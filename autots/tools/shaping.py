@@ -58,14 +58,14 @@ def df_cleanup(
     if verbose > 0:
         dupes = df_wide.columns.duplicated()
         if sum(dupes) > 0:
-            print("Warning, series ids are not unique: {df_wide.columns[dupes]}")
+            print(f"Warning, series ids are not unique: {df_wide.columns[dupes]}")
 
     # infer frequency
     inferred_freq = infer_frequency(df_wide)
     if frequency == 'infer':
         frequency = inferred_freq
     if verbose > 0:
-        print("Data frequency is: {inferred_freq}, used frequency is: {frequency}")
+        print(f"Data frequency is: {inferred_freq}, used frequency is: {frequency}")
     if (frequency is None) and (verbose >= 0):
         print("Frequency is 'None'! Data frequency not recognized.")
 

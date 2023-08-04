@@ -269,7 +269,7 @@ class PredictionObject(object):
         model=None,
         transformer=None,
     ):
-        self.model_name = model_name
+        self.model_name = self.name = model_name
         self.model_parameters = model_parameters
         self.transformation_parameters = transformation_parameters
         self.forecast_length = forecast_length

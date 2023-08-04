@@ -714,6 +714,7 @@ class ModelPrediction(ModelObject):
             forecast_length=forecast_length,
             n_jobs=n_jobs,
         )
+        self.name = "ModelPrediction"
         self._fit_complete = False
 
     def fit(self, df, future_regressor=None):

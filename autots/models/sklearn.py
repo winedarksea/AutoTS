@@ -550,7 +550,7 @@ datepart_model_dict: dict = {
     'Adaboost': 0.05,
     'SVM': 0.05,
     'KerasRNN': 0.05,
-    'Transformer': 0.05,
+    'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
 }

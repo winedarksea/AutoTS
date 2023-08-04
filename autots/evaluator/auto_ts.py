@@ -1974,8 +1974,6 @@ or otherwise increase models available."""
                     prediction_interval=prediction_interval,
                     no_negatives=self.no_negatives,
                     constraint=self.constraint,
-                    future_regressor_train=use_regr_train,
-                    future_regressor_forecast=future_regressor,
                     holiday_country=self.holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     grouping_ids=self.grouping_ids,
@@ -1983,13 +1981,12 @@ or otherwise increase models available."""
                     random_seed=self.random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
-                    template_cols=self.template_cols,
                     current_model_file=self.current_model_file,
                     return_model=True,
                 )
-                self.model = self.model.fit(use_data, use_regr_train)
+                self.model = self.model.fit(use_data, future_regressor=use_regr_train)
             else:
-                self.model = self.model.fit_data(use_data, future_regressor=use_regr_train)
+                self.model.fit_data(use_data, future_regressor=use_regr_train)
             df_forecast = self.model.predict(forecast_length, future_regressor=future_regressor)
         else:
             df_forecast = model_forecast(
@@ -2047,9 +2044,10 @@ or otherwise increase models available."""
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
-        If using a model from update_fit list, with no ensembling, underlying model will not be retrained when used as such, with a single prediction interval:
+        If using a model from update_fit list, with no ensembling, underlying model will not be retrained when used as below, with a single prediction interval:
+        This designed for high speed forecasting. Full retraining is best when there is sufficient time.
         ```python
-        model = AutoTS()
+        model = AutoTS(model_list='update_fit')
         model.fit(df)
         model.predict()
         # for new data without retraining
@@ -2057,6 +2055,8 @@ or otherwise increase models available."""
         model.predict()
         # to force retrain of model
         model.model = None
+        model.fit_data(df)
+        model.predict()
         ```
 
         Args:
@@ -2257,6 +2257,28 @@ or otherwise increase models available."""
                 )
             )
         return import_template
+    
+    def _enforce_model_list(self, template, model_list=None, include_ensemble=False, addon_flag=False):
+        """remove models not in given model list."""
+        if model_list is None:
+            model_list = self.model_list
+        if include_ensemble:
+            mod_list = model_list + ['Ensemble']
+        else:
+            mod_list = model_list
+        present = template['Model'].unique().tolist()
+        template = template[template['Model'].isin(mod_list)]
+        # double method of removing Ensemble
+        if not include_ensemble and "Ensemble" in template.columns:
+            template = template[template["Ensemble"] == 0]
+        if template.shape[0] == 0:
+            error_msg = f"Len 0. Model_list {model_list} does not match models in imported template {present}, template import failed."
+            if addon_flag:
+                # if template is addon, then this is fine as just a warning
+                print(error_msg)
+            else:
+                raise ValueError(error_msg)
+        return template
 
     def import_template(
         self,
@@ -2286,22 +2308,10 @@ or otherwise increase models available."""
         )
 
         if enforce_model_list:
-            # remove models not in given model list
-            if include_ensemble:
-                mod_list = self.model_list + ['Ensemble']
-            else:
-                mod_list = self.model_list
-            import_template = import_template[import_template['Model'].isin(mod_list)]
-            # double method of removing Ensemble
-            if not include_ensemble and "Ensemble" in import_template.columns:
-                import_template = import_template[import_template["Ensemble"] == 0]
-            if import_template.shape[0] == 0:
-                error_msg = "Len 0. Model_list does not match models in imported template, template import failed."
-                if addon_flag:
-                    # if template is addon, then this is fine as just a warning
-                    print(error_msg)
-                else:
-                    raise ValueError(error_msg)
+            import_template = self._enforce_model_list(
+                template=import_template, model_list=None,
+                include_ensemble=include_ensemble, addon_flag=addon_flag
+            )
 
         if addon_flag:
             self.initial_template = self.initial_template.merge(
@@ -2325,18 +2335,30 @@ or otherwise increase models available."""
         """Basically the same as export_template but only ever the one best model."""
         return self.save_template(filename, self.best_model.copy(), **kwargs)
 
-    def import_best_model(self, import_target):
+    def import_best_model(self, import_target, enforce_model_list: bool = True, include_ensemble: bool = True):
         """Load a best model, overriding any existing setting.
         
         Args:
             import_target: pd.DataFrame or file path
         """
         if isinstance(import_target, pd.DataFrame):
-            self.best_model = import_target.copy().iloc[0:1]
+            template = import_target.copy()
         else:
-            self.best_model = self.load_template(import_target).iloc[0:1]
+            template = self.load_template(import_target)
+        if not include_ensemble:
+            template = unpack_ensemble_models(
+                template, self.template_cols, keep_ensemble=False, recursive=True
+            )
+        if enforce_model_list:
+            template = self._enforce_model_list(
+                template=template, model_list=None,
+                include_ensemble=include_ensemble, addon_flag=False
+            )
+
+        self.best_model = template.iloc[0:1]
         
         self.parse_best_model()
+        return self
 
     def import_results(self, filename):
         """Add results from another run on the same data.

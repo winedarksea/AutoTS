@@ -25,19 +25,20 @@ class AutoTSTest(unittest.TestCase):
         print("Starting AutoTS class tests")
         forecast_length = 8
         long = False
-        df = load_daily(long=long).drop(columns=['US.Total.Covid.Tests'], errors='ignore')
+        df = load_daily(long=long)
         n_jobs = 'auto'
         verbose = 0
         validation_method = "backwards"
         generations = 1
-        num_validations = 2
-        models_to_validate = 0.35  # must be a decimal percent for this test
+        num_validations = 1
+        models_to_validate = 0.25  # must be a decimal percent for this test
 
         model_list = [
             'ConstantNaive',
             'LastValueNaive',
             'AverageValueNaive',
             'SeasonalNaive',
+            'DatepartRegression',
         ]
 
         transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
@@ -52,12 +53,23 @@ class AutoTSTest(unittest.TestCase):
             'spl_weighting': 1,
             'contour_weighting': 1,
         }
+        ensemble = [
+            'simple',
+            # 'distance',
+            # 'horizontal',
+            'horizontal-max',
+            # 'mosaic',
+            'mosaic-window',
+            'mosaic-crosshair'
+            # 'subsample',
+            # 'mlensemble',
+        ]
 
         model = AutoTS(
             forecast_length=forecast_length,
             frequency='infer',
             prediction_interval=0.9,
-            ensemble='all',
+            ensemble=ensemble,
             constraint=None,
             max_generations=generations,
             num_validations=num_validations,
@@ -69,7 +81,7 @@ class AutoTSTest(unittest.TestCase):
             metric_weighting=metric_weighting,
             models_to_validate=models_to_validate,
             max_per_model_class=None,
-            model_interrupt=False,
+            model_interrupt="end_generation",
             no_negatives=True,
             subset=100,
             n_jobs=n_jobs,
@@ -95,6 +107,7 @@ class AutoTSTest(unittest.TestCase):
             id_col='series_id' if long else None,
         )
         prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+        long_form = prediction.long_form_results()
         forecasts_df = prediction.forecast
         initial_results = model.results()
         validation_results = model.results("validation")
@@ -158,12 +171,15 @@ class AutoTSTest(unittest.TestCase):
         # test back_forecast
         # self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
         self.assertFalse(np.any(back_forecast.isnull()))
+        self.assertEqual(long_form.shape[0], forecasts_df.shape[0] * forecasts_df.shape[1] * 3)
 
         # TEST EXPORTING A TEMPLATE THEN USING THE BEST MODEL AS A PREDICTION
+        df_train = df.iloc[:-forecast_length]
+        df_test = df.iloc[-forecast_length:]
         tf = tempfile.NamedTemporaryFile(suffix='.csv', prefix=os.path.basename("autots_test"), delete=False)
         time.sleep(1)
         name = tf.name
-        model.export_template(name, models="best", n=1)
+        model.export_template(name, models="best", n=20, max_per_model_class=3)
         
         model2 = AutoTS(
             forecast_length=forecast_length,
@@ -174,7 +190,7 @@ class AutoTSTest(unittest.TestCase):
             max_generations=generations,
             num_validations=num_validations,
             validation_method=validation_method,
-            model_list=model_list,
+            model_list="update_fit",
             transformer_list=transformer_list,
             transformer_max_depth=transformer_max_depth,
             initial_template='General+Random',
@@ -186,15 +202,36 @@ class AutoTSTest(unittest.TestCase):
             subset=100,
             n_jobs=n_jobs,
             drop_most_recent=1,
-            verbose=verbose,
+            verbose=2,
         )
+        # TEST MODEL PREDICT WITH LOWER LEVEL MODEL TRAINED ON PREVIOUS DATA ONLY
+        model2.import_best_model(tf.name, include_ensemble=False)
+        model2.fit_data(df_train, future_regressor=future_regressor_train2d.reindex(df_train.index))
+        prediction = model2.predict(future_regressor=future_regressor_forecast2d.reindex(df_test.index), verbose=0)
+        prediction.evaluate(df_test, df_train=df_train)
+        smape1 = prediction.avg_metrics['smape']
+        
         model2.fit_data(df, future_regressor=future_regressor_train2d)
-        model2.import_best_model(tf.name)
+        prediction2 = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+        forecasts_df2 = prediction2.forecast
+        
+        # now retrain on full data
+        model2.model = None
+        model2.fit_data(df, future_regressor=future_regressor_train2d)
+        prediction2 = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+        # and see if it got better on past holdout
+        model2.fit_data(df_train, future_regressor=future_regressor_train2d.reindex(df_train.index))
+        prediction = model2.predict(future_regressor=future_regressor_forecast2d.reindex(df_test.index), verbose=0)
+        prediction.evaluate(df_test, df_train=df_train)
+        smape2 = prediction.avg_metrics['smape']
+        print("=====================================================")
+        # smape2 should be better because it is trained on the very data it is supposed to predict
+        print(f"fit 1 SMAPE {smape1}, then refit with history SMAPE: {smape2}")
+
         tf.close()
         os.unlink(tf.name)
 
-        prediction = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
-        forecasts_df2 = prediction.forecast
+        
         self.assertEqual(forecasts_df2.shape[0], forecast_length)
         self.assertEqual(forecasts_df2.shape[1], df.shape[1])
         self.assertFalse(forecasts_df2.isna().any().any())

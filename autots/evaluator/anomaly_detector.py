@@ -319,12 +319,15 @@ class HolidayDetector(object):
         self.anomaly_model.plot(**kwargs)
 
     def plot(
-        self, series_name=None, include_anomalies=True, title=None, plot_kwargs={}
+        self, series_name=None, include_anomalies=True, title=None, plot_kwargs={}, series=None
     ):
         import matplotlib.pyplot as plt
 
         if series_name is None:
-            series_name = random.choice(self.df.columns)
+            if series is not None:
+                series_name = series
+            else:
+                series_name = random.choice(self.df.columns)
         if title is None:
             title = (
                 series_name[0:50]
