@@ -2033,7 +2033,7 @@ class DatepartRegression(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         if forecast_length is None:
-            self.forecast_length = forecast_length
+            forecast_length = self.forecast_length
         if df is not None:
             self.fit_data(df)
         predictStartTime = datetime.datetime.now()

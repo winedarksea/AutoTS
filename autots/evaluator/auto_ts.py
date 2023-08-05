@@ -2053,7 +2053,7 @@ or otherwise increase models available."""
         # for new data without retraining
         model.fit_data(df)
         model.predict()
-        # to force retrain of model
+        # to force retrain of best model (but not full model search)
         model.model = None
         model.fit_data(df)
         model.predict()

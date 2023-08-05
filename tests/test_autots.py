@@ -30,7 +30,7 @@ class AutoTSTest(unittest.TestCase):
         verbose = 0
         validation_method = "backwards"
         generations = 1
-        num_validations = 1
+        num_validations = 2
         models_to_validate = 0.25  # must be a decimal percent for this test
 
         model_list = [
@@ -148,7 +148,6 @@ class AutoTSTest(unittest.TestCase):
         # check all the checks work
         self.assertEqual(model.ensemble_check, 1)
         self.assertFalse(model.weighted)
-        self.assertFalse(model.used_regressor_check)
         self.assertFalse(model.subset_flag)
         # assess 'backwards' validation
         self.assertEqual(len(model.validation_test_indexes), num_validations + 1)
@@ -323,6 +322,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(model.ensemble_check, 1)
         self.assertFalse(model.weighted)
         self.assertFalse(model.subset_flag)
+        self.assertFalse(model.used_regressor_check)
         # assess 'backwards' validation
         val_1 = model.validation_test_indexes[1]
         self.assertEqual(len(model.validation_test_indexes), num_validations + 1)
@@ -473,6 +473,7 @@ class ModelTest(unittest.TestCase):
         n_jobs = 1
         random_seed = 300
         df = load_daily(long=False).iloc[:, 0:5]
+        df = df[df.index < "2022-10-04"]  # update dataset and have not yet updated stored model results
         models = [
             'SectionalMotif', 'MultivariateMotif', 'AverageValueNaive',
             'NVAR', "LastValueNaive", 'Theta', 'FBProphet', 'SeasonalNaive',
@@ -777,7 +778,7 @@ class ModelTest(unittest.TestCase):
         )
         model.fit(df_train)
         first_forecast = model.predict(future_regressor=future_regressor_forecast)
-        self.assertListEqual(first_forecast.index.tolist(), df_test.index.tolist())
+        self.assertListEqual(first_forecast.forecast.index.tolist(), df_test.index.tolist())
         model.fit_data(df)
         updated_forecast = model.predict()
         self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
@@ -797,7 +798,7 @@ class ModelTest(unittest.TestCase):
         model.fit(df_train.fillna(method='ffill'))
         first_forecast = model.predict(future_regressor=future_regressor_forecast)
         # first_forecast.plot_grid(df)
-        self.assertListEqual(first_forecast.index.tolist(), df_test.index.tolist())
+        self.assertListEqual(first_forecast.forecast.index.tolist(), df_test.index.tolist())
         model.fit_data(df)
         updated_forecast = model.predict()
         # updated_forecast.plot_grid(df)
