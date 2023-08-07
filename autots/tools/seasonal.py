@@ -490,11 +490,16 @@ def seasonal_window_match(
     # finding sliding windows to compare
     temp = sliding_window_view(array[:-n_tail, :], window_size, axis=0)
     # compare windows by metrics
+    last_window = array[-window_size:, :]
     if distance_metric == "mae":
-        scores = np.mean(np.abs(temp - array[-window_size:, :].T), axis=2)
+        scores = np.mean(np.abs(temp - last_window.T), axis=2)
+    elif distance_metric == "canberra":
+        divisor = np.abs(temp) + np.abs(last_window.T)
+        divisor[divisor == 0] = 1
+        scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
     elif distance_metric == "mqae":
         q = 0.85
-        ae = np.abs(temp - array[-window_size:, :].T)
+        ae = np.abs(temp - last_window.T)
         if ae.shape[2] <= 1:
             vals = ae
         else:
@@ -503,7 +508,7 @@ def seasonal_window_match(
             vals = np.partition(ae, qi, axis=2)[..., :qi]
         scores = np.mean(vals, axis=2)
     elif distance_metric == "mse":
-        scores = np.mean((temp - array[-window_size:, :].T) ** 2, axis=2)
+        scores = np.mean((temp - last_window.T) ** 2, axis=2)
     else:
         raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
@@ -518,6 +523,48 @@ def seasonal_window_match(
         + min_idx
         + window_size
     )
+    # for data over the end, fill last value
+    if k > min_k:
+        test = np.where(test >= len(DTindex), -1, test)
+    return test, scores
+
+
+def seasonal_independent_match(
+    DTindex, DTindex_future, k, datepart_method, distance_metric
+):
+    array = date_part(DTindex, method=datepart_method).to_numpy()
+    future_array = date_part(DTindex_future, method=datepart_method).to_numpy()
+
+    # when k is larger, can be more aggressive on allowing a longer portion into view
+    min_k = 5
+    # compare windows by metrics
+    a = array[:, None]
+    b = future_array
+    if distance_metric == "mae":
+        scores = np.mean(np.abs(a - b), axis=2)
+    elif distance_metric == "canberra":
+        divisor = np.abs(a) + np.abs(b)
+        divisor[divisor == 0] = 1
+        scores = np.mean(np.abs(a - b) / divisor, axis=2)
+    elif distance_metric == "mqae":
+        q = 0.85
+        ae = np.abs(a - b)
+        if ae.shape[2] <= 1:
+            vals = ae
+        else:
+            qi = int(ae.shape[2] * q)
+            qi = qi if qi > 1 else 1
+            vals = np.partition(ae, qi, axis=2)[..., :qi]
+        scores = np.mean(vals, axis=2)
+    elif distance_metric == "mse":
+        scores = np.mean((a - b) ** 2, axis=2)
+    else:
+        raise ValueError(f"distance_metric: {distance_metric} not recognized")
+
+    # select smallest windows
+    min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
+    # take the period starting AFTER the window
+    test = min_idx.T
     # for data over the end, fill last value
     if k > min_k:
         test = np.where(test >= len(DTindex), -1, test)

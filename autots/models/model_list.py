@@ -122,12 +122,14 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
-fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
+fast_parallel_no_arima = {
+    i: fast_parallel[i] for i in fast_parallel if i not in ['ARIMA', 'NVAR']
+}
 # so this opiniated and not fully updated always
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'GluonTS', 'TMF', 'PytorchForecasting']
+        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting']
     )
 )
 
@@ -290,7 +292,7 @@ regressions = [
     'UnivariateRegression',
     'MultivariateRegression',
 ]
-no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
+no_shared_fast = list(set(no_shared).intersection(set(fast_parallel_no_arima)))
 # this should be implementable with some models in gluonts
 all_result_path = [
     "UnivariateMotif",
@@ -308,6 +310,14 @@ diff_window_motif_list = [
     "MultivariateMotif",
     "Motif",
     "ARCH",
+]
+# models that fit and then have updated predicts without updated model fits (just data update)
+update_fit = [
+    'MultivariateRegression',
+    "DatepartRegression",
+    "GluonTS",
+    'WindowRegression',
+    'Cassandra',
 ]
 model_lists = {
     "all": all_models,
@@ -333,6 +343,7 @@ model_lists = {
     "all_result_path": all_result_path,
     "regressions": regressions,
     "all_pragmatic": all_pragmatic,
+    "update_fit": update_fit,
 }
 
 

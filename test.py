@@ -62,7 +62,7 @@ verbose = 1
 validation_method = "similarity"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 20
+generations = 100
 generation_timeout = 300
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
@@ -77,8 +77,8 @@ if force_univariate:
     df = df.iloc[:, 0]
 
 transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "DatepartRegression"]
-transformer_max_depth = 1
+# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer"]
+transformer_max_depth = 4
 models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
 # model_list = "fast_parallel"  # fast_parallel, all, fast
@@ -86,10 +86,16 @@ model_list = "superfast"
 # model_list = ['LastValueNaive', 'PytorchForecasting']
 preclean = None
 {
-    "fillna": None,  # mean or median one of few consistent things
-    "transformations": {"0": "EWMAFilter"},
+    "fillna": None,
+    "transformations": {"0": "LocalLinearTrend"},
     "transformation_params": {
-        "0": {"span": 14},
+        "0": {
+            'rolling_window': 30,
+             'n_tails': 0.1,
+             'n_future': 0.2,
+             'method': 'mean',
+             'macro_micro': True
+         },
     },
 }
 ensemble = [
@@ -111,7 +117,7 @@ metric_weighting = {
     'spl_weighting': 3,
     'containment_weighting': 0,
     'contour_weighting': 0,
-    'runtime_weighting': 0.05,
+    'runtime_weighting': 0.01,
     'maxe_weighting': 0,
     'oda_weighting': 0,
     'mqae_weighting': 0,
@@ -186,8 +192,20 @@ regr_train, regr_fcst = create_regressor(
     fill_na="pchip",
     holiday_countries=["US"],
     datepart_method="recurring",
+    preprocessing_params={
+        "fillna": None,
+        "transformations": {"0": "LocalLinearTrend"},
+        "transformation_params": {
+            "0": {
+                'rolling_window': 30,
+                 'n_tails': 0.1,
+                 'n_future': 0.2,
+                 'method': 'mean',
+                 'macro_micro': True
+             },
+        },
+    },
 )
-
 
 # model = model.import_results('test.pickle')
 if use_template:
@@ -250,22 +268,26 @@ if save_template:
 
 if graph:
     start_date = "auto"
+    # issues with long and preclean vary 'raw' df choice
+    use_df = df if not long else model.df_wide_numeric
     prediction.plot(
-        model.df_wide_numeric,
+        use_df,
         series=cols[0],
         remove_zeroes=False,
         start_date=start_date,
     )
     # plt.savefig("single_forecast2.png", dpi=300, bbox_inches="tight")
     plt.show()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
+    prediction.plot_grid(use_df, start_date=start_date)
     # plt.savefig("forecast_grid2.png", dpi=300, bbox_inches="tight")
     plt.show()
-    worst = model.best_model_per_series_score().head(6).index.tolist()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
+    scores = model.best_model_per_series_mape().index.tolist()
+    scores = [x for x in scores if x in df.columns]
+    worst = scores[0:6]
+    prediction.plot_grid(use_df, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
     plt.show()
-    best = model.best_model_per_series_score().tail(6).index.tolist()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Lowest (Best) Historical MAPE Series", cols=best)
+    best = scores[-6:]
+    prediction.plot_grid(use_df, start_date=start_date, title="Forecasts of Lowest (Best) Historical MAPE Series", cols=best)
     plt.show()
     model.plot_generation_loss()
     plt.show()
@@ -304,29 +326,29 @@ if graph:
     if back_forecast:
         model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
-    ax = model.plot_validations(subset='Worst', compare_horizontal=True, include_bounds=False)
+    ax = model.plot_validations(use_df, subset='Worst', compare_horizontal=True, include_bounds=False)
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
-    ax = model.plot_validations()
+    ax = model.plot_validations(use_df)
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     # plt.savefig("validation_plot.png", dpi=300, bbox_inches="tight")
     plt.show()
 
-    ax = model.plot_validations(subset='Best')
+    ax = model.plot_validations(use_df, subset='Best')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     # plt.savefig("validation_plot2.png", dpi=300, bbox_inches="tight")
     plt.show()
 
-    ax = model.plot_validations(subset='Worst')
+    ax = model.plot_validations(use_df, subset='Worst')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
-    ax = model.plot_validations(subset='Best Score')
+    ax = model.plot_validations(use_df, subset='Best Score')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
-    ax = model.plot_validations(subset='Worst Score')
+    ax = model.plot_validations(use_df, subset='Worst Score')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
@@ -344,7 +366,7 @@ if model.best_model["Ensemble"].iloc[0] == 2:
                 interest_models.extend(list(y.values()))
             if graph:
                 prediction.plot(
-                    model.df_wide_numeric,
+                    use_df,
                     series=x,
                     remove_zeroes=False,
                     start_date=start_date,
@@ -362,7 +384,7 @@ else:
     for x in interest_series:
         if graph:
             prediction.plot(
-                model.df_wide_numeric,
+                use_df,
                 series=x,
                 remove_zeroes=False,
                 start_date=start_date,
@@ -425,6 +447,8 @@ python -m unittest discover ./tests
 python -m unittest tests.test_autots.ModelTest.test_models
 python -m unittest tests.test_impute.TestImpute.test_impute
 
+pytest tests/ --durations=0
+
 python ./autots/evaluator/benchmark.py > benchmark.txt
 
 cd <project dir>
@@ -448,7 +472,11 @@ https://packaging.python.org/tutorials/packaging-projects/
 
 python -m pip install --user --upgrade setuptools wheel
 cd /to project directory
+# old
 python setup.py sdist bdist_wheel
+# new
+pip install --upgrade build
+python -m build
 twine upload dist/*
 To use this API token:
     Set your username to __token__

@@ -1136,7 +1136,8 @@ class UnobservedComponents(ModelObject):
                 ["lbfgs", "bfgs", "powell", "cg", "newton", "nm"],
                 [0.8, 0.1, 0.1, 0.1, 0.1, 0.1],
             )[0],
-            'autoregressive': random.choices([None, 1, 2], [0.8, 0.2, 0.1])[0],
+            # AR1 is helpful but AR2 is getting slow
+            'autoregressive': random.choices([None, 1, 2], [0.8, 0.3, 0.02])[0],
             'regression_type': regression_choice,
         }
 

@@ -96,8 +96,6 @@ class GluonTS(ModelObject):
                 "GluonTS installation is incompatible with AutoTS. The numpy version is sometimes the issue, try 1.23.1 {as of 06-2023}"
             )
 
-        df = self.basic_profile(df)
-
         try:
             from mxnet.random import seed as mxnet_seed
 
@@ -105,16 +103,10 @@ class GluonTS(ModelObject):
         except Exception:
             pass
 
-        gluon_train = df.to_numpy().T
+        gluon_freq = str(self.frequency).split('-')[0]
         self.train_index = df.columns
         self.train_columns = df.index
 
-        gluon_freq = str(self.frequency).split('-')[0]
-        if self.regression_type == "User":
-            if future_regressor is None:
-                raise ValueError(
-                    "regression_type='User' but no future_regressor supplied"
-                )
         if gluon_freq in ["MS", "1MS"]:
             gluon_freq = "M"
 
@@ -135,7 +127,7 @@ class GluonTS(ModelObject):
         else:
             self.gluon_context_length = 20
             self.context_length = '20'
-        ts_metadata = {
+        self.ts_metadata = ts_metadata = {
             'num_series': len(self.train_index),
             'freq': gluon_freq,
             'start_ts': df.index[0],
@@ -145,56 +137,9 @@ class GluonTS(ModelObject):
             'context_length': self.gluon_context_length,
             'forecast_length': self.forecast_length,
         }
+        self.fit_data(df, future_regressor=future_regressor)
         npts_flag = False
-        if self.gluon_model in self.multivariate_mods:
-            if self.regression_type == "User":
-                regr = future_regressor.to_numpy().T
-                self.regr_train = regr
-                self.test_ds = ListDataset(
-                    [
-                        {
-                            "start": df.index[0],
-                            "target": gluon_train,
-                            "feat_dynamic_real": regr,
-                        }
-                    ],
-                    freq=ts_metadata['freq'],
-                    one_dim_target=False,
-                )
-            else:
-                self.test_ds = ListDataset(
-                    [{"start": df.index[0], "target": gluon_train}],
-                    freq=ts_metadata['freq'],
-                    one_dim_target=False,
-                )
-        else:
-            if self.regression_type == "User":
-                self.gluon_train = gluon_train
-                regr = future_regressor.to_numpy().T
-                self.regr_train = regr
-                self.test_ds = ListDataset(
-                    [
-                        {
-                            FieldName.TARGET: target,
-                            FieldName.START: ts_metadata['start_ts'],
-                            FieldName.FEAT_DYNAMIC_REAL: regr,
-                        }
-                        for target in gluon_train
-                    ],
-                    freq=ts_metadata['freq'],
-                )
-            else:
-                # use the actual start date, if NaN given (semi-hidden)
-                # ts_metadata['gluon_start'] = df.notna().idxmax().tolist()
-                self.test_ds = ListDataset(
-                    [
-                        {FieldName.TARGET: target, FieldName.START: start}
-                        for (target, start) in zip(
-                            gluon_train, ts_metadata['gluon_start']
-                        )
-                    ],
-                    freq=ts_metadata['freq'],
-                )
+
         if self.gluon_model == 'DeepAR':
             try:
                 from gluonts.mx import DeepAREstimator
@@ -319,7 +264,7 @@ class GluonTS(ModelObject):
                 from gluonts.model.deepvar import DeepVAREstimator
 
             estimator = DeepVAREstimator(
-                target_dim=gluon_train.shape[0],
+                target_dim=df.shape[1],
                 freq=ts_metadata['freq'],
                 context_length=ts_metadata['context_length'],
                 prediction_length=ts_metadata['forecast_length'],
@@ -332,7 +277,7 @@ class GluonTS(ModelObject):
                 from gluonts.model.gpvar import GPVAREstimator
 
             estimator = GPVAREstimator(
-                target_dim=gluon_train.shape[0],
+                target_dim=df.shape[1],
                 freq=ts_metadata['freq'],
                 context_length=ts_metadata['context_length'],
                 prediction_length=ts_metadata['forecast_length'],
@@ -443,12 +388,75 @@ class GluonTS(ModelObject):
             self.GluonPredictor = estimator
         else:
             self.GluonPredictor = estimator.train(self.test_ds)
-        self.ts_metadata = ts_metadata
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
+    def fit_data(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        gluon_train = df.to_numpy().T
+        self.train_index = df.columns
+        self.train_columns = df.index
+        if self.regression_type == "User":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor supplied"
+                )
+        if self.gluon_model in self.multivariate_mods:
+            if self.regression_type == "User":
+                regr = future_regressor.to_numpy().T
+                self.regr_train = regr
+                self.test_ds = ListDataset(
+                    [
+                        {
+                            "start": df.index[0],
+                            "target": gluon_train,
+                            "feat_dynamic_real": regr,
+                        }
+                    ],
+                    freq=self.ts_metadata['freq'],
+                    one_dim_target=False,
+                )
+            else:
+                self.test_ds = ListDataset(
+                    [{"start": df.index[0], "target": gluon_train}],
+                    freq=self.ts_metadata['freq'],
+                    one_dim_target=False,
+                )
+        else:
+            if self.regression_type == "User":
+                self.gluon_train = gluon_train
+                regr = future_regressor.to_numpy().T
+                self.regr_train = regr
+                self.test_ds = ListDataset(
+                    [
+                        {
+                            FieldName.TARGET: target,
+                            FieldName.START: self.ts_metadata['start_ts'],
+                            FieldName.FEAT_DYNAMIC_REAL: regr,
+                        }
+                        for target in gluon_train
+                    ],
+                    freq=self.ts_metadata['freq'],
+                )
+            else:
+                # use the actual start date, if NaN given (semi-hidden)
+                # ts_metadata['gluon_start'] = df.notna().idxmax().tolist()
+                self.test_ds = ListDataset(
+                    [
+                        {FieldName.TARGET: target, FieldName.START: start}
+                        for (target, start) in zip(
+                            gluon_train, self.ts_metadata['gluon_start']
+                        )
+                    ],
+                    freq=self.ts_metadata['freq'],
+                )
+        return self
+
     def predict(
-        self, forecast_length: int, future_regressor=[], just_point_forecast=False
+        self,
+        forecast_length: int = None,
+        future_regressor=[],
+        just_point_forecast=False,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -461,6 +469,8 @@ class GluonTS(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if forecast_length is None:
+            forecast_length = self.forecast_length
         if int(forecast_length) > int(self.forecast_length):
             raise ValueError("GluonTS must be refit to change forecast length!")
         predictStartTime = datetime.datetime.now()

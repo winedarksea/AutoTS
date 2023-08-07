@@ -9,7 +9,7 @@ import datetime
 import json
 from hashlib import md5
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
-from autots.models.base import PredictionObject
+from autots.models.base import PredictionObject, ModelObject
 from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
@@ -638,30 +638,8 @@ def ModelMonster(
         )
 
 
-def ModelPrediction(
-    df_train,
-    forecast_length: int,
-    transformation_dict: dict,
-    model_str: str,
-    parameter_dict: dict,
-    frequency: str = 'infer',
-    prediction_interval: float = 0.9,
-    no_negatives: bool = False,
-    constraint: float = None,
-    future_regressor_train=None,
-    future_regressor_forecast=None,
-    holiday_country: str = 'US',
-    startTimeStamps=None,
-    grouping_ids=None,
-    fail_on_forecast_nan: bool = True,
-    return_model: bool = False,
-    random_seed: int = 2020,
-    verbose: int = 0,
-    n_jobs: int = None,
-    current_model_file: str = None,
-    model_count: int = 0,
-):
-    """Feed parameters into modeling pipeline
+class ModelPrediction(ModelObject):
+    """Feed parameters into modeling pipeline. A class object, does NOT work with ensembles.
 
     Args:
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
@@ -684,142 +662,206 @@ def ModelPrediction(
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
-    transformationStartTime = datetime.datetime.now()
-    if current_model_file is not None:
-        try:
-            with open(f'{current_model_file}.json', 'w') as f:
-                json.dump(
-                    {
-                        "model_number": model_count,
-                        "model_name": model_str,
-                        "model_param_dict": parameter_dict,
-                        "model_transform_dict": transformation_dict,
-                    },
-                    f,
-                )
-        except Exception as e:
-            error_msg = f"failed to write {current_model_file} with error {repr(e)}"
+
+    def __init__(
+        self,
+        forecast_length: int,
+        transformation_dict: dict,
+        model_str: str,
+        parameter_dict: dict,
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        no_negatives: bool = False,
+        constraint: float = None,
+        holiday_country: str = 'US',
+        startTimeStamps=None,
+        grouping_ids=None,
+        fail_on_forecast_nan: bool = True,
+        return_model: bool = False,
+        random_seed: int = 2020,
+        verbose: int = 0,
+        n_jobs: int = None,
+        current_model_file: str = None,
+        model_count: int = 0,
+    ):
+        self.forecast_length = forecast_length
+        self.transformation_dict = transformation_dict
+        self.model_str = model_str
+        self.parameter_dict = parameter_dict
+        self.frequency = frequency
+        self.prediction_interval = prediction_interval
+        self.no_negatives = no_negatives
+        self.constraint = constraint
+        self.holiday_country = holiday_country
+        self.fail_on_forecast_nan = fail_on_forecast_nan
+        self.return_model = return_model
+        self.random_seed = random_seed
+        self.verbose = verbose
+        self.n_jobs = n_jobs
+        self.current_model_file = current_model_file
+        self.model_count = model_count
+        self.transformer_object = GeneralTransformer(
+            **transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
+        )
+        self.model = ModelMonster(
+            model_str,
+            parameters=parameter_dict,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+        )
+        self.name = "ModelPrediction"
+        self._fit_complete = False
+
+    def fit(self, df, future_regressor=None):
+        self.df = df
+        transformationStartTime = datetime.datetime.now()
+        if self.current_model_file is not None:
             try:
-                with open(f'{current_model_file}_failure.json', 'w') as f:
-                    f.write(error_msg)
-            except Exception:
-                pass
-            print(error_msg)
-
-    transformer_object = GeneralTransformer(
-        **transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
-    )
-    df_train_transformed = transformer_object._fit(df_train)
-
-    # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
-    if future_regressor_train is not None:
-        future_regressor_train = future_regressor_train.reindex(df_train.index)
-
-    transformation_runtime = datetime.datetime.now() - transformationStartTime
-    # from autots.evaluator.auto_model import ModelMonster
-    model = ModelMonster(
-        model_str,
-        parameters=parameter_dict,
-        frequency=frequency,
-        prediction_interval=prediction_interval,
-        holiday_country=holiday_country,
-        random_seed=random_seed,
-        verbose=verbose,
-        forecast_length=forecast_length,
-        n_jobs=n_jobs,
-    )
-    model = model.fit(df_train_transformed, future_regressor=future_regressor_train)
-    df_forecast = model.predict(
-        forecast_length=forecast_length, future_regressor=future_regressor_forecast
-    )
-
-    # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
-    # can maybe remove this eventually and just keep the later one
-    if fail_on_forecast_nan:
-        if not np.isfinite(np.max(df_forecast.forecast.to_numpy())):
-            raise ValueError(
-                "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
-                    model_str
+                with open(f'{self.current_model_file}.json', 'w') as f:
+                    json.dump(
+                        {
+                            "model_number": self.model_count,
+                            "model_name": self.model_str,
+                            "model_param_dict": self.parameter_dict,
+                            "model_transform_dict": self.transformation_dict,
+                        },
+                        f,
+                    )
+            except Exception as e:
+                error_msg = (
+                    f"failed to write {self.current_model_file} with error {repr(e)}"
                 )
-            )
+                try:
+                    with open(f'{self.current_model_file}_failure.json', 'w') as f:
+                        f.write(error_msg)
+                except Exception:
+                    pass
+                print(error_msg)
 
-    transformationStartTime = datetime.datetime.now()
-    # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
-    # forecast inverse MUST come before upper and lower bounds inverse
-    df_forecast.forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.forecast)
-    )
-    df_forecast.lower_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(
-            df_forecast.lower_forecast, fillzero=True, bounds=True
+        df_train_transformed = self.transformer_object._fit(df)
+
+        # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
+        if future_regressor is not None:
+            future_regressor = future_regressor.reindex(df.index)
+
+        self.transformation_runtime = datetime.datetime.now() - transformationStartTime
+        # from autots.evaluator.auto_model import ModelMonster
+        self.model = self.model.fit(
+            df_train_transformed, future_regressor=future_regressor
         )
-    )
-    df_forecast.upper_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(
-            df_forecast.upper_forecast, fillzero=True, bounds=True
-        )
-    )
-    # CHECK Forecasts are proper length!
-    if df_forecast.forecast.shape[0] != forecast_length:
-        raise ValueError(f"Model {model_str} returned improper forecast_length")
+        self._fit_complete = True
+        return self
 
-    if df_forecast.forecast.shape[1] != df_train.shape[1]:
-        raise ValueError("Model failed to return correct number of series.")
-
-    df_forecast.transformation_parameters = transformation_dict
-    # Remove negatives if desired
-    # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster
-    if no_negatives:
-        df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower=0)
-        df_forecast.forecast = df_forecast.forecast.clip(lower=0)
-        df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower=0)
-
-    if constraint is not None:
-        if isinstance(constraint, dict):
-            constraint_method = constraint.get("constraint_method", "quantile")
-            constraint_regularization = constraint.get("constraint_regularization", 1)
-            lower_constraint = constraint.get("lower_constraint", 0)
-            upper_constraint = constraint.get("upper_constraint", 1)
-            bounds = constraint.get("bounds", False)
-        else:
-            constraint_method = "stdev_min"
-            lower_constraint = float(constraint)
-            upper_constraint = float(constraint)
-            constraint_regularization = 1
-            bounds = False
-        if verbose > 3:
-            print(
-                f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
-            )
-
-        df_forecast = df_forecast.apply_constraints(
-            constraint_method,
-            constraint_regularization,
-            upper_constraint,
-            lower_constraint,
-            bounds,
-            df_train,
+    def predict(self, forecast_length=None, future_regressor=None):
+        if forecast_length is None:
+            forecast_length = self.forecast_length
+        if not self._fit_complete:
+            raise ValueError("Model not yet fit.")
+        df_forecast = self.model.predict(
+            forecast_length=self.forecast_length, future_regressor=future_regressor
         )
 
-    transformation_runtime = transformation_runtime + (
-        datetime.datetime.now() - transformationStartTime
-    )
-    df_forecast.transformation_runtime = transformation_runtime
-
-    if return_model:
-        df_forecast.model = model
-        df_forecast.transformer = transformer_object
-
-    # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
-    if fail_on_forecast_nan:
-        if not np.isfinite(np.max(df_forecast.forecast.to_numpy())):
-            raise ValueError(
-                "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(
-                    str(transformation_dict)
+        # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
+        # can maybe remove this eventually and just keep the later one
+        if self.fail_on_forecast_nan:
+            if not np.isfinite(np.max(df_forecast.forecast.to_numpy())):
+                raise ValueError(
+                    "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
+                        self.model_str
+                    )
                 )
+
+        transformationStartTime = datetime.datetime.now()
+        # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
+        # forecast inverse MUST come before upper and lower bounds inverse
+        df_forecast.forecast = pd.DataFrame(
+            self.transformer_object.inverse_transform(df_forecast.forecast)
+        )
+        df_forecast.lower_forecast = pd.DataFrame(
+            self.transformer_object.inverse_transform(
+                df_forecast.lower_forecast, fillzero=True, bounds=True
+            )
+        )
+        df_forecast.upper_forecast = pd.DataFrame(
+            self.transformer_object.inverse_transform(
+                df_forecast.upper_forecast, fillzero=True, bounds=True
+            )
+        )
+        # CHECK Forecasts are proper length!
+        if df_forecast.forecast.shape[0] != self.forecast_length:
+            raise ValueError(
+                f"Model {self.model_str} returned improper forecast_length"
             )
 
-    return df_forecast
+        if df_forecast.forecast.shape[1] != self.df.shape[1]:
+            raise ValueError("Model failed to return correct number of series.")
+
+        df_forecast.transformation_parameters = self.transformation_dict
+        # Remove negatives if desired
+        # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster
+        if self.no_negatives:
+            df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower=0)
+            df_forecast.forecast = df_forecast.forecast.clip(lower=0)
+            df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower=0)
+
+        if self.constraint is not None:
+            if isinstance(self.constraint, dict):
+                constraint_method = self.constraint.get("constraint_method", "quantile")
+                constraint_regularization = self.constraint.get(
+                    "constraint_regularization", 1
+                )
+                lower_constraint = self.constraint.get("lower_constraint", 0)
+                upper_constraint = self.constraint.get("upper_constraint", 1)
+                bounds = self.constraint.get("bounds", False)
+            else:
+                constraint_method = "stdev_min"
+                lower_constraint = float(self.constraint)
+                upper_constraint = float(self.constraint)
+                constraint_regularization = 1
+                bounds = False
+            if self.verbose > 3:
+                print(
+                    f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
+                )
+
+            df_forecast = df_forecast.apply_constraints(
+                constraint_method,
+                constraint_regularization,
+                upper_constraint,
+                lower_constraint,
+                bounds,
+                self.df,
+            )
+
+        self.transformation_runtime = self.transformation_runtime + (
+            datetime.datetime.now() - transformationStartTime
+        )
+        df_forecast.transformation_runtime = self.transformation_runtime
+
+        if self.return_model:
+            df_forecast.model = self.model
+            df_forecast.transformer = self.transformer_object
+
+        # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
+        if self.fail_on_forecast_nan:
+            if not np.isfinite(np.max(df_forecast.forecast.to_numpy())):
+                raise ValueError(
+                    "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(
+                        str(self.transformation_dict)
+                    )
+                )
+        sys.stdout.flush()
+
+        return df_forecast
+
+    def fit_data(self, df, future_regressor=None):
+        self.df = df
+        self.model.fit_data(df, future_regressor)
 
 
 class TemplateEvalObject(object):
@@ -1136,6 +1178,9 @@ def model_forecast(
                     test_mod = row['ID']
                     horizontal_subset = parse_horizontal(all_series, model_id=test_mod)
 
+                if verbose >= 2:
+                    p = f"Ensemble {model_param_dict['model_name']} component {index} of {total_ens} {row['Model']} started"
+                    print(p)
                 df_forecast = model_forecast(
                     model_name=row['Model'],
                     model_param_dict=row['ModelParameters'],
@@ -1175,9 +1220,6 @@ def model_forecast(
                 upper_forecasts[model_id] = df_forecast.upper_forecast
                 lower_forecasts[model_id] = df_forecast.lower_forecast
                 # print(f"{model_param_dict['model_name']} with shape {df_forecast.forecast.shape}")
-                if verbose >= 2:
-                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} succeeded"
-                    print(p)
             except Exception as e:
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1
@@ -1223,18 +1265,15 @@ def model_forecast(
             df_train_low = df_train.copy()
             full_model_created = True
 
-        df_forecast = ModelPrediction(
-            df_train_low,
-            forecast_length,
-            model_transform_dict,
-            model_name,
-            model_param_dict,
+        model = ModelPrediction(
+            forecast_length=forecast_length,
+            transformation_dict=model_transform_dict,
+            model_str=model_name,
+            parameter_dict=model_param_dict,
             frequency=frequency,
             prediction_interval=prediction_interval,
             no_negatives=no_negatives,
             constraint=constraint,
-            future_regressor_train=future_regressor_train,
-            future_regressor_forecast=future_regressor_forecast,
             grouping_ids=grouping_ids,
             holiday_country=holiday_country,
             random_seed=random_seed,
@@ -1246,9 +1285,10 @@ def model_forecast(
             current_model_file=current_model_file,
             model_count=model_count,
         )
-
-        sys.stdout.flush()
-        return df_forecast
+        model = model.fit(df_train_low, future_regressor_train)
+        return model.predict(
+            forecast_length, future_regressor=future_regressor_forecast
+        )
 
 
 def _ps_metric(per_series_metrics, metric, model_id):

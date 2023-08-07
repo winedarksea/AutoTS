@@ -200,12 +200,11 @@ def rolling_x_regressor_regressor(
 
 def retrieve_regressor(
     regression_model: dict = {
-        "model": 'Adaboost',
+        "model": 'RandomForest',
         "model_params": {
-            'n_estimators': 50,
-            'estimator': 'DecisionTree',
-            'loss': 'linear',
-            'learning_rate': 1.0,
+            'n_estimators': 300,
+            'min_samples_leaf': 1,
+            'bootstrap': False,
         },
     },
     verbose: int = 0,
@@ -551,7 +550,7 @@ datepart_model_dict: dict = {
     'Adaboost': 0.05,
     'SVM': 0.05,
     'KerasRNN': 0.05,
-    'Transformer': 0.05,
+    'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
 }
@@ -1180,7 +1179,7 @@ class RollingRegression(ModelObject):
         elif self.Y.shape[1] < 2:
             multioutput = False
         # retrieve model object to train
-        self.regr = retrieve_regressor(
+        self.model = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
             verbose_bool=self.verbose_bool,
@@ -1205,7 +1204,7 @@ class RollingRegression(ModelObject):
             x_device = X
             y_device = Y
         """
-        self.regr = self.regr.fit(self.X, self.Y)
+        self.model = self.model.fit(self.X, self.Y)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1269,7 +1268,7 @@ class RollingRegression(ModelObject):
             if isinstance(x_dat, pd.DataFrame):
                 x_dat.columns = [str(xc) for xc in x_dat.columns]
 
-            rfPred = pd.DataFrame(self.regr.predict(x_dat.tail(1).to_numpy()))
+            rfPred = pd.DataFrame(self.model.predict(x_dat.tail(1).to_numpy()))
 
             forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
             self.sktraindata = pd.concat(
@@ -1496,7 +1495,7 @@ class WindowRegression(ModelObject):
             multioutput = False
         if isinstance(self.X, pd.DataFrame):
             self.X = self.X.to_numpy()
-        self.regr = retrieve_regressor(
+        self.model = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
             verbose_bool=self.verbose_bool,
@@ -1504,16 +1503,22 @@ class WindowRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.regr = self.regr.fit(self.X.astype(float), self.Y.astype(float))
+        self.model = self.model.fit(self.X.astype(float), self.Y.astype(float))
         self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
+    def fit_data(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.last_window = df.tail(self.window_size)
+        return self
+
     def predict(
         self,
-        forecast_length: int,
+        forecast_length: int = None,
         future_regressor=None,
         just_point_forecast: bool = False,
+        df=None,
     ):
         """Generate forecast data immediately following dates of .fit().
 
@@ -1526,9 +1531,13 @@ class WindowRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        predictStartTime = datetime.datetime.now()
+        if df is not None:
+            self.fit_data(df)
+        if forecast_length is None:
+            forecast_length = self.forecast_length
         if int(forecast_length) > int(self.forecast_length):
             print("Regression must be refit to change forecast length!")
-        predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
 
         if self.output_dim == '1step':
@@ -1549,7 +1558,7 @@ class WindowRegression(ModelObject):
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
                 if isinstance(pred, pd.DataFrame):
                     pred = pred.to_numpy()
-                rfPred = pd.DataFrame(self.regr.predict(pred))
+                rfPred = pd.DataFrame(self.model.predict(pred))
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
                     rfPred.columns = self.last_window.columns
@@ -1574,7 +1583,7 @@ class WindowRegression(ModelObject):
                 pred = pd.concat([pred, tmerg], axis=1)
             if isinstance(pred, pd.DataFrame):
                 pred = pred.to_numpy()
-            cY = pd.DataFrame(self.regr.predict(pred.astype(float)))
+            cY = pd.DataFrame(self.model.predict(pred.astype(float)))
             if self.input_dim == 'multivariate':
                 cY.index = ['values']
                 cY.columns = np.tile(self.column_names, reps=self.forecast_length)
@@ -1795,7 +1804,7 @@ class ComponentAnalysis(ModelObject):
 
     def predict(
         self,
-        forecast_length: int,
+        forecast_length: int = None,
         future_regressor=None,
         just_point_forecast: bool = False,
     ):
@@ -1812,6 +1821,8 @@ class ComponentAnalysis(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
 
+        if forecast_length is None:
+            forecast_length = self.forecast_length
         XA = self.modelobj.predict(
             forecast_length=forecast_length, future_regressor=future_regressor
         )
@@ -1951,6 +1962,7 @@ class DatepartRegression(ModelObject):
         self.regression_model = regression_model
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
+        self.forecast_length = forecast_length
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1998,11 +2010,16 @@ class DatepartRegression(ModelObject):
         self.shape = df.shape
         return self
 
+    def fit_data(self, df, future_regressor=None):
+        self.basic_profile(df)
+        return self
+
     def predict(
         self,
-        forecast_length: int,
+        forecast_length: int = None,
         future_regressor=None,
         just_point_forecast: bool = False,
+        df=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -2015,6 +2032,10 @@ class DatepartRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if forecast_length is None:
+            forecast_length = self.forecast_length
+        if df is not None:
+            self.fit_data(df)
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         self.X_pred = date_part(
@@ -2747,16 +2768,25 @@ class MultivariateRegression(ModelObject):
                 self.model_upper.fit(self.X, self.Y)
                 self.model_lower.fit(self.X, self.Y)
             # we only need the N most recent points for predict
-            self.sktraindata = df.tail(self.min_threshold)
+            # self.sktraindata = df.tail(self.min_threshold)
+            self.fit_data(df)
 
             self.fit_runtime = datetime.datetime.now() - self.startTime
             return self
+
+    def fit_data(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.sktraindata = df.tail(self.min_threshold)
+        if future_regressor is not None:
+            self.regressor_train = future_regressor
+        return self
 
     def predict(
         self,
         forecast_length: int = None,
         just_point_forecast: bool = False,
         future_regressor=None,
+        df=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -2770,6 +2800,10 @@ class MultivariateRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if df is not None:
+            self.fit_data(df)  # no new regressor support
+        if forecast_length is None:
+            forecast_length = self.forecast_length
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         forecast = pd.DataFrame()

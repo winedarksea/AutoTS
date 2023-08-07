@@ -58,21 +58,27 @@ def df_cleanup(
     if verbose > 0:
         dupes = df_wide.columns.duplicated()
         if sum(dupes) > 0:
-            print("Warning, series ids are not unique: {df_wide.columns[dupes]}")
+            print(f"Warning, series ids are not unique: {df_wide.columns[dupes]}")
 
     # infer frequency
+    inferred_freq = infer_frequency(df_wide)
     if frequency == 'infer':
-        frequency = infer_frequency(df_wide)
-        if verbose > 0:
-            print("Inferred frequency is: {}".format(str(frequency)))
-        if (frequency is None) and (verbose >= 0):
-            print("Frequency is 'None'! Input frequency not recognized.")
+        frequency = inferred_freq
+    if verbose > 0:
+        print(f"Data frequency is: {inferred_freq}, used frequency is: {frequency}")
+    if (frequency is None) and (verbose >= 0):
+        print("Frequency is 'None'! Data frequency not recognized.")
 
-    # fill missing dates in index with NaN, resample to freq as necessary
-    try:
-        df_wide = df_wide.resample(frequency).apply(aggfunc)
-    except Exception:
-        df_wide = df_wide.asfreq(frequency, fill_value=np.nan)
+    # trying to avoid resampling if necessary because it can cause unexpected data changes
+    # test if dates are missing from index
+    expected_index = pd.date_range(df_wide.index[0], df_wide.index[-1], freq=frequency)
+    # or at least if lengths are the same, which should be a 'good enough' test for likely issues
+    if len(df_wide.index) != len(expected_index):
+        # fill missing dates in index with NaN, resample to freq as necessary
+        try:
+            df_wide = df_wide.resample(frequency).apply(aggfunc)
+        except Exception:
+            df_wide = df_wide.asfreq(frequency, fill_value=np.nan)
 
     # drop older data, because too much of a good thing...
     if str(drop_data_older_than_periods).isdigit():
@@ -110,7 +116,7 @@ def df_cleanup(
     if drop_most_recent > 0:
         df_wide.drop(df_wide.tail(drop_most_recent).index, inplace=True)
 
-    return pd.DataFrame(df_wide)
+    return df_wide
 
 
 def long_to_wide(

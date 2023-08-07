@@ -1,6 +1,7 @@
 """Fill NA."""
 import numpy as np
 import pandas as pd
+from autots.tools.seasonal import seasonal_independent_match
 
 try:
     from sklearn.impute import KNNImputer
@@ -259,27 +260,65 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         cols = df.columns
         indx = df.index
 
-        df = IterativeImputer(
+        df_local = IterativeImputer(
             ExtraTreesRegressor(n_estimators=10, random_state=0),
             random_state=0,
             max_iter=100,
         ).fit_transform(df)
-        if not isinstance(df, pd.DataFrame):
-            df = pd.DataFrame(df)
-            df.index = indx
-            df.columns = cols
-        return df
+        if not isinstance(df_local, pd.DataFrame):
+            df_local = pd.DataFrame(df_local)
+            df_local.index = indx
+            df_local.columns = cols
+        return df_local
 
     elif method == 'KNNImputer':
         cols = df.columns
         indx = df.index
 
-        df = KNNImputer(n_neighbors=5).fit_transform(df)
-        if not isinstance(df, pd.DataFrame):
-            df = pd.DataFrame(df)
-            df.index = indx
-            df.columns = cols
-        return df
+        df_knn = KNNImputer(n_neighbors=5).fit_transform(df)
+        if not isinstance(df_knn, pd.DataFrame):
+            df_knn = pd.DataFrame(df_knn)
+            df_knn.index = indx
+            df_knn.columns = cols
+        return df_knn
+
+    elif method == 'SeasonalityMotifImputer':
+        s_imputer = SeasonalityMotifImputer(
+            k=3,
+            datepart_method="common_fourier",
+            distance_metric="canberra",
+            linear_mixed=False,
+        )
+        return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
+
+    elif method == 'SeasonalityMotifImputerLinMix':
+        s_imputer = SeasonalityMotifImputer(
+            k=2,
+            datepart_method="common_fourier",
+            distance_metric="canberra",
+            linear_mixed=True,
+        )
+        return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
+
+    elif method == 'DatepartRegressionImputer':
+        # circular import
+        from autots.tools.transform import DatepartRegressionTransformer
+
+        imputer = DatepartRegressionTransformer(
+            datepart_method="common_fourier",
+            holiday_country=["US"],
+            holiday_countries_used=True,
+            regression_model={
+                "model": 'RandomForest',
+                "model_params": {
+                    'n_estimators': 150,
+                    'min_samples_leaf': 1,
+                    'bootstrap': False,
+                },
+            },
+        )
+        imputer.fit(df)
+        return imputer.impute(df)
 
     elif method is None or method == 'None':
         return df
@@ -287,3 +326,106 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     else:
         print(f"FillNA method `{str(method)}` not known, returning original")
         return df
+
+
+class SeasonalityMotifImputer(object):
+    def __init__(
+        self,
+        k: int = 3,
+        datepart_method: str = "simple_2",
+        distance_metric: str = "canberra",
+        linear_mixed: bool = False,
+    ):
+        """Shares arg params with SeasonalityMotif model with which it has much in common.
+
+        Args:
+            k (int): n neighbors. More is smoother, fewer is most accurate, usually
+            datepart_method (str): standard date part methods accepted
+            distance_metirc (str): same as seaonality motif, ie 'mae', 'canberra'
+            linear_mixed (bool): if True, take simple average of this and linear interpolation
+        """
+        self.k = k
+        self.datepart_method = datepart_method
+        self.distance_metric = distance_metric
+        self.linear_mixed = linear_mixed
+
+    def impute(self, df):
+        """Infer missing values on input df."""
+        test, scores = seasonal_independent_match(
+            DTindex=df.index,
+            DTindex_future=df.index,
+            k=df.shape[0] - 1,  # not really used here
+            datepart_method=self.datepart_method,
+            distance_metric=self.distance_metric,
+        )
+        full_dist = np.argsort(scores)
+        full_nan_mask = np.isnan(df.to_numpy())
+
+        brdcst_mask = np.broadcast_to(
+            full_nan_mask[..., None], full_nan_mask.shape + (df.shape[0],)
+        ).T
+        brdcst_mask = np.moveaxis(
+            np.broadcast_to(
+                full_nan_mask[..., None], full_nan_mask.shape + (df.shape[0],)
+            ),
+            0,
+            0,
+        )
+        # brdcst = np.array(np.broadcast_to(full_dist[...,None],full_dist.shape+(df.shape[1],)))  # .reshape(brdcst_mask.shape)
+        brdcst = np.moveaxis(
+            np.array(
+                np.broadcast_to(full_dist[..., None], full_dist.shape + (df.shape[1],))
+            ),
+            -1,
+            1,
+        )
+
+        # mask_positive = (np.cumsum(~brdcst_mask, axis=-1) <= k) & ~brdcst_mask  # True = keeps
+        # mask_negative = (np.cumsum(~brdcst_mask, axis=-1) > k) | brdcst_mask  # True = don't keep
+        mask_negative = np.cumsum(~brdcst_mask, axis=-1) > self.k  # True = don't keep
+
+        # test = np.ma.masked_array(brdcst.T, mask_negative)
+        # temp = np.take(df.to_numpy()[..., None], brdcst)
+        # arrd = np.take(df.to_numpy().T, brdcst).T
+
+        arrd = np.take_along_axis(
+            np.broadcast_to(df.to_numpy()[..., None], df.shape + (df.shape[0],)),
+            brdcst,
+            axis=0,
+        )
+        arrd_mask = np.isnan(arrd)
+        mask_negative = np.cumsum(~arrd_mask, axis=-1) > self.k  # True = don't keep
+        arrd[arrd_mask] = 0
+        temp = np.ma.masked_array(arrd, mask_negative)
+        test = (temp.sum(axis=2) / self.k).data
+        self.df_impt = pd.DataFrame(test, index=df.index, columns=df.columns)
+        if self.linear_mixed:
+            self.df_impt = self.df_impt - 0.5 * (
+                self.df_impt.rolling(14, min_periods=1, center=True).mean()
+                - df.interpolate("linear")
+            )
+
+        # col = "US__sv_feed_interface"
+        # pd.concat([df.loc[:, col], df_impt.loc[:, col + "_imputed"]], axis=1).plot()
+
+        return df.where(~full_nan_mask, self.df_impt)
+
+
+# accuracy test (not necessarily a test of "best")
+if False:
+    from autots import load_daily
+    from autots.tools.transform import na_probs
+
+    df_daily = load_daily(long=False)
+    start = -400
+    end = -300
+    test = df_daily.iloc[start:end].copy()
+    df_daily.iloc[start:end] = np.nan
+    impute_mape = na_probs.copy()
+    impute_mape = {**impute_mape, **df_interpolate}
+    for key in impute_mape.keys():
+        df_imputed = FillNA(df_daily, method=key, window=10)
+        impute_mape[key] = (
+            (df_imputed.iloc[start:end] - test).abs().mean() / df_daily.mean()
+        ).mean()
+    impute_mape

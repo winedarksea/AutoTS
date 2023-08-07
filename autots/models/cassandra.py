@@ -1195,35 +1195,75 @@ class Cassandra(ModelObject):
         )
         return df_forecast
 
-    def predict(
+    def fit_data(
         self,
-        forecast_length,
-        include_history=False,
+        df,
+        forecast_length=None,
         future_regressor=None,
         regressor_per_series=None,
         flag_regressors=None,
         future_impacts=None,
-        new_df=None,
         regressor_forecast_model=None,
         regressor_forecast_model_params=None,
         regressor_forecast_transformations=None,
-        include_organic=False,
+        include_history=True,
+        past_impacts=None,
     ):
-        """Generate a forecast.
+        self.df = self.preprocesser.transform(self.df)
+        if self.past_impacts_intervention == "remove":
+            try:
+                self.df = self.df / (1 + past_impacts)
+            except TypeError:
+                raise ValueError(
+                    "if using past impact with df updates, must pass past_impacts to .fit_data or .predict"
+                )
+        self.df = self.scale_data(df)
+        (
+            self.regr_ps_fore,
+            self.use_impacts,
+            self.full_regr,
+            self.all_flags,
+        ) = self._process_regressors(
+            df=self.df,
+            forecast_length=forecast_length,
+            future_regressor=future_regressor,
+            regressor_per_series=regressor_per_series,
+            flag_regressors=flag_regressors,
+            future_impacts=future_impacts,
+            regressor_forecast_model=regressor_forecast_model,
+            regressor_forecast_model_params=regressor_forecast_model_params,
+            regressor_forecast_transformations=regressor_forecast_transformations,
+            include_history=include_history,
+        )
+        self.trend_train = self.df - self._predict_linear(
+            dates=df.index,
+            history_df=self.df,
+            future_regressor=self.full_regr,
+            flag_regressors=self.all_flags,
+            impacts=self.use_impacts,
+            regressor_per_series=self.regr_ps_fore,
+        )
+        if self.trend_window is not None:
+            self.trend_train, slope, intercept = self.rolling_trend(
+                self.trend_train, np.array(self.create_t(df.index))
+            )
+            self.trend_train = pd.DataFrame(
+                self.trend_train, index=df.index, columns=df.columns
+            )
 
-        future_regressor and regressor_per_series should only include new future values, history is already stored
-        they should match on forecast_length and index of forecasts
-        """
-        self.forecast_length = forecast_length
-        predictStartTime = self.time()
-        if self.trend_train is None:
-            raise ValueError("Cassandra must first be .fit() successfully.")
-
-        # scale new_df if given
-        if new_df is not None:
-            df = self.scale_data(new_df)
-        else:
-            df = self.df.copy()
+    def _process_regressors(
+        self,
+        df=None,
+        forecast_length=None,
+        future_regressor=None,
+        regressor_per_series=None,
+        flag_regressors=None,
+        future_impacts=None,
+        regressor_forecast_model=None,
+        regressor_forecast_model_params=None,
+        regressor_forecast_transformations=None,
+        include_history=True,
+    ):
         # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
         full_regr = None
         if (
@@ -1335,27 +1375,84 @@ class Cassandra(ModelObject):
                 self.regr_ps = regr_ps_fore
         else:
             regr_ps_fore = self.regr_per_series_tr
+        return regr_ps_fore, impacts, full_regr, all_flags
+
+    def predict(
+        self,
+        forecast_length=None,
+        include_history=False,
+        future_regressor=None,
+        regressor_per_series=None,
+        flag_regressors=None,
+        future_impacts=None,
+        new_df=None,
+        regressor_forecast_model=None,
+        regressor_forecast_model_params=None,
+        regressor_forecast_transformations=None,
+        include_organic=False,
+        df=None,  # to be compatiable with others, identical to new_df
+        past_impacts=None,  # only if new_df provided
+    ):
+        """Generate a forecast.
+
+        future_regressor and regressor_per_series should only include new future values, history is already stored
+        they should match on forecast_length and index of forecasts
+
+        Args:
+            forecast_length (int): steps ahead to predict, or None
+            include_history (bool): include past predictions if True
+            all the same regressor args as .fit, but future forecast versions here
+            future_impacts (pd.DataFrame): like past impacts but for the forecast ahead
+            new_df (pd.DataFrame): or df, equivalent to fit_data update
+        """
+        self.forecast_length = forecast_length
+        predictStartTime = self.time()
+        if self.trend_train is None:
+            raise ValueError("Cassandra must first be .fit() successfully.")
+
+        # scale new_df if given
+        if df is not None:
+            new_df = df
+        if new_df is not None:
+            self.fit_data(
+                df=new_df,
+                forecast_length=forecast_length,
+                future_regressor=future_regressor,
+                regressor_per_series=regressor_per_series,
+                flag_regressors=flag_regressors,
+                future_impacts=future_impacts,
+                regressor_forecast_model=regressor_forecast_model,
+                regressor_forecast_model_params=regressor_forecast_model_params,
+                regressor_forecast_transformations=regressor_forecast_transformations,
+                include_history=include_history,
+                past_impacts=past_impacts,
+            )
+        else:
+            (
+                self.regr_ps_fore,
+                self.use_impacts,
+                self.full_regr,
+                self.all_flags,
+            ) = self._process_regressors(
+                df=self.df,
+                forecast_length=forecast_length,
+                future_regressor=future_regressor,
+                regressor_per_series=regressor_per_series,
+                flag_regressors=flag_regressors,
+                future_impacts=future_impacts,
+                regressor_forecast_model=regressor_forecast_model,
+                regressor_forecast_model_params=regressor_forecast_model_params,
+                regressor_forecast_transformations=regressor_forecast_transformations,
+                include_history=include_history,
+            )
+        df = self.df.copy()
 
         # generate trend
         # MAY WANT TO PASS future_regressor HERE
         resid = None
         if forecast_length is not None:
             # create new rolling residual if new data provided
-            if new_df is not None:
-                resid = df - self._predict_linear(
-                    dates=df.index,
-                    history_df=df,
-                    future_regressor=full_regr,
-                    flag_regressors=all_flags,
-                    impacts=impacts,
-                    regressor_per_series=regr_ps_fore,
-                )
-                if self.trend_window is not None:
-                    resid, slope, intercept = self.rolling_trend(
-                        resid, np.array(self.create_t(df.index))
-                    )
-                    resid = pd.DataFrame(resid, index=df.index, columns=df.columns)
-            df_train = self.trend_train if resid is None else resid
+            df_train = self.trend_train
             # combine regressor types depending on what is given
             if (
                 self.future_regressor_train is None
@@ -1365,7 +1462,7 @@ class Cassandra(ModelObject):
                 comp_regr_train = self.flag_regressor_train.reindex(
                     index=df_train.index
                 )
-                comp_regr = all_flags.tail(forecast_length)
+                comp_regr = self.all_flags.tail(forecast_length)
             elif (
                 self.future_regressor_train is not None
                 and self.flag_regressor_train is None
@@ -1374,7 +1471,7 @@ class Cassandra(ModelObject):
                 comp_regr_train = self.future_regressor_train.reindex(
                     index=df_train.index
                 )
-                comp_regr = full_regr.tail(forecast_length)
+                comp_regr = self.full_regr.tail(forecast_length)
             elif (
                 self.future_regressor_train is not None
                 and self.flag_regressor_train is not None
@@ -1383,7 +1480,7 @@ class Cassandra(ModelObject):
                 comp_regr_train = pd.concat(
                     [self.future_regressor_train, self.flag_regressor_train], axis=1
                 ).reindex(index=df_train.index)
-                comp_regr = pd.concat([full_regr, all_flags], axis=1).tail(
+                comp_regr = pd.concat([self.full_regr, self.all_flags], axis=1).tail(
                     forecast_length
                 )
             else:
@@ -1398,11 +1495,8 @@ class Cassandra(ModelObject):
                 forecast_length=forecast_length,
                 frequency=self.frequency,
                 prediction_interval=self.prediction_interval,
-                # no_negatives=no_negatives,
-                # constraint=constraint,
                 future_regressor_train=comp_regr_train,
                 future_regressor_forecast=comp_regr,
-                # holiday_country=holiday_country,
                 fail_on_forecast_nan=True,
                 random_seed=self.random_seed,
                 verbose=self.verbose,
@@ -1453,10 +1547,10 @@ class Cassandra(ModelObject):
                 dates=df.index,
                 trend_component=trend_forecast,
                 history_df=df,
-                future_regressor=full_regr,
-                flag_regressors=all_flags,
-                impacts=impacts,
-                regressor_per_series=regr_ps_fore,
+                future_regressor=self.full_regr,
+                flag_regressors=self.all_flags,
+                impacts=self.use_impacts,
+                regressor_per_series=self.regr_ps_fore,
             )
         elif self.predict_loop_req:
             for step in range(forecast_length):
@@ -1467,10 +1561,10 @@ class Cassandra(ModelObject):
                     dates=forecast_index,
                     trend_component=trend_forecast,
                     history_df=df,
-                    future_regressor=full_regr,
-                    flag_regressors=all_flags,
-                    impacts=impacts,
-                    regressor_per_series=regr_ps_fore,
+                    future_regressor=self.full_regr,
+                    flag_regressors=self.all_flags,
+                    impacts=self.use_impacts,
+                    regressor_per_series=self.regr_ps_fore,
                 )
                 df = pd.concat([df, df_forecast.forecast.iloc[-1:]])
             if not include_history:
@@ -1491,10 +1585,10 @@ class Cassandra(ModelObject):
                 dates=forecast_index,
                 trend_component=trend_forecast,
                 history_df=df,
-                future_regressor=full_regr,
-                flag_regressors=all_flags,
-                impacts=impacts,
-                regressor_per_series=regr_ps_fore,
+                future_regressor=self.full_regr,
+                flag_regressors=self.all_flags,
+                impacts=self.use_impacts,
+                regressor_per_series=self.regr_ps_fore,
             )
 
         # save future index before include_history is added
@@ -2049,7 +2143,10 @@ class Cassandra(ModelObject):
             )
         plot_df = pd.concat(plot_list, axis=1)
         if start_date is not None:
-            plot_df = plot_df[plot_df.index >= start_date]
+            if start_date == "auto":
+                plot_df = plot_df.iloc[-(prediction.forecast_length * 3) :]
+            else:
+                plot_df = plot_df[plot_df.index >= start_date]
         return plot_df.plot(subplots=True, figsize=figsize, title=title)
 
     def return_components(self, to_origin_space=True, include_impacts=False):
@@ -2120,6 +2217,11 @@ class Cassandra(ModelObject):
             },
             index=cur_trend.index,
         )
+        if start_date == "auto":
+            slx = self.forecast_length * 3
+            if slx > len(plot_df.index):
+                slx = 0
+            start_date = plot_df.index[-slx]
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         ax = plot_df.plot(title=title, color=colors, **kwargs)
@@ -2194,6 +2296,14 @@ class Cassandra(ModelObject):
             if self.forecast_length is None
             else prediction.forecast.index[-self.forecast_length]
         )
+        if start_date == "auto":
+            if actuals is not None:
+                slx = -self.forecast_length * 3
+                if abs(slx) > actuals.shape[0]:
+                    slx = 0
+                start_date = actuals.index[slx]
+            else:
+                start_date = prediction.forecast.index[0]
         ax = prediction.plot(
             actuals_used.loc[prediction.forecast.index]
             if actuals_flag is not None
@@ -2447,9 +2557,6 @@ def linear_model(x, y, params):
 # l1_norm isn't working
 # unittests
 
-# TEST
-# new_df
-
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
 
 # search space:
@@ -2529,10 +2636,12 @@ if False:
     past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns)
     past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100
     past_impacts.iloc[-30:, -1] = np.linspace(1, 10)[0:30] / -100
+    past_impacts_full = pd.DataFrame(0, index=df_daily.index, columns=df_daily.columns)
     future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra().get_new_params()
+    c_params['regressors_used'] = False
 
     mod = Cassandra(
         n_jobs=1,
@@ -2546,7 +2655,7 @@ if False:
         categorical_groups=categorical_groups,
         future_regressor=fake_regr,
         regressor_per_series=regr_per_series,
-        past_impacts=past_impacts,
+        # past_impacts=past_impacts,
         flag_regressors=flag_regressor,
     )
     pred = mod.predict(
@@ -2565,7 +2674,7 @@ if False:
     mod.regressors_used
     mod.holiday_countries_used
     with plt.style.context("seaborn-white"):
-        start_date = "2019-07-01"
+        start_date = "auto"
         mod.plot_forecast(
             pred,
             actuals=df_daily if include_history else df_test,
@@ -2602,6 +2711,7 @@ if False:
             dates, fill_value=0
         )
     }
+    # NOT PASSING PROPER REGRESSORS HERE (zero fill) SO MAY LOOK OFF IF REGRESSORS_USED
     pred2 = mod.predict(
         forecast_length=forecast_length,
         include_history=True,
@@ -2609,23 +2719,33 @@ if False:
         flag_regressors=flag_regressor_fcst.reindex(dates, fill_value=0),
         future_regressor=fake_regr_fcst.reindex(dates, fill_value=0),
         regressor_per_series=regr_ps,
+        past_impacts=past_impacts_full[df_train.columns],
     )
     mod.plot_forecast(pred2, actuals=df_daily, series=series, start_date=start_date)
     mod.return_components()
+    # and try retraining back with shorter dataset and see if it matches prior
+    mod.fit_data(df_train, past_impacts=past_impacts[df_train.columns])
+    pred3 = mod.predict(
+        forecast_length=forecast_length,
+        include_history=True,
+        flag_regressors=flag_regressor_fcst.reindex(df_daily.index, fill_value=0),
+        future_regressor=fake_regr_fcst.reindex(df_daily.index, fill_value=0),
+        regressor_per_series=regr_ps,
+        future_impacts=future_impacts,
+    )
+    mod.plot_forecast(
+        pred3,
+        actuals=df_daily if include_history else df_test,
+        series=series,
+        start_date=start_date,
+    )
+
     print(c_params['trend_model'])
 
-# MULTIPLICATIVE SEASONALITY AND HOLIDAYS
+# Known and Possible ISSUES:
+# Multivariate feature working or not?
+# multiplicative seasonality
 
-# low memory option to delete stored dfs and arrays as soon as possible
-
-# Make sure x features are all scaled
-# Remove seasonality from regressors
-
-# transfer learning
-# graphics (AMFM watermark)
-# compare across past forecasts
-# stability
-# make it more modular (separate usable functions)
 
 # Automation
 # allow some config inputs, or automated fit

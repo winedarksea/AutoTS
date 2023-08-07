@@ -244,6 +244,7 @@ class CassandraTest(unittest.TestCase):
                 dates, fill_value=0
             )
         }
+        mod.past_impacts_intervention = None
         pred2 = mod.predict(
             forecast_length=forecast_length,
             include_history=True,

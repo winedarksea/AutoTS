@@ -302,7 +302,7 @@ prediction.plot(
 )
 plt.show()
 
-model.plot_per_series_smape(kind="pie")
+model.plot_per_series_mape(kind="pie")
 plt.show()
 
 model.plot_per_series_error()
@@ -522,11 +522,13 @@ bench.results
 
 ### Mysterious crashes
 Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded. 
-`UnivariateRegression` is usually the most prone to these issues, removing it from the model_list may help. 
+`UnivariateRegression` is usually the most prone to these issues, removing it from the model_list may help (by default it is not included in most lists for this reason). 
 
 Try setting `n_jobs=1` or an otherwise low number, which should reduce the load. Also test the 'superfast' naive models, which are generally low resource consumption. 
 GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used. 
 If problems persist, post to the GitHub Discussion or Issues. 
+
+Rebooting between heavy uses of multiprocessing can also help reduce the risk of crashing in future model runs.
 
 ### Series IDs really need to be unique (or column names need to be all unique in wide data)
 Pretty much as it says, if this isn't true, some odd things may happen that shouldn't.
@@ -750,6 +752,7 @@ params = AnomalyDetector.get_new_params()
 mod = AnomalyDetector(output='multivariate', **params)
 mod.detect(df)
 mod.plot()
+mod.scores # meaning of scores varies by method
 
 # holiday detection, random parameters
 holiday_params = HolidayDetector.get_new_params()

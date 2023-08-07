@@ -415,16 +415,17 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": null, "transformations": {}, "transformation_params": {}}',
         'Ensemble': 0,
     },
-}
-"""
-
-    "66": {
-        'Model': 'UnivariateRegression',
-        'ModelParameters': '{"regression_model": {"model": "KNN", "model_params": {"n_neighbors": 3, "weights": "uniform"}}, "holiday": false, "mean_rolling_periods": 5, "macd_periods": 28, "std_rolling_periods": null, "max_rolling_periods": 24, "min_rolling_periods": null, "ewm_var_alpha": null, "ewm_alpha": 0.5, "additional_lag_periods": 11, "abs_energy": false, "rolling_autocorr_periods": null, "add_date_part": null, "polynomial_degree": null, "x_transform": null, "regression_type": null, "window": null}',
-        'TransformationParameters': '{"fillna": "rolling_mean", "transformations": {"0": "QuantileTransformer", "1": "QuantileTransformer"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 1000}, "1": {"output_distribution": "uniform", "n_quantiles": 20}}}',
+    "68": {
+        'Model': 'SeasonalityMotif',
+        'ModelParameters': '''{
+            "window": 5, "point_method": "weighted_mean",
+            "distance_metric": "mae", "k": 10,
+            "datepart_method": "common_fourier"
+        }''',
+        'TransformationParameters': '{"fillna": "nearest", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": false}}}',
         'Ensemble': 0,
     },
-"""
+}
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
 

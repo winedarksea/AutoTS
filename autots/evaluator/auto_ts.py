@@ -32,6 +32,7 @@ from autots.evaluator.auto_model import (
     remove_leading_zeros,
     horizontal_template_to_model_list,
     create_model_id,
+    ModelPrediction,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -39,7 +40,7 @@ from autots.models.ensemble import (
     generate_mosaic_template,
     generate_crosshair_score,
 )
-from autots.models.model_list import model_lists, no_shared
+from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools import cpu_count
 from autots.evaluator.validation import (
     validate_num_validations,
@@ -80,6 +81,7 @@ class AutoTS(object):
             takes a new subset of columns on each validation, unless mosaic ensembling, in which case columns are the same in each validation
         aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum.
             Beware numeric aggregations like 'mean' will not work with non-numeric inputs.
+            Numeric aggregations like 'sum' will also change nan values to 0
         na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
@@ -156,7 +158,7 @@ class AutoTS(object):
         max_generations: int = 10,
         no_negatives: bool = False,
         constraint: float = None,
-        ensemble: str = 'auto',
+        ensemble: str = None,  # 'auto',
         initial_template: str = 'General+Random',
         random_seed: int = 2022,
         holiday_country: str = 'US',
@@ -178,7 +180,7 @@ class AutoTS(object):
             'oda_weighting': 0.001,
         },
         drop_most_recent: int = 0,
-        drop_data_older_than_periods: int = 100000,
+        drop_data_older_than_periods: int = None,
         model_list: str = 'default',
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
@@ -417,7 +419,6 @@ class AutoTS(object):
                     index, 'TransformationParameters'
                 ] = json.dumps(full_params)
 
-        self.best_model = pd.DataFrame()
         self.regressor_used = False
         # do not add 'ID' to the below unless you want to refactor things.
         self.template_cols = [
@@ -431,10 +432,14 @@ class AutoTS(object):
             if "ID" in self.template_cols
             else ['ID'] + self.template_cols
         )
+        self.grouping_ids = None
         self.initial_results = TemplateEvalObject()
+        self.best_model = pd.DataFrame()
+        self.best_model_id = ""
         self.best_model_name = ""
         self.best_model_params = {}
         self.best_model_transformation_params = ""
+        self.best_model_ensemble = -1
         self.traceback = True if verbose > 1 else False
         self.future_regressor_train = None
         self.validation_train_indexes = []
@@ -459,6 +464,7 @@ class AutoTS(object):
             'datepart_method': 'common_fourier_rw',
         }
         self.model_count = 0
+        self.model = None  # intended for fit_data update models only
 
         if verbose > 2:
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
@@ -486,7 +492,9 @@ class AutoTS(object):
                 ],
                 [0.3, 0.1, 0.2, 0.2],
             )[0]
+            max_generations = random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0]
         else:
+            max_generations = random.choices([15, 25, 50, 200], [0.2, 0.5, 0.2, 0.1])[0]
             ensemble_choice = random.choices(
                 [
                     None,
@@ -506,7 +514,7 @@ class AutoTS(object):
                 ],
                 [0.3, 0.1, 0.2, 0.2],
             )[0]
-        if method in ["full", "fast"]:
+        if method in ["full", "fast", "superfast"]:
             metric_weighting = {
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
@@ -543,6 +551,10 @@ class AutoTS(object):
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
             }
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
+                [0.4, 0.1, 0.3, 0.3, 0.2],
+            )[0]
         else:
             metric_weighting = {
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
@@ -570,6 +582,10 @@ class AutoTS(object):
                     [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
                 )[0],
             }
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                [0.4, 0.1, 0.3, 0.3],
+            )[0]
         preclean_choice = random.choices(
             [
                 None,
@@ -612,9 +628,102 @@ class AutoTS(object):
                         }
                     },
                 },
+                {
+                    'fillna': None,
+                    'transformations': {
+                        '0': 'ClipOutliers',
+                        '1': 'RegressionFilter',
+                        '2': 'ClipOutliers',
+                    },
+                    'transformation_params': {
+                        '0': {
+                            'method': 'remove',
+                            'std_threshold': 2.5,
+                            'fillna': None,
+                        },  # "SeasonalityMotifImputerLinMix"
+                        '1': {
+                            "sigma": 2,
+                            "rolling_window": 90,
+                            "run_order": "season_first",
+                            "regression_params": {
+                                "regression_model": {
+                                    "model": "ElasticNet",
+                                    "model_params": {},
+                                },
+                                "datepart_method": ['common_fourier'],
+                                "polynomial_degree": None,
+                                "transform_dict": None,
+                                "holiday_countries_used": False,
+                            },
+                            "holiday_params": None,
+                        },
+                        '2': {
+                            'method': 'remove',
+                            'std_threshold': 3.0,
+                            'fillna': "SeasonalityMotifImputerLinMix",
+                        },
+                    },
+                },
+                {
+                    'fillna': None,
+                    'transformations': {
+                        '0': 'ClipOutliers',
+                        '1': "LevelShiftMagic",
+                        '2': 'RegressionFilter',
+                        '3': 'ClipOutliers',
+                    },
+                    'transformation_params': {
+                        '0': {
+                            'method': 'remove',
+                            'std_threshold': 2.5,
+                            'fillna': None,
+                        },  # "SeasonalityMotifImputerLinMix"
+                        '1': {
+                            'window_size': 90,
+                            'alpha': 2.5,
+                            'grouping_forward_limit': 3,
+                            'max_level_shifts': 5,
+                            'alignment': 'average',
+                        },
+                        '2': {
+                            "sigma": 2,
+                            "rolling_window": 90,
+                            "run_order": "season_first",
+                            "regression_params": {
+                                "regression_model": {
+                                    "model": "ElasticNet",
+                                    "model_params": {},
+                                },
+                                "datepart_method": ['common_fourier'],
+                                "polynomial_degree": None,
+                                "transform_dict": None,
+                                "holiday_countries_used": False,
+                            },
+                            "holiday_params": None,
+                        },
+                        '3': {
+                            'method': 'remove',
+                            'std_threshold': 3.0,
+                            'fillna': "SeasonalityMotifImputerLinMix",
+                        },
+                    },
+                },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "LocalLinearTrend"},
+                    "transformation_params": {
+                        "0": {
+                            'rolling_window': 30,
+                            'n_tails': 0.1,
+                            'n_future': 0.2,
+                            'method': 'mean',
+                            'macro_micro': True,
+                        },
+                    },
+                },
                 'random',
             ],
-            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.1],
         )[0]
         if preclean_choice == "random":
             preclean_choice = RandomTransform(
@@ -626,7 +735,7 @@ class AutoTS(object):
                     'fast',
                     'superfast',
                     'default',
-                    'fast_parallel',
+                    'fast_parallel_no_arima',
                     'all',
                     'motifs',
                     'no_shared_fast',
@@ -641,8 +750,8 @@ class AutoTS(object):
                 ],
                 [
                     0.2,
-                    0.2,
-                    0.2,
+                    0.4,
+                    0.1,
                     0.2,
                     0.01,
                     0.1,
@@ -664,14 +773,18 @@ class AutoTS(object):
                     'superfast',
                     'motifs',
                     'no_shared_fast',
+                    'fast_parallel_no_arima',
                 ],
                 [
                     0.2,
+                    0.3,
                     0.2,
                     0.2,
-                    0.2,
+                    0.05,
                 ],
             )[0]
+        elif method == "superfast":
+            model_list = 'superfast'
         else:
             model_list = random.choices(
                 [
@@ -682,20 +795,11 @@ class AutoTS(object):
                     'motifs',
                     'no_shared_fast',
                 ],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.1],
+                [0.2, 0.3, 0.2, 0.2, 0.05, 0.1],
             )[0]
-        if method in ['full', 'fast']:
-            validation_method = random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
-            )[0]
-        else:
-            validation_method = random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364'],
-                [0.4, 0.1, 0.3, 0.3],
-            )[0]
+
         return {
-            'max_generations': random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0],
+            'max_generations': max_generations,
             'model_list': model_list,
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],
@@ -778,90 +882,19 @@ class AutoTS(object):
             except Exception:
                 return "Initiated AutoTS object"
 
-    def fit(
+    def fit_data(
         self,
         df,
-        date_col: str = None,
-        value_col: str = None,
-        id_col: str = None,
+        date_col=None,
+        value_col=None,
+        id_col=None,
         future_regressor=None,
-        weights: dict = {},
-        result_file: str = None,
-        grouping_ids=None,
-        validation_indexes: list = None,
+        weights={},
     ):
-        """Train algorithm given data supplied.
-
-        Args:
-            df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
-            date_col (str): name of datetime column
-            value_col (str): name of column containing the data of series.
-            id_col (str): name of column identifying different series.
-            future_regressor (numpy.Array): single external regressor matching train.index
-            weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
-                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
-                available aliases: mean, median, min, max
-            result_file (str): results saved on each new generation. Does not include validation rounds.
-                ".csv" save model results table.
-                ".pickle" saves full object, including ensemble information.
-            grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
-                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
-        """
-        self.weights = weights
+        """Part of the setup that involves fitting the initial data but not running any models."""
         self.date_col = date_col
         self.value_col = value_col
         self.id_col = id_col
-        self.grouping_ids = grouping_ids
-
-        # import mkl
-        # so this actually works it seems, on all sub process models
-        # mkl.set_num_threads_local(8)
-
-        # convert class variables to local variables (makes testing easier)
-        forecast_length = self.forecast_length
-        if self.validation_method == "custom":
-            self.validation_indexes = validation_indexes
-            assert (
-                validation_indexes is not None
-            ), "validation_indexes needs to be filled with 'custom' validation"
-            # if auto num_validation, use as many as provided in custom
-            if self.num_validations in ["auto", 'max']:
-                self.num_validations == len(validation_indexes) - 1
-            else:
-                assert len(validation_indexes) >= (
-                    self.num_validations + 1
-                ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
-        else:
-            self.validation_indexes = []
-        # flag if weights are given
-        if bool(weights):
-            weighted = True
-        else:
-            weighted = False
-        self.weighted = weighted
-        prediction_interval = self.prediction_interval
-        random_seed = self.random_seed
-        metric_weighting = self.metric_weighting
-        verbose = self.verbose
-        template_cols = self.template_cols
-
-        # shut off warnings if running silently
-        if verbose <= 0:
-            import warnings
-
-            warnings.filterwarnings("ignore")
-
-        # clean up result_file input, if given.
-        if result_file is not None:
-            formats = ['.csv', '.pickle']
-            if not any(x in result_file for x in formats):
-                print("result_file must be a valid str with .csv or .pickle")
-                result_file = None
-
-        # set random seeds for environment
-        random_seed = abs(int(random_seed))
-        random.seed(random_seed)
-        np.random.seed(random_seed)
 
         # convert data to wide format
         if date_col is None and value_col is None:
@@ -922,10 +955,16 @@ class AutoTS(object):
                 ens_piece3 = ""
             # self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
             self.ensemble = [ens_piece1, ens_piece2, ens_piece3]
-        ensemble = self.ensemble
+
         # because horizontal cannot handle non-string columns/series_ids
         if any(x in self.ensemble for x in self.h_ens_list):
             df_wide_numeric.columns = [str(xc) for xc in df_wide_numeric.columns]
+
+        # flag if weights are given
+        if bool(weights):
+            self.weighted = True
+        else:
+            self.weighted = False
 
         # use "mean" to assign weight as mean
         if self.weighted:
@@ -962,12 +1001,35 @@ class AutoTS(object):
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
+        if future_regressor is not None:
+            if not isinstance(future_regressor, pd.DataFrame):
+                future_regressor = pd.DataFrame(future_regressor)
+            if future_regressor.empty:
+                raise ValueError(
+                    "future_regressor empty, pass None if intending not to use"
+                )
+            if not isinstance(future_regressor.index, pd.DatetimeIndex):
+                # should be same length as history as this is not yet the predict step
+                future_regressor.index = df_wide_numeric.index
+            # test shape
+            if future_regressor.shape[0] != self.df_wide_numeric.shape[0]:
+                print(
+                    "future_regressor row count does not match length of training data"
+                )
+                time.sleep(2)
+
+            # handle any non-numeric data, crudely
+            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
+            self.future_regressor_train = self.regr_num_trans.fit_transform(
+                future_regressor
+            )
+
         # check how many validations are possible given the length of the data.
         self.num_validations = validate_num_validations(
             self.validation_method,
             self.num_validations,
-            df_wide_numeric,
-            forecast_length,
+            self.df_wide_numeric,
+            self.forecast_length,
             self.min_allowed_train_percent,
             self.verbose,
         )
@@ -975,15 +1037,98 @@ class AutoTS(object):
         # generate validation indices (so it can fail now, not after all the generations)
         self.validation_indexes = generate_validation_indices(
             self.validation_method,
-            forecast_length,
+            self.forecast_length,
             self.num_validations,
-            df_wide_numeric,
+            self.df_wide_numeric,
             validation_params=self.similarity_validation_params
             if self.validation_method == "similarity"
             else self.seasonal_validation_params,
             preclean=None,
             verbose=0,
         )
+
+    def fit(
+        self,
+        df,
+        date_col: str = None,
+        value_col: str = None,
+        id_col: str = None,
+        future_regressor=None,
+        weights: dict = {},
+        result_file: str = None,
+        grouping_ids=None,
+        validation_indexes: list = None,
+    ):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
+            date_col (str): name of datetime column
+            value_col (str): name of column containing the data of series.
+            id_col (str): name of column identifying different series.
+            future_regressor (numpy.Array): single external regressor matching train.index
+            weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
+                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
+                available aliases: mean, median, min, max
+            result_file (str): results saved on each new generation. Does not include validation rounds.
+                ".csv" save model results table.
+                ".pickle" saves full object, including ensemble information.
+            grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
+                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
+        """
+        self.model = None
+        self.grouping_ids = grouping_ids
+
+        # convert class variables to local variables (makes testing easier)
+        if self.validation_method == "custom":
+            self.validation_indexes = validation_indexes
+            assert (
+                validation_indexes is not None
+            ), "validation_indexes needs to be filled with 'custom' validation"
+            # if auto num_validation, use as many as provided in custom
+            if self.num_validations in ["auto", 'max']:
+                self.num_validations == len(validation_indexes) - 1
+            else:
+                assert len(validation_indexes) >= (
+                    self.num_validations + 1
+                ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
+        else:
+            self.validation_indexes = []
+
+        prediction_interval = self.prediction_interval
+        random_seed = self.random_seed
+        metric_weighting = self.metric_weighting
+        verbose = self.verbose
+        template_cols = self.template_cols
+
+        # shut off warnings if running silently
+        if verbose <= 0:
+            import warnings
+
+            warnings.filterwarnings("ignore")
+
+        # clean up result_file input, if given.
+        if result_file is not None:
+            formats = ['.csv', '.pickle']
+            if not any(x in result_file for x in formats):
+                print("result_file must be a valid str with .csv or .pickle")
+                result_file = None
+
+        # set random seeds for environment
+        random_seed = abs(int(random_seed))
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+
+        self.fit_data(
+            df=df,
+            date_col=date_col,
+            value_col=value_col,
+            id_col=id_col,
+            future_regressor=future_regressor,
+            weights=weights,
+        )
+
+        ensemble = self.ensemble
 
         # record if subset or not
         if self.subset is not None:
@@ -999,15 +1144,15 @@ class AutoTS(object):
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
             df_subset = subset_series(
-                df_wide_numeric,
-                list((self.weights.get(i)) for i in df_wide_numeric.columns),
+                self.df_wide_numeric,
+                list((self.weights.get(i)) for i in self.df_wide_numeric.columns),
                 n=self.subset,
                 random_state=random_seed,
             )
             if self.verbose > 1:
                 print(f'First subset is of: {df_subset.columns}')
         else:
-            df_subset = df_wide_numeric.copy()
+            df_subset = self.df_wide_numeric.copy()
         # go to first index
         first_idx = self.validation_indexes[0]
         if max(first_idx) > max(df_subset.index):
@@ -1023,37 +1168,22 @@ class AutoTS(object):
         # split train and test portions, and split regressor if present
         df_train, df_test = simple_train_test_split(
             df_subset,
-            forecast_length=forecast_length,
+            forecast_length=self.forecast_length,
             min_allowed_train_percent=self.min_allowed_train_percent,
             verbose=self.verbose,
         )
         self.validation_train_indexes.append(df_train.index)
         self.validation_test_indexes.append(df_test.index)
         if future_regressor is not None:
-            if not isinstance(future_regressor, pd.DataFrame):
-                future_regressor = pd.DataFrame(future_regressor)
-            if future_regressor.empty:
-                raise ValueError(
-                    "future_regressor empty, pass None if intending not to use"
-                )
-            if not isinstance(future_regressor.index, pd.DatetimeIndex):
-                # should be same length as history as this is not yet the predict step
-                future_regressor.index = df_subset.index
-            # handle any non-numeric data, crudely
-            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
-            future_regressor = self.regr_num_trans.fit_transform(future_regressor)
-            self.future_regressor_train = future_regressor
-            future_regressor_train = future_regressor.reindex(index=df_train.index)
-            future_regressor_test = future_regressor.reindex(index=df_test.index)
+            future_regressor_train = self.future_regressor_train.reindex(
+                index=df_train.index
+            )
+            future_regressor_test = self.future_regressor_train.reindex(
+                index=df_test.index
+            )
         else:
             future_regressor_train = None
             future_regressor_test = None
-        if future_regressor is not None:
-            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
-                print(
-                    "future_regressor row count does not match length of training data"
-                )
-                time.sleep(2)
 
         self.start_time = pd.Timestamp.now()
 
@@ -1164,7 +1294,7 @@ class AutoTS(object):
                 )
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results,
-                    forecast_length=forecast_length,
+                    forecast_length=self.forecast_length,
                     ensemble=ensemble,
                     score_per_series=self.score_per_series,
                 )
@@ -1258,10 +1388,10 @@ class AutoTS(object):
         # run validations
         if self.num_validations > 0:
             self._run_validations(
-                df_wide_numeric=df_wide_numeric,
+                df_wide_numeric=self.df_wide_numeric,
                 num_validations=self.num_validations,
                 validation_template=self.validation_template,
-                future_regressor=future_regressor,
+                future_regressor=self.future_regressor_train,
             )
             # ensembles built on validation results
             if self.ensemble:
@@ -1288,7 +1418,7 @@ class AutoTS(object):
                     )
                     ensemble_templates = EnsembleTemplateGenerator(
                         ens_copy,
-                        forecast_length=forecast_length,
+                        forecast_length=self.forecast_length,
                         ensemble=ensemble,
                         score_per_series=self.score_per_series,
                     )
@@ -1306,10 +1436,10 @@ class AutoTS(object):
                         result_file=result_file,
                     )
                     self._run_validations(
-                        df_wide_numeric=df_wide_numeric,
+                        df_wide_numeric=self.df_wide_numeric,
                         num_validations=self.num_validations,
                         validation_template=ensemble_templates,
-                        future_regressor=future_regressor,
+                        future_regressor=self.future_regressor_train,
                         first_validation=False,
                     )
                 except Exception as e:
@@ -1341,7 +1471,7 @@ or otherwise increase models available."""
                 ens_templates = HorizontalTemplateGenerator(
                     self.score_per_series,
                     model_results=self.initial_results.model_results,
-                    forecast_length=forecast_length,
+                    forecast_length=self.forecast_length,
                     ensemble=ensemble,
                     subset_flag=self.subset_flag,
                 )
@@ -1604,6 +1734,16 @@ or otherwise increase models available."""
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
             ]
+            if eligible_models.empty:
+                # this may occur if there is enough data for full validations
+                # but a lot of that data is bad leading to complete validation round failures
+                print(
+                    "your validation results are questionable, perhaps bad data and too many validations"
+                )
+                max_vals = self.validation_results.model_results['Runs'].max()
+                eligible_models = self.validation_results.model_results[
+                    self.validation_results.model_results['Runs'] >= max_vals
+                ]
             try:
                 self.best_model_non_horizontal = (
                     eligible_models.sort_values(
@@ -1641,6 +1781,16 @@ or otherwise increase models available."""
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
             ]
+            if eligible_models.empty:
+                # this may occur if there is enough data for full validations
+                # but a lot of that data is bad leading to complete validation round failures
+                print(
+                    "your validation results are questionable, perhaps bad data and too many validations"
+                )
+                max_vals = self.validation_results.model_results['Runs'].max()
+                eligible_models = self.validation_results.model_results[
+                    self.validation_results.model_results['Runs'] >= max_vals
+                ]
             try:
                 self.best_model = (
                     eligible_models.sort_values(
@@ -1652,6 +1802,17 @@ or otherwise increase models available."""
             except IndexError:
                 raise ValueError(error_msg_template)
         # give a more convenient dict option
+        self.parse_best_model()
+
+        # clean up any remaining print statements
+        sys.stdout.flush()
+        return self
+
+    def parse_best_model(self):
+        if self.best_model.empty:
+            raise ValueError(
+                "no best model present. Run .fit() of the AutoTS class first."
+            )
         self.best_model_name = self.best_model['Model'].iloc[0]
         self.best_model_id = self.best_model['ID'].iloc[0]
         self.best_model_params = json.loads(self.best_model['ModelParameters'].iloc[0])
@@ -1659,16 +1820,13 @@ or otherwise increase models available."""
             self.best_model['TransformationParameters'].iloc[0]
         )
         self.best_model_ensemble = self.best_model['Ensemble'].iloc[0]
+        # flag if is any type of ensemble
         self.ensemble_check = int(self.best_model_ensemble > 0)
-
         # set flags to check if regressors or ensemble used in final model.
         self.used_regressor_check = self._regr_param_check(
             self.best_model_params.copy()
         )
         self.regressor_used = self.used_regressor_check
-        # clean up any remaining print statements
-        sys.stdout.flush()
-        return self
 
     def _regr_param_check(self, param_dict):
         """Help to search for if a regressor was used in model."""
@@ -1872,38 +2030,74 @@ or otherwise increase models available."""
         model_transformation_params=None,
         df_wide_numeric=None,
         future_regressor_train=None,
+        refit=False,
     ):
-        df_forecast = model_forecast(
-            model_name=self.best_model_name if model_name is None else model_name,
-            model_param_dict=self.best_model_params.copy()
-            if model_params is None
-            else model_params,
-            model_transform_dict=self.best_model_transformation_params
-            if model_transformation_params is None
-            else model_transformation_params,
-            df_train=self.df_wide_numeric
-            if df_wide_numeric is None
-            else df_wide_numeric,
-            forecast_length=forecast_length,
-            frequency=self.frequency,
-            prediction_interval=prediction_interval,
-            no_negatives=self.no_negatives,
-            constraint=self.constraint,
-            future_regressor_train=self.future_regressor_train
-            if future_regressor_train is None
-            else future_regressor_train,
-            future_regressor_forecast=future_regressor,
-            holiday_country=self.holiday_country,
-            startTimeStamps=self.startTimeStamps,
-            grouping_ids=self.grouping_ids,
-            fail_on_forecast_nan=fail_on_forecast_nan,
-            random_seed=self.random_seed,
-            verbose=verbose,
-            n_jobs=self.n_jobs,
-            template_cols=self.template_cols,
-            current_model_file=self.current_model_file,
-            return_model=True,
+        use_model = self.best_model_name if model_name is None else model_name
+        use_params = (
+            self.best_model_params.copy() if model_params is None else model_params
         )
+        use_trans = (
+            self.best_model_transformation_params
+            if model_transformation_params is None
+            else model_transformation_params
+        )
+        use_data = self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric
+        use_regr_train = (
+            self.future_regressor_train
+            if future_regressor_train is None
+            else future_regressor_train
+        )
+        if use_model in update_fit:
+            if self.model is None or refit:
+                self.model = ModelPrediction(
+                    transformation_dict=use_trans,
+                    model_str=use_model,
+                    parameter_dict=use_params,
+                    forecast_length=forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=prediction_interval,
+                    no_negatives=self.no_negatives,
+                    constraint=self.constraint,
+                    holiday_country=self.holiday_country,
+                    startTimeStamps=self.startTimeStamps,
+                    grouping_ids=self.grouping_ids,
+                    fail_on_forecast_nan=fail_on_forecast_nan,
+                    random_seed=self.random_seed,
+                    verbose=verbose,
+                    n_jobs=self.n_jobs,
+                    current_model_file=self.current_model_file,
+                    return_model=True,
+                )
+                self.model = self.model.fit(use_data, future_regressor=use_regr_train)
+            else:
+                self.model.fit_data(use_data, future_regressor=use_regr_train)
+            df_forecast = self.model.predict(
+                forecast_length, future_regressor=future_regressor
+            )
+        else:
+            df_forecast = model_forecast(
+                model_name=use_model,
+                model_param_dict=use_params,
+                model_transform_dict=use_trans,
+                df_train=use_data,
+                forecast_length=forecast_length,
+                frequency=self.frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=self.no_negatives,
+                constraint=self.constraint,
+                future_regressor_train=use_regr_train,
+                future_regressor_forecast=future_regressor,
+                holiday_country=self.holiday_country,
+                startTimeStamps=self.startTimeStamps,
+                grouping_ids=self.grouping_ids,
+                fail_on_forecast_nan=fail_on_forecast_nan,
+                random_seed=self.random_seed,
+                verbose=verbose,
+                n_jobs=self.n_jobs,
+                template_cols=self.template_cols,
+                current_model_file=self.current_model_file,
+                return_model=True,
+            )
         # convert categorical back to numeric
         trans = self.categorical_transformer
         df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
@@ -1911,6 +2105,7 @@ or otherwise increase models available."""
         df_forecast.upper_forecast = trans.inverse_transform(df_forecast.upper_forecast)
         # undo preclean transformations if necessary
         if self.preclean is not None:
+            # self.raw_forecast = copy.copy(df_forecast)
             df_forecast.forecast = self.preclean_transformer.inverse_transform(
                 df_forecast.forecast
             )
@@ -1934,6 +2129,21 @@ or otherwise increase models available."""
         verbose: int = 'self',
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
+
+        If using a model from update_fit list, with no ensembling, underlying model will not be retrained when used as below, with a single prediction interval:
+        This designed for high speed forecasting. Full retraining is best when there is sufficient time.
+        ```python
+        model = AutoTS(model_list='update_fit')
+        model.fit(df)
+        model.predict()
+        # for new data without retraining
+        model.fit_data(df)
+        model.predict()
+        # to force retrain of best model (but not full model search)
+        model.model = None
+        model.fit_data(df)
+        model.predict()
+        ```
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
@@ -1981,6 +2191,7 @@ or otherwise increase models available."""
                     future_regressor=future_regressor,
                     fail_on_forecast_nan=fail_on_forecast_nan,
                     verbose=verbose,
+                    refit=True,  # need to audit all models to make sure they don't require update train with new prediction_interval
                 )
                 forecast_objects[str(interval)] = df_forecast
             return forecast_objects
@@ -2051,6 +2262,7 @@ or otherwise increase models available."""
                 export_template = self.best_model
             else:
                 export_template = self.validation_results.model_results
+                # all validated models + horizontal ensembles
                 export_template = export_template[
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
@@ -2093,19 +2305,70 @@ or otherwise increase models available."""
                     export_template = export_template[self.template_cols_id]
         else:
             raise ValueError("`models` must be 'all' or 'best'")
+        return self.save_template(filename, export_template)
+
+    def save_template(self, filename, export_template, **kwargs):
+        """Helper function for the save part of export_template."""
         try:
             if filename is None:
                 return export_template
             elif '.csv' in filename:
-                return export_template.to_csv(filename, index=False)
+                return export_template.to_csv(
+                    filename, index=False, **kwargs
+                )  # lineterminator='\r\n'
             elif '.json' in filename:
-                return export_template.to_json(filename, orient='columns')
+                return export_template.to_json(filename, orient='columns', **kwargs)
             else:
                 raise ValueError("file must be .csv or .json")
-        except PermissionError:
+        except PermissionError as e:
             raise PermissionError(
                 "Permission Error: directory or existing file is locked for editing."
+            ) from e
+
+    def load_template(self, filename):
+        """Helper funciton for just loading the file part of import_template."""
+        if isinstance(filename, pd.DataFrame):
+            import_template = filename.copy()
+        elif '.csv' in filename:
+            import_template = pd.read_csv(filename)
+        elif '.json' in filename:
+            import_template = pd.read_json(filename, orient='columns')
+        else:
+            raise ValueError("file must be .csv or .json")
+
+        try:
+            import_template = import_template[self.template_cols_id]
+        except Exception:
+            print(
+                "Column names {} were not recognized as matching template columns: {}".format(
+                    str(import_template.columns), str(self.template_cols_id)
+                )
             )
+        return import_template
+
+    def _enforce_model_list(
+        self, template, model_list=None, include_ensemble=False, addon_flag=False
+    ):
+        """remove models not in given model list."""
+        if model_list is None:
+            model_list = self.model_list
+        if include_ensemble:
+            mod_list = model_list + ['Ensemble']
+        else:
+            mod_list = model_list
+        present = template['Model'].unique().tolist()
+        template = template[template['Model'].isin(mod_list)]
+        # double method of removing Ensemble
+        if not include_ensemble and "Ensemble" in template.columns:
+            template = template[template["Ensemble"] == 0]
+        if template.shape[0] == 0:
+            error_msg = f"Len 0. Model_list {model_list} does not match models in imported template {present}, template import failed."
+            if addon_flag:
+                # if template is addon, then this is fine as just a warning
+                print(error_msg)
+            else:
+                raise ValueError(error_msg)
+        return template
 
     def import_template(
         self,
@@ -2128,45 +2391,19 @@ or otherwise increase models available."""
         else:
             addon_flag = False
 
-        if isinstance(filename, pd.DataFrame):
-            import_template = filename.copy()
-        elif '.csv' in filename:
-            import_template = pd.read_csv(filename)
-        elif '.json' in filename:
-            import_template = pd.read_json(filename, orient='columns')
-        else:
-            raise ValueError("file must be .csv or .json")
-
-        try:
-            import_template = import_template[self.template_cols]
-        except Exception:
-            print(
-                "Column names {} were not recognized as matching template columns: {}".format(
-                    str(import_template.columns), str(self.template_cols)
-                )
-            )
+        import_template = self.load_template(filename)
 
         import_template = unpack_ensemble_models(
             import_template, self.template_cols, keep_ensemble=True, recursive=True
         )
 
         if enforce_model_list:
-            # remove models not in given model list
-            if include_ensemble:
-                mod_list = self.model_list + ['Ensemble']
-            else:
-                mod_list = self.model_list
-            import_template = import_template[import_template['Model'].isin(mod_list)]
-            # double method of removing Ensemble
-            if not include_ensemble and "Ensemble" in import_template.columns:
-                import_template = import_template[import_template["Ensemble"] == 0]
-            if import_template.shape[0] == 0:
-                error_msg = "Len 0. Model_list does not match models in imported template, template import failed."
-                if addon_flag:
-                    # if template is addon, then this is fine as just a warning
-                    print(error_msg)
-                else:
-                    raise ValueError(error_msg)
+            import_template = self._enforce_model_list(
+                template=import_template,
+                model_list=None,
+                include_ensemble=include_ensemble,
+                addon_flag=addon_flag,
+            )
 
         if addon_flag:
             self.initial_template = self.initial_template.merge(
@@ -2184,6 +2421,42 @@ or otherwise increase models available."""
         else:
             return ValueError("method must be 'addon' or 'only'")
 
+        return self
+
+    def export_best_model(self, filename, **kwargs):
+        """Basically the same as export_template but only ever the one best model."""
+        return self.save_template(filename, self.best_model.copy(), **kwargs)
+
+    def import_best_model(
+        self,
+        import_target,
+        enforce_model_list: bool = True,
+        include_ensemble: bool = True,
+    ):
+        """Load a best model, overriding any existing setting.
+
+        Args:
+            import_target: pd.DataFrame or file path
+        """
+        if isinstance(import_target, pd.DataFrame):
+            template = import_target.copy()
+        else:
+            template = self.load_template(import_target)
+        if not include_ensemble:
+            template = unpack_ensemble_models(
+                template, self.template_cols, keep_ensemble=False, recursive=True
+            )
+        if enforce_model_list:
+            template = self._enforce_model_list(
+                template=template,
+                model_list=None,
+                include_ensemble=include_ensemble,
+                addon_flag=False,
+            )
+
+        self.best_model = template.iloc[0:1]
+
+        self.parse_best_model()
         return self
 
     def import_results(self, filename):
@@ -2394,9 +2667,15 @@ or otherwise increase models available."""
             series.set_index(series.columns[0], inplace=True)
             series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
         series.columns = ['Series', 'ID']
-        series = series.merge(
-            self.results()[['ID', "Model"]].drop_duplicates(), on="ID"
+        results = pd.Series(
+            {
+                x: self.best_model_params['models'][x]['Model']
+                for x in self.best_model_params['models'].keys()
+            }
         )
+        results.name = "Model"
+        series = series.merge(results, left_on="ID", right_index=True)
+        # series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")  # old
         series = series.merge(
             self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
         )
@@ -2587,6 +2866,7 @@ or otherwise increase models available."""
 
     def plot_validations(
         self,
+        df_wide=None,
         models=None,
         series=None,
         title=None,
@@ -2613,21 +2893,28 @@ or otherwise increase models available."""
             compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
             include_bounds (bool): if True (default) include the upper/lower forecast bounds
         """
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
         if series is None:
-            if str(subset).lower() == "best":
-                series = self.best_model_per_series_mape().tail(1).index.tolist()[0]
-            elif str(subset).lower() == "best score":
-                series = self.best_model_per_series_score().tail(1).index.tolist()[0]
-            elif str(subset).lower() == "worst":
-                series = self.best_model_per_series_mape().head(1).index.tolist()[0]
-            elif str(subset).lower() == "worst score":
-                series = self.best_model_per_series_score().head(1).index.tolist()[0]
-            elif subset is None:
-                series = random.choice(self.df_wide_numeric.columns)
+            if subset is None:
+                series = random.choice(df_wide.columns)
             else:
-                raise ValueError(
-                    "plot_validations arg subset must be None, 'best' or 'worst'"
-                )
+                scores = self.best_model_per_series_mape().index.tolist()
+                scores = [x for x in scores if "_lltmicro" not in x]
+                mapes = self.best_model_per_series_score().index.tolist()
+                mapes = [x for x in mapes if "_lltmicro" not in x]
+                if str(subset).lower() == "best":
+                    series = mapes[-1]
+                elif str(subset).lower() == "best score":
+                    series = scores[-1]
+                elif str(subset).lower() == "worst":
+                    series = mapes[0]
+                elif str(subset).lower() == "worst score":
+                    series = scores[0]
+                else:
+                    raise ValueError(
+                        "plot_validations arg subset must be None, 'best' or 'worst'"
+                    )
         if title is None:
             if subset is not None:
                 if "score" in str(subset).lower():
@@ -2669,12 +2956,21 @@ or otherwise increase models available."""
         if not duplicated:
             self.validation_forecast_cuts = []
             # self.validation_forecasts = {}
-            for val in range(len(self.validation_train_indexes)):
-                test_idx = self.validation_train_indexes[val]
-                train_reg = self.future_regressor_train.reindex(test_idx)
-                sec_idx = self.validation_test_indexes[val]
+            for val in range(len(self.validation_indexes)):
+                val_df_train, val_df_test = simple_train_test_split(
+                    self.df_wide_numeric,
+                    forecast_length=self.forecast_length,
+                    min_allowed_train_percent=self.min_allowed_train_percent,
+                    verbose=self.verbose,
+                )
+                sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
-                fut_reg = self.future_regressor_train.reindex(sec_idx)
+                try:
+                    train_reg = self.future_regressor_train.reindex(val_df_train.index)
+                    fut_reg = self.future_regressor_train.reindex(sec_idx)
+                except Exception:
+                    train_reg = None
+                    fut_reg = None
                 for index, row in validation_template.iterrows():
                     df_forecast = self._predict(
                         forecast_length=self.forecast_length,
@@ -2685,7 +2981,7 @@ or otherwise increase models available."""
                         model_name=row["Model"],
                         model_params=row["ModelParameters"],
                         model_transformation_params=row["TransformationParameters"],
-                        df_wide_numeric=self.df_wide_numeric.reindex(test_idx),
+                        df_wide_numeric=val_df_train,
                         future_regressor_train=train_reg,
                     )
                     idz = create_model_id(
@@ -2705,7 +3001,7 @@ or otherwise increase models available."""
         for x in self.validation_forecasts.keys():
             mname = x.split("_")[1]
             if mname == "chosen" or mname in needed_mods:
-                new_df = pd.DataFrame(index=self.df_wide_numeric.index)
+                new_df = pd.DataFrame(index=df_wide.index)
                 new_df[mname] = self.validation_forecasts[x].forecast[series]
                 new_df[mname + "_" + "upper"] = self.validation_forecasts[
                     x
@@ -2717,7 +3013,7 @@ or otherwise increase models available."""
         plot_df = pd.concat(df_list, sort=True, axis=0)
         plot_df = plot_df.groupby(level=0).last()
         plot_df = (
-            self.df_wide_numeric[series]
+            df_wide[series]
             .rename("actuals")
             .to_frame()
             .merge(plot_df, left_index=True, right_index=True, how="left")
@@ -2843,6 +3139,28 @@ or otherwise increase models available."""
                 figsize=figsize,
                 **kwargs,
             )
+
+    def plot_per_series_smape(
+        self,
+        title: str = None,
+        max_series: int = 10,
+        max_name_chars: int = 25,
+        color: str = "#ff9912",
+        figsize=(12, 4),
+        kind: str = "bar",
+        **kwargs,
+    ):
+        """To be backwards compatible, not necessarily maintained, plot_per_series_mape is to be preferred."""
+        print("please switch to plot_per_series_mape")
+        return self.plot_per_series_mape(
+            title=title,
+            max_series=max_series,
+            max_name_chars=max_name_chars,
+            color=color,
+            figsize=figsize,
+            kind=kind,
+            **kwargs,
+        )
 
     def best_model_per_series_score(self):
         return (

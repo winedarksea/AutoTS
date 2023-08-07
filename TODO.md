@@ -12,12 +12,15 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.8 🌷🌷🌷
-* added plot_validations
-* updated pytorch forecasting for 1.0.0 version
-* plot_grid to prediction object
-* breaking change: plot_per_series_smape switched to the more accurately described plot_per_series_mape
-* various bug fixes such as 'TotalRuntime' missing
+# 0.6.0 ♨️♨️♨️
+* import_best_model and fit_data
+* added canberra distance to SeasonalityMotif and MetricMotif
+* DatepartRegressionTransformer now handles NaN in input data
+* new DatepartRegression and SeasonalityMotif based imputers
+* LevelShiftMagic transformer added
+* adjusted automatic resampling to be performed only when necessary (to avoid filling NA with 0 bug and aggfunc='sum')
+* fixed a bug where if a full validation round fails, best model selection fails
+* macro_micro to LocalLinearTrend
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
