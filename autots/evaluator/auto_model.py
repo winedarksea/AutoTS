@@ -733,7 +733,9 @@ class ModelPrediction(ModelObject):
                         f,
                     )
             except Exception as e:
-                error_msg = f"failed to write {self.current_model_file} with error {repr(e)}"
+                error_msg = (
+                    f"failed to write {self.current_model_file} with error {repr(e)}"
+                )
                 try:
                     with open(f'{self.current_model_file}_failure.json', 'w') as f:
                         f.write(error_msg)
@@ -749,7 +751,9 @@ class ModelPrediction(ModelObject):
 
         self.transformation_runtime = datetime.datetime.now() - transformationStartTime
         # from autots.evaluator.auto_model import ModelMonster
-        self.model = self.model.fit(df_train_transformed, future_regressor=future_regressor)
+        self.model = self.model.fit(
+            df_train_transformed, future_regressor=future_regressor
+        )
         self._fit_complete = True
         return self
 
@@ -790,7 +794,9 @@ class ModelPrediction(ModelObject):
         )
         # CHECK Forecasts are proper length!
         if df_forecast.forecast.shape[0] != self.forecast_length:
-            raise ValueError(f"Model {self.model_str} returned improper forecast_length")
+            raise ValueError(
+                f"Model {self.model_str} returned improper forecast_length"
+            )
 
         if df_forecast.forecast.shape[1] != self.df.shape[1]:
             raise ValueError("Model failed to return correct number of series.")
@@ -806,7 +812,9 @@ class ModelPrediction(ModelObject):
         if self.constraint is not None:
             if isinstance(self.constraint, dict):
                 constraint_method = self.constraint.get("constraint_method", "quantile")
-                constraint_regularization = self.constraint.get("constraint_regularization", 1)
+                constraint_regularization = self.constraint.get(
+                    "constraint_regularization", 1
+                )
                 lower_constraint = self.constraint.get("lower_constraint", 0)
                 upper_constraint = self.constraint.get("upper_constraint", 1)
                 bounds = self.constraint.get("bounds", False)
@@ -850,11 +858,10 @@ class ModelPrediction(ModelObject):
         sys.stdout.flush()
 
         return df_forecast
-    
+
     def fit_data(self, df, future_regressor=None):
         self.df = df
         self.model.fit_data(df, future_regressor)
-
 
 
 class TemplateEvalObject(object):
@@ -1279,7 +1286,9 @@ def model_forecast(
             model_count=model_count,
         )
         model = model.fit(df_train_low, future_regressor_train)
-        return model.predict(forecast_length, future_regressor=future_regressor_forecast)
+        return model.predict(
+            forecast_length, future_regressor=future_regressor_forecast
+        )
 
 
 def _ps_metric(per_series_metrics, metric, model_id):

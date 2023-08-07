@@ -12,7 +12,7 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.9 ♨️♨️♨️
+# 0.6.0 ♨️♨️♨️
 * import_best_model and fit_data
 * added canberra distance to SeasonalityMotif and MetricMotif
 * DatepartRegressionTransformer now handles NaN in input data

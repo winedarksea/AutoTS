@@ -319,7 +319,12 @@ class HolidayDetector(object):
         self.anomaly_model.plot(**kwargs)
 
     def plot(
-        self, series_name=None, include_anomalies=True, title=None, plot_kwargs={}, series=None
+        self,
+        series_name=None,
+        include_anomalies=True,
+        title=None,
+        plot_kwargs={},
+        series=None,
     ):
         import matplotlib.pyplot as plt
 

@@ -122,7 +122,9 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
-fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i not in ['ARIMA', 'NVAR']}
+fast_parallel_no_arima = {
+    i: fast_parallel[i] for i in fast_parallel if i not in ['ARIMA', 'NVAR']
+}
 # so this opiniated and not fully updated always
 best = list(
     set(
@@ -310,7 +312,13 @@ diff_window_motif_list = [
     "ARCH",
 ]
 # models that fit and then have updated predicts without updated model fits (just data update)
-update_fit = ['MultivariateRegression', "DatepartRegression", "GluonTS", 'WindowRegression', 'Cassandra']
+update_fit = [
+    'MultivariateRegression',
+    "DatepartRegression",
+    "GluonTS",
+    'WindowRegression',
+    'Cassandra',
+]
 model_lists = {
     "all": all_models,
     "default": default,

@@ -1176,7 +1176,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 [
                     X,
                     holiday_flag(
-                        df_local.index, country=self.holiday_country, encode_holiday_type=True
+                        df_local.index,
+                        country=self.holiday_country,
+                        encode_holiday_type=True,
                     ),
                 ],
                 axis=1,
@@ -1189,7 +1191,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
             X = np.repeat(X.to_numpy(), y.shape[1], axis=0)
             # add a (hopefully not too massive) series ID encoder. This will not scale well to large multivariate
             # X = np.concatenate([X, np.repeat(np.eye(y.shape[1]), df_local.shape[0], axis=0)], axis=1)
-            X = np.concatenate([X, np.tile(np.eye(y.shape[1]), df_local.shape[0]).T], axis=1)
+            X = np.concatenate(
+                [X, np.tile(np.eye(y.shape[1]), df_local.shape[0]).T], axis=1
+            )
             y = y.flatten()
             y_mask = np.isnan(y)
             y = y[~y_mask]
@@ -1212,7 +1216,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.model = self.model.fit(X, y)
         self.shape = df_local.shape
         return self
-    
+
     def impute(self, df, regressor=None):
         """Fill Missing. Needs to have same general pattern of missingness (full rows of NaN only or scattered NaN) as was present during .fit()"""
         X = date_part(
@@ -1235,7 +1239,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
         if self.partial_nan_rows:
             # process into a single output approach
             X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
-            X = np.concatenate([X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1)
+            X = np.concatenate(
+                [X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1
+            )
 
         pred = self.model.predict(X)
         if self.partial_nan_rows:
@@ -1284,7 +1290,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
         if self.partial_nan_rows:
             # process into a single output approach
             X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
-            X = np.concatenate([X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1)
+            X = np.concatenate(
+                [X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1
+            )
         # X.columns = [str(xc) for xc in X.columns]
         pred = self.model.predict(X)
         if self.partial_nan_rows:
@@ -1324,7 +1332,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
         if self.partial_nan_rows:
             # process into a single output approach
             X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
-            X = np.concatenate([X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1)
+            X = np.concatenate(
+                [X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1
+            )
         pred = self.model.predict(X)
         if self.partial_nan_rows:
             pred = pred.reshape(-1, df.shape[1])
@@ -3203,7 +3213,8 @@ class LocalLinearTrend(EmptyTransformer):
         if self.macro_micro:
             macro = pd.DataFrame(
                 self.slope * self.dates_2d + self.intercept,
-                index=df.index, columns=df.columns
+                index=df.index,
+                columns=df.columns,
             )
             self.columns = df.columns
             micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
@@ -3234,7 +3245,8 @@ class LocalLinearTrend(EmptyTransformer):
         if self.macro_micro:
             macro = pd.DataFrame(
                 self.full_slope[idx] * dates_2d + self.full_intercept[idx],
-                index=df.index, columns=df.columns
+                index=df.index,
+                columns=df.columns,
             )
             micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
             return pd.concat([macro, micro], axis=1)
@@ -3250,7 +3262,9 @@ class LocalLinearTrend(EmptyTransformer):
         if self.macro_micro:
             macro = df[self.columns]
             micro = df[df.columns.difference(self.columns)]
-            micro = micro.rename(columns=lambda x: str(x)[:-len(self.suffix)])[self.columns]
+            micro = micro.rename(columns=lambda x: str(x)[: -len(self.suffix)])[
+                self.columns
+            ]
             return macro + micro
         else:
             dates = df.index.to_julian_date()
@@ -3710,7 +3724,9 @@ class RegressionFilter(EmptyTransformer):
             holiday_params = None
 
         return {
-            "sigma": random.choices([0.5, 1, 1.5, 2, 2.5, 3], [0.1, 0.4, 0.1, 0.3, 0.05, 0.1])[0],
+            "sigma": random.choices(
+                [0.5, 1, 1.5, 2, 2.5, 3], [0.1, 0.4, 0.1, 0.3, 0.05, 0.1]
+            )[0],
             "rolling_window": 90,
             "run_order": random.choices(["season_first", "trend_first"], [0.7, 0.3])[0],
             "regression_params": regression_params,
@@ -3746,9 +3762,9 @@ class LevelShiftMagic(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "window_size": random.choices(
-                [7, 30, 90, 364], [0.1, 0.4, 0.4, 0.1], k=1
-            )[0],
+            "window_size": random.choices([7, 30, 90, 364], [0.1, 0.4, 0.4, 0.1], k=1)[
+                0
+            ],
             "alpha": random.choices(
                 [1.0, 2.0, 2.5, 3.0, 3.5, 4.0], [0.05, 0.2, 0.3, 0.2, 0.15, 0.1], k=1
             )[0],
@@ -3757,7 +3773,7 @@ class LevelShiftMagic(EmptyTransformer):
             "alignment": random.choices(
                 ["average", "last_value", "rolling_diff", "rolling_diff_3nn"],
                 [0.5, 0.2, 0.15, 0.15],
-            )[0]
+            )[0],
         }
 
     def fit(self, df):
@@ -3769,23 +3785,35 @@ class LevelShiftMagic(EmptyTransformer):
         rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
         # pandas 1.1.0 introduction, or thereabouts
         try:
-            indexer = pd.api.indexers.FixedForwardWindowIndexer(window_size=self.window_size)
+            indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                window_size=self.window_size
+            )
             rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
         except Exception:
-            rolling_forward = df.loc[::-1].rolling(self.window_size, center=False, min_periods=1).mean()[::-1]
+            rolling_forward = (
+                df.loc[::-1]
+                .rolling(self.window_size, center=False, min_periods=1)
+                .mean()[::-1]
+            )
         # compare rolling forward and backwards diffs
-        diff = (rolling - rolling_forward)
-        threshold = (diff.std() * self.alpha)
+        diff = rolling - rolling_forward
+        threshold = diff.std() * self.alpha
         diff_abs = diff.abs()
-        diff_mask_0 =  (diff_abs > threshold)  #  | (diff < -threshold)
+        diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
         # merge nearby groups
-        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).fillna(method='ffill', limit=self.grouping_forward_limit)
-        diff_mask =  (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).fillna(
+            method='ffill', limit=self.grouping_forward_limit
+        )
+        diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
         # the max of each changepoint group is the chosen changepoint of the level shift
         # doesn't handle identical maxes although that is unlikely with these floating point averages
         maxes = diff_abs.where(diff_mask, np.nan).max()
         # group ids are needed so that we can progressively remove
-        range_arr = pd.DataFrame(np.mgrid[0:df.shape[0]:1, 0:df.shape[1]][0], index=df.index, columns=df.columns)
+        range_arr = pd.DataFrame(
+            np.mgrid[0 : df.shape[0] : 1, 0 : df.shape[1]][0],
+            index=df.index,
+            columns=df.columns,
+        )
         group_ids = range_arr[~diff_mask].fillna(method='ffill')  # [diff_mask]
         max_mask = diff_abs == maxes
         used_groups = group_ids[max_mask].mean()
@@ -3797,19 +3825,43 @@ class LevelShiftMagic(EmptyTransformer):
             curr_maxes = curr_diff.max()
             max_mask = max_mask | (curr_diff == curr_maxes)
             used_groups = group_ids[curr_diff == curr_maxes].mean()
-            curr_diff = curr_diff.where(((group_ids != used_groups) & diff_mask), np.nan)
+            curr_diff = curr_diff.where(
+                ((group_ids != used_groups) & diff_mask), np.nan
+            )
             curr_diff_sum = np.sum(~curr_diff.isnull().to_numpy())
             count += 1
         # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
         if self.alignment == "last_value":
-            self.lvlshft = (df[max_mask] - df[max_mask.shift(1)].shift(-1)).fillna(0).loc[::-1].cumsum()[::-1]
+            self.lvlshft = (
+                (df[max_mask] - df[max_mask.shift(1)].shift(-1))
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
         elif self.alignment == "average":
             # average the two other approaches
-            lvlshft1 = (df[max_mask] - df[max_mask.shift(1)].shift(-1)).fillna(0).loc[::-1].cumsum()[::-1]
+            lvlshft1 = (
+                (df[max_mask] - df[max_mask.shift(1)].shift(-1))
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
             lvlshft2 = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
             self.lvlshft = (lvlshft1 + lvlshft2) / 2
         elif self.alignment == "rolling_diff_3nn":
-            self.lvlshft = ((diff[max_mask.shift(1)].shift(-1).fillna(0) + diff[max_mask] + diff[max_mask.shift(-1)].shift(1).fillna(0)) / 3).fillna(0).loc[::-1].cumsum()[::-1]
+            self.lvlshft = (
+                (
+                    (
+                        diff[max_mask.shift(1)].shift(-1).fillna(0)
+                        + diff[max_mask]
+                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
+                    )
+                    / 3
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
         else:
             self.lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
 
@@ -3821,7 +3873,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(method='bfill').fillna(0)
+        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(
+            method='bfill'
+        ).fillna(0)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3829,7 +3883,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(method='bfill').fillna(0)
+        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(
+            method='bfill'
+        ).fillna(0)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3839,6 +3895,7 @@ class LevelShiftMagic(EmptyTransformer):
         """
         self.fit(df)
         return self.transform(df)
+
 
 LevelShiftTransformer = LevelShiftMagic
 

@@ -636,10 +636,33 @@ class AutoTS(object):
                         '2': 'ClipOutliers',
                     },
                     'transformation_params': {
-                        '0': {'method': 'remove', 'std_threshold': 2.5, 'fillna': None},  # "SeasonalityMotifImputerLinMix"
-                        '1': {"sigma": 2, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": ['common_fourier'], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None},
-                        '2': {'method': 'remove', 'std_threshold': 3.0, 'fillna': "SeasonalityMotifImputerLinMix"},
-                    }
+                        '0': {
+                            'method': 'remove',
+                            'std_threshold': 2.5,
+                            'fillna': None,
+                        },  # "SeasonalityMotifImputerLinMix"
+                        '1': {
+                            "sigma": 2,
+                            "rolling_window": 90,
+                            "run_order": "season_first",
+                            "regression_params": {
+                                "regression_model": {
+                                    "model": "ElasticNet",
+                                    "model_params": {},
+                                },
+                                "datepart_method": ['common_fourier'],
+                                "polynomial_degree": None,
+                                "transform_dict": None,
+                                "holiday_countries_used": False,
+                            },
+                            "holiday_params": None,
+                        },
+                        '2': {
+                            'method': 'remove',
+                            'std_threshold': 3.0,
+                            'fillna': "SeasonalityMotifImputerLinMix",
+                        },
+                    },
                 },
                 {
                     'fillna': None,
@@ -650,11 +673,40 @@ class AutoTS(object):
                         '3': 'ClipOutliers',
                     },
                     'transformation_params': {
-                        '0': {'method': 'remove', 'std_threshold': 2.5, 'fillna': None},  # "SeasonalityMotifImputerLinMix"
-                        '1': {'window_size': 90, 'alpha': 2.5, 'grouping_forward_limit': 3, 'max_level_shifts': 5, 'alignment': 'average'},
-                        '2': {"sigma": 2, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": ['common_fourier'], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None},
-                        '3': {'method': 'remove', 'std_threshold': 3.0, 'fillna': "SeasonalityMotifImputerLinMix"},
-                    }
+                        '0': {
+                            'method': 'remove',
+                            'std_threshold': 2.5,
+                            'fillna': None,
+                        },  # "SeasonalityMotifImputerLinMix"
+                        '1': {
+                            'window_size': 90,
+                            'alpha': 2.5,
+                            'grouping_forward_limit': 3,
+                            'max_level_shifts': 5,
+                            'alignment': 'average',
+                        },
+                        '2': {
+                            "sigma": 2,
+                            "rolling_window": 90,
+                            "run_order": "season_first",
+                            "regression_params": {
+                                "regression_model": {
+                                    "model": "ElasticNet",
+                                    "model_params": {},
+                                },
+                                "datepart_method": ['common_fourier'],
+                                "polynomial_degree": None,
+                                "transform_dict": None,
+                                "holiday_countries_used": False,
+                            },
+                            "holiday_params": None,
+                        },
+                        '3': {
+                            'method': 'remove',
+                            'std_threshold': 3.0,
+                            'fillna': "SeasonalityMotifImputerLinMix",
+                        },
+                    },
                 },
                 {
                     "fillna": None,
@@ -662,11 +714,11 @@ class AutoTS(object):
                     "transformation_params": {
                         "0": {
                             'rolling_window': 30,
-                             'n_tails': 0.1,
-                             'n_future': 0.2,
-                             'method': 'mean',
-                             'macro_micro': True
-                         },
+                            'n_tails': 0.1,
+                            'n_future': 0.2,
+                            'method': 'mean',
+                            'macro_micro': True,
+                        },
                     },
                 },
                 'random',
@@ -830,7 +882,15 @@ class AutoTS(object):
             except Exception:
                 return "Initiated AutoTS object"
 
-    def fit_data(self, df, date_col=None, value_col=None, id_col=None, future_regressor=None, weights={}):
+    def fit_data(
+        self,
+        df,
+        date_col=None,
+        value_col=None,
+        id_col=None,
+        future_regressor=None,
+        weights={},
+    ):
         """Part of the setup that involves fitting the initial data but not running any models."""
         self.date_col = date_col
         self.value_col = value_col
@@ -895,7 +955,7 @@ class AutoTS(object):
                 ens_piece3 = ""
             # self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
             self.ensemble = [ens_piece1, ens_piece2, ens_piece3]
-  
+
         # because horizontal cannot handle non-string columns/series_ids
         if any(x in self.ensemble for x in self.h_ens_list):
             df_wide_numeric.columns = [str(xc) for xc in df_wide_numeric.columns]
@@ -940,7 +1000,7 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
-        
+
         if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
@@ -960,7 +1020,9 @@ class AutoTS(object):
 
             # handle any non-numeric data, crudely
             self.regr_num_trans = NumericTransformer(verbose=self.verbose)
-            self.future_regressor_train = self.regr_num_trans.fit_transform(future_regressor)
+            self.future_regressor_train = self.regr_num_trans.fit_transform(
+                future_regressor
+            )
 
         # check how many validations are possible given the length of the data.
         self.num_validations = validate_num_validations(
@@ -984,7 +1046,7 @@ class AutoTS(object):
             preclean=None,
             verbose=0,
         )
-            
+
     def fit(
         self,
         df,
@@ -1056,10 +1118,14 @@ class AutoTS(object):
         random_seed = abs(int(random_seed))
         random.seed(random_seed)
         np.random.seed(random_seed)
-        
+
         self.fit_data(
-            df=df, date_col=date_col, value_col=value_col, id_col=id_col,
-            future_regressor=future_regressor, weights=weights
+            df=df,
+            date_col=date_col,
+            value_col=value_col,
+            id_col=id_col,
+            future_regressor=future_regressor,
+            weights=weights,
         )
 
         ensemble = self.ensemble
@@ -1109,8 +1175,12 @@ class AutoTS(object):
         self.validation_train_indexes.append(df_train.index)
         self.validation_test_indexes.append(df_test.index)
         if future_regressor is not None:
-            future_regressor_train = self.future_regressor_train.reindex(index=df_train.index)
-            future_regressor_test = self.future_regressor_train.reindex(index=df_test.index)
+            future_regressor_train = self.future_regressor_train.reindex(
+                index=df_train.index
+            )
+            future_regressor_test = self.future_regressor_train.reindex(
+                index=df_test.index
+            )
         else:
             future_regressor_train = None
             future_regressor_test = None
@@ -1667,11 +1737,12 @@ or otherwise increase models available."""
             if eligible_models.empty:
                 # this may occur if there is enough data for full validations
                 # but a lot of that data is bad leading to complete validation round failures
-                print("your validation results are questionable, perhaps bad data and too many validations")
+                print(
+                    "your validation results are questionable, perhaps bad data and too many validations"
+                )
                 max_vals = self.validation_results.model_results['Runs'].max()
                 eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs']
-                    >= max_vals
+                    self.validation_results.model_results['Runs'] >= max_vals
                 ]
             try:
                 self.best_model_non_horizontal = (
@@ -1713,11 +1784,12 @@ or otherwise increase models available."""
             if eligible_models.empty:
                 # this may occur if there is enough data for full validations
                 # but a lot of that data is bad leading to complete validation round failures
-                print("your validation results are questionable, perhaps bad data and too many validations")
+                print(
+                    "your validation results are questionable, perhaps bad data and too many validations"
+                )
                 max_vals = self.validation_results.model_results['Runs'].max()
                 eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs']
-                    >= max_vals
+                    self.validation_results.model_results['Runs'] >= max_vals
                 ]
             try:
                 self.best_model = (
@@ -1735,10 +1807,12 @@ or otherwise increase models available."""
         # clean up any remaining print statements
         sys.stdout.flush()
         return self
-    
+
     def parse_best_model(self):
         if self.best_model.empty:
-            raise ValueError("no best model present. Run .fit() of the AutoTS class first.")
+            raise ValueError(
+                "no best model present. Run .fit() of the AutoTS class first."
+            )
         self.best_model_name = self.best_model['Model'].iloc[0]
         self.best_model_id = self.best_model['ID'].iloc[0]
         self.best_model_params = json.loads(self.best_model['ModelParameters'].iloc[0])
@@ -1959,10 +2033,20 @@ or otherwise increase models available."""
         refit=False,
     ):
         use_model = self.best_model_name if model_name is None else model_name
-        use_params = self.best_model_params.copy() if model_params is None else model_params
-        use_trans = self.best_model_transformation_params if model_transformation_params is None else model_transformation_params
+        use_params = (
+            self.best_model_params.copy() if model_params is None else model_params
+        )
+        use_trans = (
+            self.best_model_transformation_params
+            if model_transformation_params is None
+            else model_transformation_params
+        )
         use_data = self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric
-        use_regr_train = self.future_regressor_train if future_regressor_train is None else future_regressor_train
+        use_regr_train = (
+            self.future_regressor_train
+            if future_regressor_train is None
+            else future_regressor_train
+        )
         if use_model in update_fit:
             if self.model is None or refit:
                 self.model = ModelPrediction(
@@ -1987,7 +2071,9 @@ or otherwise increase models available."""
                 self.model = self.model.fit(use_data, future_regressor=use_regr_train)
             else:
                 self.model.fit_data(use_data, future_regressor=use_regr_train)
-            df_forecast = self.model.predict(forecast_length, future_regressor=future_regressor)
+            df_forecast = self.model.predict(
+                forecast_length, future_regressor=future_regressor
+            )
         else:
             df_forecast = model_forecast(
                 model_name=use_model,
@@ -2220,14 +2306,16 @@ or otherwise increase models available."""
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         return self.save_template(filename, export_template)
-            
+
     def save_template(self, filename, export_template, **kwargs):
         """Helper function for the save part of export_template."""
         try:
             if filename is None:
                 return export_template
             elif '.csv' in filename:
-                return export_template.to_csv(filename, index=False, **kwargs)  # lineterminator='\r\n'
+                return export_template.to_csv(
+                    filename, index=False, **kwargs
+                )  # lineterminator='\r\n'
             elif '.json' in filename:
                 return export_template.to_json(filename, orient='columns', **kwargs)
             else:
@@ -2257,8 +2345,10 @@ or otherwise increase models available."""
                 )
             )
         return import_template
-    
-    def _enforce_model_list(self, template, model_list=None, include_ensemble=False, addon_flag=False):
+
+    def _enforce_model_list(
+        self, template, model_list=None, include_ensemble=False, addon_flag=False
+    ):
         """remove models not in given model list."""
         if model_list is None:
             model_list = self.model_list
@@ -2309,8 +2399,10 @@ or otherwise increase models available."""
 
         if enforce_model_list:
             import_template = self._enforce_model_list(
-                template=import_template, model_list=None,
-                include_ensemble=include_ensemble, addon_flag=addon_flag
+                template=import_template,
+                model_list=None,
+                include_ensemble=include_ensemble,
+                addon_flag=addon_flag,
             )
 
         if addon_flag:
@@ -2335,9 +2427,14 @@ or otherwise increase models available."""
         """Basically the same as export_template but only ever the one best model."""
         return self.save_template(filename, self.best_model.copy(), **kwargs)
 
-    def import_best_model(self, import_target, enforce_model_list: bool = True, include_ensemble: bool = True):
+    def import_best_model(
+        self,
+        import_target,
+        enforce_model_list: bool = True,
+        include_ensemble: bool = True,
+    ):
         """Load a best model, overriding any existing setting.
-        
+
         Args:
             import_target: pd.DataFrame or file path
         """
@@ -2351,12 +2448,14 @@ or otherwise increase models available."""
             )
         if enforce_model_list:
             template = self._enforce_model_list(
-                template=template, model_list=None,
-                include_ensemble=include_ensemble, addon_flag=False
+                template=template,
+                model_list=None,
+                include_ensemble=include_ensemble,
+                addon_flag=False,
             )
 
         self.best_model = template.iloc[0:1]
-        
+
         self.parse_best_model()
         return self
 
@@ -2568,7 +2667,12 @@ or otherwise increase models available."""
             series.set_index(series.columns[0], inplace=True)
             series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
         series.columns = ['Series', 'ID']
-        results = pd.Series({x: self.best_model_params['models'][x]['Model'] for x in self.best_model_params['models'].keys()})
+        results = pd.Series(
+            {
+                x: self.best_model_params['models'][x]['Model']
+                for x in self.best_model_params['models'].keys()
+            }
+        )
         results.name = "Model"
         series = series.merge(results, left_on="ID", right_index=True)
         # series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")  # old

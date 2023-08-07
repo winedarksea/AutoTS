@@ -752,6 +752,7 @@ params = AnomalyDetector.get_new_params()
 mod = AnomalyDetector(output='multivariate', **params)
 mod.detect(df)
 mod.plot()
+mod.scores # meaning of scores varies by method
 
 # holiday detection, random parameters
 holiday_params = HolidayDetector.get_new_params()

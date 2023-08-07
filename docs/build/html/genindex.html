@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; AutoTS 0.5.8 documentation</title>
+    <title>Index &#8212; AutoTS 0.6.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
@@ -769,10 +769,10 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.EnsembleTemplateGenerator">EnsembleTemplateGenerator() (in module autots.models.ensemble)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.fast_kalman.ensure_matrix">ensure_matrix() (in module autots.tools.fast_kalman)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.error_correlations">error_correlations() (in module autots.evaluator.auto_ts)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.statsmodels.ETS">ETS (class in autots.models.statsmodels)</a>
@@ -787,6 +787,12 @@
       </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.EWMAFilter">EWMAFilter (class in autots.tools.transform)</a>
 </li>
+      <li><a href="source/autots.html#autots.AutoTS.export_best_model">export_best_model() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.export_best_model">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.html#autots.AutoTS.export_template">export_template() (autots.AutoTS method)</a>
 
       <ul>
@@ -863,6 +869,8 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.anomaly_detector.AnomalyDetector.fit">(autots.evaluator.anomaly_detector.AnomalyDetector method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.anomaly_detector.HolidayDetector.fit">(autots.evaluator.anomaly_detector.HolidayDetector method)</a>
+</li>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction.fit">(autots.evaluator.auto_model.ModelPrediction method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.fit">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
@@ -1006,6 +1014,8 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.KalmanSmoothing.fit">(autots.tools.transform.KalmanSmoothing method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftMagic.fit">(autots.tools.transform.LevelShiftMagic method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.LocalLinearTrend.fit">(autots.tools.transform.LocalLinearTrend method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.MeanDifference.fit">(autots.tools.transform.MeanDifference method)</a>
@@ -1039,6 +1049,28 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.anomaly_detector.AnomalyDetector.fit_anomaly_classifier">(autots.evaluator.anomaly_detector.AnomalyDetector method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.AnomalyRemoval.fit_anomaly_classifier">(autots.tools.transform.AnomalyRemoval method)</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.html#autots.AutoTS.fit_data">fit_data() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.html#autots.Cassandra.fit_data">(autots.Cassandra method)</a>
+</li>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction.fit_data">(autots.evaluator.auto_model.ModelPrediction method)</a>
+</li>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.fit_data">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.base.ModelObject.fit_data">(autots.models.base.ModelObject method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.cassandra.Cassandra.fit_data">(autots.models.cassandra.Cassandra method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.gluonts.GluonTS.fit_data">(autots.models.gluonts.GluonTS method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.fit_data">(autots.models.sklearn.DatepartRegression method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.MultivariateRegression.fit_data">(autots.models.sklearn.MultivariateRegression method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.WindowRegression.fit_data">(autots.models.sklearn.WindowRegression method)</a>
 </li>
       </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.SinTrend.fit_sin">fit_sin() (autots.tools.transform.SinTrend static method)</a>
@@ -1085,6 +1117,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.IntermittentOccurrence.fit_transform">(autots.tools.transform.IntermittentOccurrence method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.KalmanSmoothing.fit_transform">(autots.tools.transform.KalmanSmoothing method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftMagic.fit_transform">(autots.tools.transform.LevelShiftMagic method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.LocalLinearTrend.fit_transform">(autots.tools.transform.LocalLinearTrend method)</a>
 </li>
@@ -1142,8 +1176,6 @@
       <li><a href="source/autots.tools.html#autots.tools.fast_kalman.Gaussian">Gaussian (class in autots.tools.fast_kalman)</a>
 </li>
       <li><a href="source/autots.templates.html#autots.templates.general.general_template">general_template (in module autots.templates.general)</a>
-</li>
-      <li><a href="source/autots.templates.html#autots.templates.general.general_template_dict">general_template_dict (in module autots.templates.general)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.generalize_horizontal">generalize_horizontal() (in module autots.models.ensemble)</a>
 </li>
@@ -1335,6 +1367,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.IntermittentOccurrence.get_new_params">(autots.tools.transform.IntermittentOccurrence static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.KalmanSmoothing.get_new_params">(autots.tools.transform.KalmanSmoothing static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftMagic.get_new_params">(autots.tools.transform.LevelShiftMagic static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.LocalLinearTrend.get_new_params">(autots.tools.transform.LocalLinearTrend static method)</a>
 </li>
@@ -1539,6 +1573,12 @@
 <h2 id="I">I</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.html#autots.AutoTS.import_best_model">import_best_model() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.import_best_model">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.html#autots.AutoTS.import_results">import_results() (autots.AutoTS method)</a>
 
       <ul>
@@ -1549,6 +1589,12 @@
 
       <ul>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.import_template">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.impute.SeasonalityMotifImputer.impute">impute() (autots.tools.impute.SeasonalityMotifImputer method)</a>
+
+      <ul>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.impute">(autots.tools.transform.DatepartRegressionTransformer method)</a>
 </li>
       </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.infer_frequency">infer_frequency() (in module autots.tools.shaping)</a>
@@ -1593,6 +1639,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.IntermittentOccurrence.inverse_transform">(autots.tools.transform.IntermittentOccurrence method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.KalmanSmoothing.inverse_transform">(autots.tools.transform.KalmanSmoothing method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftMagic.inverse_transform">(autots.tools.transform.LevelShiftMagic method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.LocalLinearTrend.inverse_transform">(autots.tools.transform.LocalLinearTrend method)</a>
 </li>
@@ -1657,6 +1705,10 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.matrix_var.latc_predictor">latc_predictor() (in module autots.models.matrix_var)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftMagic">LevelShiftMagic (class in autots.tools.transform)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftTransformer">LevelShiftTransformer (in module autots.tools.transform)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.anomaly_utils.limits_to_anomalies">limits_to_anomalies() (in module autots.tools.anomaly_utils)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.linear_model">linear_model() (in module autots.models.cassandra)</a>
@@ -1711,6 +1763,12 @@
 
       <ul>
         <li><a href="source/autots.datasets.html#autots.datasets.load_sine">(in module autots.datasets)</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.html#autots.AutoTS.load_template">load_template() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.load_template">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
       </ul></li>
       <li><a href="source/autots.html#autots.load_weekdays">load_weekdays() (in module autots)</a>
@@ -1813,7 +1871,7 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.base.ModelObject">ModelObject (class in autots.models.base)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction">ModelPrediction() (in module autots.evaluator.auto_model)</a>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction">ModelPrediction (class in autots.evaluator.auto_model)</a>
 </li>
       <li>
     module
@@ -2000,6 +2058,12 @@
         <li><a href="source/autots.models.html#autots.models.cassandra.Cassandra..params">(autots.models.cassandra.Cassandra. attribute)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.html#autots.AutoTS.parse_best_model">parse_best_model() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.parse_best_model">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.models.html#autots.models.ensemble.parse_horizontal">parse_horizontal() (in module autots.models.ensemble)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.PCA">PCA (class in autots.tools.transform)</a>
@@ -2110,6 +2174,12 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.plot_per_series_mape">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.html#autots.AutoTS.plot_per_series_smape">plot_per_series_smape() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.plot_per_series_smape">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.html#autots.Cassandra.plot_things">plot_things() (autots.Cassandra method)</a>
 
       <ul>
@@ -2136,6 +2206,8 @@
 
       <ul>
         <li><a href="source/autots.html#autots.Cassandra.predict">(autots.Cassandra method)</a>, <a href="source/autots.html#id5">[1]</a>
+</li>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction.predict">(autots.evaluator.auto_model.ModelPrediction method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.predict">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
@@ -2404,6 +2476,12 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.TemplateEvalObject.save">save() (autots.evaluator.auto_model.TemplateEvalObject method)</a>
 </li>
+      <li><a href="source/autots.html#autots.AutoTS.save_template">save_template() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.save_template">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.html#autots.Cassandra.scale_data">scale_data() (autots.Cassandra method)</a>
 
       <ul>
@@ -2436,6 +2514,8 @@
         <li><a href="source/autots.models.html#autots.models.cassandra.Cassandra..anomaly_detector.scores">(autots.models.cassandra.Cassandra..anomaly_detector attribute)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_independent_match">seasonal_independent_match() (in module autots.tools.seasonal)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_int">seasonal_int() (in module autots.tools.seasonal)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_window_match">seasonal_window_match() (in module autots.tools.seasonal)</a>
@@ -2444,12 +2524,16 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.SeasonalityMotif">SeasonalityMotif (class in autots.models.basics)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.impute.SeasonalityMotifImputer">SeasonalityMotifImputer (class in autots.tools.impute)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.basics.SeasonalNaive">SeasonalNaive (class in autots.models.basics)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.SectionalMotif">SectionalMotif (class in autots.models.basics)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.greykite.seek_the_oracle">seek_the_oracle() (in module autots.models.greykite)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.set_limit">set_limit() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
 
       <ul>
@@ -2460,8 +2544,6 @@
         <li><a href="source/autots.html#id16">(autots.EventRiskForecast static method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast">set_limit_forecast() (in module autots.evaluator.event_forecasting)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast_historic">set_limit_forecast_historic() (in module autots.evaluator.event_forecasting)</a>
@@ -2592,6 +2674,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.IntermittentOccurrence.transform">(autots.tools.transform.IntermittentOccurrence method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.KalmanSmoothing.transform">(autots.tools.transform.KalmanSmoothing method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.LevelShiftMagic.transform">(autots.tools.transform.LevelShiftMagic method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.LocalLinearTrend.transform">(autots.tools.transform.LocalLinearTrend method)</a>
 </li>

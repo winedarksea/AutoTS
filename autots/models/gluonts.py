@@ -106,7 +106,7 @@ class GluonTS(ModelObject):
         gluon_freq = str(self.frequency).split('-')[0]
         self.train_index = df.columns
         self.train_columns = df.index
-        
+
         if gluon_freq in ["MS", "1MS"]:
             gluon_freq = "M"
 
@@ -453,7 +453,10 @@ class GluonTS(ModelObject):
         return self
 
     def predict(
-        self, forecast_length: int = None, future_regressor=[], just_point_forecast=False
+        self,
+        forecast_length: int = None,
+        future_regressor=[],
+        just_point_forecast=False,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 

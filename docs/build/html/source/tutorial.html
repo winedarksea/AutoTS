@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>Tutorial &#8212; AutoTS 0.5.8 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.6.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
@@ -311,7 +311,7 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 <span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 
-<span class="n">model</span><span class="o">.</span><span class="n">plot_per_series_smape</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pie&quot;</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">plot_per_series_mape</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pie&quot;</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 
 <span class="n">model</span><span class="o">.</span><span class="n">plot_per_series_error</span><span class="p">()</span>
@@ -534,10 +534,11 @@ python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </sp
 <section id="mysterious-crashes">
 <h3>Mysterious crashes<a class="headerlink" href="#mysterious-crashes" title="Permalink to this heading">¶</a></h3>
 <p>Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded.
-<code class="docutils literal notranslate"><span class="pre">UnivariateRegression</span></code> is usually the most prone to these issues, removing it from the model_list may help.</p>
+<code class="docutils literal notranslate"><span class="pre">UnivariateRegression</span></code> is usually the most prone to these issues, removing it from the model_list may help (by default it is not included in most lists for this reason).</p>
 <p>Try setting <code class="docutils literal notranslate"><span class="pre">n_jobs=1</span></code> or an otherwise low number, which should reduce the load. Also test the ‘superfast’ naive models, which are generally low resource consumption.
 GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used.
 If problems persist, post to the GitHub Discussion or Issues.</p>
+<p>Rebooting between heavy uses of multiprocessing can also help reduce the risk of crashing in future model runs.</p>
 </section>
 <section id="series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data">
 <h3>Series IDs really need to be unique (or column names need to be all unique in wide data)<a class="headerlink" href="#series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data" title="Permalink to this heading">¶</a></h3>
@@ -758,6 +759,7 @@ Forecast_length effects how far ahead each forecast step is. Larger is faster, s
 <span class="n">mod</span> <span class="o">=</span> <span class="n">AnomalyDetector</span><span class="p">(</span><span class="n">output</span><span class="o">=</span><span class="s1">&#39;multivariate&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
 <span class="n">mod</span><span class="o">.</span><span class="n">detect</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
 <span class="n">mod</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+<span class="n">mod</span><span class="o">.</span><span class="n">scores</span> <span class="c1"># meaning of scores varies by method</span>
 
 <span class="c1"># holiday detection, random parameters</span>
 <span class="n">holiday_params</span> <span class="o">=</span> <span class="n">HolidayDetector</span><span class="o">.</span><span class="n">get_new_params</span><span class="p">()</span>

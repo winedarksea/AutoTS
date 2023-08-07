@@ -8,7 +8,11 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
-from autots.tools.seasonal import seasonal_int, seasonal_window_match, seasonal_independent_match
+from autots.tools.seasonal import (
+    seasonal_int,
+    seasonal_window_match,
+    seasonal_independent_match,
+)
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
@@ -2489,7 +2493,7 @@ class MetricMotif(ModelObject):
             else:
                 scores = np.mean(np.abs(temp - last_window.T), axis=2)
         elif distance_metric == "canberra":
-            divisor = (np.abs(temp) + np.abs(last_window.T))
+            divisor = np.abs(temp) + np.abs(last_window.T)
             divisor[divisor == 0] = 1
             if nan_flag:
                 scores = np.nanmean(np.abs(temp - last_window.T) / divisor, axis=2)
@@ -2840,7 +2844,7 @@ class SeasonalityMotif(ModelObject):
                 ],
                 [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
             )[0],
-            "independent": bool(random.getrandbits(1))
+            "independent": bool(random.getrandbits(1)),
         }
 
     def get_params(self):

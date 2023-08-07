@@ -494,7 +494,7 @@ def seasonal_window_match(
     if distance_metric == "mae":
         scores = np.mean(np.abs(temp - last_window.T), axis=2)
     elif distance_metric == "canberra":
-        divisor = (np.abs(temp) + np.abs(last_window.T))
+        divisor = np.abs(temp) + np.abs(last_window.T)
         divisor[divisor == 0] = 1
         scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
     elif distance_metric == "mqae":
@@ -530,7 +530,7 @@ def seasonal_window_match(
 
 
 def seasonal_independent_match(
-        DTindex, DTindex_future, k, datepart_method, distance_metric
+    DTindex, DTindex_future, k, datepart_method, distance_metric
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
     future_array = date_part(DTindex_future, method=datepart_method).to_numpy()
@@ -543,7 +543,7 @@ def seasonal_independent_match(
     if distance_metric == "mae":
         scores = np.mean(np.abs(a - b), axis=2)
     elif distance_metric == "canberra":
-        divisor = (np.abs(a) + np.abs(b))
+        divisor = np.abs(a) + np.abs(b)
         divisor[divisor == 0] = 1
         scores = np.mean(np.abs(a - b) / divisor, axis=2)
     elif distance_metric == "mqae":

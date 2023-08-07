@@ -474,6 +474,7 @@ class ModelTest(unittest.TestCase):
         random_seed = 300
         df = load_daily(long=False).iloc[:, 0:5]
         df = df[df.index < "2022-10-04"]  # update dataset and have not yet updated stored model results
+        df = df[df.index > "2017-10-04"]  # update dataset and have not yet updated stored model results
         models = [
             'SectionalMotif', 'MultivariateMotif', 'AverageValueNaive',
             'NVAR', "LastValueNaive", 'Theta', 'FBProphet', 'SeasonalNaive',
@@ -829,7 +830,7 @@ class ModelTest(unittest.TestCase):
         )
         model.fit(df_train)
         first_forecast = model.predict(future_regressor=future_regressor_forecast)
-        self.assertListEqual(first_forecast.index.tolist(), df_test.index.tolist())
+        self.assertListEqual(first_forecast.forecast.index.tolist(), df_test.index.tolist())
         model.fit_data(df)
         updated_forecast = model.predict()
         self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)

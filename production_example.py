@@ -36,7 +36,7 @@ forecast_name = "example"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = (
-    "D"  # "infer" for automatic alignment, but specific offsets are most reliable
+    "D"  # "infer" for automatic alignment, but specific offsets are most reliable, 'D' is daily
 )
 forecast_length = 60  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
@@ -124,6 +124,7 @@ fred_series = [
 tickers = ["MSFT", "PG"]
 trend_list = ["forecasting", "msft", "p&g"]
 weather_event_types = ["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"]
+wikipedia_pages = ['all', 'Microsoft', "Procter_%26_Gamble", "YouTube", "United_States"]
 df = load_live_daily(
     long=False,
     fred_key=fred_key,
@@ -133,7 +134,7 @@ df = load_live_daily(
     earthquake_min_magnitude=5,
     weather_years=3,
     london_air_days=700,
-    wikipedia_pages=['all', 'Microsoft', "Procter_%26_Gamble", "YouTube", "United_States"],
+    wikipedia_pages=wikipedia_pages,
     gsa_key=gsa_key,
     gov_domain_list=None,  # ['usajobs.gov', 'usps.com', 'weather.gov'],
     gov_domain_limit=700,
@@ -196,6 +197,7 @@ df.to_csv(f"training_data_{forecast_name}.csv")
 # example future_regressor with some things we can glean from data and datetime index
 # note this only accepts `wide` style input dataframes
 # and this is optional, not required for the modeling
+# also create macro_micro before inclusion
 regr_train, regr_fcst = create_regressor(
     df,
     forecast_length=forecast_length,
@@ -243,7 +245,7 @@ model = AutoTS(
     max_generations=gens,
     metric_weighting=metric_weighting,
     initial_template=initial_template,
-    aggfunc="sum",
+    aggfunc="first",
     models_to_validate=models_to_validate,
     model_interrupt=True,
     num_validations=num_validations,
@@ -273,6 +275,19 @@ model = model.fit(
     future_regressor=regr_train,
 )
 
+# save a template of best models
+if initial_training or evolve:
+    model.export_template(
+        template_filename,
+        models="best",
+        n=n_export,
+        max_per_model_class=6,
+        include_results=True,
+    )
+    if archive_templates:
+        arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
+        model.export_template(arc_file, models="best", n=1)
+
 prediction = model.predict(
     future_regressor=regr_fcst, verbose=2, fail_on_forecast_nan=True
 )
@@ -296,19 +311,6 @@ forecasts_lower_df = prediction.lower_forecast
 model_results = model.results()
 validation_results = model.results("validation")
 
-# save a template of best models
-if initial_training or evolve:
-    model.export_template(
-        template_filename,
-        models="best",
-        n=n_export,
-        max_per_model_class=6,
-        include_results=True,
-    )
-    if archive_templates:
-        arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
-        model.export_template(arc_file, models="best", n=1)
-
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 print(f'The following model types failed completely {model.list_failed_model_types()}')
 print("Slowest models:")
@@ -329,11 +331,13 @@ if graph:
         prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
         plt.show()
 
-        worst = model.best_model_per_series_score().head(6).index.tolist()
+        scores = model.best_model_per_series_mape().index.tolist()
+        scores = [x for x in scores if x in df.columns]
+        worst = scores[0:6]
         prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Worst Performing Forecasts", cols=worst)
         plt.show()
 
-        best = model.best_model_per_series_score().tail(6).index.tolist()
+        best = scores[-6:]
         prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Best Performing Forecasts", cols=best)
         plt.show()
 

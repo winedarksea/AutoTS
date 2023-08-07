@@ -1515,7 +1515,7 @@ class WindowRegression(ModelObject):
 
     def predict(
         self,
-        forecast_length: int=None,
+        forecast_length: int = None,
         future_regressor=None,
         just_point_forecast: bool = False,
         df=None,
@@ -1804,7 +1804,7 @@ class ComponentAnalysis(ModelObject):
 
     def predict(
         self,
-        forecast_length: int=None,
+        forecast_length: int = None,
         future_regressor=None,
         just_point_forecast: bool = False,
     ):
