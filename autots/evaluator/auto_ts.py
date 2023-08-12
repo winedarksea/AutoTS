@@ -449,6 +449,7 @@ class AutoTS(object):
         self.best_model_non_horizontal = None
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
+        self.validation_results = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -1448,10 +1449,6 @@ class AutoTS(object):
                     )
                     time.sleep(5)
 
-        error_msg_template = """No models available from validation.
-Try increasing models_to_validate, max_per_model_class
-or otherwise increase models available."""
-
         # run validation_results aggregation
         self.validation_results = copy.copy(self.initial_results)
         self.validation_results = validation_aggregation(
@@ -1730,36 +1727,17 @@ or otherwise increase models available."""
             # use the best of these ensembles if any ran successfully
             # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
             # however they are chosen based off of validation results of all validation runs
-            eligible_models = self.validation_results.model_results[
-                self.validation_results.model_results['Runs']
-                >= (self.num_validations + 1)
-            ]
-            if eligible_models.empty:
-                # this may occur if there is enough data for full validations
-                # but a lot of that data is bad leading to complete validation round failures
-                print(
-                    "your validation results are questionable, perhaps bad data and too many validations"
-                )
-                max_vals = self.validation_results.model_results['Runs'].max()
-                eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs'] >= max_vals
-                ]
             try:
-                self.best_model_non_horizontal = (
-                    eligible_models.sort_values(
-                        by="Score", ascending=True, na_position='last'
-                    )
-                    .drop_duplicates(subset=self.template_cols)
-                    .head(1)[self.template_cols_id]
-                )
-            except IndexError:
-                raise ValueError(error_msg_template)
+                self.best_model_non_horizontal = self._best_non_horizontal()
+            except Exception:
+                self.best_model_non_horizontal = pd.DataFrame()
+
             try:
                 horz_flag = hens_model_results['Exceptions'].isna().any()
             except Exception:
                 horz_flag = False
             if not hens_model_results.empty and horz_flag:
-                hens_model_results['Score'] = generate_score(
+                hens_model_results.loc['Score'] = generate_score(
                     hens_model_results,
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval,
@@ -1776,37 +1754,56 @@ or otherwise increase models available."""
                 self.best_model = self.best_model_non_horizontal
 
         else:
-            # choose best model, when no horizontal ensembling is done
-            eligible_models = self.validation_results.model_results[
-                self.validation_results.model_results['Runs']
-                >= (self.num_validations + 1)
-            ]
-            if eligible_models.empty:
-                # this may occur if there is enough data for full validations
-                # but a lot of that data is bad leading to complete validation round failures
-                print(
-                    "your validation results are questionable, perhaps bad data and too many validations"
-                )
-                max_vals = self.validation_results.model_results['Runs'].max()
-                eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs'] >= max_vals
-                ]
-            try:
-                self.best_model = (
-                    eligible_models.sort_values(
-                        by="Score", ascending=True, na_position='last'
-                    )
-                    .drop_duplicates(subset=self.template_cols)
-                    .head(1)[self.template_cols_id]
-                )
-            except IndexError:
-                raise ValueError(error_msg_template)
+            self.best_model= self._best_non_horizontal()
+
         # give a more convenient dict option
         self.parse_best_model()
 
         # clean up any remaining print statements
         sys.stdout.flush()
         return self
+
+    def _best_non_horizontal(self, metric_weighting=None):
+        if self.validation_results is None:
+            raise ValueError("validation results are None, cannot choose best model without fit")
+        if metric_weighting is None:
+            metric_weighting = self.metric_weighting
+        # choose best model, when no horizontal ensembling is done
+        eligible_models = self.validation_results.model_results[
+            self.validation_results.model_results['Runs']
+            >= (self.num_validations + 1)
+        ].copy()
+        if eligible_models.empty:
+            # this may occur if there is enough data for full validations
+            # but a lot of that data is bad leading to complete validation round failures
+            print(
+                "your validation results are questionable, perhaps bad data and too many validations"
+            )
+            max_vals = self.validation_results.model_results['Runs'].max()
+            eligible_models = self.validation_results.model_results[
+                self.validation_results.model_results['Runs'] >= max_vals
+            ]
+        # previously I was relying on the mean of Scores calculated for each individual validation
+        eligible_models['Score'] = generate_score(
+            eligible_models,
+            metric_weighting=metric_weighting,
+            prediction_interval=self.prediction_interval,
+        )
+        try:
+            best_model = (
+                eligible_models.sort_values(
+                    by="Score", ascending=True, na_position='last'
+                )
+                .drop_duplicates(subset=self.template_cols)
+                .head(1)[self.template_cols_id]
+            )
+        except IndexError:
+            raise ValueError(
+                """No models available from validation.
+Try increasing models_to_validate, max_per_model_class
+or otherwise increase models available."""
+            )
+        return best_model
 
     def parse_best_model(self):
         if self.best_model.empty:
