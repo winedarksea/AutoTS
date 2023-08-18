@@ -3735,7 +3735,7 @@ class RegressionFilter(EmptyTransformer):
 
 
 class LevelShiftMagic(EmptyTransformer):
-    """Detects and corrects for level shifts.
+    """Detects and corrects for level shifts. May seriously alter trend.
 
     Args:
         method (str): "clip" or "remove"
@@ -3900,6 +3900,117 @@ class LevelShiftMagic(EmptyTransformer):
 LevelShiftTransformer = LevelShiftMagic
 
 
+class CenterSplit(EmptyTransformer):
+    """Vaguely Croston inspired approach separating occurrence from magnitude.
+
+    Args:
+        center (str): 'zero' or 'median', the value to use as most the intermittent gap
+        fillna (str): a fillna method, see standard fillna methods
+    """
+
+    def __init__(
+        self,
+        center: str = "zero",
+        fillna="linear",
+        suffix: str = "_mdfcrst",
+        **kwargs,
+    ):
+        super().__init__(name="CenterSplit")
+        self.center = center
+        self.fillna = fillna
+        self.suffix = suffix
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.center in ["zero", "0", 0]:
+            mask = df != 0
+            use_df = df
+        elif self.center == "median":
+            self.median = df.median(axis=0)
+            mask = df != self.median
+            use_df = df - self.median
+        else:
+            raise ValueError(f"ModifiedCroston arg center `{self.center}` not recognized")
+
+        macro = use_df.where(mask, np.nan)
+        macro = FillNA(macro, method=self.fillna, window=10)
+
+        self.columns = df.columns
+        micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
+        return pd.concat([macro, micro], axis=1)
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.center in ["zero", "0", 0]:
+            mask = df != 0
+            use_df = df
+        elif self.center == "median":
+            # self.median = df.median(axis=0)
+            mask = df != self.median
+            use_df = df - self.median
+        else:
+            raise ValueError(f"ModifiedCroston arg center `{self.center}` not recognized")
+
+        macro = use_df.where(mask, np.nan)
+        macro = FillNA(macro, method=self.fillna, window=10)
+
+        # self.columns = df.columns
+        micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
+        return pd.concat([macro, micro], axis=1)
+        
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        macro = df[self.columns]
+        micro = df[df.columns.difference(self.columns)]
+        micro = micro.rename(columns=lambda x: str(x)[: -len(self.suffix)])[
+            self.columns
+        ]
+        if self.center == "median":
+            return macro * micro + self.median
+        else:
+            return macro * micro
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "fillna": random.choices(
+                ["linear", "SeasonalityMotifImputer", 'pchip', 'akima', 'mean', 'ffill', "SeasonalityMotifImputer1K"], [0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1]
+            )[0],
+            "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3971,6 +4082,7 @@ have_params = {
     "DatepartRegressionTransformer": DatepartRegressionTransformer,
     "LevelShiftMagic": LevelShiftMagic,
     "LevelShiftTransformer": LevelShiftTransformer,
+    "CenterSplit": CenterSplit,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4065,6 +4177,8 @@ class GeneralTransformer(object):
             'LocalLinearTrend': rolling local trend, using tails for future and past trend
             'KalmanSmoothing': smooth using a state space model
             'RegressionFilter': fit seasonal removal and local linear trend, clip std devs away from this fit
+            'LevelShiftTransformer': automatically compensate for historic level shifts in data.
+            'CenterSplit': Croston inspired magnitude/occurrence split for intermittent
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4477,11 +4591,12 @@ transformer_dict = {
     "Cointegration": 0.01,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
-    'HolidayTransformer': 0.01,
+    'HolidayTransformer': 0.02,
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.04,
     'RegressionFilter': 0.07,
     "LevelShiftTransformer": 0.03,
+    "CenterSplit": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -4541,6 +4656,7 @@ decompositions = {
     "DifferencedTransformer": 0.05,
     "DatepartRegression": 0.05,
     "ClipOutliers": 0.05,
+    "LocalLinearTrend": 0.03,
 }
 transformer_class = {}
 
@@ -4561,6 +4677,7 @@ na_probs = {
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
     "SeasonalityMotifImputer": 0.1,
     "SeasonalityMotifImputerLinMix": 0.02,
+    "SeasonalityMotifImputer1K": 0.01,
     "DatepartRegressionImputer": 0.05,  # also slow
 }
 

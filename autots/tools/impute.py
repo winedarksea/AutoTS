@@ -291,6 +291,15 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         )
         return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
 
+    elif method == 'SeasonalityMotifImputer1K':
+        s_imputer = SeasonalityMotifImputer(
+            k=1,
+            datepart_method="common_fourier",
+            distance_metric="mae",
+            linear_mixed=False,
+        )
+        return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
+
     elif method == 'SeasonalityMotifImputerLinMix':
         s_imputer = SeasonalityMotifImputer(
             k=2,

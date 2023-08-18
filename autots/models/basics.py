@@ -1894,7 +1894,8 @@ class SectionalMotif(ModelObject):
         res_sum = np.nansum(res, axis=0)
         num_top = self.k
         res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
-        results = array[window_idxs[res_idx, window_size:]]
+        self.windows = window_idxs[res_idx, window_size:]
+        results = array[self.windows]
         # reshape results to (num_windows, forecast_length, num_series)
         if results.ndim == 4:
             res_shape = results.shape

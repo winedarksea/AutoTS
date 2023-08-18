@@ -13,6 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # 0.6.1 ✨✨✨
+* CenterSplit transformer added
+* separated function for best model selection
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
