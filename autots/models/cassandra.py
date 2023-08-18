@@ -670,7 +670,7 @@ class Cassandra(ModelObject):
                 c_x['intercept'] = 1
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                self.params[col] = linear_model(
+                self.params[col] = fit_linear_model(
                     c_x, self.df[col].to_frame(), params=self.linear_model
                 )
                 trend_residuals.append(
@@ -694,7 +694,7 @@ class Cassandra(ModelObject):
             self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
             x_array['intercept'] = 1
             # run model
-            self.params = linear_model(x_array, self.df, params=self.linear_model)
+            self.params = fit_linear_model(x_array, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(
                 x_array[self.keep_cols], self.params[self.keep_cols_idx]
             )
@@ -2486,7 +2486,7 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     ).x.reshape(X.shape[1], y.shape[1])
 
 
-def linear_model(x, y, params):
+def fit_linear_model(x, y, params):
     model_type = params.get("model", "lstsq")
     lambd = params.get("lambda", None)
     rec = params.get("recency_weighting", None)
