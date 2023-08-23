@@ -364,6 +364,7 @@ def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
 datepart_components = [
     "dayofweek",
     "month",
+    'day',
     "weekend",
     "weekdayofmonth",
     "hour",
@@ -372,6 +373,10 @@ datepart_components = [
     "dayofyear",
     "weekdaymonthofyear",
     "dayofmonthofyear",
+    "is_month_end",
+    "is_month_start",
+    "is_quarter_start",
+    "is_quarter_end",
 ]
 
 
@@ -385,6 +390,11 @@ def create_datepart_components(DTindex, seasonality):
     elif seasonality == "month":
         return pd.get_dummies(
             pd.Categorical(DTindex.month, categories=list(range(1, 13)), ordered=True),
+            dtype=np.uint8,
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "day":
+        return pd.get_dummies(
+            pd.Categorical(DTindex.day, categories=list(range(1, 32)), ordered=True),
             dtype=np.uint8,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "weekend":
@@ -455,6 +465,16 @@ def create_datepart_components(DTindex, seasonality):
             ),
             dtype=np.uint16,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "is_month_end":
+        return pd.DataFrame({'is_month_end': DTindex.is_month_end})
+    elif seasonality == "is_month_start":
+        return pd.DataFrame({'is_month_start': DTindex.is_month_start})
+    elif seasonality == "is_quarter_start":
+        return pd.DataFrame({'is_quarter_start': DTindex.is_quarter_start})
+    elif seasonality == "is_quarter_end":
+        return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
+    else:
+        raise ValueError(f"create_datepart_components `{seasonality}` is not recognized")
 
 
 def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
