@@ -1709,7 +1709,7 @@ class Cassandra(ModelObject):
                     columns=self.past_impacts.columns,
                 )
                 if future_impacts is not None:
-                    future_impts = future_impts + future_impacts
+                    future_impts = ((1 + future_impts) * (1 + future_impacts)) - 1
             else:
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
@@ -1999,6 +1999,10 @@ class Cassandra(ModelObject):
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
                 'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
+                'method': random.choices(
+                    [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'SLSQP', 'Powell', 'trust-constr', 'COBYLA'],
+                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02]
+                )[0],
             }
         if method == "regressor":
             regressors_used = True
@@ -2465,7 +2469,7 @@ def cost_function_l2(params, X, y):
 
 
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
-def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
+def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     """Any cost function version of lin reg."""
     # start with lstsq fit as estimated point
     x0 = lstsq_solve(X, y).flatten()
@@ -2482,7 +2486,7 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     else:
         cost_func = cost_function_l1
     return minimize(
-        cost_func, x0, args=(X, y), bounds=bounds, options={'maxiter': maxiter}
+        cost_func, x0, args=(X, y), bounds=bounds, method=method, options={'maxiter': maxiter}
     ).x.reshape(X.shape[1], y.shape[1])
 
 
@@ -2512,6 +2516,7 @@ def fit_linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="l1",
         )
     elif model_type == "quantile_norm":
@@ -2519,6 +2524,7 @@ def fit_linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="quantile",
         )
     elif model_type == "dwae_norm":
@@ -2526,6 +2532,7 @@ def fit_linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="dwae",
         )
     elif model_type == "l1_positive":
@@ -2533,6 +2540,7 @@ def fit_linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="l1_positive",
         )
     else:
