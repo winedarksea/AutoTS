@@ -983,10 +983,10 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'GaussianProcessRegressor',
                 "model_params": {
-                    'alpha': random.choice([0.0000000001, 0.00001]),
+                    'alpha': random.choice([0.0000000001, 0.00001, 1]),
                     'kernel': random.choices(
                         [None, "DotWhite", "White", "RBF", "ExpSineSquared"],
-                        [0.4, 0.1, 0.1, 0.1, 0.1],
+                        [0.4, 0.1, 0.1, 0.4, 0.1],
                     )[0],
                 },
             }
