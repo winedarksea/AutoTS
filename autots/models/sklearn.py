@@ -20,6 +20,7 @@ from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.window_functions import window_maker, last_window
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.holiday import holiday_flag
+from autots.tools.shaping import infer_frequency
 
 
 def rolling_x_regressor(
@@ -36,6 +37,7 @@ def rolling_x_regressor(
     additional_lag_periods: int = 7,
     abs_energy: bool = False,
     rolling_autocorr_periods: int = None,
+    nonzero_last_n: int = None,
     add_date_part: str = None,
     holiday: bool = False,
     holiday_country: str = 'US',
@@ -50,38 +52,48 @@ def rolling_x_regressor(
     macd_periods ignored if mean_rolling is None.
 
     Returns a dataframe of statistical features. Will need to be shifted by 1 or more to match Y for forecast.
+    so for the index date of the output here, this represents the time of the prediction being made, NOT the target datetime.
+    the datepart components should then represent the NEXT period ahead, which ARE the target datetime
     """
     # making this all or partially Numpy (if possible) would probably be faster
-    X = [df.copy()]
+    local_df = df.copy()
+    inferred_freq = infer_frequency(local_df.index)
+    local_df.columns = [str(x) for x in range(len(df.columns))]
+    X = [local_df.rename(columns=lambda x: "lastvalue_" + x)]
     if str(mean_rolling_periods).isdigit():
-        temp = df.rolling(int(mean_rolling_periods), min_periods=1).median()
+        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median()
         X.append(temp)
         if str(macd_periods).isdigit():
-            temp = df.rolling(int(macd_periods), min_periods=1).median() - temp
+            temp = local_df.rolling(int(macd_periods), min_periods=1).median() - temp
             X.append(temp)
     if str(std_rolling_periods).isdigit():
-        X.append(df.rolling(std_rolling_periods, min_periods=1).std())
+        X.append(local_df.rolling(std_rolling_periods, min_periods=1).std())
     if str(max_rolling_periods).isdigit():
-        X.append(df.rolling(max_rolling_periods, min_periods=1).max())
+        X.append(local_df.rolling(max_rolling_periods, min_periods=1).max())
     if str(min_rolling_periods).isdigit():
-        X.append(df.rolling(min_rolling_periods, min_periods=1).min())
+        X.append(local_df.rolling(min_rolling_periods, min_periods=1).min())
     if str(quantile90_rolling_periods).isdigit():
-        X.append(df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9))
+        X.append(local_df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9))
     if str(quantile10_rolling_periods).isdigit():
-        X.append(df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1))
+        X.append(local_df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1))
     if str(ewm_alpha).replace('.', '').isdigit():
-        X.append(df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean())
+        X.append(local_df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean())
     if str(ewm_var_alpha).replace('.', '').isdigit():
-        X.append(df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var())
+        X.append(local_df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var())
     if str(additional_lag_periods).isdigit():
-        X.append(df.shift(additional_lag_periods))
+        X.append(local_df.shift(additional_lag_periods))
+    if nonzero_last_n is not None:
+        full_index = local_df.index.union(local_df.index.shift(-nonzero_last_n, freq=inferred_freq))
+        X.append(
+            (local_df.reindex(full_index).fillna(method="bfill") != 0).rolling(nonzero_last_n, min_periods=1).sum().reindex(local_df.index)
+        )
     if cointegration is not None:
-        if cointegration == "btcd":
+        if str(cointegration).lower() == "btcd":
             X.append(
                 pd.DataFrame(
                     np.matmul(
                         btcd_decompose(
-                            df.values,
+                            local_df.values,
                             retrieve_regressor(
                                 regression_model={
                                     "model": 'LinearRegression',
@@ -94,44 +106,54 @@ def rolling_x_regressor(
                             ),
                             max_lag=cointegration_lag,
                         ),
-                        (df.values).T,
+                        (local_df.values).T,
                     ).T,
-                    index=df.index,
+                    index=local_df.index,
                 )
             )
         else:
             X.append(
                 pd.DataFrame(
                     np.matmul(
-                        coint_johansen(df.values, k_ar_diff=cointegration_lag),
-                        (df.values).T,
+                        coint_johansen(local_df.values, k_ar_diff=cointegration_lag),
+                        (local_df.values).T,
                     ).T,
-                    index=df.index,
+                    index=local_df.index,
                 )
             )
     if abs_energy:
-        X.append(df.pow(other=([2] * len(df.columns))).cumsum())
+        X.append(local_df.pow(other=([2] * len(local_df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
-        temp = df.rolling(rolling_autocorr_periods).apply(
+        temp = local_df.rolling(rolling_autocorr_periods).apply(
             lambda x: x.autocorr(), raw=False
         )
         X.append(temp)
-    if add_date_part not in [None, "None", "none"]:
-        date_part_df = date_part(df.index, method=add_date_part)
-        date_part_df.index = df.index
-        X.append(date_part_df)
     # unlike the others, this pulls the entire window, not just one lag
     if str(window).isdigit():
         # we already have lag 1 using this
         for curr_shift in range(1, window):
-            X.append(df.shift(curr_shift))
+            X.append(local_df.shift(curr_shift).rename(columns=lambda x: "window_" + str(curr_shift) + "_" + x))  # backfill should fill last values safely
+
+    
+    if add_date_part not in [None, "None", "none"]:
+        ahead_index = local_df.index.shift(1, freq=inferred_freq)
+        date_part_df = date_part(ahead_index, method=add_date_part)
+        date_part_df.index = local_df.index
+        X.append(date_part_df)
     X = pd.concat(X, axis=1)
 
     if holiday:
-        X['holiday_flag_'] = holiday_flag(X.index, country=holiday_country)
-        X['holiday_flag_future_'] = holiday_flag(
-            X.index.shift(1, freq=pd.infer_freq(X.index)), country=holiday_country
-        )
+        ahead_index = local_df.index.shift(1, freq=inferred_freq)
+        ahead_2_index = local_df.index.shift(2, freq=inferred_freq)
+        full_index = ahead_index.union(ahead_2_index)
+        hldflag = holiday_flag(full_index, country=holiday_country)
+        X['holiday_flag_'] = hldflag.reindex(ahead_index).to_numpy()
+        X['holiday_flag_future_'] = hldflag.reindex(ahead_2_index).to_numpy()
+
+
+    # X = X.replace([np.inf, -np.inf], np.nan)
+    X = X.fillna(method='bfill')
+
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
         from sklearn.preprocessing import PolynomialFeatures
@@ -139,10 +161,8 @@ def rolling_x_regressor(
         poly = PolynomialFeatures(polynomial_degree)
         X = pd.DataFrame(poly.fit_transform(X))
 
-    # X = X.replace([np.inf, -np.inf], np.nan)
-    X.fillna(method='bfill', inplace=True)
-
-    X.columns = [str(x) for x in range(len(X.columns))]
+    # rename to remove duplicates but still keep names if present
+    X.columns = [m + "_" + str(n) for m,n in zip([str(x) for x in range(len(X.columns))], X.columns.tolist())]
 
     return X
 
@@ -161,6 +181,7 @@ def rolling_x_regressor_regressor(
     additional_lag_periods: int = 7,
     abs_energy: bool = False,
     rolling_autocorr_periods: int = None,
+    nonzero_last_n: int = None,
     add_date_part: str = None,
     holiday: bool = False,
     holiday_country: str = 'US',
@@ -185,6 +206,7 @@ def rolling_x_regressor_regressor(
         ewm_alpha=ewm_alpha,
         abs_energy=abs_energy,
         rolling_autocorr_periods=rolling_autocorr_periods,
+        nonzero_last_n=nonzero_last_n,
         add_date_part=add_date_part,
         holiday=holiday,
         holiday_country=holiday_country,
@@ -808,7 +830,7 @@ def generate_regressor_params(
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
-                [None, 5, 10, 20, 30], [0.2, 0.1, 0.3, 0.4, 0.1]
+                [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
             )[0]
             estimators_choice = random.choices([50, 100, 500], [0.05, 0.9, 0.05])[0]
             param_dict = {
@@ -816,8 +838,13 @@ def generate_regressor_params(
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
+                    "min_samples_split": random.choices([2, 4, 1], [0.8, 0.1, 0.1])[0],
                     "max_depth": max_depth_choice,
-                    # "criterion": "squared_error",
+                    "criterion": random.choices(
+                        ["squared_error", "absolute_error", "friedman_mse", "poisson"],
+                        [0.25, 0.0, 0.25, 0.1]  # abs error very slow
+                    )[0],
+                    "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
                 },
             }
         elif model == 'KerasRNN':
@@ -1050,6 +1077,7 @@ class RollingRegression(ModelObject):
         additional_lag_periods: int = 7,
         abs_energy: bool = False,
         rolling_autocorr_periods: int = None,
+        nonzero_last_n: int = None,
         add_date_part: str = None,
         polynomial_degree: int = None,
         x_transform: str = None,
@@ -1085,6 +1113,7 @@ class RollingRegression(ModelObject):
         self.additional_lag_periods = additional_lag_periods
         self.abs_energy = abs_energy
         self.rolling_autocorr_periods = rolling_autocorr_periods
+        self.nonzero_last_n = nonzero_last_n
         self.add_date_part = add_date_part
         self.polynomial_degree = polynomial_degree
         self.x_transform = x_transform
@@ -1150,6 +1179,7 @@ class RollingRegression(ModelObject):
             ewm_alpha=self.ewm_alpha,
             abs_energy=self.abs_energy,
             rolling_autocorr_periods=self.rolling_autocorr_periods,
+            nonzero_last_n=self.nonzero_last_n,
             add_date_part=self.add_date_part,
             holiday=self.holiday,
             holiday_country=self.holiday_country,
@@ -1253,6 +1283,7 @@ class RollingRegression(ModelObject):
                 ewm_alpha=self.ewm_alpha,
                 abs_energy=self.abs_energy,
                 rolling_autocorr_periods=self.rolling_autocorr_periods,
+                nonzero_last_n=self.nonzero_last_n,
                 add_date_part=self.add_date_part,
                 holiday=self.holiday,
                 holiday_country=self.holiday_country,
@@ -1395,6 +1426,7 @@ class RollingRegression(ModelObject):
             'additional_lag_periods': self.additional_lag_periods,
             'abs_energy': self.abs_energy,
             'rolling_autocorr_periods': self.rolling_autocorr_periods,
+            'nonzero_last_n': self.nonzero_last_n,
             'add_date_part': self.add_date_part,
             'polynomial_degree': self.polynomial_degree,
             'x_transform': self.x_transform,
@@ -2600,10 +2632,12 @@ class MultivariateRegression(ModelObject):
         additional_lag_periods: int = None,
         abs_energy: bool = False,
         rolling_autocorr_periods: int = None,
+        nonzero_last_n: int = None,
         datepart_method: str = None,
         polynomial_degree: int = None,
         window: int = 5,
         probabilistic: bool = False,
+        scale_full_X: bool = False,
         quantile_params: dict = {
             'learning_rate': 0.1,
             'max_depth': 20,
@@ -2645,12 +2679,14 @@ class MultivariateRegression(ModelObject):
         self.additional_lag_periods = additional_lag_periods
         self.abs_energy = abs_energy
         self.rolling_autocorr_periods = rolling_autocorr_periods
+        self.nonzero_last_n = nonzero_last_n
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
         self.window = window
         self.quantile_params = quantile_params
         self.regressor_train = None
         self.probabilistic = probabilistic
+        self.scale_full_X = scale_full_X
         self.cointegration = cointegration
         self.cointegration_lag = cointegration_lag
 
@@ -2666,10 +2702,29 @@ class MultivariateRegression(ModelObject):
             quantile10_rolling_periods,
             additional_lag_periods,
             rolling_autocorr_periods,
+            nonzero_last_n,
             window,
             starting_min,
         ]
         self.min_threshold = max([x for x in list_o_vals if str(x).isdigit()])
+        self.scaler_mean = None
+
+    def base_scaler(self, df):
+        self.scaler_mean = np.mean(df, axis=0)
+        self.scaler_std = np.std(df, axis=0)
+        return (df - self.scaler_mean) / self.scaler_std
+
+    def scale_data(self, df):
+        if self.scaler_mean is None:
+            return self.base_scaler(df)
+        else:
+            return (df - self.scaler_mean) / self.scaler_std
+
+    def to_origin_space(
+        self, df, trans_method='forecast', components=False, bounds=False
+    ):
+        """Take transformed outputs back to original feature space."""
+        return df * self.scaler_std + self.scaler_mean
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2719,6 +2774,7 @@ class MultivariateRegression(ModelObject):
                         ewm_alpha=self.ewm_alpha,
                         abs_energy=self.abs_energy,
                         rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        nonzero_last_n=self.nonzero_last_n,
                         add_date_part=self.datepart_method,
                         holiday=self.holiday,
                         holiday_country=self.holiday_country,
@@ -2730,7 +2786,7 @@ class MultivariateRegression(ModelObject):
                     )
                     for x_col in base.columns
                 ]
-            ).to_numpy()
+            )
             del base
             if self.probabilistic:
                 from sklearn.ensemble import GradientBoostingRegressor
@@ -2762,11 +2818,14 @@ class MultivariateRegression(ModelObject):
                 n_jobs=self.n_jobs,
                 multioutput=multioutput,
             )
-            self.model.fit(self.X, self.Y)
+            if self.scale_full_X:
+                self.X = self.scale_data(self.X)
+
+            self.model.fit(self.X.to_numpy(), self.Y)
 
             if self.probabilistic:
-                self.model_upper.fit(self.X, self.Y)
-                self.model_lower.fit(self.X, self.Y)
+                self.model_upper.fit(self.X.to_numpy(), self.Y)
+                self.model_lower.fit(self.X.to_numpy(), self.Y)
             # we only need the N most recent points for predict
             # self.sktraindata = df.tail(self.min_threshold)
             self.fit_data(df)
@@ -2839,6 +2898,7 @@ class MultivariateRegression(ModelObject):
                         ewm_alpha=self.ewm_alpha,
                         abs_energy=self.abs_energy,
                         rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        nonzero_last_n=self.nonzero_last_n,
                         add_date_part=self.datepart_method,
                         holiday=self.holiday,
                         holiday_country=self.holiday_country,
@@ -2850,8 +2910,11 @@ class MultivariateRegression(ModelObject):
                     ).tail(1)
                     for x_col in current_x.columns
                 ]
-            ).to_numpy()
-            rfPred = self.model.predict(self.X_pred)
+            )
+            if self.scale_full_X:
+                rfPred = self.model.predict(self.scale_data(self.X_pred).to_numpy())
+            else:
+                rfPred = self.model.predict(self.X_pred.to_numpy())
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
@@ -2953,6 +3016,9 @@ class MultivariateRegression(ModelObject):
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
+        nonzero_last_n = random.choices(
+            [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]
+        )[0]
         add_date_part_choice = random.choices(
             [
                 None,
@@ -2992,12 +3058,14 @@ class MultivariateRegression(ModelObject):
             'additional_lag_periods': lag_periods_choice,
             'abs_energy': abs_energy_choice,
             'rolling_autocorr_periods': rolling_autocorr_periods_choice,
+            'nonzero_last_n': nonzero_last_n,
             'datepart_method': add_date_part_choice,
             'polynomial_degree': polynomial_degree_choice,
             'regression_type': regression_choice,
             'window': window_choice,
             'holiday': holiday_choice,
             "probabilistic": probabilistic,
+            'scale_full_X': random.choices([True, False], [0.2, 0.8])[0],
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
         }
@@ -3019,13 +3087,135 @@ class MultivariateRegression(ModelObject):
             'additional_lag_periods': self.additional_lag_periods,
             'abs_energy': self.abs_energy,
             'rolling_autocorr_periods': self.rolling_autocorr_periods,
+            'nonzero_last_n': self.nonzero_last_n,
             'datepart_method': self.datepart_method,
             'polynomial_degree': self.polynomial_degree,
             'regression_type': self.regression_type,
             'window': self.window,
             'holiday': self.holiday,
             'probabilistic': self.probabilistic,
+            'scale_full_X': self.scale_full_X,
             "cointegration": self.cointegration,
             "cointegration_lag": self.cointegration_lag,
         }
         return parameter_dict
+
+
+class VectorizedMultiOutputGPR:
+    """Courtesy of GPT v4."""
+    def __init__(self, kernel='linear', noise_var=1e-2, gamma=None):
+        self.kernel = kernel
+        self.noise_var = noise_var
+        self.gamma = gamma
+        self.lambda_prime = 0
+        self.p = 0
+
+    def _linear_kernel(self, x1, x2):
+        return np.dot(x1, x2.T)
+    
+    def _polynomial_kernel(self, x1, x2, p=2):
+        return (1 + np.dot(x1, x2.T)) ** p
+    
+    def _rbf_kernel(self, x1, x2, gamma):
+        if gamma is None:
+            gamma = 1.0 / x1.shape[1]
+        distance = np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+        return np.exp(-gamma * distance)
+
+    def _exponential_kernel(self, x1, x2, lambda_):
+        return np.exp(-np.abs(x1 - x2.T) / lambda_)
+
+    def _periodic_kernel(self, x1, x2, lambda_, p):
+        sin_sq = np.sin(np.pi * np.abs(x1 - x2.T) / p) ** 2
+        return np.exp(-2 * sin_sq / lambda_**2)
+
+    def _locally_periodic_kernel(self, x1, x2, lambda_, lambda_prime, p):
+        rbf_part = np.exp(-((x1 - x2.T) ** 2) / (2 * lambda_**2))
+        periodic_part = self._periodic_kernel(x1, x2, lambda_prime, p)
+        return rbf_part * periodic_part
+
+    def fit(self, X, Y):
+        self.X_train = X
+        
+        if self.kernel == 'linear':
+            K = self._linear_kernel(X, X)
+        elif self.kernel == 'polynomial':
+            K = self._polynomial_kernel(X, X)
+        elif self.kernel == 'rbf':
+            K = self._rbf_kernel(X, X, self.gamma)
+        elif self.kernel == 'exponential':
+            K = self._exponential_kernel(X, X, self.gamma)
+        elif self.kernel == 'periodic':
+            K = self._periodic_kernel(X, X, self.gamma, self.lambda_)
+        elif self.kernel == 'locally_periodic':
+            K = self._locally_periodic_kernel(X, X, self.gamma, self.lambda_prime, self.p)
+        else:
+            raise ValueError("Invalid Kernel")
+
+        # Regularized Kernel
+        K_reg = K + self.noise_var * np.eye(K.shape[0])
+        
+        # Cholesky decomposition and solve for alpha in a vectorized way
+        self.L = np.linalg.cholesky(K_reg)
+        self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, Y))
+
+    def predict(self, X):
+        if self.kernel == 'linear':
+            k = self._linear_kernel(X, self.X_train)
+        elif self.kernel == 'polynomial':
+            k = self._polynomial_kernel(X, self.X_train)
+        elif self.kernel == 'rbf':
+            k = self._rbf_kernel(X, self.X_train, self.gamma)
+        elif self.kernel == 'exponential':
+            k = self._exponential_kernel(X, self.X_train, self.gamma)
+        elif self.kernel == 'periodic':
+            k = self._periodic_kernel(X, self.X_train, self.gamma, self.lambda_)
+        elif self.kernel == 'locally_periodic':
+            k = self._locally_periodic_kernel(X, self.X_train, self.gamma, self.lambda_prime, self.p)
+        else:
+            raise ValueError("Invalid Kernel")
+            
+        # Making predictions
+        Y_pred = k @ self.alpha
+        
+        return Y_pred
+
+    def predict_proba(self, X):
+        if self.kernel == 'linear':
+            k_star = self._linear_kernel(X, self.X_train)
+            k_star_star = np.diag(self._linear_kernel(X, X))
+        elif self.kernel == 'polynomial':
+            k_star = self._polynomial_kernel(X, self.X_train)
+            k_star_star = np.diag(self._polynomial_kernel(X, X))
+        elif self.kernel == 'rbf':
+            k_star = self._rbf_kernel(X, self.X_train, self.gamma)
+            k_star_star = np.diag(self._rbf_kernel(X, X, self.gamma))
+        # FINISH
+        else:
+            raise ValueError("Invalid Kernel")
+            
+        # Making predictions
+        Y_pred = k_star @ self.alpha
+        
+        # Computing the predictive variance for each test point and each output
+        v = np.linalg.solve(self.L, k_star.T)
+        Y_var = k_star_star - np.sum(v**2, axis=0)
+        
+        return Y_pred, Y_var
+
+
+"""
+    gamma: For the RBF, Exponential, and Locally Periodic kernels, γγ is essentially an inverse length scale.
+        If you're dealing with daily time series data over a year, you might want to try values in the range [0.1,1,10,100][0.1,1,10,100]. A smaller value of γγ will imply a longer wavelength for the function, and a larger value will imply a shorter wavelength.
+        It might also be helpful to consider the spread or variance of your data to help initialize this parameter.
+
+    lambda_: For the Periodic and Locally Periodic kernels, \lambda_ determines the smoothness of the periodic function.
+        A reasonable range might be [0.1,1,10,100][0.1,1,10,100]. Like γγ, the specific optimal value can depend on the structure and scale of your data.
+
+    lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. You can use the same range as \lambda_.
+
+    p: The period parameter for the Periodic and Locally Periodic kernels.
+        You should have some idea of what the period of your time series might be. For instance, if you're looking at daily data with a weekly cycle, p=7p=7 is a good starting point. For yearly data with seasonal patterns, p=365.25p=365.25 might be appropriate.
+        Alternatively, you can also use techniques like spectral analysis or autocorrelation plots to help identify potential periodicity in your data.
+"""
+

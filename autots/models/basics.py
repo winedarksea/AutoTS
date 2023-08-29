@@ -2039,6 +2039,7 @@ class KalmanStateSpace(ModelObject):
         observation_noise: float = 1.0,
         em_iter: int = 10,
         model_name: str = "undefined",
+        forecast_length: int = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2056,6 +2057,7 @@ class KalmanStateSpace(ModelObject):
         self.observation_noise = observation_noise
         self.em_iter = em_iter
         self.model_name = model_name
+        self.forecast_length = forecast_length
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2063,22 +2065,93 @@ class KalmanStateSpace(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
-        df = self.basic_profile(df)
+        self.fit_data(df)
 
+        if self.observation_noise == "auto":
+            self.fit_noise = self.tune_observational_noise(df)[0]
+        else:
+            self.fit_noise = self.observation_noise
         self.kf = KalmanFilter(
             state_transition=self.state_transition,  # matrix A
             process_noise=self.process_noise,  # Q
             observation_model=self.observation_model,  # H
-            observation_noise=self.observation_noise,  # R
+            observation_noise=self.fit_noise,  # R
         )
-        self.df_train = df.to_numpy().T
         if self.em_iter is not None:
             self.kf = self.kf.em(self.df_train, n_iter=self.em_iter)
+        
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
+    
+    def fit_data(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.df_train = df.to_numpy().T
+        self.train_index = df.index
+        return self
+
+    def cost_function(self, param, df):
+        try:
+            # need to adjust to be on a holdout as insample is just going to zero
+            kf = KalmanFilter(
+                state_transition=self.state_transition,  # matrix A
+                process_noise=self.process_noise,  # Q
+                observation_model=self.observation_model,  # H
+                observation_noise=param[0],  # R
+            )
+            if self.em_iter is not None:
+                kf = kf.em(self.df_train, n_iter=self.em_iter)
+            result = kf.smooth(self.df_train)
+            df_smooth = pd.DataFrame(
+                result.observations.mean.T,
+                index=df.index,
+                columns=self.column_names,
+            )
+            df_stdev = np.sqrt(result.observations.cov).T
+            bound = df_stdev * norm.ppf(self.prediction_interval)
+            upper_forecast = df_smooth + bound
+            lower_forecast = df_smooth - bound
+    
+            A = np.asarray(df)
+            inv_prediction_interval = 1 - self.prediction_interval
+            upper_diff = df - upper_forecast
+            upper_pl = np.where(
+                A >= upper_forecast,
+                self.prediction_interval * upper_diff,
+                inv_prediction_interval * -1 * upper_diff,
+            )
+            # note that the quantile here is the lower quantile
+            low_diff = A - lower_forecast
+            lower_pl = np.where(
+                A >= lower_forecast,
+                inv_prediction_interval * low_diff,
+                self.prediction_interval * -1 * low_diff,
+            )
+            scaler = np.nanmean(np.abs(np.diff(A[-100:], axis=0)), axis=0)
+            fill_val = np.nanmax(scaler)
+            fill_val = fill_val if fill_val > 0 else 1
+            scaler[scaler == 0] = fill_val
+            scaler[np.isnan(scaler)] = fill_val
+            result_score = np.nansum(np.nanmean(upper_pl + lower_pl, axis=0) / scaler)
+            print(f"param is {param} with score {result_score}")
+            return result_score
+        except Exception as e:
+            print(f"param {param} failed with {repr(e)}")
+            return 1e9
+        
+    
+    def tune_observational_noise(self, df):
+        from scipy.optimize import minimize
+
+        if self.forecast_length is None:
+            raise ValueError("for tuning, forecast_length must be passed to init")
+        x0 = [0.1]
+        bounds = [(0.000001, 100) for x in x0]
+        return minimize(
+            self.cost_function, x0, args=(df), bounds=bounds, method=None, options={'maxiter': 100}
+        ).x
 
     def predict(
-        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+        self, forecast_length: int = None, future_regressor=None, just_point_forecast=False
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -2091,6 +2164,10 @@ class KalmanStateSpace(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if forecast_length is None:
+            forecast_length = self.forecast_length
+            if self.forecast_length is None:
+                raise ValueError("must provide forecast_length to KalmanStateSpace predict")
         predictStartTime = datetime.datetime.now()
         result = self.kf.predict(self.df_train, forecast_length)
         df = pd.DataFrame(
@@ -2132,6 +2209,32 @@ class KalmanStateSpace(ModelObject):
             )[0]
         else:
             em_iter = random.choices([None, 10, 30], [0.3, 0.7, 0.1])[0]
+
+        # these are too big to fit below
+        sigma_epsilon2 = 1  # Just an example, replace with actual values
+        sigma_xi2 = 1       # Just an example, replace with actual values
+        sigma_sw2 = 1       # Just an example, replace with actual values
+        sigma_sy2 = 1       # Just an example, replace with actual values
+        
+        # Construct Q matrix
+        Q = np.block([[sigma_epsilon2, 0, np.zeros((1, 6+364))],
+                      [0, sigma_xi2, np.zeros((1, 6+364))],
+                      [np.zeros((6, 2)), sigma_sw2 * np.eye(6), np.zeros((6, 364))],
+                      [np.zeros((364, 2+6)), sigma_sy2 * np.eye(364)]])
+
+        local_linear = np.array([[1, 1],
+                                 [0, 1]])
+        # Weekly Seasonalit
+        weekly = np.eye(6, k=1)
+        weekly = np.vstack((weekly, -1 * np.ones((1, 6))))
+        # Yearly Seasonality
+        yearly = np.eye(364, k=1)
+        yearly = np.vstack((yearly, -1 * np.ones((1, 364))))
+        # Final Transition Matrix
+        F = np.block([[local_linear, np.zeros((2, 6)), np.zeros((2, 364))],
+              [np.zeros((7, 2)), weekly, np.zeros((7, 364))],
+              [np.zeros((365, 2)), np.zeros((365, 6)), yearly]])
+
         params = random.choices(
             # the same model can sometimes be defined in various matrix forms
             [
@@ -2194,6 +2297,13 @@ class KalmanStateSpace(ModelObject):
                     'observation_noise': 1.0,
                 },
                 {
+                    'model_name': 'ucm_deterministic_trend',
+                    'state_transition': [[1, 1], [0, 1]],
+                    'process_noise': [[0.01, 0], [0, 0.01]],  # these would be tuned
+                    'observation_model': [[1, 0]],
+                    'observation_noise': 0.1,  # this would be tuned
+                },
+                {
                     'model_name': 'X1',
                     'state_transition': [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
                     'process_noise': [
@@ -2251,6 +2361,31 @@ class KalmanStateSpace(ModelObject):
                     'observation_model': [[1, 0, 0, 0, 0, 0]],
                     'observation_noise': 0.04,
                 },
+                {
+                    'model_name': "ucm_deterministictrend_seasonal7",
+                    'state_transition': [
+                        [1, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 1, 0],
+                        [0, 0, -1, -1, -1, -1, -1, -1],
+                    ],
+                    'process_noise': [
+                        [0.001, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0.001, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0.001, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0.001, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0.001, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0.001, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0.001, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0],
+                    ],
+                    'observation_model': [[1, 0, 1, 1, 1, 1, 1, 1]],
+                    'observation_noise': 0.03,
+                },
                 "random",
                 364,
                 12,
@@ -2261,9 +2396,16 @@ class KalmanStateSpace(ModelObject):
                     'observation_model': [[1, 0]],
                     'observation_noise': 0.1,
                 },
+                {
+                    'model_name': 'locallinear_364',
+                    'state_transition': F,
+                    'process_noise': Q,
+                    'observation_model': np.hstack(([1, 0], np.ones(6), np.ones(364)))[np.newaxis, ...],
+                    'observation_noise': 0.1,
+                },
                 "dynamic_linear",
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         if params in [364] and method not in ['deep']:
             params = 7

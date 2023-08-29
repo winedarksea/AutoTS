@@ -577,6 +577,7 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
+            forecast_length=forecast_length,
             **parameters,
         )
     elif model == "MetricMotif":
