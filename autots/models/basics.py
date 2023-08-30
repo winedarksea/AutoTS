@@ -16,7 +16,7 @@ from autots.tools.seasonal import (
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
-from autots.tools.fast_kalman import KalmanFilter, random_state_space
+from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.transform import GeneralTransformer, RandomTransform, filters
 
 
@@ -2091,7 +2091,7 @@ class KalmanStateSpace(ModelObject):
 
     def cost_function(self, param, df):
         try:
-            # need to adjust to be on a holdout as insample is just going to zero
+            # evaluating on a single, most recent holdout only, for simplicity
             kf = KalmanFilter(
                 state_transition=self.state_transition,  # matrix A
                 process_noise=self.process_noise,  # Q
@@ -2099,21 +2099,22 @@ class KalmanStateSpace(ModelObject):
                 observation_noise=param[0],  # R
             )
             if self.em_iter is not None:
-                kf = kf.em(self.df_train, n_iter=self.em_iter)
-            result = kf.smooth(self.df_train)
+                kf = kf.em(self.df_train[:, :-self.forecast_length], n_iter=self.em_iter)
+            result = kf.predict(self.df_train[:, :-self.forecast_length], self.forecast_length)
             df_smooth = pd.DataFrame(
                 result.observations.mean.T,
-                index=df.index,
+                index=df.index[-self.forecast_length:],
                 columns=self.column_names,
             )
             df_stdev = np.sqrt(result.observations.cov).T
             bound = df_stdev * norm.ppf(self.prediction_interval)
             upper_forecast = df_smooth + bound
             lower_forecast = df_smooth - bound
-    
-            A = np.asarray(df)
+
+            # evaluate the prediction
+            A = np.asarray(df.iloc[-self.forecast_length:, :])
             inv_prediction_interval = 1 - self.prediction_interval
-            upper_diff = df - upper_forecast
+            upper_diff = A - upper_forecast
             upper_pl = np.where(
                 A >= upper_forecast,
                 self.prediction_interval * upper_diff,
@@ -2126,13 +2127,13 @@ class KalmanStateSpace(ModelObject):
                 inv_prediction_interval * low_diff,
                 self.prediction_interval * -1 * low_diff,
             )
-            scaler = np.nanmean(np.abs(np.diff(A[-100:], axis=0)), axis=0)
+            scaler = np.nanmean(np.abs(np.diff(np.asarray(df)[-100:], axis=0)), axis=0)
             fill_val = np.nanmax(scaler)
             fill_val = fill_val if fill_val > 0 else 1
             scaler[scaler == 0] = fill_val
             scaler[np.isnan(scaler)] = fill_val
             result_score = np.nansum(np.nanmean(upper_pl + lower_pl, axis=0) / scaler)
-            print(f"param is {param} with score {result_score}")
+            # print(f"param is {param} with score {result_score}")
             return result_score
         except Exception as e:
             print(f"param {param} failed with {repr(e)}")
@@ -2145,9 +2146,9 @@ class KalmanStateSpace(ModelObject):
         if self.forecast_length is None:
             raise ValueError("for tuning, forecast_length must be passed to init")
         x0 = [0.1]
-        bounds = [(0.000001, 100) for x in x0]
+        bounds = [(0.00001, 100) for x in x0]
         return minimize(
-            self.cost_function, x0, args=(df), bounds=bounds, method=None, options={'maxiter': 100}
+            self.cost_function, x0, args=(df), bounds=bounds, method=None, options={'maxiter': 50}
         ).x
 
     def predict(
@@ -2201,310 +2202,7 @@ class KalmanStateSpace(ModelObject):
 
     def get_new_params(self, method: str = "random"):
         # predefined, or random
-        if method in ['fast', 'superfast']:
-            em_iter = random.choices([None, 10], [0.4, 0.6])[0]
-        elif method == "deep":
-            em_iter = random.choices(
-                [None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1]
-            )[0]
-        else:
-            em_iter = random.choices([None, 10, 30], [0.3, 0.7, 0.1])[0]
-
-        # these are too big to fit below
-        sigma_epsilon2 = 1  # Just an example, replace with actual values
-        sigma_xi2 = 1       # Just an example, replace with actual values
-        sigma_sw2 = 1       # Just an example, replace with actual values
-        sigma_sy2 = 1       # Just an example, replace with actual values
-        
-        # Construct Q matrix
-        Q = np.block([[sigma_epsilon2, 0, np.zeros((1, 6+364))],
-                      [0, sigma_xi2, np.zeros((1, 6+364))],
-                      [np.zeros((6, 2)), sigma_sw2 * np.eye(6), np.zeros((6, 364))],
-                      [np.zeros((364, 2+6)), sigma_sy2 * np.eye(364)]])
-
-        local_linear = np.array([[1, 1],
-                                 [0, 1]])
-        # Weekly Seasonalit
-        weekly = np.eye(6, k=1)
-        weekly = np.vstack((weekly, -1 * np.ones((1, 6))))
-        # Yearly Seasonality
-        yearly = np.eye(364, k=1)
-        yearly = np.vstack((yearly, -1 * np.ones((1, 364))))
-        # Final Transition Matrix
-        F = np.block([[local_linear, np.zeros((2, 6)), np.zeros((2, 364))],
-              [np.zeros((7, 2)), weekly, np.zeros((7, 364))],
-              [np.zeros((365, 2)), np.zeros((365, 6)), yearly]])
-
-        params = random.choices(
-            # the same model can sometimes be defined in various matrix forms
-            [
-                # floats are phi
-                'ets_aan',
-                {
-                    'model_name': 'local linear stochastic seasonal dummy',
-                    'state_transition': [
-                        [1, 0, 0, 0],
-                        [0, -1, -1, -1],
-                        [0, 1, 0, 0],
-                        [0, 0, 1, 0],
-                    ],
-                    'process_noise': [
-                        [1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, 0, 0],
-                        [0, 0, 0, 0],
-                    ],
-                    'observation_model': [[1, 1, 0, 0]],
-                    'observation_noise': 0.25,
-                },
-                {
-                    'model_name': 'local linear stochastic seasonal 7',
-                    'state_transition': [
-                        [1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-                    ],
-                    'process_noise': [
-                        [1, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 0],
-                    ],
-                    'observation_model': [[1, 0, 1, 0, 0, 0, 0, 0]],
-                    'observation_noise': 0.25,
-                },
-                {
-                    'model_name': 'MA',
-                    'state_transition': [[1, 0], [1, 0]],
-                    'process_noise': [[0.2, 0.0], [0.0, 0]],
-                    'observation_model': [[1, 0.1]],
-                    'observation_noise': 1.0,
-                },
-                {
-                    'model_name': 'AR(2)',
-                    'state_transition': [[1, 1], [0.1, 0]],
-                    'process_noise': [[1, 0], [0, 0]],
-                    'observation_model': [[1, 0]],
-                    'observation_noise': 1.0,
-                },
-                {
-                    'model_name': 'ucm_deterministic_trend',
-                    'state_transition': [[1, 1], [0, 1]],
-                    'process_noise': [[0.01, 0], [0, 0.01]],  # these would be tuned
-                    'observation_model': [[1, 0]],
-                    'observation_noise': 0.1,  # this would be tuned
-                },
-                {
-                    'model_name': 'X1',
-                    'state_transition': [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
-                    'process_noise': [
-                        [0.1, 0.0, 0.0],
-                        [0.0, 0.01, 0.0],
-                        [0.0, 0.0, 0.1],
-                    ],
-                    'observation_model': [[1, 1, 1]],
-                    'observation_noise': 1.0,
-                },
-                # I believe this is a seasonal ETS model but I would like confirmation on that
-                {
-                    'model_name': "local linear hidden state with seasonal 7",
-                    'state_transition': [
-                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
-                        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-                    ],
-                    'process_noise': [
-                        [0.0016, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 1e-06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                    ],
-                    'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
-                    'observation_noise': random.choice([0.25, 0.5, 1.0, 0.04, 0.02]),
-                },
-                {
-                    'model_name': "factor",
-                    'state_transition': [
-                        [1, 1, 0, 0, 0, 0],
-                        [0, 1, 0, 0, 0, 0],
-                        [0, 0, 1, 0, 0, 0],
-                        [0, 0, 0, 1, 1, 0],
-                        [0, 0, 0, 0, 1, 0],
-                        [0, 0, 0, 0, 0, 1],
-                    ],
-                    'process_noise': [
-                        [1, 0, 0, 0, 0, 0],
-                        [0, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0],
-                        [0, 0, 1, 0, 0, 0],
-                        [0, 0, 0, 1, 0, 0],
-                        [0, 0, 0, 0, 0, 0],
-                    ],
-                    'observation_model': [[1, 0, 0, 0, 0, 0]],
-                    'observation_noise': 0.04,
-                },
-                {
-                    'model_name': "ucm_deterministictrend_seasonal7",
-                    'state_transition': [
-                        [1, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 1, 0],
-                        [0, 0, -1, -1, -1, -1, -1, -1],
-                    ],
-                    'process_noise': [
-                        [0.001, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 0.001, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0.001, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0.001, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0.001, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0.001, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0.001, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 0],
-                    ],
-                    'observation_model': [[1, 0, 1, 1, 1, 1, 1, 1]],
-                    'observation_noise': 0.03,
-                },
-                "random",
-                364,
-                12,
-                {
-                    'model_name': 'spline',
-                    'state_transition': [[2, -1], [1, 0]],
-                    'process_noise': [[1, 0], [0, 0]],
-                    'observation_model': [[1, 0]],
-                    'observation_noise': 0.1,
-                },
-                {
-                    'model_name': 'locallinear_364',
-                    'state_transition': F,
-                    'process_noise': Q,
-                    'observation_model': np.hstack(([1, 0], np.ones(6), np.ones(364)))[np.newaxis, ...],
-                    'observation_noise': 0.1,
-                },
-                "dynamic_linear",
-            ],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
-        )[0]
-        if params in [364] and method not in ['deep']:
-            params = 7
-        if params == "random":
-            st, procnois, obsmod, obsnois = random_state_space()
-            params = {
-                'model_name': 'randomly generated',
-                'state_transition': st.tolist(),
-                'process_noise': procnois.tolist(),
-                'observation_model': obsmod.tolist(),
-                'observation_noise': obsnois,
-            }
-        elif params == "dynamic_linear":
-            choices = [
-                0.0,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.6,
-                0.7,
-                0.8,
-                0.9,
-                1.0,
-                1.1,
-                1.2,
-                1.3,
-                1.4,
-                1.5,
-            ]
-            params = {
-                'model_name': 'dynamic linear',
-                'state_transition': [
-                    [1, 1, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, random.choice(choices), 1],
-                    [0, 0, random.choice(choices), 0],
-                ],
-                'process_noise': [
-                    [random.choice(choices), 0, 0, 0],
-                    [0, random.choice(choices), 0, 0],
-                    [0, 0, random.choice(choices), 0],
-                    [0, 0, 0, 0],
-                ],
-                'observation_model': [[1, 0, 1, 0]],
-                'observation_noise': 0.25,
-                'em_iter': 10,
-            }
-        elif params == "ets_aan":
-            choices = [
-                0.0,
-                0.01,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.6,
-                0.7,
-                0.8,
-                0.9,
-                1.0,
-                1.1,
-                1.2,
-                1.3,
-                1.4,
-                1.5,
-            ]
-            params = {
-                'model_name': 'local_linear_trend_ets_aan',
-                'state_transition': [[1, 1], [0, 1]],
-                'process_noise': [
-                    [random.choice(choices), 0.0],
-                    [0.0, random.choice(choices)],
-                ],
-                'observation_model': [[1, 0]],
-                'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
-            }
-        elif isinstance(params, int):
-            state_transition = np.zeros((params + 1, params + 1))
-            state_transition[0, 0] = 1
-            state_transition[1, 1:-1] = [-1.0] * (params - 1)
-            state_transition[2:, 1:-1] = np.eye(params - 1)
-            observation_model = [[1, 1] + [0] * (params - 1)]
-            level_noise = 0.2 / random.choice([0.2, 0.5, 1, 5, 10, 200])
-            season_noise = random.choice([1e-4, 1e-3, 1e-2, 1e-1])
-            process_noise_cov = (
-                np.diag([level_noise, season_noise] + [0] * (params - 1)) ** 2
-            )
-            params = {
-                'model_name': f'local linear hidden state with seasonal {params}',
-                'state_transition': state_transition.tolist(),
-                'process_noise': process_noise_cov.tolist(),
-                'observation_model': observation_model,
-                'observation_noise': 0.04,
-            }
-        params['em_iter'] = em_iter
-        return params
+        return new_kalman_params(method=method)
 
     def get_params(self):
         """Return dict of current parameters."""
