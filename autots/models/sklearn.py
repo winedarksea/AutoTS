@@ -955,7 +955,7 @@ def generate_regressor_params(
                 },
             }
         elif model in ['LightGBM', "LightGBMRegressorChain"]:
-            branch = random.choices(['p1', 'p2', 'random'], [0.2, 0.3, 0.5])[0]
+            branch = random.choices(['p1', 'p2', 'random'], [0.2, 0.2, 0.6])[0]
             if branch == 'p1':
                 param_dict = lightgbmp1
             elif branch == 'p2':
@@ -973,16 +973,19 @@ def generate_regressor_params(
                                 'tweedie',
                                 'poisson',
                                 'quantile',
+                                "fair",
+                                'mape',
+                                ['regression', 'mape'],
                             ],
-                            [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
+                            [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01, 0.05, 0.05, 0.1],
                         )[0],
                         "learning_rate": random.choices(
-                            [0.001, 0.1, 0.01],
-                            [0.1, 0.6, 0.3],
+                            [0.001, 0.1, 0.01, 0.7],
+                            [0.1, 0.6, 0.3, 0.2],
                         )[0],
                         "num_leaves": random.choices(
-                            [31, 127, 70],
-                            [0.6, 0.1, 0.3],
+                            [31, 127, 70, 1000, 15],
+                            [0.6, 0.1, 0.3, 0.1, 0.2],
                         )[0],
                         "max_depth": random.choices(
                             [-1, 5, 10],
@@ -997,6 +1000,11 @@ def generate_regressor_params(
                             [0.6, 0.1, 0.3, 0.0010],
                         )[0],
                         "linear_tree": random.choice([True, False]),
+                        "lambda_l1": random.choices([0.0, 0.1, 1, 10], [0.5, 0.1, 0.1, 0.1])[0],
+                        "lambda_l2": random.choices([0.0, 0.1, 1, 10], [0.5, 0.1, 0.1, 0.1])[0],
+                        "min_data_in_leaf": random.choices([5, 15, 20, 30], [0.1, 0.2, 0.6, 0.1])[0],
+                        "feature_fraction": random.choices([1.0, 0.1, 0.5, 0.8], [0.5, 0.1, 0.1, 0.1])[0],
+                        "max_bin": random.choices([1500, 1000, 255, 50], [0.1, 0.2, 0.6, 0.1])[0],
                     },
                 }
         elif model == 'Ridge':
