@@ -2336,11 +2336,14 @@ or otherwise increase models available."""
         try:
             import_template = import_template[self.template_cols_id]
         except Exception:
-            print(
-                "Column names {} were not recognized as matching template columns: {}".format(
-                    str(import_template.columns), str(self.template_cols_id)
+            try:
+                import_template = import_template[self.template_cols]
+            except Exception:
+                print(
+                    "Column names {} were not recognized as matching template columns: {}".format(
+                        str(import_template.columns), str(self.template_cols_id)
+                    )
                 )
-            )
         return import_template
 
     def _enforce_model_list(

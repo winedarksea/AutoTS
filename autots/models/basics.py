@@ -2207,6 +2207,7 @@ class KalmanStateSpace(ModelObject):
     def get_params(self):
         """Return dict of current parameters."""
         return {
+            "model_name": self.model_name,
             "state_transition": self.state_transition,
             "process_noise": self.process_noise,
             "observation_model": self.observation_model,
