@@ -47,6 +47,7 @@ except Exception:
         @staticmethod
         def ppf(x):
             return 1.6448536269514722
+        # norm.ppf((1 + 0.95) / 2)
 
 
 class Cassandra(ModelObject):

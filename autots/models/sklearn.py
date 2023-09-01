@@ -21,6 +21,16 @@ from autots.tools.window_functions import window_maker, last_window
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.holiday import holiday_flag
 from autots.tools.shaping import infer_frequency
+# scipy is technically optional but most likely is present
+try:
+    from scipy.stats import norm
+except Exception:
+
+    class norm(object):
+        @staticmethod
+        def ppf(x):
+            return 1.95996398454
+        # norm.ppf((1 + 0.95) / 2)
 
 
 def rolling_x_regressor(
@@ -463,6 +473,8 @@ def retrieve_regressor(
         return GaussianProcessRegressor(
             kernel=kernel, random_state=random_seed, **model_param_dict
         )
+    elif model_class == "MultioutputGPR":
+        return VectorizedMultiOutputGPR(**model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
@@ -498,6 +510,7 @@ sklearn_model_dict = {
     'RANSAC': 0.05,
     'Ridge': 0.02,
     # 'GaussianProcessRegressor': 0.02,  # slow
+    'MultioutputGPR': 0.05,
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -518,6 +531,7 @@ multivariate_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
+    'MultioutputGPR': 0.05,
 }
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
@@ -575,6 +589,7 @@ datepart_model_dict: dict = {
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
+    'MultioutputGPR': 0.05,
 }
 gradient_boosting = {
     'xgboost': 0.09,
@@ -685,10 +700,10 @@ def generate_regressor_params(
     model_dict=None,
     method="default",
 ):
-    if model_dict is None:
-        model_dict = sklearn_model_dict
-    # force neural networks for testing purposes (not recommended)
-    if method == "neuralnets":
+    # force neural networks for testing purposes
+    if method in ["default", 'random', 'fast']:
+        pass
+    elif method == "neuralnets":
         model_dict = {
             'KerasRNN': 0.05,
             'Transformer': 0.05,
@@ -701,6 +716,12 @@ def generate_regressor_params(
     elif method == "trees":
         model_dict = tree_dict
         method = "default"
+    elif method in sklearn_model_dict.keys():
+        model_dict = {
+            method: sklearn_model_dict[method]
+        }
+    elif model_dict is None:
+        model_dict = sklearn_model_dict
     """Generate new parameters for input to regressor."""
     model_list = list(model_dict.keys())
     model = random.choices(model_list, list(model_dict.values()), k=1)[0]
@@ -1025,6 +1046,24 @@ def generate_regressor_params(
                     )[0],
                 },
             }
+        elif model == "MultioutputGPR":
+            kernel = random.choices(
+                ['linear', "exponential", "locally_periodic", "rbf", "polynomial", 'periodic'],
+                [0.1, 0.1, 0.1, 0.4, 0.1, 0.1],
+            )[0]
+            param_dict = {
+                "model": 'GaussianProcessRegressor',
+                "model_params": {
+                    'noise_var': random.choice([1e-7, 1e-4, 1e-3, 1e-2, 0.1, 1, 10]),
+                    'kernel': kernel,
+                },
+            }
+            if kernel in ["exponential", "locally_periodic", "rbf", "periodic"]:
+                param_dict['gamma'] = random.choice([0.1, 1, 10, 100])
+            if kernel in ["locally_periodic", "periodic"]:
+                param_dict['p'] = random.choices([7, 12, 365.25, 52, 28], [0.6, 0.15, 0.15, 0.05, 0.05])[0]
+            if kernel == "locally_periodic":
+                param_dict['lambda_prime'] = random.choice([0.1, 1, 10, 100])
         else:
             min_samples = np.random.choice(
                 [1, 2, 0.05], p=[0.5, 0.3, 0.2], size=1
@@ -2165,6 +2204,9 @@ class UnivariateRegression(ModelObject):
     """Regression-framed approach to forecasting using sklearn.
     A univariate version of rolling regression: ie each series is modeled independently
 
+    "You've got to think for your selves!. You're ALL individuals"
+    "Yes! We're all individuals!" - Python
+
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
@@ -2826,12 +2868,13 @@ class MultivariateRegression(ModelObject):
                 n_jobs=self.n_jobs,
                 multioutput=multioutput,
             )
+            self.multioutputgpr = self.regression_model['model'] == "MultioutputGPR"
             if self.scale_full_X:
                 self.X = self.scale_data(self.X)
 
             self.model.fit(self.X.to_numpy(), self.Y)
 
-            if self.probabilistic:
+            if self.probabilistic and not self.multioutputgpr:
                 self.model_upper.fit(self.X.to_numpy(), self.Y)
                 self.model_lower.fit(self.X.to_numpy(), self.Y)
             # we only need the N most recent points for predict
@@ -2920,19 +2963,32 @@ class MultivariateRegression(ModelObject):
                 ]
             )
             if self.scale_full_X:
-                rfPred = self.model.predict(self.scale_data(self.X_pred).to_numpy())
+                c_x_pred = self.scale_data(self.X_pred).to_numpy()
+                rfPred = self.model.predict(c_x_pred)
             else:
-                rfPred = self.model.predict(self.X_pred.to_numpy())
+                c_x_pred = self.X_pred.to_numpy()
+                rfPred = self.model.predict(c_x_pred)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
             forecast = pd.concat([forecast, pred_clean])
-            if self.probabilistic:
-                rfPred_upper = self.model_upper.predict(self.X_pred)
+            if self.multioutputgpr:
+                med, var = self.model.predict_proba(c_x_pred)
+                stdev = np.sqrt(var)[..., np.newaxis] * norm.ppf((1 + self.prediction_interval) / 2)
+                pred_upper = pd.DataFrame(
+                    med + stdev, index=[index[fcst_step]], columns=current_x.columns
+                )
+                pred_lower = pd.DataFrame(
+                    med - stdev, index=[index[fcst_step]], columns=current_x.columns
+                )
+                upper_forecast = pd.concat([upper_forecast, pred_upper])
+                lower_forecast = pd.concat([lower_forecast, pred_lower])
+            elif self.probabilistic:
+                rfPred_upper = self.model_upper.predict(c_x_pred)
                 pred_upper = pd.DataFrame(
                     rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
-                rfPred_lower = self.model_lower.predict(self.X_pred)
+                rfPred_lower = self.model_lower.predict(c_x_pred)
                 pred_lower = pd.DataFrame(
                     rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
@@ -3110,13 +3166,22 @@ class MultivariateRegression(ModelObject):
 
 
 class VectorizedMultiOutputGPR:
-    """Courtesy of GPT v4."""
-    def __init__(self, kernel='linear', noise_var=1e-2, gamma=None):
+    """Gaussian Process Regressor.
+
+    Args:
+        kernel (str): linear, polynomial, rbf, periodic, locally_periodic, exponential
+        noise_var (float): noise variance, effectively regularization. Close to zero little regularization, larger values create more model flexiblity and noise tolerance.
+        gamma: For the RBF, Exponential, and Locally Periodic kernels, γ is essentially an inverse length scale. [0.1,1,10,100].
+        lambda_: For the Periodic and Locally Periodic kernels, \lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
+        lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as \lambda_.
+        p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
+    """
+    def __init__(self, kernel='rbf', noise_var=1e-2, gamma=0.1, lambda_prime=0.1, p=7):
         self.kernel = kernel
         self.noise_var = noise_var
         self.gamma = gamma
-        self.lambda_prime = 0
-        self.p = 0
+        self.lambda_prime = lambda_prime
+        self.p = p
 
     def _linear_kernel(self, x1, x2):
         return np.dot(x1, x2.T)
@@ -3130,33 +3195,34 @@ class VectorizedMultiOutputGPR:
         distance = np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         return np.exp(-gamma * distance)
 
-    def _exponential_kernel(self, x1, x2, lambda_):
-        return np.exp(-np.abs(x1 - x2.T) / lambda_)
+    def _exponential_kernel(self, x1, x2, gamma):
+        return np.exp(-np.abs(x1 - x2.T) / gamma)
 
-    def _periodic_kernel(self, x1, x2, lambda_, p):
+    def _periodic_kernel(self, x1, x2, gamma, p):
         sin_sq = np.sin(np.pi * np.abs(x1 - x2.T) / p) ** 2
-        return np.exp(-2 * sin_sq / lambda_**2)
+        return np.exp(-2 * sin_sq / gamma**2)
 
-    def _locally_periodic_kernel(self, x1, x2, lambda_, lambda_prime, p):
-        rbf_part = np.exp(-((x1 - x2.T) ** 2) / (2 * lambda_**2))
+    def _locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
+        rbf_part = np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
         periodic_part = self._periodic_kernel(x1, x2, lambda_prime, p)
         return rbf_part * periodic_part
 
     def fit(self, X, Y):
-        self.X_train = X
+        self.X_train = np.asarray(X)
+        y = np.asarray(Y)
         
         if self.kernel == 'linear':
-            K = self._linear_kernel(X, X)
+            K = self._linear_kernel(self.X_train, self.X_train)
         elif self.kernel == 'polynomial':
-            K = self._polynomial_kernel(X, X)
+            K = self._polynomial_kernel(self.X_train, self.X_train)
         elif self.kernel == 'rbf':
-            K = self._rbf_kernel(X, X, self.gamma)
+            K = self._rbf_kernel(self.X_train, self.X_train, self.gamma)
         elif self.kernel == 'exponential':
-            K = self._exponential_kernel(X, X, self.gamma)
+            K = self._exponential_kernel(self.X_train, self.X_train, self.gamma)
         elif self.kernel == 'periodic':
-            K = self._periodic_kernel(X, X, self.gamma, self.lambda_)
+            K = self._periodic_kernel(self.X_train, self.X_train, self.gamma, self.p)
         elif self.kernel == 'locally_periodic':
-            K = self._locally_periodic_kernel(X, X, self.gamma, self.lambda_prime, self.p)
+            K = self._locally_periodic_kernel(self.X_train, self.X_train, self.gamma, self.lambda_prime, self.p)
         else:
             raise ValueError("Invalid Kernel")
 
@@ -3165,21 +3231,23 @@ class VectorizedMultiOutputGPR:
         
         # Cholesky decomposition and solve for alpha in a vectorized way
         self.L = np.linalg.cholesky(K_reg)
-        self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, Y))
+        self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, y))
+        return self
 
     def predict(self, X):
+        x_pred = np.asarray(X)
         if self.kernel == 'linear':
-            k = self._linear_kernel(X, self.X_train)
+            k = self._linear_kernel(x_pred, self.X_train)
         elif self.kernel == 'polynomial':
-            k = self._polynomial_kernel(X, self.X_train)
+            k = self._polynomial_kernel(x_pred, self.X_train)
         elif self.kernel == 'rbf':
-            k = self._rbf_kernel(X, self.X_train, self.gamma)
+            k = self._rbf_kernel(x_pred, self.X_train, self.gamma)
         elif self.kernel == 'exponential':
-            k = self._exponential_kernel(X, self.X_train, self.gamma)
+            k = self._exponential_kernel(x_pred, self.X_train, self.gamma)
         elif self.kernel == 'periodic':
-            k = self._periodic_kernel(X, self.X_train, self.gamma, self.lambda_)
+            k = self._periodic_kernel(x_pred, self.X_train, self.gamma, self.p)
         elif self.kernel == 'locally_periodic':
-            k = self._locally_periodic_kernel(X, self.X_train, self.gamma, self.lambda_prime, self.p)
+            k = self._locally_periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_prime, self.p)
         else:
             raise ValueError("Invalid Kernel")
             
@@ -3189,19 +3257,29 @@ class VectorizedMultiOutputGPR:
         return Y_pred
 
     def predict_proba(self, X):
+        x_pred = np.asarray(X)
         if self.kernel == 'linear':
-            k_star = self._linear_kernel(X, self.X_train)
-            k_star_star = np.diag(self._linear_kernel(X, X))
+            k_star = self._linear_kernel(x_pred, self.X_train)
+            k_star_star = np.diag(self._linear_kernel(x_pred, self.X_train))
         elif self.kernel == 'polynomial':
-            k_star = self._polynomial_kernel(X, self.X_train)
-            k_star_star = np.diag(self._polynomial_kernel(X, X))
+            k_star = self._polynomial_kernel(x_pred, self.X_train)
+            k_star_star = np.diag(self._polynomial_kernel(x_pred, self.X_train))
         elif self.kernel == 'rbf':
-            k_star = self._rbf_kernel(X, self.X_train, self.gamma)
-            k_star_star = np.diag(self._rbf_kernel(X, X, self.gamma))
-        # FINISH
+            k_star = self._rbf_kernel(x_pred, self.X_train, self.gamma)
+            k_star_star = np.diag(self._rbf_kernel(x_pred, self.X_train, self.gamma))
+
+        elif self.kernel == 'exponential':
+            k_star = self._exponential_kernel(X, self.X_train, self.gamma)
+            k_star_star = np.diag(self._exponential_kernel(x_pred, self.X_train, self.gamma))
+        elif self.kernel == 'periodic':
+            k_star = self._periodic_kernel(X, self.X_train, self.gamma, self.p)
+            k_star_star = np.diag(self._periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_))
+        elif self.kernel == 'locally_periodic':
+            k_star = self._locally_periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_prime, self.p)
+            k_star_star = np.diag(self._locally_periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_prime, self.p))
         else:
             raise ValueError("Invalid Kernel")
-            
+
         # Making predictions
         Y_pred = k_star @ self.alpha
         
@@ -3210,20 +3288,3 @@ class VectorizedMultiOutputGPR:
         Y_var = k_star_star - np.sum(v**2, axis=0)
         
         return Y_pred, Y_var
-
-
-"""
-    gamma: For the RBF, Exponential, and Locally Periodic kernels, γγ is essentially an inverse length scale.
-        If you're dealing with daily time series data over a year, you might want to try values in the range [0.1,1,10,100][0.1,1,10,100]. A smaller value of γγ will imply a longer wavelength for the function, and a larger value will imply a shorter wavelength.
-        It might also be helpful to consider the spread or variance of your data to help initialize this parameter.
-
-    lambda_: For the Periodic and Locally Periodic kernels, \lambda_ determines the smoothness of the periodic function.
-        A reasonable range might be [0.1,1,10,100][0.1,1,10,100]. Like γγ, the specific optimal value can depend on the structure and scale of your data.
-
-    lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. You can use the same range as \lambda_.
-
-    p: The period parameter for the Periodic and Locally Periodic kernels.
-        You should have some idea of what the period of your time series might be. For instance, if you're looking at daily data with a weekly cycle, p=7p=7 is a good starting point. For yearly data with seasonal patterns, p=365.25p=365.25 might be appropriate.
-        Alternatively, you can also use techniques like spectral analysis or autocorrelation plots to help identify potential periodicity in your data.
-"""
-
