@@ -1268,9 +1268,17 @@ def ddot(A, B):
     return np.matmul(A, B)
 
 
-def ddot_t_right(A, B):
+def ddot_t_right_old(A, B):
     "Matrix multiplication over last 2 axes with right operand transposed"
     return np.einsum("...ij,...kj->...ik", A, B)
+
+
+def ddot_t_right(A, B):
+    "Matrix multiplication over last 2 axes with right operand transposed"
+    # see previous for original code
+    # return np.matmul(A, np.transpose(B, axes=(-1, -2)))
+    #  (A @ B.swapaxes(-1, -2)).swapaxes(-1, -2)
+    return np.matmul(A, np.swapaxes(B, -1, -2))
 
 
 def douter(a, b):

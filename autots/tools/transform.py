@@ -372,18 +372,20 @@ class Detrend(EmptyTransformer):
 
 class StatsmodelsFilter(EmptyTransformer):
     """Irreversible filters.
-
     Args:
         method (str): bkfilter or cffilter or convolution_filter
     """
-
     def __init__(self, method: str = "bkfilter", **kwargs):
         super().__init__(name="StatsmodelsFilter")
         self.method = method
+        self.filters = {
+            "bkfilter": self.bkfilter,
+            "cffilter": self.cffilter,
+            "convolution_filter": self.convolution_filter,
+        }
 
     def fit_transform(self, df):
         """Fit and Return Detrended DataFrame.
-
         Args:
             df (pandas.DataFrame): input dataframe
         """
@@ -391,30 +393,29 @@ class StatsmodelsFilter(EmptyTransformer):
 
     def transform(self, df):
         """Return detrended data.
-
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if self.method == "bkfilter":
-            from statsmodels.tsa.filters import bk_filter
+        return self.filters[self.method](df)
 
-            cycles = bk_filter.bkfilter(df, K=1)
-            cycles.columns = df.columns
-            df = (df - cycles).fillna(method="ffill").fillna(method="bfill")
-        elif self.method == "cffilter":
-            from statsmodels.tsa.filters import cf_filter
+    def bkfilter(self, df):
+        from statsmodels.tsa.filters import bk_filter
+        cycles = bk_filter.bkfilter(df, K=1)
+        cycles.columns = df.columns
+        return (df - cycles).fillna(method="ffill").fillna(method="bfill")
 
-            cycle, trend = cf_filter.cffilter(df)
-            if isinstance(cycle, pd.Series):
-                cycle = cycle.to_frame()
-            cycle.columns = df.columns
-            df = df - cycle
-        elif "convolution_filter" in self.method:
-            from statsmodels.tsa.filters.filtertools import convolution_filter
+    def cffilter(self, df):
+        from statsmodels.tsa.filters import cf_filter
+        cycle, trend = cf_filter.cffilter(df)
+        if isinstance(cycle, pd.Series):
+            cycle = cycle.to_frame()
+        cycle.columns = df.columns
+        return df - cycle
 
-            df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
-            df = df.fillna(method="ffill").fillna(method="bfill")
-        return df
+    def convolution_filter(self, df):
+        from statsmodels.tsa.filters.filtertools import convolution_filter
+        df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
+        return df.fillna(method="ffill").fillna(method="bfill")
 
 
 class HPFilter(EmptyTransformer):
