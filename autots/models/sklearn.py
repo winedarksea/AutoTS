@@ -2972,28 +2972,30 @@ class MultivariateRegression(ModelObject):
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
             forecast = pd.concat([forecast, pred_clean])
-            if self.multioutputgpr:
-                med, var = self.model.predict_proba(c_x_pred)
-                stdev = np.sqrt(var)[..., np.newaxis] * norm.ppf((1 + self.prediction_interval) / 2)
-                pred_upper = pd.DataFrame(
-                    med + stdev, index=[index[fcst_step]], columns=current_x.columns
-                )
-                pred_lower = pd.DataFrame(
-                    med - stdev, index=[index[fcst_step]], columns=current_x.columns
-                )
-                upper_forecast = pd.concat([upper_forecast, pred_upper])
-                lower_forecast = pd.concat([lower_forecast, pred_lower])
-            elif self.probabilistic:
-                rfPred_upper = self.model_upper.predict(c_x_pred)
-                pred_upper = pd.DataFrame(
-                    rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
-                ).transpose()
-                rfPred_lower = self.model_lower.predict(c_x_pred)
-                pred_lower = pd.DataFrame(
-                    rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
-                ).transpose()
-                upper_forecast = pd.concat([upper_forecast, pred_upper])
-                lower_forecast = pd.concat([lower_forecast, pred_lower])
+            # a lot slower
+            if self.probabilistic:
+                if self.multioutputgpr:
+                    med, var = self.model.predict_proba(c_x_pred)
+                    stdev = np.sqrt(var)[..., np.newaxis].T * norm.ppf((1 + self.prediction_interval) / 2)
+                    pred_upper = pd.DataFrame(
+                        med + stdev, index=[index[fcst_step]], columns=current_x.columns
+                    )
+                    pred_lower = pd.DataFrame(
+                        med - stdev, index=[index[fcst_step]], columns=current_x.columns
+                    )
+                    upper_forecast = pd.concat([upper_forecast, pred_upper])
+                    lower_forecast = pd.concat([lower_forecast, pred_lower])
+                else:
+                    rfPred_upper = self.model_upper.predict(c_x_pred)
+                    pred_upper = pd.DataFrame(
+                        rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
+                    ).transpose()
+                    rfPred_lower = self.model_lower.predict(c_x_pred)
+                    pred_lower = pd.DataFrame(
+                        rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
+                    ).transpose()
+                    upper_forecast = pd.concat([upper_forecast, pred_upper])
+                    lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
