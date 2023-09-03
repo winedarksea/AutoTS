@@ -2184,7 +2184,7 @@ or otherwise increase models available."""
             for interval in prediction_interval:
                 df_forecast = self._predict(
                     forecast_length=forecast_length,
-                    prediction_interval=prediction_interval,
+                    prediction_interval=interval,
                     future_regressor=future_regressor,
                     fail_on_forecast_nan=fail_on_forecast_nan,
                     verbose=verbose,
