@@ -17,7 +17,7 @@ except Exception:
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
-from autots.tools.window_functions import window_maker, last_window
+from autots.tools.window_functions import window_maker, last_window, sliding_window_view
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.holiday import holiday_flag
 from autots.tools.shaping import infer_frequency
@@ -3290,3 +3290,366 @@ class VectorizedMultiOutputGPR:
         Y_var = k_star_star - np.sum(v**2, axis=0)
         
         return Y_pred, Y_var
+
+
+class PreprocessingRegression(ModelObject):
+    """Regression use the last n values as the basis of training data.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        # regression_type: str = None,
+    """
+
+    def __init__(
+        self,
+        name: str = "PreprocessingRegression",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2023,
+        verbose: int = 0,
+        window_size: int = 10,
+        regression_model: dict = {
+            "model": 'RandomForest',
+            "model_params": {},
+        },
+        transformation_dict=None,
+        max_history: int = None,
+        one_step: bool = False,
+        processed_y: bool = False,
+        normalize_window: bool = False,
+        datepart_method: str = "common_fourier",
+        forecast_length: int = 28,
+        regression_type: str = None,
+        n_jobs: int = -1,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            regression_type=regression_type,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.regression_model = regression_model
+        self.window_size = abs(int(window_size))
+        self.max_history = max_history
+        self.one_step = one_step
+        self.processed_y = processed_y
+        self.transformation_dict = transformation_dict
+        self.datepart_method = datepart_method
+        self.normalize_window = normalize_window
+        self.forecast_length = forecast_length
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        self.fit_data(df)
+        if self.regression_type in ["User", "user"]:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor passed"
+                )
+        from autots.tools.transform import GeneralTransformer  # avoid circular imports
+
+        self.transformer_object = GeneralTransformer(
+            **self.transformation_dict, n_jobs=self.n_jobs, holiday_country=self.holiday_country
+        )
+        forecast_length = self.forecast_length
+        one_step = self.one_step
+        processed_y = self.processed_y
+        df = self.transformer_object._first_fit(df)
+
+        df_list = [df]
+        new_df = df
+        trans_keys = sorted(list(self.transformer_object.transformations.keys()))
+        for i in trans_keys:
+            trans_name = self.transformer_object.transformations[i]
+            if trans_name not in ['Slice']:
+                new_df = self.transformer_object._fit_one(new_df, i)
+                df_list.append(new_df)
+
+        max_history = 0 if self.max_history is None else abs(int(self.max_history))
+        window_list = []
+        for cdf in df_list:
+            window_size = 10
+            window_list.append(sliding_window_view(np.asarray(cdf)[-max_history:], window_shape=(window_size,), axis=0,))
+        full = np.concatenate(window_list, axis=2)
+
+        extras = self._construct_extras(df_index=df.index, future_regressor=future_regressor)
+
+        full_end = df.shape[0] - 1
+        window_end = full.shape[0] - 1
+        max_hist_rev = df.shape[0] - max_history if max_history != 0 else 0
+
+        if one_step:
+            self.X = full[:-1].reshape(-1, full.shape[-1])
+            if extras is not None:
+                self.X = np.concatenate([self.X, extras[window_size + max_hist_rev:].reshape(-1, extras.shape[-1])], axis=1)
+            if processed_y:
+                self.Y = np.asarray(df_list[-1])[window_size + max_hist_rev:].reshape(-1)
+            else:
+                self.Y = np.asarray(df)[window_size + max_hist_rev:].reshape(-1)
+        else:
+            windows = []
+            targets = []
+            extra_sel = []
+            forecast_steps = []
+            # concat and drop window of end of dataset
+            for n in range(forecast_length):
+                # don't include last point for windows as it is the training point
+                end_point = window_end - n - 1
+                if end_point > 0:
+                    window_idx = np.arange(0, end_point)
+                    windows.append(full[window_idx])
+                    # for y and target related vars, don't include first point
+                    target_idx = np.arange(window_size + n + max_hist_rev, full_end)
+                    if processed_y:
+                        targets.append(np.asarray(df_list[-1])[target_idx])
+                    else:
+                        targets.append(np.asarray(df)[target_idx])
+                    forecast_steps.append((np.ones_like(df) * n)[target_idx])
+                    if extras is not None:
+                        extra_sel.append(extras[target_idx])
+            windows = np.concatenate(windows, axis=0)
+            if extras is not None:
+                extra_sel = np.concatenate(extra_sel, axis=0)
+            forecast_steps = np.concatenate(forecast_steps, axis=0)
+            if extras is not None:
+                self.X = np.concatenate([windows.reshape(-1, windows.shape[-1]), extra_sel.reshape(-1, extras.shape[-1]), forecast_steps.reshape(-1, 1)], axis=1)
+            else:
+                self.X = np.concatenate([windows.reshape(-1, windows.shape[-1]), forecast_steps.reshape(-1, 1)], axis=1)
+            self.Y = np.concatenate(targets, axis=0).reshape(-1)
+
+        # DROP values which contain numpy, not having filled initial nan values
+        # NORMALIZE the data after creation, as option
+        # param for if Y comes from pre or post processed
+
+        multioutput = True
+        if self.Y.ndim < 2:
+            multioutput = False
+        elif self.Y.shape[1] < 2:
+            multioutput = False
+        self.model = retrieve_regressor(
+            regression_model=self.regression_model,
+            verbose=self.verbose,
+            verbose_bool=self.verbose_bool,
+            random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
+            multioutput=multioutput,
+        )
+        if self.normalize_window:
+            self.X = self._base_scaler(self.X)
+        self.model = self.model.fit(self.X.astype(float), self.Y.astype(float))
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def _construct_extras(self, df_index, future_regressor):
+        extras = True
+        if self.datepart_method is not None:
+            date_part_df = date_part(df_index, method=self.datepart_method)
+            if future_regressor is not None:
+                date_part_df = date_part_df.merge(future_regressor, left_index=True, right_index=True, how='left')
+        elif future_regressor is not None and self.regression_type in ["User", "user"]:
+            date_part_df = future_regressor
+        else:
+            extras = None
+        if extras is not None:
+            N = self.train_shape[1]
+            # memory efficient repeat, hopefully
+            extras = np.moveaxis(np.asarray(date_part_df)[:, :, np.newaxis] * np.ones((1, 1, N)), 2, 1)
+        return extras
+
+    def _construct_full(self, df):
+        df_list = [df]
+        new_df = df
+        trans_keys = sorted(list(self.transformer_object.transformations.keys()))
+        for i in trans_keys:
+            trans_name = self.transformer_object.transformations[i]
+            if trans_name not in ['Slice']:
+                new_df = self.transformer_object._transform_one(new_df, i)
+                df_list.append(new_df)
+
+        max_history = 0 if self.max_history is None else self.max_history
+        window_list = []
+        for cdf in df_list:
+            window_size = 10
+            window_list.append(sliding_window_view(np.asarray(cdf)[-max_history:], window_shape=(window_size,), axis=0,))
+        return np.concatenate(window_list, axis=2)
+
+    def _base_scaler(self, X):
+        self.scaler_mean = np.mean(X, axis=0)
+        self.scaler_std = np.std(X, axis=0)
+        return (X - self.scaler_mean) / self.scaler_std
+
+    def _scale(self, X):
+        return (X - self.scaler_mean) / self.scaler_std
+
+    def fit_data(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.last_window = df.tail(self.window_size)
+        return self
+
+    def predict(
+        self,
+        forecast_length: int = None,
+        future_regressor=None,
+        just_point_forecast: bool = False,
+        df=None,
+    ):
+        """Generate forecast data immediately following dates of .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        if df is not None:
+            self.fit_data(df)
+        if forecast_length is None:
+            forecast_length = self.forecast_length
+        if int(forecast_length) > int(self.forecast_length) and not self.one_step:
+            print("Regression must be refit to change forecast length!")
+        index = self.create_forecast_index(forecast_length=forecast_length)
+
+        if self.one_step:
+            # combined_index = (self.df_train.index.append(index))
+            forecast = pd.DataFrame()
+            # forecast, 1 step ahead, then another, and so on
+            lwindow = self.last_window
+            for x in range(forecast_length):
+                cindex = index[x: x+1]
+                full = self._construct_full(lwindow)
+                c_reg = future_regressor.reindex(cindex) if future_regressor is not None else None
+                extras = self._construct_extras(cindex, c_reg)
+                if extras is not None:
+                    pred = np.concatenate([full[-1:].reshape(-1, full.shape[-1]), extras.reshape(-1, extras.shape[-1])], axis=1)
+                else:
+                    pred = full[-1:].reshape(-1, full.shape[-1])
+                if self.normalize_window:
+                    pred = self._scale(pred)
+                rfPred = pd.DataFrame(self.model.predict(pred)).transpose()
+                rfPred.columns = self.last_window.columns
+                rfPred.index = cindex
+                if self.processed_y:
+                    # won't work with some preprocessing like diff
+                    rfPred = self.transformer_object.inverse_transform(rfPred)
+                forecast = pd.concat([forecast, rfPred], axis=0)
+                lwindow = pd.concat(
+                    [lwindow, rfPred], axis=0, ignore_index=True
+                ).tail(self.window_size)
+            df = forecast
+        else:
+            full = self._construct_full(self.last_window)[-1:]
+            full = full.reshape(-1, full.shape[-1])
+            N = self.train_shape[1]
+            forecast_steps = np.repeat(np.arange(1, forecast_length + 1), N).reshape(-1, 1)
+            c_reg = future_regressor.reindex(index) if future_regressor is not None else None
+            extras = self._construct_extras(index, c_reg)
+            if extras is None:
+                self.pred = np.concatenate([full, forecast_steps], axis=1)
+            else:
+                self.pred = np.concatenate([np.tile(full, (forecast_length, 1)), extras.reshape(-1, extras.shape[-1]), forecast_steps], axis=1)
+            if self.normalize_window:
+                self.pred = self._scale(self.pred)
+            cY = self.model.predict(self.pred.astype(float))
+            cY = pd.DataFrame(cY.reshape(forecast_length, self.train_shape[1]))
+            cY.columns = self.column_names
+            cY.index = index
+            if self.processed_y:
+                # won't work with some preprocessing like diff
+                cY = self.transformer_object.inverse_transform(cY)
+            df = cY
+
+        if just_point_forecast:
+            return df
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.last_window,
+                df,
+                prediction_interval=self.prediction_interval,
+                method='inferred_normal',
+            )
+
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=df.index,
+                forecast_columns=df.columns,
+                lower_forecast=lower_forecast,
+                forecast=df,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        wnd_sz_choice = random.choice([5, 10, 20, seasonal_int()])
+        if method != "deep":
+            wnd_sz_choice = wnd_sz_choice if wnd_sz_choice < 91 else 90
+        model_choice = generate_regressor_params(
+            model_dict=sklearn_model_dict, method=method
+        )
+        if "regressor" in method:
+            regression_type_choice = "User"
+        else:
+            regression_type_choice = random.choices(
+                [None, "User"], weights=[0.8, 0.2]
+            )[0]
+        normalize_window_choice = random.choices([True, False], [0.1, 0.9])[0]
+        datepart_choice = random.choices(
+            [
+                "recurring",
+                "simple",
+                "expanded",
+                "simple_2",
+                "simple_binarized",
+                "expanded_binarized",
+                'common_fourier',
+            ],
+            [0.4, 0.3, 0.3, 0.3, 0.4, 0.05, 0.05],
+        )[0]
+        return {
+            'window_size': wnd_sz_choice,
+            'max_history': random.choices([None, 1000], [0.5, 0.5])[0],
+            'one_step': random.choice([True, False]),
+            'normalize_window': normalize_window_choice,
+            'processed_y': random.choice([True, False]),
+            'transformation_dict': None,  # assume this passed via AutoTS transformer dict
+            'datepart_method': datepart_choice,
+            'regression_type': regression_type_choice,
+            'regression_model': model_choice,
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            'window_size': self.window_size,
+            'max_history': self.max_history,
+            'one_step': self.one_step,
+            'normalize_window': self.normalize_window,
+            'processed_y': self.processed_y,
+            'transformation_dict': self.transformation_dict,
+            'datepart_method': self.datepart_method,
+            'regression_type': self.regression_type,
+            'regression_model': self.regression_model,
+        }

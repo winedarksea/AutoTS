@@ -41,6 +41,7 @@ all_models = [
     'Cassandra',
     'SeasonalityMotif',
     'MLEnsemble',
+    'PreprocessingRegression',
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -231,6 +232,7 @@ recombination_approved = [
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',
+    'PreprocessingRegression',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -276,6 +278,7 @@ regressor = [
     'NeuralProphet',
     'ARCH',
     'Cassandra',
+    'PreprocessingRegression',
 ]
 motifs = [
     'UnivariateMotif',
@@ -291,6 +294,7 @@ regressions = [
     'DatepartRegression',
     'UnivariateRegression',
     'MultivariateRegression',
+    'PreprocessingRegression',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel_no_arima)))
 # this should be implementable with some models in gluonts
@@ -318,6 +322,7 @@ update_fit = [
     "GluonTS",
     'WindowRegression',
     'Cassandra',
+    'PreprocessingRegression',
 ]
 model_lists = {
     "all": all_models,

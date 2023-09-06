@@ -611,6 +611,18 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == "PreprocessingRegression":
+        from autots.models.sklearn import PreprocessingRegression
+
+        return PreprocessingRegression(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            forecast_length=forecast_length,
+            **parameters,
+        )
     elif model == "MLEnsemble":
         from autots.models.mlensemble import MLEnsemble  # circular import
 
@@ -701,6 +713,13 @@ class ModelPrediction(ModelObject):
         self.n_jobs = n_jobs
         self.current_model_file = current_model_file
         self.model_count = model_count
+        if model_str == "PreprocessingRegression":
+            parameter_dict['transformation_dict'] = transformation_dict
+            transformation_dict = {
+                'fillna': None,
+                'transformations': {},
+                'transformation_params': {},
+            }
         self.transformer_object = GeneralTransformer(
             **transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
         )

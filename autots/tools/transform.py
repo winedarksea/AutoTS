@@ -4192,6 +4192,14 @@ class GeneralTransformer(object):
                 f"Transformation {transformation} not known or improperly entered, returning untransformed df"
             )
             return EmptyTransformer()
+    
+    def _first_fit(self, df):
+        # fill NaN
+        df = self.fill_na(df)
+
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        return df
 
     def _fit_one(self, df, i):
         transformation = self.transformations[i]
@@ -4215,11 +4223,8 @@ class GeneralTransformer(object):
         return df
 
     def _fit(self, df):
-        # fill NaN
-        df = self.fill_na(df)
+        df = self._first_fit(df)
 
-        self.df_index = df.index
-        self.df_colnames = df.columns
         try:
             for i in sorted(self.transformations.keys()):
                 df = self._fit_one(df, i)
