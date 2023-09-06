@@ -1125,6 +1125,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
+                    'MultioutputGPR': 0.1,
                 }
             )
         if holiday_countries_used is None:
@@ -4192,6 +4193,27 @@ class GeneralTransformer(object):
             )
             return EmptyTransformer()
 
+    def _fit_one(self, df, i):
+        transformation = self.transformations[i]
+        self.transformers[i] = self.retrieve_transformer(
+            transformation=transformation,
+            df=df,
+            param=self.transformation_params[i],
+            random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
+        )
+        df = self.transformers[i].fit_transform(df)
+        # convert to DataFrame only if it isn't already
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+        # update index reference if sliced
+        if transformation in ["Slice", "FastICA", "PCA"]:
+            self.df_index = df.index
+            self.df_colnames = df.columns
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        return df
+
     def _fit(self, df):
         # fill NaN
         df = self.fill_na(df)
@@ -4200,24 +4222,7 @@ class GeneralTransformer(object):
         self.df_colnames = df.columns
         try:
             for i in sorted(self.transformations.keys()):
-                transformation = self.transformations[i]
-                self.transformers[i] = self.retrieve_transformer(
-                    transformation=transformation,
-                    df=df,
-                    param=self.transformation_params[i],
-                    random_seed=self.random_seed,
-                    n_jobs=self.n_jobs,
-                    holiday_country=self.holiday_country,
-                )
-                df = self.transformers[i].fit_transform(df)
-                # convert to DataFrame only if it isn't already
-                if not isinstance(df, pd.DataFrame):
-                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-                # update index reference if sliced
-                if transformation in ["Slice", "FastICA", "PCA"]:
-                    self.df_index = df.index
-                    self.df_colnames = df.columns
-                # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+                df = self._fit_one(df, i)
         except Exception as e:
             raise Exception(
                 f"Transformer {self.transformations[i]} failed on fit"
@@ -4238,6 +4243,18 @@ class GeneralTransformer(object):
         """Directly fit and apply transformations to convert df."""
         return self._fit(df)
 
+    def _transform_one(self, df, i):
+        transformation = self.transformations[i]
+        df = self.transformers[i].transform(df)
+        # convert to DataFrame only if it isn't already
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+        # update index reference if sliced
+        if transformation in ["Slice", "FastICA", "PCA"]:
+            self.df_index = df.index
+            self.df_colnames = df.columns
+        return df
+
     def transform(self, df):
         """Apply transformations to convert df."""
         df = df.copy()
@@ -4253,16 +4270,36 @@ class GeneralTransformer(object):
         # transformations
         i = 0
         for i in sorted(self.transformations.keys()):
-            transformation = self.transformations[i]
-            df = self.transformers[i].transform(df)
-            # convert to DataFrame only if it isn't already
-            if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-            # update index reference if sliced
-            if transformation in ["Slice", "FastICA", "PCA"]:
-                self.df_index = df.index
-                self.df_colnames = df.columns
+            df = self._transform_one(df, i)
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        return df
+
+    def _inverse_one(self, df, i, trans_method='forecast', bounds=False):
+        self.c_trans_n = self.transformations[i]
+        if self.c_trans_n in self.oddities_list:
+            if self.c_trans_n in self.bounded_oddities:
+                if not bounds:
+                    adjustment = None
+                else:
+                    adjustment = self.adjustments.get(i, None)
+                df = self.transformers[i].inverse_transform(
+                    df,
+                    trans_method=trans_method,
+                    adjustment=adjustment,
+                )
+                if not bounds:
+                    self.adjustments[i] = self.transformers[i].adjustment
+            else:
+                df = self.transformers[i].inverse_transform(
+                    df, trans_method=trans_method
+                )
+        else:
+            df = self.transformers[i].inverse_transform(df)
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+        elif self.c_trans_n in ["FastICA", "PCA"]:
+            self.df_colnames = df.columns
+        # df = df.replace([np.inf, -np.inf], 0)
         return df
 
     def inverse_transform(
@@ -4285,33 +4322,9 @@ class GeneralTransformer(object):
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         try:
             for i in sorted(self.transformations.keys(), reverse=True):
-                c_trans_n = self.transformations[i]
-                if c_trans_n in self.oddities_list:
-                    if c_trans_n in self.bounded_oddities:
-                        if not bounds:
-                            adjustment = None
-                        else:
-                            adjustment = self.adjustments.get(i, None)
-                        df = self.transformers[i].inverse_transform(
-                            df,
-                            trans_method=trans_method,
-                            adjustment=adjustment,
-                        )
-                        if not bounds:
-                            self.adjustments[i] = self.transformers[i].adjustment
-                    else:
-                        df = self.transformers[i].inverse_transform(
-                            df, trans_method=trans_method
-                        )
-                else:
-                    df = self.transformers[i].inverse_transform(df)
-                if not isinstance(df, pd.DataFrame):
-                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-                elif c_trans_n in ["FastICA", "PCA"]:
-                    self.df_colnames = df.columns
-                # df = df.replace([np.inf, -np.inf], 0)
+                df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
         except Exception as e:
-            raise Exception(f"Transformer {c_trans_n} failed on inverse") from e
+            raise Exception(f"Transformer {self.c_trans_n} failed on inverse") from e
 
         if fillzero:
             df = df.fillna(0)

@@ -460,6 +460,8 @@ class PredictionObject(object):
             interpolate=interpolate,
             start_date=start_date,
         )
+        if 'actuals' not in plot_df.columns:
+            plot_df['actuals'] = np.nan
         if colors is None:
             colors = {
                 'low_forecast': '#A5ADAF',

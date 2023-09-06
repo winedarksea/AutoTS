@@ -106,6 +106,8 @@ class AutoTSTest(unittest.TestCase):
             value_col='value' if long else None,
             id_col='series_id' if long else None,
         )
+        # first test multiple prediction intervals
+        prediction = model.predict(future_regressor=future_regressor_forecast2d, prediction_interval=[0.6, 0.9], verbose=0)
         prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
         long_form = prediction.long_form_results()
         forecasts_df = prediction.forecast

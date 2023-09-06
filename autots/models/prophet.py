@@ -223,6 +223,7 @@ class FBProphet(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.verbose <= 0:
+            logging.getLogger('fbprophet').disabled = True
             logging.getLogger('fbprophet').setLevel(logging.CRITICAL)
             logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
             logging.getLogger('prophet').setLevel(logging.CRITICAL)
