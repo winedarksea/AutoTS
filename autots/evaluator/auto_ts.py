@@ -3037,13 +3037,14 @@ or otherwise increase models available."""
             ax = plot_df[['actuals', 'chosen']].plot(
                 title=title, color=colors, **kwargs
             )
-            ax.fill_between(
-                plot_df.index,
-                plot_df['chosen_upper'],
-                plot_df['chosen_lower'],
-                alpha=alpha,
-                color="#A5ADAF",
-            )
+            if include_bounds:
+                ax.fill_between(
+                    plot_df.index,
+                    plot_df['chosen_upper'],
+                    plot_df['chosen_lower'],
+                    alpha=alpha,
+                    color="#A5ADAF",
+                )
         else:
             ax = plot_df.plot(title=title, **kwargs)
         ax.vlines(

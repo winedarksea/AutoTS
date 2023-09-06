@@ -215,7 +215,7 @@ class Cassandra(ModelObject):
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
-        self.scaler_std = np.std(df, axis=0)
+        self.scaler_std = np.std(df, axis=0).replace(0, 1)
         return (df - self.scaler_mean) / self.scaler_std
 
     def scale_data(self, df):
