@@ -4268,10 +4268,7 @@ class GeneralTransformer(object):
             df = self.hier.transform(df)
         """
         # fill NaN
-        df = self.fill_na(df)
-
-        self.df_index = df.index
-        self.df_colnames = df.columns
+        df = self._first_fit(df)
         # transformations
         i = 0
         for i in sorted(self.transformations.keys()):

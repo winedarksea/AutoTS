@@ -3362,7 +3362,7 @@ class PreprocessingRegression(ModelObject):
         from autots.tools.transform import GeneralTransformer  # avoid circular imports
 
         self.transformer_object = GeneralTransformer(
-            **self.transformation_dict, n_jobs=self.n_jobs, holiday_country=self.holiday_country
+            n_jobs=self.n_jobs, holiday_country=self.holiday_country, **self.transformation_dict
         )
         forecast_length = self.forecast_length
         one_step = self.one_step
@@ -3381,8 +3381,7 @@ class PreprocessingRegression(ModelObject):
         max_history = 0 if self.max_history is None else abs(int(self.max_history))
         window_list = []
         for cdf in df_list:
-            window_size = 10
-            window_list.append(sliding_window_view(np.asarray(cdf)[-max_history:], window_shape=(window_size,), axis=0,))
+            window_list.append(sliding_window_view(np.asarray(cdf)[-max_history:], window_shape=(self.window_size,), axis=0,))
         full = np.concatenate(window_list, axis=2)
 
         extras = self._construct_extras(df_index=df.index, future_regressor=future_regressor)
@@ -3394,11 +3393,11 @@ class PreprocessingRegression(ModelObject):
         if one_step:
             self.X = full[:-1].reshape(-1, full.shape[-1])
             if extras is not None:
-                self.X = np.concatenate([self.X, extras[window_size + max_hist_rev:].reshape(-1, extras.shape[-1])], axis=1)
+                self.X = np.concatenate([self.X, extras[self.window_size + max_hist_rev:].reshape(-1, extras.shape[-1])], axis=1)
             if processed_y:
-                self.Y = np.asarray(df_list[-1])[window_size + max_hist_rev:].reshape(-1)
+                self.Y = np.asarray(df_list[-1])[self.window_size + max_hist_rev:].reshape(-1)
             else:
-                self.Y = np.asarray(df)[window_size + max_hist_rev:].reshape(-1)
+                self.Y = np.asarray(df)[self.window_size + max_hist_rev:].reshape(-1)
         else:
             windows = []
             targets = []
@@ -3412,7 +3411,7 @@ class PreprocessingRegression(ModelObject):
                     window_idx = np.arange(0, end_point)
                     windows.append(full[window_idx])
                     # for y and target related vars, don't include first point
-                    target_idx = np.arange(window_size + n + max_hist_rev, full_end)
+                    target_idx = np.arange(self.window_size + n + max_hist_rev, full_end)
                     if processed_y:
                         targets.append(np.asarray(df_list[-1])[target_idx])
                     else:
@@ -3431,8 +3430,10 @@ class PreprocessingRegression(ModelObject):
             self.Y = np.concatenate(targets, axis=0).reshape(-1)
 
         # DROP values which contain numpy, not having filled initial nan values
-        # NORMALIZE the data after creation, as option
-        # param for if Y comes from pre or post processed
+        nan_rows = np.argwhere(np.isnan(np.sum(self.X, axis=1)))
+        if nan_rows.size != 0:
+            self.X = np.delete(self.X, nan_rows, axis=0)
+            self.Y = np.delete(self.Y, nan_rows, axis=0)
 
         multioutput = True
         if self.Y.ndim < 2:
@@ -3470,6 +3471,8 @@ class PreprocessingRegression(ModelObject):
         return extras
 
     def _construct_full(self, df):
+        # used in predict only
+        df = self.transformer_object._first_fit(df)
         df_list = [df]
         new_df = df
         trans_keys = sorted(list(self.transformer_object.transformations.keys()))
@@ -3479,11 +3482,10 @@ class PreprocessingRegression(ModelObject):
                 new_df = self.transformer_object._transform_one(new_df, i)
                 df_list.append(new_df)
 
-        max_history = 0 if self.max_history is None else self.max_history
+        # max_history = 0 if self.max_history is None else self.max_history
         window_list = []
         for cdf in df_list:
-            window_size = 10
-            window_list.append(sliding_window_view(np.asarray(cdf)[-max_history:], window_shape=(window_size,), axis=0,))
+            window_list.append(sliding_window_view(np.asarray(cdf), window_shape=(self.window_size,), axis=0,))  # [-max_history:]
         return np.concatenate(window_list, axis=2)
 
     def _base_scaler(self, X):
@@ -3550,7 +3552,7 @@ class PreprocessingRegression(ModelObject):
                     rfPred = self.transformer_object.inverse_transform(rfPred)
                 forecast = pd.concat([forecast, rfPred], axis=0)
                 lwindow = pd.concat(
-                    [lwindow, rfPred], axis=0, ignore_index=True
+                    [lwindow, rfPred], axis=0, ignore_index=False
                 ).tail(self.window_size)
             df = forecast
         else:
