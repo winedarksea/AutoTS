@@ -460,6 +460,9 @@ class PredictionObject(object):
             interpolate=interpolate,
             start_date=start_date,
         )
+        if self.forecast_length == 1:
+            if plot_df.shape[0] > 3:
+                plot_df['forecast'].iloc[-2] = plot_df['actuals'].iloc[-2]
         if 'actuals' not in plot_df.columns:
             plot_df['actuals'] = np.nan
         if colors is None:

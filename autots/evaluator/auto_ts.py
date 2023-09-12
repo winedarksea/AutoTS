@@ -3031,6 +3031,10 @@ or otherwise increase models available."""
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
             plot_df = plot_df[plot_df.index <= end_date]
+        # try to make visible (if not quite right) on a short forecast
+        if self.forecast_length == 1:
+            if plot_df.shape[0] > 3:
+                plot_df.loc[:, 'chosen'] = plot_df['chosen'].fillna(method='bfill', limit=1)
         # actual plotting section
         if colors is not None:
             # this will need to change is users are allowed to input colors

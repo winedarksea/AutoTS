@@ -414,7 +414,10 @@ def smoothness(arr):
     """A gradient measure of linearity, where 0 is linear and larger values are more volatile."""
     # return np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0) # linear smallest, massive jumps biggest
     # return np.abs(np.mean(np.diff(arr, n=2, axis=0), axis=0))  # favors linear and also sine wave types, suspectible to large but self-canceling
-    return np.log1p(np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0).round(12))
+    if arr.shape[0] < 3:
+        return np.log1p(np.mean(np.abs(np.diff(arr, n=1, axis=0)), axis=0).round(12))
+    else:
+        return np.log1p(np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0).round(12))
 
 
 def full_metric_evaluation(
@@ -564,7 +567,7 @@ def full_metric_evaluation(
             # 'u' weighted (start and end highest priority) rmse
             'uwmse': np.mean((filled_full_mae_errors * u_weights) ** 2, axis=0)
             / scaler,
-            'smoothness': smoothness(F),
+            'smoothness': smoothness(lF),
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),
