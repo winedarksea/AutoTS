@@ -158,6 +158,12 @@ class FBProphet(ModelObject):
             """Prophet for for loop or parallel."""
             current_series = current_series.rename(columns={series: 'y'})
             current_series['ds'] = current_series.index
+            # logging needs to be inside the multiprocessing, apparently
+            logging.getLogger('fbprophet').disabled = True
+            logging.getLogger('fbprophet').setLevel(logging.CRITICAL)
+            logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
+            logging.getLogger('prophet').setLevel(logging.WARNING)
+            logging.getLogger('cmdstanpy').setLevel(logging.WARNING)
             m = Prophet(
                 interval_width=args['prediction_interval'],
                 yearly_seasonality=self.yearly_seasonality,
@@ -222,11 +228,6 @@ class FBProphet(ModelObject):
             return (forecast, lower_forecast, upper_forecast)
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
-        if self.verbose <= 0:
-            logging.getLogger('fbprophet').disabled = True
-            logging.getLogger('fbprophet').setLevel(logging.CRITICAL)
-            logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
-            logging.getLogger('prophet').setLevel(logging.CRITICAL)
         args = {
             'holiday': self.holiday,
             'holiday_country': self.holiday_country,
