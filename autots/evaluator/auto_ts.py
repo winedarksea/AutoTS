@@ -41,7 +41,7 @@ from autots.models.ensemble import (
     generate_crosshair_score,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
-from autots.tools import cpu_count
+from autots.tools import set_n_jobs
 from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,
@@ -307,17 +307,7 @@ class AutoTS(object):
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
-        if self.n_jobs == 'auto':
-            self.n_jobs = cpu_count(modifier=0.75)
-            if verbose > 0:
-                print(f"Using {self.n_jobs} cpus for n_jobs.")
-        elif str(self.n_jobs).isdigit():
-            self.n_jobs = int(self.n_jobs)
-            if self.n_jobs < 0:
-                core_count = cpu_count() + 1 - self.n_jobs
-                self.n_jobs = core_count if core_count > 1 else 1
-        if self.n_jobs == 0:
-            self.n_jobs = 1
+        self.n_jobs = set_n_jobs(self.n_jobs, verbose=self.verbose)
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):

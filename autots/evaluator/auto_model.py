@@ -8,6 +8,7 @@ import pandas as pd
 import datetime
 import json
 from hashlib import md5
+from autots.tools.cpu_count import set_n_jobs
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.base import PredictionObject, ModelObject
 from autots.models.ensemble import (
@@ -1153,12 +1154,8 @@ def model_forecast(
     if frequency == "infer":
         frequency = infer_frequency(df_train)
     # handle "auto" n_jobs to an integer of local count
-    if n_jobs == 'auto':
-        from autots.tools import cpu_count
-
-        n_jobs = cpu_count(modifier=0.75)
-        if verbose > 0:
-            print(f"Auto-detected {n_jobs} cpus for n_jobs.")
+    if n_jobs == 'auto' or not isinstance(n_jobs, int):
+        n_jobs = set_n_jobs(n_jobs=n_jobs, verbose=verbose)
 
     # if an ensemble
     if model_name == 'Ensemble':
