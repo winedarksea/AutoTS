@@ -41,7 +41,7 @@ from autots.models.ensemble import (
     generate_crosshair_score,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
-from autots.tools import set_n_jobs
+from autots.tools.cpu_count import set_n_jobs
 from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,

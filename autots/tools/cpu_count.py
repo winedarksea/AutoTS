@@ -60,7 +60,7 @@ def set_n_jobs(n_jobs, verbose=0):
     frac_flag = False
     if isinstance(n_jobs, float):
         frac_flag = n_jobs < 1 and n_jobs > 0
-    if n_jobs == 'auto' or frac_flag:
+    if n_jobs == 'auto' or frac_flag or n_jobs == -1:
         if frac_flag:
             n_jobs = cpu_count(modifier=n_jobs)
         else:    
@@ -69,9 +69,11 @@ def set_n_jobs(n_jobs, verbose=0):
             print(f"Using {n_jobs} cpus for n_jobs.")
     elif str(n_jobs).isdigit():
         n_jobs = int(n_jobs)
-        if n_jobs < 0:
-            core_count = cpu_count() + 1 - n_jobs
-            n_jobs = core_count if core_count > 1 else 1
+    elif n_jobs < 0:
+        core_count = cpu_count(modifier=1) + 1 + n_jobs
+        n_jobs = core_count if core_count > 1 else 1
+    elif isinstance(n_jobs, (float, int)):
+        pass
     else:
         raise ValueError("n_jobs must be 'auto' or integer")
     if n_jobs <= 0:
