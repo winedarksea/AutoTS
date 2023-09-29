@@ -3244,6 +3244,139 @@ or otherwise increase models available."""
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
+    
+    def diagnose_params(self, target='runtime'):
+        """Attempt to explain params causing measured outcomes.
+        
+        Args:
+            target (str): runtime, smape, or exception
+        """
+
+        from autots.tools.transform import transformer_dict
+        from sklearn.linear_model import Lasso
+        from sklearn.preprocessing import StandardScaler
+
+        initial_results = self.results()
+        all_trans = list(transformer_dict.keys())
+        all_trans = [x for x in all_trans if x is not None]
+        master_df = []
+        res = []
+        mas_trans = []
+        for x in initial_results['Model'].unique():
+            if x not in ["Ensemble"]:
+                set_mod = initial_results[initial_results['Model'] == x]
+                # pull all transformations
+                for idx, row in set_mod.iterrows():
+                    t = pd.Categorical(list(set(json.loads(row['TransformationParameters'])['transformations'].values())), categories=all_trans)
+                    mas_trans.append(pd.get_dummies(t).max(axis=0).to_frame().transpose())
+                    y = pd.json_normalize(json.loads(row["ModelParameters"]))
+                    y.index = [row['ID']]
+                    y['Model'] = x  # might need to remove this and do analysis independently for each
+                    res.append(pd.DataFrame({'runtime': row['TotalRuntimeSeconds'], 'smape': row['smape'], 'mae' : row['mae'], 'exception': int(not pd.isnull(row['Exceptions'])), 'oda': row['oda']}, index=[row['ID']]))
+                    master_df.append(y)
+        master_df = pd.concat(master_df, axis=0)
+        mas_trans = pd.concat(mas_trans, axis=0)
+        mas_trans.index = master_df.index
+        res = pd.concat(res, axis=0)
+        X = pd.concat([pd.get_dummies(master_df), mas_trans.rename(columns=lambda x: "Transformer_" + x)], axis=1)
+
+        # target = 'runtime'
+        y = res[target]
+        y = y.dropna(how='any')
+        # Standardize the features
+        scaler = StandardScaler()
+        X_train = X.fillna(0)
+        X_train = X_train[X_train.index.isin(y.index)]
+        X_train_scaled = scaler.fit_transform(X_train)
+        feature_names = X.columns.tolist()
+
+        preprocess = True
+        try:
+            from flaml import AutoML
+            # Initialize FLAML AutoML instance
+            automl = AutoML()
+            
+            # Specify the task as regression and the estimator as xgboost
+            settings = {
+                "time_budget": 60,  # in seconds
+                "metric": 'mae',
+                "task": 'regression',
+                "estimator_list": ['xgboost'],  # specify xgboost as the estimator, extra_tree
+                # "preprocess": preprocess,
+            }
+            # Train with FLAML
+            automl.fit(X_train, y, **settings)
+            print(f"FLAML MAE loss: {automl.best_loss:.3f} vs avg runtime {res['runtime'].mean():.3f}")
+            shap_X = automl._preprocess(X_train)
+            feature_names = shap_X.columns
+            bst = automl.model.estimator
+        except Exception as e:
+            print(repr(e))
+            from sklearn.ensemble import ExtraTreesRegressor
+            # replace with most likely present scikit-learn
+            # bst = xgb.XGBRegressor(objective ='reg:linear', n_estimators=10, seed=123)
+            bst = ExtraTreesRegressor(
+                max_features=0.63857, max_leaf_nodes=81, n_estimators=5, n_jobs=-1, random_state=12032022
+            )
+            bst = bst.fit(X_train, y)
+            shap_X = X_train
+
+        try:
+            import shap
+            # Compute SHAP values
+            explainer = shap.Explainer(bst, feature_names=feature_names)
+            shap_values = explainer(shap_X)
+            # Plot summary plot
+            shap.summary_plot(shap_values, shap_X, feature_names=feature_names)
+            # Plot SHAP values for a single prediction
+            try:
+                shap.plots.waterfall(shap_values[0], max_display=15)
+                shap.plots.waterfall(shap_values[1], max_display=15)
+                shap.plots.waterfall(shap_values[2], max_display=15)
+            except Exception:
+                pass
+    
+            # Compute the mean absolute SHAP value for each feature
+            mean_shap_values = np.abs(shap_values.values).mean(axis=0)
+            # Pair the feature names with their mean absolute SHAP values in a list of tuples
+            feature_shap_pairs = list(zip(feature_names, mean_shap_values))
+            # Sort the list of tuples by the SHAP values from smallest to largest
+            sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
+            # Print the sorted pairs
+            print("Sorted Mean Absolute SHAP Values for Feature Importance:")
+            for feature, mean_shap in sorted_feature_shap_pairs:
+                print(f"{feature}: {mean_shap} impact (not direction)")
+    
+            # Compute the mean SHAP value for each feature
+            mean_shap_values = shap_values.values.mean(axis=0)
+            # Pair the feature names with their mean SHAP values in a list of tuples
+            feature_shap_pairs = list(zip(feature_names, mean_shap_values))
+            # Sort the list of tuples by the SHAP values from smallest to largest
+            sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
+            # Print the sorted pairs
+            print("Sorted Mean SHAP Values for Feature Importance:")
+            for feature, mean_shap in sorted_feature_shap_pairs:
+                print(f"{feature}: {mean_shap}")
+        except Exception as e:
+            print(repr(e))
+            mean_shap_values = 0
+
+        # Fit a Lasso regression model
+        lasso = Lasso(alpha=0.1)
+        lasso.fit(shap_X if preprocess else X_train_scaled, y)
+
+        lasso_coef = lasso.coef_
+        # Pair the feature names with their coefficients in a list of tuples
+        feature_coef_pairs = list(zip(feature_names, lasso_coef))
+        # Sort the list of tuples by the coefficient values from smallest to largest
+        sorted_feature_coef_pairs = sorted(feature_coef_pairs, key=lambda x: x[1])
+        # Print the sorted pairs
+        print("Sorted Lasso Coefficients for Feature Importance:")
+        for feature, coef in sorted_feature_coef_pairs[-20:]:
+            print(f"{feature}: {coef:.4f}")
+
+        param_impact = pd.DataFrame({"shap_value": mean_shap_values, "lasso_value": lasso_coef}, index=feature_names)
+        return param_impact
 
 
 colors_list = [

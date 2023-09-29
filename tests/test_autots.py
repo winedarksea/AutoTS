@@ -17,6 +17,7 @@ from autots.evaluator.auto_model import ModelMonster
 from autots.models.model_list import default as default_model_list
 from autots.models.model_list import all_models
 from autots.evaluator.benchmark import Benchmark
+from autots.tools.cpu_count import cpu_count, set_n_jobs
 
 
 class AutoTSTest(unittest.TestCase):
@@ -837,3 +838,13 @@ class ModelTest(unittest.TestCase):
         updated_forecast = model.predict()
         self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
         self.assertTrue(updated_forecast.forecast.index[0] > df.index[-1])
+
+    def test_corecount(self):
+        auto_count = cpu_count()
+        half = int(auto_count * 0.5) if int(auto_count * 0.5) > 1 else 1
+        self.assertEqual(half, set_n_jobs(0.5))
+        self.assertGreater(auto_count, 0)
+        self.assertGreater(set_n_jobs(-4), 0)
+        self.assertEqual(set_n_jobs(8.0), 8)
+        self.assertIsInstance(set_n_jobs("auto"), int)
+        self.assertEqual(set_n_jobs("auto"), set_n_jobs(-1))

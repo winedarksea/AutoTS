@@ -15,6 +15,12 @@
 # 0.6.1 ✨✨✨
 * CenterSplit transformer added
 * separated function for best model selection
+* improved graphing when forecast_length == 1
+* quieter Prophet
+* added PreprocessingRegression model
+* more KalmanStateSpace models
+* assorted bug fixes
+* added AutoTS diagnose_params
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
