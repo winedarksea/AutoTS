@@ -2034,7 +2034,8 @@ or otherwise increase models available."""
             if future_regressor_train is None
             else future_regressor_train
         )
-        if use_model in update_fit:
+        self.update_fit_check = use_model in update_fit
+        if self.update_fit_check:
             if self.model is None or refit:
                 self.model = ModelPrediction(
                     transformation_dict=use_trans,
@@ -2973,6 +2974,7 @@ or otherwise increase models available."""
                         model_transformation_params=row["TransformationParameters"],
                         df_wide_numeric=val_df_train,
                         future_regressor_train=train_reg,
+                        refit=True,
                     )
                     idz = create_model_id(
                         row["Model"],
