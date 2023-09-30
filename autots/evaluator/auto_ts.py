@@ -2873,6 +2873,7 @@ or otherwise increase models available."""
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
         Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
         'chosen' refers to best_model_id, the model chosen to run for predict
+        Validation sections may overlap (depending on method) which can confuse graph readers.
 
         Args:
             models (list): list, str, df or None, models to compare (IDs unless df of model params)
@@ -2949,7 +2950,7 @@ or otherwise increase models available."""
             # self.validation_forecasts = {}
             for val in range(len(self.validation_indexes)):
                 val_df_train, val_df_test = simple_train_test_split(
-                    self.df_wide_numeric,
+                    self.df_wide_numeric.reindex(self.validation_indexes[val]),
                     forecast_length=self.forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
@@ -3003,6 +3004,7 @@ or otherwise increase models available."""
                 ].lower_forecast[series]
                 df_list.append(new_df)
         plot_df = pd.concat(df_list, sort=True, axis=0)
+        # self.val_plot_df = plot_df.copy()
         plot_df = plot_df.groupby(level=0).last()
         plot_df = (
             df_wide[series]

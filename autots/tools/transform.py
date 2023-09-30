@@ -1501,8 +1501,7 @@ class CumSumTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = df.cumsum(skipna=True)
-        return df
+        return df.cumsum(skipna=True)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame
