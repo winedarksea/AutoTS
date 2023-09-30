@@ -1207,7 +1207,7 @@ class Cassandra(ModelObject):
         regressor_forecast_model=None,
         regressor_forecast_model_params=None,
         regressor_forecast_transformations=None,
-        include_history=True,
+        include_history=False,
         past_impacts=None,
     ):
         self.df = self.preprocesser.transform(self.df)

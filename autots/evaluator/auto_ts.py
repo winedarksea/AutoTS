@@ -2034,7 +2034,7 @@ or otherwise increase models available."""
             if future_regressor_train is None
             else future_regressor_train
         )
-        self.update_fit_check = use_model in update_fit
+        self.update_fit_check = use_model in update_fit  # True means model can be updated without retraining
         if self.update_fit_check:
             if self.model is None or refit:
                 self.model = ModelPrediction(

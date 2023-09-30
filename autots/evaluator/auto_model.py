@@ -699,7 +699,6 @@ class ModelPrediction(ModelObject):
         model_count: int = 0,
     ):
         self.forecast_length = forecast_length
-        self.transformation_dict = transformation_dict
         self.model_str = model_str
         self.parameter_dict = parameter_dict
         self.frequency = frequency
@@ -714,19 +713,28 @@ class ModelPrediction(ModelObject):
         self.n_jobs = n_jobs
         self.current_model_file = current_model_file
         self.model_count = model_count
+        # handle still in JSON form
+        if isinstance(transformation_dict, str):
+            self.transformation_dict = json.loads(transformation_dict)
+        else:
+            self.transformation_dict = transformation_dict
+        if isinstance(parameter_dict, str):
+            self.parameter_dict = json.loads(parameter_dict)
+        else:
+            self.parameter_dict = parameter_dict
         if model_str == "PreprocessingRegression":
-            parameter_dict['transformation_dict'] = transformation_dict
-            transformation_dict = {
+            self.parameter_dict['transformation_dict'] = self.transformation_dict
+            self.transformation_dict = {
                 'fillna': None,
                 'transformations': {},
                 'transformation_params': {},
             }
         self.transformer_object = GeneralTransformer(
-            **transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
+            **self.transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
         )
         self.model = ModelMonster(
             model_str,
-            parameters=parameter_dict,
+            parameters=self.parameter_dict,
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
