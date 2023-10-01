@@ -3282,7 +3282,7 @@ or otherwise increase models available."""
         mas_trans = pd.concat(mas_trans, axis=0)
         mas_trans.index = master_df.index
         res = pd.concat(res, axis=0)
-        X = pd.concat([pd.get_dummies(master_df), mas_trans.rename(columns=lambda x: "Transformer_" + x)], axis=1)
+        X = pd.concat([pd.get_dummies(master_df.astype(str)), mas_trans.rename(columns=lambda x: "Transformer_" + x)], axis=1)
 
         # target = 'runtime'
         y = res[target]

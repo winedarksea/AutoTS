@@ -2003,7 +2003,7 @@ class Cassandra(ModelObject):
                 'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
                 'method': random.choices(
                     [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'SLSQP', 'Powell', 'trust-constr', 'COBYLA'],
-                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02]
+                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.005]
                 )[0],
             }
         elif linear_model == "bayesian_linear":
