@@ -3250,14 +3250,14 @@ or otherwise increase models available."""
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
     
     def diagnose_params(self, target='runtime'):
-        """Attempt to explain params causing measured outcomes.
+        """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
         
         Args:
-            target (str): runtime, smape, or exception
+            target (str): runtime, smape, mae, oda, or exception, the measured outcome to correlate parameters with
         """
 
         from autots.tools.transform import transformer_dict
-        from sklearn.linear_model import Lasso
+        from sklearn.linear_model import Lasso, ElasticNet
         from sklearn.preprocessing import StandardScaler
 
         initial_results = self.results()
@@ -3282,17 +3282,18 @@ or otherwise increase models available."""
         mas_trans = pd.concat(mas_trans, axis=0)
         mas_trans.index = master_df.index
         res = pd.concat(res, axis=0)
-        X = pd.concat([pd.get_dummies(master_df.astype(str)), mas_trans.rename(columns=lambda x: "Transformer_" + x)], axis=1)
+        self.lasso_X = pd.concat([pd.get_dummies(master_df.astype(str)), mas_trans.rename(columns=lambda x: "Transformer_" + x)], axis=1)
+        self.lasso_X['intercept'] = 1
 
         # target = 'runtime'
         y = res[target]
         y = y.dropna(how='any')
         # Standardize the features
         scaler = StandardScaler()
-        X_train = X.fillna(0)
+        X_train = self.lasso_X.fillna(0)
         X_train = X_train[X_train.index.isin(y.index)]
         X_train_scaled = scaler.fit_transform(X_train)
-        feature_names = X.columns.tolist()
+        feature_names = self.lasso_X.columns.tolist()
 
         preprocess = True
         try:
@@ -3301,16 +3302,27 @@ or otherwise increase models available."""
             automl = AutoML()
             
             # Specify the task as regression and the estimator as xgboost
-            settings = {
-                "time_budget": 60,  # in seconds
-                "metric": 'mae',
-                "task": 'regression',
-                "estimator_list": ['xgboost'],  # specify xgboost as the estimator, extra_tree
-                # "preprocess": preprocess,
-            }
+            if target in ['exception']:
+                settings = {
+                    "time_budget": 60,  # in seconds
+                    "metric": 'accuracy',
+                    "task": 'classification',
+                    "estimator_list": ['xgboost'],
+                    "verbose": 1,
+                }
+            else:
+                settings = {
+                    "time_budget": 60,  # in seconds
+                    "metric": 'mae',
+                    "task": 'regression',
+                    "estimator_list": ['xgboost'],  # specify xgboost as the estimator, extra_tree
+                    "verbose": 1,
+                    # "preprocess": preprocess,
+                }
             # Train with FLAML
             automl.fit(X_train, y, **settings)
-            print(f"FLAML MAE loss: {automl.best_loss:.3f} vs avg runtime {res['runtime'].mean():.3f}")
+            print("##########################################################")
+            print(f"FLAML loss: {automl.best_loss:.3f} vs avg runtime {res['runtime'].mean():.3f}")
             shap_X = automl._preprocess(X_train)
             feature_names = shap_X.columns
             bst = automl.model.estimator
@@ -3348,7 +3360,7 @@ or otherwise increase models available."""
             sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
             # Print the sorted pairs
             print("Sorted Mean Absolute SHAP Values for Feature Importance:")
-            for feature, mean_shap in sorted_feature_shap_pairs:
+            for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
                 print(f"{feature}: {mean_shap} impact (not direction)")
     
             # Compute the mean SHAP value for each feature
@@ -3359,28 +3371,40 @@ or otherwise increase models available."""
             sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
             # Print the sorted pairs
             print("Sorted Mean SHAP Values for Feature Importance:")
-            for feature, mean_shap in sorted_feature_shap_pairs:
+            for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
                 print(f"{feature}: {mean_shap}")
         except Exception as e:
             print(repr(e))
             mean_shap_values = 0
 
-        # Fit a Lasso regression model
-        lasso = Lasso(alpha=0.1)
-        lasso.fit(shap_X if preprocess else X_train_scaled, y)
+        # IF the outcome is a 0/1 flag
+        if target in ['exception']:
+            from sklearn.linear_model import LogisticRegression
+            self.lasso = LogisticRegression(penalty='l1', solver='saga', C=10)  # C=10 is the inverse of alpha\
+        # elif target == "smape":
+        #     self.lasso = ElasticNet(alpha=1.0, l1_ratio=0.5, random_state=0)
+        else:
+            # Fit a Lasso regression model
+            self.lasso = Lasso(alpha=0.01)
+        self.lasso.fit(shap_X if preprocess else X_train_scaled, y)
 
-        lasso_coef = lasso.coef_
+        lasso_coef = self.lasso.coef_.flatten()
         # Pair the feature names with their coefficients in a list of tuples
         feature_coef_pairs = list(zip(feature_names, lasso_coef))
         # Sort the list of tuples by the coefficient values from smallest to largest
         sorted_feature_coef_pairs = sorted(feature_coef_pairs, key=lambda x: x[1])
         # Print the sorted pairs
         print("Sorted Lasso Coefficients for Feature Importance:")
-        for feature, coef in sorted_feature_coef_pairs[-20:]:
+        for feature, coef in sorted_feature_coef_pairs[-10:]:
             print(f"{feature}: {coef:.4f}")
 
         param_impact = pd.DataFrame({"shap_value": mean_shap_values, "lasso_value": lasso_coef}, index=feature_names)
-        return param_impact
+        # give two different approaches for runtime
+        if target not in ['exception']:
+            lasso2 = ElasticNet(alpha=1.0, l1_ratio=0.5, random_state=0)
+            lasso2.fit(shap_X if preprocess else X_train_scaled, y)
+            param_impact['elastic_value'] = lasso2.coef_.flatten()
+        return param_impact.copy().rename(columns=lambda x: f"{target}_" + str(x))
 
 
 colors_list = [
