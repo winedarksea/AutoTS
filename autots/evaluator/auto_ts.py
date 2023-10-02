@@ -2017,7 +2017,8 @@ or otherwise increase models available."""
         model_transformation_params=None,
         df_wide_numeric=None,
         future_regressor_train=None,
-        refit=False,
+        refit=False, # refit model
+        bypass_save=False # don't even try saving model
     ):
         use_model = self.best_model_name if model_name is None else model_name
         use_params = (
@@ -2035,7 +2036,7 @@ or otherwise increase models available."""
             else future_regressor_train
         )
         self.update_fit_check = use_model in update_fit  # True means model can be updated without retraining
-        if self.update_fit_check:
+        if self.update_fit_check and not bypass_save:
             if self.model is None or refit:
                 self.model = ModelPrediction(
                     transformation_dict=use_trans,
@@ -2975,7 +2976,7 @@ or otherwise increase models available."""
                         model_transformation_params=row["TransformationParameters"],
                         df_wide_numeric=val_df_train,
                         future_regressor_train=train_reg,
-                        refit=True,
+                        bypass_save=True,
                     )
                     idz = create_model_id(
                         row["Model"],
