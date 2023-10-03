@@ -2079,10 +2079,10 @@ class KalmanStateSpace(ModelObject):
         )
         if self.em_iter is not None:
             self.kf = self.kf.em(self.df_train, n_iter=self.em_iter)
-        
+
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
-    
+
     def fit_data(self, df, future_regressor=None):
         df = self.basic_profile(df)
         self.df_train = df.to_numpy().T
@@ -2099,11 +2099,15 @@ class KalmanStateSpace(ModelObject):
                 observation_noise=param[0],  # R
             )
             if self.em_iter is not None:
-                kf = kf.em(self.df_train[:, :-self.forecast_length], n_iter=self.em_iter)
-            result = kf.predict(self.df_train[:, :-self.forecast_length], self.forecast_length)
+                kf = kf.em(
+                    self.df_train[:, : -self.forecast_length], n_iter=self.em_iter
+                )
+            result = kf.predict(
+                self.df_train[:, : -self.forecast_length], self.forecast_length
+            )
             df_smooth = pd.DataFrame(
                 result.observations.mean.T,
-                index=df.index[-self.forecast_length:],
+                index=df.index[-self.forecast_length :],
                 columns=self.column_names,
             )
             df_stdev = np.sqrt(result.observations.cov).T
@@ -2112,7 +2116,7 @@ class KalmanStateSpace(ModelObject):
             lower_forecast = df_smooth - bound
 
             # evaluate the prediction
-            A = np.asarray(df.iloc[-self.forecast_length:, :])
+            A = np.asarray(df.iloc[-self.forecast_length :, :])
             inv_prediction_interval = 1 - self.prediction_interval
             upper_diff = A - upper_forecast
             upper_pl = np.where(
@@ -2138,8 +2142,7 @@ class KalmanStateSpace(ModelObject):
         except Exception as e:
             print(f"param {param} failed with {repr(e)}")
             return 1e9
-        
-    
+
     def tune_observational_noise(self, df):
         from scipy.optimize import minimize
 
@@ -2148,11 +2151,19 @@ class KalmanStateSpace(ModelObject):
         x0 = [0.1]
         bounds = [(0.00001, 100) for x in x0]
         return minimize(
-            self.cost_function, x0, args=(df), bounds=bounds, method=None, options={'maxiter': 50}
+            self.cost_function,
+            x0,
+            args=(df),
+            bounds=bounds,
+            method=None,
+            options={'maxiter': 50},
         ).x
 
     def predict(
-        self, forecast_length: int = None, future_regressor=None, just_point_forecast=False
+        self,
+        forecast_length: int = None,
+        future_regressor=None,
+        just_point_forecast=False,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -2168,7 +2179,9 @@ class KalmanStateSpace(ModelObject):
         if forecast_length is None:
             forecast_length = self.forecast_length
             if self.forecast_length is None:
-                raise ValueError("must provide forecast_length to KalmanStateSpace predict")
+                raise ValueError(
+                    "must provide forecast_length to KalmanStateSpace predict"
+                )
         predictStartTime = datetime.datetime.now()
         result = self.kf.predict(self.df_train, forecast_length)
         df = pd.DataFrame(

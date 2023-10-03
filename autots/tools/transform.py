@@ -375,6 +375,7 @@ class StatsmodelsFilter(EmptyTransformer):
     Args:
         method (str): bkfilter or cffilter or convolution_filter
     """
+
     def __init__(self, method: str = "bkfilter", **kwargs):
         super().__init__(name="StatsmodelsFilter")
         self.method = method
@@ -400,12 +401,14 @@ class StatsmodelsFilter(EmptyTransformer):
 
     def bkfilter(self, df):
         from statsmodels.tsa.filters import bk_filter
+
         cycles = bk_filter.bkfilter(df, K=1)
         cycles.columns = df.columns
         return (df - cycles).fillna(method="ffill").fillna(method="bfill")
 
     def cffilter(self, df):
         from statsmodels.tsa.filters import cf_filter
+
         cycle, trend = cf_filter.cffilter(df)
         if isinstance(cycle, pd.Series):
             cycle = cycle.to_frame()
@@ -414,6 +417,7 @@ class StatsmodelsFilter(EmptyTransformer):
 
     def convolution_filter(self, df):
         from statsmodels.tsa.filters.filtertools import convolution_filter
+
         df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
         return df.fillna(method="ffill").fillna(method="bfill")
 
@@ -3721,7 +3725,9 @@ class CenterSplit(EmptyTransformer):
             mask = df != self.median
             use_df = df - self.median
         else:
-            raise ValueError(f"ModifiedCroston arg center `{self.center}` not recognized")
+            raise ValueError(
+                f"ModifiedCroston arg center `{self.center}` not recognized"
+            )
 
         macro = use_df.where(mask, np.nan)
         macro = FillNA(macro, method=self.fillna, window=10)
@@ -3753,7 +3759,9 @@ class CenterSplit(EmptyTransformer):
             mask = df != self.median
             use_df = df - self.median
         else:
-            raise ValueError(f"ModifiedCroston arg center `{self.center}` not recognized")
+            raise ValueError(
+                f"ModifiedCroston arg center `{self.center}` not recognized"
+            )
 
         macro = use_df.where(mask, np.nan)
         macro = FillNA(macro, method=self.fillna, window=10)
@@ -3761,7 +3769,6 @@ class CenterSplit(EmptyTransformer):
         # self.columns = df.columns
         micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
         return pd.concat([macro, micro], axis=1)
-        
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3792,7 +3799,16 @@ class CenterSplit(EmptyTransformer):
         """Generate new random parameters"""
         return {
             "fillna": random.choices(
-                ["linear", "SeasonalityMotifImputer", 'pchip', 'akima', 'mean', 'ffill', "SeasonalityMotifImputer1K"], [0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1]
+                [
+                    "linear",
+                    "SeasonalityMotifImputer",
+                    'pchip',
+                    'akima',
+                    'mean',
+                    'ffill',
+                    "SeasonalityMotifImputer1K",
+                ],
+                [0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
@@ -4191,7 +4207,7 @@ class GeneralTransformer(object):
                 f"Transformation {transformation} not known or improperly entered, returning untransformed df"
             )
             return EmptyTransformer()
-    
+
     def _first_fit(self, df):
         # fill NaN
         df = self.fill_na(df)

@@ -56,6 +56,7 @@ def cpu_count(modifier: float = 1):
     core_count = 1 if core_count < 1 else core_count
     return core_count
 
+
 def set_n_jobs(n_jobs, verbose=0):
     frac_flag = False
     if isinstance(n_jobs, float):
@@ -63,7 +64,7 @@ def set_n_jobs(n_jobs, verbose=0):
     if n_jobs == 'auto' or frac_flag or n_jobs == -1:
         if frac_flag:
             n_jobs = cpu_count(modifier=n_jobs)
-        else:    
+        else:
             n_jobs = cpu_count(modifier=0.75)
         if verbose > 0:
             print(f"Using {n_jobs} cpus for n_jobs.")

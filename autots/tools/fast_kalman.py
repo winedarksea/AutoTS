@@ -152,10 +152,12 @@ def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):
     # State Transition Matrix F
     # Level & Trend Equations
 
-    F_lt = np.array([  # not sure about having the alpha and beta here
-        [1 + (alpha * (1 - phi)), phi],
-        [beta * (1 - phi), phi]
-    ])
+    F_lt = np.array(
+        [  # not sure about having the alpha and beta here
+            [1 + (alpha * (1 - phi)), phi],
+            [beta * (1 - phi), phi],
+        ]
+    )
     # Seasonal Equation
     F_s = np.eye(M, M, -1)  # This creates an identity matrix and shifts it down
     first_row = np.zeros((1, M))
@@ -175,23 +177,23 @@ def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):
     """
 
     # Process Noise Covariance Q
-    Q = np.zeros((M+2, M+2))
+    Q = np.zeros((M + 2, M + 2))
     # Assuming the same variance for all states for simplicity.
     # Modify these values based on specific requirements.
     Q[0, 0] = alpha
     Q[1, 1] = beta
-    for i in range(2, M+2):
+    for i in range(2, M + 2):
         Q[i, i] = gamma
-    
+
     # Observation Matrix H
-    H = np.zeros((1, M+2))
+    H = np.zeros((1, M + 2))
     H[0, 0] = 1
     H[0, 1] = 1
     H[0, -1] = 1
-    
+
     # Observation Noise Covariance R
     R = np.array([[1]])
-    
+
     return F, Q, H, R
 
 
@@ -201,81 +203,92 @@ def new_kalman_params(method=None):
     elif method == "superfast":
         em_iter = None
     elif method == "deep":
-        em_iter = random.choices(
-            [None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1]
-        )[0]
+        em_iter = random.choices([None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1])[0]
     else:
         em_iter = random.choices([None, 10, 30], [0.3, 0.7, 0.1])[0]
-
 
     K = random.choices([2, 3, 6, 8], [0.1, 0.6, 0.1, 0.1])[0]
     sigma_level2 = 1e-2  # Placeholder
     sigma_slope2 = 1e-3  # Placeholder
     sigma_weekly2 = 1e-2  # Placeholder
     sigma_fourier2 = 1e-2  # Placeholder
-    
-    Q = np.block([[sigma_level2, 0, np.zeros((1, 6)), np.zeros((1, 2*K))],
-                  [0, sigma_slope2, np.zeros((1, 6)), np.zeros((1, 2*K))],
-                  [np.zeros((6, 2)), sigma_weekly2 * np.eye(6), np.zeros((6, 2*K))],
-                  [np.zeros((2*K, 2)), np.zeros((2*K, 6)), sigma_fourier2 * np.eye(2*K)]])
+
+    Q = np.block(
+        [
+            [sigma_level2, 0, np.zeros((1, 6)), np.zeros((1, 2 * K))],
+            [0, sigma_slope2, np.zeros((1, 6)), np.zeros((1, 2 * K))],
+            [np.zeros((6, 2)), sigma_weekly2 * np.eye(6), np.zeros((6, 2 * K))],
+            [
+                np.zeros((2 * K, 2)),
+                np.zeros((2 * K, 6)),
+                sigma_fourier2 * np.eye(2 * K),
+            ],
+        ]
+    )
 
     # Deterministic Trend
-    deterministic_trend = np.array([[1, 1],
-                                    [0, 1]])
-    
+    deterministic_trend = np.array([[1, 1], [0, 1]])
+
     weekly = np.eye(6, k=1)
     weekly[-1, 0] = -1  # Link the last state to the first to maintain cyclicality
 
     harmonics = []
-    for k in range(1, K+1):
+    for k in range(1, K + 1):
         angle = 2 * np.pi * k / 365.25
-        matrix = np.array([[np.cos(angle), -np.sin(angle)],
-                           [np.sin(angle), np.cos(angle)]])
+        matrix = np.array(
+            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+        )
         harmonics.append(matrix)
-    
+
     # Stack Fourier matrices
     fourier_yearly = np.block([harmonics[i] for i in range(K)])
-    
-    
+
     # The top part
     # F_top is of shape (2, 2+6+2K)
-    F_top = np.hstack([
-        deterministic_trend,                # shape: (2, 2)
-        np.zeros((2, 6)),     # shape: (2, 6)
-        np.zeros((2, 2 * K))    # shape: (2, 2K)
-    ])
-    
-    
+    F_top = np.hstack(
+        [
+            deterministic_trend,  # shape: (2, 2)
+            np.zeros((2, 6)),  # shape: (2, 6)
+            np.zeros((2, 2 * K)),  # shape: (2, 2K)
+        ]
+    )
+
     # The middle part (weekly seasonality)
     # F_mid is of shape (6, 2+6+2K)
-    F_mid = np.hstack([
-        np.zeros((6, 2)),     # shape: (6, 2)
-        weekly,               # shape: (6, 6)
-        np.zeros((6, 2 * K))    # shape: (6, 2K)
-    ])
-    
-    
+    F_mid = np.hstack(
+        [
+            np.zeros((6, 2)),  # shape: (6, 2)
+            weekly,  # shape: (6, 6)
+            np.zeros((6, 2 * K)),  # shape: (6, 2K)
+        ]
+    )
+
     # The bottom part (yearly Fourier seasonality)
     # F_bot is of shape (2K, 2+6+2K)
-    F_bot = np.hstack([
-        np.zeros((2*K, 2)),   # shape: (2K, 2)
-        np.zeros((2*K, 6)),   # shape: (2K, 6)
-        fourier_yearly.T,        # shape: (2K, 2K)
-        np.zeros((2*K, K * 2 - 2))
-    ])
+    F_bot = np.hstack(
+        [
+            np.zeros((2 * K, 2)),  # shape: (2K, 2)
+            np.zeros((2 * K, 6)),  # shape: (2K, 6)
+            fourier_yearly.T,  # shape: (2K, 2K)
+            np.zeros((2 * K, K * 2 - 2)),
+        ]
+    )
     # Vertically stack
     F = np.vstack([F_top, F_mid, F_bot])
     # Generating H for Fourier terms
     H_fourier = []
-    for k in range(1, K+1):
-        H_fourier.extend([np.cos(2 * np.pi * k / 365.25), np.sin(2 * np.pi * k / 365.25)])
+    for k in range(1, K + 1):
+        H_fourier.extend(
+            [np.cos(2 * np.pi * k / 365.25), np.sin(2 * np.pi * k / 365.25)]
+        )
     H = np.hstack(([1, 0], np.ones(6), H_fourier))
-    
+
     F_hw, Q_hw, H_hw, R_hw = holt_winters_damped_matrices(
         M=7,
         alpha=random.choice([0.9, 1.0, 0, 0.3]),
-        beta=random.choice([0.9, 1.0, 0, 0.3]), gamma=random.choice([0.9, 1.0, 0, 0.3]),
-        phi=random.choice([0.9, 1.0, 0.995, 0.98])
+        beta=random.choice([0.9, 1.0, 0, 0.3]),
+        gamma=random.choice([0.9, 1.0, 0, 0.3]),
+        phi=random.choice([0.9, 1.0, 0.995, 0.98]),
     )
 
     params = random.choices(
@@ -381,7 +394,9 @@ def new_kalman_params(method=None):
                     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 ],
                 'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
-                'observation_noise': random.choice([0.25, 0.5, 1.0, 0.04, 0.02, 'auto']),
+                'observation_noise': random.choice(
+                    [0.25, 0.5, 1.0, 0.04, 0.02, 'auto']
+                ),
             },
             {
                 'model_name': "factor",
@@ -455,7 +470,25 @@ def new_kalman_params(method=None):
             },
             "dynamic_linear",
         ],
-        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+        [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+        ],
     )[0]
     if params in [364] and method not in ['deep']:
         params = 7

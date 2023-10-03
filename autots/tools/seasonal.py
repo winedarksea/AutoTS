@@ -474,7 +474,9 @@ def create_datepart_components(DTindex, seasonality):
     elif seasonality == "is_quarter_end":
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
     else:
-        raise ValueError(f"create_datepart_components `{seasonality}` is not recognized")
+        raise ValueError(
+            f"create_datepart_components `{seasonality}` is not recognized"
+        )
 
 
 def create_seasonality_feature(DTindex, t, seasonality, history_days=None):

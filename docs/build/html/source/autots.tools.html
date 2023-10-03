@@ -283,6 +283,11 @@ and order.</p>
 </dl>
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.cpu_count.set_n_jobs">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.cpu_count.</span></span><span class="sig-name descname"><span class="pre">set_n_jobs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cpu_count.set_n_jobs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </section>
 <section id="module-autots.tools.fast_kalman">
 <span id="autots-tools-fast-kalman-module"></span><h2>autots.tools.fast_kalman module<a class="headerlink" href="#module-autots.tools.fast_kalman" title="Permalink to this heading">¶</a></h2>
@@ -624,6 +629,12 @@ the prior mean and covariance instead</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.ddot_t_right_old">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">ddot_t_right_old</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">B</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.ddot_t_right_old" title="Permalink to this definition">¶</a></dt>
+<dd><p>Matrix multiplication over last 2 axes with right operand transposed</p>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.fast_kalman.dinv">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">dinv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.dinv" title="Permalink to this definition">¶</a></dt>
 <dd><p>Matrix inverse applied to last two axes</p>
@@ -643,6 +654,17 @@ the prior mean and covariance instead</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.fast_kalman.ensure_matrix">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">ensure_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.ensure_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.holt_winters_damped_matrices">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">holt_winters_damped_matrices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.holt_winters_damped_matrices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Not sure if this is correct. It’s close, at least.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.new_kalman_params">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">new_kalman_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.new_kalman_params" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -1836,6 +1858,71 @@ for each anomalous sequence.</p>
 </dd></dl>
 
 <dl class="py class">
+<dt class="sig sig-object py" id="autots.tools.transform.CenterSplit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">CenterSplit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">center</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'zero'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fillna</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'linear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">suffix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_mdfcrst'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterSplit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
+<p>Vaguely Croston inspired approach separating occurrence from magnitude.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>center</strong> (<em>str</em>) – ‘zero’ or ‘median’, the value to use as most the intermittent gap</p></li>
+<li><p><strong>fillna</strong> (<em>str</em>) – a fillna method, see standard fillna methods</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.CenterSplit.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterSplit.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.CenterSplit.fit_transform">
+<span class="sig-name descname"><span class="pre">fit_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterSplit.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.CenterSplit.get_new_params">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterSplit.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.CenterSplit.inverse_transform">
+<span class="sig-name descname"><span class="pre">inverse_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trans_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'forecast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterSplit.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original <em>or</em> forecast form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.CenterSplit.transform">
+<span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterSplit.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
 <dt class="sig sig-object py" id="autots.tools.transform.ClipOutliers">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">ClipOutliers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'clip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fillna</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ClipOutliers" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
@@ -2514,7 +2601,9 @@ most of the interpolate methods from pandas.interpolate</p>
 ‘HolidayTransformer’: detects holidays and wishes good cheer to all
 ‘LocalLinearTrend’: rolling local trend, using tails for future and past trend
 ‘KalmanSmoothing’: smooth using a state space model
-‘RegressionFilter’: fit seasonal removal and local linear trend, clip std devs away from this fit</p>
+‘RegressionFilter’: fit seasonal removal and local linear trend, clip std devs away from this fit
+‘LevelShiftTransformer’: automatically compensate for historic level shifts in data.
+‘CenterSplit’: Croston inspired magnitude/occurrence split for intermittent</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -2841,7 +2930,7 @@ style (str): option for how to return information</p>
 <dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">LevelShiftMagic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">90</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grouping_forward_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_level_shifts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alignment</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'average'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
-<p>Detects and corrects for level shifts.</p>
+<p>Detects and corrects for level shifts. May seriously alter trend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -3212,7 +3301,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.transform.RandomTransform">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">RandomTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{None:</span> <span class="pre">0.0,</span> <span class="pre">'MinMaxScaler':</span> <span class="pre">0.05,</span> <span class="pre">'PowerTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'QuantileTransformer':</span> <span class="pre">0.05,</span> <span class="pre">'MaxAbsScaler':</span> <span class="pre">0.05,</span> <span class="pre">'StandardScaler':</span> <span class="pre">0.04,</span> <span class="pre">'RobustScaler':</span> <span class="pre">0.05,</span> <span class="pre">'PCA':</span> <span class="pre">0.01,</span> <span class="pre">'FastICA':</span> <span class="pre">0.01,</span> <span class="pre">'Detrend':</span> <span class="pre">0.1,</span> <span class="pre">'RollingMeanTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'RollingMean100thN':</span> <span class="pre">0.01,</span> <span class="pre">'DifferencedTransformer':</span> <span class="pre">0.07,</span> <span class="pre">'SinTrend':</span> <span class="pre">0.01,</span> <span class="pre">'PctChangeTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'CumSumTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'PositiveShift':</span> <span class="pre">0.02,</span> <span class="pre">'Log':</span> <span class="pre">0.01,</span> <span class="pre">'IntermittentOccurrence':</span> <span class="pre">0.01,</span> <span class="pre">'SeasonalDifference':</span> <span class="pre">0.1,</span> <span class="pre">'cffilter':</span> <span class="pre">0.01,</span> <span class="pre">'bkfilter':</span> <span class="pre">0.05,</span> <span class="pre">'convolution_filter':</span> <span class="pre">0.001,</span> <span class="pre">'HPFilter':</span> <span class="pre">0.01,</span> <span class="pre">'DatepartRegression':</span> <span class="pre">0.01,</span> <span class="pre">'ClipOutliers':</span> <span class="pre">0.05,</span> <span class="pre">'Discretize':</span> <span class="pre">0.01,</span> <span class="pre">'CenterLastValue':</span> <span class="pre">0.01,</span> <span class="pre">'Round':</span> <span class="pre">0.02,</span> <span class="pre">'Slice':</span> <span class="pre">0.02,</span> <span class="pre">'ScipyFilter':</span> <span class="pre">0.02,</span> <span class="pre">'STLFilter':</span> <span class="pre">0.01,</span> <span class="pre">'EWMAFilter':</span> <span class="pre">0.02,</span> <span class="pre">'MeanDifference':</span> <span class="pre">0.002,</span> <span class="pre">'BTCD':</span> <span class="pre">0.01,</span> <span class="pre">'Cointegration':</span> <span class="pre">0.01,</span> <span class="pre">'AlignLastValue':</span> <span class="pre">0.2,</span> <span class="pre">'AnomalyRemoval':</span> <span class="pre">0.03,</span> <span class="pre">'HolidayTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'LocalLinearTrend':</span> <span class="pre">0.01,</span> <span class="pre">'KalmanSmoothing':</span> <span class="pre">0.04,</span> <span class="pre">'RegressionFilter':</span> <span class="pre">0.07,</span> <span class="pre">'LevelShiftTransformer':</span> <span class="pre">0.03}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_max_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">na_prob_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'ffill':</span> <span class="pre">0.4,</span> <span class="pre">'fake_date':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean_24':</span> <span class="pre">0.1,</span> <span class="pre">'IterativeImputer':</span> <span class="pre">0.05,</span> <span class="pre">'mean':</span> <span class="pre">0.06,</span> <span class="pre">'zero':</span> <span class="pre">0.05,</span> <span class="pre">'ffill_mean_biased':</span> <span class="pre">0.1,</span> <span class="pre">'median':</span> <span class="pre">0.03,</span> <span class="pre">None:</span> <span class="pre">0.001,</span> <span class="pre">'interpolate':</span> <span class="pre">0.4,</span> <span class="pre">'KNNImputer':</span> <span class="pre">0.05,</span> <span class="pre">'IterativeImputerExtraTrees':</span> <span class="pre">0.0001,</span> <span class="pre">'SeasonalityMotifImputer':</span> <span class="pre">0.1,</span> <span class="pre">'SeasonalityMotifImputerLinMix':</span> <span class="pre">0.02,</span> <span class="pre">'DatepartRegressionImputer':</span> <span class="pre">0.05}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">superfast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">traditional_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_min_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_nan_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">RandomTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{None:</span> <span class="pre">0.0,</span> <span class="pre">'MinMaxScaler':</span> <span class="pre">0.05,</span> <span class="pre">'PowerTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'QuantileTransformer':</span> <span class="pre">0.05,</span> <span class="pre">'MaxAbsScaler':</span> <span class="pre">0.05,</span> <span class="pre">'StandardScaler':</span> <span class="pre">0.04,</span> <span class="pre">'RobustScaler':</span> <span class="pre">0.05,</span> <span class="pre">'PCA':</span> <span class="pre">0.01,</span> <span class="pre">'FastICA':</span> <span class="pre">0.01,</span> <span class="pre">'Detrend':</span> <span class="pre">0.1,</span> <span class="pre">'RollingMeanTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'RollingMean100thN':</span> <span class="pre">0.01,</span> <span class="pre">'DifferencedTransformer':</span> <span class="pre">0.07,</span> <span class="pre">'SinTrend':</span> <span class="pre">0.01,</span> <span class="pre">'PctChangeTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'CumSumTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'PositiveShift':</span> <span class="pre">0.02,</span> <span class="pre">'Log':</span> <span class="pre">0.01,</span> <span class="pre">'IntermittentOccurrence':</span> <span class="pre">0.01,</span> <span class="pre">'SeasonalDifference':</span> <span class="pre">0.1,</span> <span class="pre">'cffilter':</span> <span class="pre">0.01,</span> <span class="pre">'bkfilter':</span> <span class="pre">0.05,</span> <span class="pre">'convolution_filter':</span> <span class="pre">0.001,</span> <span class="pre">'HPFilter':</span> <span class="pre">0.01,</span> <span class="pre">'DatepartRegression':</span> <span class="pre">0.01,</span> <span class="pre">'ClipOutliers':</span> <span class="pre">0.05,</span> <span class="pre">'Discretize':</span> <span class="pre">0.01,</span> <span class="pre">'CenterLastValue':</span> <span class="pre">0.01,</span> <span class="pre">'Round':</span> <span class="pre">0.02,</span> <span class="pre">'Slice':</span> <span class="pre">0.02,</span> <span class="pre">'ScipyFilter':</span> <span class="pre">0.02,</span> <span class="pre">'STLFilter':</span> <span class="pre">0.01,</span> <span class="pre">'EWMAFilter':</span> <span class="pre">0.02,</span> <span class="pre">'MeanDifference':</span> <span class="pre">0.002,</span> <span class="pre">'BTCD':</span> <span class="pre">0.01,</span> <span class="pre">'Cointegration':</span> <span class="pre">0.01,</span> <span class="pre">'AlignLastValue':</span> <span class="pre">0.2,</span> <span class="pre">'AnomalyRemoval':</span> <span class="pre">0.03,</span> <span class="pre">'HolidayTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'LocalLinearTrend':</span> <span class="pre">0.01,</span> <span class="pre">'KalmanSmoothing':</span> <span class="pre">0.04,</span> <span class="pre">'RegressionFilter':</span> <span class="pre">0.07,</span> <span class="pre">'LevelShiftTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'CenterSplit':</span> <span class="pre">0.01}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_max_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">na_prob_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'ffill':</span> <span class="pre">0.4,</span> <span class="pre">'fake_date':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean_24':</span> <span class="pre">0.1,</span> <span class="pre">'IterativeImputer':</span> <span class="pre">0.05,</span> <span class="pre">'mean':</span> <span class="pre">0.06,</span> <span class="pre">'zero':</span> <span class="pre">0.05,</span> <span class="pre">'ffill_mean_biased':</span> <span class="pre">0.1,</span> <span class="pre">'median':</span> <span class="pre">0.03,</span> <span class="pre">None:</span> <span class="pre">0.001,</span> <span class="pre">'interpolate':</span> <span class="pre">0.4,</span> <span class="pre">'KNNImputer':</span> <span class="pre">0.05,</span> <span class="pre">'IterativeImputerExtraTrees':</span> <span class="pre">0.0001,</span> <span class="pre">'SeasonalityMotifImputer':</span> <span class="pre">0.1,</span> <span class="pre">'SeasonalityMotifImputerLinMix':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalityMotifImputer1K':</span> <span class="pre">0.01,</span> <span class="pre">'DatepartRegressionImputer':</span> <span class="pre">0.05}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">superfast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">traditional_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_min_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_nan_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>BTCD is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -3701,32 +3790,38 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dt class="sig sig-object py" id="autots.tools.transform.StatsmodelsFilter">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">StatsmodelsFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'bkfilter'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
-<p>Irreversible filters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>method</strong> (<em>str</em>) – bkfilter or cffilter or convolution_filter</p>
-</dd>
-</dl>
+<p>Irreversible filters.
+:param method: bkfilter or cffilter or convolution_filter
+:type method: str</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.StatsmodelsFilter.bkfilter">
+<span class="sig-name descname"><span class="pre">bkfilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.bkfilter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.StatsmodelsFilter.cffilter">
+<span class="sig-name descname"><span class="pre">cffilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.cffilter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.StatsmodelsFilter.convolution_filter">
+<span class="sig-name descname"><span class="pre">convolution_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.convolution_filter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.StatsmodelsFilter.fit_transform">
 <span class="sig-name descname"><span class="pre">fit_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.fit_transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fit and Return Detrended DataFrame.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
-</dd>
-</dl>
+<dd><p>Fit and Return Detrended DataFrame.
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.StatsmodelsFilter.transform">
 <span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return detrended data.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
-</dd>
-</dl>
+<dd><p>Return detrended data.
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
 </dd></dl>
 
 </dd></dl>

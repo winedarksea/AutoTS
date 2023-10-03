@@ -1744,7 +1744,7 @@ class AutoTS(object):
                 self.best_model = self.best_model_non_horizontal
 
         else:
-            self.best_model= self._best_non_horizontal()
+            self.best_model = self._best_non_horizontal()
 
         # give a more convenient dict option
         self.parse_best_model()
@@ -1755,13 +1755,14 @@ class AutoTS(object):
 
     def _best_non_horizontal(self, metric_weighting=None):
         if self.validation_results is None:
-            raise ValueError("validation results are None, cannot choose best model without fit")
+            raise ValueError(
+                "validation results are None, cannot choose best model without fit"
+            )
         if metric_weighting is None:
             metric_weighting = self.metric_weighting
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
-            self.validation_results.model_results['Runs']
-            >= (self.num_validations + 1)
+            self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
         ].copy()
         if eligible_models.empty:
             # this may occur if there is enough data for full validations
@@ -2017,8 +2018,8 @@ or otherwise increase models available."""
         model_transformation_params=None,
         df_wide_numeric=None,
         future_regressor_train=None,
-        refit=False, # refit model
-        bypass_save=False # don't even try saving model
+        refit=False,  # refit model
+        bypass_save=False,  # don't even try saving model
     ):
         use_model = self.best_model_name if model_name is None else model_name
         use_params = (
@@ -2035,7 +2036,9 @@ or otherwise increase models available."""
             if future_regressor_train is None
             else future_regressor_train
         )
-        self.update_fit_check = use_model in update_fit  # True means model can be updated without retraining
+        self.update_fit_check = (
+            use_model in update_fit
+        )  # True means model can be updated without retraining
         if self.update_fit_check and not bypass_save:
             if self.model is None or refit:
                 self.model = ModelPrediction(
@@ -3029,7 +3032,9 @@ or otherwise increase models available."""
         # try to make visible (if not quite right) on a short forecast
         if self.forecast_length == 1:
             if plot_df.shape[0] > 3:
-                plot_df.loc[:, 'chosen'] = plot_df['chosen'].fillna(method='bfill', limit=1)
+                plot_df.loc[:, 'chosen'] = plot_df['chosen'].fillna(
+                    method='bfill', limit=1
+                )
         # actual plotting section
         if colors is not None:
             # this will need to change is users are allowed to input colors
@@ -3249,10 +3254,10 @@ or otherwise increase models available."""
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
-    
+
     def diagnose_params(self, target='runtime'):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
-        
+
         Args:
             target (str): runtime, smape, mae, oda, or exception, the measured outcome to correlate parameters with
         """
@@ -3272,18 +3277,48 @@ or otherwise increase models available."""
                 set_mod = initial_results[initial_results['Model'] == x]
                 # pull all transformations
                 for idx, row in set_mod.iterrows():
-                    t = pd.Categorical(list(set(json.loads(row['TransformationParameters'])['transformations'].values())), categories=all_trans)
-                    mas_trans.append(pd.get_dummies(t).max(axis=0).to_frame().transpose())
+                    t = pd.Categorical(
+                        list(
+                            set(
+                                json.loads(row['TransformationParameters'])[
+                                    'transformations'
+                                ].values()
+                            )
+                        ),
+                        categories=all_trans,
+                    )
+                    mas_trans.append(
+                        pd.get_dummies(t).max(axis=0).to_frame().transpose()
+                    )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y['Model'] = x  # might need to remove this and do analysis independently for each
-                    res.append(pd.DataFrame({'runtime': row['TotalRuntimeSeconds'], 'smape': row['smape'], 'mae' : row['mae'], 'exception': int(not pd.isnull(row['Exceptions'])), 'oda': row['oda']}, index=[row['ID']]))
+                    y[
+                        'Model'
+                    ] = x  # might need to remove this and do analysis independently for each
+                    res.append(
+                        pd.DataFrame(
+                            {
+                                'runtime': row['TotalRuntimeSeconds'],
+                                'smape': row['smape'],
+                                'mae': row['mae'],
+                                'exception': int(not pd.isnull(row['Exceptions'])),
+                                'oda': row['oda'],
+                            },
+                            index=[row['ID']],
+                        )
+                    )
                     master_df.append(y)
         master_df = pd.concat(master_df, axis=0)
         mas_trans = pd.concat(mas_trans, axis=0)
         mas_trans.index = master_df.index
         res = pd.concat(res, axis=0)
-        self.lasso_X = pd.concat([pd.get_dummies(master_df.astype(str)), mas_trans.rename(columns=lambda x: "Transformer_" + x)], axis=1)
+        self.lasso_X = pd.concat(
+            [
+                pd.get_dummies(master_df.astype(str)),
+                mas_trans.rename(columns=lambda x: "Transformer_" + x),
+            ],
+            axis=1,
+        )
         self.lasso_X['intercept'] = 1
 
         # target = 'runtime'
@@ -3299,9 +3334,10 @@ or otherwise increase models available."""
         preprocess = True
         try:
             from flaml import AutoML
+
             # Initialize FLAML AutoML instance
             automl = AutoML()
-            
+
             # Specify the task as regression and the estimator as xgboost
             if target in ['exception']:
                 settings = {
@@ -3316,30 +3352,40 @@ or otherwise increase models available."""
                     "time_budget": 60,  # in seconds
                     "metric": 'mae',
                     "task": 'regression',
-                    "estimator_list": ['xgboost'],  # specify xgboost as the estimator, extra_tree
+                    "estimator_list": [
+                        'xgboost'
+                    ],  # specify xgboost as the estimator, extra_tree
                     "verbose": 1,
                     # "preprocess": preprocess,
                 }
             # Train with FLAML
             automl.fit(X_train, y, **settings)
             print("##########################################################")
-            print(f"FLAML loss: {automl.best_loss:.3f} vs avg runtime {res['runtime'].mean():.3f}")
+            print(
+                f"FLAML loss: {automl.best_loss:.3f} vs avg runtime {res['runtime'].mean():.3f}"
+            )
             shap_X = automl._preprocess(X_train)
             feature_names = shap_X.columns
             bst = automl.model.estimator
         except Exception as e:
             print(repr(e))
             from sklearn.ensemble import ExtraTreesRegressor
+
             # replace with most likely present scikit-learn
             # bst = xgb.XGBRegressor(objective ='reg:linear', n_estimators=10, seed=123)
             bst = ExtraTreesRegressor(
-                max_features=0.63857, max_leaf_nodes=81, n_estimators=5, n_jobs=-1, random_state=12032022
+                max_features=0.63857,
+                max_leaf_nodes=81,
+                n_estimators=5,
+                n_jobs=-1,
+                random_state=12032022,
             )
             bst = bst.fit(X_train, y)
             shap_X = X_train
 
         try:
             import shap
+
             # Compute SHAP values
             explainer = shap.Explainer(bst, feature_names=feature_names)
             shap_values = explainer(shap_X)
@@ -3352,7 +3398,7 @@ or otherwise increase models available."""
                 shap.plots.waterfall(shap_values[2], max_display=15)
             except Exception:
                 pass
-    
+
             # Compute the mean absolute SHAP value for each feature
             mean_shap_values = np.abs(shap_values.values).mean(axis=0)
             # Pair the feature names with their mean absolute SHAP values in a list of tuples
@@ -3363,7 +3409,7 @@ or otherwise increase models available."""
             print("Sorted Mean Absolute SHAP Values for Feature Importance:")
             for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
                 print(f"{feature}: {mean_shap} impact (not direction)")
-    
+
             # Compute the mean SHAP value for each feature
             mean_shap_values = shap_values.values.mean(axis=0)
             # Pair the feature names with their mean SHAP values in a list of tuples
@@ -3381,7 +3427,10 @@ or otherwise increase models available."""
         # IF the outcome is a 0/1 flag
         if target in ['exception']:
             from sklearn.linear_model import LogisticRegression
-            self.lasso = LogisticRegression(penalty='l1', solver='saga', C=10)  # C=10 is the inverse of alpha\
+
+            self.lasso = LogisticRegression(
+                penalty='l1', solver='saga', C=10
+            )  # C=10 is the inverse of alpha\
         # elif target == "smape":
         #     self.lasso = ElasticNet(alpha=1.0, l1_ratio=0.5, random_state=0)
         else:
@@ -3399,7 +3448,10 @@ or otherwise increase models available."""
         for feature, coef in sorted_feature_coef_pairs[-10:]:
             print(f"{feature}: {coef:.4f}")
 
-        param_impact = pd.DataFrame({"shap_value": mean_shap_values, "lasso_value": lasso_coef}, index=feature_names)
+        param_impact = pd.DataFrame(
+            {"shap_value": mean_shap_values, "lasso_value": lasso_coef},
+            index=feature_names,
+        )
         # give two different approaches for runtime
         if target not in ['exception']:
             lasso2 = ElasticNet(alpha=1.0, l1_ratio=0.5, random_state=0)

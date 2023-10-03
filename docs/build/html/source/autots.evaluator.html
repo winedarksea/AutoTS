@@ -725,6 +725,17 @@ tail (int): df.tail() of the dataset, back_forecast is only run on n most recent
 <dd></dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.auto_ts.AutoTS.diagnose_params">
+<span class="sig-name descname"><span class="pre">diagnose_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'runtime'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.diagnose_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Attempt to explain params causing measured outcomes using shap and linear regression coefficients.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>target</strong> (<em>str</em>) – runtime, smape, mae, oda, or exception, the measured outcome to correlate parameters with</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.auto_ts.AutoTS.export_best_model">
 <span class="sig-name descname"><span class="pre">export_best_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.export_best_model" title="Permalink to this definition">¶</a></dt>
 <dd><p>Basically the same as export_template but only ever the one best model.</p>
@@ -998,7 +1009,8 @@ Note this doesn’t capture transformers nested in simple ensembles.</p>
 <span class="sig-name descname"><span class="pre">plot_validations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df_wide</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">models</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compare_horizontal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_validations" title="Permalink to this definition">¶</a></dt>
 <dd><p>Similar to plot_backforecast but using the model’s validation segments specifically. Must reforecast.
 Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
-‘chosen’ refers to best_model_id, the model chosen to run for predict</p>
+‘chosen’ refers to best_model_id, the model chosen to run for predict
+Validation sections may overlap (depending on method) which can confuse graph readers.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1707,6 +1719,7 @@ Also doesn’t like zeroes in either forecast or actual - results in poor error 
 <section id="module-autots.evaluator.validation">
 <span id="autots-evaluator-validation-module"></span><h2>autots.evaluator.validation module<a class="headerlink" href="#module-autots.evaluator.validation" title="Permalink to this heading">¶</a></h2>
 <p>Extracted from auto_ts.py, the functions to create validation segments.</p>
+<p>Warning, these are used in AMFM, possibly other places. Avoid modification of function structures, if possible.</p>
 <p>Created on Mon Jan 16 11:36:01 2023</p>
 <p>&#64;author: Colin</p>
 <dl class="py function">

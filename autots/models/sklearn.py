@@ -21,6 +21,7 @@ from autots.tools.window_functions import window_maker, last_window, sliding_win
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.holiday import holiday_flag
 from autots.tools.shaping import infer_frequency
+
 # scipy is technically optional but most likely is present
 try:
     from scipy.stats import norm
@@ -30,6 +31,7 @@ except Exception:
         @staticmethod
         def ppf(x):
             return 1.95996398454
+
         # norm.ppf((1 + 0.95) / 2)
 
 
@@ -83,9 +85,13 @@ def rolling_x_regressor(
     if str(min_rolling_periods).isdigit():
         X.append(local_df.rolling(min_rolling_periods, min_periods=1).min())
     if str(quantile90_rolling_periods).isdigit():
-        X.append(local_df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9))
+        X.append(
+            local_df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9)
+        )
     if str(quantile10_rolling_periods).isdigit():
-        X.append(local_df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1))
+        X.append(
+            local_df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1)
+        )
     if str(ewm_alpha).replace('.', '').isdigit():
         X.append(local_df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean())
     if str(ewm_var_alpha).replace('.', '').isdigit():
@@ -93,9 +99,14 @@ def rolling_x_regressor(
     if str(additional_lag_periods).isdigit():
         X.append(local_df.shift(additional_lag_periods))
     if nonzero_last_n is not None:
-        full_index = local_df.index.union(local_df.index.shift(-nonzero_last_n, freq=inferred_freq))
+        full_index = local_df.index.union(
+            local_df.index.shift(-nonzero_last_n, freq=inferred_freq)
+        )
         X.append(
-            (local_df.reindex(full_index).fillna(method="bfill") != 0).rolling(nonzero_last_n, min_periods=1).sum().reindex(local_df.index)
+            (local_df.reindex(full_index).fillna(method="bfill") != 0)
+            .rolling(nonzero_last_n, min_periods=1)
+            .sum()
+            .reindex(local_df.index)
         )
     if cointegration is not None:
         if str(cointegration).lower() == "btcd":
@@ -142,9 +153,12 @@ def rolling_x_regressor(
     if str(window).isdigit():
         # we already have lag 1 using this
         for curr_shift in range(1, window):
-            X.append(local_df.shift(curr_shift).rename(columns=lambda x: "window_" + str(curr_shift) + "_" + x))  # backfill should fill last values safely
+            X.append(
+                local_df.shift(curr_shift).rename(
+                    columns=lambda x: "window_" + str(curr_shift) + "_" + x
+                )
+            )  # backfill should fill last values safely
 
-    
     if add_date_part not in [None, "None", "none"]:
         ahead_index = local_df.index.shift(1, freq=inferred_freq)
         date_part_df = date_part(ahead_index, method=add_date_part)
@@ -160,7 +174,6 @@ def rolling_x_regressor(
         X['holiday_flag_'] = hldflag.reindex(ahead_index).to_numpy()
         X['holiday_flag_future_'] = hldflag.reindex(ahead_2_index).to_numpy()
 
-
     # X = X.replace([np.inf, -np.inf], np.nan)
     X = X.fillna(method='bfill')
 
@@ -172,7 +185,10 @@ def rolling_x_regressor(
         X = pd.DataFrame(poly.fit_transform(X))
 
     # rename to remove duplicates but still keep names if present
-    X.columns = [m + "_" + str(n) for m,n in zip([str(x) for x in range(len(X.columns))], X.columns.tolist())]
+    X.columns = [
+        m + "_" + str(n)
+        for m, n in zip([str(x) for x in range(len(X.columns))], X.columns.tolist())
+    ]
 
     return X
 
@@ -717,9 +733,7 @@ def generate_regressor_params(
         model_dict = tree_dict
         method = "default"
     elif method in sklearn_model_dict.keys():
-        model_dict = {
-            method: sklearn_model_dict[method]
-        }
+        model_dict = {method: sklearn_model_dict[method]}
     elif model_dict is None:
         model_dict = sklearn_model_dict
     """Generate new parameters for input to regressor."""
@@ -863,7 +877,7 @@ def generate_regressor_params(
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
-                        [0.25, 0.0, 0.25, 0.1]  # abs error very slow
+                        [0.25, 0.0, 0.25, 0.1],  # abs error very slow
                     )[0],
                     "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
                 },
@@ -1021,11 +1035,21 @@ def generate_regressor_params(
                             [0.6, 0.1, 0.3, 0.0010],
                         )[0],
                         "linear_tree": random.choice([True, False]),
-                        "lambda_l1": random.choices([0.0, 0.1, 1, 10], [0.5, 0.1, 0.1, 0.1])[0],
-                        "lambda_l2": random.choices([0.0, 0.1, 1, 10], [0.5, 0.1, 0.1, 0.1])[0],
-                        "min_data_in_leaf": random.choices([5, 15, 20, 30], [0.1, 0.2, 0.6, 0.1])[0],
-                        "feature_fraction": random.choices([1.0, 0.1, 0.5, 0.8], [0.5, 0.1, 0.1, 0.1])[0],
-                        "max_bin": random.choices([1500, 1000, 255, 50], [0.1, 0.2, 0.6, 0.1])[0],
+                        "lambda_l1": random.choices(
+                            [0.0, 0.1, 1, 10], [0.5, 0.1, 0.1, 0.1]
+                        )[0],
+                        "lambda_l2": random.choices(
+                            [0.0, 0.1, 1, 10], [0.5, 0.1, 0.1, 0.1]
+                        )[0],
+                        "min_data_in_leaf": random.choices(
+                            [5, 15, 20, 30], [0.1, 0.2, 0.6, 0.1]
+                        )[0],
+                        "feature_fraction": random.choices(
+                            [1.0, 0.1, 0.5, 0.8], [0.5, 0.1, 0.1, 0.1]
+                        )[0],
+                        "max_bin": random.choices(
+                            [1500, 1000, 255, 50], [0.1, 0.2, 0.6, 0.1]
+                        )[0],
                     },
                 }
         elif model == 'Ridge':
@@ -1048,7 +1072,14 @@ def generate_regressor_params(
             }
         elif model == "MultioutputGPR":
             kernel = random.choices(
-                ['linear', "exponential", "locally_periodic", "rbf", "polynomial", 'periodic'],
+                [
+                    'linear',
+                    "exponential",
+                    "locally_periodic",
+                    "rbf",
+                    "polynomial",
+                    'periodic',
+                ],
                 [0.1, 0.1, 0.1, 0.4, 0.1, 0.1],
             )[0]
             param_dict = {
@@ -1061,7 +1092,9 @@ def generate_regressor_params(
             if kernel in ["exponential", "locally_periodic", "rbf", "periodic"]:
                 param_dict['gamma'] = random.choice([0.1, 1, 10, 100])
             if kernel in ["locally_periodic", "periodic"]:
-                param_dict['p'] = random.choices([7, 12, 365.25, 52, 28], [0.6, 0.15, 0.15, 0.05, 0.05])[0]
+                param_dict['p'] = random.choices(
+                    [7, 12, 365.25, 52, 28], [0.6, 0.15, 0.15, 0.05, 0.05]
+                )[0]
             if kernel == "locally_periodic":
                 param_dict['lambda_prime'] = random.choice([0.1, 1, 10, 100])
         else:
@@ -2976,7 +3009,9 @@ class MultivariateRegression(ModelObject):
             if self.probabilistic:
                 if self.multioutputgpr:
                     med, var = self.model.predict_proba(c_x_pred)
-                    stdev = np.sqrt(var)[..., np.newaxis].T * norm.ppf((1 + self.prediction_interval) / 2)
+                    stdev = np.sqrt(var)[..., np.newaxis].T * norm.ppf(
+                        (1 + self.prediction_interval) / 2
+                    )
                     pred_upper = pd.DataFrame(
                         med + stdev, index=[index[fcst_step]], columns=current_x.columns
                     )
@@ -2988,11 +3023,15 @@ class MultivariateRegression(ModelObject):
                 else:
                     rfPred_upper = self.model_upper.predict(c_x_pred)
                     pred_upper = pd.DataFrame(
-                        rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
+                        rfPred_upper,
+                        index=current_x.columns,
+                        columns=[index[fcst_step]],
                     ).transpose()
                     rfPred_lower = self.model_lower.predict(c_x_pred)
                     pred_lower = pd.DataFrame(
-                        rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
+                        rfPred_lower,
+                        index=current_x.columns,
+                        columns=[index[fcst_step]],
                     ).transpose()
                     upper_forecast = pd.concat([upper_forecast, pred_upper])
                     lower_forecast = pd.concat([lower_forecast, pred_lower])
@@ -3178,6 +3217,7 @@ class VectorizedMultiOutputGPR:
         lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as \lambda_.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
+
     def __init__(self, kernel='rbf', noise_var=1e-2, gamma=0.1, lambda_prime=0.1, p=7):
         self.kernel = kernel
         self.noise_var = noise_var
@@ -3187,14 +3227,18 @@ class VectorizedMultiOutputGPR:
 
     def _linear_kernel(self, x1, x2):
         return np.dot(x1, x2.T)
-    
+
     def _polynomial_kernel(self, x1, x2, p=2):
         return (1 + np.dot(x1, x2.T)) ** p
-    
+
     def _rbf_kernel(self, x1, x2, gamma):
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
-        distance = np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+        distance = (
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
+        )
         return np.exp(-gamma * distance)
 
     def _exponential_kernel(self, x1, x2, gamma):
@@ -3212,7 +3256,7 @@ class VectorizedMultiOutputGPR:
     def fit(self, X, Y):
         self.X_train = np.asarray(X)
         y = np.asarray(Y)
-        
+
         if self.kernel == 'linear':
             K = self._linear_kernel(self.X_train, self.X_train)
         elif self.kernel == 'polynomial':
@@ -3224,13 +3268,15 @@ class VectorizedMultiOutputGPR:
         elif self.kernel == 'periodic':
             K = self._periodic_kernel(self.X_train, self.X_train, self.gamma, self.p)
         elif self.kernel == 'locally_periodic':
-            K = self._locally_periodic_kernel(self.X_train, self.X_train, self.gamma, self.lambda_prime, self.p)
+            K = self._locally_periodic_kernel(
+                self.X_train, self.X_train, self.gamma, self.lambda_prime, self.p
+            )
         else:
             raise ValueError("Invalid Kernel")
 
         # Regularized Kernel
         K_reg = K + self.noise_var * np.eye(K.shape[0])
-        
+
         # Cholesky decomposition and solve for alpha in a vectorized way
         self.L = np.linalg.cholesky(K_reg)
         self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, y))
@@ -3249,13 +3295,15 @@ class VectorizedMultiOutputGPR:
         elif self.kernel == 'periodic':
             k = self._periodic_kernel(x_pred, self.X_train, self.gamma, self.p)
         elif self.kernel == 'locally_periodic':
-            k = self._locally_periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_prime, self.p)
+            k = self._locally_periodic_kernel(
+                x_pred, self.X_train, self.gamma, self.lambda_prime, self.p
+            )
         else:
             raise ValueError("Invalid Kernel")
-            
+
         # Making predictions
         Y_pred = k @ self.alpha
-        
+
         return Y_pred
 
     def predict_proba(self, X):
@@ -3272,23 +3320,33 @@ class VectorizedMultiOutputGPR:
 
         elif self.kernel == 'exponential':
             k_star = self._exponential_kernel(X, self.X_train, self.gamma)
-            k_star_star = np.diag(self._exponential_kernel(x_pred, self.X_train, self.gamma))
+            k_star_star = np.diag(
+                self._exponential_kernel(x_pred, self.X_train, self.gamma)
+            )
         elif self.kernel == 'periodic':
             k_star = self._periodic_kernel(X, self.X_train, self.gamma, self.p)
-            k_star_star = np.diag(self._periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_))
+            k_star_star = np.diag(
+                self._periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_)
+            )
         elif self.kernel == 'locally_periodic':
-            k_star = self._locally_periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_prime, self.p)
-            k_star_star = np.diag(self._locally_periodic_kernel(x_pred, self.X_train, self.gamma, self.lambda_prime, self.p))
+            k_star = self._locally_periodic_kernel(
+                x_pred, self.X_train, self.gamma, self.lambda_prime, self.p
+            )
+            k_star_star = np.diag(
+                self._locally_periodic_kernel(
+                    x_pred, self.X_train, self.gamma, self.lambda_prime, self.p
+                )
+            )
         else:
             raise ValueError("Invalid Kernel")
 
         # Making predictions
         Y_pred = k_star @ self.alpha
-        
+
         # Computing the predictive variance for each test point and each output
         v = np.linalg.solve(self.L, k_star.T)
         Y_var = k_star_star - np.sum(v**2, axis=0)
-        
+
         return Y_pred, Y_var
 
 
@@ -3362,7 +3420,9 @@ class PreprocessingRegression(ModelObject):
         from autots.tools.transform import GeneralTransformer  # avoid circular imports
 
         self.transformer_object = GeneralTransformer(
-            n_jobs=self.n_jobs, holiday_country=self.holiday_country, **self.transformation_dict
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
+            **self.transformation_dict,
         )
         forecast_length = self.forecast_length
         one_step = self.one_step
@@ -3381,10 +3441,18 @@ class PreprocessingRegression(ModelObject):
         max_history = 0 if self.max_history is None else abs(int(self.max_history))
         window_list = []
         for cdf in df_list:
-            window_list.append(sliding_window_view(np.asarray(cdf)[-max_history:], window_shape=(self.window_size,), axis=0,))
+            window_list.append(
+                sliding_window_view(
+                    np.asarray(cdf)[-max_history:],
+                    window_shape=(self.window_size,),
+                    axis=0,
+                )
+            )
         full = np.concatenate(window_list, axis=2)
 
-        extras = self._construct_extras(df_index=df.index, future_regressor=future_regressor)
+        extras = self._construct_extras(
+            df_index=df.index, future_regressor=future_regressor
+        )
 
         full_end = df.shape[0] - 1
         window_end = full.shape[0] - 1
@@ -3393,11 +3461,21 @@ class PreprocessingRegression(ModelObject):
         if one_step:
             self.X = full[:-1].reshape(-1, full.shape[-1])
             if extras is not None:
-                self.X = np.concatenate([self.X, extras[self.window_size + max_hist_rev:].reshape(-1, extras.shape[-1])], axis=1)
+                self.X = np.concatenate(
+                    [
+                        self.X,
+                        extras[self.window_size + max_hist_rev :].reshape(
+                            -1, extras.shape[-1]
+                        ),
+                    ],
+                    axis=1,
+                )
             if processed_y:
-                self.Y = np.asarray(df_list[-1])[self.window_size + max_hist_rev:].reshape(-1)
+                self.Y = np.asarray(df_list[-1])[
+                    self.window_size + max_hist_rev :
+                ].reshape(-1)
             else:
-                self.Y = np.asarray(df)[self.window_size + max_hist_rev:].reshape(-1)
+                self.Y = np.asarray(df)[self.window_size + max_hist_rev :].reshape(-1)
         else:
             windows = []
             targets = []
@@ -3411,7 +3489,9 @@ class PreprocessingRegression(ModelObject):
                     window_idx = np.arange(0, end_point)
                     windows.append(full[window_idx])
                     # for y and target related vars, don't include first point
-                    target_idx = np.arange(self.window_size + n + max_hist_rev, full_end)
+                    target_idx = np.arange(
+                        self.window_size + n + max_hist_rev, full_end
+                    )
                     if processed_y:
                         targets.append(np.asarray(df_list[-1])[target_idx])
                     else:
@@ -3424,9 +3504,22 @@ class PreprocessingRegression(ModelObject):
                 extra_sel = np.concatenate(extra_sel, axis=0)
             forecast_steps = np.concatenate(forecast_steps, axis=0)
             if extras is not None:
-                self.X = np.concatenate([windows.reshape(-1, windows.shape[-1]), extra_sel.reshape(-1, extras.shape[-1]), forecast_steps.reshape(-1, 1)], axis=1)
+                self.X = np.concatenate(
+                    [
+                        windows.reshape(-1, windows.shape[-1]),
+                        extra_sel.reshape(-1, extras.shape[-1]),
+                        forecast_steps.reshape(-1, 1),
+                    ],
+                    axis=1,
+                )
             else:
-                self.X = np.concatenate([windows.reshape(-1, windows.shape[-1]), forecast_steps.reshape(-1, 1)], axis=1)
+                self.X = np.concatenate(
+                    [
+                        windows.reshape(-1, windows.shape[-1]),
+                        forecast_steps.reshape(-1, 1),
+                    ],
+                    axis=1,
+                )
             self.Y = np.concatenate(targets, axis=0).reshape(-1)
 
         # DROP values which contain numpy, not having filled initial nan values
@@ -3459,7 +3552,9 @@ class PreprocessingRegression(ModelObject):
         if self.datepart_method is not None:
             date_part_df = date_part(df_index, method=self.datepart_method)
             if future_regressor is not None:
-                date_part_df = date_part_df.merge(future_regressor, left_index=True, right_index=True, how='left')
+                date_part_df = date_part_df.merge(
+                    future_regressor, left_index=True, right_index=True, how='left'
+                )
         elif future_regressor is not None and self.regression_type in ["User", "user"]:
             date_part_df = future_regressor
         else:
@@ -3467,7 +3562,9 @@ class PreprocessingRegression(ModelObject):
         if extras is not None:
             N = self.train_shape[1]
             # memory efficient repeat, hopefully
-            extras = np.moveaxis(np.asarray(date_part_df)[:, :, np.newaxis] * np.ones((1, 1, N)), 2, 1)
+            extras = np.moveaxis(
+                np.asarray(date_part_df)[:, :, np.newaxis] * np.ones((1, 1, N)), 2, 1
+            )
         return extras
 
     def _construct_full(self, df):
@@ -3485,7 +3582,13 @@ class PreprocessingRegression(ModelObject):
         # max_history = 0 if self.max_history is None else self.max_history
         window_list = []
         for cdf in df_list:
-            window_list.append(sliding_window_view(np.asarray(cdf), window_shape=(self.window_size,), axis=0,))  # [-max_history:]
+            window_list.append(
+                sliding_window_view(
+                    np.asarray(cdf),
+                    window_shape=(self.window_size,),
+                    axis=0,
+                )
+            )  # [-max_history:]
         return np.concatenate(window_list, axis=2)
 
     def _base_scaler(self, X):
@@ -3534,12 +3637,22 @@ class PreprocessingRegression(ModelObject):
             # forecast, 1 step ahead, then another, and so on
             lwindow = self.last_window
             for x in range(forecast_length):
-                cindex = index[x: x+1]
+                cindex = index[x : x + 1]
                 full = self._construct_full(lwindow)
-                c_reg = future_regressor.reindex(cindex) if future_regressor is not None else None
+                c_reg = (
+                    future_regressor.reindex(cindex)
+                    if future_regressor is not None
+                    else None
+                )
                 extras = self._construct_extras(cindex, c_reg)
                 if extras is not None:
-                    pred = np.concatenate([full[-1:].reshape(-1, full.shape[-1]), extras.reshape(-1, extras.shape[-1])], axis=1)
+                    pred = np.concatenate(
+                        [
+                            full[-1:].reshape(-1, full.shape[-1]),
+                            extras.reshape(-1, extras.shape[-1]),
+                        ],
+                        axis=1,
+                    )
                 else:
                     pred = full[-1:].reshape(-1, full.shape[-1])
                 if self.normalize_window:
@@ -3551,21 +3664,34 @@ class PreprocessingRegression(ModelObject):
                     # won't work with some preprocessing like diff
                     rfPred = self.transformer_object.inverse_transform(rfPred)
                 forecast = pd.concat([forecast, rfPred], axis=0)
-                lwindow = pd.concat(
-                    [lwindow, rfPred], axis=0, ignore_index=False
-                ).tail(self.window_size)
+                lwindow = pd.concat([lwindow, rfPred], axis=0, ignore_index=False).tail(
+                    self.window_size
+                )
             df = forecast
         else:
             full = self._construct_full(self.last_window)[-1:]
             full = full.reshape(-1, full.shape[-1])
             N = self.train_shape[1]
-            forecast_steps = np.repeat(np.arange(1, forecast_length + 1), N).reshape(-1, 1)
-            c_reg = future_regressor.reindex(index) if future_regressor is not None else None
+            forecast_steps = np.repeat(np.arange(1, forecast_length + 1), N).reshape(
+                -1, 1
+            )
+            c_reg = (
+                future_regressor.reindex(index)
+                if future_regressor is not None
+                else None
+            )
             extras = self._construct_extras(index, c_reg)
             if extras is None:
                 self.pred = np.concatenate([full, forecast_steps], axis=1)
             else:
-                self.pred = np.concatenate([np.tile(full, (forecast_length, 1)), extras.reshape(-1, extras.shape[-1]), forecast_steps], axis=1)
+                self.pred = np.concatenate(
+                    [
+                        np.tile(full, (forecast_length, 1)),
+                        extras.reshape(-1, extras.shape[-1]),
+                        forecast_steps,
+                    ],
+                    axis=1,
+                )
             if self.normalize_window:
                 self.pred = self._scale(self.pred)
             cY = self.model.predict(self.pred.astype(float))
@@ -3614,9 +3740,9 @@ class PreprocessingRegression(ModelObject):
         if "regressor" in method:
             regression_type_choice = "User"
         else:
-            regression_type_choice = random.choices(
-                [None, "User"], weights=[0.8, 0.2]
-            )[0]
+            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
+                0
+            ]
         normalize_window_choice = random.choices([True, False], [0.1, 0.9])[0]
         datepart_choice = random.choices(
             [

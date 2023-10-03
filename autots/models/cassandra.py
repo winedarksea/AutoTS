@@ -47,6 +47,7 @@ except Exception:
         @staticmethod
         def ppf(x):
             return 1.6448536269514722
+
         # norm.ppf((1 + 0.95) / 2)
 
 
@@ -2003,15 +2004,19 @@ class Cassandra(ModelObject):
                 'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
                 'method': random.choices(
                     [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'SLSQP', 'Powell'],
-                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02]
+                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02],
                 )[0],
             }
         elif linear_model == "bayesian_linear":
             linear_model = {
                 'model': "bayesian_linear",
                 'alpha': random.choices([1.0, 0.1, 10], [0.8, 0.1, 0.1])[0],
-                'gaussian_prior_mean': random.choices([0, 0.1, 1], [0.8, 0.08, 0.02])[0],
-                'wishart_prior_scale': random.choices([1.0, 0.1, 10], [0.8, 0.1, 0.1])[0],
+                'gaussian_prior_mean': random.choices([0, 0.1, 1], [0.8, 0.08, 0.02])[
+                    0
+                ],
+                'wishart_prior_scale': random.choices([1.0, 0.1, 10], [0.8, 0.1, 0.1])[
+                    0
+                ],
                 'wishart_dof_excess': random.choices([0, 1, 5], [0.9, 0.05, 0.05])[0],
             }
         if method == "regressor":
@@ -2496,7 +2501,12 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     else:
         cost_func = cost_function_l1
     return minimize(
-        cost_func, x0, args=(X, y), bounds=bounds, method=method, options={'maxiter': maxiter}
+        cost_func,
+        x0,
+        args=(X, y),
+        bounds=bounds,
+        method=method,
+        options={'maxiter': maxiter},
     ).x.reshape(X.shape[1], y.shape[1])
 
 
@@ -2578,7 +2588,14 @@ class BayesianMultiOutputRegression:
         wishart_dof_excess (int): Larger values make the prior more peaked around the scale matrix.
         wishart_prior_scale (float): A larger value means a smaller prior variance on the noise covariance, while a smaller value means more prior uncertainty about it.
     """
-    def __init__(self, gaussian_prior_mean=0, alpha=1.0, wishart_prior_scale=1.0, wishart_dof_excess=0):
+
+    def __init__(
+        self,
+        gaussian_prior_mean=0,
+        alpha=1.0,
+        wishart_prior_scale=1.0,
+        wishart_dof_excess=0,
+    ):
         self.gaussian_prior_mean = gaussian_prior_mean
         self.alpha = alpha
         self.wishart_prior_scale = wishart_prior_scale
@@ -2590,12 +2607,16 @@ class BayesianMultiOutputRegression:
 
         # Prior for the regression coefficients: Gaussian
         # For Ridge regularization: Set the diagonal elements to alpha
-        self.m_0 = np.zeros((n_features, n_outputs)) + self.gaussian_prior_mean  # Prior mean
+        self.m_0 = (
+            np.zeros((n_features, n_outputs)) + self.gaussian_prior_mean
+        )  # Prior mean
         self.S_0 = self.alpha * np.eye(n_features)  # Prior covariance
 
         # Prior for the precision matrix (inverse covariance): Wishart
         self.nu_0 = n_features + self.wishart_dof_excess  # Degrees of freedom
-        self.W_0_inv = self.wishart_prior_scale * np.eye(n_outputs)  # Scale matrix (inverse)
+        self.W_0_inv = self.wishart_prior_scale * np.eye(
+            n_outputs
+        )  # Scale matrix (inverse)
 
         # Posterior for the regression coefficients
         S_0_inv = np.linalg.inv(self.S_0)
@@ -2605,7 +2626,12 @@ class BayesianMultiOutputRegression:
 
         # Posterior for the precision matrix
         nu_n = self.nu_0 + n_samples
-        W_n_inv = self.W_0_inv + Y.T @ Y + self.m_0.T @ S_0_inv @ self.m_0 - m_n.T @ S_n_inv @ m_n
+        W_n_inv = (
+            self.W_0_inv
+            + Y.T @ Y
+            + self.m_0.T @ S_0_inv @ self.m_0
+            - m_n.T @ S_n_inv @ m_n
+        )
 
         self.m_n = self.params = m_n
         self.S_n = S_n
@@ -2616,7 +2642,11 @@ class BayesianMultiOutputRegression:
         Y_pred = X @ self.m_n
         if return_std:
             # Average predictive variance for each output dimension
-            Y_var = np.einsum('ij,jk,ik->i', X, self.S_n, X) + np.trace(np.linalg.inv(self.nu_n * self.W_n_inv)) / self.W_n_inv.shape[0]
+            Y_var = (
+                np.einsum('ij,jk,ik->i', X, self.S_n, X)
+                + np.trace(np.linalg.inv(self.nu_n * self.W_n_inv))
+                / self.W_n_inv.shape[0]
+            )
             return Y_pred, np.sqrt(Y_var)
         return Y_pred
 
@@ -2627,10 +2657,12 @@ class BayesianMultiOutputRegression:
         # Sample from the posterior distribution of the precision matrix
         # precision_samples = wishart(df=self.nu_n, scale=np.linalg.inv(self.W_n_inv)).rvs(n_samples)
         # return beta_samples, precision_samples
-    
+
         sampled_weights = np.zeros((n_samples, self.m_n.shape[0], self.m_n.shape[1]))
         for i in range(self.m_n.shape[1]):
-            sampled_weights[:, :, i] = np.random.multivariate_normal(self.m_n[:, i], self.S_n, n_samples)
+            sampled_weights[:, :, i] = np.random.multivariate_normal(
+                self.m_n[:, i], self.S_n, n_samples
+            )
         return sampled_weights
 
 
@@ -2796,7 +2828,6 @@ if False:
         else df_test[df_train.columns]
     )
     print(pred.avg_metrics.round(1))
-
 
     # if not mod.regressors_used:
     dates = df_daily.index.union(

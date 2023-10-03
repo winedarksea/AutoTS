@@ -182,6 +182,17 @@ class AutoTSTest(unittest.TestCase):
         time.sleep(1)
         name = tf.name
         model.export_template(name, models="best", n=20, max_per_model_class=3)
+        future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
+            df,
+            dimensions=4,
+            forecast_length=forecast_length,
+            date_col='datetime' if long else None,
+            value_col='value' if long else None,
+            id_col='series_id' if long else None,
+            drop_most_recent=0,
+            aggfunc=model.aggfunc,
+            verbose=model.verbose,
+        )
         
         model2 = AutoTS(
             forecast_length=forecast_length,
@@ -209,7 +220,7 @@ class AutoTSTest(unittest.TestCase):
         # TEST MODEL PREDICT WITH LOWER LEVEL MODEL TRAINED ON PREVIOUS DATA ONLY
         model2.import_best_model(tf.name, include_ensemble=False)
         model2.fit_data(df_train, future_regressor=future_regressor_train2d.reindex(df_train.index))
-        prediction = model2.predict(future_regressor=future_regressor_forecast2d.reindex(df_test.index), verbose=0)
+        prediction = model2.predict(future_regressor=future_regressor_train2d.reindex(df_test.index), verbose=0)
         prediction.evaluate(df_test, df_train=df_train)
         smape1 = prediction.avg_metrics['smape']
         
