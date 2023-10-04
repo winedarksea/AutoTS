@@ -83,6 +83,7 @@ class KerasRNN(object):
         tf.keras.backend.clear_session()
         tf.random.set_seed(self.random_seed)
         train_X = pd.DataFrame(X).to_numpy()
+        # target shape is [samples, timesteps, features]
         if self.shape == 1:
             train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
         elif self.shape > 2:

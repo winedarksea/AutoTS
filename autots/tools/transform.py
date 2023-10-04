@@ -15,7 +15,7 @@ from autots.tools.anomaly_utils import (
     dates_to_holidays,
 )
 from autots.tools.window_functions import window_lin_reg_mean
-from autots.tools.fast_kalman import KalmanFilter, random_state_space
+from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
 
@@ -372,7 +372,6 @@ class Detrend(EmptyTransformer):
 
 class StatsmodelsFilter(EmptyTransformer):
     """Irreversible filters.
-
     Args:
         method (str): bkfilter or cffilter or convolution_filter
     """
@@ -380,10 +379,14 @@ class StatsmodelsFilter(EmptyTransformer):
     def __init__(self, method: str = "bkfilter", **kwargs):
         super().__init__(name="StatsmodelsFilter")
         self.method = method
+        self.filters = {
+            "bkfilter": self.bkfilter,
+            "cffilter": self.cffilter,
+            "convolution_filter": self.convolution_filter,
+        }
 
     def fit_transform(self, df):
         """Fit and Return Detrended DataFrame.
-
         Args:
             df (pandas.DataFrame): input dataframe
         """
@@ -391,30 +394,32 @@ class StatsmodelsFilter(EmptyTransformer):
 
     def transform(self, df):
         """Return detrended data.
-
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if self.method == "bkfilter":
-            from statsmodels.tsa.filters import bk_filter
+        return self.filters[self.method](df)
 
-            cycles = bk_filter.bkfilter(df, K=1)
-            cycles.columns = df.columns
-            df = (df - cycles).fillna(method="ffill").fillna(method="bfill")
-        elif self.method == "cffilter":
-            from statsmodels.tsa.filters import cf_filter
+    def bkfilter(self, df):
+        from statsmodels.tsa.filters import bk_filter
 
-            cycle, trend = cf_filter.cffilter(df)
-            if isinstance(cycle, pd.Series):
-                cycle = cycle.to_frame()
-            cycle.columns = df.columns
-            df = df - cycle
-        elif "convolution_filter" in self.method:
-            from statsmodels.tsa.filters.filtertools import convolution_filter
+        cycles = bk_filter.bkfilter(df, K=1)
+        cycles.columns = df.columns
+        return (df - cycles).fillna(method="ffill").fillna(method="bfill")
 
-            df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
-            df = df.fillna(method="ffill").fillna(method="bfill")
-        return df
+    def cffilter(self, df):
+        from statsmodels.tsa.filters import cf_filter
+
+        cycle, trend = cf_filter.cffilter(df)
+        if isinstance(cycle, pd.Series):
+            cycle = cycle.to_frame()
+        cycle.columns = df.columns
+        return df - cycle
+
+    def convolution_filter(self, df):
+        from statsmodels.tsa.filters.filtertools import convolution_filter
+
+        df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
+        return df.fillna(method="ffill").fillna(method="bfill")
 
 
 class HPFilter(EmptyTransformer):
@@ -1124,6 +1129,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
+                    'MultioutputGPR': 0.1,
                 }
             )
         if holiday_countries_used is None:
@@ -1499,8 +1505,7 @@ class CumSumTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = df.cumsum(skipna=True)
-        return df
+        return df.cumsum(skipna=True)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame
@@ -3327,221 +3332,7 @@ class KalmanSmoothing(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        if method in ['fast', 'superfast']:
-            em_iter = None
-        elif method == "deep":
-            em_iter = random.choices(
-                [None, 10, 20, 50, 100], [0.9, 0.2, 0.1, 0.1, 0.1]
-            )[0]
-        else:
-            em_iter = random.choices([None, 10, 30], [0.9, 0.4, 0.1])[0]
-        params = random.choices(
-            # the same model can sometimes be defined in various matrix forms
-            [
-                # floats are phi
-                'ets_aan',
-                {
-                    'model_name': 'local linear stochastic seasonal dummy',
-                    'state_transition': [
-                        [1, 0, 0, 0],
-                        [0, -1, -1, -1],
-                        [0, 1, 0, 0],
-                        [0, 0, 1, 0],
-                    ],
-                    'process_noise': [
-                        [1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, 0, 0],
-                        [0, 0, 0, 0],
-                    ],
-                    'observation_model': [[1, 1, 0, 0]],
-                    'observation_noise': 0.25,
-                },
-                {
-                    'model_name': 'local linear stochastic seasonal 7',
-                    'state_transition': [
-                        [1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-                    ],
-                    'process_noise': [
-                        [1, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 0],
-                    ],
-                    'observation_model': [[1, 0, 1, 0, 0, 0, 0, 0]],
-                    'observation_noise': 0.25,
-                },
-                {
-                    'model_name': 'MA',
-                    'state_transition': [[1, 0], [1, 0]],
-                    'process_noise': [[0.2, 0.0], [0.0, 0]],
-                    'observation_model': [[1, 0.1]],
-                    'observation_noise': 1.0,
-                },
-                {
-                    'model_name': 'AR(2)',
-                    'state_transition': [[1, 1], [0.1, 0]],
-                    'process_noise': [[1, 0], [0, 0]],
-                    'observation_model': [[1, 0]],
-                    'observation_noise': 1.0,
-                },
-                {
-                    'model_name': 'X1',
-                    'state_transition': [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
-                    'process_noise': [
-                        [0.1, 0.0, 0.0],
-                        [0.0, 0.01, 0.0],
-                        [0.0, 0.0, 0.1],
-                    ],
-                    'observation_model': [[1, 1, 1]],
-                    'observation_noise': 1.0,
-                },
-                {
-                    'model_name': "local linear hidden state with seasonal 7",
-                    'state_transition': [
-                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
-                        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-                    ],
-                    'process_noise': [
-                        [0.0016, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 1e-06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                    ],
-                    'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
-                    'observation_noise': 0.04,
-                },
-                {
-                    'model_name': 'spline',
-                    'state_transition': [[2, -1], [1, 0]],
-                    'process_noise': [[1, 0], [0, 0]],
-                    'observation_model': [[1, 0]],
-                    'observation_noise': 1.0,
-                },
-                12,
-                "dynamic_linear",
-            ],
-            [0.1, 0.1, 0.1, 0.05, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1],
-        )[0]
-        if params in [364] and method not in ['deep']:
-            params = 7
-        if params == "random":
-            st, procnois, obsmod, obsnois = random_state_space()
-            params = {
-                'model_name': 'randomly generated',
-                'state_transition': st.tolist(),
-                'process_noise': procnois.tolist(),
-                'observation_model': obsmod.tolist(),
-                'observation_noise': obsnois,
-            }
-        elif params == "dynamic_linear":
-            choices = [
-                0.0,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.6,
-                0.7,
-                0.8,
-                0.9,
-                1.0,
-                1.1,
-                1.2,
-                1.3,
-                1.4,
-                1.5,
-            ]
-            params = {
-                'model_name': 'dynamic linear',
-                'state_transition': [
-                    [1, 1, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, random.choice(choices), 1],
-                    [0, 0, random.choice(choices), 0],
-                ],
-                'process_noise': [
-                    [random.choice(choices), 0, 0, 0],
-                    [0, random.choice(choices), 0, 0],
-                    [0, 0, random.choice(choices), 0],
-                    [0, 0, 0, 0],
-                ],
-                'observation_model': [[1, 0, 1, 0]],
-                'observation_noise': 0.25,
-                'em_iter': 10,
-            }
-        elif params == "ets_aan":
-            choices = [
-                0.0,
-                0.01,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.6,
-                0.7,
-                0.8,
-                0.9,
-                1.0,
-                1.1,
-                1.2,
-                1.3,
-                1.4,
-                1.5,
-            ]
-            params = {
-                'model_name': 'local_linear_trend_ets_aan',
-                'state_transition': [[1, 1], [0, 1]],
-                'process_noise': [
-                    [random.choice(choices), 0.0],
-                    [0.0, random.choice(choices)],
-                ],
-                'observation_model': [[1, 0]],
-                'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
-            }
-        elif isinstance(params, int):
-            state_transition = np.zeros((params + 1, params + 1))
-            state_transition[0, 0] = 1
-            state_transition[1, 1:-1] = [-1.0] * (params - 1)
-            state_transition[2:, 1:-1] = np.eye(params - 1)
-            observation_model = [[1, 1] + [0] * (params - 1)]
-            level_noise = 0.2 / random.choice([0.2, 0.5, 1, 5, 10, 200])
-            season_noise = random.choice([1e-4, 1e-3, 1e-2, 1e-1])
-            process_noise_cov = (
-                np.diag([level_noise, season_noise] + [0] * (params - 1)) ** 2
-            )
-            params = {
-                'model_name': f'local linear hidden state with seasonal {params}',
-                'state_transition': state_transition.tolist(),
-                'process_noise': process_noise_cov.tolist(),
-                'observation_model': observation_model,
-                'observation_noise': 0.04,
-            }
-        params['em_iter'] = em_iter
-        return params
+        return new_kalman_params(method=method)
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -3735,7 +3526,7 @@ class RegressionFilter(EmptyTransformer):
 
 
 class LevelShiftMagic(EmptyTransformer):
-    """Detects and corrects for level shifts.
+    """Detects and corrects for level shifts. May seriously alter trend.
 
     Args:
         method (str): "clip" or "remove"
@@ -3900,6 +3691,129 @@ class LevelShiftMagic(EmptyTransformer):
 LevelShiftTransformer = LevelShiftMagic
 
 
+class CenterSplit(EmptyTransformer):
+    """Vaguely Croston inspired approach separating occurrence from magnitude.
+
+    Args:
+        center (str): 'zero' or 'median', the value to use as most the intermittent gap
+        fillna (str): a fillna method, see standard fillna methods
+    """
+
+    def __init__(
+        self,
+        center: str = "zero",
+        fillna="linear",
+        suffix: str = "_mdfcrst",
+        **kwargs,
+    ):
+        super().__init__(name="CenterSplit")
+        self.center = center
+        self.fillna = fillna
+        self.suffix = suffix
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.center in ["zero", "0", 0]:
+            mask = df != 0
+            use_df = df
+        elif self.center == "median":
+            self.median = df.median(axis=0)
+            mask = df != self.median
+            use_df = df - self.median
+        else:
+            raise ValueError(
+                f"ModifiedCroston arg center `{self.center}` not recognized"
+            )
+
+        macro = use_df.where(mask, np.nan)
+        macro = FillNA(macro, method=self.fillna, window=10)
+
+        self.columns = df.columns
+        micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
+        return pd.concat([macro, micro], axis=1)
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.center in ["zero", "0", 0]:
+            mask = df != 0
+            use_df = df
+        elif self.center == "median":
+            # self.median = df.median(axis=0)
+            mask = df != self.median
+            use_df = df - self.median
+        else:
+            raise ValueError(
+                f"ModifiedCroston arg center `{self.center}` not recognized"
+            )
+
+        macro = use_df.where(mask, np.nan)
+        macro = FillNA(macro, method=self.fillna, window=10)
+
+        # self.columns = df.columns
+        micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
+        return pd.concat([macro, micro], axis=1)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        macro = df[self.columns]
+        micro = df[df.columns.difference(self.columns)]
+        micro = micro.rename(columns=lambda x: str(x)[: -len(self.suffix)])[
+            self.columns
+        ]
+        if self.center == "median":
+            return macro * micro + self.median
+        else:
+            return macro * micro
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "fillna": random.choices(
+                [
+                    "linear",
+                    "SeasonalityMotifImputer",
+                    'pchip',
+                    'akima',
+                    'mean',
+                    'ffill',
+                    "SeasonalityMotifImputer1K",
+                ],
+                [0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1],
+            )[0],
+            "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3971,6 +3885,7 @@ have_params = {
     "DatepartRegressionTransformer": DatepartRegressionTransformer,
     "LevelShiftMagic": LevelShiftMagic,
     "LevelShiftTransformer": LevelShiftTransformer,
+    "CenterSplit": CenterSplit,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4065,6 +3980,8 @@ class GeneralTransformer(object):
             'LocalLinearTrend': rolling local trend, using tails for future and past trend
             'KalmanSmoothing': smooth using a state space model
             'RegressionFilter': fit seasonal removal and local linear trend, clip std devs away from this fit
+            'LevelShiftTransformer': automatically compensate for historic level shifts in data.
+            'CenterSplit': Croston inspired magnitude/occurrence split for intermittent
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4291,32 +4208,41 @@ class GeneralTransformer(object):
             )
             return EmptyTransformer()
 
-    def _fit(self, df):
+    def _first_fit(self, df):
         # fill NaN
         df = self.fill_na(df)
 
         self.df_index = df.index
         self.df_colnames = df.columns
+        return df
+
+    def _fit_one(self, df, i):
+        transformation = self.transformations[i]
+        self.transformers[i] = self.retrieve_transformer(
+            transformation=transformation,
+            df=df,
+            param=self.transformation_params[i],
+            random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
+        )
+        df = self.transformers[i].fit_transform(df)
+        # convert to DataFrame only if it isn't already
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+        # update index reference if sliced
+        if transformation in ["Slice", "FastICA", "PCA"]:
+            self.df_index = df.index
+            self.df_colnames = df.columns
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        return df
+
+    def _fit(self, df):
+        df = self._first_fit(df)
+
         try:
             for i in sorted(self.transformations.keys()):
-                transformation = self.transformations[i]
-                self.transformers[i] = self.retrieve_transformer(
-                    transformation=transformation,
-                    df=df,
-                    param=self.transformation_params[i],
-                    random_seed=self.random_seed,
-                    n_jobs=self.n_jobs,
-                    holiday_country=self.holiday_country,
-                )
-                df = self.transformers[i].fit_transform(df)
-                # convert to DataFrame only if it isn't already
-                if not isinstance(df, pd.DataFrame):
-                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-                # update index reference if sliced
-                if transformation in ["Slice", "FastICA", "PCA"]:
-                    self.df_index = df.index
-                    self.df_colnames = df.columns
-                # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+                df = self._fit_one(df, i)
         except Exception as e:
             raise Exception(
                 f"Transformer {self.transformations[i]} failed on fit"
@@ -4337,6 +4263,18 @@ class GeneralTransformer(object):
         """Directly fit and apply transformations to convert df."""
         return self._fit(df)
 
+    def _transform_one(self, df, i):
+        transformation = self.transformations[i]
+        df = self.transformers[i].transform(df)
+        # convert to DataFrame only if it isn't already
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+        # update index reference if sliced
+        if transformation in ["Slice", "FastICA", "PCA"]:
+            self.df_index = df.index
+            self.df_colnames = df.columns
+        return df
+
     def transform(self, df):
         """Apply transformations to convert df."""
         df = df.copy()
@@ -4345,23 +4283,40 @@ class GeneralTransformer(object):
             df = self.hier.transform(df)
         """
         # fill NaN
-        df = self.fill_na(df)
-
-        self.df_index = df.index
-        self.df_colnames = df.columns
+        df = self._first_fit(df)
         # transformations
         i = 0
         for i in sorted(self.transformations.keys()):
-            transformation = self.transformations[i]
-            df = self.transformers[i].transform(df)
-            # convert to DataFrame only if it isn't already
-            if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-            # update index reference if sliced
-            if transformation in ["Slice", "FastICA", "PCA"]:
-                self.df_index = df.index
-                self.df_colnames = df.columns
+            df = self._transform_one(df, i)
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        return df
+
+    def _inverse_one(self, df, i, trans_method='forecast', bounds=False):
+        self.c_trans_n = self.transformations[i]
+        if self.c_trans_n in self.oddities_list:
+            if self.c_trans_n in self.bounded_oddities:
+                if not bounds:
+                    adjustment = None
+                else:
+                    adjustment = self.adjustments.get(i, None)
+                df = self.transformers[i].inverse_transform(
+                    df,
+                    trans_method=trans_method,
+                    adjustment=adjustment,
+                )
+                if not bounds:
+                    self.adjustments[i] = self.transformers[i].adjustment
+            else:
+                df = self.transformers[i].inverse_transform(
+                    df, trans_method=trans_method
+                )
+        else:
+            df = self.transformers[i].inverse_transform(df)
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+        elif self.c_trans_n in ["FastICA", "PCA"]:
+            self.df_colnames = df.columns
+        # df = df.replace([np.inf, -np.inf], 0)
         return df
 
     def inverse_transform(
@@ -4384,33 +4339,9 @@ class GeneralTransformer(object):
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         try:
             for i in sorted(self.transformations.keys(), reverse=True):
-                c_trans_n = self.transformations[i]
-                if c_trans_n in self.oddities_list:
-                    if c_trans_n in self.bounded_oddities:
-                        if not bounds:
-                            adjustment = None
-                        else:
-                            adjustment = self.adjustments.get(i, None)
-                        df = self.transformers[i].inverse_transform(
-                            df,
-                            trans_method=trans_method,
-                            adjustment=adjustment,
-                        )
-                        if not bounds:
-                            self.adjustments[i] = self.transformers[i].adjustment
-                    else:
-                        df = self.transformers[i].inverse_transform(
-                            df, trans_method=trans_method
-                        )
-                else:
-                    df = self.transformers[i].inverse_transform(df)
-                if not isinstance(df, pd.DataFrame):
-                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-                elif c_trans_n in ["FastICA", "PCA"]:
-                    self.df_colnames = df.columns
-                # df = df.replace([np.inf, -np.inf], 0)
+                df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
         except Exception as e:
-            raise Exception(f"Transformer {c_trans_n} failed on inverse") from e
+            raise Exception(f"Transformer {self.c_trans_n} failed on inverse") from e
 
         if fillzero:
             df = df.fillna(0)
@@ -4477,11 +4408,12 @@ transformer_dict = {
     "Cointegration": 0.01,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
-    'HolidayTransformer': 0.01,
+    'HolidayTransformer': 0.02,
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.04,
     'RegressionFilter': 0.07,
     "LevelShiftTransformer": 0.03,
+    "CenterSplit": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -4541,6 +4473,7 @@ decompositions = {
     "DifferencedTransformer": 0.05,
     "DatepartRegression": 0.05,
     "ClipOutliers": 0.05,
+    "LocalLinearTrend": 0.03,
 }
 transformer_class = {}
 
@@ -4561,6 +4494,7 @@ na_probs = {
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
     "SeasonalityMotifImputer": 0.1,
     "SeasonalityMotifImputerLinMix": 0.02,
+    "SeasonalityMotifImputer1K": 0.01,
     "DatepartRegressionImputer": 0.05,  # also slow
 }
 

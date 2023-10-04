@@ -2,6 +2,8 @@
 """
 Extracted from auto_ts.py, the functions to create validation segments.
 
+Warning, these are used in AMFM, possibly other places. Avoid modification of function structures, if possible.
+
 Created on Mon Jan 16 11:36:01 2023
 
 @author: Colin

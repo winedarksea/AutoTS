@@ -8,6 +8,7 @@ import pandas as pd
 import datetime
 import json
 from hashlib import md5
+from autots.tools.cpu_count import set_n_jobs
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.base import PredictionObject, ModelObject
 from autots.models.ensemble import (
@@ -577,6 +578,7 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
+            forecast_length=forecast_length,
             **parameters,
         )
     elif model == "MetricMotif":
@@ -608,6 +610,18 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "PreprocessingRegression":
+        from autots.models.sklearn import PreprocessingRegression
+
+        return PreprocessingRegression(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            forecast_length=forecast_length,
             **parameters,
         )
     elif model == "MLEnsemble":
@@ -685,7 +699,6 @@ class ModelPrediction(ModelObject):
         model_count: int = 0,
     ):
         self.forecast_length = forecast_length
-        self.transformation_dict = transformation_dict
         self.model_str = model_str
         self.parameter_dict = parameter_dict
         self.frequency = frequency
@@ -700,12 +713,28 @@ class ModelPrediction(ModelObject):
         self.n_jobs = n_jobs
         self.current_model_file = current_model_file
         self.model_count = model_count
+        # handle still in JSON form
+        if isinstance(transformation_dict, str):
+            self.transformation_dict = json.loads(transformation_dict)
+        else:
+            self.transformation_dict = transformation_dict
+        if isinstance(parameter_dict, str):
+            self.parameter_dict = json.loads(parameter_dict)
+        else:
+            self.parameter_dict = parameter_dict
+        if model_str == "PreprocessingRegression":
+            self.parameter_dict['transformation_dict'] = self.transformation_dict
+            self.transformation_dict = {
+                'fillna': None,
+                'transformations': {},
+                'transformation_params': {},
+            }
         self.transformer_object = GeneralTransformer(
-            **transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
+            **self.transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
         )
         self.model = ModelMonster(
             model_str,
-            parameters=parameter_dict,
+            parameters=self.parameter_dict,
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
@@ -1133,12 +1162,8 @@ def model_forecast(
     if frequency == "infer":
         frequency = infer_frequency(df_train)
     # handle "auto" n_jobs to an integer of local count
-    if n_jobs == 'auto':
-        from autots.tools import cpu_count
-
-        n_jobs = cpu_count(modifier=0.75)
-        if verbose > 0:
-            print(f"Auto-detected {n_jobs} cpus for n_jobs.")
+    if n_jobs == 'auto' or not isinstance(n_jobs, int):
+        n_jobs = set_n_jobs(n_jobs=n_jobs, verbose=verbose)
 
     # if an ensemble
     if model_name == 'Ensemble':

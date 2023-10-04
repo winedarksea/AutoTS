@@ -382,8 +382,12 @@ def simple_train_test_split(
         (df.shape[0]) - forecast_length
     ):
         raise ValueError(
-            """forecast_length is too large for training data, alter min_allowed_train_percent to override.
-            This error is also often caused by errors in inputing of or preshaping the data.
+            """forecast_length is too large for training data.
+What this means is you don't have enough history to support cross validation with your forecast_length.
+Various solutions include bringing in more data, alter min_allowed_train_percent to something smaller,
+and also setting a shorter forecast_length to class init for cross validation which you can then override with a longer value in .predict()
+This error is also often caused by errors in inputing of or preshaping the data.
+Check model.df_wide_numeric to make sure data was imported correctly.
             """
         )
 

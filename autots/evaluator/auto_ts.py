@@ -41,7 +41,7 @@ from autots.models.ensemble import (
     generate_crosshair_score,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
-from autots.tools import cpu_count
+from autots.tools.cpu_count import set_n_jobs
 from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,
@@ -307,17 +307,7 @@ class AutoTS(object):
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
-        if self.n_jobs == 'auto':
-            self.n_jobs = cpu_count(modifier=0.75)
-            if verbose > 0:
-                print(f"Using {self.n_jobs} cpus for n_jobs.")
-        elif str(self.n_jobs).isdigit():
-            self.n_jobs = int(self.n_jobs)
-            if self.n_jobs < 0:
-                core_count = cpu_count() + 1 - self.n_jobs
-                self.n_jobs = core_count if core_count > 1 else 1
-        if self.n_jobs == 0:
-            self.n_jobs = 1
+        self.n_jobs = set_n_jobs(self.n_jobs, verbose=self.verbose)
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
@@ -449,6 +439,7 @@ class AutoTS(object):
         self.best_model_non_horizontal = None
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
+        self.validation_results = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -1448,10 +1439,6 @@ class AutoTS(object):
                     )
                     time.sleep(5)
 
-        error_msg_template = """No models available from validation.
-Try increasing models_to_validate, max_per_model_class
-or otherwise increase models available."""
-
         # run validation_results aggregation
         self.validation_results = copy.copy(self.initial_results)
         self.validation_results = validation_aggregation(
@@ -1730,36 +1717,17 @@ or otherwise increase models available."""
             # use the best of these ensembles if any ran successfully
             # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
             # however they are chosen based off of validation results of all validation runs
-            eligible_models = self.validation_results.model_results[
-                self.validation_results.model_results['Runs']
-                >= (self.num_validations + 1)
-            ]
-            if eligible_models.empty:
-                # this may occur if there is enough data for full validations
-                # but a lot of that data is bad leading to complete validation round failures
-                print(
-                    "your validation results are questionable, perhaps bad data and too many validations"
-                )
-                max_vals = self.validation_results.model_results['Runs'].max()
-                eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs'] >= max_vals
-                ]
             try:
-                self.best_model_non_horizontal = (
-                    eligible_models.sort_values(
-                        by="Score", ascending=True, na_position='last'
-                    )
-                    .drop_duplicates(subset=self.template_cols)
-                    .head(1)[self.template_cols_id]
-                )
-            except IndexError:
-                raise ValueError(error_msg_template)
+                self.best_model_non_horizontal = self._best_non_horizontal()
+            except Exception:
+                self.best_model_non_horizontal = pd.DataFrame()
+
             try:
                 horz_flag = hens_model_results['Exceptions'].isna().any()
             except Exception:
                 horz_flag = False
             if not hens_model_results.empty and horz_flag:
-                hens_model_results['Score'] = generate_score(
+                hens_model_results.loc['Score'] = generate_score(
                     hens_model_results,
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval,
@@ -1776,37 +1744,57 @@ or otherwise increase models available."""
                 self.best_model = self.best_model_non_horizontal
 
         else:
-            # choose best model, when no horizontal ensembling is done
-            eligible_models = self.validation_results.model_results[
-                self.validation_results.model_results['Runs']
-                >= (self.num_validations + 1)
-            ]
-            if eligible_models.empty:
-                # this may occur if there is enough data for full validations
-                # but a lot of that data is bad leading to complete validation round failures
-                print(
-                    "your validation results are questionable, perhaps bad data and too many validations"
-                )
-                max_vals = self.validation_results.model_results['Runs'].max()
-                eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs'] >= max_vals
-                ]
-            try:
-                self.best_model = (
-                    eligible_models.sort_values(
-                        by="Score", ascending=True, na_position='last'
-                    )
-                    .drop_duplicates(subset=self.template_cols)
-                    .head(1)[self.template_cols_id]
-                )
-            except IndexError:
-                raise ValueError(error_msg_template)
+            self.best_model = self._best_non_horizontal()
+
         # give a more convenient dict option
         self.parse_best_model()
 
         # clean up any remaining print statements
         sys.stdout.flush()
         return self
+
+    def _best_non_horizontal(self, metric_weighting=None):
+        if self.validation_results is None:
+            raise ValueError(
+                "validation results are None, cannot choose best model without fit"
+            )
+        if metric_weighting is None:
+            metric_weighting = self.metric_weighting
+        # choose best model, when no horizontal ensembling is done
+        eligible_models = self.validation_results.model_results[
+            self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
+        ].copy()
+        if eligible_models.empty:
+            # this may occur if there is enough data for full validations
+            # but a lot of that data is bad leading to complete validation round failures
+            print(
+                "your validation results are questionable, perhaps bad data and too many validations"
+            )
+            max_vals = self.validation_results.model_results['Runs'].max()
+            eligible_models = self.validation_results.model_results[
+                self.validation_results.model_results['Runs'] >= max_vals
+            ]
+        # previously I was relying on the mean of Scores calculated for each individual validation
+        eligible_models['Score'] = generate_score(
+            eligible_models,
+            metric_weighting=metric_weighting,
+            prediction_interval=self.prediction_interval,
+        )
+        try:
+            best_model = (
+                eligible_models.sort_values(
+                    by="Score", ascending=True, na_position='last'
+                )
+                .drop_duplicates(subset=self.template_cols)
+                .head(1)[self.template_cols_id]
+            )
+        except IndexError:
+            raise ValueError(
+                """No models available from validation.
+Try increasing models_to_validate, max_per_model_class
+or otherwise increase models available."""
+            )
+        return best_model
 
     def parse_best_model(self):
         if self.best_model.empty:
@@ -2030,7 +2018,8 @@ or otherwise increase models available."""
         model_transformation_params=None,
         df_wide_numeric=None,
         future_regressor_train=None,
-        refit=False,
+        refit=False,  # refit model
+        bypass_save=False,  # don't even try saving model
     ):
         use_model = self.best_model_name if model_name is None else model_name
         use_params = (
@@ -2047,7 +2036,10 @@ or otherwise increase models available."""
             if future_regressor_train is None
             else future_regressor_train
         )
-        if use_model in update_fit:
+        self.update_fit_check = (
+            use_model in update_fit
+        )  # True means model can be updated without retraining
+        if self.update_fit_check and not bypass_save:
             if self.model is None or refit:
                 self.model = ModelPrediction(
                     transformation_dict=use_trans,
@@ -2187,7 +2179,7 @@ or otherwise increase models available."""
             for interval in prediction_interval:
                 df_forecast = self._predict(
                     forecast_length=forecast_length,
-                    prediction_interval=prediction_interval,
+                    prediction_interval=interval,
                     future_regressor=future_regressor,
                     fail_on_forecast_nan=fail_on_forecast_nan,
                     verbose=verbose,
@@ -2339,11 +2331,14 @@ or otherwise increase models available."""
         try:
             import_template = import_template[self.template_cols_id]
         except Exception:
-            print(
-                "Column names {} were not recognized as matching template columns: {}".format(
-                    str(import_template.columns), str(self.template_cols_id)
+            try:
+                import_template = import_template[self.template_cols]
+            except Exception:
+                print(
+                    "Column names {} were not recognized as matching template columns: {}".format(
+                        str(import_template.columns), str(self.template_cols_id)
+                    )
                 )
-            )
         return import_template
 
     def _enforce_model_list(
@@ -2882,6 +2877,7 @@ or otherwise increase models available."""
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
         Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
         'chosen' refers to best_model_id, the model chosen to run for predict
+        Validation sections may overlap (depending on method) which can confuse graph readers.
 
         Args:
             models (list): list, str, df or None, models to compare (IDs unless df of model params)
@@ -2958,7 +2954,7 @@ or otherwise increase models available."""
             # self.validation_forecasts = {}
             for val in range(len(self.validation_indexes)):
                 val_df_train, val_df_test = simple_train_test_split(
-                    self.df_wide_numeric,
+                    self.df_wide_numeric.reindex(self.validation_indexes[val]),
                     forecast_length=self.forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
@@ -2983,6 +2979,7 @@ or otherwise increase models available."""
                         model_transformation_params=row["TransformationParameters"],
                         df_wide_numeric=val_df_train,
                         future_regressor_train=train_reg,
+                        bypass_save=True,
                     )
                     idz = create_model_id(
                         row["Model"],
@@ -3011,6 +3008,7 @@ or otherwise increase models available."""
                 ].lower_forecast[series]
                 df_list.append(new_df)
         plot_df = pd.concat(df_list, sort=True, axis=0)
+        # self.val_plot_df = plot_df.copy()
         plot_df = plot_df.groupby(level=0).last()
         plot_df = (
             df_wide[series]
@@ -3031,19 +3029,26 @@ or otherwise increase models available."""
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
             plot_df = plot_df[plot_df.index <= end_date]
+        # try to make visible (if not quite right) on a short forecast
+        if self.forecast_length == 1:
+            if plot_df.shape[0] > 3:
+                plot_df.loc[:, 'chosen'] = plot_df['chosen'].fillna(
+                    method='bfill', limit=1
+                )
         # actual plotting section
         if colors is not None:
             # this will need to change is users are allowed to input colors
             ax = plot_df[['actuals', 'chosen']].plot(
                 title=title, color=colors, **kwargs
             )
-            ax.fill_between(
-                plot_df.index,
-                plot_df['chosen_upper'],
-                plot_df['chosen_lower'],
-                alpha=alpha,
-                color="#A5ADAF",
-            )
+            if include_bounds:
+                ax.fill_between(
+                    plot_df.index,
+                    plot_df['chosen_upper'],
+                    plot_df['chosen_lower'],
+                    alpha=alpha,
+                    color="#A5ADAF",
+                )
         else:
             ax = plot_df.plot(title=title, **kwargs)
         ax.vlines(
@@ -3249,6 +3254,210 @@ or otherwise increase models available."""
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
+
+    def diagnose_params(self, target='runtime'):
+        """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
+
+        Args:
+            target (str): runtime, smape, mae, oda, or exception, the measured outcome to correlate parameters with
+        """
+
+        from autots.tools.transform import transformer_dict
+        from sklearn.linear_model import Lasso, ElasticNet
+        from sklearn.preprocessing import StandardScaler
+
+        initial_results = self.results()
+        all_trans = list(transformer_dict.keys())
+        all_trans = [x for x in all_trans if x is not None]
+        master_df = []
+        res = []
+        mas_trans = []
+        for x in initial_results['Model'].unique():
+            if x not in ["Ensemble"]:
+                set_mod = initial_results[initial_results['Model'] == x]
+                # pull all transformations
+                for idx, row in set_mod.iterrows():
+                    t = pd.Categorical(
+                        list(
+                            set(
+                                json.loads(row['TransformationParameters'])[
+                                    'transformations'
+                                ].values()
+                            )
+                        ),
+                        categories=all_trans,
+                    )
+                    mas_trans.append(
+                        pd.get_dummies(t).max(axis=0).to_frame().transpose()
+                    )
+                    y = pd.json_normalize(json.loads(row["ModelParameters"]))
+                    y.index = [row['ID']]
+                    y[
+                        'Model'
+                    ] = x  # might need to remove this and do analysis independently for each
+                    res.append(
+                        pd.DataFrame(
+                            {
+                                'runtime': row['TotalRuntimeSeconds'],
+                                'smape': row['smape'],
+                                'mae': row['mae'],
+                                'exception': int(not pd.isnull(row['Exceptions'])),
+                                'oda': row['oda'],
+                            },
+                            index=[row['ID']],
+                        )
+                    )
+                    master_df.append(y)
+        master_df = pd.concat(master_df, axis=0)
+        mas_trans = pd.concat(mas_trans, axis=0)
+        mas_trans.index = master_df.index
+        res = pd.concat(res, axis=0)
+        self.lasso_X = pd.concat(
+            [
+                pd.get_dummies(master_df.astype(str)),
+                mas_trans.rename(columns=lambda x: "Transformer_" + x),
+            ],
+            axis=1,
+        )
+        self.lasso_X['intercept'] = 1
+
+        # target = 'runtime'
+        y = res[target]
+        y = y.dropna(how='any')
+        # Standardize the features
+        scaler = StandardScaler()
+        X_train = self.lasso_X.fillna(0)
+        X_train = X_train[X_train.index.isin(y.index)]
+        X_train_scaled = scaler.fit_transform(X_train)
+        feature_names = self.lasso_X.columns.tolist()
+
+        preprocess = True
+        try:
+            from flaml import AutoML
+
+            # Initialize FLAML AutoML instance
+            automl = AutoML()
+
+            # Specify the task as regression and the estimator as xgboost
+            if target in ['exception']:
+                settings = {
+                    "time_budget": 60,  # in seconds
+                    "metric": 'accuracy',
+                    "task": 'classification',
+                    "estimator_list": ['xgboost'],
+                    "verbose": 1,
+                }
+            else:
+                settings = {
+                    "time_budget": 60,  # in seconds
+                    "metric": 'mae',
+                    "task": 'regression',
+                    "estimator_list": [
+                        'xgboost'
+                    ],  # specify xgboost as the estimator, extra_tree
+                    "verbose": 1,
+                    # "preprocess": preprocess,
+                }
+            # Train with FLAML
+            automl.fit(X_train, y, **settings)
+            print("##########################################################")
+            print(
+                f"FLAML loss: {automl.best_loss:.3f} vs avg runtime {res['runtime'].mean():.3f}"
+            )
+            shap_X = automl._preprocess(X_train)
+            feature_names = shap_X.columns
+            bst = automl.model.estimator
+        except Exception as e:
+            print(repr(e))
+            from sklearn.ensemble import ExtraTreesRegressor
+
+            # replace with most likely present scikit-learn
+            # bst = xgb.XGBRegressor(objective ='reg:linear', n_estimators=10, seed=123)
+            bst = ExtraTreesRegressor(
+                max_features=0.63857,
+                max_leaf_nodes=81,
+                n_estimators=5,
+                n_jobs=-1,
+                random_state=12032022,
+            )
+            bst = bst.fit(X_train, y)
+            shap_X = X_train
+
+        try:
+            import shap
+
+            # Compute SHAP values
+            explainer = shap.Explainer(bst, feature_names=feature_names)
+            shap_values = explainer(shap_X)
+            # Plot summary plot
+            shap.summary_plot(shap_values, shap_X, feature_names=feature_names)
+            # Plot SHAP values for a single prediction
+            try:
+                shap.plots.waterfall(shap_values[0], max_display=15)
+                shap.plots.waterfall(shap_values[1], max_display=15)
+                shap.plots.waterfall(shap_values[2], max_display=15)
+            except Exception:
+                pass
+
+            # Compute the mean absolute SHAP value for each feature
+            mean_shap_values = np.abs(shap_values.values).mean(axis=0)
+            # Pair the feature names with their mean absolute SHAP values in a list of tuples
+            feature_shap_pairs = list(zip(feature_names, mean_shap_values))
+            # Sort the list of tuples by the SHAP values from smallest to largest
+            sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
+            # Print the sorted pairs
+            print("Sorted Mean Absolute SHAP Values for Feature Importance:")
+            for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
+                print(f"{feature}: {mean_shap} impact (not direction)")
+
+            # Compute the mean SHAP value for each feature
+            mean_shap_values = shap_values.values.mean(axis=0)
+            # Pair the feature names with their mean SHAP values in a list of tuples
+            feature_shap_pairs = list(zip(feature_names, mean_shap_values))
+            # Sort the list of tuples by the SHAP values from smallest to largest
+            sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
+            # Print the sorted pairs
+            print("Sorted Mean SHAP Values for Feature Importance:")
+            for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
+                print(f"{feature}: {mean_shap}")
+        except Exception as e:
+            print(repr(e))
+            mean_shap_values = 0
+
+        # IF the outcome is a 0/1 flag
+        if target in ['exception']:
+            from sklearn.linear_model import LogisticRegression
+
+            self.lasso = LogisticRegression(
+                penalty='l1', solver='saga', C=10
+            )  # C=10 is the inverse of alpha\
+        # elif target == "smape":
+        #     self.lasso = ElasticNet(alpha=1.0, l1_ratio=0.5, random_state=0)
+        else:
+            # Fit a Lasso regression model
+            self.lasso = Lasso(alpha=0.01)
+        self.lasso.fit(shap_X if preprocess else X_train_scaled, y)
+
+        lasso_coef = self.lasso.coef_.flatten()
+        # Pair the feature names with their coefficients in a list of tuples
+        feature_coef_pairs = list(zip(feature_names, lasso_coef))
+        # Sort the list of tuples by the coefficient values from smallest to largest
+        sorted_feature_coef_pairs = sorted(feature_coef_pairs, key=lambda x: x[1])
+        # Print the sorted pairs
+        print("Sorted Lasso Coefficients for Feature Importance:")
+        for feature, coef in sorted_feature_coef_pairs[-10:]:
+            print(f"{feature}: {coef:.4f}")
+
+        param_impact = pd.DataFrame(
+            {"shap_value": mean_shap_values, "lasso_value": lasso_coef},
+            index=feature_names,
+        )
+        # give two different approaches for runtime
+        if target not in ['exception']:
+            lasso2 = ElasticNet(alpha=1.0, l1_ratio=0.5, random_state=0)
+            lasso2.fit(shap_X if preprocess else X_train_scaled, y)
+            param_impact['elastic_value'] = lasso2.coef_.flatten()
+        return param_impact.copy().rename(columns=lambda x: f"{target}_" + str(x))
 
 
 colors_list = [

@@ -427,6 +427,7 @@ class PredictionObject(object):
         title=None,
         vline=None,
         colors=None,
+        include_bounds=True,
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -441,6 +442,7 @@ class PredictionObject(object):
             vline (datetime): datetime of dashed vertical line to plot
             colors (dict): colors mapping dictionary col: color
             alpha (float): intensity of bound interval shading
+            include_bounds (bool): if True, shows region of upper and lower forecasts
             **kwargs passed to pd.DataFrame.plot()
         """
         if start_date == "auto":
@@ -458,6 +460,11 @@ class PredictionObject(object):
             interpolate=interpolate,
             start_date=start_date,
         )
+        if self.forecast_length == 1 and 'actuals' in plot_df.columns:
+            if plot_df.shape[0] > 3:
+                plot_df['forecast'].iloc[-2] = plot_df['actuals'].iloc[-2]
+        if 'actuals' not in plot_df.columns:
+            plot_df['actuals'] = np.nan
         if colors is None:
             colors = {
                 'low_forecast': '#A5ADAF',
@@ -483,13 +490,14 @@ class PredictionObject(object):
             title = f"{series} with model {title_prelim}"
 
         ax = plot_df[['actuals', 'forecast']].plot(title=title, color=colors, **kwargs)
-        ax.fill_between(
-            plot_df.index,
-            plot_df['up_forecast'],
-            plot_df['low_forecast'],
-            alpha=alpha,
-            color="#A5ADAF",
-        )
+        if include_bounds:
+            ax.fill_between(
+                plot_df.index,
+                plot_df['up_forecast'],
+                plot_df['low_forecast'],
+                alpha=alpha,
+                color="#A5ADAF",
+            )
         if vline is not None:
             ax.vlines(
                 x=vline,
@@ -511,8 +519,9 @@ class PredictionObject(object):
         title="AutoTS Forecasts",
         cols=None,
         colors=None,
+        include_bounds=True,
     ):
-        """Plots multiple series in a grid, if present."""
+        """Plots multiple series in a grid, if present. Mostly identical args to the single plot function."""
         import matplotlib.pyplot as plt
 
         if cols is None:
@@ -547,6 +556,7 @@ class PredictionObject(object):
                         interpolate=interpolate,
                         start_date=start_date,
                         colors=colors,
+                        include_bounds=include_bounds,
                         ax=ax,
                     )
                     count += 1

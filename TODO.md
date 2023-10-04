@@ -12,15 +12,15 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.0 ♨️♨️♨️
-* import_best_model and fit_data
-* added canberra distance to SeasonalityMotif and MetricMotif
-* DatepartRegressionTransformer now handles NaN in input data
-* new DatepartRegression and SeasonalityMotif based imputers
-* LevelShiftMagic transformer added
-* adjusted automatic resampling to be performed only when necessary (to avoid filling NA with 0 bug and aggfunc='sum')
-* fixed a bug where if a full validation round fails, best model selection fails
-* macro_micro to LocalLinearTrend
+# 0.6.1 ✨✨✨
+* CenterSplit transformer added
+* separated function for best model selection
+* improved graphing when forecast_length == 1
+* quieter Prophet
+* added PreprocessingRegression model
+* more KalmanStateSpace models
+* assorted bug fixes
+* added AutoTS diagnose_params
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

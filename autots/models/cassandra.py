@@ -48,6 +48,8 @@ except Exception:
         def ppf(x):
             return 1.6448536269514722
 
+        # norm.ppf((1 + 0.95) / 2)
+
 
 class Cassandra(ModelObject):
     """Explainable decomposition-based forecasting with advanced trend modeling and preprocessing.
@@ -214,7 +216,7 @@ class Cassandra(ModelObject):
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
-        self.scaler_std = np.std(df, axis=0)
+        self.scaler_std = np.std(df, axis=0).replace(0, 1)
         return (df - self.scaler_mean) / self.scaler_std
 
     def scale_data(self, df):
@@ -670,7 +672,7 @@ class Cassandra(ModelObject):
                 c_x['intercept'] = 1
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                self.params[col] = linear_model(
+                self.params[col] = fit_linear_model(
                     c_x, self.df[col].to_frame(), params=self.linear_model
                 )
                 trend_residuals.append(
@@ -694,7 +696,7 @@ class Cassandra(ModelObject):
             self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
             x_array['intercept'] = 1
             # run model
-            self.params = linear_model(x_array, self.df, params=self.linear_model)
+            self.params = fit_linear_model(x_array, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(
                 x_array[self.keep_cols], self.params[self.keep_cols_idx]
             )
@@ -1206,7 +1208,7 @@ class Cassandra(ModelObject):
         regressor_forecast_model=None,
         regressor_forecast_model_params=None,
         regressor_forecast_transformations=None,
-        include_history=True,
+        include_history=False,
         past_impacts=None,
     ):
         self.df = self.preprocesser.transform(self.df)
@@ -1709,7 +1711,7 @@ class Cassandra(ModelObject):
                     columns=self.past_impacts.columns,
                 )
                 if future_impacts is not None:
-                    future_impts = future_impts + future_impacts
+                    future_impts = ((1 + future_impts) * (1 + future_impacts)) - 1
             else:
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
@@ -1974,8 +1976,9 @@ class Cassandra(ModelObject):
                 'dwae_norm',
                 'quantile_norm',
                 'l1_positive',
+                'bayesian_linear',
             ],
-            [0.6, 0.2, 0.1, 0.05, 0.02, 0.03],
+            [0.6, 0.2, 0.1, 0.05, 0.02, 0.05, 0.1],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -1999,6 +2002,22 @@ class Cassandra(ModelObject):
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
                 'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
+                'method': random.choices(
+                    [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'SLSQP', 'Powell'],
+                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02],
+                )[0],
+            }
+        elif linear_model == "bayesian_linear":
+            linear_model = {
+                'model': "bayesian_linear",
+                'alpha': random.choices([1.0, 0.1, 10], [0.8, 0.1, 0.1])[0],
+                'gaussian_prior_mean': random.choices([0, 0.1, 1], [0.8, 0.08, 0.02])[
+                    0
+                ],
+                'wishart_prior_scale': random.choices([1.0, 0.1, 10], [0.8, 0.1, 0.1])[
+                    0
+                ],
+                'wishart_dof_excess': random.choices([0, 1, 5], [0.9, 0.05, 0.05])[0],
             }
         if method == "regressor":
             regressors_used = True
@@ -2026,7 +2045,7 @@ class Cassandra(ModelObject):
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
             if predefined:
-                seasonalities = random.choice(date_part_methods)
+                seasonalities = [random.choice(date_part_methods)]
             else:
                 comp_opts = datepart_components + [7, 365.25, 12]
                 seasonalities = random.choices(comp_opts, k=2)
@@ -2465,7 +2484,7 @@ def cost_function_l2(params, X, y):
 
 
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
-def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
+def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     """Any cost function version of lin reg."""
     # start with lstsq fit as estimated point
     x0 = lstsq_solve(X, y).flatten()
@@ -2482,11 +2501,18 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     else:
         cost_func = cost_function_l1
     return minimize(
-        cost_func, x0, args=(X, y), bounds=bounds, options={'maxiter': maxiter}
+        cost_func,
+        x0,
+        args=(X, y),
+        bounds=bounds,
+        method=method,
+        options={'maxiter': maxiter},
     ).x.reshape(X.shape[1], y.shape[1])
 
 
-def linear_model(x, y, params):
+def fit_linear_model(x, y, params=None):
+    if params is None:
+        params = {}
     model_type = params.get("model", "lstsq")
     lambd = params.get("lambda", None)
     rec = params.get("recency_weighting", None)
@@ -2512,6 +2538,7 @@ def linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="l1",
         )
     elif model_type == "quantile_norm":
@@ -2519,6 +2546,7 @@ def linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="quantile",
         )
     elif model_type == "dwae_norm":
@@ -2526,6 +2554,7 @@ def linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="dwae",
         )
     elif model_type == "l1_positive":
@@ -2533,10 +2562,108 @@ def linear_model(x, y, params):
             np.asarray(x),
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
+            method=params.get("method", None),
             cost_function="l1_positive",
         )
+    elif model_type == "bayesian_linear":
+        # this could support better probabilistic bounds but that is not yet done
+        model = BayesianMultiOutputRegression(
+            alpha=params.get("alpha", 1),
+            gaussian_prior_mean=params.get("gaussian_prior_mean", 0),
+            wishart_prior_scale=params.get("wishart_prior_scale", 1),
+            wishart_dof_excess=params.get("wishart_dof_excess", 0),
+        )
+        model.fit(X=np.asarray(x), Y=np.asarray(y))
+        return model.params
     else:
         raise ValueError("linear model not recognized")
+
+
+class BayesianMultiOutputRegression:
+    """Bayesian Linear Regression, conjugate prior update.
+
+    Args:
+        gaussian_prior_mean (float): mean of prior, a small positive value can encourage positive coefs which make better component plots
+        alpha (float): prior scale of gaussian covariance, effectively a regularization term
+        wishart_dof_excess (int): Larger values make the prior more peaked around the scale matrix.
+        wishart_prior_scale (float): A larger value means a smaller prior variance on the noise covariance, while a smaller value means more prior uncertainty about it.
+    """
+
+    def __init__(
+        self,
+        gaussian_prior_mean=0,
+        alpha=1.0,
+        wishart_prior_scale=1.0,
+        wishart_dof_excess=0,
+    ):
+        self.gaussian_prior_mean = gaussian_prior_mean
+        self.alpha = alpha
+        self.wishart_prior_scale = wishart_prior_scale
+        self.wishart_dof_excess = wishart_dof_excess
+
+    def fit(self, X, Y):
+        n_samples, n_features = X.shape
+        n_outputs = Y.shape[1]
+
+        # Prior for the regression coefficients: Gaussian
+        # For Ridge regularization: Set the diagonal elements to alpha
+        self.m_0 = (
+            np.zeros((n_features, n_outputs)) + self.gaussian_prior_mean
+        )  # Prior mean
+        self.S_0 = self.alpha * np.eye(n_features)  # Prior covariance
+
+        # Prior for the precision matrix (inverse covariance): Wishart
+        self.nu_0 = n_features + self.wishart_dof_excess  # Degrees of freedom
+        self.W_0_inv = self.wishart_prior_scale * np.eye(
+            n_outputs
+        )  # Scale matrix (inverse)
+
+        # Posterior for the regression coefficients
+        S_0_inv = np.linalg.inv(self.S_0)
+        S_n_inv = S_0_inv + X.T @ X
+        S_n = np.linalg.inv(S_n_inv)
+        m_n = S_n @ (S_0_inv @ self.m_0 + X.T @ Y)
+
+        # Posterior for the precision matrix
+        nu_n = self.nu_0 + n_samples
+        W_n_inv = (
+            self.W_0_inv
+            + Y.T @ Y
+            + self.m_0.T @ S_0_inv @ self.m_0
+            - m_n.T @ S_n_inv @ m_n
+        )
+
+        self.m_n = self.params = m_n
+        self.S_n = S_n
+        self.nu_n = nu_n
+        self.W_n_inv = W_n_inv
+
+    def predict(self, X, return_std=False):
+        Y_pred = X @ self.m_n
+        if return_std:
+            # Average predictive variance for each output dimension
+            Y_var = (
+                np.einsum('ij,jk,ik->i', X, self.S_n, X)
+                + np.trace(np.linalg.inv(self.nu_n * self.W_n_inv))
+                / self.W_n_inv.shape[0]
+            )
+            return Y_pred, np.sqrt(Y_var)
+        return Y_pred
+
+    def sample_posterior(self, n_samples=1):
+        # from scipy.stats import wishart
+        # Sample from the posterior distribution of the coefficients
+        # beta_samples = np.random.multivariate_normal(self.m_n.ravel(), self.S_n, size=n_samples)
+        # Sample from the posterior distribution of the precision matrix
+        # precision_samples = wishart(df=self.nu_n, scale=np.linalg.inv(self.W_n_inv)).rvs(n_samples)
+        # return beta_samples, precision_samples
+
+        sampled_weights = np.zeros((n_samples, self.m_n.shape[0], self.m_n.shape[1]))
+        for i in range(self.m_n.shape[1]):
+            sampled_weights[:, :, i] = np.random.multivariate_normal(
+                self.m_n[:, i], self.S_n, n_samples
+            )
+        return sampled_weights
 
 
 # Seasonalities
