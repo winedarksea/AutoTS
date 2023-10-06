@@ -12,15 +12,8 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.1 ✨✨✨
-* CenterSplit transformer added
-* separated function for best model selection
-* improved graphing when forecast_length == 1
-* quieter Prophet
-* added PreprocessingRegression model
-* more KalmanStateSpace models
-* assorted bug fixes
-* added AutoTS diagnose_params
+# 0.6.2 🏡🏡🏡
+* FFTFilter added
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

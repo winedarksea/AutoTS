@@ -3814,6 +3814,85 @@ class CenterSplit(EmptyTransformer):
         }
 
 
+class FFTFilter(EmptyTransformer):
+    """Vaguely Croston inspired approach separating occurrence from magnitude.
+
+    Args:
+        cutoff (float): smoothign value
+    """
+
+    def __init__(
+        self,
+        cutoff: float = 0.1,
+        reverse: bool = False,
+        **kwargs,
+    ):
+        super().__init__(name="FFTFilter")
+        self.cutoff = cutoff
+        self.reverse = reverse
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        data = df.to_numpy()
+        spectrum = np.fft.fft(data, axis=0)
+        frequencies = np.fft.fftfreq(data.shape[0])
+
+        # Zero out components beyond the cutoff
+        if self.reverse:
+            spectrum[np.abs(frequencies) < self.cutoff] = 0
+        else:
+            spectrum[np.abs(frequencies) > self.cutoff] = 0
+
+        # Inverse FFT to get the smoothed data
+        smoothed_data = np.real(np.fft.ifft(spectrum, axis=0))
+        return pd.DataFrame(smoothed_data, index=df.index, columns=df.columns)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "cutoff": random.choices([0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8], [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1])[0],
+            "reverse": random.choices([False, True], [0.9, 0.1])[0]
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3886,6 +3965,7 @@ have_params = {
     "LevelShiftMagic": LevelShiftMagic,
     "LevelShiftTransformer": LevelShiftTransformer,
     "CenterSplit": CenterSplit,
+    "FFTFilter": FFTFilter,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -3982,6 +4062,7 @@ class GeneralTransformer(object):
             'RegressionFilter': fit seasonal removal and local linear trend, clip std devs away from this fit
             'LevelShiftTransformer': automatically compensate for historic level shifts in data.
             'CenterSplit': Croston inspired magnitude/occurrence split for intermittent
+            "FFTFilter": filter using a fast fourier transform
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4414,6 +4495,7 @@ transformer_dict = {
     'RegressionFilter': 0.07,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
+    "FFTFilter": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -4455,6 +4537,7 @@ filters = {
     "KalmanSmoothing": 0.1,
     "ClipOutliers": 0.1,
     "RegressionFilter": 0.05,
+    "FFTFilter": 0.01,
 }
 scalers = {
     "MinMaxScaler": 0.05,

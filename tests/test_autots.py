@@ -622,7 +622,9 @@ class ModelTest(unittest.TestCase):
             'AnomalyRemoval', "HolidayTransformer",  # new 0.5.0
             'LocalLinearTrend',  # new 0.5.1
             "KalmanSmoothing",  # new 0.5.1
-            # "RegressionFilter"   # new 0.5.7
+            # "RegressionFilter",   # new 0.5.7
+            # "CenterSplit",   # new 0.6.1
+            # "FFTFilter",  # new 0.6.2
         ]
 
         timings = {}
