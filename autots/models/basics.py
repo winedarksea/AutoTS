@@ -2711,3 +2711,158 @@ class SeasonalityMotif(ModelObject):
             "k": self.k,
             "datepart_method": self.datepart_method,
         }
+
+
+def fourierExtrapolation_matrix(df, forecast_length, n_harm=10, detrend='linear', freq_range=None):
+    x = df.to_numpy()
+    m, n = x.shape
+    t = np.arange(0, m)
+    
+    # Detrend
+    if detrend == 'linear':
+        p = np.polyfit(t, x, 1).T
+        x_notrend = x - np.outer(t, p[:, 0])
+    elif detrend == 'quadratic':
+        p = np.polyfit(t, x, 2).T
+        x_notrend = x - np.outer(t**2, p[:, 0]) - np.outer(t, p[:, 1])
+    elif detrend is None:
+        x_notrend = x
+    else:
+        raise ValueError(f"Unsupported detrend option: {detrend}")
+    
+    # FFT
+    x_freqdom = np.fft.fft(x_notrend, axis=0)
+    
+    # Frequencies and sorted indices
+    f = np.fft.fftfreq(m)
+    indexes = np.argsort(np.abs(f))
+    
+    # Frequency range filtering
+    if freq_range:
+        low, high = freq_range
+        indexes = [i for i in indexes if low <= np.abs(f[i]) <= high]
+    
+    t_extended = np.arange(0, m + forecast_length)
+    restored_sig = np.zeros((t_extended.size, n))
+    
+    # Use harmonics to reconstruct signal
+    for i in indexes[:1 + n_harm * 2]:
+        ampli = np.abs(x_freqdom[i]) / m
+        phase = np.angle(x_freqdom[i])
+        restored_sig += (ampli * np.cos(2 * np.pi * f[i] * t_extended[:, None] + phase))
+
+    # Add trend back
+    if detrend == 'linear':
+        return pd.DataFrame((restored_sig + np.outer(t_extended, p[:, 0]))[-forecast_length:], columns=df.columns)
+    elif detrend == 'quadratic':
+        return pd.DataFrame((restored_sig + np.outer(t_extended**2, p[:, 0]) + np.outer(t_extended, p[:, 1]))[-forecast_length:], columns=df.columns)
+    else:
+        return pd.DataFrame(restored_sig[-forecast_length:], columns=df.columns)
+
+
+class FFT(ModelObject):
+    def __init__(
+        self,
+        name: str = "FFT",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2023,
+        verbose: int = 0,
+        n_harmonics: int = 10,
+        detrend: str = "linear",
+        **kwargs,
+    ):
+        """Fast Fourier Transform forecast.
+        
+        Args:
+            n_harmonics (int): number of frequencies to include
+            detrend (str): None, 'linear', or 'quadratic', use if no other detrending already done
+        """
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+        )
+        assert n_harmonics >= 2, f"n_harmonics {n_harmonics} must be >= 2"
+        self.n_harmonics = int(n_harmonics)
+        self.detrend = detrend
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+            regressor (numpy.Array): additional regressor
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        forecast = fourierExtrapolation_matrix(
+            self.df, forecast_length, n_harm=self.n_harmonics, detrend=self.detrend
+        )
+        forecast.index = test_index
+        if just_point_forecast:
+            return forecast
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        return {
+            "n_harmonics": random.choices(
+                [2, 4, 6, 10, 20, 100, 5000], [0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+            "detrend": random.choices([None, "linear", 'quadratic'], [0.1, 0.8, 0.1])[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "n_harmonics": self.n_harmonics,
+            "detrend": self.detrend,
+        }

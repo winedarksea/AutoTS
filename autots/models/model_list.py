@@ -42,6 +42,7 @@ all_models = [
     'SeasonalityMotif',
     'MLEnsemble',
     'PreprocessingRegression',
+    'FFT',
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -106,6 +107,7 @@ fast = {
     'MetricMotif': 1,
     'Cassandra': 1,
     'SeasonalityMotif': 1,
+    'FFT': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -235,6 +237,7 @@ recombination_approved = [
     'Cassandra',
     'SeasonalityMotif',
     'PreprocessingRegression',
+    'FFT',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -259,6 +262,7 @@ no_shared = [
     'KalmanStateSpace',
     'MetricMotif',
     'SeasonalityMotif',
+    'FFT',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [

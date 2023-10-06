@@ -39,6 +39,7 @@ from autots.models.basics import (
     KalmanStateSpace,
     MetricMotif,
     SeasonalityMotif,
+    FFT,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -644,6 +645,16 @@ def ModelMonster(
             verbose=verbose,
             n_jobs=n_jobs,
             multivariate=parameters.get("multivariate", False),
+            **parameters,
+        )
+    elif model == "FFT":
+        return FFT(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
             **parameters,
         )
     else:
