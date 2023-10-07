@@ -1108,7 +1108,7 @@ def looped_motif(
     if distance_metric == "kdtree":
         from scipy.spatial import KDTree
         # Build a KDTree for Xb
-        tree = KDTree(Xa)
+        tree = KDTree(Xa, leafsize=14)
         # Query the KDTree to find k nearest neighbors for each point in Xa
         A, idx = tree.query(Xb, k=k)
         idx = idx.flatten()
@@ -2363,6 +2363,15 @@ class MetricMotif(ModelObject):
                 scores = np.nanmean(np.abs(temp - last_window.T) / divisor, axis=2)
             else:
                 scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
+        elif distance_metric == "minkowski":
+            p = 2
+            scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1/p)
+        elif distance_metric == "cosine":
+            scores = 1 - np.sum(temp * last_window.T, axis=2) / (np.linalg.norm(temp, axis=2) * np.linalg.norm(last_window.T, axis=2))
+        elif distance_metric == "euclidean":
+            scores = np.sqrt(np.sum((temp - last_window.T)**2, axis=2))
+        elif distance_metric == "chebyshev":
+            scores = np.max(np.abs(temp - last_window.T), axis=2)
         elif distance_metric == "mqae":
             q = 0.85
             ae = np.abs(temp - last_window.T)
@@ -2479,7 +2488,15 @@ class MetricMotif(ModelObject):
             'mqae',
             'mse',
             "canberra",
+            "minkowski",
+            "euclidean",
+            "chebyshev",
         ]
+        comparisons = filters.copy()
+        comparisons['CenterLastValue'] = 0.05
+        comparisons['StandardScaler'] = 0.05
+        combinations = filters.copy()
+        combinations['AlignLastValue'] = 0.1
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -2498,7 +2515,7 @@ class MetricMotif(ModelObject):
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
             "comparison_transformation": RandomTransform(
-                transformer_list=filters, transformer_max_depth=1, allow_none=True
+                transformer_list=comparisons, transformer_max_depth=1, allow_none=True
             ),
             "combination_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=1, allow_none=True

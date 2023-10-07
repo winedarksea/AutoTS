@@ -453,6 +453,9 @@ class PredictionObject(object):
                 start_date = df_wide.index[slx]
             else:
                 start_date = self.forecast.index[0]
+
+        if series is None:
+            series = random.choice(self.forecast.columns)
         plot_df = self.plot_df(
             df_wide=df_wide,
             series=series,
