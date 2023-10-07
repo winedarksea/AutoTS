@@ -1105,9 +1105,17 @@ def looped_motif(
     # model.fit(Xa)
     # model.kneighbors(Xb)
 
-    A = cdist(Xa, Xb, metric=distance_metric)
-    # lowest values
-    idx = np.argpartition(A, k, axis=0)[:k].flatten()
+    if distance_metric == "kdtree":
+        from scipy.spatial import KDTree
+        # Build a KDTree for Xb
+        tree = KDTree(Xa)
+        # Query the KDTree to find k nearest neighbors for each point in Xa
+        A, idx = tree.query(Xb, k=k)
+        idx = idx.flatten()
+    else:
+        A = cdist(Xa, Xb, metric=distance_metric)
+        # lowest values
+        idx = np.argpartition(A, k, axis=0)[:k].flatten()
     # distances for weighted mean
     results = y[idx]
     if point_method == "weighted_mean":
@@ -1331,6 +1339,7 @@ class Motif(ModelObject):
             'sokalsneath',
             'sqeuclidean',
             'yule',
+            'kdtree',
         ]
         if method == "event_risk":
             k_choice = random.choices(

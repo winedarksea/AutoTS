@@ -14,6 +14,8 @@
 
 # 0.6.2 🏡🏡🏡
 * FFTFilter added
+* FFT forecast added
+* kdtree to Univariate/Multivariate Motif
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
