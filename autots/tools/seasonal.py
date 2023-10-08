@@ -519,6 +519,13 @@ def seasonal_window_match(
         divisor = np.abs(temp) + np.abs(last_window.T)
         divisor[divisor == 0] = 1
         scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
+    elif distance_metric == "minkowski":
+        p = 2
+        scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1/p)
+    elif distance_metric == "euclidean":
+        scores = np.sqrt(np.sum((temp - last_window.T)**2, axis=2))
+    elif distance_metric == "chebyshev":
+        scores = np.max(np.abs(temp - last_window.T), axis=2)
     elif distance_metric == "mqae":
         q = 0.85
         ae = np.abs(temp - last_window.T)
@@ -568,6 +575,13 @@ def seasonal_independent_match(
         divisor = np.abs(a) + np.abs(b)
         divisor[divisor == 0] = 1
         scores = np.mean(np.abs(a - b) / divisor, axis=2)
+    elif distance_metric == "minkowski":
+        p = 2
+        scores = np.sum(np.abs(a - b) ** p, axis=2) ** (1/p)
+    elif distance_metric == "euclidean":
+        scores = np.sqrt(np.sum((a - b)**2, axis=2))
+    elif distance_metric == "chebyshev":
+        scores = np.max(np.abs(a - b), axis=2)
     elif distance_metric == "mqae":
         q = 0.85
         ae = np.abs(a - b)

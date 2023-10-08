@@ -852,9 +852,11 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  MultivariateRegression | sklearn      | lightgbm, tensorflow    |    True       |     sklearn     | some  | True         |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  PreprocessingRegression | sklearn     |                         |    False      |                 |       |              |              | True          |
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
 |  MetricMotif, SeasonalityMotif |       |                         |    True       |                 |       |              |              |               |
+|  BallTreeMultivariateMotif | sklearn, scipy |                    |    True       |                 |       | True         |              |               |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  RRVAR, MAR, TMF        |              |                         |               |                 |       | True         |              |               |
 |  LATC                   |              |                         |               |                 |       | True         |              |               |
@@ -863,6 +865,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
 |  KalmanStateSpace       |              |                         |    True       |                 |       |              |              |               |
+|  FFT                    |              |                         |    True       |                 |       |              |              |               |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

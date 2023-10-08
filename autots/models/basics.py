@@ -2547,6 +2547,7 @@ class SeasonalityMotif(ModelObject):
             "weighted_mean", "mean", "median", "midhinge"
         distance_metric (str): mae, mqae, mse
         k (int): number of closest neighbors to consider
+        independent (bool): if True, each time step is separate. This is the one motif that can then handle large forecast_length to short historical data.
     """
 
     def __init__(
@@ -2694,6 +2695,8 @@ class SeasonalityMotif(ModelObject):
             'mqae',
             'mse',
             'canberra',
+            'minkowski',
+            'chebyshev',
         ]
         if method == "event_risk":
             k_choice = random.choices(
@@ -2891,4 +2894,188 @@ class FFT(ModelObject):
         return {
             "n_harmonics": self.n_harmonics,
             "detrend": self.detrend,
+        }
+
+
+class BallTreeMultivariateMotif(ModelObject):
+    """Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+    Many of these motifs will struggle when the forecast_length is large and history is short.
+
+    Args:
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        n_jobs (int): how many parallel processes to run
+        random_seed (int): used in selecting windows if max_windows is less than total available
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): all valid values for scipy cdist
+        k (int): number of closest neighbors to consider
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        n_jobs: int = 1,
+        window: int = 5,
+        point_method: str = "mean",
+        distance_metric: str = "canberra",
+        k: int = 10,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            "BallTreeMultivariateMotif",
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.window = window
+        self.point_method = point_method
+        self.distance_metric = distance_metric
+        self.k = k
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        # keep this at top so it breaks quickly if missing version
+        x = sliding_window_view(
+            self.df.to_numpy(), self.window + forecast_length, axis=0
+        )
+        Xa = x.reshape(-1, x.shape[-1])
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        if self.distance_metric in ["euclidean", 'kdtree']:
+            from scipy.spatial import KDTree
+            # Build a KDTree for Xb
+            tree = KDTree(Xa[:, :self.window], leafsize=40)
+        else:
+            from sklearn.neighbors import BallTree
+            tree = BallTree(Xa[:, :self.window], metric=self.distance_metric)
+            # Query the KDTree to find k nearest neighbors for each point in Xa
+        Xb = self.df.iloc[-self.window :].to_numpy().T
+        A, idx = tree.query(Xb, k=self.k)
+        # (k, forecast_length, n_series)
+        self.result_windows = Xa[idx][:, :, self.window:].transpose(1, 2, 0)
+
+        # now aggregate results into point and bound forecasts
+        if self.point_method == "weighted_mean":
+            weights = np.repeat(A.T[..., np.newaxis, :], 14, axis=1)
+            if weights.sum() == 0:
+                weights = None
+            forecast = np.average(self.result_windows, axis=0, weights=weights)
+        elif self.point_method == "mean":
+            forecast = np.nanmean(self.result_windows, axis=0)
+        elif self.point_method == "median":
+            forecast = np.nanmedian(self.result_windows, axis=0)
+        elif self.point_method == "midhinge":
+            q1 = nan_quantile(self.result_windows, q=0.25, axis=0)
+            q2 = nan_quantile(self.result_windows, q=0.75, axis=0)
+            forecast = (q1 + q2) / q2
+        elif self.point_method == 'closest':
+            # assumes the first K is the smallest distance (true when written)
+            forecast = self.result_windows[0]
+
+        pred_int = round((1 - self.prediction_interval) / 2, 5)
+        upper_forecast = nan_quantile(self.result_windows, q=(1 - pred_int), axis=0)
+        lower_forecast = nan_quantile(self.result_windows, q=pred_int, axis=0)
+        
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            lower_forecast, index=test_index, columns=self.column_names
+        )
+        upper_forecast = pd.DataFrame(
+            upper_forecast, index=test_index, columns=self.column_names
+        )
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+        
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        metric_list = [
+            'braycurtis',
+            'canberra',
+            'chebyshev',
+            'cityblock',
+            'cosine',
+            'euclidean',
+            'hamming',
+            'mahalanobis',
+            'minkowski',
+            'kdtree',
+        ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.02, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
+        return {
+            "window": random.choices(
+                [2, 3, 5, 7, 10, 14, 28, 60],
+                [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
+            )[0],
+            "point_method": random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "closest"], [0.4, 0.2, 0.2, 0.2, 0.2]
+            )[0],
+            "distance_metric": random.choice(metric_list),
+            "k": k_choice,
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "window": self.window,
+            "point_method": self.point_method,
+            "distance_metric": self.distance_metric,
+            "k": self.k,
         }

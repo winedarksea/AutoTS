@@ -43,6 +43,7 @@ all_models = [
     'MLEnsemble',
     'PreprocessingRegression',
     'FFT',
+    "BallTreeMultivariateMotif",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -108,6 +109,7 @@ fast = {
     'Cassandra': 1,
     'SeasonalityMotif': 1,
     'FFT': 1,
+    "BallTreeMultivariateMotif": 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -194,6 +196,7 @@ multivariate = [
     'TMF',
     'LATC',
     'Cassandra',  # depends
+    'BallTreeMultivariateMotif',
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -238,6 +241,7 @@ recombination_approved = [
     'SeasonalityMotif',
     'PreprocessingRegression',
     'FFT',
+    'BallTreeMultivariateMotif',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -293,6 +297,7 @@ motifs = [
     'MotifSimulation',
     'MetricMotif',
     'SeasonalityMotif',
+    'BallTreeMultivariateMotif',
 ]
 regressions = [
     'RollingRegression',

@@ -40,6 +40,7 @@ from autots.models.basics import (
     MetricMotif,
     SeasonalityMotif,
     FFT,
+    BallTreeMultivariateMotif,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -649,6 +650,16 @@ def ModelMonster(
         )
     elif model == "FFT":
         return FFT(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "BallTreeMultivariateMotif":
+        return BallTreeMultivariateMotif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
