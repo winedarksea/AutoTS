@@ -1115,7 +1115,10 @@ def looped_motif(
     else:
         A = cdist(Xa, Xb, metric=distance_metric)
         # lowest values
-        idx = np.argpartition(A, k, axis=0)[:k].flatten()
+        if point_method == "closest":
+            idx = np.argsort(A, axis=0)[:k].flatten()
+        else:
+            idx = np.argpartition(A, k, axis=0)[:k].flatten()
     # distances for weighted mean
     results = y[idx]
     if point_method == "weighted_mean":
@@ -1131,6 +1134,10 @@ def looped_motif(
         q1 = nan_quantile(results, q=0.25, axis=0)
         q2 = nan_quantile(results, q=0.75, axis=0)
         forecast = (q1 + q2) / 2
+    elif point_method == "closest":
+        forecast = results[0]
+    else:
+        raise ValueError(f"distance_metric {distance_metric} not recognized")
 
     pred_int = (1 - prediction_interval) / 2
     upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
@@ -1328,7 +1335,7 @@ class Motif(ModelObject):
             'hamming',
             'jaccard',
             'jensenshannon',
-            'kulsinski',
+            # 'kulsinski',
             'mahalanobis',
             'matching',
             'minkowski',
