@@ -18,6 +18,7 @@ from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.transform import GeneralTransformer, RandomTransform, filters
+from autots.tools.fft import fourier_extrapolation
 
 
 # these are all optional packages
@@ -1335,7 +1336,6 @@ class Motif(ModelObject):
             'hamming',
             'jaccard',
             'jensenshannon',
-            # 'kulsinski',
             'mahalanobis',
             'matching',
             'minkowski',
@@ -1362,7 +1362,7 @@ class Motif(ModelObject):
                 [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
+                ["weighted_mean", "mean", "median", "midhinge", "closest"], [0.4, 0.2, 0.2, 0.2, 0.2]
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
@@ -2749,53 +2749,6 @@ class SeasonalityMotif(ModelObject):
         }
 
 
-def fourierExtrapolation_matrix(df, forecast_length, n_harm=10, detrend='linear', freq_range=None):
-    x = df.to_numpy()
-    m, n = x.shape
-    t = np.arange(0, m)
-    
-    # Detrend
-    if detrend == 'linear':
-        p = np.polyfit(t, x, 1).T
-        x_notrend = x - np.outer(t, p[:, 0])
-    elif detrend == 'quadratic':
-        p = np.polyfit(t, x, 2).T
-        x_notrend = x - np.outer(t**2, p[:, 0]) - np.outer(t, p[:, 1])
-    elif detrend is None:
-        x_notrend = x
-    else:
-        raise ValueError(f"Unsupported detrend option: {detrend}")
-    
-    # FFT
-    x_freqdom = np.fft.fft(x_notrend, axis=0)
-    
-    # Frequencies and sorted indices
-    f = np.fft.fftfreq(m)
-    indexes = np.argsort(np.abs(f))
-    
-    # Frequency range filtering
-    if freq_range:
-        low, high = freq_range
-        indexes = [i for i in indexes if low <= np.abs(f[i]) <= high]
-    
-    t_extended = np.arange(0, m + forecast_length)
-    restored_sig = np.zeros((t_extended.size, n))
-    
-    # Use harmonics to reconstruct signal
-    for i in indexes[:1 + n_harm * 2]:
-        ampli = np.abs(x_freqdom[i]) / m
-        phase = np.angle(x_freqdom[i])
-        restored_sig += (ampli * np.cos(2 * np.pi * f[i] * t_extended[:, None] + phase))
-
-    # Add trend back
-    if detrend == 'linear':
-        return pd.DataFrame((restored_sig + np.outer(t_extended, p[:, 0]))[-forecast_length:], columns=df.columns)
-    elif detrend == 'quadratic':
-        return pd.DataFrame((restored_sig + np.outer(t_extended**2, p[:, 0]) + np.outer(t_extended, p[:, 1]))[-forecast_length:], columns=df.columns)
-    else:
-        return pd.DataFrame(restored_sig[-forecast_length:], columns=df.columns)
-
-
 class FFT(ModelObject):
     def __init__(
         self,
@@ -2857,9 +2810,9 @@ class FFT(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        forecast = fourierExtrapolation_matrix(
-            self.df, forecast_length, n_harm=self.n_harmonics, detrend=self.detrend
-        )
+        forecast = pd.DataFrame(fourier_extrapolation(
+            self.df.to_numpy(), forecast_length, n_harm=self.n_harmonics, detrend=self.detrend
+        )[-forecast_length:], columns=self.df.columns)
         forecast.index = test_index
         if just_point_forecast:
             return forecast
@@ -2891,9 +2844,9 @@ class FFT(ModelObject):
         """Returns dict of new parameters for parameter tuning"""
         return {
             "n_harmonics": random.choices(
-                [2, 4, 6, 10, 20, 100, 5000], [0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1]
+                [2, 4, 6, 10, 20, 100, 1000, 5000], [0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1]
             )[0],
-            "detrend": random.choices([None, "linear", 'quadratic'], [0.1, 0.8, 0.1])[0],
+            "detrend": random.choices([None, "linear", 'quadratic'], [0.2, 0.7, 0.1])[0],
         }
 
     def get_params(self):

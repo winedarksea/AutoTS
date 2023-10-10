@@ -18,6 +18,7 @@ from autots.tools.window_functions import window_lin_reg_mean
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
+from autots.tools.fft import FFT as fft_class
 
 try:
     from joblib import Parallel, delayed
@@ -3815,10 +3816,11 @@ class CenterSplit(EmptyTransformer):
 
 
 class FFTFilter(EmptyTransformer):
-    """Vaguely Croston inspired approach separating occurrence from magnitude.
+    """Fit Fourier Transform and keep only lowest frequencies below cutoff
 
     Args:
-        cutoff (float): smoothign value
+        cutoff (float): smoothing value
+        reverse (bool): if True, keep highest frequencies only
     """
 
     def __init__(
@@ -3890,6 +3892,90 @@ class FFTFilter(EmptyTransformer):
         return {
             "cutoff": random.choices([0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8], [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1])[0],
             "reverse": random.choices([False, True], [0.9, 0.1])[0]
+        }
+
+
+class FFTDecomposition(EmptyTransformer):
+    """FFT decomposition, then removal, then extrapolation and addition.
+
+    Args:
+        n_harmnonics (float): number of frequencies to include
+        detrend (str): None, 'linear', or 'quadratic'
+    """
+
+    def __init__(
+        self,
+        n_harmonics: float = 0.1,
+        detrend: str = "linear",
+        **kwargs,
+    ):
+        super().__init__(name="FFTDecomposition")
+        self.n_harmonics = n_harmonics
+        self.detrend = detrend
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.df_columns = df.columns
+        self.df_index = df.index
+        self.freq = infer_frequency(df)
+        self.fft = fft_class(n_harm=self.n_harmonics, detrend=self.detrend)
+        self.fft.fit(df.to_numpy())
+        self.start_forecast_len = df.shape[0]
+        self._predict(forecast_length=self.start_forecast_len)
+        return df - self.predicted.reindex(df.index)
+
+    def _predict(self, forecast_length):
+        self.predicted = pd.DataFrame(self.fft.predict(forecast_length).real, columns=self.df_columns)
+        self.predicted.index = self.df_index.union(
+            pd.date_range(self.df_index[-1], periods=forecast_length + 1, freq=self.freq)
+        )
+        return self
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df - self.predicted.reindex(df.index)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if df.shape[0] > self.start_forecast_len:
+            self._predict(forecast_length=df.shape[0])
+        return df + self.predicted.reindex(df.index)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "n_harmonics": random.choices([None, 10, 20, 0.5, -0.5, -0.95, "mid10", "mid20"], [0.1, 0.3, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05])[0],
+            "detrend": random.choices([None, "linear", "quadratic"], [0.4, 0.3, 0.3])[0]
         }
 
 
@@ -3966,6 +4052,7 @@ have_params = {
     "LevelShiftTransformer": LevelShiftTransformer,
     "CenterSplit": CenterSplit,
     "FFTFilter": FFTFilter,
+    "FFTDecomposition": FFTDecomposition,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4063,6 +4150,7 @@ class GeneralTransformer(object):
             'LevelShiftTransformer': automatically compensate for historic level shifts in data.
             'CenterSplit': Croston inspired magnitude/occurrence split for intermittent
             "FFTFilter": filter using a fast fourier transform
+            "FFTDecomposition": remove FFT harmonics, later add back
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4496,6 +4584,7 @@ transformer_dict = {
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
+    "FFTDecomposition": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -4557,6 +4646,7 @@ decompositions = {
     "DatepartRegression": 0.05,
     "ClipOutliers": 0.05,
     "LocalLinearTrend": 0.03,
+    "FFTDecomposition": 0.02,
 }
 transformer_class = {}
 

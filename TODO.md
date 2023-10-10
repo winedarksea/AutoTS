@@ -18,6 +18,7 @@
 * kdtree to Univariate/Multivariate Motif
 * additional metrics to MetricMotif
 * added BallTreeMultivariateMotif model
+* added FFTDecomposition
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

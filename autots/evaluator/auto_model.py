@@ -751,6 +751,8 @@ class ModelPrediction(ModelObject):
                 'transformations': {},
                 'transformation_params': {},
             }
+        if self.transformation_dict is None:
+            self.transformation_dict = {}
         self.transformer_object = GeneralTransformer(
             **self.transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
         )
