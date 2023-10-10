@@ -29,7 +29,7 @@ additional = [
 	'prophet>=0.4.0',
 	'fredapi',
 	'tensorflow',
-	'xgboost',
+	'xgboost>=1.6',
 	'lightgbm',
 	'joblib',
 	'scipy',

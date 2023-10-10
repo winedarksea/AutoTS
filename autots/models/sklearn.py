@@ -398,7 +398,7 @@ def retrieve_regressor(
     elif model_class in ['xgboost', 'XGBRegressor']:
         import xgboost as xgb
 
-        if multioutput:
+        if False:  # this is no longer necessary in 1.6 and beyond
             regr = MultiOutputRegressor(
                 xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
@@ -780,23 +780,26 @@ def generate_regressor_params(
                 param_dict = {
                     "model": 'xgboost',
                     "model_params": {
-                        "objective": np.random.choice(
+                        "objective": random.choices(
                             ['count:poisson', 'reg:squarederror', 'reg:gamma'],
-                            p=[0.4, 0.5, 0.1],
-                            size=1,
-                        ).item(),
-                        "eta": np.random.choice([0.3], p=[1.0], size=1).item(),
-                        "min_child_weight": np.random.choice(
-                            [1, 2, 5], p=[0.8, 0.1, 0.1], size=1
-                        ).item(),
-                        "max_depth": np.random.choice(
-                            [3, 6, 9], p=[0.1, 0.8, 0.1], size=1
-                        ).item(),
-                        "subsample": np.random.choice(
-                            [1, 0.7, 0.5], p=[0.9, 0.05, 0.05], size=1
-                        ).item(),
+                            [0.4, 0.5, 0.1],
+                        )[0],
+                        "eta": random.choices([0.3], [1.0])[0],
+                        "min_child_weight": random.choices(
+                            [1, 2, 5], [0.8, 0.1, 0.1]
+                        )[0],
+                        "max_depth": random.choices(
+                            [3, 6, 9], [0.1, 0.8, 0.1]
+                        )[0],
+                        "subsample": random.choices(
+                            [1, 0.7, 0.5], [0.9, 0.05, 0.05]
+                        )[0],
                     },
                 }
+                # new vector trees
+                if random.choices([True, False], [0.2, 0.8])[0]:
+                    param_dict["multi_strategy"] = "multi_output_tree"
+                    param_dict["tree_method"] = "hist"
         elif model == 'MLP':
             solver = np.random.choice(
                 ['lbfgs', 'sgd', 'adam'], p=[0.5, 0.1, 0.4], size=1

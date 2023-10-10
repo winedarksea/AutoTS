@@ -19,6 +19,7 @@
 * additional metrics to MetricMotif
 * added BallTreeMultivariateMotif model
 * added FFTDecomposition
+* added ReplaceConstant
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

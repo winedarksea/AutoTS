@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
-from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.models.sklearn import generate_regressor_params, retrieve_regressor
 from autots.tools.anomaly_utils import (
@@ -3979,6 +3979,125 @@ class FFTDecomposition(EmptyTransformer):
         }
 
 
+class ReplaceConstant(EmptyTransformer):
+    """Replace constant, filling the NaN, then possibly reintroducing.
+    If reintroducion is used, it is unlikely inverse_transform will match original exactly.
+
+    Args:
+        constant (float): target to replace
+        fillna (str): None, and standard fillna methods of AutoTS
+        reintroduction_model (dict): if given, attempts to predict occurrence of constant and reintroduce
+    """
+
+    def __init__(
+        self,
+        constant: float = 0,
+        fillna: str = "linear",
+        reintroduction_model: str = None,
+        **kwargs,
+    ):
+        super().__init__(name="ReplaceConstant")
+        self.constant = constant
+        self.fillna = fillna
+        self.reintroduction_model = reintroduction_model
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.reintroduction_model is None:
+            return FillNA(df.replace(self.constant, np.nan), method=self.fillna, window=10)
+        else:
+            # goal is for y to be 0 for constant and 1 for everything else
+            y = 1 - np.where(df != self.constant, 0, 1)
+            X = date_part(
+                df.index,
+                method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
+            )
+            from sklearn.ensemble import RandomForestClassifier
+            params = self.reintroduction_model.get("model")
+            if params is None:
+                params = {}
+            self.model = RandomForestClassifier(**params)
+            self.model.fit(X, y)
+
+        # DATEPART 0/1 prediction
+
+        return 0
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return FillNA(df.replace(self.constant, np.nan), method=self.fillna, window=10)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.reintroduction_model is None:
+            return df
+        else:
+            X = date_part(
+                df.index,
+                method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
+            )
+            pred = pd.DataFrame(self.model.predict(X), index=df.index, columns=df.columns)
+            if self.constant == 0:
+                return df * pred
+            else:
+                return df.where(pred != 0, self.constant)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        reintroduction_model = random.choices([None, True], [0.5, 0.5])[0]
+        if reintroduction_model:
+            reintroduction_model = {}
+            reintroduction_model['datepart_method'] = random_datepart(method=method)
+            reintroduction_model['model'] = {}
+        return {
+            "constant": random.choices([0, 1], [0.9, 0.1])[0],
+            "reintroduction_model": reintroduction_model,
+            "fillna": random.choices(
+                [
+                    None,
+                    "linear",
+                    "SeasonalityMotifImputer",
+                    'pchip',
+                    'akima',
+                    'mean',
+                    'ffill',
+                    "SeasonalityMotifImputer1K",
+                ],
+                [0.2, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1],
+            )[0],
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4053,6 +4172,7 @@ have_params = {
     "CenterSplit": CenterSplit,
     "FFTFilter": FFTFilter,
     "FFTDecomposition": FFTDecomposition,
+    "ReplaceConstant": ReplaceConstant,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4151,6 +4271,7 @@ class GeneralTransformer(object):
             'CenterSplit': Croston inspired magnitude/occurrence split for intermittent
             "FFTFilter": filter using a fast fourier transform
             "FFTDecomposition": remove FFT harmonics, later add back
+            "ReplaceConstant": replace a value with NaN, optionally fillna then later reintroduce
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4540,31 +4661,31 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 # dictionary of probabilities for randomly choosen transformers
 transformer_dict = {
     None: 0.0,
-    "MinMaxScaler": 0.05,
+    "MinMaxScaler": 0.03,
     "PowerTransformer": 0.02,  # is noticeably slower at scale, if not tons
-    "QuantileTransformer": 0.05,
-    "MaxAbsScaler": 0.05,
+    "QuantileTransformer": 0.03,
+    "MaxAbsScaler": 0.03,
     "StandardScaler": 0.04,
-    "RobustScaler": 0.05,
+    "RobustScaler": 0.03,
     "PCA": 0.01,
     "FastICA": 0.01,
-    "Detrend": 0.1,  # slow with some params, but that's handled in get_params
+    "Detrend": 0.02,  # slow with some params, but that's handled in get_params
     "RollingMeanTransformer": 0.02,
     "RollingMean100thN": 0.01,  # old
-    "DifferencedTransformer": 0.07,
+    "DifferencedTransformer": 0.05,
     "SinTrend": 0.01,
     "PctChangeTransformer": 0.01,
     "CumSumTransformer": 0.02,
     "PositiveShift": 0.02,
     "Log": 0.01,
     "IntermittentOccurrence": 0.01,
-    "SeasonalDifference": 0.1,
+    "SeasonalDifference": 0.06,
     "cffilter": 0.01,
     "bkfilter": 0.05,
     "convolution_filter": 0.001,
     "HPFilter": 0.01,
     "DatepartRegression": 0.01,
-    "ClipOutliers": 0.05,
+    "ClipOutliers": 0.03,
     "Discretize": 0.01,
     "CenterLastValue": 0.01,
     "Round": 0.02,
@@ -4580,11 +4701,12 @@ transformer_dict = {
     'HolidayTransformer': 0.02,
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.04,
-    'RegressionFilter': 0.07,
+    'RegressionFilter': 0.03,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
     "FFTDecomposition": 0.01,
+    "ReplaceConstant": 0.005,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()

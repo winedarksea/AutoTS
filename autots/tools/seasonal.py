@@ -377,6 +377,7 @@ datepart_components = [
     "is_month_start",
     "is_quarter_start",
     "is_quarter_end",
+    "days_from_epoch",
 ]
 
 
@@ -473,6 +474,8 @@ def create_datepart_components(DTindex, seasonality):
         return pd.DataFrame({'is_quarter_start': DTindex.is_quarter_start})
     elif seasonality == "is_quarter_end":
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
+    elif seasonality == "days_from_epoch":
+        return (DTindex - pd.Timestamp('2000-01-01')).days.astype('int32')
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
@@ -496,6 +499,36 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         return ValueError(
             f"Seasonality `{seasonality}` not recognized. Must be int, float, or a select type string such as 'dayofweek'"
         )
+
+
+def random_datepart(method='random'):
+    """New random parameters for seasonality."""
+    seasonalities = random.choices(
+        [
+            "recurring",
+            "simple",
+            "expanded",
+            "simple_2",
+            "simple_binarized",
+            "expanded_binarized",
+            'common_fourier',
+            'common_fourier_rw',
+            "simple_poly",
+            [7, 365.25],
+            ["dayofweek", 365.25],
+            ['weekdayofmonth', 'common_fourier'],
+            "other",
+        ],
+        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.2],
+    )[0]
+    if seasonalities == "other":
+        predefined = random.choices([True, False], [0.5, 0.5])[0]
+        if predefined:
+            seasonalities = [random.choice(date_part_methods)]
+        else:
+            comp_opts = datepart_components + [7, 365.25, 12]
+            seasonalities = random.choices(comp_opts, k=2)
+    return seasonalities
 
 
 def seasonal_window_match(
