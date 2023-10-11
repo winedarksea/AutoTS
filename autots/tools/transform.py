@@ -6,7 +6,7 @@ import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
-from autots.models.sklearn import generate_regressor_params, retrieve_regressor
+from autots.models.sklearn import generate_regressor_params, retrieve_regressor, retrieve_classifier, generate_classifier_params
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
     detect_anomalies,
@@ -3975,7 +3975,7 @@ class FFTDecomposition(EmptyTransformer):
         """Generate new random parameters"""
         return {
             "n_harmonics": random.choices([None, 10, 20, 0.5, -0.5, -0.95, "mid10", "mid20"], [0.1, 0.3, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05])[0],
-            "detrend": random.choices([None, "linear", "quadratic"], [0.4, 0.3, 0.3])[0]
+            "detrend": random.choices([None, "linear", "quadratic", "cubic", "quartic"], [0.4, 0.3, 0.3, 0.1, 0.05])[0],
         }
 
 
@@ -3994,12 +3994,14 @@ class ReplaceConstant(EmptyTransformer):
         constant: float = 0,
         fillna: str = "linear",
         reintroduction_model: str = None,
+        n_jobs: int = 1,
         **kwargs,
     ):
         super().__init__(name="ReplaceConstant")
         self.constant = constant
         self.fillna = fillna
         self.reintroduction_model = reintroduction_model
+        self.n_jobs = n_jobs
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -4016,11 +4018,21 @@ class ReplaceConstant(EmptyTransformer):
                 df.index,
                 method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
             )
-            from sklearn.ensemble import RandomForestClassifier
-            params = self.reintroduction_model.get("model")
-            if params is None:
-                params = {}
-            self.model = RandomForestClassifier(**params)
+            if y.ndim < 2:
+                multioutput = False
+            elif y.shape[1] < 2:
+                multioutput = False
+            else:
+                multioutput = True
+
+            self.model = retrieve_classifier(
+                regression_model=self.reintroduction_model,
+                verbose=0,
+                verbose_bool=False,
+                random_seed=2023,
+                multioutput=multioutput,
+                n_jobs=self.n_jobs,
+            )
             self.model.fit(X, y)
             if False:
                 print(self.model.score(X, y))
@@ -4073,11 +4085,10 @@ class ReplaceConstant(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
-        reintroduction_model = random.choices([None, True], [0.5, 0.5])[0]
+        reintroduction_model = random.choices([None, True], [0.3, 0.7])[0]
         if reintroduction_model:
-            reintroduction_model = {}
+            reintroduction_model = generate_classifier_params()
             reintroduction_model['datepart_method'] = random_datepart(method=method)
-            reintroduction_model['model'] = {}
         return {
             "constant": random.choices([0, 1], [0.9, 0.1])[0],
             "reintroduction_model": reintroduction_model,
@@ -4138,6 +4149,7 @@ n_jobs_trans = {
     "SineTrend": SinTrend(),
     "AnomalyRemoval": AnomalyRemoval,
     'HolidayTransformer': HolidayTransformer,
+    'ReplaceConstant': ReplaceConstant,
 }
 # transformers with parameter pass through (internal only) MUST be here
 have_params = {

@@ -504,6 +504,52 @@ def retrieve_regressor(
         return regr
 
 
+def retrieve_classifier(
+    regression_model: dict = {
+        "model": 'RandomForest',
+        "model_params": {
+            'n_estimators': 300,
+            'min_samples_leaf': 1,
+            'bootstrap': False,
+        },
+    },
+    verbose: int = 0,
+    verbose_bool: bool = False,
+    random_seed: int = 2020,
+    n_jobs: int = 1,
+    multioutput: bool = True,
+):
+    """Convert a model param dict to model object for regression frameworks."""
+    model_class = regression_model.get('model', 'RandomForest')
+    model_param_dict = regression_model.get("model_params", {})
+    if model_class == "ExtraTrees":
+        from sklearn.ensemble import ExtraTreesClassifier
+
+        return ExtraTreesClassifier(
+            n_jobs=n_jobs, random_state=random_seed, **model_param_dict
+        )
+    elif model_class == 'DecisionTree':
+        from sklearn.tree import DecisionTreeClassifier
+
+        return DecisionTreeClassifier(random_state=random_seed, **model_param_dict)
+    elif model_class in ['xgboost', 'XGBClassifier']:
+        import xgboost as xgb
+
+        return xgb.XGBClassifier(
+            verbosity=verbose, **model_param_dict, n_jobs=n_jobs
+        )
+    elif model_class == "RandomForest":
+        from sklearn.ensemble import RandomForestClassifier
+
+        return RandomForestClassifier(
+            random_state=random_seed,
+            verbose=verbose_bool,
+            n_jobs=n_jobs,
+            **model_param_dict,
+        )
+    else:
+        raise ValueError(f"classifier {model_class} not a recognized option.")
+
 # models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict = {
     'RandomForest': 0.02,
@@ -711,6 +757,24 @@ lightgbmp2 = {
     },
 }
 
+classifier_prebuilt1 = {}
+
+
+def generate_classifier_params(
+    model_dict=None,
+    method="default",
+):
+    if model_dict is None:
+        model_dict = {'xgboost': 1, 'ExtraTrees': 1, 'RandomForest': 1}
+    regr_params = generate_regressor_params(
+        model_dict=model_dict, method=method,
+    )
+    if regr_params["model"] == 'xgboost':
+        regr_params['model_params'].pop('objective')
+    elif regr_params["model"] == 'ExtraTrees':
+        regr_params['model_params']['criterion'] = 'gini'
+    return regr_params
+
 
 def generate_regressor_params(
     model_dict=None,
@@ -785,16 +849,25 @@ def generate_regressor_params(
                     "model": 'xgboost',
                     "model_params": {
                         "objective": objective,
-                        "eta": random.choices([0.3], [1.0])[0],
+                        "eta": random.choices(
+                            [1.0, 0.3, 0.01, 0.03, 0.05, 0.003],
+                            [0.05, 0.1, 0.1, 0.1, 0.1, 0.1]
+                        )[0],  # aka learning_rate
                         "min_child_weight": random.choices(
-                            [1, 2, 5], [0.8, 0.1, 0.1]
+                            [0.05, 0.5, 1, 2, 5], [0.1, 0.2, 0.8, 0.1, 0.1]
                         )[0],
                         "max_depth": random.choices(
                             [3, 6, 9], [0.1, 0.8, 0.1]
                         )[0],
                         "subsample": random.choices(
-                            [1, 0.7, 0.5], [0.9, 0.05, 0.05]
+                            [1, 0.9, 0.7, 0.5], [0.9, 0.05, 0.05, 0.05]
                         )[0],
+                        "colsample_bylevel": random.choices(
+                            [1, 0.9, 0.7, 0.5], [0.4, 0.1, 0.1, 0.1]
+                        )[0],
+                        "reg_alpha": random.choices([0, 0.001, 0.05], [0.9, 0.05, 0.05])[0],
+                        "reg_lambda": random.choices([1, 0.03, 0.11, 0.2], [0.9, 0.05, 0.05, 0.05])[0],
+                        
                     },
                 }
                 if objective == "reg:quantileerror":
@@ -860,27 +933,23 @@ def generate_regressor_params(
                 "model": 'RandomForest',
                 "model_params": {
                     "n_estimators": random.choices(
-                        [300, 100, 1000, 5000], [0.4, 0.4, 0.2, 0.01]
+                        [4, 300, 100, 1000, 5000], [0.1, 0.4, 0.4, 0.2, 0.01]
                     )[0],
                     "min_samples_leaf": random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0],
                     "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
-                    # absolute_error is noticeably slower
-                    # "criterion": random.choices(
-                    #     ["squared_error", "poisson"], [0.99, 0.001]
-                    # )[0],
                 },
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
                 [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
             )[0]
-            estimators_choice = random.choices([50, 100, 500], [0.05, 0.9, 0.05])[0]
+            estimators_choice = random.choices([4, 50, 100, 500], [0.05, 0.05, 0.9, 0.05])[0]
             param_dict = {
                 "model": 'ExtraTrees',
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([2, 4, 1], [0.8, 0.1, 0.1])[0],
+                    "min_samples_split": random.choices([2, 4, 1.0], [0.8, 0.1, 0.1])[0],
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],

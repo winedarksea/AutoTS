@@ -107,6 +107,12 @@ class FFT(object):
         elif self.detrend == 'quadratic':
             self.p = np.polyfit(t, x, 2).T
             x_notrend = x - np.outer(t**2, self.p[:, 0]) - np.outer(t, self.p[:, 1])
+        elif self.detrend == 'cubic':
+            self.p = np.polyfit(t, x, 3).T
+            x_notrend = x - np.outer(t**3, self.p[:, 0]) - np.outer(t**2, self.p[:, 1]) - np.outer(t, self.p[:, 2])
+        elif self.detrend == 'quartic':
+            self.p = np.polyfit(t, x, 4).T
+            x_notrend = x - np.outer(t**4, self.p[:, 0])  - np.outer(t**3, self.p[:, 1]) - np.outer(t**2, self.p[:, 2]) - np.outer(t, self.p[:, 3])
         elif self.detrend is None:
             x_notrend = x
         else:
@@ -163,5 +169,9 @@ class FFT(object):
             return (restored_sig + np.outer(t_extended, self.p[:, 0]))
         elif self.detrend == 'quadratic':
             return (restored_sig + np.outer(t_extended**2, self.p[:, 0]) + np.outer(t_extended, self.p[:, 1]))
+        elif self.detrend == 'cubic':
+            return (restored_sig + np.outer(t_extended**3, self.p[:, 0]) + np.outer(t_extended**2, self.p[:, 1]) + np.outer(t_extended, self.p[:, 2]))
+        elif self.detrend == 'quartic':
+            return (restored_sig + np.outer(t_extended**4, self.p[:, 0]) + np.outer(t_extended**3, self.p[:, 1]) + np.outer(t_extended**2, self.p[:, 2]) + np.outer(t_extended, self.p[:, 3]))
         else:
             return restored_sig
