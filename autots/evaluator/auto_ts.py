@@ -445,7 +445,7 @@ class AutoTS(object):
         stride_size = stride_size if stride_size > 0 else 1
         self.similarity_validation_params = {
             "stride_size": stride_size,
-            "distance_metric": "nan_euclidean",
+            "distance_metric": "canberra",
             "include_differenced": True,
             "window_size": 30,
         }
@@ -2866,12 +2866,14 @@ or otherwise increase models available."""
         series=None,
         title=None,
         start_date="auto",
-        end_date=None,
+        end_date="auto",
         subset=None,
         compare_horizontal=False,
         colors=None,
         include_bounds=True,
         alpha=0.35,
+        start_color="darkred",
+        end_color="#A2AD9C",
         **kwargs,
     ):
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
@@ -2883,11 +2885,13 @@ or otherwise increase models available."""
             models (list): list, str, df or None, models to compare (IDs unless df of model params)
             series (str): time series to graph
             title (str): graph title
-            start_date (str): or datetime, place to begin graph, None for full
-            end_date (str): or datetime, end of graph x axis
+            start_date (str): 'auto' or datetime, place to begin graph, None for full
+            end_date (str): 'auto' or datetime, end of graph x axis
             subset (str): overrides series, shows either 'best' or 'worst'
             compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
             include_bounds (bool): if True (default) include the upper/lower forecast bounds
+            start_color (str): color of vline for val start marker, None to remove vline
+            end_color (str): color of vline for val end marker, None to remove vline
         """
         if df_wide is None:
             df_wide = self.df_wide_numeric
@@ -2951,6 +2955,7 @@ or otherwise increase models available."""
                 duplicated = True
         if not duplicated:
             self.validation_forecast_cuts = []
+            self.validation_forecast_cuts_ends = []
             # self.validation_forecasts = {}
             for val in range(len(self.validation_indexes)):
                 val_df_train, val_df_test = simple_train_test_split(
@@ -2961,6 +2966,7 @@ or otherwise increase models available."""
                 )
                 sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
+                self.validation_forecast_cuts_ends.append(sec_idx[-1])
                 try:
                     train_reg = self.future_regressor_train.reindex(val_df_train.index)
                     fut_reg = self.future_regressor_train.reindex(sec_idx)
@@ -3025,6 +3031,10 @@ or otherwise increase models available."""
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
             ).index.min() - pd.Timedelta(days=7)
+        if end_date == "auto":
+            end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
+                how='all', axis=0
+            ).index.max() + pd.Timedelta(days=7)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
@@ -3051,14 +3061,24 @@ or otherwise increase models available."""
                 )
         else:
             ax = plot_df.plot(title=title, **kwargs)
-        ax.vlines(
-            x=self.validation_forecast_cuts,
-            ls='--',
-            lw=1,
-            colors='darkred',
-            ymin=plot_df.min().min(),
-            ymax=plot_df.max().max(),
-        )
+        if end_color is not None:
+            ax.vlines(
+                x=self.validation_forecast_cuts_ends,
+                ls='-.',
+                lw=1,
+                colors='#D3D3D3',
+                ymin=plot_df.min().min(),
+                ymax=plot_df.max().max(),
+            )
+        if start_color is not None:
+            ax.vlines(
+                x=self.validation_forecast_cuts,
+                ls='--',
+                lw=1,
+                colors='darkred',
+                ymin=plot_df.min().min(),
+                ymax=plot_df.max().max(),
+            )
         return ax
 
     def list_failed_model_types(self):
@@ -3188,6 +3208,7 @@ or otherwise increase models available."""
         color: str = "#ff9912",
         figsize=(12, 4),
         kind: str = "bar",
+        upper_clip: float = 1000,
         **kwargs,
     ):
         """Plot which series are contributing most to error (Score) of final model. Avg of validations for best_model
@@ -3199,6 +3220,7 @@ or otherwise increase models available."""
             color (str): hex or name of color of plot
             figsize (tuple): passed through to plot axis
             kind (str): bar or pie
+            upper_clip (float): set max error show to this value, to prevent unnecessary distortion
             **kwargs passed to pandas.plot()
         """
         if self.best_model.empty:
@@ -3207,6 +3229,7 @@ or otherwise increase models available."""
         best_model_per = self.best_model_per_series_score().head(max_series)
         temp = best_model_per.reset_index()
         temp.columns = ["Series", "Error"]
+        temp["Error"] = temp["Error"].clip(upper=upper_clip, lower=0)
         if self.best_model["Ensemble"].iloc[0] == 2:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')

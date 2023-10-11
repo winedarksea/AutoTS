@@ -3929,7 +3929,7 @@ class FFTDecomposition(EmptyTransformer):
         return df - self.predicted.reindex(df.index)
 
     def _predict(self, forecast_length):
-        self.predicted = pd.DataFrame(self.fft.predict(forecast_length).real, columns=self.df_columns)
+        self.predicted = pd.DataFrame(self.fft.predict(forecast_length), columns=self.df_columns)
         self.predicted.index = self.df_index.union(
             pd.date_range(self.df_index[-1], periods=forecast_length + 1, freq=self.freq)
         )
@@ -4022,10 +4022,9 @@ class ReplaceConstant(EmptyTransformer):
                 params = {}
             self.model = RandomForestClassifier(**params)
             self.model.fit(X, y)
-
-        # DATEPART 0/1 prediction
-
-        return 0
+            if False:
+                print(self.model.score(X, y))
+            return FillNA(df.replace(self.constant, np.nan), method=self.fillna, window=10)
 
     def fit(self, df):
         """Learn behavior of data to change.

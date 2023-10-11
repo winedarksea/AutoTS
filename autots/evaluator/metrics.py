@@ -583,9 +583,11 @@ def full_metric_evaluation(
             # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
         },
         index=columns,
-    ).transpose()
+    )
+    # this only happens in a pretty rare edge case, so not sure if worth including
+    result_df['smape'] = result_df['smape'].fillna(200)
 
     if return_components:
-        return result_df, full_mae_errors, squared_errors, upper_pl, lower_pl
+        return result_df.transpose(), full_mae_errors, squared_errors, upper_pl, lower_pl
     else:
-        return result_df
+        return result_df.transpose()

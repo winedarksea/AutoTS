@@ -777,13 +777,14 @@ def generate_regressor_params(
             elif branch == 'p2':
                 param_dict = xgparam3
             else:
+                objective = random.choices(
+                    ['count:poisson', 'reg:squarederror', 'reg:gamma', 'reg:pseudohubererror', 'reg:quantileerror'],
+                    [0.2, 0.5, 0.1, 0.1, 0.1],
+                )[0]
                 param_dict = {
                     "model": 'xgboost',
                     "model_params": {
-                        "objective": random.choices(
-                            ['count:poisson', 'reg:squarederror', 'reg:gamma'],
-                            [0.4, 0.5, 0.1],
-                        )[0],
+                        "objective": objective,
                         "eta": random.choices([0.3], [1.0])[0],
                         "min_child_weight": random.choices(
                             [1, 2, 5], [0.8, 0.1, 0.1]
@@ -796,10 +797,13 @@ def generate_regressor_params(
                         )[0],
                     },
                 }
-                # new vector trees
-                if random.choices([True, False], [0.2, 0.8])[0]:
-                    param_dict["multi_strategy"] = "multi_output_tree"
-                    param_dict["tree_method"] = "hist"
+                if objective == "reg:quantileerror":
+                    param_dict['model_params']["quantile_alpha"] = 0.5
+                    param_dict['model_params']["tree_method"] = "hist"
+                elif random.choices([True, False], [0.2, 0.8])[0]:
+                    # new in 2.0 vector trees
+                    param_dict['model_params']["multi_strategy"] = "multi_output_tree"
+                    param_dict['model_params']["tree_method"] = "hist"
         elif model == 'MLP':
             solver = np.random.choice(
                 ['lbfgs', 'sgd', 'adam'], p=[0.5, 0.1, 0.4], size=1
