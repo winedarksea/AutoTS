@@ -560,7 +560,7 @@ sklearn_model_dict = {
     'Adaboost': 0.03,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
-    'xgboost': 0.03,
+    'xgboost': 0.05,
     'KerasRNN': 0.02,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
@@ -673,91 +673,68 @@ tree_dict = {
 xgparam3 = {
     "model": 'xgboost',
     "model_params": {
-        "base_score": 0.5,
         "booster": 'gbtree',
-        "colsample_bylevel": 0.541426,
-        "colsample_bynode": 1,
-        "colsample_bytree": 1.0,
-        "early_stopping_rounds": None,
-        "enable_categorical": False,
-        "eval_metric": None,
-        "feature_types": None,
-        "gamma": 0,
-        "grow_policy": 'depthwise',
-        "importance_type": None,
-        "interaction_constraints": '',
-        "learning_rate": 0.012543,
-        "max_bin": 256,
-        "max_cat_threshold": 64,
-        "max_cat_to_onehot": 4,
-        "max_delta_step": 0,
+        "colsample_bylevel": 0.54,
+        "learning_rate": 0.0125,
         "max_depth": 11,
-        "max_leaves": 0,
         "min_child_weight": 0.0127203,
-        "monotone_constraints": '()',
         "n_estimators": 319,
-        "num_parallel_tree": 1,
-        "predictor": 'auto',
     },
+}
+xgparam1 = {
+    "model": 'xgboost',
+    "model_params": {
+        'n_estimators': 7,
+        'max_leaves': 4,
+        'min_child_weight': 2.5,
+        'learning_rate': 0.35,
+        'subsample': 0.95,
+        'colsample_bylevel': 0.56,
+        'colsample_bytree': 0.46,
+        'reg_alpha': 0.0016,
+        'reg_lambda': 5.3,
+    }
 }
 xgparam2 = {
     "model": 'xgboost',
     "model_params": {
         "base_score": 0.5,
         "booster": 'gbtree',
-        "colsample_bylevel": 0.691915,
-        "colsample_bynode": 1,
-        "colsample_bytree": 1.0,
-        "early_stopping_rounds": None,
-        "enable_categorical": False,
-        "eval_metric": None,
-        "feature_types": None,
-        "gamma": 0,
-        "grow_policy": 'depthwise',
-        "importance_type": None,
-        "interaction_constraints": '',
-        "learning_rate": 0.02199,
+        "colsample_bylevel": 0.692,
+        "learning_rate": 0.022,
         "max_bin": 256,
-        "max_cat_threshold": 64,
-        "max_cat_to_onehot": 4,
-        "max_delta_step": 0,
         "max_depth": 14,
         "max_leaves": 0,
-        "min_child_weight": 0.024213,
-        "monotone_constraints": '()',
+        "min_child_weight": 0.024,
         "n_estimators": 162,
-        "num_parallel_tree": 1,
-        "predictor": 'auto',
     },
 }
 lightgbmp1 = {
     "model": 'LightGBM',
     "model_params": {
-        "colsample_bytree": 0.164532,
-        "learning_rate": 0.0202726,
+        "colsample_bytree": 0.1645,
+        "learning_rate": 0.0203,
         "max_bin": 1023,
         "min_child_samples": 16,
         "n_estimators": 1794,
         "num_leaves": 15,
-        "reg_alpha": 0.00097656,
-        "reg_lambda": 0.6861,
+        "reg_alpha": 0.00098,
+        "reg_lambda": 0.686,
     },
 }
 lightgbmp2 = {
     "model": 'LightGBM',
     "model_params": {
-        "colsample_bytree": 0.94716,
+        "colsample_bytree": 0.947,
         "learning_rate": 0.7024,
         "max_bin": 255,
         "min_child_samples": 15,
         "n_estimators": 5,
         "num_leaves": 35,
         "reg_alpha": 0.00308,
-        "reg_lambda": 5.1817,
+        "reg_lambda": 5.182,
     },
 }
-
-classifier_prebuilt1 = {}
 
 
 def generate_classifier_params(
@@ -835,15 +812,17 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            branch = random.choices(['p1', 'p2', 'random'], [0.1, 0.4, 0.5])[0]
+            branch = random.choices(['p1', 'p2', 'p3' 'random'], [0.1, 0.1, 0.1, 0.7])[0]
             if branch == 'p1':
-                param_dict = xgparam2
+                param_dict = xgparam1
             elif branch == 'p2':
+                param_dict = xgparam2
+            elif branch == 'p3':
                 param_dict = xgparam3
             else:
                 objective = random.choices(
                     ['count:poisson', 'reg:squarederror', 'reg:gamma', 'reg:pseudohubererror', 'reg:quantileerror'],
-                    [0.2, 0.5, 0.1, 0.1, 0.1],
+                    [0.1, 0.6, 0.1, 0.1, 0.1],
                 )[0]
                 param_dict = {
                     "model": 'xgboost',
@@ -856,20 +835,28 @@ def generate_regressor_params(
                         "min_child_weight": random.choices(
                             [0.05, 0.5, 1, 2, 5], [0.1, 0.2, 0.8, 0.1, 0.1]
                         )[0],
-                        "max_depth": random.choices(
-                            [3, 6, 9], [0.1, 0.8, 0.1]
-                        )[0],
+                        
                         "subsample": random.choices(
                             [1, 0.9, 0.7, 0.5], [0.9, 0.05, 0.05, 0.05]
                         )[0],
                         "colsample_bylevel": random.choices(
                             [1, 0.9, 0.7, 0.5], [0.4, 0.1, 0.1, 0.1]
                         )[0],
-                        "reg_alpha": random.choices([0, 0.001, 0.05], [0.9, 0.05, 0.05])[0],
-                        "reg_lambda": random.choices([1, 0.03, 0.11, 0.2], [0.9, 0.05, 0.05, 0.05])[0],
-                        
+                        "reg_alpha": random.choices([0, 0.001, 0.05, 100], [0.9, 0.1, 0.05, 0.05])[0],
+                        "reg_lambda": random.choices([1, 0.03, 0.11, 0.2, 5], [0.9, 0.05, 0.05, 0.05, 0.05])[0],
                     },
                 }
+                if random.choices([True, False], [0.4, 0.6])[0]:
+                    param_dict["model_params"]["max_depth"] = random.choices(
+                        [3, 6, 9], [0.1, 0.8, 0.1]
+                    )[0]
+                if random.choices([True, False], [0.5, 0.5])[0]:
+                    param_dict["model_params"]["n_estimators"] = random.choices(
+                        [4, 7, 10, 20, 100, 1000],
+                        [0.2, 0.2, 0.2, 0.2, 0.5, 0.2],
+                    )[0]
+                if random.choices([True, False], [0.2, 0.8])[0]:
+                    param_dict["model_params"]["grow_policy"] = "lossguide"
                 if objective == "reg:quantileerror":
                     param_dict['model_params']["quantile_alpha"] = 0.5
                     param_dict['model_params']["tree_method"] = "hist"
@@ -1066,7 +1053,7 @@ def generate_regressor_params(
                 },
             }
         elif model in ['LightGBM', "LightGBMRegressorChain"]:
-            branch = random.choices(['p1', 'p2', 'random'], [0.2, 0.2, 0.6])[0]
+            branch = random.choices(['p1', 'p2', 'random'], [0.1, 0.1, 0.8])[0]
             if branch == 'p1':
                 param_dict = lightgbmp1
             elif branch == 'p2':
