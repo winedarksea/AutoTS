@@ -44,6 +44,7 @@ all_models = [
     'PreprocessingRegression',
     'FFT',
     "BallTreeMultivariateMotif",
+    "TiDE",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -150,7 +151,7 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
-gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting']
+gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting', "TiDE"]
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
@@ -197,6 +198,7 @@ multivariate = [
     'LATC',
     'Cassandra',  # depends
     'BallTreeMultivariateMotif',
+    "TiDE",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -242,6 +244,7 @@ recombination_approved = [
     'PreprocessingRegression',
     'FFT',
     'BallTreeMultivariateMotif',
+    "TiDE",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

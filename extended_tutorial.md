@@ -866,6 +866,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
 |  KalmanStateSpace       |              |                         |    True       |                 |       |              |              |               |
 |  FFT                    |              |                         |    True       |                 |       |              |              |               |
+|  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |              |               |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

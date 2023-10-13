@@ -20,6 +20,7 @@
 * added BallTreeMultivariateMotif model
 * added FFTDecomposition
 * added ReplaceConstant
+* added TiDE model
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
