@@ -747,7 +747,8 @@ def generate_classifier_params(
         model_dict=model_dict, method=method,
     )
     if regr_params["model"] == 'xgboost':
-        regr_params['model_params'].pop('objective')
+        if "objective" in regr_params['model_params'].keys():
+            regr_params['model_params'].pop('objective', None)
     elif regr_params["model"] == 'ExtraTrees':
         regr_params['model_params']['criterion'] = 'gini'
     return regr_params
@@ -812,7 +813,7 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            branch = random.choices(['p1', 'p2', 'p3' 'random'], [0.1, 0.1, 0.1, 0.7])[0]
+            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.1, 0.1, 0.1, 0.7])[0]
             if branch == 'p1':
                 param_dict = xgparam1
             elif branch == 'p2':
