@@ -221,8 +221,7 @@ class TimeSeriesdata(object):
 
     def __init__(
         self,
-        data_path,
-        datetime_col,
+        df,
         num_cov_cols,
         cat_cov_cols,
         ts_cols,
@@ -232,7 +231,7 @@ class TimeSeriesdata(object):
         hist_len,
         pred_len,
         batch_size,
-        freq="H",
+        freq="D",
         normalize=True,
         epoch_len=None,
         holiday=False,
@@ -241,8 +240,7 @@ class TimeSeriesdata(object):
         """Initialize objects.
 
         Args:
-          data_path: path to csv file
-          datetime_col: column name for datetime col
+          df: wide style dataframe
           num_cov_cols: list of numerical global covariates
           cat_cov_cols: list of categorical global covariates
           ts_cols: columns corresponding to ts
@@ -261,7 +259,7 @@ class TimeSeriesdata(object):
         Returns:
           None
         """
-        self.data_df = pd.read_csv(open(data_path, "r"))
+        self.data_df = df
         if not num_cov_cols:
             self.data_df["ncol"] = np.zeros(self.data_df.shape[0])
             num_cov_cols = ["ncol"]
@@ -269,9 +267,7 @@ class TimeSeriesdata(object):
             self.data_df["ccol"] = np.zeros(self.data_df.shape[0])
             cat_cov_cols = ["ccol"]
         self.data_df.fillna(0, inplace=True)
-        self.data_df.set_index(
-            pd.DatetimeIndex(self.data_df[datetime_col]), inplace=True
-        )
+        # self.data_df.set_index(pd.DatetimeIndex(self.data_df[datetime_col]), inplace=True)
         self.num_cov_cols = num_cov_cols
         self.cat_cov_cols = cat_cov_cols
         self.ts_cols = ts_cols
@@ -635,6 +631,9 @@ class TideModel(keras.Model):
             out = (out - affine_bias[:, None]) / (affine_weight[:, None] + EPS)
             out = out * batch_std[:, None] + batch_mean[:, None]
         return out
+    
+    def predict(self):
+        pass
 
     @tf.function
     def train_step(self, past_data, future_features, ytrue, tsidx, optimizer):
@@ -655,7 +654,6 @@ class TideModel(keras.Model):
         idxs = np.arange(0, self.pred_len, self.pred_len // num_split).tolist() + [
             self.pred_len
         ]
-        # is this for loop the best you could do Google?
         for i in range(len(idxs) - 1):
             indices = (idxs[i], idxs[i + 1])
             all_y_true, all_y_pred, test_loss, test_num = self.get_eval_data_for_split(
@@ -716,7 +714,7 @@ class TideModel(keras.Model):
             all_test_num,
         )
 
-    def eval(self, data, mode, num_split=1):
+    def evaluate(self, data, mode, num_split=1):
         all_y_pred, all_y_true, test_loss = self.get_all_eval_data(
             data, mode, num_split
         )
@@ -778,18 +776,89 @@ METRICS = {
 }
 
 
-FLAGS = "MISSING"
-DATA_DICT = "MISSING"
+# FLAGS = "MISSING"
+# DATA_DICT = "MISSING"
 
+"""
+--transform=false \
+--layer_norm=true \
+--holiday=false \
+--dropout_rate=0.0 \
+--batch_size=512 \
+--hidden_size=512 \
+--num_layers=1 \
+--hist_len=720 \
+--dataset=weather \
+--decoder_output_dim=8 \
+--final_decoder_hidden=16 \
+--num_split=1 \
+--learning_rate=0.00003012706619800982 \
+--min_num_epochs=20
 
-def training(random_seed=42):
+--transform=false \
+--layer_norm=true \
+--holiday=false \
+--dropout_rate=0.5 \
+--batch_size=512 \
+--hidden_size=1024 \
+--num_layers=2 \
+--hist_len=720 \
+--dataset=elec \
+--decoder_output_dim=8 \
+--final_decoder_hidden=64 \
+--num_split=2 \
+--learning_rate=0.0009999999999999998 \
+--min_num_epochs=0
+
+--transform=true \
+--layer_norm=false \
+--holiday=true \
+--dropout_rate=0.3 \
+--batch_size=512 \
+--hidden_size=256 \
+--num_layers=1 \
+--hist_len=720 \
+--dataset=traffic \
+--decoder_output_dim=16 \
+--final_decoder_hidden=64 \
+--num_split=4 \
+--learning_rate=0.00006558212854103338 \
+--min_num_epochs=0
+"""
+
+def training(
+        random_seed=42, frequency='D',
+        learning_rate=0.0009999,
+        transform=False,
+        layer_norm=False,
+        holiday=True,
+        dropout_rate=0.3,
+        batch_size=512,
+        hidden_size=256,
+        num_layers=1,
+        hist_len=720,
+        decoder_output_dim=16,
+        final_decoder_hidden=64,
+        num_split=4,
+        min_num_epochs=0,
+        train_epochs=100,
+        patience=40,
+        epoch_len=None,
+        permute=True,
+        normalize=True,
+        gpu_index=0,
+        data_df=None,
+        num_cov_cols=None,
+        cat_cov_cols=None,
+        forecast_length: int = 14,
+    ):
     """Training TS code."""
     tf.random.set_seed(random_seed)
     np.random.seed(random_seed)
 
     try:
         gpus = tf.config.experimental.list_physical_devices("GPU")
-        tf.config.experimental.set_visible_devices(gpus[FLAGS.gpu], "GPU")
+        tf.config.experimental.set_visible_devices(gpus[gpu_index], "GPU")
         if gpus:
             try:
                 for gpu in gpus:
@@ -799,64 +868,57 @@ def training(random_seed=42):
     except Exception as e:
         print(repr(e))
 
-    dataset = FLAGS.dataset
-    data_path = DATA_DICT[dataset]["data_path"]
-    freq = DATA_DICT[dataset]["freq"]
-    boundaries = DATA_DICT[dataset]["boundaries"]
+    # some weird way of passing validation indexes which is silly for prod
+    full_len_idx = data_df.shape[0]
+    boundaries = [full_len_idx - forecast_length * 3, full_len_idx - forecast_length * 2, full_len_idx - forecast_length]
 
-    data_df = pd.read_csv(open(data_path, "r"))
-
-    if FLAGS.ts_cols:
-        ts_cols = DATA_DICT[dataset]["ts_cols"]
-        num_cov_cols = DATA_DICT[dataset]["num_cov_cols"]
-        cat_cov_cols = DATA_DICT[dataset]["cat_cov_cols"]
+    if num_cov_cols is None and cat_cov_cols is None:
+        ts_cols = data_df.columns
     else:
-        ts_cols = [col for col in data_df.columns if col != FLAGS.datetime_col]
-        num_cov_cols = None
-        cat_cov_cols = None
-    permute = FLAGS.permute
+        num_cov_cols_temp = [] if not isinstance(num_cov_cols, list) else num_cov_cols
+        cat_cov_cols_temp = [] if not isinstance(cat_cov_cols, list) else cat_cov_cols
+        ts_cols = [col for col in data_df.columns if col not in set(num_cov_cols_temp + cat_cov_cols_temp)]
     dtl = TimeSeriesdata(
-        data_path=data_path,
-        datetime_col=FLAGS.datetime_col,
+        df=data_df,
         num_cov_cols=num_cov_cols,
-        cat_cov_cols=cat_cov_cols,
+        cat_cov_cols=None,
         ts_cols=np.array(ts_cols),
         train_range=[0, boundaries[0]],
         val_range=[boundaries[0], boundaries[1]],
         test_range=[boundaries[1], boundaries[2]],
-        hist_len=FLAGS.hist_len,
-        pred_len=FLAGS.pred_len,
-        batch_size=min(FLAGS.batch_size, len(ts_cols)),
-        freq=freq,
-        normalize=FLAGS.normalize,
-        epoch_len=FLAGS.epoch_len,
-        holiday=FLAGS.holiday,
+        hist_len=hist_len,
+        pred_len=forecast_length,
+        batch_size=min(batch_size, len(ts_cols)),
+        freq=frequency,
+        normalize=normalize,
+        epoch_len=epoch_len,
+        holiday=holiday,
         permute=permute,
     )
 
     # Create model
     model_config = {
         "model_type": "dnn",
-        "hidden_dims": [FLAGS.hidden_size] * FLAGS.num_layers,
+        "hidden_dims": [hidden_size] * num_layers,
         "time_encoder_dims": [64, 4],
-        "decoder_output_dim": FLAGS.decoder_output_dim,
-        "final_decoder_hidden": FLAGS.final_decoder_hidden,
+        "decoder_output_dim": decoder_output_dim,
+        "final_decoder_hidden": final_decoder_hidden,
         "batch_size": dtl.batch_size,
     }
     model = TideModel(
         model_config=model_config,
-        pred_len=FLAGS.pred_len,
+        pred_len=forecast_length,
         num_ts=len(ts_cols),
         cat_sizes=dtl.cat_sizes,
-        transform=FLAGS.transform,
-        layer_norm=FLAGS.layer_norm,
-        dropout_rate=FLAGS.dropout_rate,
+        transform=transform,
+        layer_norm=layer_norm,
+        dropout_rate=dropout_rate,
     )
 
     step = tf.Variable(0)
     # LR scheduling
     lr_schedule = keras.optimizers.schedules.CosineDecay(
-        initial_learning_rate=FLAGS.learning_rate,
+        initial_learning_rate=learning_rate,
         decay_steps=30 * dtl.train_range[1],
     )
 
@@ -864,7 +926,7 @@ def training(random_seed=42):
 
     best_loss = np.inf
     # best_check_path = None
-    while step.numpy() < FLAGS.train_epochs + 1:
+    while step.numpy() < train_epochs + 1:
         ep = step.numpy()
         # sys.stdout.flush()
 
@@ -879,12 +941,18 @@ def training(random_seed=42):
 
         step.assign_add(1)
         # Test metrics
-        val_metrics, val_res, val_loss = model.eval(
-            dtl, "val", num_split=FLAGS.num_split
+        val_metrics, val_res, val_loss = model.evaluate(
+            dtl, "val", num_split=num_split
         )
-        test_metrics, test_res, test_loss = model.eval(
-            dtl, "test", num_split=FLAGS.num_split
+        test_metrics, test_res, test_loss = model.evaluate(
+            dtl, "test", num_split=num_split
         )
         tracked_loss = val_metrics["rmse"]
-        if tracked_loss < best_loss and ep > FLAGS.min_num_epochs:
+        if tracked_loss < best_loss and ep > min_num_epochs:
             best_loss = tracked_loss
+
+
+from autots import load_daily
+
+data_df = load_daily(long=False)
+# training(data_df=data_df)
