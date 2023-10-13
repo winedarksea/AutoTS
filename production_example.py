@@ -268,12 +268,17 @@ if not initial_training:
     if evolve:
         model.import_template(template_filename, method="addon")
     else:
-        model.import_template(template_filename, method="only")
+        # model.import_template(template_filename, method="only")
+        model.import_best_model(template_filename)  # include_ensemble=False
 
-model = model.fit(
-    df,
-    future_regressor=regr_train,
-)
+if evolve or initial_training:
+    model = model.fit(
+        df,
+        future_regressor=regr_train,
+        # weights='mean'
+    )
+else:
+    model.fit_data(df, future_regressor=regr_train)
 
 # save a template of best models
 if initial_training or evolve:

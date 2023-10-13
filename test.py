@@ -33,13 +33,14 @@ models_to_validate = 0.25  # 0.99 to validate every tried (use with template imp
 template_filename = "template_" + str(platform.node()) + ".csv"
 template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
-random_seed = 2022
-forecast_length = 28
+random_seed = 2023
+forecast_length = 14
 long = False
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
 # df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
 # df = load_artificial(long=long, date_start="2018-01-01")
 df = load_daily(long=long)
+# df.iloc[5, :] = np.nan
 interest_series = [
     'wiki_all',
     'wiki_William_Shakespeare',
@@ -58,11 +59,11 @@ if not long and interest_series[0] not in df.columns:
     ]
 prediction_interval = 0.9
 n_jobs = "auto"
-verbose = 1
-validation_method = "similarity"  # "similarity"
+verbose = 2
+validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 100
+generations = 50
 generation_timeout = 300
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
@@ -79,11 +80,11 @@ if force_univariate:
 transformer_list = "fast"  # "fast", "all", "superfast"
 # transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer"]
 transformer_max_depth = 4
-models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
+models_mode = "gradient_boosting"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
-# model_list = "fast_parallel"  # fast_parallel, all, fast
-# model_list = ["LastValueNaive", "GluonTS", "SeasonalityMotif", "MetricMotif", 'PytorchForecasting']
-# model_list = ['LastValueNaive', 'PytorchForecasting']
+# model_list = "fast"  # fast_parallel, all, fast
+# model_list = ["GluonTS"]
+# model_list = ['PreprocessingRegression', 'MultivariateRegression', 'DatepartRegression', 'WindowRegression']
 preclean = None
 {
     "fillna": None,
@@ -105,7 +106,7 @@ ensemble = [
     "mosaic-window",
     'mosaic-crosshair',
 ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
-# ensemble = None
+ensemble = None
 metric_weighting = {
     'smape_weighting': 3,
     'mae_weighting': 2,
@@ -114,8 +115,8 @@ metric_weighting = {
     'mage_weighting': 0,
     'mle_weighting': 0,
     'imle_weighting': 0,
-    'spl_weighting': 3,
-    'containment_weighting': 0,
+    'spl_weighting': 0,
+    'containment_weighting': 0.1,
     'contour_weighting': 0,
     'runtime_weighting': 0.01,
     'maxe_weighting': 0,
@@ -148,6 +149,12 @@ constraint = {
     "lower_constraint": lower_constraint,
     "bounds": True,
 }
+constraint = {
+    "constraint_method": "stdev_min",
+    "upper_constraint": 2.0,
+    "lower_constraint": 2.0,
+    "bounds": True,
+}
 constraint = None
 
 model = AutoTS(
@@ -174,6 +181,7 @@ model = AutoTS(
     preclean=preclean,
     # prefill_na=0,
     # subset=2,
+    no_negatives=True,
     verbose=verbose,
     models_mode=models_mode,
     random_seed=random_seed,
@@ -250,12 +258,14 @@ print(model.validation_test_indexes)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 print(f'The following model types failed completely {model.list_failed_model_types()}')
 print("Slowest models:")
-print(
-    initial_results[initial_results["Ensemble"] < 1]
-    .groupby("Model")
-    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
-    .idxmax()
-)
+runtimes = initial_results[initial_results["Ensemble"] < 1].groupby("Model").agg({
+    "TotalRuntimeSeconds": ["mean", "max"],
+    "smape": ["median", "min"]
+}).rename(columns={
+    "median": "median_smape", "min": "min_smape"
+})
+print(runtimes["TotalRuntimeSeconds"].rename(columns={"mean": "slowest_avg_runtime", "max": "slowest_max_runtime"}).idxmax())
+print(runtimes['smape'].idxmin())
 
 if save_template:
     model.export_template(
@@ -352,7 +362,16 @@ if graph:
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
+    param_impacts_runtime = model.diagnose_params(target="runtime")
+    param_impacts_mae = model.diagnose_params(target="mae")
+    param_impacts_exception = model.diagnose_params(target="exception")
+    param_impacts_smape = model.diagnose_params(target="smape")
+    param_impacts = pd.concat([param_impacts_runtime, param_impacts_mae, param_impacts_smape, param_impacts_exception], axis=1).reset_index(drop=False)
+
 df_wide_numeric = model.df_wide_numeric
+
+
+
 
 if not [x for x in interest_series if x in model.df_wide_numeric.columns.tolist()]:
     interest_series = model.df_wide_numeric.columns.tolist()[0:5]
