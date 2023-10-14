@@ -3004,7 +3004,6 @@ class BallTreeMultivariateMotif(ModelObject):
             'canberra',
             'chebyshev',
             'cityblock',
-            'cosine',
             'euclidean',
             'hamming',
             'mahalanobis',

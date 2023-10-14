@@ -372,7 +372,7 @@ class TimeSeriesdata(object):
         elif mode == "test":
             start = self.test_range[0]
             end = self.test_range[1] - self.pred_len + 1
-        elif mode == 'predict':
+        elif mode == "predict":
             start = self.test_range[0]
             end = self.test_range[1] + 1
         else:
@@ -779,13 +779,13 @@ METRICS = {
 
 
 class TiDE(ModelObject):
-    """Google Research MLP based forecasting approach.
-    """
+    """Google Research MLP based forecasting approach."""
 
     def __init__(
         self,
         name: str = "UnivariateRegression",
-        random_seed=42, frequency='D',
+        random_seed=42,
+        frequency="D",
         learning_rate=0.0009999,
         transform=False,
         layer_norm=False,
@@ -805,7 +805,7 @@ class TiDE(ModelObject):
         permute=True,
         normalize=True,
         gpu_index=0,
-        n_jobs: int = 'auto',
+        n_jobs: int = "auto",
         forecast_length: int = 14,
         prediction_interval: float = 0.9,
         verbose: int = 0,
@@ -822,39 +822,34 @@ class TiDE(ModelObject):
             n_jobs=n_jobs,
         )
         self.forecast_length = forecast_length
-        self.learning_rate=learning_rate
-        self.transform=transform
-        self.layer_norm=layer_norm
-        self.holiday=holiday
-        self.dropout_rate=dropout_rate
-        self.batch_size=batch_size
-        self.hidden_size=hidden_size
-        self.num_layers=num_layers
-        self.hist_len=hist_len
-        self.decoder_output_dim=decoder_output_dim
-        self.final_decoder_hidden=final_decoder_hidden
-        self.num_split=num_split
-        self.min_num_epochs=min_num_epochs
-        self.train_epochs=train_epochs
-        self.patience=patience
-        self.epoch_len=epoch_len
-        self.permute=permute
-        self.normalize=normalize
-        self.gpu_index=gpu_index
+        self.learning_rate = learning_rate
+        self.transform = transform
+        self.layer_norm = layer_norm
+        self.holiday = holiday
+        self.dropout_rate = dropout_rate
+        self.batch_size = batch_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.hist_len = hist_len
+        self.decoder_output_dim = decoder_output_dim
+        self.final_decoder_hidden = final_decoder_hidden
+        self.num_split = num_split
+        self.min_num_epochs = min_num_epochs
+        self.train_epochs = train_epochs
+        self.patience = patience
+        self.epoch_len = epoch_len
+        self.permute = permute
+        self.normalize = normalize
+        self.gpu_index = gpu_index
 
-    def fit(
-        self,
-        df=None,
-        num_cov_cols=None,
-        cat_cov_cols=None
-    ):
+    def fit(self, df=None, num_cov_cols=None, cat_cov_cols=None, future_regressor=None):
         """Training TS code."""
         df = self.basic_profile(df)
         tf.random.set_seed(self.random_seed)
         np.random.seed(self.random_seed)
         keras.backend.clear_session()
         data_df = df.copy()
-    
+
         try:
             gpus = tf.config.experimental.list_physical_devices("GPU")
             tf.config.experimental.set_visible_devices(gpus[self.gpu_index], "GPU")
@@ -866,18 +861,30 @@ class TiDE(ModelObject):
                     print(e)
         except Exception as e:
             print("TF GPU init error:" + repr(e))
-    
+
         # some weird way of passing validation indexes which is silly for prod
         full_len_idx = data_df.shape[0]
         # will be tied to num_splits
-        boundaries = [full_len_idx - self.forecast_length * 3, full_len_idx - self.forecast_length * 2, full_len_idx - self.forecast_length]
-    
+        boundaries = [
+            full_len_idx - self.forecast_length * 3,
+            full_len_idx - self.forecast_length * 2,
+            full_len_idx - self.forecast_length,
+        ]
+
         if num_cov_cols is None and cat_cov_cols is None:
             ts_cols = data_df.columns
         else:
-            num_cov_cols_temp = [] if not isinstance(num_cov_cols, list) else num_cov_cols
-            cat_cov_cols_temp = [] if not isinstance(cat_cov_cols, list) else cat_cov_cols
-            ts_cols = [col for col in data_df.columns if col not in set(num_cov_cols_temp + cat_cov_cols_temp)]
+            num_cov_cols_temp = (
+                [] if not isinstance(num_cov_cols, list) else num_cov_cols
+            )
+            cat_cov_cols_temp = (
+                [] if not isinstance(cat_cov_cols, list) else cat_cov_cols
+            )
+            ts_cols = [
+                col
+                for col in data_df.columns
+                if col not in set(num_cov_cols_temp + cat_cov_cols_temp)
+            ]
         dtl = TimeSeriesdata(
             df=data_df,
             num_cov_cols=num_cov_cols,
@@ -895,7 +902,7 @@ class TiDE(ModelObject):
             holiday=self.holiday,
             permute=self.permute,
         )
-    
+
         # Create model
         model_config = {
             "model_type": "dnn",
@@ -914,23 +921,23 @@ class TiDE(ModelObject):
             layer_norm=self.layer_norm,
             dropout_rate=self.dropout_rate,
         )
-    
+
         step = tf.Variable(0)
         # LR scheduling
         lr_schedule = keras.optimizers.schedules.CosineDecay(
             initial_learning_rate=self.learning_rate,
             decay_steps=30 * dtl.train_range[1],
         )
-    
+
         optimizer = keras.optimizers.Adam(learning_rate=lr_schedule, clipvalue=1e3)
-    
+
         best_loss = np.inf
         pat = 0
         # best_check_path = None
         while step.numpy() < self.train_epochs + 1:
             ep = step.numpy()
             # sys.stdout.flush()
-    
+
             iterator = dtl.tf_dataset(mode="train")
             for i, batch in enumerate(iterator):
                 # print(f"i is {i}")
@@ -941,7 +948,7 @@ class TiDE(ModelObject):
                     past_data, future_features, batch[3], tsidx, optimizer
                 )
                 # print(f"training epoch is {ep} with loss: {loss}")
-    
+
             step.assign_add(1)
             # Test metrics
             val_metrics, val_res, val_loss = self.model.evaluate(
@@ -958,10 +965,12 @@ class TiDE(ModelObject):
                 pat += 1
                 # early stopping
                 if pat > self.patience:
-                  break
+                    break
 
             if self.verbose > 0:
-                print(f"epoch {ep} with mape {val_metrics['mape']} and rmse {val_metrics['rmse']}")
+                print(
+                    f"epoch {ep} with mape {val_metrics['mape']} and rmse {val_metrics['rmse']}"
+                )
         self.past_data = past_data
         self.future_features = future_features
         self.tsidx = tsidx
@@ -970,8 +979,14 @@ class TiDE(ModelObject):
 
         return self
 
-    def predict(self, forecast_length='self', future_regressor=None, mode='test', just_point_forecast=False):
-        if forecast_length != 'self':
+    def predict(
+        self,
+        forecast_length="self",
+        future_regressor=None,
+        mode="test",
+        just_point_forecast=False,
+    ):
+        if forecast_length != "self":
             if forecast_length != self.forecast_length:
                 raise ValueError("forecast_length must be set in TiDE init")
         predictStartTime = datetime.datetime.now()
@@ -985,7 +1000,9 @@ class TiDE(ModelObject):
             arr = self.dtl.scaler.inverse_transform(all_preds.numpy().T)
         else:
             arr = all_preds.numpy().T
-        fut_idx = pd.date_range(self.train_last_date, periods=self.forecast_length + 1, freq=self.frequency)[1:]
+        fut_idx = pd.date_range(
+            self.train_last_date, periods=self.forecast_length + 1, freq=self.frequency
+        )[1:]
         forecast = pd.DataFrame(arr, columns=self.column_names, index=fut_idx)
         if just_point_forecast:
             return forecast
@@ -994,7 +1011,7 @@ class TiDE(ModelObject):
                 self.dtl.data_df[self.column_names],
                 forecast,
                 prediction_interval=self.prediction_interval,
-                method='inferred_normal',
+                method="inferred_normal",
             )
 
             predict_runtime = datetime.datetime.now() - predictStartTime
@@ -1014,30 +1031,40 @@ class TiDE(ModelObject):
             return prediction
         return forecast
 
-    def get_new_params(self, method: str = 'random'):
+    def get_new_params(self, method: str = "random"):
         """Return dict of new parameters for parameter tuning."""
         return {
             # borrowed mostly from the defaults used for the paper results
-            "learning_rate": random.choices([0.00006558, 0.000999999, 0.000030127, 0.01], [0.3, 0.3, 0.3, 0.1])[0],
+            "learning_rate": random.choices(
+                [0.00006558, 0.000999999, 0.000030127, 0.01], [0.3, 0.3, 0.3, 0.1]
+            )[0],
             "transform": random.choices([True, False], [0.35, 0.65])[0],
             "layer_norm": random.choices([True, False], [0.65, 0.35])[0],
             "holiday": random.choices([True, False], [0.35, 0.65])[0],
             "dropout_rate": random.choices([0.0, 0.3, 0.5], [0.3, 0.3, 0.3])[0],
             "batch_size": random.choices([512, 257, 32], [0.4, 0.1, 0.1])[0],
-            "hidden_size": random.choices([1024, 512, 256, 64], [0.2, 0.2, 0.2, 0.1])[0],
+            "hidden_size": random.choices([1024, 512, 256, 64], [0.2, 0.2, 0.2, 0.1])[
+                0
+            ],
             "num_layers": random.choices([1, 2, 3], [0.8, 0.1, 0.1])[0],
             "hist_len": random.choices([720, 10, 364, 21], [0.1, 0.1, 0.1, 0.1])[0],
-            "decoder_output_dim": random.choices([16, 8, 4, 32], [0.4, 0.4, 0.1, 0.1])[0],
-            "final_decoder_hidden": random.choices([128, 64, 32, 16], [0.1, 0.8, 0.1, 0.1])[0],
+            "decoder_output_dim": random.choices([16, 8, 4, 32], [0.4, 0.4, 0.1, 0.1])[
+                0
+            ],
+            "final_decoder_hidden": random.choices(
+                [128, 64, 32, 16], [0.1, 0.8, 0.1, 0.1]
+            )[0],
             "num_split": random.choices([4, 1, 2], [0.8, 0.2, 0.2])[0],
             "min_num_epochs": random.choices([5, 10, 20], [0.85, 0.1, 0.1])[0],
-            "train_epochs": random.choices([20, 40, 100, 500], [0.2, 0.2, 0.2, 0.05])[0],
+            "train_epochs": random.choices([20, 40, 100, 500], [0.2, 0.2, 0.2, 0.05])[
+                0
+            ],
             # "patience": random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0],
-            "epoch_len": random.choices([1, None], [0.5, 0.5, 0.1])[0],
+            "epoch_len": random.choices([1, None], [0.5, 0.5])[0],
             "permute": random.choices([True, False], [0.5, 0.5])[0],
             "normalize": random.choices([True, False], [0.5, 0.5])[0],
         }
-    
+
     def get_params(self):
         """Return dict of current parameters."""
         return {
@@ -1060,7 +1087,6 @@ class TiDE(ModelObject):
             "permute": self.permute,
             "normalize": self.normalize,
         }
-
 
 
 """

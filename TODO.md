@@ -21,6 +21,7 @@
 * added FFTDecomposition
 * added ReplaceConstant
 * added TiDE model
+* logging improvements for pytorch and some pytorch backend for gluonts support
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

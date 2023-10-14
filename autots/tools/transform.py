@@ -405,7 +405,7 @@ class StatsmodelsFilter(EmptyTransformer):
 
         cycles = bk_filter.bkfilter(df, K=1)
         cycles.columns = df.columns
-        return (df - cycles).fillna(method="ffill").fillna(method="bfill")
+        return (df - cycles).ffill().bfill()
 
     def cffilter(self, df):
         from statsmodels.tsa.filters import cf_filter
@@ -508,7 +508,7 @@ class STLFilter(EmptyTransformer):
 
         if df.index.freq is None:
             freq = infer_frequency(df)
-            df = df.asfreq(freq).fillna(method='ffill')
+            df = df.asfreq(freq).ffill()
 
         def _stl_one_return(series, decomp_type="STL", seasonal=7, part="trend"):
             """Convert filter to apply on pd DataFrame."""
@@ -532,7 +532,7 @@ class STLFilter(EmptyTransformer):
             seasonal=self.seasonal,
             part=self.part,
         )
-        return df.fillna(method="ffill").fillna(method="bfill")
+        return df.ffill().bfill()
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -891,10 +891,10 @@ class RollingMeanTransformer(EmptyTransformer):
         """
         self.shape = df.shape
         self.last_values = (
-            df.tail(self.window).fillna(method="ffill").fillna(method="bfill")
+            df.tail(self.window).ffill().bfill()
         )
         self.first_values = (
-            df.head(self.window).fillna(method="ffill").fillna(method="bfill")
+            df.head(self.window).ffill().bfill()
         )
 
         df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1).mean()
@@ -1381,7 +1381,7 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = (df - df.shift(self.lag)).fillna(method="bfill")
+        df = (df - df.shift(self.lag)).bfill
         return df
 
     def fit_transform(self, df):
@@ -1446,7 +1446,7 @@ class PctChangeTransformer(EmptyTransformer):
         """
         df = df.replace([0], np.nan)
         df = df.fillna((df[df != 0]).abs().min(axis=0)).fillna(0.1)
-        df = df.pct_change(periods=1, fill_method="ffill").fillna(0)
+        df = df.pct_change(periods=1).fillna(0)
         df = df.replace([np.inf, -np.inf], 0)
         return df
 
@@ -3593,8 +3593,8 @@ class LevelShiftMagic(EmptyTransformer):
         diff_abs = diff.abs()
         diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
         # merge nearby groups
-        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).fillna(
-            method='ffill', limit=self.grouping_forward_limit
+        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
+            limit=self.grouping_forward_limit
         )
         diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
         # the max of each changepoint group is the chosen changepoint of the level shift
@@ -3606,7 +3606,7 @@ class LevelShiftMagic(EmptyTransformer):
             index=df.index,
             columns=df.columns,
         )
-        group_ids = range_arr[~diff_mask].fillna(method='ffill')  # [diff_mask]
+        group_ids = range_arr[~diff_mask].ffill # [diff_mask]
         max_mask = diff_abs == maxes
         used_groups = group_ids[max_mask].mean()
         curr_diff = diff_abs.where(((group_ids != used_groups) & diff_mask), np.nan)
@@ -3665,9 +3665,7 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(
-            method='bfill'
-        ).fillna(0)
+        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).bfill().fillna(0)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3675,9 +3673,7 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(
-            method='bfill'
-        ).fillna(0)
+        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).bfill().fillna(0)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.

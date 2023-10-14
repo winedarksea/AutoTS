@@ -670,11 +670,11 @@ def ModelMonster(
         )
     elif model == "TiDE":
         from autots.models.tide import TiDE
-        return BallTreeMultivariateMotif(
+        return TiDE(
             frequency=frequency,
             forecast_length=forecast_length,
             prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
+            # holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
