@@ -80,7 +80,7 @@ if force_univariate:
 transformer_list = "fast"  # "fast", "all", "superfast"
 # transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer"]
 transformer_max_depth = 4
-models_mode = "gradient_boosting"  # "default", "regressor", "neuralnets", "gradient_boosting"
+models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
 # model_list = "fast"  # fast_parallel, all, fast
 # model_list = ["GluonTS"]
@@ -233,6 +233,21 @@ model = model.fit(
     id_col="series_id" if long else None,
 )
 
+if save_template:
+    model.export_template(
+        template_filename,
+        models="best",
+        n=20,
+        max_per_model_class=5,
+        include_results=True,
+    )
+    model.export_template(
+        "slowest_models_template.csv",
+        models="slowest",
+        n=10,
+        include_results=True,
+    )
+
 elapsed_for = timeit.default_timer() - start_time_for
 
 prediction = model.predict(
@@ -266,15 +281,6 @@ runtimes = initial_results[initial_results["Ensemble"] < 1].groupby("Model").agg
 })
 print(runtimes["TotalRuntimeSeconds"].rename(columns={"mean": "slowest_avg_runtime", "max": "slowest_max_runtime"}).idxmax())
 print(runtimes['smape'].idxmin())
-
-if save_template:
-    model.export_template(
-        template_filename,
-        models="best",
-        n=20,
-        max_per_model_class=5,
-        include_results=True,
-    )
 
 if graph:
     start_date = "auto"

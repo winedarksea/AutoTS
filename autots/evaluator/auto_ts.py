@@ -2239,7 +2239,7 @@ or otherwise increase models available."""
         Args:
             filename (str): 'csv' or 'json' (in filename).
                 `None` to return a dataframe and not write a file.
-            models (str): 'best' or 'all'
+            models (str): 'best' or 'all', and 'slowest' for diagnostics
             n (int): if models = 'best', how many n-best to export
             max_per_model_class (int): if models = 'best',
                 the max number of each model class to include in template
@@ -2295,6 +2295,10 @@ or otherwise increase models available."""
                     ).drop_duplicates()
                 if not include_results:
                     export_template = export_template[self.template_cols_id]
+        elif models == "slowest":
+            return self.save_template(
+                filename, self.initial_results.model_results.nlargest(n, columns=['TotalRuntime'])
+            )
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         return self.save_template(filename, export_template)
@@ -3408,17 +3412,20 @@ or otherwise increase models available."""
 
         try:
             import shap
+            import matplotlib.pyplot as plt
 
             # Compute SHAP values
             explainer = shap.Explainer(bst, feature_names=feature_names)
             shap_values = explainer(shap_X)
             # Plot summary plot
-            shap.summary_plot(shap_values, shap_X, feature_names=feature_names)
+            shap.summary_plot(shap_values, shap_X, feature_names=feature_names, title=f"SHAP Summary for {target}")
             # Plot SHAP values for a single prediction
             try:
                 shap.plots.waterfall(shap_values[0], max_display=15)
                 shap.plots.waterfall(shap_values[1], max_display=15)
-                shap.plots.waterfall(shap_values[2], max_display=15)
+                shap.plots.waterfall(shap_values[2], max_display=15, show=False)
+                plt.title(f"SHAP Waterfall for {target} and row 0")
+                plt.show()
             except Exception:
                 pass
 

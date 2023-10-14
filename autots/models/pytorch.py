@@ -22,6 +22,7 @@ try:
         import pytorch_lightning as pl
     try:
         from lightning.pytorch.callbacks.early_stopping import EarlyStopping  # 2.0
+        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
     except Exception:
         from pytorch_lightning.callbacks import EarlyStopping  # , LearningRateMonitor
     from pytorch_forecasting import (
@@ -241,6 +242,18 @@ class PytorchForecasting(ModelObject):
                     mode="min",
                 )
             ]
+        try:
+            self.callbacks.append(
+                ModelCheckpoint(
+                    save_last=False,
+                    save_top_k=0,
+                    every_n_train_steps=0,
+                    every_n_epochs=0,
+                )
+            )
+        except Exception as e:
+            print(repr(e))
+
         # lr_logger = LearningRateMonitor()
         if is_available() and "accelerator" not in self.trainer_kwargs.keys():
             self.trainer = pl.Trainer(
@@ -250,10 +263,10 @@ class PytorchForecasting(ModelObject):
                 # limit_train_batches=30,
                 callbacks=self.callbacks,  # lr_logger,
                 logger=False,
-                # checkpoint_callback=False,
                 accelerator='gpu',
                 gradient_clip_val=0.05,  # necessary to be less than 0.1 to prevent a strange bug
                 devices=1,
+                log_every_n_steps=0,
                 **self.trainer_kwargs,
             )
         else:
@@ -262,10 +275,11 @@ class PytorchForecasting(ModelObject):
                 # num_processes=self.n_jobs,  # don't think this will usually be used
                 # gradient_clip_val=0.1,
                 # limit_train_batches=30,
+                # enable_checkpointing
                 callbacks=self.callbacks,  # lr_logger,
                 gradient_clip_val=0.05,
                 logger=False,
-                # checkpoint_callback=False,
+                log_every_n_steps=0,
                 **self.trainer_kwargs,
             )
 

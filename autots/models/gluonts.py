@@ -142,16 +142,24 @@ class GluonTS(ModelObject):
 
         if self.gluon_model == 'DeepAR':
             try:
-                from gluonts.mx import DeepAREstimator
+                try:
+                    from gluonts.mx import DeepAREstimator
+                except Exception:
+                    from gluonts.model.deepar import DeepAREstimator
+                estimator = DeepAREstimator(
+                    freq=ts_metadata['freq'],
+                    context_length=ts_metadata['context_length'],
+                    prediction_length=ts_metadata['forecast_length'],
+                    trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+                )
             except Exception:
-                from gluonts.model.deepar import DeepAREstimator
+                from gluonts.torch import DeepAREstimator
+                estimator = DeepAREstimator(
+                    freq=ts_metadata['freq'],
+                    context_length=ts_metadata['context_length'],
+                    prediction_length=ts_metadata['forecast_length'],
+                )
 
-            estimator = DeepAREstimator(
-                freq=ts_metadata['freq'],
-                context_length=ts_metadata['context_length'],
-                prediction_length=ts_metadata['forecast_length'],
-                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
-            )
         elif self.gluon_model == 'NPTS':
             try:
                 from gluonts.model.npts import NPTSPredictor
@@ -380,6 +388,16 @@ class GluonTS(ModelObject):
                     learning_rate=self.learning_rate,
                     hybridize=False,
                 ),
+            )
+        elif self.gluon_model == 'PatchTST':
+            from gluonts.torch.model.patch_tst import PatchTSTEstimator
+
+            estimator = PatchTSTEstimator(
+                prediction_length=ts_metadata['forecast_length'],
+                context_length=ts_metadata['context_length'],
+                patch_len=5,
+                lr=self.learning_rate,
+                trainer_kwargs={'logging': False, 'log_every_n_steps': 0},
             )
         else:
             raise ValueError("'gluon_model' not recognized.")
@@ -647,6 +665,7 @@ class GluonTS(ModelObject):
                     'SelfAttention',
                     'TemporalFusionTransformer',
                     'DeepTPP',
+                    'PatchTST',
                 ],
                 [
                     0.1,
@@ -666,6 +685,7 @@ class GluonTS(ModelObject):
                     0.1,
                     0.1,
                     0.1,
+                    0.1,
                 ],
                 k=1,
             )[0]
@@ -677,7 +697,7 @@ class GluonTS(ModelObject):
             [5, 10, 30, '1ForecastLength', '2ForecastLength'],
             [0.2, 0.3, 0.1, 0.1, 0.1],
         )[0]
-        learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
+        learning_rate_choice = random.choices([0.01, 0.001, 0.0001, 0.00001], [0.3, 0.6, 0.1, 0.1])[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice in ['NPTS', 'Rotbaum']:
             epochs_choice = 20
