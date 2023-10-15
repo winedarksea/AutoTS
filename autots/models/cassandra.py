@@ -541,9 +541,10 @@ class Cassandra(ModelObject):
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            print(
-                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
-            )
+            if self.verbose > 1:
+                print(
+                    f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+                )
             raise ValueError("nan values in x_array")
         if np.all(self.df == 0):
             raise ValueError("transformed data is all zeroes")
@@ -949,9 +950,10 @@ class Cassandra(ModelObject):
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            print(
-                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
-            )
+            if self.verbose > 1:
+                print(
+                    f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+                )
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL

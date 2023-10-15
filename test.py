@@ -63,8 +63,8 @@ verbose = 2
 validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 50
-generation_timeout = 300
+generations = 150
+generation_timeout = 120
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
 if use_template:
@@ -83,8 +83,15 @@ transformer_max_depth = 4
 models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
 # model_list = "fast"  # fast_parallel, all, fast
-# model_list = ["GluonTS"]
+model_list = ["BallTreeMultivariateMotif", "WindowRegression", 'SeasonalityMotif', 'SeasonalNaive']
 # model_list = ['PreprocessingRegression', 'MultivariateRegression', 'DatepartRegression', 'WindowRegression']
+
+# only saving with superfast
+if model_list == "superfast" and save_template:
+    save_template = True
+else:
+    save_template = False
+
 preclean = None
 {
     "fillna": None,

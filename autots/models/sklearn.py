@@ -337,7 +337,7 @@ def retrieve_regressor(
         if multioutput:
             return MultiOutputRegressor(
                 LGBMRegressor(
-                    verbose=int(verbose_bool),
+                    verbose=- 1,
                     random_state=random_seed,
                     n_jobs=1,
                     **model_param_dict,
@@ -346,7 +346,7 @@ def retrieve_regressor(
             )
         else:
             return LGBMRegressor(
-                verbose=int(verbose_bool),
+                verbose=-1,
                 random_state=random_seed,
                 n_jobs=n_jobs,
                 **model_param_dict,
@@ -355,7 +355,7 @@ def retrieve_regressor(
         from lightgbm import LGBMRegressor
 
         regr = LGBMRegressor(
-            verbose=int(verbose_bool),
+            verbose=-1,
             random_state=random_seed,
             n_jobs=n_jobs,
             **model_param_dict,
@@ -370,7 +370,7 @@ def retrieve_regressor(
         if regression_model["model_params"]['estimator'] == 'SVR':
             from sklearn.svm import LinearSVR
 
-            svc = LinearSVR(verbose=verbose, random_state=random_seed, max_iter=1500)
+            svc = LinearSVR(verbose=0, random_state=random_seed, max_iter=1500)
             regr = AdaBoostRegressor(
                 estimator=svc,
                 n_estimators=regression_model["model_params"]['n_estimators'],

@@ -3282,11 +3282,12 @@ or otherwise increase models available."""
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
 
-    def diagnose_params(self, target='runtime'):
+    def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 
         Args:
             target (str): runtime, smape, mae, oda, or exception, the measured outcome to correlate parameters with
+            waterfall_plots (bool): whether to show waterfall SHAP plots
         """
 
         from autots.tools.transform import transformer_dict
@@ -3421,11 +3422,25 @@ or otherwise increase models available."""
             shap.summary_plot(shap_values, shap_X, feature_names=feature_names, title=f"SHAP Summary for {target}")
             # Plot SHAP values for a single prediction
             try:
-                shap.plots.waterfall(shap_values[0], max_display=15)
-                shap.plots.waterfall(shap_values[1], max_display=15)
-                shap.plots.waterfall(shap_values[2], max_display=15, show=False)
-                plt.title(f"SHAP Waterfall for {target} and row 0")
-                plt.show()
+                if waterfall_plots:
+                    shap.plots.waterfall(shap_values[0], max_display=15, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row 1")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[1], max_display=15, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row 2")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[2], max_display=15, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row 3")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[-1], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -1")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[-2], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -2")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[-3], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -3")
+                    plt.show()
             except Exception:
                 pass
 
