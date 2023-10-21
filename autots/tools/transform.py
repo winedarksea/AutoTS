@@ -4460,6 +4460,7 @@ class GeneralTransformer(object):
             "SeasonalDifference28",
             "MeanDifference",
             "AlignLastValue",
+            "AlignLastDiff",
         ]
 
     @staticmethod
