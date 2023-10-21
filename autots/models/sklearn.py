@@ -571,8 +571,8 @@ sklearn_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    # 'GaussianProcessRegressor': 0.02,  # slow
-    'MultioutputGPR': 0.05,
+    'GaussianProcessRegressor': 0.000000001,  # slow
+    'MultioutputGPR': 0.01,
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -593,7 +593,7 @@ multivariate_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    'MultioutputGPR': 0.05,
+    # 'MultioutputGPR': 0.05,
 }
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
@@ -651,7 +651,7 @@ datepart_model_dict: dict = {
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
-    'MultioutputGPR': 0.05,
+    # 'MultioutputGPR': 0.05,
 }
 gradient_boosting = {
     'xgboost': 0.09,
@@ -796,6 +796,7 @@ def generate_regressor_params(
         'ExtraTrees',
         'Ridge',
         'GaussianProcessRegressor',
+        'MultioutputGPR',
     ]:
         if model == 'Adaboost':
             param_dict = {
