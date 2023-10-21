@@ -4148,11 +4148,11 @@ class AlignLastDiff(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "rows": random.choices([1, 2, 4, 7, None], [0.83, 0.02, 0.05, 0.1, 0.1])[0],
+            "rows": random.choices([1, 2, 4, 7, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1])[0],
             "quantile": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2, 0], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05]
             )[0],
-            "decay_span": random.chocies([None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
+            "decay_span": random.choices([None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
         }
 
     def fit(self, df):
