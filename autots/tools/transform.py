@@ -422,7 +422,7 @@ class StatsmodelsFilter(EmptyTransformer):
         from statsmodels.tsa.filters.filtertools import convolution_filter
 
         df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
-        return df.fillna(method="ffill").fillna(method="bfill")
+        return df.ffill().bfill()
 
 
 class HPFilter(EmptyTransformer):
@@ -1383,7 +1383,7 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = (df - df.shift(self.lag)).bfill
+        df = (df - df.shift(self.lag)).bfill()
         return df
 
     def fit_transform(self, df):

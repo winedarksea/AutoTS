@@ -205,7 +205,7 @@ def create_regressor(
                 axis=1,
             )
         except Exception as e:
-            print(repr(e))
+            print("HolidayDetector failed with error: " + repr(e)[:180])
 
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]

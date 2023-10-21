@@ -489,7 +489,7 @@ def retrieve_regressor(
         return GaussianProcessRegressor(
             kernel=kernel, random_state=random_seed, **model_param_dict
         )
-    elif model_class == "MultioutputGPR":
+    elif model_class in ["MultioutputGPR", "VectorizedMultiOutputGPR"]:
         return VectorizedMultiOutputGPR(**model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
@@ -1148,7 +1148,7 @@ def generate_regressor_params(
                 [0.1, 0.1, 0.1, 0.4, 0.1, 0.1],
             )[0]
             param_dict = {
-                "model": 'GaussianProcessRegressor',
+                "model": 'MultioutputGPR',
                 "model_params": {
                     'noise_var': random.choice([1e-7, 1e-4, 1e-3, 1e-2, 0.1, 1, 10]),
                     'kernel': kernel,
@@ -3343,8 +3343,13 @@ class VectorizedMultiOutputGPR:
         K_reg = K + self.noise_var * np.eye(K.shape[0])
 
         # Cholesky decomposition and solve for alpha in a vectorized way
-        self.L = np.linalg.cholesky(K_reg)
-        self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, y))
+        if False:
+            from scipy.sparse.linalg import cg
+            self.alpha, _ = cg(K_reg, y)  # _ captures info about convergence
+        else:
+            self.L = np.linalg.cholesky(K_reg)
+            self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, y))
+        # Regularized Kernel
         return self
 
     def predict(self, X):
