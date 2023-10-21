@@ -624,7 +624,7 @@ class ModelTest(unittest.TestCase):
             "KalmanSmoothing",  # new 0.5.1
             # "RegressionFilter",   # new 0.5.7
             # "CenterSplit",   # new 0.6.1
-            # "FFTFilter",  "FFTDecomposition",  # new 0.6.2
+            # "FFTFilter",  "FFTDecomposition", "AlignLastDiff",  # new 0.6.2
         ]
 
         timings = {}

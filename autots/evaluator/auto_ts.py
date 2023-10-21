@@ -3435,11 +3435,11 @@ or otherwise increase models available."""
                     shap.plots.waterfall(shap_values[-1], max_display=10, show=False)
                     plt.title(f"SHAP Waterfall for {target} and row -1")
                     plt.show()
-                    shap.plots.waterfall(shap_values[-2], max_display=10, show=False)
-                    plt.title(f"SHAP Waterfall for {target} and row -2")
+                    shap.plots.waterfall(shap_values[-4], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -4")
                     plt.show()
-                    shap.plots.waterfall(shap_values[-3], max_display=10, show=False)
-                    plt.title(f"SHAP Waterfall for {target} and row -3")
+                    shap.plots.waterfall(shap_values[-8], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -8")
                     plt.show()
             except Exception:
                 pass

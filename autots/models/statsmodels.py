@@ -2004,11 +2004,11 @@ class Theta(ModelObject):
         return {
             'deseasonalize': random.choices([True, False], [0.8, 0.2])[0],
             'difference': random.choice([True, False]),
-            'use_test': random.choices([True, False], [0.8, 0.2])[0],
+            'use_test': random.choices([True, False], [0.4, 0.2])[0],
             'method': "auto",
             'period': None,
             'theta': random.choice([1.2, 1.4, 1.6, 2, 2.5, 3, 4]),
-            'use_mle': random.choices([True, False], [0.2, 0.8])[0],
+            'use_mle': random.choices([True, False], [0.0001, 0.99])[0],
         }
 
     def get_params(self):

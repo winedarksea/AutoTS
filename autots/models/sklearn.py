@@ -400,12 +400,12 @@ def retrieve_regressor(
 
         if False:  # this is no longer necessary in 1.6 and beyond
             regr = MultiOutputRegressor(
-                xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
+                xgb.XGBRegressor(verbosity=0, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
             )
         else:
             regr = xgb.XGBRegressor(
-                verbosity=verbose, **model_param_dict, n_jobs=n_jobs
+                verbosity=0, **model_param_dict, n_jobs=n_jobs
             )
         return regr
     elif model_class == 'SVM':

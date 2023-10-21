@@ -19,6 +19,8 @@ from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
 from autots.tools.fft import FFT as fft_class
+from autots.tools.percentile import nan_quantile
+
 
 try:
     from joblib import Parallel, delayed
@@ -2638,6 +2640,8 @@ class AlignLastValue(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        if self.rows is None:
+            self.rows = df.shape[0]
         # fill NaN if present (up to a limit for slight speedup)
         if np.isnan(np.sum(np.array(df)[-50:])):
             self.center = self.find_centerpoint(df.ffill(axis=0), self.rows, self.lag)
@@ -2673,6 +2677,7 @@ class AlignLastValue(EmptyTransformer):
 
         Args:
             df (pandas.DataFrame): input dataframe
+            adjustment (float): size of shift, utilized for adjusting the upper and lower bounds to match point forecast
         """
         if self.adjustment is not None:
             self.adjustment = adjustment
@@ -4104,6 +4109,125 @@ class ReplaceConstant(EmptyTransformer):
         }
 
 
+def exponential_decay(n, span=None, halflife=None):
+    assert not ((span is not None) and (halflife is not None)), "Only one of span or halflife should be provided"
+
+    t = np.arange(n)
+
+    if span is not None:
+        decay_values = np.exp(-t / span)
+    else:
+        decay_values = np.exp(-np.log(2) * t / halflife)
+    
+    return decay_values
+
+
+class AlignLastDiff(EmptyTransformer):
+    """Shift all data relative to the last value(s) of the series.
+    This version aligns based on historic diffs rather than direct values.
+
+    Args:
+        rows (int): number of rows to average as diff history. rows=1 rather different from others
+        quantile (float): quantile of historic diffs to use as allowed [0, 1]
+        decay_span (int): span of exponential decay which softens adjustment to no adjustment
+    """
+
+    def __init__(
+        self,
+        rows: int = 1,
+        quantile: float = 0.5,
+        decay_span: float = None,
+        **kwargs,
+    ):
+        super().__init__(name="AlignLastDiff")
+        self.rows = rows
+        self.quantile = quantile
+        self.decay_span = decay_span
+        self.adjustment = None
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        return {
+            "rows": random.choices([1, 2, 4, 7, None], [0.83, 0.02, 0.05, 0.1, 0.1])[0],
+            "quantile": random.choices(
+                [1.0, 0.9, 0.7, 0.5, 0.2, 0], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05]
+            )[0],
+            "decay_span": random.chocies([None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
+        }
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.rows is None:
+            self.rows = df.shape[0]
+        # fill NaN if present (up to a limit for slight speedup)
+        if np.isnan(np.sum(np.array(df)[-self.rows:])):
+            local_df = df.ffill(axis=0)
+        else:
+            local_df = df
+        
+        self.center = df.iloc[-1, :]
+
+        if self.rows <= 1:
+            self.diff = np.abs(((local_df - local_df.shift(1)).iloc[-1:]).to_numpy())
+        else:
+            # positive diff = growing
+            diff = (local_df - local_df.shift(1)).iloc[1:].iloc[-self.rows:]
+            mask = diff > 0
+            self.growth_diff = nan_quantile(diff[mask], q=self.quantile, axis=0)
+            self.decline_diff = nan_quantile(diff[~mask], q=self.quantile, axis=0)
+
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+            adjustment (float): size of shift, utilized for adjusting the upper and lower bounds to match point forecast
+        """
+        if self.adjustment is not None:
+            self.adjustment = adjustment
+        if trans_method == "original":
+            return df
+        
+
+        if self.adjustment is None:
+            displacement = df.iloc[0] - self.center  # positive is growth
+            if self.rows <= 1:
+                self.adjustment = np.where(np.abs(displacement) > self.diff.flatten(), displacement - (self.diff.flatten() * np.sign(displacement)), 0)
+            else:
+                self.adjustment = np.where(
+                    displacement > 0,
+                    np.where(displacement > self.growth_diff, displacement - self.growth_diff, 0),
+                    np.where(displacement < self.decline_diff, displacement - self.decline_diff, 0)
+                )
+            if self.decay_span is not None:
+                self.adjustment = np.repeat(self.adjustment[..., np.newaxis], df.shape[0], axis=1).T
+                self.adjustment = self.adjustment * exponential_decay(self.adjustment.shape[0], span=self.decay_span)[..., np.newaxis]
+        return df - self.adjustment
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4180,6 +4304,7 @@ have_params = {
     "FFTFilter": FFTFilter,
     "FFTDecomposition": FFTDecomposition,
     "ReplaceConstant": ReplaceConstant,
+    "AlignLastDiff": AlignLastDiff,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4279,6 +4404,7 @@ class GeneralTransformer(object):
             "FFTFilter": filter using a fast fourier transform
             "FFTDecomposition": remove FFT harmonics, later add back
             "ReplaceConstant": replace a value with NaN, optionally fillna then later reintroduce
+            "AlignLastDiff": shift forecast to be within range of historical diffs
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4316,7 +4442,7 @@ class GeneralTransformer(object):
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different
-        self.bounded_oddities = ["AlignLastValue"]
+        self.bounded_oddities = ["AlignLastValue", "AlignLastDiff"]
         # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",
@@ -4714,6 +4840,7 @@ transformer_dict = {
     "FFTFilter": 0.01,
     "FFTDecomposition": 0.01,
     "ReplaceConstant": 0.005,
+    "AlignLastDiff": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -4742,6 +4869,7 @@ superfast_transformer_dict = {
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
+    # "AlignLastDiff": 0.05,  # pending testing
 }
 # Split tranformers by type
 # filters that remain near original space most of the time

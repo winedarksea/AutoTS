@@ -54,6 +54,10 @@ def df_cleanup(
         pd.DataFrame: original dataframe, now possibly shorter.
 
     """
+    if drop_most_recent is None:
+        drop_most_recent = 0
+    elif not isinstance(drop_most_recent, (float, int)):
+        raise ValueError(f"drop_most_recent must be an integer or None, not {drop_most_recent}")
     # check to make sure column names are unique
     if verbose > 0:
         dupes = df_wide.columns.duplicated()
