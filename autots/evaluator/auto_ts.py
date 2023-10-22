@@ -3281,6 +3281,62 @@ or otherwise increase models available."""
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
+    
+    def plot_metric_corr(self, cols=None):
+        """Plot correlation in results among metrics.
+        The metrics that are highly correlated are those that mostly the unscaled ones
+
+        Args:
+            cols (list): strings of columns to show, 'all' for all
+        """
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        res = self.initial_results.model_results
+        res = res[res['Exceptions'].isnull()]
+        # correlation is much more interesting among the top models than among the full trials
+        res = res.loc[res.sort_values("Score").index[0:int(res.shape[0] * 0.1) + 1]]
+        metrics = res.select_dtypes("number")
+        metrics = metrics[[x for x in metrics.columns if "weighted" not in x]]
+        metrics = metrics.drop(columns=[
+            'Ensemble', 'Runs', 'TransformationRuntime', 'FitRuntime',
+            'PredictRuntime', 'Generation', 'ValidationRound',
+            'PostMemoryPercent', 'TotalRuntimeSeconds'
+        ], errors='ignore')
+        metrics = (metrics) / metrics.std()
+
+        corr = metrics.corr()
+
+        if cols is None:
+            mostly_one = (corr.abs() == 1).sum() == (corr.abs() == 1).sum().max()
+            cols = corr[~mostly_one].abs().sum().nlargest(15).index.tolist()
+            if len(cols) < 15:
+                cols.extend(corr[mostly_one].index[0:15 - len(cols)].tolist())
+        elif cols == 'all':
+            cols = corr.columns
+
+        if len(cols) <= 2:
+            correlation_matrix = corr.loc[cols]
+        else:
+            correlation_matrix = corr[cols].loc[cols]
+        # Create a mask for the upper triangle to hide redundant information
+        mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
+
+        # Set up the matplotlib figure and axis
+        fig, ax = plt.subplots(figsize=(16, 12))
+
+        # Generate a diverging colormap
+        cmap = sns.diverging_palette(220, 20, as_cmap=True)
+
+        # Create the correlogram using a heatmap
+        sns.heatmap(correlation_matrix, mask=mask, cmap=cmap, vmax=1, center=0,
+                    annot=True, fmt=".2f", square=True, linewidths=.5, cbar_kws={"shrink": 0.7})
+        sns.set_style("whitegrid")  # Add a grid for clarity
+
+        # Add a title
+        plt.title("Correlogram of Metric Correlations from Optimized Forecasts")
+        self.metric_corr = corr
+        return ax
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.

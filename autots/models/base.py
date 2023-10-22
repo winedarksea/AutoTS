@@ -573,6 +573,7 @@ class PredictionObject(object):
         per_timestamp_errors: bool = False,
         full_mae_error: bool = True,
         scaler=None,
+        cumsum_A=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -614,6 +615,7 @@ class PredictionObject(object):
                 columns=self.forecast.columns,
                 scaler=scaler,
                 return_components=True,
+                cumsum_A=cumsum_A,
             )
 
         if per_timestamp_errors:

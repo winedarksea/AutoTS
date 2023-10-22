@@ -438,9 +438,9 @@ class SeasonalNaive(ModelObject):
             tile_index = tile_index[len(tile_index) - (df_length) :]
             df.index = tile_index
             if self.method == "median":
-                self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
+                self.tile_values_lag_1 = df.groupby(level=0).median()
             else:
-                self.tile_values_lag_1 = df.groupby(level=0, axis=0).mean()
+                self.tile_values_lag_1 = df.groupby(level=0).mean()
             if str(self.lag_2).isdigit():
                 if self.lag_2 == 1:
                     self.tile_values_lag_2 = df.tail(self.lag_2)
@@ -451,9 +451,9 @@ class SeasonalNaive(ModelObject):
                     tile_index = tile_index[len(tile_index) - (df_length) :]
                     df.index = tile_index
                     if self.method == "median":
-                        self.tile_values_lag_2 = df.groupby(level=0, axis=0).median()
+                        self.tile_values_lag_2 = df.groupby(level=0).median()
                     else:
-                        self.tile_values_lag_2 = df.groupby(level=0, axis=0).mean()
+                        self.tile_values_lag_2 = df.groupby(level=0).mean()
         else:
             self.method == 'lastvalue'
             self.tile_values_lag_1 = df.tail(self.lag_1)

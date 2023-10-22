@@ -420,6 +420,31 @@ def smoothness(arr):
         return np.log1p(np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0).round(12))
 
 
+def wasserstein(F, A):
+    # Step 1: Sort each column (perhaps a bit slow)
+    sorted_P = np.sort(F, axis=0)
+    sorted_A = np.sort(A, axis=0)
+
+    # Step 2: Compute cumulative sums
+    cumsum_P = np.cumsum(sorted_P, axis=0)
+    # actuals may have NaNs but forecasts should not
+    cumsum_A = np.nancumsum(sorted_A, axis=0)
+
+    # Step 3: Compute L1 distance between cumulative sums
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
+
+
+def sort_cumsum(A):
+    # defined separately in auto_model, update there too if changed
+    return np.nancumsum(np.sort(A, axis=0), axis=0)
+
+
+def precomp_wasserstein(F, cumsum_A):
+    sorted_P = np.sort(F, axis=0)
+    cumsum_P = np.cumsum(sorted_P, axis=0)
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)    
+
+
 def full_metric_evaluation(
     A,
     F,
@@ -430,6 +455,7 @@ def full_metric_evaluation(
     columns=None,
     scaler=None,
     return_components=False,
+    cumsum_A=None,
     **kwargs,
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
@@ -476,6 +502,9 @@ def full_metric_evaluation(
         fill_val = fill_val if fill_val > 0 else 1
         scaler[scaler == 0] = fill_val
         scaler[np.isnan(scaler)] = fill_val
+
+    if cumsum_A is None:
+        cumsum_A = sort_cumsum(A)
 
     # fill with zero where applicable
     filled_full_mae_errors = full_mae_errors.copy()
@@ -575,6 +604,7 @@ def full_metric_evaluation(
             'uwmse': np.mean((filled_full_mae_errors * u_weights) ** 2, axis=0)
             / scaler,
             'smoothness': smoothness(lF),
+            'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),

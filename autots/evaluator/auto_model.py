@@ -1477,6 +1477,7 @@ def TemplateWizard(
     # minor speedup with one less copy per eval by assuring arrays at this level
     actuals = np.asarray(df_test)
     df_trn_arr = np.asarray(df_train)
+    cumsum_A = np.nancumsum(np.sort(actuals, axis=0), axis=0)
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
@@ -1544,6 +1545,7 @@ def TemplateWizard(
                 df_train=df_trn_arr,
                 per_timestamp_errors=per_ts,
                 scaler=scaler,
+                cumsum_A=cumsum_A,
             )
             if validation_round >= 1 and verbose > 0:
                 round_smape = model_error.avg_metrics['smape'].round(2)
