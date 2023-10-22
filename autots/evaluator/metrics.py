@@ -491,11 +491,17 @@ def full_metric_evaluation(
     # test for NaN, this allows faster calculations if no nan
     nan_flag = np.isnan(np.min(full_errors))
 
-    # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+    # mean aggregate error, sum across all series, per timestamp then averaged
     if nan_flag:
         mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
     else:
         mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
+
+    # mean absolute temporal error, sum of error across time for one series
+    if nan_flag:
+        mate = np.abs(np.nansum(full_errors, axis=0))
+    else:
+        mate = np.abs(np.sum(full_errors, axis=0))
 
     direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
     weights = np.geomspace(1, 10, full_mae_errors.shape[0])[:, np.newaxis]
@@ -520,6 +526,7 @@ def full_metric_evaluation(
             'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
             # aggregate error
             'mage': mage,  # Gandalf approved
+            'mate': mate,  # the British version, of course
             'underestimate': np.nansum(full_errors[~ovm], axis=0),
             'mle': msle(full_errors, full_mae_errors, log_errors, nan_flag=nan_flag),
             'overestimate': np.nansum(full_errors[ovm], axis=0),

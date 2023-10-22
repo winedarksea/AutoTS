@@ -572,7 +572,7 @@ sklearn_model_dict = {
     'RANSAC': 0.05,
     'Ridge': 0.02,
     'GaussianProcessRegressor': 0.000000001,  # slow
-    'MultioutputGPR': 0.01,
+    'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -593,7 +593,6 @@ multivariate_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    # 'MultioutputGPR': 0.05,
 }
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
@@ -651,7 +650,7 @@ datepart_model_dict: dict = {
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
-    # 'MultioutputGPR': 0.05,
+    'MultioutputGPR': 0.0001,
 }
 gradient_boosting = {
     'xgboost': 0.09,
@@ -3306,21 +3305,55 @@ class VectorizedMultiOutputGPR:
         )
         return np.exp(-gamma * distance)
 
-    def _exponential_kernel(self, x1, x2, gamma):
-        return np.exp(-np.abs(x1 - x2.T) / gamma)
+    def _old_exponential_kernel(self, x1, x2, gamma):
+        # memory hungry
+        diff = x1[:, np.newaxis, :] - x2[np.newaxis, :, :]
+        return np.exp(-np.abs(diff) / gamma)
+        # return np.exp(-np.abs(x1 - x2.T) / gamma)
 
-    def _periodic_kernel(self, x1, x2, gamma, p):
+    def _exponential_kernel(self, x1, x2, gamma):
+        # less memory hungry
+        result = np.empty((x1.shape[0], x2.shape[0]))
+        for i, xi in enumerate(x1):
+            diff = np.abs(xi - x2)
+            result[i, :] = np.exp(-diff.sum(axis=1) / gamma)
+        return result
+
+    def _old_periodic_kernel(self, x1, x2, gamma, p):
         sin_sq = np.sin(np.pi * np.abs(x1 - x2.T) / p) ** 2
         return np.exp(-2 * sin_sq / gamma**2)
 
-    def _locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
-        rbf_part = np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
+    def _vec_periodic_kernel(self, x1, x2, gamma, p):
+        diff = x1[:, np.newaxis, :] - x2[np.newaxis, :, :]
+        sin_sq = np.sin(np.pi * np.abs(diff) / p) ** 2
+        return np.exp(-2 * sin_sq / gamma**2)
+    
+    def _periodic_kernel(self, x1, x2, gamma, p):
+        result = np.empty((x1.shape[0], x2.shape[0]))
+        for i, xi in enumerate(x1):
+            diff = xi - x2
+            sin_sq = (np.sin(np.pi * np.abs(diff) / p) ** 2).sum(axis=1)
+            result[i, :] = np.exp(-2 * sin_sq / gamma**2)
+        return result
+
+    def _old_locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
+        rbf_part = np.exp(-((x1 - x2) ** 2) / (2 * gamma**2))  #  old: np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
         periodic_part = self._periodic_kernel(x1, x2, lambda_prime, p)
         return rbf_part * periodic_part
+    
+    def _locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
+        result = np.empty((x1.shape[0], x2.shape[0]))
+        for i, xi in enumerate(x1):
+            diff = xi - x2
+            rbf_part = np.exp(-np.sum(diff**2, axis=1) / (2 * gamma**2))
+            sin_sq = (np.sin(np.pi * np.abs(diff) / p) ** 2).sum(axis=1)
+            periodic_part = np.exp(-2 * sin_sq / gamma**2)
+            result[i, :] = rbf_part * periodic_part
+        return result
+
 
     def fit(self, X, Y):
         self.X_train = np.asarray(X)
-        y = np.asarray(Y)
 
         if self.kernel == 'linear':
             K = self._linear_kernel(self.X_train, self.X_train)
@@ -3340,15 +3373,17 @@ class VectorizedMultiOutputGPR:
             raise ValueError("Invalid Kernel")
 
         # Regularized Kernel
-        K_reg = K + self.noise_var * np.eye(K.shape[0])
+        # K_reg = K + self.noise_var * np.eye(K.shape[0])
+        np.fill_diagonal(K, np.diag(K) + self.noise_var)
 
         # Cholesky decomposition and solve for alpha in a vectorized way
         if False:
             from scipy.sparse.linalg import cg
-            self.alpha, _ = cg(K_reg, y)  # _ captures info about convergence
+            self.alpha, _ = cg(K, np.asarray(Y))  # _ captures info about convergence
         else:
-            self.L = np.linalg.cholesky(K_reg)
-            self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, y))
+            self.L = np.linalg.cholesky(K)
+            self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, np.asarray(Y)))
+        del K
         # Regularized Kernel
         return self
 

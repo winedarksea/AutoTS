@@ -326,6 +326,8 @@ def date_part(
             )
         )
         date_part_df.columns = ['dp' + str(x) for x in date_part_df.columns]
+    if isinstance(date_part_df, pd.Index):
+        date_part_df = pd.Series(date_part_df)
     if set_index:
         date_part_df.index = DTindex
     if holiday_country is not None and holiday_countries_used:
