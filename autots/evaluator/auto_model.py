@@ -1477,7 +1477,7 @@ def TemplateWizard(
     # minor speedup with one less copy per eval by assuring arrays at this level
     actuals = np.asarray(df_test)
     df_trn_arr = np.asarray(df_train)
-    cumsum_A = np.nancumsum(np.sort(actuals, axis=0), axis=0)
+    cumsum_A = np.nancumsum(actuals, axis=0)
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:

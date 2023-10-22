@@ -421,6 +421,7 @@ def smoothness(arr):
 
 
 def wasserstein(F, A):
+    """This version has sorting, which is perhaps not appropriate for time series."""
     # Step 1: Sort each column (perhaps a bit slow)
     sorted_P = np.sort(F, axis=0)
     sorted_A = np.sort(A, axis=0)
@@ -436,12 +437,13 @@ def wasserstein(F, A):
 
 def sort_cumsum(A):
     # defined separately in auto_model, update there too if changed
-    return np.nancumsum(np.sort(A, axis=0), axis=0)
+    # return np.nancumsum(np.sort(A, axis=0), axis=0)
+    return np.nancumsum(A, axis=0)
 
 
 def precomp_wasserstein(F, cumsum_A):
-    sorted_P = np.sort(F, axis=0)
-    cumsum_P = np.cumsum(sorted_P, axis=0)
+    # sorted_P = np.sort(F, axis=0)
+    cumsum_P = np.cumsum(F, axis=0)
     return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)    
 
 

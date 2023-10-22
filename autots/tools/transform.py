@@ -1009,9 +1009,9 @@ class SeasonalDifference(EmptyTransformer):
             tile_index = tile_index[len(tile_index) - (df_length) :]
             df2.index = tile_index
             if self.method == "Median":
-                self.tile_values_lag_1 = df2.groupby(level=0, axis=0).median()
+                self.tile_values_lag_1 = df2.groupby(level=0).median()
             else:
-                self.tile_values_lag_1 = df2.groupby(level=0, axis=0).mean()
+                self.tile_values_lag_1 = df2.groupby(level=0).mean()
         else:
             self.method == "LastValue"
             self.tile_values_lag_1 = df.tail(self.lag_1)

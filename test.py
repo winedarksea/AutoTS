@@ -34,7 +34,7 @@ template_filename = "template_" + str(platform.node()) + ".csv"
 template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
 random_seed = 2023
-forecast_length = 14
+forecast_length = 90
 long = False
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
 # df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
@@ -64,7 +64,7 @@ validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
 generations = 150
-generation_timeout = 120
+generation_timeout = 2
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
 if use_template:
@@ -78,12 +78,12 @@ if force_univariate:
     df = df.iloc[:, 0]
 
 transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer"]
+# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer", 'AlignLastDiff']
 transformer_max_depth = 4
 models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
 # model_list = "fast"  # fast_parallel, all, fast
-model_list = ["BallTreeMultivariateMotif", "WindowRegression", 'SeasonalityMotif', 'SeasonalNaive']
+# model_list = ["BallTreeMultivariateMotif", "WindowRegression", 'SeasonalityMotif', 'SeasonalNaive']
 # model_list = ['PreprocessingRegression', 'MultivariateRegression', 'DatepartRegression', 'WindowRegression']
 
 # only saving with superfast
@@ -110,10 +110,10 @@ ensemble = [
     "simple",
     # 'mlensemble',
     'horizontal-max',
-    "mosaic-window",
-    'mosaic-crosshair',
+    # "mosaic-window",
+    # 'mosaic-crosshair',
 ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
-ensemble = None
+# ensemble = None
 metric_weighting = {
     'smape_weighting': 3,
     'mae_weighting': 2,
@@ -375,6 +375,13 @@ if graph:
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
+    try:
+        model.plot_metric_corr()
+        plt.show()
+        # model.metric_corr.loc['wasserstein'].sort_values()
+    except Exception as e:
+        print(repr(e))
+
     param_impacts_runtime = model.diagnose_params(target="runtime")
     param_impacts_mae = model.diagnose_params(target="mae")
     param_impacts_exception = model.diagnose_params(target="exception")
@@ -475,6 +482,8 @@ PACKAGE RELEASE
 conda activate env
 cd to AutoTS
 set PYTHONPATH=%PYTHONPATH%;C:/Users/Colin/Documents/AutoTS
+export PYTHONPATH=/users/colincatlin/Documents/AutoTS:$PYTHONPATH
+
 python -m unittest discover ./tests
 python -m unittest tests.test_autots.ModelTest.test_models
 python -m unittest tests.test_impute.TestImpute.test_impute

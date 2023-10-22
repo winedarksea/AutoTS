@@ -24,6 +24,7 @@
 * logging improvements for pytorch and some pytorch backend for gluonts support
 * added AlignLastDiff
 * added plot_metric_corr
+* added mate, wasserstein metrics
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
