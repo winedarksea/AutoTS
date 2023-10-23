@@ -650,8 +650,9 @@ datepart_model_dict: dict = {
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
-    'MultioutputGPR': 0.0001,
+    'MultioutputGPR': 0.001,
 }
+gpu = ['Transformer', 'KerasRNN']
 gradient_boosting = {
     'xgboost': 0.09,
     'HistGradientBoost': 0.03,
@@ -757,6 +758,7 @@ def generate_regressor_params(
     model_dict=None,
     method="default",
 ):
+    """Generate new parameters for input to regressor."""
     # force neural networks for testing purposes
     if method in ["default", 'random', 'fast']:
         pass
@@ -777,7 +779,8 @@ def generate_regressor_params(
         model_dict = {method: sklearn_model_dict[method]}
     elif model_dict is None:
         model_dict = sklearn_model_dict
-    """Generate new parameters for input to regressor."""
+    if method == "no_gpu":
+        model_dict = {x: y for (x, y) in model_dict.items() if x not in gpu}
     model_list = list(model_dict.keys())
     model = random.choices(model_list, list(model_dict.values()), k=1)[0]
     if model in [
@@ -1139,12 +1142,12 @@ def generate_regressor_params(
                 [
                     'linear',
                     "exponential",
-                    "locally_periodic",
                     "rbf",
                     "polynomial",
                     'periodic',
+                    "locally_periodic",
                 ],
-                [0.1, 0.1, 0.1, 0.4, 0.1, 0.1],
+                [0.1, 0.1, 0.4, 0.2, 0.01, 0.01],
             )[0]
             param_dict = {
                 "model": 'MultioutputGPR',
@@ -1154,13 +1157,16 @@ def generate_regressor_params(
                 },
             }
             if kernel in ["exponential", "locally_periodic", "rbf", "periodic"]:
-                param_dict['gamma'] = random.choice([0.1, 1, 10, 100])
+                param_dict['gamma'] = random.choices(
+                    [0.1, 1, 10, 100],
+                    [0.2, 0.05, 0.2, 0.2],
+                )[0]
             if kernel in ["locally_periodic", "periodic"]:
                 param_dict['p'] = random.choices(
-                    [7, 12, 365.25, 52, 28], [0.6, 0.15, 0.15, 0.05, 0.05]
+                    [7, 12, 365.25, 52, 28], [0.8, 0.15, 0.15, 0.05, 0.05]
                 )[0]
             if kernel == "locally_periodic":
-                param_dict['lambda_prime'] = random.choice([0.1, 1, 10, 100])
+                param_dict['lambda_prime'] = random.choice([0.1, 1, 10])
         else:
             min_samples = np.random.choice(
                 [1, 2, 0.05], p=[0.5, 0.3, 0.2], size=1
@@ -3282,7 +3288,7 @@ class VectorizedMultiOutputGPR:
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
 
-    def __init__(self, kernel='rbf', noise_var=1e-2, gamma=0.1, lambda_prime=0.1, p=7):
+    def __init__(self, kernel='rbf', noise_var=10, gamma=0.1, lambda_prime=0.1, p=7):
         self.kernel = kernel
         self.noise_var = noise_var
         self.gamma = gamma
@@ -3296,6 +3302,8 @@ class VectorizedMultiOutputGPR:
         return (1 + np.dot(x1, x2.T)) ** p
 
     def _rbf_kernel(self, x1, x2, gamma):
+        # from scipy.spatial.distance import cdist
+        # return np.exp(-gamma * cdist(x1, x2, 'sqeuclidean'))
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
