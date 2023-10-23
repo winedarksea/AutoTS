@@ -2351,6 +2351,8 @@ or otherwise increase models available."""
         """remove models not in given model list."""
         if model_list is None:
             model_list = self.model_list
+        if isinstance(model_list, dict):
+            model_list = list(model_list.keys())
         if include_ensemble:
             mod_list = model_list + ['Ensemble']
         else:
