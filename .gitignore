@@ -111,3 +111,14 @@ venv.bak/
 # Visual Studio
 *.DS_Store
 .vscode/
+
+# old stuff and diagnostic
+archive/
+kernel_failures/
+lightning_logs/
+current_model_*
+# ignore in root but not in subdirectories
+/*.zip
+/*.gz
+/*.png
+/*.csv
