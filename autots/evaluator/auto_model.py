@@ -1064,17 +1064,34 @@ class TemplateEvalObject(object):
         self.model_count = self.model_count + another_eval.model_count
         return self
 
-    def save(self, filename):
-        """Save results to a file."""
-        if '.csv' in filename:
+    def save(self, filename='initial_results.pickle'):
+        """Save results to a file.
+        
+        Args:
+            filename (str): *.pickle or *.csv. .pickle saves full results
+        """
+        if filename.endswith('.csv'):
             self.model_results.to_csv(filename, index=False)
-        elif '.pickle' in filename:
+        elif filename.endswith('.pickle'):
             import pickle
 
             with open(filename, "wb") as f:
                 pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         else:
-            raise ValueError("filename not .csv or .pickle")
+            raise ValueError(f"filename `{filename}` not .csv or .pickle")
+    
+    def load(self, filename):
+        # might want to add csv handling from auto_ts
+        if isinstance(filename, TemplateEvalObject):
+            new_obj = filename
+        elif filename.endswith('.pickle'):
+            import pickle
+
+            new_obj = pickle.load(open(filename, "rb"))
+        else:
+            raise ValueError("import type not recognized.")
+        self = self.concat(new_obj)
+        return self
 
 
 def unpack_ensemble_models(

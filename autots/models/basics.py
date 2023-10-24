@@ -2379,6 +2379,8 @@ class MetricMotif(ModelObject):
             scores = np.sqrt(np.sum((temp - last_window.T)**2, axis=2))
         elif distance_metric == "chebyshev":
             scores = np.max(np.abs(temp - last_window.T), axis=2)
+        elif distance_metric == "wasserstein":
+            scores = np.mean(np.abs(np.cumsum(temp, axis=-1) - np.cumsum(last_window, axis=0).T), axis=2)
         elif distance_metric == "mqae":
             q = 0.85
             ae = np.abs(temp - last_window.T)
@@ -2498,6 +2500,7 @@ class MetricMotif(ModelObject):
             "minkowski",
             "euclidean",
             "chebyshev",
+            "wasserstein",
         ]
         comparisons = filters.copy()
         comparisons['CenterLastValue'] = 0.05

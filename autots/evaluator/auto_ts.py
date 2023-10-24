@@ -1440,10 +1440,7 @@ class AutoTS(object):
                     time.sleep(5)
 
         # run validation_results aggregation
-        self.validation_results = copy.copy(self.initial_results)
-        self.validation_results = validation_aggregation(
-            self.validation_results, df_train=self.df_wide_numeric
-        )
+        self = self.validation_agg()
 
         # Construct horizontal style ensembles
         models_to_use = None
@@ -1709,10 +1706,7 @@ class AutoTS(object):
                 hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
-            self.validation_results = copy.copy(self.initial_results)
-            self.validation_results = validation_aggregation(
-                self.validation_results, df_train=self.df_wide_numeric
-            )
+            self = self.validation_agg()
 
             # use the best of these ensembles if any ran successfully
             # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
@@ -1753,11 +1747,21 @@ class AutoTS(object):
         sys.stdout.flush()
         return self
 
+    def validaton_agg(self):
+        self.validation_results = copy.copy(self.initial_results)
+        self.validation_results = validation_aggregation(
+            self.validation_results, df_train=self.df_wide_numeric
+        )
+        return self
+
     def _best_non_horizontal(self, metric_weighting=None):
         if self.validation_results is None:
-            raise ValueError(
-                "validation results are None, cannot choose best model without fit"
-            )
+            if not self.initial_results.model_results.empty:
+                self = self.validation_agg()
+            else:
+                raise ValueError(
+                    "validation results are None, cannot choose best model without fit"
+                )
         if metric_weighting is None:
             metric_weighting = self.metric_weighting
         # choose best model, when no horizontal ensembling is done
@@ -2000,11 +2004,7 @@ or otherwise increase models available."""
                 result_file=None,
             )
 
-        self.validation_results = copy.copy(self.initial_results)
-        # aggregate validation results
-        self.validation_results = validation_aggregation(
-            self.validation_results, df_train=self.df_wide_numeric
-        )
+        self = self.validation_agg()
 
     def _predict(
         self,
