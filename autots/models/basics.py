@@ -2400,7 +2400,10 @@ class MetricMotif(ModelObject):
             raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
         # select smallest windows
-        min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
+        if point_method == "closest":
+            min_idx = np.argsort(scores, axis=0)[:k]
+        else:
+            min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
         # take the period starting AFTER the window
         test = (
             np.moveaxis(
@@ -2446,6 +2449,10 @@ class MetricMotif(ModelObject):
             q1 = nan_quantile(results, q=0.25, axis=0)
             q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
+        elif point_method == "closest":
+            forecast = results[0]
+        else:
+            raise ValueError(f"point_method {point_method} not recognized")
 
         del temp, scores, test, min_idx
 
@@ -2520,7 +2527,7 @@ class MetricMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
+                ["weighted_mean", "mean", "median", "midhinge", "closest"], [0.4, 0.2, 0.2, 0.2, 0.1]
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
