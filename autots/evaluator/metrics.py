@@ -507,6 +507,15 @@ def chi_squared_hist_distribution_loss(F, A, bins="auto"):
         norm_A = hist_A / (np.sum(hist_A) + 1e-10)
         norm_P = hist_P / (np.sum(hist_P) + 1e-10)
         results.append(np.sum((norm_A - norm_P)**2 / (norm_A + norm_P + 1e-10)))
+        """
+        bin_width = bin_edges[1] - bin_edges[0]
+        plt.bar(bin_edges[:-1], norm_P, align='edge', width=bin_width, alpha=0.5, label='forecast', color='blue')
+        plt.bar(bin_edges[:-1], norm_A, align='edge', width=bin_width, alpha=0.5, label='history', color='red')
+        plt.title('Histogram Comparison')
+        plt.xlabel('Value')
+        plt.ylabel('Frequency')
+        plt.show()
+        """
     return np.array(results)
 
 

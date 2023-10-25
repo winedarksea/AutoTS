@@ -1747,7 +1747,7 @@ class AutoTS(object):
         sys.stdout.flush()
         return self
 
-    def validaton_agg(self):
+    def validation_agg(self):
         self.validation_results = copy.copy(self.initial_results)
         self.validation_results = validation_aggregation(
             self.validation_results, df_train=self.df_wide_numeric
