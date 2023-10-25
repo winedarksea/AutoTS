@@ -421,8 +421,8 @@ def smoothness(arr):
 
 
 def wasserstein(F, A):
-    """This version has sorting, which is perhaps not appropriate for time series."""
-    # Step 1: Sort each column (perhaps a bit slow)
+    """This version has sorting, which is perhaps less relevant on average than the unsorted."""
+    # Step 1: Sort each column (perhaps a bit slow), is smallest to largest by default
     sorted_P = np.sort(F, axis=0)
     sorted_A = np.sort(A, axis=0)
 
@@ -435,16 +435,79 @@ def wasserstein(F, A):
     return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
 
 
-def sort_cumsum(A):
-    # defined separately in auto_model, update there too if changed
-    # return np.nancumsum(np.sort(A, axis=0), axis=0)
-    return np.nancumsum(A, axis=0)
+def unsorted_wasserstein(F, A):
+    """Also known as earth moving distance."""
+    cumsum_P = np.cumsum(F, axis=0)
+    # actuals may have NaNs but forecasts should not
+    cumsum_A = np.nancumsum(A, axis=0)
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
 
 
 def precomp_wasserstein(F, cumsum_A):
     # sorted_P = np.sort(F, axis=0)
     cumsum_P = np.cumsum(F, axis=0)
     return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)    
+
+
+def _gaussian_kernel(x, data, bandwidth):
+    """Compute Gaussian kernel values of data over x."""
+    # Reshape x and data for broadcasting
+    x = x[:, np.newaxis, np.newaxis]
+    return np.exp(-0.5 * ((x - data) / bandwidth) ** 2) / (bandwidth * np.sqrt(2 * np.pi))
+
+
+def kl_divergence(p, q):
+    """Compute KL Divergence between two distributions."""
+    epsilon = 1e-10
+    p = p + epsilon
+    q = q + epsilon
+    return np.sum(p * np.log(p / q), axis=0)
+
+
+def _empirical_distribution(data, values):
+    """Compute empirical distribution of data over given values."""
+    return np.array([(data == v).sum(axis=0) for v in values], dtype=float) / data.shape[0]
+
+
+def kde(actuals, forecasts, bandwidth, x):
+    # Compute empirical distribution for actuals over x
+    # x = np.arange(0, 10, 0.1)  # Adjusted range for Poisson values and continuous forecasts
+    # p = _empirical_distribution(actuals, x)
+
+    # Compute KDE for forecasts over x
+    p = _gaussian_kernel(x, actuals, bandwidth).sum(axis=1)
+    p /= p.sum(axis=0, keepdims=True)
+    q = _gaussian_kernel(x, forecasts, bandwidth).sum(axis=1)
+    q /= q.sum(axis=0, keepdims=True)
+    return p, q
+
+
+def kde_kl_distance(F, A, bandwidth=0.5, x=None):
+    """Distribution loss by means of KDE and KL Divergence."""
+    if x is None:
+        combined_data = np.concatenate([A, F])
+        x_min = combined_data.min() - 1
+        x_max = combined_data.max() + 1
+        x = np.linspace(x_min, x_max, 1000)
+    p, q = kde(A, F, bandwidth=bandwidth, x=x)
+    return kl_divergence(p, q)
+
+
+def chi_squared_hist_distribution_loss(F, A, bins="auto"):
+    """Distribution loss, chi-squared distance from histograms."""
+    cols = F.shape[1]
+    results = []
+    # I haven't yet found a way to vectorize histograms
+    for i in range(cols):
+        current_series = F[:, i]
+        current_actuals = A[:, i]
+        hist_A, bin_edges = np.histogram(current_actuals, bins=bins)
+        hist_P, _ = np.histogram(current_series, bins=bin_edges)
+        # Normalize the histograms to make them distributions, unnecessary except NaN in actuals
+        norm_A = hist_A / (np.sum(hist_A) + 1e-10)
+        norm_P = hist_P / (np.sum(hist_P) + 1e-10)
+        results.append(np.sum((norm_A - norm_P)**2 / (norm_A + norm_P + 1e-10)))
+    return np.array(results)
 
 
 def full_metric_evaluation(
@@ -506,7 +569,7 @@ def full_metric_evaluation(
         scaler[np.isnan(scaler)] = fill_val
 
     if cumsum_A is None:
-        cumsum_A = sort_cumsum(A)
+        cumsum_A = np.nancumsum(A, axis=0)
 
     # fill with zero where applicable
     filled_full_mae_errors = full_mae_errors.copy()
