@@ -11,6 +11,7 @@ from hashlib import md5
 from autots.tools.cpu_count import set_n_jobs
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.base import PredictionObject, ModelObject
+from autots.evaluator.metrics import default_scaler, array_last_val
 from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
@@ -1484,18 +1485,16 @@ def TemplateWizard(
 
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
-    # precompute scaler to save a few miliseconds (saves very little time)
-    scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
-    fill_val = np.nanmax(scaler)
-    fill_val = fill_val if fill_val > 0 else 1
-    scaler[scaler == 0] = fill_val
-    scaler[np.isnan(scaler)] = fill_val
-
-    template_dict = template.to_dict('records')
     # minor speedup with one less copy per eval by assuring arrays at this level
     actuals = np.asarray(df_test)
     df_trn_arr = np.asarray(df_train)
+    # precompute scaler to save a few miliseconds (saves very little time)
+    scaler = default_scaler(df_trn_arr)
     cumsum_A = np.nancumsum(actuals, axis=0)
+    last_of_array = array_last_val(df_trn_arr)
+    diff_A = np.diff(np.concatenate([last_of_array, actuals]), axis=0)
+
+    template_dict = template.to_dict('records')
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
@@ -1564,6 +1563,8 @@ def TemplateWizard(
                 per_timestamp_errors=per_ts,
                 scaler=scaler,
                 cumsum_A=cumsum_A,
+                diff_A=diff_A,
+                last_of_array=last_of_array,
             )
             if validation_round >= 1 and verbose > 0:
                 round_smape = model_error.avg_metrics['smape'].round(2)
