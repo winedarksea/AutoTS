@@ -3283,21 +3283,17 @@ or otherwise increase models available."""
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
-    
-    def plot_metric_corr(self, cols=None):
-        """Plot correlation in results among metrics.
-        The metrics that are highly correlated are those that mostly the unscaled ones
+        
+    def get_metric_corr(self, percent_best=0.1):
+        """Returns a dataframe of correlation among evaluation metrics across evaluations.
 
         Args:
-            cols (list): strings of columns to show, 'all' for all
+            percent_best (float): percent (ie 0.1 for 10%) of models to use, best by score first
         """
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-
         res = self.initial_results.model_results
         res = res[res['Exceptions'].isnull()]
         # correlation is much more interesting among the top models than among the full trials
-        res = res.loc[res.sort_values("Score").index[0:int(res.shape[0] * 0.1) + 1]]
+        res = res.loc[res.sort_values("Score").index[0:int(res.shape[0] * percent_best) + 1]]
         metrics = res.select_dtypes("number")
         metrics = metrics[[x for x in metrics.columns if "weighted" not in x]]
         metrics = metrics.drop(columns=[
@@ -3307,20 +3303,33 @@ or otherwise increase models available."""
         ], errors='ignore')
         metrics = (metrics) / metrics.std()
 
-        corr = metrics.corr()
+        return metrics.corr()
+    
+    def plot_metric_corr(self, cols=None, percent_best=0.1):
+        """Plot correlation in results among metrics.
+        The metrics that are highly correlated are those that mostly the unscaled ones
+
+        Args:
+            cols (list): strings of columns to show, 'all' for all
+            percent_best (float): percent (ie 0.1 for 10%) of models to use, best by score first
+        """
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        self.metric_corr = self.get_metric_corr(percent_best=percent_best)
 
         if cols is None:
-            mostly_one = (corr.abs() == 1).sum() == (corr.abs() == 1).sum().max()
-            cols = corr[~mostly_one].abs().sum().nlargest(15).index.tolist()
+            mostly_one = (self.metric_corr.abs() == 1).sum() == (self.metric_corr.abs() == 1).sum().max()
+            cols = self.metric_corr[~mostly_one].abs().sum().nlargest(15).index.tolist()
             if len(cols) < 15:
-                cols.extend(corr[mostly_one].index[0:15 - len(cols)].tolist())
+                cols.extend(self.metric_corr[mostly_one].index[0:15 - len(cols)].tolist())
         elif cols == 'all':
-            cols = corr.columns
+            cols = self.metric_corr.columns
 
         if len(cols) <= 2:
-            correlation_matrix = corr.loc[cols]
+            correlation_matrix = self.metric_corr.loc[cols]
         else:
-            correlation_matrix = corr[cols].loc[cols]
+            correlation_matrix = self.metric_corr[cols].loc[cols]
         # Create a mask for the upper triangle to hide redundant information
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
 
@@ -3337,7 +3346,6 @@ or otherwise increase models available."""
 
         # Add a title
         plt.title("Correlogram of Metric Correlations from Optimized Forecasts")
-        self.metric_corr = corr
         return ax
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):

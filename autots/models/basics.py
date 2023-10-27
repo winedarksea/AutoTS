@@ -2635,6 +2635,7 @@ class SeasonalityMotif(ModelObject):
         distance_metric = self.distance_metric
         datepart_method = self.datepart_method
         k = self.k
+        full_sort = self.point_method == "closest"
 
         if self.independent:
             # each timestep is considered individually and not as a series
@@ -2644,6 +2645,7 @@ class SeasonalityMotif(ModelObject):
                 k=k,
                 datepart_method=datepart_method,
                 distance_metric=distance_metric,
+                full_sort=full_sort,
             )
         else:
             # original method and perhaps smoother
@@ -2654,6 +2656,7 @@ class SeasonalityMotif(ModelObject):
                 forecast_length=forecast_length,
                 datepart_method=datepart_method,
                 distance_metric=distance_metric,
+                full_sort=full_sort,
             )
         # (num_windows, forecast_length, num_series)
         results = np.moveaxis(np.take(self.df.to_numpy(), test, axis=0), 1, 0)
@@ -2672,6 +2675,10 @@ class SeasonalityMotif(ModelObject):
             q1 = nan_quantile(results, q=0.25, axis=0)
             q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
+        elif point_method == "closest":
+            forecast = results[0]
+        else:
+            raise ValueError(f"point_method {point_method} not recognized.")
 
         pred_int = round((1 - self.prediction_interval) / 2, 5)
         upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
@@ -2728,7 +2735,7 @@ class SeasonalityMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge"], [0.2, 0.2, 0.2, 0.2]
+                ["weighted_mean", "mean", "median", "midhinge", 'closest'], [0.2, 0.2, 0.2, 0.2, 0.1]
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,

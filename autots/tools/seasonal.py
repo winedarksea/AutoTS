@@ -534,7 +534,7 @@ def random_datepart(method='random'):
 
 
 def seasonal_window_match(
-    DTindex, k, window_size, forecast_length, datepart_method, distance_metric
+    DTindex, k, window_size, forecast_length, datepart_method, distance_metric, full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
 
@@ -577,7 +577,10 @@ def seasonal_window_match(
         raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
     # select smallest windows
-    min_idx = np.argpartition(scores.mean(axis=1), k - 1, axis=0)[:k]
+    if full_sort:
+        min_idx = np.argsort(scores.mean(axis=1), axis=0)[:k]
+    else:
+        min_idx = np.argpartition(scores.mean(axis=1), k - 1, axis=0)[:k]
     # take the period starting AFTER the window
     test = (
         np.broadcast_to(
@@ -594,7 +597,7 @@ def seasonal_window_match(
 
 
 def seasonal_independent_match(
-    DTindex, DTindex_future, k, datepart_method, distance_metric
+    DTindex, DTindex_future, k, datepart_method, distance_metric, full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
     future_array = date_part(DTindex_future, method=datepart_method).to_numpy()
@@ -633,7 +636,10 @@ def seasonal_independent_match(
         raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
     # select smallest windows
-    min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
+    if full_sort:
+        min_idx = np.argsort(scores, axis=0)[:k]
+    else:
+        min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
     # take the period starting AFTER the window
     test = min_idx.T
     # for data over the end, fill last value
