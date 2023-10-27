@@ -586,6 +586,8 @@ class PredictionObject(object):
         full_mae_error: bool = True,
         scaler=None,
         cumsum_A=None,
+        diff_A=None,
+        last_of_array=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -628,6 +630,8 @@ class PredictionObject(object):
                 scaler=scaler,
                 return_components=True,
                 cumsum_A=cumsum_A,
+                diff_A=diff_A,
+                last_of_array=last_of_array,
             )
 
         if per_timestamp_errors:
