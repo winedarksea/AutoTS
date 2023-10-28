@@ -4941,9 +4941,9 @@ def transformer_list_to_dict(transformer_list):
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict
     elif transformer_list == "scalable":
-        scalable_transformer_dict = fast_transformer_dict.copy()
-        del scalable_transformer_dict["KalmanSmoothing"]  # potential kernel/RAM issues
-        del scalable_transformer_dict["SinTrend"]
+        transformer_list = fast_transformer_dict.copy()
+        del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
+        del transformer_list["SinTrend"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
