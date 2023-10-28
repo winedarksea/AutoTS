@@ -4843,12 +4843,6 @@ transformer_dict = {
     "ReplaceConstant": 0.005,
     "AlignLastDiff": 0.01,
 }
-# remove any slow transformers
-fast_transformer_dict = transformer_dict.copy()
-# del fast_transformer_dict["SinTrend"]
-del fast_transformer_dict["FastICA"]
-del fast_transformer_dict["Cointegration"]
-del fast_transformer_dict["BTCD"]
 
 # and even more, not just removing slow but also less commonly useful ones
 # also there should be no 'shared' transformers in this list to make h-ensembles faster
@@ -4870,7 +4864,7 @@ superfast_transformer_dict = {
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
-    # "AlignLastDiff": 0.05,  # pending testing
+    "AlignLastDiff": 0.05,  # pending testing
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -4932,12 +4926,24 @@ na_probs = {
 
 def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
+    if transformer_list in ["fast", "default", "Fast", "auto", 'scalable']:
+        # remove any slow transformers
+        fast_transformer_dict = transformer_dict.copy()
+        # del fast_transformer_dict["SinTrend"]
+        del fast_transformer_dict["FastICA"]
+        del fast_transformer_dict["Cointegration"]
+        del fast_transformer_dict["BTCD"]
+
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
     elif transformer_list in ["fast", "default", "Fast", "auto"]:
         transformer_list = fast_transformer_dict
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict
+    elif transformer_list == "scalable":
+        scalable_transformer_dict = fast_transformer_dict.copy()
+        del scalable_transformer_dict["KalmanSmoothing"]  # potential kernel/RAM issues
+        del scalable_transformer_dict["SinTrend"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
