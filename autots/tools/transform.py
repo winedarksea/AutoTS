@@ -3611,7 +3611,7 @@ class LevelShiftMagic(EmptyTransformer):
             index=df.index,
             columns=df.columns,
         )
-        group_ids = range_arr[~diff_mask].ffill # [diff_mask]
+        group_ids = range_arr[~diff_mask].ffill() # [diff_mask]
         max_mask = diff_abs == maxes
         used_groups = group_ids[max_mask].mean()
         curr_diff = diff_abs.where(((group_ids != used_groups) & diff_mask), np.nan)
