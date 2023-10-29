@@ -4137,18 +4137,21 @@ class AlignLastDiff(EmptyTransformer):
         rows: int = 1,
         quantile: float = 0.5,
         decay_span: float = None,
+        displacement_rows: int = 1,
         **kwargs,
     ):
         super().__init__(name="AlignLastDiff")
         self.rows = rows
         self.quantile = quantile
         self.decay_span = decay_span
+        self.displacement_rows = displacement_rows
         self.adjustment = None
 
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
             "rows": random.choices([1, 2, 4, 7, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1])[0],
+            "displacement_rows": random.choices([1, 2, 4, 7, 21], [0.8, 0.05, 0.05, 0.05, 0.05])[0],
             "quantile": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2, 0], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05]
             )[0],
@@ -4204,7 +4207,11 @@ class AlignLastDiff(EmptyTransformer):
         
 
         if self.adjustment is None:
-            displacement = df.iloc[0] - self.center  # positive is growth
+            if self.displacement_rows == 1 or self.displacement_rows is None:
+                displacement = df.iloc[0] - self.center  # positive is growth
+            else:
+                displacement = df.iloc[0:self.displacement_rows].mean() - self.center  # positive is growth
+
             if self.rows <= 1:
                 self.adjustment = np.where(np.abs(displacement) > self.diff.flatten(), displacement - (self.diff.flatten() * np.sign(displacement)), 0)
             else:
