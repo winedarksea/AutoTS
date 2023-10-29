@@ -541,6 +541,15 @@ class AutoTS(object):
                 'ewmae_weighting': random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
+                'mate_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'wasserstein_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'dwd_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
             }
             validation_method = random.choices(
                 ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
@@ -928,7 +937,12 @@ class AutoTS(object):
             time.sleep(3)  # give the message a chance to be seen
 
         if self.transformer_list == "auto":
-            self.transformer_list = "all" if df_wide_numeric.shape[1] <= 10 else "fast"
+            if df_wide_numeric.shape[1] <= 8:
+                self.transformer_list = "all"
+            elif df_wide_numeric.shape[1] <= 500:
+                self.transformer_list = "fast"
+            else:
+                self.transformer_list = "superfast"
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:

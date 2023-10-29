@@ -47,7 +47,7 @@ class TestMetrics(unittest.TestCase):
             index=[
                 'smape', 'mae', 'rmse', 'made', 'mage', 'mate', 'underestimate', 'mle',
                 'overestimate', 'imle', 'spl', 'containment', 'contour', 'maxe',
-                'oda', 'dwae', 'mqae', 'ewmae', 'uwmse', 'smoothness', "wasserstein", "diff_wasserstein",
+                'oda', 'dwae', 'mqae', 'ewmae', 'uwmse', 'smoothness', "wasserstein", "dwd",
             ]
         )
         known_avg_metrics_weighted = pd.Series(
@@ -58,7 +58,7 @@ class TestMetrics(unittest.TestCase):
             index=[
                 'smape', 'mae', 'rmse', 'made', 'mage', 'mate', 'underestimate', 'mle',
                 'overestimate', 'imle', 'spl', 'containment', 'contour', 'maxe',
-                'oda', 'dwae', 'mqae', 'ewmae', 'uwmse', 'smoothness', "wasserstein", "diff_wasserstein",
+                'oda', 'dwae', 'mqae', 'ewmae', 'uwmse', 'smoothness', "wasserstein", "dwd",
             ]
         )
         b_avg_metrics = pd.Series(
@@ -69,7 +69,7 @@ class TestMetrics(unittest.TestCase):
             index=[
                 'smape', 'mae', 'rmse', 'made', 'mage', 'mate', 'underestimate',
                 'mle', 'overestimate', 'imle', 'spl', 'containment', 'contour',
-                'maxe', 'oda', 'dwae', 'mqae', 'ewmae', 'uwmse', 'smoothness', "wasserstein", "diff_wasserstein",
+                'maxe', 'oda', 'dwae', 'mqae', 'ewmae', 'uwmse', 'smoothness', "wasserstein", "dwd",
             ]
         )
 

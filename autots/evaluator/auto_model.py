@@ -960,6 +960,7 @@ class TemplateEvalObject(object):
         per_series_smoothness=None,
         per_series_mate=None,
         per_series_wasserstein=None,
+        per_series_dwd=None,
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -981,7 +982,8 @@ class TemplateEvalObject(object):
         self.per_series_uwmse = per_series_uwmse
         self.per_series_smoothness = per_series_smoothness
         self.per_series_mate = per_series_mate
-        self.per_series_wasserstein= per_series_wasserstein
+        self.per_series_wasserstein = per_series_wasserstein
+        self.per_series_dwd = per_series_dwd
         self.full_mae_ids = []
         self.full_mae_errors = []
         self.full_pl_errors = []
@@ -1055,6 +1057,11 @@ class TemplateEvalObject(object):
         )
         self.per_series_wasserstein = pd.concat(
             [self.per_series_wasserstein, another_eval.per_series_wasserstein],
+            axis=0,
+            sort=False,
+        )
+        self.per_series_dwd = pd.concat(
+            [self.per_series_dwd, another_eval.per_series_dwd],
             axis=0,
             sort=False,
         )
@@ -1796,6 +1803,7 @@ def TemplateWizard(
         template_result.per_series_smoothness = ps[ps['autots_eval_metric'] == 'smoothness'].drop(columns='autots_eval_metric')
         template_result.per_series_mate = ps[ps['autots_eval_metric'] == 'mate'].drop(columns='autots_eval_metric')
         template_result.per_series_wasserstein = ps[ps['autots_eval_metric'] == 'wasserstein'].drop(columns='autots_eval_metric')
+        template_result.per_series_dwd = ps[ps['autots_eval_metric'] == 'dwd'].drop(columns='autots_eval_metric')
         """
         template_result.per_series_mae = pd.concat(
             template_result.per_series_mae, axis=0
@@ -1864,6 +1872,7 @@ def TemplateWizard(
         template_result.per_series_smoothness = pd.DataFrame()
         template_result.per_series_mate = pd.DataFrame()
         template_result.per_series_wasserstein = pd.DataFrame()
+        template_result.per_series_dwd = pd.DataFrame()
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
@@ -2349,6 +2358,7 @@ def validation_aggregation(validation_results, df_train=None):
         'smoothness': 'mean',
         'mate': 'mean',
         'wasserstein': 'mean',
+        'dwd': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
@@ -2367,6 +2377,7 @@ def validation_aggregation(validation_results, df_train=None):
         'smoothness_weighted': 'mean',
         'mate_weighted': 'mean',
         'wasserstein_weighted': 'mean',
+        'dwd_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
@@ -2450,6 +2461,7 @@ def generate_score(
     smoothness_weighting = metric_weighting.get('smoothness_weighting', 0)
     mate_weighting = metric_weighting.get('mate_weighting', 0)
     wasserstein_weighting = metric_weighting.get('wasserstein_weighting', 0)
+    dwd_weighting = metric_weighting.get('dwd_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         model_results['TotalRuntimeSeconds'] = np.where(
@@ -2559,6 +2571,12 @@ def generate_score(
             ].min()
             wasserstein_score = model_results['wasserstein_weighted'] / wasserstein_scaler
             overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
+        if dwd_weighting != 0:
+            dwd_scaler = model_results['dwd_weighted'][
+                model_results['dwd_weighted'] != 0
+            ].min()
+            dwd_score = model_results['dwd_weighted'] / dwd_scaler
+            overall_score = overall_score + (dwd_score * dwd_weighting)
         if smoothness_weighting != 0:
             smoothness_scaler = model_results['smoothness_weighted'][
                 model_results['smoothness_weighted'] != 0
@@ -2627,6 +2645,7 @@ def generate_score_per_series(
     smoothness_weighting = metric_weighting.get('smoothness_weighting', 0)
     mate_weighting = metric_weighting.get('mate_weighting', 0)
     wasserstein_weighting = metric_weighting.get('wasserstein_weighting', 0)
+    dwd_weighting = metric_weighting.get('dwd_weighting', 0)
 
     # there are problems when very small ~e-20 type number are in play
     mae_scaler = results_object.per_series_mae[
@@ -2725,6 +2744,14 @@ def generate_score_per_series(
         )
         wasserstein_score = results_object.per_series_wasserstein / wasserstein_scaler
         overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
+    if dwd_weighting != 0:
+        dwd_scaler = (
+            results_object.per_series_dwd[results_object.per_series_dwd != 0]
+            .min()
+            .fillna(1)
+        )
+        dwd_score = results_object.per_series_dwd / dwd_scaler
+        overall_score = overall_score + (dwd_score * dwd_weighting)
     if smoothness_weighting != 0:
         smoothness_scaler = (
             results_object.per_series_smoothness[

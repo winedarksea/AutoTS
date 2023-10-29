@@ -24,7 +24,7 @@
 * logging improvements for pytorch and some pytorch backend for gluonts support
 * added AlignLastDiff
 * added plot_metric_corr
-* added mate, wasserstein metrics
+* added mate, wasserstein, dwd metrics
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
@@ -49,7 +49,7 @@
 
 ## New Metric Checklist:
 	* Create function in metrics.py
-	* Add to mode base .evaluate()  (benchmark to make sure it is still fast)
+	* Add to mode base full_metric_evaluation  (benchmark to make sure it is still fast)
 	* Add to concat in TemplateWizard (if per_series metrics will be used)
 	* Add to concat in TemplateEvalObject (if per_series metrics will be used)
 	* Add to generate_score

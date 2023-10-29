@@ -381,10 +381,9 @@ class SeasonalityMotifImputer(object):
             0,
         )
         # brdcst = np.array(np.broadcast_to(full_dist[...,None],full_dist.shape+(df.shape[1],)))  # .reshape(brdcst_mask.shape)
+        # this uses WAY too much memory
         brdcst = np.moveaxis(
-            np.array(
-                np.broadcast_to(full_dist[..., None], full_dist.shape + (df.shape[1],))
-            ),
+            np.broadcast_to(full_dist[..., None], full_dist.shape + (df.shape[1],)),
             -1,
             1,
         )

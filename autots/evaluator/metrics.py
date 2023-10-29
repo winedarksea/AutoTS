@@ -246,7 +246,7 @@ def _precomp_contour(diff_A, diff_F):
             (np.nan_to_num(diff_A) >= 0)
             == (np.nan_to_num(diff_F) > 0),
             axis=0,
-        ) / (diff_F.shape[0] - 1)
+        ) / (diff_F.shape[0])
     except Exception:
         contour_result = np.nan
     return contour_result
@@ -740,7 +740,7 @@ def full_metric_evaluation(
             / scaler,
             'smoothness': smoothness(lF),
             'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler,
-            "diff_wasserstein": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A)) / scaler,
+            "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A)) / scaler, # differential wasserstein distance, pronounced "DUDE"
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),

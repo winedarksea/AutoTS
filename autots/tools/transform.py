@@ -4917,9 +4917,9 @@ na_probs = {
     "interpolate": 0.4,
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
-    "SeasonalityMotifImputer": 0.1,
-    "SeasonalityMotifImputerLinMix": 0.02,
-    "SeasonalityMotifImputer1K": 0.01,
+    "SeasonalityMotifImputer": 0.1,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputerLinMix": 0.01,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputer1K": 0.01,  # apparently this is too memory hungry at scale
     "DatepartRegressionImputer": 0.05,  # also slow
 }
 
@@ -5000,10 +5000,20 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("IterativeImputer", None)
         throw_away = df_interpolate.pop("spline", None)  # noqa
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
     if superfast_params:
         params_method = "fast"
+        throw_away = na_prob_dict.pop("IterativeImputer", None)
+        throw_away = df_interpolate.pop("spline", None)  # noqa
+        throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
+        throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
