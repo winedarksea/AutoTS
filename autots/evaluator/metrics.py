@@ -371,8 +371,8 @@ def msle(full_errors, ae, le, nan_flag=True):
 def oda(A, F, last_of_array):
     """Origin Directional Accuracy, the accuracy of growth or decline relative to most recent data."""
     return (
-        np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0)
-        / F.shape[0]
+        # np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0]
+        np.nanmean(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0)
     )
 
 
@@ -709,7 +709,8 @@ def full_metric_evaluation(
             # maximum error point
             'maxe': np.max(filled_full_mae_errors, axis=0),  # TAKE MAX for AGG
             # origin directional accuracy
-            'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+            # 'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+            'oda': np.nanmean(direc_sign, axis=0),
             # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
             "dwae": (
                 (
