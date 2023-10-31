@@ -1868,7 +1868,7 @@ class Cassandra(ModelObject):
                     "KalmanStateSpace",
                     'RRVAR',
                 ],
-                [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05, 0.05],
+                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.02, 0.02, 0.05],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -2040,9 +2040,10 @@ class Cassandra(ModelObject):
                 ["dayofweek", 365.25],
                 ["month", "dayofweek", "weekdayofmonth"],
                 ['weekdayofmonth', 'common_fourier'],
+                ["simple_binarized"],
                 "other",
             ],
-            [0.1, 0.1, 0.1, 0.05, 0.1],
+            [0.1, 0.1, 0.1, 0.05, 0.1, 0.1],
         )[0]
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
