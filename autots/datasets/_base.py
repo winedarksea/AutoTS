@@ -416,7 +416,7 @@ def load_live_daily(
                 report = "domain"  # site, domain, download, second-level-domain
                 url = f"https://api.gsa.gov/analytics/dap/v1.1/domain/{domain}/reports/{report}/data?api_key={gsa_key}&limit={gov_domain_limit}&after={observation_start}"
                 data = s.get(url, timeout=timeout)
-                gdf = pd.read_json(data.text, orient="records")
+                gdf = pd.read_json(io.StringIO(data.text), orient="records")
                 gdf['date'] = pd.to_datetime(gdf['date'])
                 # essentially duplicates brought by agency and null agency
                 gresult = gdf.groupby('date')['visits'].first()

@@ -159,7 +159,7 @@ if 'wiki_all' in df.columns:
 if trend_list is not None:
     for tx in trend_list:
         if tx in df.columns:
-            df[tx] = df[tx].interpolate('akima').fillna(method='ffill', limit=30).fillna(method='bfill', limit=30)
+            df[tx] = df[tx].interpolate('akima').ffill(limit=30).bfill(limit=30)
 # fill weekends
 if tickers is not None:
     for fx in tickers:
@@ -176,7 +176,7 @@ if weather_event_types is not None:
     df[wevnt] = df[wevnt].mask(df[wevnt].notnull().cummax(), df[wevnt].fillna(0))
 # most of the NaN here are just weekends, when financial series aren't collected, ffill of a few steps is fine
 # partial forward fill, no back fill
-df = df.fillna(method='ffill', limit=3)
+df = df.ffill(limit=3)
 
 df = df[df.index.year > 1999]
 # remove any data from the future

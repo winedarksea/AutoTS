@@ -72,7 +72,7 @@ class hierarchial(object):
         self.top_ids = set(grouping_ids.values())
         self.bottom_ids = grouping_ids.keys()
 
-        hier = df.abs().groupby(grouping_ids, axis=1).sum()
+        hier = df.abs().T.groupby(grouping_ids).sum()
         self.hier = hier
 
         if self.reconciliation == 'mean':
@@ -115,7 +115,7 @@ class hierarchial(object):
 
             top_level = fore[self.top_ids]
             bottom_up = (
-                fore[self.bottom_ids].abs().groupby(self.grouping_ids, axis=1).sum()
+                fore[self.bottom_ids].abs().T.groupby(self.grouping_ids).sum()
             )
 
             diff = (top_level - bottom_up) / 2

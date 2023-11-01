@@ -103,7 +103,7 @@ def rolling_x_regressor(
             local_df.index.shift(-nonzero_last_n, freq=inferred_freq)
         )
         X.append(
-            (local_df.reindex(full_index).fillna(method="bfill") != 0)
+            (local_df.reindex(full_index).bfill() != 0)
             .rolling(nonzero_last_n, min_periods=1)
             .sum()
             .reindex(local_df.index)

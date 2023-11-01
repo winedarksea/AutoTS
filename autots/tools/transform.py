@@ -2397,9 +2397,7 @@ class MeanDifference(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return (df - df.mean(axis=1).shift(self.lag).values[..., None]).fillna(
-            method="bfill"
-        )
+        return (df - df.mean(axis=1).shift(self.lag).values[..., None]).bfill()
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -2407,9 +2405,7 @@ class MeanDifference(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
-        return (df - self.means.shift(self.lag).values[..., None]).fillna(
-            method="bfill"
-        )
+        return (df - self.means.shift(self.lag).values[..., None]).bfill()
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
@@ -4118,7 +4114,7 @@ def exponential_decay(n, span=None, halflife=None):
         decay_values = np.exp(-t / span)
     else:
         decay_values = np.exp(-np.log(2) * t / halflife)
-    
+
     return decay_values
 
 
@@ -4168,7 +4164,7 @@ class AlignLastDiff(EmptyTransformer):
             local_df = df.ffill(axis=0)
         else:
             local_df = df
-        
+
         self.center = df.iloc[-1, :]
 
         if self.rows <= 1:
@@ -4201,7 +4197,7 @@ class AlignLastDiff(EmptyTransformer):
             self.adjustment = adjustment
         if trans_method == "original":
             return df
-        
+
 
         if self.adjustment is None:
             displacement = df.iloc[0] - self.center  # positive is growth
