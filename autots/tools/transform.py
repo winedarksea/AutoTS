@@ -3810,7 +3810,7 @@ class CenterSplit(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1],
+                [0.3, 0.01, 0.2, 0.2, 0.2, 0.2, 0.01],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
@@ -4104,7 +4104,7 @@ class ReplaceConstant(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1],
+                [0.2, 0.01, 0.3, 0.2, 0.2, 0.2, 0.2, 0.01],
             )[0],
         }
 
@@ -4803,7 +4803,7 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 transformer_dict = {
     None: 0.0,
     "MinMaxScaler": 0.03,
-    "PowerTransformer": 0.02,  # is noticeably slower at scale, if not tons
+    "PowerTransformer": 0.01,  # is noticeably slower at scale, if not tons
     "QuantileTransformer": 0.03,
     "MaxAbsScaler": 0.03,
     "StandardScaler": 0.04,
@@ -4895,7 +4895,7 @@ scalers = {
     "Log": 0.03,
     "Discretize": 0.01,
     "QuantileTransformer": 0.1,
-    "PowerTransformer": 0.05,
+    "PowerTransformer": 0.02,
 }
 # intended to clean up external regressors
 decompositions = {

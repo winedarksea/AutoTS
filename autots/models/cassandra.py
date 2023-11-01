@@ -1868,7 +1868,7 @@ class Cassandra(ModelObject):
                     "KalmanStateSpace",
                     'RRVAR',
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.02, 0.02, 0.05],
+                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.02, 0.001, 0.05],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
