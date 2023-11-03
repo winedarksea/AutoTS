@@ -337,7 +337,7 @@ def retrieve_regressor(
         if multioutput:
             return MultiOutputRegressor(
                 LGBMRegressor(
-                    verbose=- 1,
+                    verbose=-1,
                     random_state=random_seed,
                     n_jobs=1,
                     **model_param_dict,
@@ -404,9 +404,7 @@ def retrieve_regressor(
                 n_jobs=n_jobs,
             )
         else:
-            regr = xgb.XGBRegressor(
-                verbosity=0, **model_param_dict, n_jobs=n_jobs
-            )
+            regr = xgb.XGBRegressor(verbosity=0, **model_param_dict, n_jobs=n_jobs)
         return regr
     elif model_class == 'SVM':
         from sklearn.svm import LinearSVR
@@ -535,9 +533,7 @@ def retrieve_classifier(
     elif model_class in ['xgboost', 'XGBClassifier']:
         import xgboost as xgb
 
-        return xgb.XGBClassifier(
-            verbosity=verbose, **model_param_dict, n_jobs=n_jobs
-        )
+        return xgb.XGBClassifier(verbosity=verbose, **model_param_dict, n_jobs=n_jobs)
     elif model_class == "RandomForest":
         from sklearn.ensemble import RandomForestClassifier
 
@@ -549,6 +545,7 @@ def retrieve_classifier(
         )
     else:
         raise ValueError(f"classifier {model_class} not a recognized option.")
+
 
 # models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict = {
@@ -693,7 +690,7 @@ xgparam1 = {
         'colsample_bytree': 0.46,
         'reg_alpha': 0.0016,
         'reg_lambda': 5.3,
-    }
+    },
 }
 xgparam2 = {
     "model": 'xgboost',
@@ -744,7 +741,8 @@ def generate_classifier_params(
     if model_dict is None:
         model_dict = {'xgboost': 1, 'ExtraTrees': 1, 'RandomForest': 1}
     regr_params = generate_regressor_params(
-        model_dict=model_dict, method=method,
+        model_dict=model_dict,
+        method=method,
     )
     if regr_params["model"] == 'xgboost':
         if "objective" in regr_params['model_params'].keys():
@@ -816,7 +814,9 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.1, 0.1, 0.1, 0.7])[0]
+            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.1, 0.1, 0.1, 0.7])[
+                0
+            ]
             if branch == 'p1':
                 param_dict = xgparam1
             elif branch == 'p2':
@@ -825,7 +825,13 @@ def generate_regressor_params(
                 param_dict = xgparam3
             else:
                 objective = random.choices(
-                    ['count:poisson', 'reg:squarederror', 'reg:gamma', 'reg:pseudohubererror', 'reg:quantileerror'],
+                    [
+                        'count:poisson',
+                        'reg:squarederror',
+                        'reg:gamma',
+                        'reg:pseudohubererror',
+                        'reg:quantileerror',
+                    ],
                     [0.1, 0.6, 0.1, 0.1, 0.1],
                 )[0]
                 param_dict = {
@@ -834,20 +840,25 @@ def generate_regressor_params(
                         "objective": objective,
                         "eta": random.choices(
                             [1.0, 0.3, 0.01, 0.03, 0.05, 0.003],
-                            [0.05, 0.1, 0.1, 0.1, 0.1, 0.1]
-                        )[0],  # aka learning_rate
+                            [0.05, 0.1, 0.1, 0.1, 0.1, 0.1],
+                        )[
+                            0
+                        ],  # aka learning_rate
                         "min_child_weight": random.choices(
                             [0.05, 0.5, 1, 2, 5], [0.1, 0.2, 0.8, 0.1, 0.1]
                         )[0],
-                        
                         "subsample": random.choices(
                             [1, 0.9, 0.7, 0.5], [0.9, 0.05, 0.05, 0.05]
                         )[0],
                         "colsample_bylevel": random.choices(
                             [1, 0.9, 0.7, 0.5], [0.4, 0.1, 0.1, 0.1]
                         )[0],
-                        "reg_alpha": random.choices([0, 0.001, 0.05, 100], [0.9, 0.1, 0.05, 0.05])[0],
-                        "reg_lambda": random.choices([1, 0.03, 0.11, 0.2, 5], [0.9, 0.05, 0.05, 0.05, 0.05])[0],
+                        "reg_alpha": random.choices(
+                            [0, 0.001, 0.05, 100], [0.9, 0.1, 0.05, 0.05]
+                        )[0],
+                        "reg_lambda": random.choices(
+                            [1, 0.03, 0.11, 0.2, 5], [0.9, 0.05, 0.05, 0.05, 0.05]
+                        )[0],
                     },
                 }
                 if random.choices([True, False], [0.4, 0.6])[0]:
@@ -934,13 +945,17 @@ def generate_regressor_params(
             max_depth_choice = random.choices(
                 [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
             )[0]
-            estimators_choice = random.choices([4, 50, 100, 500], [0.05, 0.05, 0.9, 0.05])[0]
+            estimators_choice = random.choices(
+                [4, 50, 100, 500], [0.05, 0.05, 0.9, 0.05]
+            )[0]
             param_dict = {
                 "model": 'ExtraTrees',
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([2, 4, 1.0], [0.8, 0.1, 0.1])[0],
+                    "min_samples_split": random.choices([2, 4, 1.0], [0.8, 0.1, 0.1])[
+                        0
+                    ],
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
@@ -3335,7 +3350,7 @@ class VectorizedMultiOutputGPR:
         diff = x1[:, np.newaxis, :] - x2[np.newaxis, :, :]
         sin_sq = np.sin(np.pi * np.abs(diff) / p) ** 2
         return np.exp(-2 * sin_sq / gamma**2)
-    
+
     def _periodic_kernel(self, x1, x2, gamma, p):
         result = np.empty((x1.shape[0], x2.shape[0]))
         for i, xi in enumerate(x1):
@@ -3345,10 +3360,12 @@ class VectorizedMultiOutputGPR:
         return result
 
     def _old_locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
-        rbf_part = np.exp(-((x1 - x2) ** 2) / (2 * gamma**2))  #  old: np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
+        rbf_part = np.exp(
+            -((x1 - x2) ** 2) / (2 * gamma**2)
+        )  #  old: np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
         periodic_part = self._periodic_kernel(x1, x2, lambda_prime, p)
         return rbf_part * periodic_part
-    
+
     def _locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
         result = np.empty((x1.shape[0], x2.shape[0]))
         for i, xi in enumerate(x1):
@@ -3358,7 +3375,6 @@ class VectorizedMultiOutputGPR:
             periodic_part = np.exp(-2 * sin_sq / gamma**2)
             result[i, :] = rbf_part * periodic_part
         return result
-
 
     def fit(self, X, Y):
         self.X_train = np.asarray(X)
@@ -3387,10 +3403,13 @@ class VectorizedMultiOutputGPR:
         # Cholesky decomposition and solve for alpha in a vectorized way
         if False:
             from scipy.sparse.linalg import cg
+
             self.alpha, _ = cg(K, np.asarray(Y))  # _ captures info about convergence
         else:
             self.L = np.linalg.cholesky(K)
-            self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, np.asarray(Y)))
+            self.alpha = np.linalg.solve(
+                self.L.T, np.linalg.solve(self.L, np.asarray(Y))
+            )
         del K
         # Regularized Kernel
         return self

@@ -2311,7 +2311,10 @@ or otherwise increase models available."""
                     export_template = export_template[self.template_cols_id]
         elif models == "slowest":
             return self.save_template(
-                filename, self.initial_results.model_results.nlargest(n, columns=['TotalRuntime'])
+                filename,
+                self.initial_results.model_results.nlargest(
+                    n, columns=['TotalRuntime']
+                ),
             )
         else:
             raise ValueError("`models` must be 'all' or 'best'")
@@ -2898,6 +2901,7 @@ or otherwise increase models available."""
             ].drop_duplicates()
         elif isinstance(models, pd.DataFrame):
             validation_template = models
+        # the duplicated check is only for exact match, and could be improved
         duplicated = False
         if self.validation_forecasts_template is not None:
             if self.validation_forecasts_template.equals(validation_template):
@@ -2950,12 +2954,14 @@ or otherwise increase models available."""
         self.validation_forecasts_template = validation_template
 
     def retrieve_validation_forecasts(
-            self, models=None, compare_horizontal=False, id_name="SeriesID",
-            value_name="Value", interval_name='PredictionInterval',
-        ):
-        self._validation_forecasts(
-            models=models, compare_horizontal=compare_horizontal
-        )
+        self,
+        models=None,
+        compare_horizontal=False,
+        id_name="SeriesID",
+        value_name="Value",
+        interval_name='PredictionInterval',
+    ):
+        self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
         needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []
         for x in self.validation_forecasts.keys():
@@ -3028,10 +3034,11 @@ or otherwise increase models available."""
                         "plot_validations arg subset must be None, 'best' or 'worst'"
                     )
         # run the forecasts on the past validations
-        self._validation_forecasts(
-            models=models, compare_horizontal=compare_horizontal
-        )
-        if not self.best_model_non_horizontal is not None and compare_horizontal and colors is None:
+        self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
+        if (
+            not compare_horizontal
+            and colors is None
+        ):
             colors = {
                 'actuals': '#AFDBF5',
                 'chosen': '#4D4DFF',
@@ -3327,7 +3334,7 @@ or otherwise increase models available."""
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
-        
+
     def get_metric_corr(self, percent_best=0.1):
         """Returns a dataframe of correlation among evaluation metrics across evaluations.
 
@@ -3337,18 +3344,29 @@ or otherwise increase models available."""
         res = self.initial_results.model_results
         res = res[res['Exceptions'].isnull()]
         # correlation is much more interesting among the top models than among the full trials
-        res = res.loc[res.sort_values("Score").index[0:int(res.shape[0] * percent_best) + 1]]
+        res = res.loc[
+            res.sort_values("Score").index[0 : int(res.shape[0] * percent_best) + 1]
+        ]
         metrics = res.select_dtypes("number")
         metrics = metrics[[x for x in metrics.columns if "weighted" not in x]]
-        metrics = metrics.drop(columns=[
-            'Ensemble', 'Runs', 'TransformationRuntime', 'FitRuntime',
-            'PredictRuntime', 'Generation', 'ValidationRound',
-            'PostMemoryPercent', 'TotalRuntimeSeconds'
-        ], errors='ignore')
+        metrics = metrics.drop(
+            columns=[
+                'Ensemble',
+                'Runs',
+                'TransformationRuntime',
+                'FitRuntime',
+                'PredictRuntime',
+                'Generation',
+                'ValidationRound',
+                'PostMemoryPercent',
+                'TotalRuntimeSeconds',
+            ],
+            errors='ignore',
+        )
         metrics = (metrics) / metrics.std()
 
         return metrics.corr()
-    
+
     def plot_metric_corr(self, cols=None, percent_best=0.1):
         """Plot correlation in results among metrics.
         The metrics that are highly correlated are those that mostly the unscaled ones
@@ -3363,10 +3381,14 @@ or otherwise increase models available."""
         self.metric_corr = self.get_metric_corr(percent_best=percent_best)
 
         if cols is None:
-            mostly_one = (self.metric_corr.abs() == 1).sum() == (self.metric_corr.abs() == 1).sum().max()
+            mostly_one = (self.metric_corr.abs() == 1).sum() == (
+                self.metric_corr.abs() == 1
+            ).sum().max()
             cols = self.metric_corr[~mostly_one].abs().sum().nlargest(15).index.tolist()
             if len(cols) < 15:
-                cols.extend(self.metric_corr[mostly_one].index[0:15 - len(cols)].tolist())
+                cols.extend(
+                    self.metric_corr[mostly_one].index[0 : 15 - len(cols)].tolist()
+                )
         elif cols == 'all':
             cols = self.metric_corr.columns
 
@@ -3384,8 +3406,18 @@ or otherwise increase models available."""
         cmap = sns.diverging_palette(220, 20, as_cmap=True)
 
         # Create the correlogram using a heatmap
-        sns.heatmap(correlation_matrix, mask=mask, cmap=cmap, vmax=1, center=0,
-                    annot=True, fmt=".2f", square=True, linewidths=.5, cbar_kws={"shrink": 0.7})
+        sns.heatmap(
+            correlation_matrix,
+            mask=mask,
+            cmap=cmap,
+            vmax=1,
+            center=0,
+            annot=True,
+            fmt=".2f",
+            square=True,
+            linewidths=0.5,
+            cbar_kws={"shrink": 0.7},
+        )
         sns.set_style("whitegrid")  # Add a grid for clarity
 
         # Add a title
@@ -3535,7 +3567,12 @@ or otherwise increase models available."""
             explainer = shap.Explainer(bst, feature_names=feature_names)
             shap_values = explainer(shap_X)
             # Plot summary plot
-            shap.summary_plot(shap_values, shap_X, feature_names=feature_names, title=f"SHAP Summary for {target}")
+            shap.summary_plot(
+                shap_values,
+                shap_X,
+                feature_names=feature_names,
+                title=f"SHAP Summary for {target}",
+            )
             # Plot SHAP values for a single prediction
             try:
                 if waterfall_plots:

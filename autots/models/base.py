@@ -506,7 +506,7 @@ class PredictionObject(object):
                 plot_df['low_forecast'],
                 alpha=alpha,
                 color="#A5ADAF",
-                label="Prediction Interval"
+                label="Prediction Interval",
             )
         if vline is not None:
             ax.vlines(

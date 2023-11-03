@@ -671,6 +671,7 @@ def ModelMonster(
         )
     elif model == "TiDE":
         from autots.models.tide import TiDE
+
         return TiDE(
             frequency=frequency,
             forecast_length=forecast_length,
@@ -943,7 +944,7 @@ class TemplateEvalObject(object):
         self,
         model_results=pd.DataFrame(),
         per_timestamp_smape=pd.DataFrame(),
-        per_series_metrics = pd.DataFrame(),
+        per_series_metrics=pd.DataFrame(),
         per_series_mae=None,
         per_series_rmse=None,
         per_series_made=None,
@@ -1074,7 +1075,7 @@ class TemplateEvalObject(object):
 
     def save(self, filename='initial_results.pickle'):
         """Save results to a file.
-        
+
         Args:
             filename (str): *.pickle or *.csv. .pickle saves full results
         """
@@ -1087,7 +1088,7 @@ class TemplateEvalObject(object):
                 pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         else:
             raise ValueError(f"filename `{filename}` not .csv or .pickle")
-    
+
     def load(self, filename):
         # might want to add csv handling from auto_ts
         if isinstance(filename, TemplateEvalObject):
@@ -1787,23 +1788,57 @@ def TemplateWizard(
             template_result.per_series_metrics, axis=0
         )
         ps = template_result.per_series_metrics
-        template_result.per_series_mae = ps[ps['autots_eval_metric'] == 'mae'].drop(columns='autots_eval_metric')
-        template_result.per_series_made = ps[ps['autots_eval_metric'] == 'made'].drop(columns='autots_eval_metric')
-        template_result.per_series_contour = ps[ps['autots_eval_metric'] == 'contour'].drop(columns='autots_eval_metric')
-        template_result.per_series_rmse = ps[ps['autots_eval_metric'] == 'rmse'].drop(columns='autots_eval_metric')
-        template_result.per_series_spl = ps[ps['autots_eval_metric'] == 'spl'].drop(columns='autots_eval_metric')
-        template_result.per_series_mle = ps[ps['autots_eval_metric'] == 'mle'].drop(columns='autots_eval_metric')
-        template_result.per_series_imle = ps[ps['autots_eval_metric'] == 'imle'].drop(columns='autots_eval_metric')
-        template_result.per_series_maxe = ps[ps['autots_eval_metric'] == 'maxe'].drop(columns='autots_eval_metric')
-        template_result.per_series_oda = ps[ps['autots_eval_metric'] == 'oda'].drop(columns='autots_eval_metric')
-        template_result.per_series_mqae = ps[ps['autots_eval_metric'] == 'mqae'].drop(columns='autots_eval_metric')
-        template_result.per_series_dwae = ps[ps['autots_eval_metric'] == 'dwae'].drop(columns='autots_eval_metric')
-        template_result.per_series_ewmae = ps[ps['autots_eval_metric'] == 'ewmae'].drop(columns='autots_eval_metric')
-        template_result.per_series_uwmse = ps[ps['autots_eval_metric'] == 'uwmse'].drop(columns='autots_eval_metric')
-        template_result.per_series_smoothness = ps[ps['autots_eval_metric'] == 'smoothness'].drop(columns='autots_eval_metric')
-        template_result.per_series_mate = ps[ps['autots_eval_metric'] == 'mate'].drop(columns='autots_eval_metric')
-        template_result.per_series_wasserstein = ps[ps['autots_eval_metric'] == 'wasserstein'].drop(columns='autots_eval_metric')
-        template_result.per_series_dwd = ps[ps['autots_eval_metric'] == 'dwd'].drop(columns='autots_eval_metric')
+        template_result.per_series_mae = ps[ps['autots_eval_metric'] == 'mae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_made = ps[ps['autots_eval_metric'] == 'made'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_contour = ps[
+            ps['autots_eval_metric'] == 'contour'
+        ].drop(columns='autots_eval_metric')
+        template_result.per_series_rmse = ps[ps['autots_eval_metric'] == 'rmse'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_spl = ps[ps['autots_eval_metric'] == 'spl'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_mle = ps[ps['autots_eval_metric'] == 'mle'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_imle = ps[ps['autots_eval_metric'] == 'imle'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_maxe = ps[ps['autots_eval_metric'] == 'maxe'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_oda = ps[ps['autots_eval_metric'] == 'oda'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_mqae = ps[ps['autots_eval_metric'] == 'mqae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_dwae = ps[ps['autots_eval_metric'] == 'dwae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_ewmae = ps[ps['autots_eval_metric'] == 'ewmae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_uwmse = ps[ps['autots_eval_metric'] == 'uwmse'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_smoothness = ps[
+            ps['autots_eval_metric'] == 'smoothness'
+        ].drop(columns='autots_eval_metric')
+        template_result.per_series_mate = ps[ps['autots_eval_metric'] == 'mate'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_wasserstein = ps[
+            ps['autots_eval_metric'] == 'wasserstein'
+        ].drop(columns='autots_eval_metric')
+        template_result.per_series_dwd = ps[ps['autots_eval_metric'] == 'dwd'].drop(
+            columns='autots_eval_metric'
+        )
         """
         template_result.per_series_mae = pd.concat(
             template_result.per_series_mae, axis=0
@@ -2569,7 +2604,9 @@ def generate_score(
             wasserstein_scaler = model_results['wasserstein_weighted'][
                 model_results['wasserstein_weighted'] != 0
             ].min()
-            wasserstein_score = model_results['wasserstein_weighted'] / wasserstein_scaler
+            wasserstein_score = (
+                model_results['wasserstein_weighted'] / wasserstein_scaler
+            )
             overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
         if dwd_weighting != 0:
             dwd_scaler = model_results['dwd_weighted'][
@@ -2738,7 +2775,9 @@ def generate_score_per_series(
         overall_score = overall_score + (mate_score * mate_weighting)
     if wasserstein_weighting != 0:
         wasserstein_scaler = (
-            results_object.per_series_wasserstein[results_object.per_series_wasserstein != 0]
+            results_object.per_series_wasserstein[
+                results_object.per_series_wasserstein != 0
+            ]
             .min()
             .fillna(1)
         )

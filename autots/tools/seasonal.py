@@ -534,7 +534,13 @@ def random_datepart(method='random'):
 
 
 def seasonal_window_match(
-    DTindex, k, window_size, forecast_length, datepart_method, distance_metric, full_sort=False,
+    DTindex,
+    k,
+    window_size,
+    forecast_length,
+    datepart_method,
+    distance_metric,
+    full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
 
@@ -556,9 +562,9 @@ def seasonal_window_match(
         scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
     elif distance_metric == "minkowski":
         p = 2
-        scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1/p)
+        scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1 / p)
     elif distance_metric == "euclidean":
-        scores = np.sqrt(np.sum((temp - last_window.T)**2, axis=2))
+        scores = np.sqrt(np.sum((temp - last_window.T) ** 2, axis=2))
     elif distance_metric == "chebyshev":
         scores = np.max(np.abs(temp - last_window.T), axis=2)
     elif distance_metric == "mqae":
@@ -597,7 +603,12 @@ def seasonal_window_match(
 
 
 def seasonal_independent_match(
-    DTindex, DTindex_future, k, datepart_method, distance_metric, full_sort=False,
+    DTindex,
+    DTindex_future,
+    k,
+    datepart_method,
+    distance_metric,
+    full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
     future_array = date_part(DTindex_future, method=datepart_method).to_numpy()
@@ -615,9 +626,9 @@ def seasonal_independent_match(
         scores = np.mean(np.abs(a - b) / divisor, axis=2)
     elif distance_metric == "minkowski":
         p = 2
-        scores = np.sum(np.abs(a - b) ** p, axis=2) ** (1/p)
+        scores = np.sum(np.abs(a - b) ** p, axis=2) ** (1 / p)
     elif distance_metric == "euclidean":
-        scores = np.sqrt(np.sum((a - b)**2, axis=2))
+        scores = np.sqrt(np.sum((a - b) ** 2, axis=2))
     elif distance_metric == "chebyshev":
         scores = np.max(np.abs(a - b), axis=2)
     elif distance_metric == "mqae":

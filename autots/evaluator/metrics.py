@@ -129,9 +129,7 @@ def _made(diff_A, diff_F, scaler=None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         if scaler is None:
-            return np.nanmean(
-                abs(diff_A - diff_F), axis=0
-            )
+            return np.nanmean(abs(diff_A - diff_F), axis=0)
         else:
             return (
                 np.nanmean(
@@ -243,8 +241,7 @@ def _precomp_contour(diff_A, diff_F):
         # On the assumption flat lines common in forecasts,
         # but exceedingly rare in real world
         contour_result = np.sum(
-            (np.nan_to_num(diff_A) >= 0)
-            == (np.nan_to_num(diff_F) > 0),
+            (np.nan_to_num(diff_A) >= 0) == (np.nan_to_num(diff_F) > 0),
             axis=0,
         ) / (diff_F.shape[0])
     except Exception:
@@ -477,14 +474,16 @@ def unsorted_wasserstein(F, A):
 def precomp_wasserstein(F, cumsum_A):
     # sorted_P = np.sort(F, axis=0)
     cumsum_P = np.cumsum(F, axis=0)
-    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)    
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
 
 
 def _gaussian_kernel(x, data, bandwidth):
     """Compute Gaussian kernel values of data over x."""
     # Reshape x and data for broadcasting
     x = x[:, np.newaxis, np.newaxis]
-    return np.exp(-0.5 * ((x - data) / bandwidth) ** 2) / (bandwidth * np.sqrt(2 * np.pi))
+    return np.exp(-0.5 * ((x - data) / bandwidth) ** 2) / (
+        bandwidth * np.sqrt(2 * np.pi)
+    )
 
 
 def kl_divergence(p, q, epsilon=1e-10):
@@ -496,7 +495,9 @@ def kl_divergence(p, q, epsilon=1e-10):
 
 def _empirical_distribution(data, values):
     """Compute empirical distribution of data over given values."""
-    return np.array([(data == v).sum(axis=0) for v in values], dtype=float) / data.shape[0]
+    return (
+        np.array([(data == v).sum(axis=0) for v in values], dtype=float) / data.shape[0]
+    )
 
 
 def kde(actuals, forecasts, bandwidth, x):
@@ -536,13 +537,29 @@ def chi_squared_hist_distribution_loss(F, A, bins="auto", plot=False):
         # Normalize the histograms to make them distributions, unnecessary except NaN in actuals
         norm_A = hist_A / (np.sum(hist_A) + 1e-10)
         norm_P = hist_P / (np.sum(hist_P) + 1e-10)
-        results.append(np.sum((norm_A - norm_P)**2 / (norm_A + norm_P + 1e-10)))
+        results.append(np.sum((norm_A - norm_P) ** 2 / (norm_A + norm_P + 1e-10)))
         if plot:
             import matplotlib.pyplot as plt
 
             bin_width = bin_edges[1] - bin_edges[0]
-            plt.bar(bin_edges[:-1], norm_P, align='edge', width=bin_width, alpha=0.5, label='forecast', color='blue')
-            plt.bar(bin_edges[:-1], norm_A, align='edge', width=bin_width, alpha=0.5, label='history', color='red')
+            plt.bar(
+                bin_edges[:-1],
+                norm_P,
+                align='edge',
+                width=bin_width,
+                alpha=0.5,
+                label='forecast',
+                color='blue',
+            )
+            plt.bar(
+                bin_edges[:-1],
+                norm_A,
+                align='edge',
+                width=bin_width,
+                alpha=0.5,
+                label='history',
+                color='red',
+            )
             plt.title('Histogram Comparison')
             plt.xlabel('Value')
             plt.ylabel('Frequency')
@@ -741,7 +758,8 @@ def full_metric_evaluation(
             / scaler,
             'smoothness': smoothness(lF),
             'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler,
-            "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A)) / scaler, # differential wasserstein distance, pronounced "DUDE"
+            "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A))
+            / scaler,  # differential wasserstein distance, pronounced "DUDE"
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),
@@ -762,6 +780,12 @@ def full_metric_evaluation(
     # result_df['smape'] = result_df['smape'].fillna(200)
 
     if return_components:
-        return result_df.transpose(), full_mae_errors, squared_errors, upper_pl, lower_pl
+        return (
+            result_df.transpose(),
+            full_mae_errors,
+            squared_errors,
+            upper_pl,
+            lower_pl,
+        )
     else:
         return result_df.transpose()

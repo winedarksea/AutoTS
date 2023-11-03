@@ -8,10 +8,12 @@ Created on Mon Oct  9 22:07:37 2023
 import numpy as np
 
 
-def fourier_extrapolation(x, forecast_length=10, n_harm=10, detrend='linear', freq_range=None):
+def fourier_extrapolation(
+    x, forecast_length=10, n_harm=10, detrend='linear', freq_range=None
+):
     m, n = x.shape
     t = np.arange(0, m)
-    
+
     # Detrend
     if detrend == 'linear':
         p = np.polyfit(t, x, 1).T
@@ -23,14 +25,14 @@ def fourier_extrapolation(x, forecast_length=10, n_harm=10, detrend='linear', fr
         x_notrend = x
     else:
         raise ValueError(f"Unsupported detrend option: {detrend}")
-    
+
     # FFT
     x_freqdom = np.fft.fft(x_notrend, axis=0)
-    
+
     # Frequencies and sorted indices
     f = np.fft.fftfreq(m)
     indexes = np.argsort(np.abs(f))
-    
+
     # Frequency range filtering
     if freq_range:
         low, high = freq_range
@@ -41,19 +43,19 @@ def fourier_extrapolation(x, forecast_length=10, n_harm=10, detrend='linear', fr
     elif isinstance(n_harm, (int, float)):
         # handle float as percentage
         if 0 < n_harm < 1:
-            use_idx = indexes[:int(len(indexes) * n_harm)]
+            use_idx = indexes[: int(len(indexes) * n_harm)]
         # handle negative percentage ie last N percentage
         elif -1 < n_harm < 0:
-            use_idx = indexes[int(len(indexes) * n_harm):]
+            use_idx = indexes[int(len(indexes) * n_harm) :]
         elif n_harm <= -1:
-            use_idx = indexes[n_harm * 2:]
+            use_idx = indexes[n_harm * 2 :]
         # handle exact number
         else:
-            use_idx = indexes[:1 + n_harm * 2]
+            use_idx = indexes[: 1 + n_harm * 2]
     elif isinstance(n_harm, str):
         if "mid" in n_harm:
             midp = int(''.join(filter(str.isdigit, n_harm)))
-            use_idx = indexes[midp:midp + 40]
+            use_idx = indexes[midp : midp + 40]
     else:
         raise ValueError(f"n_harm value {n_harm} not recognized")
 
@@ -64,7 +66,7 @@ def fourier_extrapolation(x, forecast_length=10, n_harm=10, detrend='linear', fr
     for i in use_idx:
         ampli = np.abs(x_freqdom[i]) / m
         phase = np.angle(x_freqdom[i])
-        restored_sig += (ampli * np.cos(2 * np.pi * f[i] * t_extended[:, None] + phase))
+        restored_sig += ampli * np.cos(2 * np.pi * f[i] * t_extended[:, None] + phase)
     """
     # Use harmonics to reconstruct signal
     for i in indexes[10:10 + n_harm * 2]:
@@ -82,24 +84,27 @@ def fourier_extrapolation(x, forecast_length=10, n_harm=10, detrend='linear', fr
 
     # Add trend back
     if detrend == 'linear':
-        return (restored_sig + np.outer(t_extended, p[:, 0]))
+        return restored_sig + np.outer(t_extended, p[:, 0])
     elif detrend == 'quadratic':
-        return (restored_sig + np.outer(t_extended**2, p[:, 0]) + np.outer(t_extended, p[:, 1]))
+        return (
+            restored_sig
+            + np.outer(t_extended**2, p[:, 0])
+            + np.outer(t_extended, p[:, 1])
+        )
     else:
         return restored_sig
 
 
 class FFT(object):
-    def __init__(self, n_harm=10, detrend='linear', freq_range=None
-        ):
+    def __init__(self, n_harm=10, detrend='linear', freq_range=None):
         self.n_harm = n_harm
         self.detrend = detrend
         self.freq_range = freq_range
-    
+
     def fit(self, x):
         self.m, self.n = x.shape
         t = np.arange(0, self.m)
-        
+
         # Detrend
         if self.detrend == 'linear':
             self.p = np.polyfit(t, x, 1).T
@@ -109,22 +114,33 @@ class FFT(object):
             x_notrend = x - np.outer(t**2, self.p[:, 0]) - np.outer(t, self.p[:, 1])
         elif self.detrend == 'cubic':
             self.p = np.polyfit(t, x, 3).T
-            x_notrend = x - np.outer(t**3, self.p[:, 0]) - np.outer(t**2, self.p[:, 1]) - np.outer(t, self.p[:, 2])
+            x_notrend = (
+                x
+                - np.outer(t**3, self.p[:, 0])
+                - np.outer(t**2, self.p[:, 1])
+                - np.outer(t, self.p[:, 2])
+            )
         elif self.detrend == 'quartic':
             self.p = np.polyfit(t, x, 4).T
-            x_notrend = x - np.outer(t**4, self.p[:, 0])  - np.outer(t**3, self.p[:, 1]) - np.outer(t**2, self.p[:, 2]) - np.outer(t, self.p[:, 3])
+            x_notrend = (
+                x
+                - np.outer(t**4, self.p[:, 0])
+                - np.outer(t**3, self.p[:, 1])
+                - np.outer(t**2, self.p[:, 2])
+                - np.outer(t, self.p[:, 3])
+            )
         elif self.detrend is None:
             x_notrend = x
         else:
             raise ValueError(f"Unsupported detrend option: {self.detrend}")
-        
+
         # FFT
         self.x_freqdom = np.fft.fft(x_notrend, axis=0)
-        
+
         # Frequencies and sorted indices
         self.f = np.fft.fftfreq(self.m)
         indexes = np.argsort(np.abs(self.f))
-        
+
         # Frequency range filtering
         if self.freq_range:
             low, high = self.freq_range
@@ -135,19 +151,19 @@ class FFT(object):
         elif isinstance(self.n_harm, (int, float)):
             # handle float as percentage
             if 0 < self.n_harm < 1:
-                use_idx = indexes[:int(len(indexes) * self.n_harm)]
+                use_idx = indexes[: int(len(indexes) * self.n_harm)]
             # handle negative percentage ie last N percentage
             elif -1 < self.n_harm < 0:
-                use_idx = indexes[int(len(indexes) * self.n_harm):]
+                use_idx = indexes[int(len(indexes) * self.n_harm) :]
             elif self.n_harm <= -1:
-                use_idx = indexes[self.n_harm * 2:]
+                use_idx = indexes[self.n_harm * 2 :]
             # handle exact number
             else:
-                use_idx = indexes[:1 + self.n_harm * 2]
+                use_idx = indexes[: 1 + self.n_harm * 2]
         elif isinstance(self.n_harm, str):
             if "mid" in self.n_harm:
                 midp = int(''.join(filter(str.isdigit, self.n_harm)))
-                use_idx = indexes[midp:midp + 41]
+                use_idx = indexes[midp : midp + 41]
         else:
             raise ValueError(f"n_harm value {self.n_harm} not recognized")
         self.use_idx = use_idx
@@ -162,16 +178,33 @@ class FFT(object):
         for i in self.use_idx:
             ampli = np.abs(self.x_freqdom[i]) / self.m
             phase = np.angle(self.x_freqdom[i])
-            restored_sig += (ampli * np.cos(2 * np.pi * self.f[i] * t_extended[:, None] + phase))
+            restored_sig += ampli * np.cos(
+                2 * np.pi * self.f[i] * t_extended[:, None] + phase
+            )
 
         # Add trend back
         if self.detrend == 'linear':
-            return (restored_sig + np.outer(t_extended, self.p[:, 0]))
+            return restored_sig + np.outer(t_extended, self.p[:, 0])
         elif self.detrend == 'quadratic':
-            return (restored_sig + np.outer(t_extended**2, self.p[:, 0]) + np.outer(t_extended, self.p[:, 1]))
+            return (
+                restored_sig
+                + np.outer(t_extended**2, self.p[:, 0])
+                + np.outer(t_extended, self.p[:, 1])
+            )
         elif self.detrend == 'cubic':
-            return (restored_sig + np.outer(t_extended**3, self.p[:, 0]) + np.outer(t_extended**2, self.p[:, 1]) + np.outer(t_extended, self.p[:, 2]))
+            return (
+                restored_sig
+                + np.outer(t_extended**3, self.p[:, 0])
+                + np.outer(t_extended**2, self.p[:, 1])
+                + np.outer(t_extended, self.p[:, 2])
+            )
         elif self.detrend == 'quartic':
-            return (restored_sig + np.outer(t_extended**4, self.p[:, 0]) + np.outer(t_extended**3, self.p[:, 1]) + np.outer(t_extended**2, self.p[:, 2]) + np.outer(t_extended, self.p[:, 3]))
+            return (
+                restored_sig
+                + np.outer(t_extended**4, self.p[:, 0])
+                + np.outer(t_extended**3, self.p[:, 1])
+                + np.outer(t_extended**2, self.p[:, 2])
+                + np.outer(t_extended, self.p[:, 3])
+            )
         else:
             return restored_sig

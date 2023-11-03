@@ -131,7 +131,15 @@ fast_parallel = {**parallel, **fast}
 fast_parallel_no_arima = {
     i: fast_parallel[i]
     for i in fast_parallel
-    if i not in ['ARIMA', 'NVAR', "UnobservedComponents", "KalmanStateSpace", "MultivariateMotif", 'Theta']
+    if i
+    not in [
+        'ARIMA',
+        'NVAR',
+        "UnobservedComponents",
+        "KalmanStateSpace",
+        "MultivariateMotif",
+        'Theta',
+    ]
 }
 # so this opiniated and not fully updated always
 best = list(

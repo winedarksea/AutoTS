@@ -1108,6 +1108,7 @@ def looped_motif(
 
     if distance_metric == "kdtree":
         from scipy.spatial import KDTree
+
         # Build a KDTree for Xb
         tree = KDTree(Xa, leafsize=14)
         # Query the KDTree to find k nearest neighbors for each point in Xa
@@ -1362,7 +1363,8 @@ class Motif(ModelObject):
                 [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "closest"], [0.4, 0.2, 0.2, 0.2, 0.2]
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.2, 0.2, 0.2],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
@@ -2372,15 +2374,20 @@ class MetricMotif(ModelObject):
                 scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
         elif distance_metric == "minkowski":
             p = 2
-            scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1/p)
+            scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1 / p)
         elif distance_metric == "cosine":
-            scores = 1 - np.sum(temp * last_window.T, axis=2) / (np.linalg.norm(temp, axis=2) * np.linalg.norm(last_window.T, axis=2))
+            scores = 1 - np.sum(temp * last_window.T, axis=2) / (
+                np.linalg.norm(temp, axis=2) * np.linalg.norm(last_window.T, axis=2)
+            )
         elif distance_metric == "euclidean":
-            scores = np.sqrt(np.sum((temp - last_window.T)**2, axis=2))
+            scores = np.sqrt(np.sum((temp - last_window.T) ** 2, axis=2))
         elif distance_metric == "chebyshev":
             scores = np.max(np.abs(temp - last_window.T), axis=2)
         elif distance_metric == "wasserstein":
-            scores = np.mean(np.abs(np.cumsum(temp, axis=-1) - np.cumsum(last_window, axis=0).T), axis=2)
+            scores = np.mean(
+                np.abs(np.cumsum(temp, axis=-1) - np.cumsum(last_window, axis=0).T),
+                axis=2,
+            )
         elif distance_metric == "mqae":
             q = 0.85
             ae = np.abs(temp - last_window.T)
@@ -2527,7 +2534,8 @@ class MetricMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "closest"], [0.4, 0.2, 0.2, 0.2, 0.1]
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.2, 0.2, 0.1],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
@@ -2735,7 +2743,8 @@ class SeasonalityMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", 'closest'], [0.2, 0.2, 0.2, 0.2, 0.1]
+                ["weighted_mean", "mean", "median", "midhinge", 'closest'],
+                [0.2, 0.2, 0.2, 0.2, 0.1],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
@@ -2780,7 +2789,7 @@ class FFT(ModelObject):
         **kwargs,
     ):
         """Fast Fourier Transform forecast.
-        
+
         Args:
             n_harmonics (int): number of frequencies to include
             detrend (str): None, 'linear', or 'quadratic', use if no other detrending already done
@@ -2827,9 +2836,15 @@ class FFT(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        forecast = pd.DataFrame(fourier_extrapolation(
-            self.df.to_numpy(), forecast_length, n_harm=self.n_harmonics, detrend=self.detrend
-        )[-forecast_length:], columns=self.df.columns)
+        forecast = pd.DataFrame(
+            fourier_extrapolation(
+                self.df.to_numpy(),
+                forecast_length,
+                n_harm=self.n_harmonics,
+                detrend=self.detrend,
+            )[-forecast_length:],
+            columns=self.df.columns,
+        )
         forecast.index = test_index
         if just_point_forecast:
             return forecast
@@ -2861,9 +2876,12 @@ class FFT(ModelObject):
         """Returns dict of new parameters for parameter tuning"""
         return {
             "n_harmonics": random.choices(
-                [2, 4, 6, 10, 20, 100, 1000, 5000], [0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1]
+                [2, 4, 6, 10, 20, 100, 1000, 5000],
+                [0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1],
             )[0],
-            "detrend": random.choices([None, "linear", 'quadratic'], [0.2, 0.7, 0.1])[0],
+            "detrend": random.choices([None, "linear", 'quadratic'], [0.2, 0.7, 0.1])[
+                0
+            ],
         }
 
     def get_params(self):
@@ -2954,16 +2972,18 @@ class BallTreeMultivariateMotif(ModelObject):
 
         if self.distance_metric in ["euclidean", 'kdtree']:
             from scipy.spatial import KDTree
+
             # Build a KDTree for Xb
-            tree = KDTree(Xa[:, :self.window], leafsize=40)
+            tree = KDTree(Xa[:, : self.window], leafsize=40)
         else:
             from sklearn.neighbors import BallTree
-            tree = BallTree(Xa[:, :self.window], metric=self.distance_metric)
+
+            tree = BallTree(Xa[:, : self.window], metric=self.distance_metric)
             # Query the KDTree to find k nearest neighbors for each point in Xa
         Xb = self.df.iloc[-self.window :].to_numpy().T
         A, idx = tree.query(Xb, k=self.k)
         # (k, forecast_length, n_series)
-        self.result_windows = Xa[idx][:, :, self.window:].transpose(1, 2, 0)
+        self.result_windows = Xa[idx][:, :, self.window :].transpose(1, 2, 0)
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
@@ -2986,7 +3006,7 @@ class BallTreeMultivariateMotif(ModelObject):
         pred_int = round((1 - self.prediction_interval) / 2, 5)
         upper_forecast = nan_quantile(self.result_windows, q=(1 - pred_int), axis=0)
         lower_forecast = nan_quantile(self.result_windows, q=pred_int, axis=0)
-        
+
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         lower_forecast = pd.DataFrame(
             lower_forecast, index=test_index, columns=self.column_names
@@ -3011,7 +3031,7 @@ class BallTreeMultivariateMotif(ModelObject):
                 fit_runtime=self.fit_runtime,
                 model_parameters=self.get_params(),
             )
-        
+
             return prediction
 
     def get_new_params(self, method: str = 'random'):
@@ -3041,7 +3061,8 @@ class BallTreeMultivariateMotif(ModelObject):
                 [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "closest"], [0.4, 0.2, 0.2, 0.2, 0.2]
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.2, 0.2, 0.2],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,

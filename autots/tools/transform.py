@@ -6,7 +6,12 @@ import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
-from autots.models.sklearn import generate_regressor_params, retrieve_regressor, retrieve_classifier, generate_classifier_params
+from autots.models.sklearn import (
+    generate_regressor_params,
+    retrieve_regressor,
+    retrieve_classifier,
+    generate_classifier_params,
+)
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
     detect_anomalies,
@@ -892,12 +897,8 @@ class RollingMeanTransformer(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.shape = df.shape
-        self.last_values = (
-            df.tail(self.window).ffill().bfill()
-        )
-        self.first_values = (
-            df.head(self.window).ffill().bfill()
-        )
+        self.last_values = df.tail(self.window).ffill().bfill()
+        self.first_values = df.head(self.window).ffill().bfill()
 
         df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1).mean()
         self.last_rolling = df.tail(1)
@@ -3611,7 +3612,7 @@ class LevelShiftMagic(EmptyTransformer):
             index=df.index,
             columns=df.columns,
         )
-        group_ids = range_arr[~diff_mask].ffill() # [diff_mask]
+        group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
         max_mask = diff_abs == maxes
         used_groups = group_ids[max_mask].mean()
         curr_diff = diff_abs.where(((group_ids != used_groups) & diff_mask), np.nan)
@@ -3670,7 +3671,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).bfill().fillna(0)
+        return df - self.lvlshft.reindex(
+            index=df.index, columns=df.columns
+        ).bfill().fillna(0)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3678,7 +3681,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).bfill().fillna(0)
+        return df + self.lvlshft.reindex(
+            index=df.index, columns=df.columns
+        ).bfill().fillna(0)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3891,8 +3896,11 @@ class FFTFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         return {
-            "cutoff": random.choices([0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8], [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1])[0],
-            "reverse": random.choices([False, True], [0.9, 0.1])[0]
+            "cutoff": random.choices(
+                [0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8],
+                [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1],
+            )[0],
+            "reverse": random.choices([False, True], [0.9, 0.1])[0],
         }
 
 
@@ -3930,9 +3938,13 @@ class FFTDecomposition(EmptyTransformer):
         return df - self.predicted.reindex(df.index)
 
     def _predict(self, forecast_length):
-        self.predicted = pd.DataFrame(self.fft.predict(forecast_length), columns=self.df_columns)
+        self.predicted = pd.DataFrame(
+            self.fft.predict(forecast_length), columns=self.df_columns
+        )
         self.predicted.index = self.df_index.union(
-            pd.date_range(self.df_index[-1], periods=forecast_length + 1, freq=self.freq)
+            pd.date_range(
+                self.df_index[-1], periods=forecast_length + 1, freq=self.freq
+            )
         )
         return self
 
@@ -3975,8 +3987,14 @@ class FFTDecomposition(EmptyTransformer):
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         return {
-            "n_harmonics": random.choices([None, 10, 20, 0.5, -0.5, -0.95, "mid10", "mid20"], [0.1, 0.3, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05])[0],
-            "detrend": random.choices([None, "linear", "quadratic", "cubic", "quartic"], [0.4, 0.3, 0.3, 0.1, 0.05])[0],
+            "n_harmonics": random.choices(
+                [None, 10, 20, 0.5, -0.5, -0.95, "mid10", "mid20"],
+                [0.1, 0.3, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
+            )[0],
+            "detrend": random.choices(
+                [None, "linear", "quadratic", "cubic", "quartic"],
+                [0.4, 0.3, 0.3, 0.1, 0.05],
+            )[0],
         }
 
 
@@ -4011,13 +4029,17 @@ class ReplaceConstant(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         if self.reintroduction_model is None:
-            return FillNA(df.replace(self.constant, np.nan), method=self.fillna, window=10)
+            return FillNA(
+                df.replace(self.constant, np.nan), method=self.fillna, window=10
+            )
         else:
             # goal is for y to be 0 for constant and 1 for everything else
             y = 1 - np.where(df != self.constant, 0, 1)
             X = date_part(
                 df.index,
-                method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
+                method=self.reintroduction_model.get(
+                    "datepart_method", "simple_binarized"
+                ),
             )
             if y.ndim < 2:
                 multioutput = False
@@ -4037,7 +4059,9 @@ class ReplaceConstant(EmptyTransformer):
             self.model.fit(X, y)
             if False:
                 print(self.model.score(X, y))
-            return FillNA(df.replace(self.constant, np.nan), method=self.fillna, window=10)
+            return FillNA(
+                df.replace(self.constant, np.nan), method=self.fillna, window=10
+            )
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -4067,9 +4091,13 @@ class ReplaceConstant(EmptyTransformer):
         else:
             X = date_part(
                 df.index,
-                method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
+                method=self.reintroduction_model.get(
+                    "datepart_method", "simple_binarized"
+                ),
             )
-            pred = pd.DataFrame(self.model.predict(X), index=df.index, columns=df.columns)
+            pred = pd.DataFrame(
+                self.model.predict(X), index=df.index, columns=df.columns
+            )
             if self.constant == 0:
                 return df * pred
             else:
@@ -4110,7 +4138,9 @@ class ReplaceConstant(EmptyTransformer):
 
 
 def exponential_decay(n, span=None, halflife=None):
-    assert not ((span is not None) and (halflife is not None)), "Only one of span or halflife should be provided"
+    assert not (
+        (span is not None) and (halflife is not None)
+    ), "Only one of span or halflife should be provided"
 
     t = np.arange(n)
 
@@ -4118,7 +4148,7 @@ def exponential_decay(n, span=None, halflife=None):
         decay_values = np.exp(-t / span)
     else:
         decay_values = np.exp(-np.log(2) * t / halflife)
-    
+
     return decay_values
 
 
@@ -4150,12 +4180,18 @@ class AlignLastDiff(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "rows": random.choices([1, 2, 4, 7, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1])[0],
-            "displacement_rows": random.choices([1, 2, 4, 7, 21], [0.8, 0.05, 0.05, 0.05, 0.05])[0],
+            "rows": random.choices(
+                [1, 2, 4, 7, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1]
+            )[0],
+            "displacement_rows": random.choices(
+                [1, 2, 4, 7, 21], [0.8, 0.05, 0.05, 0.05, 0.05]
+            )[0],
             "quantile": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2, 0], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05]
             )[0],
-            "decay_span": random.choices([None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
+            "decay_span": random.choices(
+                [None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1]
+            )[0],
         }
 
     def fit(self, df):
@@ -4167,18 +4203,18 @@ class AlignLastDiff(EmptyTransformer):
         if self.rows is None:
             self.rows = df.shape[0]
         # fill NaN if present (up to a limit for slight speedup)
-        if np.isnan(np.sum(np.array(df)[-self.rows:])):
+        if np.isnan(np.sum(np.array(df)[-self.rows :])):
             local_df = df.ffill(axis=0)
         else:
             local_df = df
-        
+
         self.center = df.iloc[-1, :]
 
         if self.rows <= 1:
             self.diff = np.abs(((local_df - local_df.shift(1)).iloc[-1:]).to_numpy())
         else:
             # positive diff = growing
-            diff = (local_df - local_df.shift(1)).iloc[1:].iloc[-self.rows:]
+            diff = (local_df - local_df.shift(1)).iloc[1:].iloc[-self.rows :]
             mask = diff > 0
             self.growth_diff = nan_quantile(diff[mask], q=self.quantile, axis=0)
             self.decline_diff = nan_quantile(diff[~mask], q=self.quantile, axis=0)
@@ -4204,25 +4240,45 @@ class AlignLastDiff(EmptyTransformer):
             self.adjustment = adjustment
         if trans_method == "original":
             return df
-        
 
         if self.adjustment is None:
             if self.displacement_rows == 1 or self.displacement_rows is None:
                 displacement = df.iloc[0] - self.center  # positive is growth
             else:
-                displacement = df.iloc[0:self.displacement_rows].mean() - self.center  # positive is growth
+                displacement = (
+                    df.iloc[0 : self.displacement_rows].mean() - self.center
+                )  # positive is growth
 
             if self.rows <= 1:
-                self.adjustment = np.where(np.abs(displacement) > self.diff.flatten(), displacement - (self.diff.flatten() * np.sign(displacement)), 0)
+                self.adjustment = np.where(
+                    np.abs(displacement) > self.diff.flatten(),
+                    displacement - (self.diff.flatten() * np.sign(displacement)),
+                    0,
+                )
             else:
                 self.adjustment = np.where(
                     displacement > 0,
-                    np.where(displacement > self.growth_diff, displacement - self.growth_diff, 0),
-                    np.where(displacement < self.decline_diff, displacement - self.decline_diff, 0)
+                    np.where(
+                        displacement > self.growth_diff,
+                        displacement - self.growth_diff,
+                        0,
+                    ),
+                    np.where(
+                        displacement < self.decline_diff,
+                        displacement - self.decline_diff,
+                        0,
+                    ),
                 )
             if self.decay_span is not None:
-                self.adjustment = np.repeat(self.adjustment[..., np.newaxis], df.shape[0], axis=1).T
-                self.adjustment = self.adjustment * exponential_decay(self.adjustment.shape[0], span=self.decay_span)[..., np.newaxis]
+                self.adjustment = np.repeat(
+                    self.adjustment[..., np.newaxis], df.shape[0], axis=1
+                ).T
+                self.adjustment = (
+                    self.adjustment
+                    * exponential_decay(self.adjustment.shape[0], span=self.decay_span)[
+                        ..., np.newaxis
+                    ]
+                )
         return df - self.adjustment
 
     def fit_transform(self, df):

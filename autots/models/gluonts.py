@@ -144,7 +144,7 @@ class GluonTS(ModelObject):
         }
         self.fit_data(df, future_regressor=future_regressor)
         npts_flag = False
-        
+
         pytorch_models = ['PatchTST', 'DeepAR']  # those supporting
         if self.gluon_model in pytorch_models:
             pass
@@ -180,15 +180,21 @@ class GluonTS(ModelObject):
                     freq=ts_metadata['freq'],
                     context_length=ts_metadata['context_length'],
                     prediction_length=ts_metadata['forecast_length'],
-                    trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+                    trainer=Trainer(
+                        epochs=self.epochs, learning_rate=self.learning_rate
+                    ),
                 )
             except Exception:
                 from gluonts.torch import DeepAREstimator
+
                 estimator = DeepAREstimator(
                     freq=ts_metadata['freq'],
                     context_length=ts_metadata['context_length'],
                     prediction_length=ts_metadata['forecast_length'],
-                    trainer_kwargs={'logger': False, 'log_every_n_steps': 0},  # , 'callbacks': callbacks
+                    trainer_kwargs={
+                        'logger': False,
+                        'log_every_n_steps': 0,
+                    },  # , 'callbacks': callbacks
                 )
 
         elif self.gluon_model == 'NPTS':
@@ -728,7 +734,9 @@ class GluonTS(ModelObject):
             [5, 10, 30, '1ForecastLength', '2ForecastLength'],
             [0.2, 0.3, 0.1, 0.1, 0.1],
         )[0]
-        learning_rate_choice = random.choices([0.01, 0.001, 0.0001, 0.00001], [0.3, 0.6, 0.1, 0.1])[0]
+        learning_rate_choice = random.choices(
+            [0.01, 0.001, 0.0001, 0.00001], [0.3, 0.6, 0.1, 0.1]
+        )[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice in ['NPTS', 'Rotbaum']:
             epochs_choice = 20

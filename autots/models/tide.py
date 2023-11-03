@@ -41,7 +41,7 @@ try:
     from pandas.tseries.offsets import Day
     from pandas.tseries.offsets import Easter
     from tqdm import tqdm
-    
+
     full_import = True
 except Exception:
     full_import = False
@@ -452,9 +452,10 @@ EPS = 1e-7
 
 
 if full_import:
+
     class MLPResidual(keras.layers.Layer):
         """Simple one hidden state residual network."""
-    
+
         def __init__(self, hidden_dim, output_dim, layer_norm=False, dropout_rate=0.0):
             super(MLPResidual, self).__init__()
             self.lin_a = tf.keras.layers.Dense(
@@ -473,7 +474,7 @@ if full_import:
                 self.lnorm = tf.keras.layers.LayerNormalization()
             self.layer_norm = layer_norm
             self.dropout = tf.keras.layers.Dropout(dropout_rate)
-    
+
         def call(self, inputs):
             """Call method."""
             h_state = self.lin_a(inputs)
@@ -483,8 +484,7 @@ if full_import:
             if self.layer_norm:
                 return self.lnorm(out + res)
             return out + res
-    
-    
+
     def _make_dnn_residual(hidden_dims, layer_norm=False, dropout_rate=0.0):
         """Multi-layer DNN residual model."""
         if len(hidden_dims) < 2:
@@ -504,10 +504,9 @@ if full_import:
             )
         return keras.Sequential(layers)
 
-
     class TideModel(keras.Model):
         """Main class for multi-scale DNN model."""
-    
+
         def __init__(
             self,
             model_config,
@@ -520,7 +519,7 @@ if full_import:
             dropout_rate=0.0,
         ):
             """Tide model.
-    
+
             Args:
               model_config: configurations specific to the model.
               pred_len: prediction horizon length.
@@ -541,7 +540,7 @@ if full_import:
                     initializer="ones",
                     trainable=True,
                 )
-    
+
                 self.affine_bias = self.add_weight(
                     name="affine_bias",
                     shape=(num_ts,),
@@ -580,11 +579,13 @@ if full_import:
             self.cat_embs = []
             for cat_size in cat_sizes:
                 self.cat_embs.append(
-                    tf.keras.layers.Embedding(input_dim=cat_size, output_dim=cat_emb_size)
+                    tf.keras.layers.Embedding(
+                        input_dim=cat_size, output_dim=cat_emb_size
+                    )
                 )
             self.ts_embs = tf.keras.layers.Embedding(input_dim=num_ts, output_dim=16)
             self.train_loss = keras.losses.MeanSquaredError()
-    
+
         @tf.function
         def _assemble_feats(self, feats, cfeats):
             """assemble all features."""
@@ -592,7 +593,7 @@ if full_import:
             for i, emb in enumerate(self.cat_embs):
                 all_feats.append(tf.transpose(emb(cfeats[i, :])))
             return tf.concat(all_feats, axis=0)
-    
+
         @tf.function
         def call(self, inputs):
             """Call function that takes in a batch of training data and features."""
@@ -613,7 +614,9 @@ if full_import:
                 )
                 past_ts = (past_ts - batch_mean[:, None]) / batch_std[:, None]
                 past_ts = affine_weight[:, None] * past_ts + affine_bias[:, None]
-            encoded_past_feats = tf.transpose(self.time_encoder(tf.transpose(past_feats)))
+            encoded_past_feats = tf.transpose(
+                self.time_encoder(tf.transpose(past_feats))
+            )
             encoded_future_feats = tf.transpose(
                 self.time_encoder(tf.transpose(future_feats))
             )
@@ -639,18 +642,18 @@ if full_import:
                 out = (out - affine_bias[:, None]) / (affine_weight[:, None] + EPS)
                 out = out * batch_std[:, None] + batch_mean[:, None]
             return out
-    
+
         @tf.function
         def train_step(self, past_data, future_features, ytrue, tsidx, optimizer):
             """One step of training."""
             with tf.GradientTape() as tape:
                 all_preds = self((past_data, future_features, tsidx), training=True)
                 loss = self.train_loss(ytrue, all_preds)
-    
+
             grads = tape.gradient(loss, self.trainable_variables)
             optimizer.apply_gradients(zip(grads, self.trainable_variables))
             return loss
-    
+
         def get_all_eval_data(self, data, mode, num_split=1):
             y_preds = []
             y_trues = []
@@ -661,26 +664,29 @@ if full_import:
             ]
             for i in range(len(idxs) - 1):
                 indices = (idxs[i], idxs[i + 1])
-                all_y_true, all_y_pred, test_loss, test_num = self.get_eval_data_for_split(
-                    data, mode, indices
-                )
+                (
+                    all_y_true,
+                    all_y_pred,
+                    test_loss,
+                    test_num,
+                ) = self.get_eval_data_for_split(data, mode, indices)
                 y_preds.append(all_y_pred)
                 y_trues.append(all_y_true)
                 all_test_loss += test_loss
                 all_test_num += test_num
             return np.hstack(y_preds), np.hstack(y_trues), all_test_loss / all_test_num
-    
+
         def get_eval_data_for_split(self, data, mode, indices):
             iterator = data.tf_dataset(mode=mode)
-    
+
             all_y_true = None
             all_y_pred = None
-    
+
             def set_or_concat(a, b):
                 if a is None:
                     return b
                 return tf.concat((a, b), axis=1)
-    
+
             all_test_loss = 0
             all_test_num = 0
             ts_count = 0
@@ -718,17 +724,17 @@ if full_import:
                 all_test_loss.numpy(),
                 all_test_num,
             )
-    
+
         def evaluate(self, data, mode, num_split=1):
             all_y_pred, all_y_true, test_loss = self.get_all_eval_data(
                 data, mode, num_split
             )
-    
+
             result_dict = {}
             for metric in METRICS:
                 eval_fn = METRICS[metric]
                 result_dict[metric] = np.float64(eval_fn(all_y_pred, all_y_true))
-    
+
             return (
                 result_dict,
                 (all_y_pred, all_y_true),
