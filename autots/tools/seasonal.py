@@ -326,6 +326,8 @@ def date_part(
             )
         )
         date_part_df.columns = ['dp' + str(x) for x in date_part_df.columns]
+    if isinstance(date_part_df, pd.Index):
+        date_part_df = pd.Series(date_part_df)
     if set_index:
         date_part_df.index = DTindex
     if holiday_country is not None and holiday_countries_used:
@@ -377,6 +379,7 @@ datepart_components = [
     "is_month_start",
     "is_quarter_start",
     "is_quarter_end",
+    "days_from_epoch",
 ]
 
 
@@ -473,6 +476,8 @@ def create_datepart_components(DTindex, seasonality):
         return pd.DataFrame({'is_quarter_start': DTindex.is_quarter_start})
     elif seasonality == "is_quarter_end":
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
+    elif seasonality == "days_from_epoch":
+        return (DTindex - pd.Timestamp('2000-01-01')).days.astype('int32')
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
@@ -498,8 +503,44 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
 
 
+def random_datepart(method='random'):
+    """New random parameters for seasonality."""
+    seasonalities = random.choices(
+        [
+            "recurring",
+            "simple",
+            "expanded",
+            "simple_2",
+            "simple_binarized",
+            "expanded_binarized",
+            'common_fourier',
+            'common_fourier_rw',
+            "simple_poly",
+            [7, 365.25],
+            ["dayofweek", 365.25],
+            ['weekdayofmonth', 'common_fourier'],
+            "other",
+        ],
+        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.2],
+    )[0]
+    if seasonalities == "other":
+        predefined = random.choices([True, False], [0.5, 0.5])[0]
+        if predefined:
+            seasonalities = [random.choice(date_part_methods)]
+        else:
+            comp_opts = datepart_components + [7, 365.25, 12]
+            seasonalities = random.choices(comp_opts, k=2)
+    return seasonalities
+
+
 def seasonal_window_match(
-    DTindex, k, window_size, forecast_length, datepart_method, distance_metric
+    DTindex,
+    k,
+    window_size,
+    forecast_length,
+    datepart_method,
+    distance_metric,
+    full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
 
@@ -519,6 +560,13 @@ def seasonal_window_match(
         divisor = np.abs(temp) + np.abs(last_window.T)
         divisor[divisor == 0] = 1
         scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
+    elif distance_metric == "minkowski":
+        p = 2
+        scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1 / p)
+    elif distance_metric == "euclidean":
+        scores = np.sqrt(np.sum((temp - last_window.T) ** 2, axis=2))
+    elif distance_metric == "chebyshev":
+        scores = np.max(np.abs(temp - last_window.T), axis=2)
     elif distance_metric == "mqae":
         q = 0.85
         ae = np.abs(temp - last_window.T)
@@ -535,7 +583,10 @@ def seasonal_window_match(
         raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
     # select smallest windows
-    min_idx = np.argpartition(scores.mean(axis=1), k - 1, axis=0)[:k]
+    if full_sort:
+        min_idx = np.argsort(scores.mean(axis=1), axis=0)[:k]
+    else:
+        min_idx = np.argpartition(scores.mean(axis=1), k - 1, axis=0)[:k]
     # take the period starting AFTER the window
     test = (
         np.broadcast_to(
@@ -552,7 +603,12 @@ def seasonal_window_match(
 
 
 def seasonal_independent_match(
-    DTindex, DTindex_future, k, datepart_method, distance_metric
+    DTindex,
+    DTindex_future,
+    k,
+    datepart_method,
+    distance_metric,
+    full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
     future_array = date_part(DTindex_future, method=datepart_method).to_numpy()
@@ -568,6 +624,13 @@ def seasonal_independent_match(
         divisor = np.abs(a) + np.abs(b)
         divisor[divisor == 0] = 1
         scores = np.mean(np.abs(a - b) / divisor, axis=2)
+    elif distance_metric == "minkowski":
+        p = 2
+        scores = np.sum(np.abs(a - b) ** p, axis=2) ** (1 / p)
+    elif distance_metric == "euclidean":
+        scores = np.sqrt(np.sum((a - b) ** 2, axis=2))
+    elif distance_metric == "chebyshev":
+        scores = np.max(np.abs(a - b), axis=2)
     elif distance_metric == "mqae":
         q = 0.85
         ae = np.abs(a - b)
@@ -584,7 +647,10 @@ def seasonal_independent_match(
         raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
     # select smallest windows
-    min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
+    if full_sort:
+        min_idx = np.argsort(scores, axis=0)[:k]
+    else:
+        min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
     # take the period starting AFTER the window
     test = min_idx.T
     # for data over the end, fill last value

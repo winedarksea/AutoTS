@@ -50,8 +50,8 @@ def historic_quantile(df_train, prediction_interval: float = 0.9, nan_flag=None)
 def inferred_normal(train, forecast, n: int = 5, prediction_interval: float = 0.9):
     """A corruption of Bayes theorem.
     It will be sensitive to the transformations of the data."""
-    prior_mu = train.mean().values
-    prior_sigma = train.std().values
+    prior_mu = train.mean().to_numpy()
+    prior_sigma = train.std().replace(0, 1).to_numpy()
     idx = forecast.index
     columns = forecast.columns
     from scipy.stats import norm

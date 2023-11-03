@@ -54,6 +54,12 @@ def df_cleanup(
         pd.DataFrame: original dataframe, now possibly shorter.
 
     """
+    if drop_most_recent is None:
+        drop_most_recent = 0
+    elif not isinstance(drop_most_recent, (float, int)):
+        raise ValueError(
+            f"drop_most_recent must be an integer or None, not {drop_most_recent}"
+        )
     # check to make sure column names are unique
     if verbose > 0:
         dupes = df_wide.columns.duplicated()
@@ -179,6 +185,7 @@ class NumericTransformer(object):
             "ffill" - uses forward and backward filling to supply na values
             "indicator" or anything else currently results in all missing replaced with str "missing_value"
         handle_unknown (str): passed through to scikit-learn OrdinalEncoder
+        downcast (str): passed to pd.to_numeric, use None or 'float'
         verbose (int): greater than 0 to print some messages
     """
 
@@ -187,6 +194,7 @@ class NumericTransformer(object):
         na_strings: list = ['', ' '],  # 'NULL', 'NA', 'NaN', 'na', 'nan'
         categorical_fillna: str = "ffill",
         handle_unknown: str = 'use_encoded_value',
+        downcast: str = None,
         verbose: int = 0,
     ):
         self.na_strings = na_strings
@@ -195,6 +203,7 @@ class NumericTransformer(object):
         self.handle_unknown = handle_unknown
         self.categorical_flag = False
         self.needs_transformation = True
+        self.downcast = downcast
 
     def _fit(self, df):
         """Fit categorical to numeric."""
@@ -212,7 +221,7 @@ class NumericTransformer(object):
             df.replace(self.na_strings, np.nan, inplace=True)  # pd.NA in future
 
             # convert series to numeric which can be readily converted.
-            df = df.apply(pd.to_numeric, errors='ignore')
+            df = df.apply(pd.to_numeric, errors='ignore', downcast=self.downcast)
 
             # record which columns are which dtypes
             self.column_order = df.columns

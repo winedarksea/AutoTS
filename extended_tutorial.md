@@ -287,6 +287,8 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 
 The contour and MADE metrics are useful as they encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.
 
+If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.
+
 ##### Plots
 ```python
 import matplotlib.pyplot as plt
@@ -852,9 +854,11 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  MultivariateRegression | sklearn      | lightgbm, tensorflow    |    True       |     sklearn     | some  | True         |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  PreprocessingRegression | sklearn     |                         |    False      |                 |       |              |              | True          |
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
 |  MetricMotif, SeasonalityMotif |       |                         |    True       |                 |       |              |              |               |
+|  BallTreeMultivariateMotif | sklearn, scipy |                    |    True       |                 |       | True         |              |               |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  RRVAR, MAR, TMF        |              |                         |               |                 |       | True         |              |               |
 |  LATC                   |              |                         |               |                 |       | True         |              |               |
@@ -863,6 +867,8 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
 |  KalmanStateSpace       |              |                         |    True       |                 |       |              |              |               |
+|  FFT                    |              |                         |    True       |                 |       |              |              |               |
+|  TiDE                   | tensorflow   |                         |               |                 | yes   | True         | True         |               |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

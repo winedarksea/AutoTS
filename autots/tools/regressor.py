@@ -205,7 +205,7 @@ def create_regressor(
                 axis=1,
             )
         except Exception as e:
-            print(repr(e))
+            print("HolidayDetector failed with error: " + repr(e)[:180])
 
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]
@@ -339,7 +339,7 @@ def create_lagged_regressor(
         model_name = 'DatepartRegression'
         model_param_dict = '{"regression_model": {"model": "RandomForest", "model_params": {}}, "datepart_method": "recurring", "regression_type": null}'
     else:
-        regressor_train = regressor_train.fillna(method="bfill").fillna(method="ffill")
+        regressor_train = regressor_train.bfill().ffill()
 
     if model_flag:
         from autots import model_forecast

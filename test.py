@@ -33,13 +33,14 @@ models_to_validate = 0.25  # 0.99 to validate every tried (use with template imp
 template_filename = "template_" + str(platform.node()) + ".csv"
 template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
-random_seed = 2022
-forecast_length = 28
+random_seed = 2023
+forecast_length = 90
 long = False
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
 # df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
 # df = load_artificial(long=long, date_start="2018-01-01")
 df = load_daily(long=long)
+# df.iloc[5, :] = np.nan
 interest_series = [
     'wiki_all',
     'wiki_William_Shakespeare',
@@ -58,12 +59,12 @@ if not long and interest_series[0] not in df.columns:
     ]
 prediction_interval = 0.9
 n_jobs = "auto"
-verbose = 1
-validation_method = "similarity"  # "similarity"
+verbose = 2
+validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 100
-generation_timeout = 300
+generations = 150
+generation_timeout = 2
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
 if use_template:
@@ -77,13 +78,20 @@ if force_univariate:
     df = df.iloc[:, 0]
 
 transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer"]
+# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer", 'AlignLastDiff']
 transformer_max_depth = 4
 models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
-# model_list = "fast_parallel"  # fast_parallel, all, fast
-# model_list = ["LastValueNaive", "GluonTS", "SeasonalityMotif", "MetricMotif", 'PytorchForecasting']
-# model_list = ['LastValueNaive', 'PytorchForecasting']
+# model_list = "fast"  # fast_parallel, all, fast
+# model_list = ["BallTreeMultivariateMotif", "WindowRegression", 'SeasonalityMotif', 'SeasonalNaive']
+# model_list = ['PreprocessingRegression', 'MultivariateRegression', 'DatepartRegression', 'WindowRegression']
+
+# only saving with superfast
+if model_list == "superfast" and save_template:
+    save_template = True
+else:
+    save_template = False
+
 preclean = None
 {
     "fillna": None,
@@ -102,8 +110,8 @@ ensemble = [
     "simple",
     # 'mlensemble',
     'horizontal-max',
-    "mosaic-window",
-    'mosaic-crosshair',
+    # "mosaic-window",
+    # 'mosaic-crosshair',
 ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
 # ensemble = None
 metric_weighting = {
@@ -114,8 +122,8 @@ metric_weighting = {
     'mage_weighting': 0,
     'mle_weighting': 0,
     'imle_weighting': 0,
-    'spl_weighting': 3,
-    'containment_weighting': 0,
+    'spl_weighting': 0,
+    'containment_weighting': 0.1,
     'contour_weighting': 0,
     'runtime_weighting': 0.01,
     'maxe_weighting': 0,
@@ -148,6 +156,12 @@ constraint = {
     "lower_constraint": lower_constraint,
     "bounds": True,
 }
+constraint = {
+    "constraint_method": "stdev_min",
+    "upper_constraint": 2.0,
+    "lower_constraint": 2.0,
+    "bounds": True,
+}
 constraint = None
 
 model = AutoTS(
@@ -174,6 +188,7 @@ model = AutoTS(
     preclean=preclean,
     # prefill_na=0,
     # subset=2,
+    no_negatives=True,
     verbose=verbose,
     models_mode=models_mode,
     random_seed=random_seed,
@@ -225,6 +240,21 @@ model = model.fit(
     id_col="series_id" if long else None,
 )
 
+if save_template:
+    model.export_template(
+        template_filename,
+        models="best",
+        n=20,
+        max_per_model_class=5,
+        include_results=True,
+    )
+    model.export_template(
+        "slowest_models_template.csv",
+        models="slowest",
+        n=10,
+        include_results=True,
+    )
+
 elapsed_for = timeit.default_timer() - start_time_for
 
 prediction = model.predict(
@@ -250,21 +280,14 @@ print(model.validation_test_indexes)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 print(f'The following model types failed completely {model.list_failed_model_types()}')
 print("Slowest models:")
-print(
-    initial_results[initial_results["Ensemble"] < 1]
-    .groupby("Model")
-    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
-    .idxmax()
-)
-
-if save_template:
-    model.export_template(
-        template_filename,
-        models="best",
-        n=20,
-        max_per_model_class=5,
-        include_results=True,
-    )
+runtimes = initial_results[initial_results["Ensemble"] < 1].groupby("Model").agg({
+    "TotalRuntimeSeconds": ["mean", "max"],
+    "smape": ["median", "min"]
+}).rename(columns={
+    "median": "median_smape", "min": "min_smape"
+})
+print(runtimes["TotalRuntimeSeconds"].rename(columns={"mean": "slowest_avg_runtime", "max": "slowest_max_runtime"}).idxmax())
+print(runtimes['smape'].idxmin())
 
 if graph:
     start_date = "auto"
@@ -351,8 +374,26 @@ if graph:
     ax = model.plot_validations(use_df, subset='Worst Score')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
+    
+    val_df = model.retrieve_validation_forecasts()
+
+    try:
+        model.plot_metric_corr()
+        plt.show()
+        # model.metric_corr.loc['wasserstein'].sort_values()
+    except Exception as e:
+        print(repr(e))
+
+    param_impacts_runtime = model.diagnose_params(target="runtime")
+    param_impacts_mae = model.diagnose_params(target="mae")
+    param_impacts_exception = model.diagnose_params(target="exception")
+    param_impacts_smape = model.diagnose_params(target="smape")
+    param_impacts = pd.concat([param_impacts_runtime, param_impacts_mae, param_impacts_smape, param_impacts_exception], axis=1).reset_index(drop=False)
 
 df_wide_numeric = model.df_wide_numeric
+
+
+
 
 if not [x for x in interest_series if x in model.df_wide_numeric.columns.tolist()]:
     interest_series = model.df_wide_numeric.columns.tolist()[0:5]
@@ -443,6 +484,8 @@ PACKAGE RELEASE
 conda activate env
 cd to AutoTS
 set PYTHONPATH=%PYTHONPATH%;C:/Users/Colin/Documents/AutoTS
+export PYTHONPATH=/users/colincatlin/Documents/AutoTS:$PYTHONPATH
+
 python -m unittest discover ./tests
 python -m unittest tests.test_autots.ModelTest.test_models
 python -m unittest tests.test_impute.TestImpute.test_impute

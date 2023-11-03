@@ -436,7 +436,7 @@ class Cassandra(ModelObject):
                 )
             elif self.multivariate_feature == "group_average":
                 multivar_df = (
-                    trs_df.groupby(self.categorical_groups, axis=1)
+                    trs_df.T.groupby(self.categorical_groups)  # axis=1
                     .mean()
                     .iloc[lag_1_indx]
                 )
@@ -541,9 +541,10 @@ class Cassandra(ModelObject):
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            print(
-                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
-            )
+            if self.verbose > 1:
+                print(
+                    f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+                )
             raise ValueError("nan values in x_array")
         if np.all(self.df == 0):
             raise ValueError("transformed data is all zeroes")
@@ -889,7 +890,7 @@ class Cassandra(ModelObject):
                 )
             elif self.multivariate_feature == "group_average":
                 multivar_df = (
-                    trs_df.groupby(self.categorical_groups, axis=1)
+                    trs_df.T.groupby(self.categorical_groups)  # axis=1
                     .mean()
                     .iloc[lag_1_indx]
                 )
@@ -949,9 +950,10 @@ class Cassandra(ModelObject):
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            print(
-                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
-            )
+            if self.verbose > 1:
+                print(
+                    f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+                )
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL
@@ -1866,7 +1868,7 @@ class Cassandra(ModelObject):
                     "KalmanStateSpace",
                     'RRVAR',
                 ],
-                [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05, 0.05],
+                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.02, 0.001, 0.05],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -2003,8 +2005,8 @@ class Cassandra(ModelObject):
                 'recency_weighting': recency_weighting,
                 'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
                 'method': random.choices(
-                    [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'SLSQP', 'Powell'],
-                    [0.9, 0.02, 0.02, 0.02, 0.02, 0.02],
+                    [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'Powell'],
+                    [0.9, 0.02, 0.02, 0.02, 0.02],
                 )[0],
             }
         elif linear_model == "bayesian_linear":
@@ -2038,9 +2040,10 @@ class Cassandra(ModelObject):
                 ["dayofweek", 365.25],
                 ["month", "dayofweek", "weekdayofmonth"],
                 ['weekdayofmonth', 'common_fourier'],
+                ["simple_binarized"],
                 "other",
             ],
-            [0.1, 0.1, 0.1, 0.05, 0.1],
+            [0.1, 0.1, 0.1, 0.05, 0.1, 0.1],
         )[0]
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]

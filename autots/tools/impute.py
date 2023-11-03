@@ -33,14 +33,14 @@ def fill_forward_alt(df):
     # this is faster if only some columns have NaN
     df2 = df.copy()
     for i in df2.columns[df2.isnull().any(axis=0)]:
-        df2[i] = df2[i].fillna(method='ffill').fillna(method='bfill').fillna(0)
+        df2[i] = df2[i].ffill().bfill().fillna(0)
     return df2
 
 
 def fill_forward(df):
     """Fill NaN with previous values."""
-    df = df.fillna(method='ffill')
-    return df.fillna(method='bfill').fillna(0)
+    df = df.ffill()
+    return df.bfill().fillna(0)
 
 
 def fill_mean_old(df):
@@ -240,7 +240,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return fake_date_fill(df, back_method='slice_all')
 
     elif method in df_interpolate_full:
-        df = df.interpolate(method=method, order=5).fillna(method='bfill')
+        df = df.interpolate(method=method, order=5).bfill()
         if df.isnull().values.any():
             df = fill_forward(df)
         return df
@@ -381,10 +381,9 @@ class SeasonalityMotifImputer(object):
             0,
         )
         # brdcst = np.array(np.broadcast_to(full_dist[...,None],full_dist.shape+(df.shape[1],)))  # .reshape(brdcst_mask.shape)
+        # this uses WAY too much memory
         brdcst = np.moveaxis(
-            np.array(
-                np.broadcast_to(full_dist[..., None], full_dist.shape + (df.shape[1],))
-            ),
+            np.broadcast_to(full_dist[..., None], full_dist.shape + (df.shape[1],)),
             -1,
             1,
         )

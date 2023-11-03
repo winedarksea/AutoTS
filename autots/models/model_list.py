@@ -42,6 +42,9 @@ all_models = [
     'SeasonalityMotif',
     'MLEnsemble',
     'PreprocessingRegression',
+    'FFT',
+    "BallTreeMultivariateMotif",
+    "TiDE",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -97,15 +100,17 @@ fast = {
     'WindowRegression': 0.5,  # this gets slow with Transformer, KerasRNN
     'DatepartRegression': 0.8,
     'UnivariateMotif': 1,
-    'MultivariateMotif': 0.8,
+    # 'MultivariateMotif': 0.8,  # RAM issues at scale it seems
     'SectionalMotif': 1,
-    'NVAR': 1,
-    'MAR': 1,
+    'NVAR': 0.3,
+    'MAR': 0.5,
     'RRVAR': 1,
-    'KalmanStateSpace': 1,
+    'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
-    'Cassandra': 1,
+    'Cassandra': 0.6,
     'SeasonalityMotif': 1,
+    'FFT': 0.8,
+    "BallTreeMultivariateMotif": 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -126,7 +131,15 @@ fast_parallel = {**parallel, **fast}
 fast_parallel_no_arima = {
     i: fast_parallel[i]
     for i in fast_parallel
-    if i not in ['ARIMA', 'NVAR', "UnobservedComponents"]
+    if i
+    not in [
+        'ARIMA',
+        'NVAR',
+        "UnobservedComponents",
+        "KalmanStateSpace",
+        "MultivariateMotif",
+        'Theta',
+    ]
 }
 # so this opiniated and not fully updated always
 best = list(
@@ -146,7 +159,7 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
-gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting']
+gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting', "TiDE"]
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
@@ -192,6 +205,8 @@ multivariate = [
     'TMF',
     'LATC',
     'Cassandra',  # depends
+    'BallTreeMultivariateMotif',
+    "TiDE",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -235,6 +250,9 @@ recombination_approved = [
     'Cassandra',
     'SeasonalityMotif',
     'PreprocessingRegression',
+    'FFT',
+    'BallTreeMultivariateMotif',
+    "TiDE",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -259,6 +277,7 @@ no_shared = [
     'KalmanStateSpace',
     'MetricMotif',
     'SeasonalityMotif',
+    'FFT',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -289,6 +308,7 @@ motifs = [
     'MotifSimulation',
     'MetricMotif',
     'SeasonalityMotif',
+    'BallTreeMultivariateMotif',
 ]
 regressions = [
     'RollingRegression',

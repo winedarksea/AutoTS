@@ -132,6 +132,14 @@ autots.models.tfp module
    :undoc-members:
    :show-inheritance:
 
+autots.models.tide module
+-------------------------
+
+.. automodule:: autots.models.tide
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

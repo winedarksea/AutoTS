@@ -4,9 +4,14 @@ import warnings
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
-from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
-from autots.models.sklearn import generate_regressor_params, retrieve_regressor
+from autots.models.sklearn import (
+    generate_regressor_params,
+    retrieve_regressor,
+    retrieve_classifier,
+    generate_classifier_params,
+)
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
     detect_anomalies,
@@ -18,6 +23,9 @@ from autots.tools.window_functions import window_lin_reg_mean
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
+from autots.tools.fft import FFT as fft_class
+from autots.tools.percentile import nan_quantile
+
 
 try:
     from joblib import Parallel, delayed
@@ -404,7 +412,7 @@ class StatsmodelsFilter(EmptyTransformer):
 
         cycles = bk_filter.bkfilter(df, K=1)
         cycles.columns = df.columns
-        return (df - cycles).fillna(method="ffill").fillna(method="bfill")
+        return (df - cycles).ffill().bfill()
 
     def cffilter(self, df):
         from statsmodels.tsa.filters import cf_filter
@@ -419,7 +427,7 @@ class StatsmodelsFilter(EmptyTransformer):
         from statsmodels.tsa.filters.filtertools import convolution_filter
 
         df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
-        return df.fillna(method="ffill").fillna(method="bfill")
+        return df.ffill().bfill()
 
 
 class HPFilter(EmptyTransformer):
@@ -507,7 +515,7 @@ class STLFilter(EmptyTransformer):
 
         if df.index.freq is None:
             freq = infer_frequency(df)
-            df = df.asfreq(freq).fillna(method='ffill')
+            df = df.asfreq(freq).ffill()
 
         def _stl_one_return(series, decomp_type="STL", seasonal=7, part="trend"):
             """Convert filter to apply on pd DataFrame."""
@@ -531,7 +539,7 @@ class STLFilter(EmptyTransformer):
             seasonal=self.seasonal,
             part=self.part,
         )
-        return df.fillna(method="ffill").fillna(method="bfill")
+        return df.ffill().bfill()
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -889,12 +897,8 @@ class RollingMeanTransformer(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.shape = df.shape
-        self.last_values = (
-            df.tail(self.window).fillna(method="ffill").fillna(method="bfill")
-        )
-        self.first_values = (
-            df.head(self.window).fillna(method="ffill").fillna(method="bfill")
-        )
+        self.last_values = df.tail(self.window).ffill().bfill()
+        self.first_values = df.head(self.window).ffill().bfill()
 
         df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1).mean()
         self.last_rolling = df.tail(1)
@@ -1006,9 +1010,9 @@ class SeasonalDifference(EmptyTransformer):
             tile_index = tile_index[len(tile_index) - (df_length) :]
             df2.index = tile_index
             if self.method == "Median":
-                self.tile_values_lag_1 = df2.groupby(level=0, axis=0).median()
+                self.tile_values_lag_1 = df2.groupby(level=0).median()
             else:
-                self.tile_values_lag_1 = df2.groupby(level=0, axis=0).mean()
+                self.tile_values_lag_1 = df2.groupby(level=0).mean()
         else:
             self.method == "LastValue"
             self.tile_values_lag_1 = df.tail(self.lag_1)
@@ -1380,7 +1384,7 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = (df - df.shift(self.lag)).fillna(method="bfill")
+        df = (df - df.shift(self.lag)).bfill()
         return df
 
     def fit_transform(self, df):
@@ -1445,7 +1449,7 @@ class PctChangeTransformer(EmptyTransformer):
         """
         df = df.replace([0], np.nan)
         df = df.fillna((df[df != 0]).abs().min(axis=0)).fillna(0.1)
-        df = df.pct_change(periods=1, fill_method="ffill").fillna(0)
+        df = df.pct_change(periods=1).fillna(0)
         df = df.replace([np.inf, -np.inf], 0)
         return df
 
@@ -2637,6 +2641,8 @@ class AlignLastValue(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        if self.rows is None:
+            self.rows = df.shape[0]
         # fill NaN if present (up to a limit for slight speedup)
         if np.isnan(np.sum(np.array(df)[-50:])):
             self.center = self.find_centerpoint(df.ffill(axis=0), self.rows, self.lag)
@@ -2672,6 +2678,7 @@ class AlignLastValue(EmptyTransformer):
 
         Args:
             df (pandas.DataFrame): input dataframe
+            adjustment (float): size of shift, utilized for adjusting the upper and lower bounds to match point forecast
         """
         if self.adjustment is not None:
             self.adjustment = adjustment
@@ -3592,8 +3599,8 @@ class LevelShiftMagic(EmptyTransformer):
         diff_abs = diff.abs()
         diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
         # merge nearby groups
-        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).fillna(
-            method='ffill', limit=self.grouping_forward_limit
+        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
+            limit=self.grouping_forward_limit
         )
         diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
         # the max of each changepoint group is the chosen changepoint of the level shift
@@ -3605,7 +3612,7 @@ class LevelShiftMagic(EmptyTransformer):
             index=df.index,
             columns=df.columns,
         )
-        group_ids = range_arr[~diff_mask].fillna(method='ffill')  # [diff_mask]
+        group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
         max_mask = diff_abs == maxes
         used_groups = group_ids[max_mask].mean()
         curr_diff = diff_abs.where(((group_ids != used_groups) & diff_mask), np.nan)
@@ -3664,9 +3671,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(
-            method='bfill'
-        ).fillna(0)
+        return df - self.lvlshft.reindex(
+            index=df.index, columns=df.columns
+        ).bfill().fillna(0)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3674,9 +3681,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(
-            method='bfill'
-        ).fillna(0)
+        return df + self.lvlshft.reindex(
+            index=df.index, columns=df.columns
+        ).bfill().fillna(0)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3808,10 +3815,480 @@ class CenterSplit(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1],
+                [0.3, 0.01, 0.2, 0.2, 0.2, 0.2, 0.01],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
+
+
+class FFTFilter(EmptyTransformer):
+    """Fit Fourier Transform and keep only lowest frequencies below cutoff
+
+    Args:
+        cutoff (float): smoothing value
+        reverse (bool): if True, keep highest frequencies only
+    """
+
+    def __init__(
+        self,
+        cutoff: float = 0.1,
+        reverse: bool = False,
+        **kwargs,
+    ):
+        super().__init__(name="FFTFilter")
+        self.cutoff = cutoff
+        self.reverse = reverse
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        data = df.to_numpy()
+        spectrum = np.fft.fft(data, axis=0)
+        frequencies = np.fft.fftfreq(data.shape[0])
+
+        # Zero out components beyond the cutoff
+        if self.reverse:
+            spectrum[np.abs(frequencies) < self.cutoff] = 0
+        else:
+            spectrum[np.abs(frequencies) > self.cutoff] = 0
+
+        # Inverse FFT to get the smoothed data
+        smoothed_data = np.real(np.fft.ifft(spectrum, axis=0))
+        return pd.DataFrame(smoothed_data, index=df.index, columns=df.columns)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "cutoff": random.choices(
+                [0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8],
+                [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1],
+            )[0],
+            "reverse": random.choices([False, True], [0.9, 0.1])[0],
+        }
+
+
+class FFTDecomposition(EmptyTransformer):
+    """FFT decomposition, then removal, then extrapolation and addition.
+
+    Args:
+        n_harmnonics (float): number of frequencies to include
+        detrend (str): None, 'linear', or 'quadratic'
+    """
+
+    def __init__(
+        self,
+        n_harmonics: float = 0.1,
+        detrend: str = "linear",
+        **kwargs,
+    ):
+        super().__init__(name="FFTDecomposition")
+        self.n_harmonics = n_harmonics
+        self.detrend = detrend
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.df_columns = df.columns
+        self.df_index = df.index
+        self.freq = infer_frequency(df)
+        self.fft = fft_class(n_harm=self.n_harmonics, detrend=self.detrend)
+        self.fft.fit(df.to_numpy())
+        self.start_forecast_len = df.shape[0]
+        self._predict(forecast_length=self.start_forecast_len)
+        return df - self.predicted.reindex(df.index)
+
+    def _predict(self, forecast_length):
+        self.predicted = pd.DataFrame(
+            self.fft.predict(forecast_length), columns=self.df_columns
+        )
+        self.predicted.index = self.df_index.union(
+            pd.date_range(
+                self.df_index[-1], periods=forecast_length + 1, freq=self.freq
+            )
+        )
+        return self
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df - self.predicted.reindex(df.index)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if df.shape[0] > self.start_forecast_len:
+            self._predict(forecast_length=df.shape[0])
+        return df + self.predicted.reindex(df.index)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "n_harmonics": random.choices(
+                [None, 10, 20, 0.5, -0.5, -0.95, "mid10", "mid20"],
+                [0.1, 0.3, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
+            )[0],
+            "detrend": random.choices(
+                [None, "linear", "quadratic", "cubic", "quartic"],
+                [0.4, 0.3, 0.3, 0.1, 0.05],
+            )[0],
+        }
+
+
+class ReplaceConstant(EmptyTransformer):
+    """Replace constant, filling the NaN, then possibly reintroducing.
+    If reintroducion is used, it is unlikely inverse_transform will match original exactly.
+
+    Args:
+        constant (float): target to replace
+        fillna (str): None, and standard fillna methods of AutoTS
+        reintroduction_model (dict): if given, attempts to predict occurrence of constant and reintroduce
+    """
+
+    def __init__(
+        self,
+        constant: float = 0,
+        fillna: str = "linear",
+        reintroduction_model: str = None,
+        n_jobs: int = 1,
+        **kwargs,
+    ):
+        super().__init__(name="ReplaceConstant")
+        self.constant = constant
+        self.fillna = fillna
+        self.reintroduction_model = reintroduction_model
+        self.n_jobs = n_jobs
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.reintroduction_model is None:
+            return FillNA(
+                df.replace(self.constant, np.nan), method=self.fillna, window=10
+            )
+        else:
+            # goal is for y to be 0 for constant and 1 for everything else
+            y = 1 - np.where(df != self.constant, 0, 1)
+            X = date_part(
+                df.index,
+                method=self.reintroduction_model.get(
+                    "datepart_method", "simple_binarized"
+                ),
+            )
+            if y.ndim < 2:
+                multioutput = False
+            elif y.shape[1] < 2:
+                multioutput = False
+            else:
+                multioutput = True
+
+            self.model = retrieve_classifier(
+                regression_model=self.reintroduction_model,
+                verbose=0,
+                verbose_bool=False,
+                random_seed=2023,
+                multioutput=multioutput,
+                n_jobs=self.n_jobs,
+            )
+            self.model.fit(X, y)
+            if False:
+                print(self.model.score(X, y))
+            return FillNA(
+                df.replace(self.constant, np.nan), method=self.fillna, window=10
+            )
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return FillNA(df.replace(self.constant, np.nan), method=self.fillna, window=10)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.reintroduction_model is None:
+            return df
+        else:
+            X = date_part(
+                df.index,
+                method=self.reintroduction_model.get(
+                    "datepart_method", "simple_binarized"
+                ),
+            )
+            pred = pd.DataFrame(
+                self.model.predict(X), index=df.index, columns=df.columns
+            )
+            if self.constant == 0:
+                return df * pred
+            else:
+                return df.where(pred != 0, self.constant)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        reintroduction_model = random.choices([None, True], [0.3, 0.7])[0]
+        if reintroduction_model:
+            reintroduction_model = generate_classifier_params()
+            reintroduction_model['datepart_method'] = random_datepart(method=method)
+        return {
+            "constant": random.choices([0, 1], [0.9, 0.1])[0],
+            "reintroduction_model": reintroduction_model,
+            "fillna": random.choices(
+                [
+                    None,
+                    "linear",
+                    "SeasonalityMotifImputer",
+                    'pchip',
+                    'akima',
+                    'mean',
+                    'ffill',
+                    "SeasonalityMotifImputer1K",
+                ],
+                [0.2, 0.01, 0.3, 0.2, 0.2, 0.2, 0.2, 0.01],
+            )[0],
+        }
+
+
+def exponential_decay(n, span=None, halflife=None):
+    assert not (
+        (span is not None) and (halflife is not None)
+    ), "Only one of span or halflife should be provided"
+
+    t = np.arange(n)
+
+    if span is not None:
+        decay_values = np.exp(-t / span)
+    else:
+        decay_values = np.exp(-np.log(2) * t / halflife)
+
+    return decay_values
+
+
+class AlignLastDiff(EmptyTransformer):
+    """Shift all data relative to the last value(s) of the series.
+    This version aligns based on historic diffs rather than direct values.
+
+    Args:
+        rows (int): number of rows to average as diff history. rows=1 rather different from others
+        quantile (float): quantile of historic diffs to use as allowed [0, 1]
+        decay_span (int): span of exponential decay which softens adjustment to no adjustment
+    """
+
+    def __init__(
+        self,
+        rows: int = 1,
+        quantile: float = 0.5,
+        decay_span: float = None,
+        displacement_rows: int = 1,
+        **kwargs,
+    ):
+        super().__init__(name="AlignLastDiff")
+        self.rows = rows
+        self.quantile = quantile
+        self.decay_span = decay_span
+        self.displacement_rows = displacement_rows
+        self.adjustment = None
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        return {
+            "rows": random.choices(
+                [1, 2, 4, 7, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1]
+            )[0],
+            "displacement_rows": random.choices(
+                [1, 2, 4, 7, 21], [0.8, 0.05, 0.05, 0.05, 0.05]
+            )[0],
+            "quantile": random.choices(
+                [1.0, 0.9, 0.7, 0.5, 0.2, 0], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05]
+            )[0],
+            "decay_span": random.choices(
+                [None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+        }
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.rows is None:
+            self.rows = df.shape[0]
+        # fill NaN if present (up to a limit for slight speedup)
+        if np.isnan(np.sum(np.array(df)[-self.rows :])):
+            local_df = df.ffill(axis=0)
+        else:
+            local_df = df
+
+        self.center = df.iloc[-1, :]
+
+        if self.rows <= 1:
+            self.diff = np.abs(((local_df - local_df.shift(1)).iloc[-1:]).to_numpy())
+        else:
+            # positive diff = growing
+            diff = (local_df - local_df.shift(1)).iloc[1:].iloc[-self.rows :]
+            mask = diff > 0
+            self.growth_diff = nan_quantile(diff[mask], q=self.quantile, axis=0)
+            self.decline_diff = nan_quantile(diff[~mask], q=self.quantile, axis=0)
+
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+            adjustment (float): size of shift, utilized for adjusting the upper and lower bounds to match point forecast
+        """
+        if self.adjustment is not None:
+            self.adjustment = adjustment
+        if trans_method == "original":
+            return df
+
+        if self.adjustment is None:
+            if self.displacement_rows == 1 or self.displacement_rows is None:
+                displacement = df.iloc[0] - self.center  # positive is growth
+            else:
+                displacement = (
+                    df.iloc[0 : self.displacement_rows].mean() - self.center
+                )  # positive is growth
+
+            if self.rows <= 1:
+                self.adjustment = np.where(
+                    np.abs(displacement) > self.diff.flatten(),
+                    displacement - (self.diff.flatten() * np.sign(displacement)),
+                    0,
+                )
+            else:
+                self.adjustment = np.where(
+                    displacement > 0,
+                    np.where(
+                        displacement > self.growth_diff,
+                        displacement - self.growth_diff,
+                        0,
+                    ),
+                    np.where(
+                        displacement < self.decline_diff,
+                        displacement - self.decline_diff,
+                        0,
+                    ),
+                )
+            if self.decay_span is not None:
+                self.adjustment = np.repeat(
+                    self.adjustment[..., np.newaxis], df.shape[0], axis=1
+                ).T
+                self.adjustment = (
+                    self.adjustment
+                    * exponential_decay(self.adjustment.shape[0], span=self.decay_span)[
+                        ..., np.newaxis
+                    ]
+                )
+        return df - self.adjustment
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
 
 
 # lookup dict for all non-parameterized transformers
@@ -3855,6 +4332,7 @@ n_jobs_trans = {
     "SineTrend": SinTrend(),
     "AnomalyRemoval": AnomalyRemoval,
     'HolidayTransformer': HolidayTransformer,
+    'ReplaceConstant': ReplaceConstant,
 }
 # transformers with parameter pass through (internal only) MUST be here
 have_params = {
@@ -3886,6 +4364,10 @@ have_params = {
     "LevelShiftMagic": LevelShiftMagic,
     "LevelShiftTransformer": LevelShiftTransformer,
     "CenterSplit": CenterSplit,
+    "FFTFilter": FFTFilter,
+    "FFTDecomposition": FFTDecomposition,
+    "ReplaceConstant": ReplaceConstant,
+    "AlignLastDiff": AlignLastDiff,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -3982,6 +4464,10 @@ class GeneralTransformer(object):
             'RegressionFilter': fit seasonal removal and local linear trend, clip std devs away from this fit
             'LevelShiftTransformer': automatically compensate for historic level shifts in data.
             'CenterSplit': Croston inspired magnitude/occurrence split for intermittent
+            "FFTFilter": filter using a fast fourier transform
+            "FFTDecomposition": remove FFT harmonics, later add back
+            "ReplaceConstant": replace a value with NaN, optionally fillna then later reintroduce
+            "AlignLastDiff": shift forecast to be within range of historical diffs
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4019,7 +4505,7 @@ class GeneralTransformer(object):
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different
-        self.bounded_oddities = ["AlignLastValue"]
+        self.bounded_oddities = ["AlignLastValue", "AlignLastDiff"]
         # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",
@@ -4037,6 +4523,7 @@ class GeneralTransformer(object):
             "SeasonalDifference28",
             "MeanDifference",
             "AlignLastValue",
+            "AlignLastDiff",
         ]
 
     @staticmethod
@@ -4371,31 +4858,31 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 # dictionary of probabilities for randomly choosen transformers
 transformer_dict = {
     None: 0.0,
-    "MinMaxScaler": 0.05,
-    "PowerTransformer": 0.02,  # is noticeably slower at scale, if not tons
-    "QuantileTransformer": 0.05,
-    "MaxAbsScaler": 0.05,
+    "MinMaxScaler": 0.03,
+    "PowerTransformer": 0.01,  # is noticeably slower at scale, if not tons
+    "QuantileTransformer": 0.03,
+    "MaxAbsScaler": 0.03,
     "StandardScaler": 0.04,
-    "RobustScaler": 0.05,
+    "RobustScaler": 0.03,
     "PCA": 0.01,
     "FastICA": 0.01,
-    "Detrend": 0.1,  # slow with some params, but that's handled in get_params
+    "Detrend": 0.02,  # slow with some params, but that's handled in get_params
     "RollingMeanTransformer": 0.02,
     "RollingMean100thN": 0.01,  # old
-    "DifferencedTransformer": 0.07,
+    "DifferencedTransformer": 0.05,
     "SinTrend": 0.01,
     "PctChangeTransformer": 0.01,
     "CumSumTransformer": 0.02,
     "PositiveShift": 0.02,
     "Log": 0.01,
     "IntermittentOccurrence": 0.01,
-    "SeasonalDifference": 0.1,
+    "SeasonalDifference": 0.06,
     "cffilter": 0.01,
     "bkfilter": 0.05,
     "convolution_filter": 0.001,
     "HPFilter": 0.01,
     "DatepartRegression": 0.01,
-    "ClipOutliers": 0.05,
+    "ClipOutliers": 0.03,
     "Discretize": 0.01,
     "CenterLastValue": 0.01,
     "Round": 0.02,
@@ -4411,16 +4898,14 @@ transformer_dict = {
     'HolidayTransformer': 0.02,
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.04,
-    'RegressionFilter': 0.07,
+    'RegressionFilter': 0.03,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
+    "FFTFilter": 0.01,
+    "FFTDecomposition": 0.01,
+    "ReplaceConstant": 0.005,
+    "AlignLastDiff": 0.01,
 }
-# remove any slow transformers
-fast_transformer_dict = transformer_dict.copy()
-# del fast_transformer_dict["SinTrend"]
-del fast_transformer_dict["FastICA"]
-del fast_transformer_dict["Cointegration"]
-del fast_transformer_dict["BTCD"]
 
 # and even more, not just removing slow but also less commonly useful ones
 # also there should be no 'shared' transformers in this list to make h-ensembles faster
@@ -4430,9 +4915,9 @@ superfast_transformer_dict = {
     "MaxAbsScaler": 0.05,
     "StandardScaler": 0.04,
     "RobustScaler": 0.05,
-    "Detrend": 0.1,
+    "Detrend": 0.05,
     "RollingMeanTransformer": 0.02,
-    "DifferencedTransformer": 0.1,
+    "DifferencedTransformer": 0.05,
     "PositiveShift": 0.02,
     "Log": 0.01,
     "SeasonalDifference": 0.1,
@@ -4442,6 +4927,7 @@ superfast_transformer_dict = {
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
+    "AlignLastDiff": 0.05,  # pending testing
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -4455,6 +4941,7 @@ filters = {
     "KalmanSmoothing": 0.1,
     "ClipOutliers": 0.1,
     "RegressionFilter": 0.05,
+    "FFTFilter": 0.01,
 }
 scalers = {
     "MinMaxScaler": 0.05,
@@ -4464,7 +4951,7 @@ scalers = {
     "Log": 0.03,
     "Discretize": 0.01,
     "QuantileTransformer": 0.1,
-    "PowerTransformer": 0.05,
+    "PowerTransformer": 0.02,
 }
 # intended to clean up external regressors
 decompositions = {
@@ -4474,6 +4961,7 @@ decompositions = {
     "DatepartRegression": 0.05,
     "ClipOutliers": 0.05,
     "LocalLinearTrend": 0.03,
+    "FFTDecomposition": 0.02,
 }
 transformer_class = {}
 
@@ -4492,21 +4980,33 @@ na_probs = {
     "interpolate": 0.4,
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
-    "SeasonalityMotifImputer": 0.1,
-    "SeasonalityMotifImputerLinMix": 0.02,
-    "SeasonalityMotifImputer1K": 0.01,
+    "SeasonalityMotifImputer": 0.1,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputerLinMix": 0.01,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputer1K": 0.01,  # apparently this is too memory hungry at scale
     "DatepartRegressionImputer": 0.05,  # also slow
 }
 
 
 def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
+    if transformer_list in ["fast", "default", "Fast", "auto", 'scalable']:
+        # remove any slow transformers
+        fast_transformer_dict = transformer_dict.copy()
+        # del fast_transformer_dict["SinTrend"]
+        del fast_transformer_dict["FastICA"]
+        del fast_transformer_dict["Cointegration"]
+        del fast_transformer_dict["BTCD"]
+
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
     elif transformer_list in ["fast", "default", "Fast", "auto"]:
         transformer_list = fast_transformer_dict
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict
+    elif transformer_list == "scalable":
+        transformer_list = fast_transformer_dict.copy()
+        del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
+        del transformer_list["SinTrend"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
@@ -4563,10 +5063,20 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("IterativeImputer", None)
         throw_away = df_interpolate.pop("spline", None)  # noqa
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
     if superfast_params:
         params_method = "fast"
+        throw_away = na_prob_dict.pop("IterativeImputer", None)
+        throw_away = df_interpolate.pop("spline", None)  # noqa
+        throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
+        throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
+        throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())

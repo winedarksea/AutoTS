@@ -11,6 +11,7 @@ from hashlib import md5
 from autots.tools.cpu_count import set_n_jobs
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.base import PredictionObject, ModelObject
+from autots.evaluator.metrics import default_scaler, array_last_val
 from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
@@ -39,6 +40,8 @@ from autots.models.basics import (
     KalmanStateSpace,
     MetricMotif,
     SeasonalityMotif,
+    FFT,
+    BallTreeMultivariateMotif,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -646,6 +649,39 @@ def ModelMonster(
             multivariate=parameters.get("multivariate", False),
             **parameters,
         )
+    elif model == "FFT":
+        return FFT(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "BallTreeMultivariateMotif":
+        return BallTreeMultivariateMotif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "TiDE":
+        from autots.models.tide import TiDE
+
+        return TiDE(
+            frequency=frequency,
+            forecast_length=forecast_length,
+            prediction_interval=prediction_interval,
+            # holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -729,6 +765,8 @@ class ModelPrediction(ModelObject):
                 'transformations': {},
                 'transformation_params': {},
             }
+        if self.transformation_dict is None:
+            self.transformation_dict = {}
         self.transformer_object = GeneralTransformer(
             **self.transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
         )
@@ -906,24 +944,29 @@ class TemplateEvalObject(object):
         self,
         model_results=pd.DataFrame(),
         per_timestamp_smape=pd.DataFrame(),
-        per_series_mae=pd.DataFrame(),
-        per_series_rmse=pd.DataFrame(),
-        per_series_made=pd.DataFrame(),
-        per_series_contour=pd.DataFrame(),
-        per_series_spl=pd.DataFrame(),
-        per_series_mle=pd.DataFrame(),
-        per_series_imle=pd.DataFrame(),
-        per_series_maxe=pd.DataFrame(),
-        per_series_oda=pd.DataFrame(),
-        per_series_mqae=pd.DataFrame(),
-        per_series_dwae=pd.DataFrame(),
-        per_series_ewmae=pd.DataFrame(),
-        per_series_uwmse=pd.DataFrame(),
-        per_series_smoothness=pd.DataFrame(),
+        per_series_metrics=pd.DataFrame(),
+        per_series_mae=None,
+        per_series_rmse=None,
+        per_series_made=None,
+        per_series_contour=None,
+        per_series_spl=None,
+        per_series_mle=None,
+        per_series_imle=None,
+        per_series_maxe=None,
+        per_series_oda=None,
+        per_series_mqae=None,
+        per_series_dwae=None,
+        per_series_ewmae=None,
+        per_series_uwmse=None,
+        per_series_smoothness=None,
+        per_series_mate=None,
+        per_series_wasserstein=None,
+        per_series_dwd=None,
         model_count: int = 0,
     ):
         self.model_results = model_results
         self.model_count = model_count
+        self.per_series_metrics = per_series_metrics
         self.per_series_mae = per_series_mae
         self.per_series_contour = per_series_contour
         self.per_series_rmse = per_series_rmse
@@ -939,6 +982,9 @@ class TemplateEvalObject(object):
         self.per_series_ewmae = per_series_ewmae
         self.per_series_uwmse = per_series_uwmse
         self.per_series_smoothness = per_series_smoothness
+        self.per_series_mate = per_series_mate
+        self.per_series_wasserstein = per_series_wasserstein
+        self.per_series_dwd = per_series_dwd
         self.full_mae_ids = []
         self.full_mae_errors = []
         self.full_pl_errors = []
@@ -1007,6 +1053,19 @@ class TemplateEvalObject(object):
             axis=0,
             sort=False,
         )
+        self.per_series_mate = pd.concat(
+            [self.per_series_mate, another_eval.per_series_mate], axis=0, sort=False
+        )
+        self.per_series_wasserstein = pd.concat(
+            [self.per_series_wasserstein, another_eval.per_series_wasserstein],
+            axis=0,
+            sort=False,
+        )
+        self.per_series_dwd = pd.concat(
+            [self.per_series_dwd, another_eval.per_series_dwd],
+            axis=0,
+            sort=False,
+        )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
         self.full_pl_errors.extend(another_eval.full_pl_errors)
         self.squared_errors.extend(another_eval.squared_errors)
@@ -1014,17 +1073,34 @@ class TemplateEvalObject(object):
         self.model_count = self.model_count + another_eval.model_count
         return self
 
-    def save(self, filename):
-        """Save results to a file."""
-        if '.csv' in filename:
+    def save(self, filename='initial_results.pickle'):
+        """Save results to a file.
+
+        Args:
+            filename (str): *.pickle or *.csv. .pickle saves full results
+        """
+        if filename.endswith('.csv'):
             self.model_results.to_csv(filename, index=False)
-        elif '.pickle' in filename:
+        elif filename.endswith('.pickle'):
             import pickle
 
             with open(filename, "wb") as f:
                 pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         else:
-            raise ValueError("filename not .csv or .pickle")
+            raise ValueError(f"filename `{filename}` not .csv or .pickle")
+
+    def load(self, filename):
+        # might want to add csv handling from auto_ts
+        if isinstance(filename, TemplateEvalObject):
+            new_obj = filename
+        elif filename.endswith('.pickle'):
+            import pickle
+
+            new_obj = pickle.load(open(filename, "rb"))
+        else:
+            raise ValueError("import type not recognized.")
+        self = self.concat(new_obj)
+        return self
 
 
 def unpack_ensemble_models(
@@ -1398,20 +1474,7 @@ def TemplateWizard(
     """
     best_smape = float("inf")
     template_result = TemplateEvalObject(
-        per_series_mae=[],
-        per_series_made=[],
-        per_series_contour=[],
-        per_series_rmse=[],
-        per_series_spl=[],
-        per_series_mle=[],
-        per_series_imle=[],
-        per_series_maxe=[],
-        per_series_oda=[],
-        per_series_mqae=[],
-        per_series_dwae=[],
-        per_series_ewmae=[],
-        per_series_uwmse=[],
-        per_series_smoothness=[],
+        per_series_metrics=[],
     )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
@@ -1430,17 +1493,16 @@ def TemplateWizard(
 
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
-    # precompute scaler to save a few miliseconds (saves very little time)
-    scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
-    fill_val = np.nanmax(scaler)
-    fill_val = fill_val if fill_val > 0 else 1
-    scaler[scaler == 0] = fill_val
-    scaler[np.isnan(scaler)] = fill_val
-
-    template_dict = template.to_dict('records')
     # minor speedup with one less copy per eval by assuring arrays at this level
     actuals = np.asarray(df_test)
     df_trn_arr = np.asarray(df_train)
+    # precompute scaler to save a few miliseconds (saves very little time)
+    scaler = default_scaler(df_trn_arr)
+    cumsum_A = np.nancumsum(actuals, axis=0)
+    last_of_array = array_last_val(df_trn_arr)
+    diff_A = np.diff(np.concatenate([last_of_array, actuals]), axis=0)
+
+    template_dict = template.to_dict('records')
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
@@ -1508,6 +1570,9 @@ def TemplateWizard(
                 df_train=df_trn_arr,
                 per_timestamp_errors=per_ts,
                 scaler=scaler,
+                cumsum_A=cumsum_A,
+                diff_A=diff_A,
+                last_of_array=last_of_array,
             )
             if validation_round >= 1 and verbose > 0:
                 round_smape = model_error.avg_metrics['smape'].round(2)
@@ -1566,7 +1631,13 @@ def TemplateWizard(
             ).reset_index(drop=True)
 
             ps_metric = model_error.per_series_metrics
+            ps_metric.index.name = "autots_eval_metric"
+            ps_metric = ps_metric.reset_index(drop=False)
+            ps_metric.index = [model_id] * ps_metric.shape[0]
+            ps_metric.index.name = "ID"
+            template_result.per_series_metrics.append(ps_metric)
 
+            """
             template_result.per_series_mae.append(
                 _ps_metric(ps_metric, 'mae', model_id)
             )
@@ -1609,6 +1680,13 @@ def TemplateWizard(
             template_result.per_series_smoothness.append(
                 _ps_metric(ps_metric, 'smoothness', model_id)
             )
+            template_result.per_series_mate.append(
+                _ps_metric(ps_metric, 'mate', model_id)
+            )
+            template_result.per_series_wasserstein.append(
+                _ps_metric(ps_metric, 'wasserstein', model_id)
+            )
+            """
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()
@@ -1705,7 +1783,63 @@ def TemplateWizard(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-    if template_result.per_series_mae:
+    if template_result.per_series_metrics:
+        template_result.per_series_metrics = pd.concat(
+            template_result.per_series_metrics, axis=0
+        )
+        ps = template_result.per_series_metrics
+        template_result.per_series_mae = ps[ps['autots_eval_metric'] == 'mae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_made = ps[ps['autots_eval_metric'] == 'made'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_contour = ps[
+            ps['autots_eval_metric'] == 'contour'
+        ].drop(columns='autots_eval_metric')
+        template_result.per_series_rmse = ps[ps['autots_eval_metric'] == 'rmse'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_spl = ps[ps['autots_eval_metric'] == 'spl'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_mle = ps[ps['autots_eval_metric'] == 'mle'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_imle = ps[ps['autots_eval_metric'] == 'imle'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_maxe = ps[ps['autots_eval_metric'] == 'maxe'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_oda = ps[ps['autots_eval_metric'] == 'oda'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_mqae = ps[ps['autots_eval_metric'] == 'mqae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_dwae = ps[ps['autots_eval_metric'] == 'dwae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_ewmae = ps[ps['autots_eval_metric'] == 'ewmae'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_uwmse = ps[ps['autots_eval_metric'] == 'uwmse'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_smoothness = ps[
+            ps['autots_eval_metric'] == 'smoothness'
+        ].drop(columns='autots_eval_metric')
+        template_result.per_series_mate = ps[ps['autots_eval_metric'] == 'mate'].drop(
+            columns='autots_eval_metric'
+        )
+        template_result.per_series_wasserstein = ps[
+            ps['autots_eval_metric'] == 'wasserstein'
+        ].drop(columns='autots_eval_metric')
+        template_result.per_series_dwd = ps[ps['autots_eval_metric'] == 'dwd'].drop(
+            columns='autots_eval_metric'
+        )
+        """
         template_result.per_series_mae = pd.concat(
             template_result.per_series_mae, axis=0
         )
@@ -1748,7 +1882,15 @@ def TemplateWizard(
         template_result.per_series_smoothness = pd.concat(
             template_result.per_series_smoothness, axis=0
         )
+        template_result.per_series_mate = pd.concat(
+            template_result.per_series_mate, axis=0
+        )
+        template_result.per_series_wasserstein = pd.concat(
+            template_result.per_series_wasserstein, axis=0
+        )
+        """
     else:
+        template_result.per_series_metrics = pd.DataFrame()
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
         template_result.per_series_contour = pd.DataFrame()
@@ -1763,6 +1905,9 @@ def TemplateWizard(
         template_result.per_series_ewmae = pd.DataFrame()
         template_result.per_series_uwmse = pd.DataFrame()
         template_result.per_series_smoothness = pd.DataFrame()
+        template_result.per_series_mate = pd.DataFrame()
+        template_result.per_series_wasserstein = pd.DataFrame()
+        template_result.per_series_dwd = pd.DataFrame()
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
@@ -2246,6 +2391,9 @@ def validation_aggregation(validation_results, df_train=None):
         'ewmae': 'mean',
         'uwmse': 'mean',
         'smoothness': 'mean',
+        'mate': 'mean',
+        'wasserstein': 'mean',
+        'dwd': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
@@ -2262,6 +2410,9 @@ def validation_aggregation(validation_results, df_train=None):
         'ewmae_weighted': 'mean',
         'uwmse_weighted': 'mean',
         'smoothness_weighted': 'mean',
+        'mate_weighted': 'mean',
+        'wasserstein_weighted': 'mean',
+        'dwd_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
@@ -2343,6 +2494,9 @@ def generate_score(
     ewmae_weighting = metric_weighting.get('ewmae_weighting', 0)
     uwmse_weighting = metric_weighting.get('uwmse_weighting', 0)
     smoothness_weighting = metric_weighting.get('smoothness_weighting', 0)
+    mate_weighting = metric_weighting.get('mate_weighting', 0)
+    wasserstein_weighting = metric_weighting.get('wasserstein_weighting', 0)
+    dwd_weighting = metric_weighting.get('dwd_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         model_results['TotalRuntimeSeconds'] = np.where(
@@ -2440,6 +2594,26 @@ def generate_score(
             ].min()
             uwmse_score = model_results['uwmse_weighted'] / uwmse_scaler
             overall_score = overall_score + (uwmse_score * uwmse_weighting)
+        if mate_weighting != 0:
+            mate_scaler = model_results['mate_weighted'][
+                model_results['mate_weighted'] != 0
+            ].min()
+            mate_score = model_results['mate_weighted'] / mate_scaler
+            overall_score = overall_score + (mate_score * mate_weighting)
+        if wasserstein_weighting != 0:
+            wasserstein_scaler = model_results['wasserstein_weighted'][
+                model_results['wasserstein_weighted'] != 0
+            ].min()
+            wasserstein_score = (
+                model_results['wasserstein_weighted'] / wasserstein_scaler
+            )
+            overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
+        if dwd_weighting != 0:
+            dwd_scaler = model_results['dwd_weighted'][
+                model_results['dwd_weighted'] != 0
+            ].min()
+            dwd_score = model_results['dwd_weighted'] / dwd_scaler
+            overall_score = overall_score + (dwd_score * dwd_weighting)
         if smoothness_weighting != 0:
             smoothness_scaler = model_results['smoothness_weighted'][
                 model_results['smoothness_weighted'] != 0
@@ -2506,6 +2680,9 @@ def generate_score_per_series(
     ewmae_weighting = metric_weighting.get('ewmae_weighting', 0)
     uwmse_weighting = metric_weighting.get('uwmse_weighting', 0)
     smoothness_weighting = metric_weighting.get('smoothness_weighting', 0)
+    mate_weighting = metric_weighting.get('mate_weighting', 0)
+    wasserstein_weighting = metric_weighting.get('wasserstein_weighting', 0)
+    dwd_weighting = metric_weighting.get('dwd_weighting', 0)
 
     # there are problems when very small ~e-20 type number are in play
     mae_scaler = results_object.per_series_mae[
@@ -2588,6 +2765,32 @@ def generate_score_per_series(
         )
         uwmse_score = results_object.per_series_uwmse / uwmse_scaler
         overall_score = overall_score + (uwmse_score * uwmse_weighting)
+    if mate_weighting != 0:
+        mate_scaler = (
+            results_object.per_series_mate[results_object.per_series_mate != 0]
+            .min()
+            .fillna(1)
+        )
+        mate_score = results_object.per_series_mate / mate_scaler
+        overall_score = overall_score + (mate_score * mate_weighting)
+    if wasserstein_weighting != 0:
+        wasserstein_scaler = (
+            results_object.per_series_wasserstein[
+                results_object.per_series_wasserstein != 0
+            ]
+            .min()
+            .fillna(1)
+        )
+        wasserstein_score = results_object.per_series_wasserstein / wasserstein_scaler
+        overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
+    if dwd_weighting != 0:
+        dwd_scaler = (
+            results_object.per_series_dwd[results_object.per_series_dwd != 0]
+            .min()
+            .fillna(1)
+        )
+        dwd_score = results_object.per_series_dwd / dwd_scaler
+        overall_score = overall_score + (dwd_score * dwd_weighting)
     if smoothness_weighting != 0:
         smoothness_scaler = (
             results_object.per_series_smoothness[

@@ -12,15 +12,19 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.1 ✨✨✨
-* CenterSplit transformer added
-* separated function for best model selection
-* improved graphing when forecast_length == 1
-* quieter Prophet
-* added PreprocessingRegression model
-* more KalmanStateSpace models
-* assorted bug fixes
-* added AutoTS diagnose_params
+# 0.6.2 🏡🏡🏡
+* FFTFilter added
+* FFT model added
+* kdtree to Univariate/Multivariate Motif
+* additional metrics to MetricMotif
+* added BallTreeMultivariateMotif model
+* added FFTDecomposition
+* added ReplaceConstant
+* added TiDE model
+* logging improvements for pytorch and some pytorch backend for gluonts support
+* added AlignLastDiff
+* added plot_metric_corr
+* added mate, wasserstein, dwd metrics
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
@@ -45,7 +49,7 @@
 
 ## New Metric Checklist:
 	* Create function in metrics.py
-	* Add to mode base .evaluate()  (benchmark to make sure it is still fast)
+	* Add to mode base full_metric_evaluation  (benchmark to make sure it is still fast)
 	* Add to concat in TemplateWizard (if per_series metrics will be used)
 	* Add to concat in TemplateEvalObject (if per_series metrics will be used)
 	* Add to generate_score

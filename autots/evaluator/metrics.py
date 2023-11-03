@@ -124,6 +124,22 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
                 )
 
 
+def _made(diff_A, diff_F, scaler=None):
+    """Version with some values precomputed at higher level."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        if scaler is None:
+            return np.nanmean(abs(diff_A - diff_F), axis=0)
+        else:
+            return (
+                np.nanmean(
+                    abs(diff_A - diff_F),
+                    axis=0,
+                )
+                / scaler
+            )
+
+
 def pinball_loss(A, F, quantile):
     """Bigger is bad-er."""
     with warnings.catch_warnings():
@@ -146,13 +162,7 @@ def scaled_pinball_loss(A, F, df_train, quantile):
     # scaler = np.abs(np.diff(df_train[-1000:], axis=0)).mean(axis=0)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        scaler = np.nanmean(np.abs(np.diff(df_train[-1000:], axis=0)), axis=0)
-    # need to handle zeroes to prevent div 0 errors.
-    # this will tend to make that series irrelevant to the overall evaluation
-    fill_val = np.nanmax(scaler)
-    fill_val = fill_val if fill_val > 0 else 1
-    scaler[scaler == 0] = fill_val
-    scaler[np.isnan(scaler)] = fill_val
+        scaler = default_scaler(df_train)
     pl = pinball_loss(A=A, F=F, quantile=quantile)
     # for those cases where an entire series is NaN...
     # if any(np.isnan(pl)):
@@ -219,6 +229,21 @@ def contour(A, F):
             == (np.nan_to_num(np.diff(F, axis=0)) > 0),
             axis=0,
         ) / (F.shape[0] - 1)
+    except Exception:
+        contour_result = np.nan
+    return contour_result
+
+
+def _precomp_contour(diff_A, diff_F):
+    """A measure of how well the actual and forecast follow the same pattern of change."""
+
+    try:
+        # On the assumption flat lines common in forecasts,
+        # but exceedingly rare in real world
+        contour_result = np.sum(
+            (np.nan_to_num(diff_A) >= 0) == (np.nan_to_num(diff_F) > 0),
+            axis=0,
+        ) / (diff_F.shape[0])
     except Exception:
         contour_result = np.nan
     return contour_result
@@ -302,12 +327,15 @@ def medae(ae, nan_flag=True):
 def smape(actual, forecast, ae, nan_flag=True):
     """Accepting abs error already calculated"""
     if nan_flag:
+        # handle fully nan actuals
+        div = np.count_nonzero(~np.isnan(actual), axis=0).astype(float)
+        div[div == 0] = np.nan
         return (
-            np.nansum((ae / (abs(forecast) + abs(actual))), axis=0) * 200
-        ) / np.count_nonzero(~np.isnan(actual), axis=0)
+            np.nansum((ae / (np.abs(forecast) + np.abs(actual))), axis=0) * 200
+        ) / div
     else:
         return (
-            np.sum((ae / (abs(forecast) + abs(actual))), axis=0) * 200
+            np.sum((ae / (np.abs(forecast) + np.abs(actual))), axis=0) * 200
         ) / actual.shape[0]
 
 
@@ -340,8 +368,8 @@ def msle(full_errors, ae, le, nan_flag=True):
 def oda(A, F, last_of_array):
     """Origin Directional Accuracy, the accuracy of growth or decline relative to most recent data."""
     return (
-        np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0)
-        / F.shape[0]
+        # np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0]
+        np.nanmean(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0)
     )
 
 
@@ -420,6 +448,149 @@ def smoothness(arr):
         return np.log1p(np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0).round(12))
 
 
+def wasserstein(F, A):
+    """This version has sorting, which is perhaps less relevant on average than the unsorted."""
+    # Step 1: Sort each column (perhaps a bit slow), is smallest to largest by default
+    sorted_P = np.sort(F, axis=0)
+    sorted_A = np.sort(A, axis=0)
+
+    # Step 2: Compute cumulative sums
+    cumsum_P = np.cumsum(sorted_P, axis=0)
+    # actuals may have NaNs but forecasts should not
+    cumsum_A = np.nancumsum(sorted_A, axis=0)
+
+    # Step 3: Compute L1 distance between cumulative sums
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
+
+
+def unsorted_wasserstein(F, A):
+    """Also known as earth moving distance."""
+    cumsum_P = np.cumsum(F, axis=0)
+    # actuals may have NaNs but forecasts should not
+    cumsum_A = np.nancumsum(A, axis=0)
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
+
+
+def precomp_wasserstein(F, cumsum_A):
+    # sorted_P = np.sort(F, axis=0)
+    cumsum_P = np.cumsum(F, axis=0)
+    return np.mean(np.abs(cumsum_P - cumsum_A), axis=0)
+
+
+def _gaussian_kernel(x, data, bandwidth):
+    """Compute Gaussian kernel values of data over x."""
+    # Reshape x and data for broadcasting
+    x = x[:, np.newaxis, np.newaxis]
+    return np.exp(-0.5 * ((x - data) / bandwidth) ** 2) / (
+        bandwidth * np.sqrt(2 * np.pi)
+    )
+
+
+def kl_divergence(p, q, epsilon=1e-10):
+    """Compute KL Divergence between two distributions."""
+    p += epsilon
+    q += epsilon
+    return np.sum(p * np.log(p / q), axis=0)
+
+
+def _empirical_distribution(data, values):
+    """Compute empirical distribution of data over given values."""
+    return (
+        np.array([(data == v).sum(axis=0) for v in values], dtype=float) / data.shape[0]
+    )
+
+
+def kde(actuals, forecasts, bandwidth, x):
+    # Compute empirical distribution for actuals over x
+    # x = np.arange(0, 10, 0.1)  # Adjusted range for Poisson values and continuous forecasts
+    # p = _empirical_distribution(actuals, x)
+
+    # Compute KDE for forecasts over x
+    p = _gaussian_kernel(x, actuals, bandwidth).sum(axis=1)
+    p /= p.sum(axis=0, keepdims=True)
+    q = _gaussian_kernel(x, forecasts, bandwidth).sum(axis=1)
+    q /= q.sum(axis=0, keepdims=True)
+    return p, q
+
+
+def kde_kl_distance(F, A, bandwidth=0.5, x=None):
+    """Distribution loss by means of KDE and KL Divergence."""
+    if x is None:
+        combined_data = np.concatenate([A, F])
+        x_min = combined_data.min() - 1
+        x_max = combined_data.max() + 1
+        x = np.linspace(x_min, x_max, 1000)
+    p, q = kde(A, F, bandwidth=bandwidth, x=x)
+    return kl_divergence(p, q)
+
+
+def chi_squared_hist_distribution_loss(F, A, bins="auto", plot=False):
+    """Distribution loss, chi-squared distance from histograms."""
+    cols = F.shape[1]
+    results = []
+    # I haven't yet found a way to vectorize histograms
+    for i in range(cols):
+        current_series = F[:, i]
+        current_actuals = A[:, i]
+        hist_A, bin_edges = np.histogram(current_actuals, bins=bins)
+        hist_P, _ = np.histogram(current_series, bins=bin_edges)
+        # Normalize the histograms to make them distributions, unnecessary except NaN in actuals
+        norm_A = hist_A / (np.sum(hist_A) + 1e-10)
+        norm_P = hist_P / (np.sum(hist_P) + 1e-10)
+        results.append(np.sum((norm_A - norm_P) ** 2 / (norm_A + norm_P + 1e-10)))
+        if plot:
+            import matplotlib.pyplot as plt
+
+            bin_width = bin_edges[1] - bin_edges[0]
+            plt.bar(
+                bin_edges[:-1],
+                norm_P,
+                align='edge',
+                width=bin_width,
+                alpha=0.5,
+                label='forecast',
+                color='blue',
+            )
+            plt.bar(
+                bin_edges[:-1],
+                norm_A,
+                align='edge',
+                width=bin_width,
+                alpha=0.5,
+                label='history',
+                color='red',
+            )
+            plt.title('Histogram Comparison')
+            plt.xlabel('Value')
+            plt.ylabel('Frequency')
+            plt.show()
+
+    return np.array(results)
+
+
+def default_scaler(df_train):
+    # need to handle zeroes to prevent div 0 errors.
+    # this will tend to make that series irrelevant to the overall evaluation
+    scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+    fill_val = np.nanmax(scaler)
+    fill_val = fill_val if fill_val > 0 else 1
+    scaler[scaler == 0] = fill_val
+    scaler[np.isnan(scaler)] = fill_val
+    return scaler
+
+
+def numpy_ffill(arr):
+    """Fill np.nan forward down the zero axis."""
+    mask = np.isnan(arr)
+    idx = np.where(~mask, np.arange(mask.shape[0])[:, None], 0)
+    np.maximum.accumulate(idx, axis=0, out=idx)
+    return arr[idx, np.arange(idx.shape[1])]
+
+
+def array_last_val(arr):
+    return np.nan_to_num(numpy_ffill(arr[-100:].copy())[-1:, :])
+
+
 def full_metric_evaluation(
     A,
     F,
@@ -430,9 +601,13 @@ def full_metric_evaluation(
     columns=None,
     scaler=None,
     return_components=False,
+    cumsum_A=None,
+    diff_A=None,
+    last_of_array=None,
     **kwargs,
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
+    There are some extra args which are precomputed metrics for efficiency in loops, don't worry about them.
 
     Args:
         A (np.array): array or df of actuals
@@ -471,11 +646,10 @@ def full_metric_evaluation(
     )
     # calculate scaler once
     if scaler is None:
-        scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
-        fill_val = np.nanmax(scaler)
-        fill_val = fill_val if fill_val > 0 else 1
-        scaler[scaler == 0] = fill_val
-        scaler[np.isnan(scaler)] = fill_val
+        scaler = default_scaler(df_train)
+
+    if cumsum_A is None:
+        cumsum_A = np.nancumsum(A, axis=0)
 
     # fill with zero where applicable
     filled_full_mae_errors = full_mae_errors.copy()
@@ -484,18 +658,29 @@ def full_metric_evaluation(
     log_errors = np.log1p(full_mae_errors)
 
     # concat most recent history to enable full-size diffs
-    last_of_array = np.nan_to_num(df_train[-1:, :])
-    lA = np.concatenate([last_of_array, A])
+    if last_of_array is None:
+        last_of_array = array_last_val(df_train)
     lF = np.concatenate([last_of_array, F])
+    if diff_A is None:
+        # diff including change from last of training data
+        diff_A = np.diff(np.concatenate([last_of_array, A]), axis=0)
+    diff_F = np.diff(lF, axis=0)
 
     # test for NaN, this allows faster calculations if no nan
     nan_flag = np.isnan(np.min(full_errors))
+    # print(f"NaN Flag value is {nan_flag}")
 
-    # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+    # mean aggregate error, sum across all series, per timestamp then averaged
     if nan_flag:
         mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
     else:
         mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
+
+    # mean absolute temporal error, sum of error across time for one series
+    if nan_flag:
+        mate = np.abs(np.nansum(full_errors, axis=0))
+    else:
+        mate = np.abs(np.sum(full_errors, axis=0))
 
     direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
     weights = np.geomspace(1, 10, full_mae_errors.shape[0])[:, np.newaxis]
@@ -517,12 +702,14 @@ def full_metric_evaluation(
             'mae': np.nanmean(full_mae_errors, axis=0),
             'rmse': rmse(squared_errors),
             # directional error
-            'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+            # 'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+            'made': _made(diff_A, diff_F, scaler=scaler),
             # aggregate error
             'mage': mage,  # Gandalf approved
-            'underestimate': np.nansum(full_errors[~ovm], axis=0),
+            'mate': mate,  # the British version, of course
+            'underestimate': np.nansum(np.where(~ovm, full_errors, 0), axis=0),
             'mle': msle(full_errors, full_mae_errors, log_errors, nan_flag=nan_flag),
-            'overestimate': np.nansum(full_errors[ovm], axis=0),
+            'overestimate': np.nansum(np.where(ovm, full_errors, 0), axis=0),
             'imle': msle(
                 -full_errors,
                 full_mae_errors,
@@ -534,11 +721,13 @@ def full_metric_evaluation(
                 scaler=scaler,
             ),
             'containment': containment(lower_forecast, upper_forecast, A),
-            'contour': contour(lA, lF),
+            # 'contour': contour(lA, lF),
+            'contour': _precomp_contour(diff_A, diff_F),
             # maximum error point
             'maxe': np.max(filled_full_mae_errors, axis=0),  # TAKE MAX for AGG
             # origin directional accuracy
-            'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+            # 'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+            'oda': np.nanmean(direc_sign, axis=0),
             # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
             "dwae": (
                 (
@@ -568,6 +757,9 @@ def full_metric_evaluation(
             'uwmse': np.mean((filled_full_mae_errors * u_weights) ** 2, axis=0)
             / scaler,
             'smoothness': smoothness(lF),
+            'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler,
+            "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A))
+            / scaler,  # differential wasserstein distance, pronounced "DUDE"
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),
@@ -583,9 +775,17 @@ def full_metric_evaluation(
             # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
         },
         index=columns,
-    ).transpose()
+    )
+    # this only happens in a pretty rare edge case, so not sure if worth including
+    # result_df['smape'] = result_df['smape'].fillna(200)
 
     if return_components:
-        return result_df, full_mae_errors, squared_errors, upper_pl, lower_pl
+        return (
+            result_df.transpose(),
+            full_mae_errors,
+            squared_errors,
+            upper_pl,
+            lower_pl,
+        )
     else:
-        return result_df
+        return result_df.transpose()

@@ -487,7 +487,7 @@ class ETS(ModelObject):
                             # freq=args['freq'],
                         )
                     except Exception as e:
-                        if args['verbose'] > 0:
+                        if args['verbose'] > 1:
                             print(f"ETS error {repr(e)}")
                         esModel = ExponentialSmoothing(
                             current_series,
@@ -506,7 +506,7 @@ class ETS(ModelObject):
                     esPred = pd.Series(esPred)
                 except Exception as e:
                     # this error handling is meant for horizontal ensembles where it will only then be needed for select series
-                    if args['verbose'] > 0:
+                    if args['verbose'] > 1:
                         print(f"ETS failed on {series_name} with {repr(e)}")
                     esPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
             esPred.name = series_name
@@ -2004,11 +2004,11 @@ class Theta(ModelObject):
         return {
             'deseasonalize': random.choices([True, False], [0.8, 0.2])[0],
             'difference': random.choice([True, False]),
-            'use_test': random.choices([True, False], [0.8, 0.2])[0],
+            'use_test': random.choices([True, False], [0.4, 0.2])[0],
             'method': "auto",
             'period': None,
             'theta': random.choice([1.2, 1.4, 1.6, 2, 2.5, 3, 4]),
-            'use_mle': random.choices([True, False], [0.2, 0.8])[0],
+            'use_mle': random.choices([True, False], [0.0001, 0.99])[0],
         }
 
     def get_params(self):

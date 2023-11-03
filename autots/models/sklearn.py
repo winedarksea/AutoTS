@@ -337,7 +337,7 @@ def retrieve_regressor(
         if multioutput:
             return MultiOutputRegressor(
                 LGBMRegressor(
-                    verbose=int(verbose_bool),
+                    verbose=-1,
                     random_state=random_seed,
                     n_jobs=1,
                     **model_param_dict,
@@ -346,7 +346,7 @@ def retrieve_regressor(
             )
         else:
             return LGBMRegressor(
-                verbose=int(verbose_bool),
+                verbose=-1,
                 random_state=random_seed,
                 n_jobs=n_jobs,
                 **model_param_dict,
@@ -355,7 +355,7 @@ def retrieve_regressor(
         from lightgbm import LGBMRegressor
 
         regr = LGBMRegressor(
-            verbose=int(verbose_bool),
+            verbose=-1,
             random_state=random_seed,
             n_jobs=n_jobs,
             **model_param_dict,
@@ -370,7 +370,7 @@ def retrieve_regressor(
         if regression_model["model_params"]['estimator'] == 'SVR':
             from sklearn.svm import LinearSVR
 
-            svc = LinearSVR(verbose=verbose, random_state=random_seed, max_iter=1500)
+            svc = LinearSVR(verbose=0, random_state=random_seed, max_iter=1500)
             regr = AdaBoostRegressor(
                 estimator=svc,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -398,15 +398,13 @@ def retrieve_regressor(
     elif model_class in ['xgboost', 'XGBRegressor']:
         import xgboost as xgb
 
-        if multioutput:
+        if False:  # this is no longer necessary in 1.6 and beyond
             regr = MultiOutputRegressor(
-                xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
+                xgb.XGBRegressor(verbosity=0, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
             )
         else:
-            regr = xgb.XGBRegressor(
-                verbosity=verbose, **model_param_dict, n_jobs=n_jobs
-            )
+            regr = xgb.XGBRegressor(verbosity=0, **model_param_dict, n_jobs=n_jobs)
         return regr
     elif model_class == 'SVM':
         from sklearn.svm import LinearSVR
@@ -489,7 +487,7 @@ def retrieve_regressor(
         return GaussianProcessRegressor(
             kernel=kernel, random_state=random_seed, **model_param_dict
         )
-    elif model_class == "MultioutputGPR":
+    elif model_class in ["MultioutputGPR", "VectorizedMultiOutputGPR"]:
         return VectorizedMultiOutputGPR(**model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
@@ -504,6 +502,51 @@ def retrieve_regressor(
         return regr
 
 
+def retrieve_classifier(
+    regression_model: dict = {
+        "model": 'RandomForest',
+        "model_params": {
+            'n_estimators': 300,
+            'min_samples_leaf': 1,
+            'bootstrap': False,
+        },
+    },
+    verbose: int = 0,
+    verbose_bool: bool = False,
+    random_seed: int = 2020,
+    n_jobs: int = 1,
+    multioutput: bool = True,
+):
+    """Convert a model param dict to model object for regression frameworks."""
+    model_class = regression_model.get('model', 'RandomForest')
+    model_param_dict = regression_model.get("model_params", {})
+    if model_class == "ExtraTrees":
+        from sklearn.ensemble import ExtraTreesClassifier
+
+        return ExtraTreesClassifier(
+            n_jobs=n_jobs, random_state=random_seed, **model_param_dict
+        )
+    elif model_class == 'DecisionTree':
+        from sklearn.tree import DecisionTreeClassifier
+
+        return DecisionTreeClassifier(random_state=random_seed, **model_param_dict)
+    elif model_class in ['xgboost', 'XGBClassifier']:
+        import xgboost as xgb
+
+        return xgb.XGBClassifier(verbosity=verbose, **model_param_dict, n_jobs=n_jobs)
+    elif model_class == "RandomForest":
+        from sklearn.ensemble import RandomForestClassifier
+
+        return RandomForestClassifier(
+            random_state=random_seed,
+            verbose=verbose_bool,
+            n_jobs=n_jobs,
+            **model_param_dict,
+        )
+    else:
+        raise ValueError(f"classifier {model_class} not a recognized option.")
+
+
 # models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict = {
     'RandomForest': 0.02,
@@ -514,7 +557,7 @@ sklearn_model_dict = {
     'Adaboost': 0.03,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
-    'xgboost': 0.03,
+    'xgboost': 0.05,
     'KerasRNN': 0.02,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
@@ -525,8 +568,8 @@ sklearn_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    # 'GaussianProcessRegressor': 0.02,  # slow
-    'MultioutputGPR': 0.05,
+    'GaussianProcessRegressor': 0.000000001,  # slow
+    'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -547,7 +590,6 @@ multivariate_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    'MultioutputGPR': 0.05,
 }
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
@@ -605,8 +647,9 @@ datepart_model_dict: dict = {
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
-    'MultioutputGPR': 0.05,
+    'MultioutputGPR': 0.001,
 }
+gpu = ['Transformer', 'KerasRNN']
 gradient_boosting = {
     'xgboost': 0.09,
     'HistGradientBoost': 0.03,
@@ -627,31 +670,26 @@ tree_dict = {
 xgparam3 = {
     "model": 'xgboost',
     "model_params": {
-        "base_score": 0.5,
         "booster": 'gbtree',
-        "colsample_bylevel": 0.541426,
-        "colsample_bynode": 1,
-        "colsample_bytree": 1.0,
-        "early_stopping_rounds": None,
-        "enable_categorical": False,
-        "eval_metric": None,
-        "feature_types": None,
-        "gamma": 0,
-        "grow_policy": 'depthwise',
-        "importance_type": None,
-        "interaction_constraints": '',
-        "learning_rate": 0.012543,
-        "max_bin": 256,
-        "max_cat_threshold": 64,
-        "max_cat_to_onehot": 4,
-        "max_delta_step": 0,
+        "colsample_bylevel": 0.54,
+        "learning_rate": 0.0125,
         "max_depth": 11,
-        "max_leaves": 0,
         "min_child_weight": 0.0127203,
-        "monotone_constraints": '()',
         "n_estimators": 319,
-        "num_parallel_tree": 1,
-        "predictor": 'auto',
+    },
+}
+xgparam1 = {
+    "model": 'xgboost',
+    "model_params": {
+        'n_estimators': 7,
+        'max_leaves': 4,
+        'min_child_weight': 2.5,
+        'learning_rate': 0.35,
+        'subsample': 0.95,
+        'colsample_bylevel': 0.56,
+        'colsample_bytree': 0.46,
+        'reg_alpha': 0.0016,
+        'reg_lambda': 5.3,
     },
 }
 xgparam2 = {
@@ -659,63 +697,66 @@ xgparam2 = {
     "model_params": {
         "base_score": 0.5,
         "booster": 'gbtree',
-        "colsample_bylevel": 0.691915,
-        "colsample_bynode": 1,
-        "colsample_bytree": 1.0,
-        "early_stopping_rounds": None,
-        "enable_categorical": False,
-        "eval_metric": None,
-        "feature_types": None,
-        "gamma": 0,
-        "grow_policy": 'depthwise',
-        "importance_type": None,
-        "interaction_constraints": '',
-        "learning_rate": 0.02199,
+        "colsample_bylevel": 0.692,
+        "learning_rate": 0.022,
         "max_bin": 256,
-        "max_cat_threshold": 64,
-        "max_cat_to_onehot": 4,
-        "max_delta_step": 0,
         "max_depth": 14,
         "max_leaves": 0,
-        "min_child_weight": 0.024213,
-        "monotone_constraints": '()',
+        "min_child_weight": 0.024,
         "n_estimators": 162,
-        "num_parallel_tree": 1,
-        "predictor": 'auto',
     },
 }
 lightgbmp1 = {
     "model": 'LightGBM',
     "model_params": {
-        "colsample_bytree": 0.164532,
-        "learning_rate": 0.0202726,
+        "colsample_bytree": 0.1645,
+        "learning_rate": 0.0203,
         "max_bin": 1023,
         "min_child_samples": 16,
         "n_estimators": 1794,
         "num_leaves": 15,
-        "reg_alpha": 0.00097656,
-        "reg_lambda": 0.6861,
+        "reg_alpha": 0.00098,
+        "reg_lambda": 0.686,
     },
 }
 lightgbmp2 = {
     "model": 'LightGBM',
     "model_params": {
-        "colsample_bytree": 0.94716,
+        "colsample_bytree": 0.947,
         "learning_rate": 0.7024,
         "max_bin": 255,
         "min_child_samples": 15,
         "n_estimators": 5,
         "num_leaves": 35,
         "reg_alpha": 0.00308,
-        "reg_lambda": 5.1817,
+        "reg_lambda": 5.182,
     },
 }
+
+
+def generate_classifier_params(
+    model_dict=None,
+    method="default",
+):
+    if model_dict is None:
+        model_dict = {'xgboost': 1, 'ExtraTrees': 1, 'RandomForest': 1}
+    regr_params = generate_regressor_params(
+        model_dict=model_dict,
+        method=method,
+    )
+    if regr_params["model"] == 'xgboost':
+        if "objective" in regr_params['model_params'].keys():
+            regr_params['model_params'].pop('objective', None)
+    elif regr_params["model"] == 'ExtraTrees':
+        regr_params['model_params']['criterion'] = 'gini'
+    return regr_params
 
 
 def generate_regressor_params(
     model_dict=None,
     method="default",
 ):
+    """Generate new parameters for input to regressor."""
     # force neural networks for testing purposes
     if method in ["default", 'random', 'fast']:
         pass
@@ -736,7 +777,8 @@ def generate_regressor_params(
         model_dict = {method: sklearn_model_dict[method]}
     elif model_dict is None:
         model_dict = sklearn_model_dict
-    """Generate new parameters for input to regressor."""
+    if method == "no_gpu":
+        model_dict = {x: y for (x, y) in model_dict.items() if x not in gpu}
     model_list = list(model_dict.keys())
     model = random.choices(model_list, list(model_dict.values()), k=1)[0]
     if model in [
@@ -754,6 +796,7 @@ def generate_regressor_params(
         'ExtraTrees',
         'Ridge',
         'GaussianProcessRegressor',
+        'MultioutputGPR',
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -771,32 +814,71 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            branch = random.choices(['p1', 'p2', 'random'], [0.1, 0.4, 0.5])[0]
+            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.1, 0.1, 0.1, 0.7])[
+                0
+            ]
             if branch == 'p1':
-                param_dict = xgparam2
+                param_dict = xgparam1
             elif branch == 'p2':
+                param_dict = xgparam2
+            elif branch == 'p3':
                 param_dict = xgparam3
             else:
+                objective = random.choices(
+                    [
+                        'count:poisson',
+                        'reg:squarederror',
+                        'reg:gamma',
+                        'reg:pseudohubererror',
+                        'reg:quantileerror',
+                    ],
+                    [0.1, 0.6, 0.1, 0.1, 0.1],
+                )[0]
                 param_dict = {
                     "model": 'xgboost',
                     "model_params": {
-                        "objective": np.random.choice(
-                            ['count:poisson', 'reg:squarederror', 'reg:gamma'],
-                            p=[0.4, 0.5, 0.1],
-                            size=1,
-                        ).item(),
-                        "eta": np.random.choice([0.3], p=[1.0], size=1).item(),
-                        "min_child_weight": np.random.choice(
-                            [1, 2, 5], p=[0.8, 0.1, 0.1], size=1
-                        ).item(),
-                        "max_depth": np.random.choice(
-                            [3, 6, 9], p=[0.1, 0.8, 0.1], size=1
-                        ).item(),
-                        "subsample": np.random.choice(
-                            [1, 0.7, 0.5], p=[0.9, 0.05, 0.05], size=1
-                        ).item(),
+                        "objective": objective,
+                        "eta": random.choices(
+                            [1.0, 0.3, 0.01, 0.03, 0.05, 0.003],
+                            [0.05, 0.1, 0.1, 0.1, 0.1, 0.1],
+                        )[
+                            0
+                        ],  # aka learning_rate
+                        "min_child_weight": random.choices(
+                            [0.05, 0.5, 1, 2, 5], [0.1, 0.2, 0.8, 0.1, 0.1]
+                        )[0],
+                        "subsample": random.choices(
+                            [1, 0.9, 0.7, 0.5], [0.9, 0.05, 0.05, 0.05]
+                        )[0],
+                        "colsample_bylevel": random.choices(
+                            [1, 0.9, 0.7, 0.5], [0.4, 0.1, 0.1, 0.1]
+                        )[0],
+                        "reg_alpha": random.choices(
+                            [0, 0.001, 0.05, 100], [0.9, 0.1, 0.05, 0.05]
+                        )[0],
+                        "reg_lambda": random.choices(
+                            [1, 0.03, 0.11, 0.2, 5], [0.9, 0.05, 0.05, 0.05, 0.05]
+                        )[0],
                     },
                 }
+                if random.choices([True, False], [0.4, 0.6])[0]:
+                    param_dict["model_params"]["max_depth"] = random.choices(
+                        [3, 6, 9], [0.1, 0.8, 0.1]
+                    )[0]
+                if random.choices([True, False], [0.5, 0.5])[0]:
+                    param_dict["model_params"]["n_estimators"] = random.choices(
+                        [4, 7, 10, 20, 100, 1000],
+                        [0.2, 0.2, 0.2, 0.2, 0.5, 0.2],
+                    )[0]
+                if random.choices([True, False], [0.2, 0.8])[0]:
+                    param_dict["model_params"]["grow_policy"] = "lossguide"
+                if objective == "reg:quantileerror":
+                    param_dict['model_params']["quantile_alpha"] = 0.5
+                    param_dict['model_params']["tree_method"] = "hist"
+                elif random.choices([True, False], [0.2, 0.8])[0]:
+                    # new in 2.0 vector trees
+                    param_dict['model_params']["multi_strategy"] = "multi_output_tree"
+                    param_dict['model_params']["tree_method"] = "hist"
         elif model == 'MLP':
             solver = np.random.choice(
                 ['lbfgs', 'sgd', 'adam'], p=[0.5, 0.1, 0.4], size=1
@@ -853,27 +935,27 @@ def generate_regressor_params(
                 "model": 'RandomForest',
                 "model_params": {
                     "n_estimators": random.choices(
-                        [300, 100, 1000, 5000], [0.4, 0.4, 0.2, 0.01]
+                        [4, 300, 100, 1000, 5000], [0.1, 0.4, 0.4, 0.2, 0.01]
                     )[0],
                     "min_samples_leaf": random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0],
                     "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
-                    # absolute_error is noticeably slower
-                    # "criterion": random.choices(
-                    #     ["squared_error", "poisson"], [0.99, 0.001]
-                    # )[0],
                 },
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
                 [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
             )[0]
-            estimators_choice = random.choices([50, 100, 500], [0.05, 0.9, 0.05])[0]
+            estimators_choice = random.choices(
+                [4, 50, 100, 500], [0.05, 0.05, 0.9, 0.05]
+            )[0]
             param_dict = {
                 "model": 'ExtraTrees',
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([2, 4, 1], [0.8, 0.1, 0.1])[0],
+                    "min_samples_split": random.choices([2, 4, 1.0], [0.8, 0.1, 0.1])[
+                        0
+                    ],
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
@@ -990,7 +1072,7 @@ def generate_regressor_params(
                 },
             }
         elif model in ['LightGBM', "LightGBMRegressorChain"]:
-            branch = random.choices(['p1', 'p2', 'random'], [0.2, 0.2, 0.6])[0]
+            branch = random.choices(['p1', 'p2', 'random'], [0.1, 0.1, 0.8])[0]
             if branch == 'p1':
                 param_dict = lightgbmp1
             elif branch == 'p2':
@@ -1075,28 +1157,31 @@ def generate_regressor_params(
                 [
                     'linear',
                     "exponential",
-                    "locally_periodic",
                     "rbf",
                     "polynomial",
                     'periodic',
+                    "locally_periodic",
                 ],
-                [0.1, 0.1, 0.1, 0.4, 0.1, 0.1],
+                [0.1, 0.1, 0.4, 0.2, 0.01, 0.01],
             )[0]
             param_dict = {
-                "model": 'GaussianProcessRegressor',
+                "model": 'MultioutputGPR',
                 "model_params": {
                     'noise_var': random.choice([1e-7, 1e-4, 1e-3, 1e-2, 0.1, 1, 10]),
                     'kernel': kernel,
                 },
             }
             if kernel in ["exponential", "locally_periodic", "rbf", "periodic"]:
-                param_dict['gamma'] = random.choice([0.1, 1, 10, 100])
+                param_dict['gamma'] = random.choices(
+                    [0.1, 1, 10, 100],
+                    [0.2, 0.05, 0.2, 0.2],
+                )[0]
             if kernel in ["locally_periodic", "periodic"]:
                 param_dict['p'] = random.choices(
-                    [7, 12, 365.25, 52, 28], [0.6, 0.15, 0.15, 0.05, 0.05]
+                    [7, 12, 365.25, 52, 28], [0.8, 0.15, 0.15, 0.05, 0.05]
                 )[0]
             if kernel == "locally_periodic":
-                param_dict['lambda_prime'] = random.choice([0.1, 1, 10, 100])
+                param_dict['lambda_prime'] = random.choice([0.1, 1, 10])
         else:
             min_samples = np.random.choice(
                 [1, 2, 0.05], p=[0.5, 0.3, 0.2], size=1
@@ -3218,7 +3303,7 @@ class VectorizedMultiOutputGPR:
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
 
-    def __init__(self, kernel='rbf', noise_var=1e-2, gamma=0.1, lambda_prime=0.1, p=7):
+    def __init__(self, kernel='rbf', noise_var=10, gamma=0.1, lambda_prime=0.1, p=7):
         self.kernel = kernel
         self.noise_var = noise_var
         self.gamma = gamma
@@ -3232,6 +3317,8 @@ class VectorizedMultiOutputGPR:
         return (1 + np.dot(x1, x2.T)) ** p
 
     def _rbf_kernel(self, x1, x2, gamma):
+        # from scipy.spatial.distance import cdist
+        # return np.exp(-gamma * cdist(x1, x2, 'sqeuclidean'))
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
@@ -3241,21 +3328,56 @@ class VectorizedMultiOutputGPR:
         )
         return np.exp(-gamma * distance)
 
-    def _exponential_kernel(self, x1, x2, gamma):
-        return np.exp(-np.abs(x1 - x2.T) / gamma)
+    def _old_exponential_kernel(self, x1, x2, gamma):
+        # memory hungry
+        diff = x1[:, np.newaxis, :] - x2[np.newaxis, :, :]
+        return np.exp(-np.abs(diff) / gamma)
+        # return np.exp(-np.abs(x1 - x2.T) / gamma)
 
-    def _periodic_kernel(self, x1, x2, gamma, p):
+    def _exponential_kernel(self, x1, x2, gamma):
+        # less memory hungry
+        result = np.empty((x1.shape[0], x2.shape[0]))
+        for i, xi in enumerate(x1):
+            diff = np.abs(xi - x2)
+            result[i, :] = np.exp(-diff.sum(axis=1) / gamma)
+        return result
+
+    def _old_periodic_kernel(self, x1, x2, gamma, p):
         sin_sq = np.sin(np.pi * np.abs(x1 - x2.T) / p) ** 2
         return np.exp(-2 * sin_sq / gamma**2)
 
-    def _locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
-        rbf_part = np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
+    def _vec_periodic_kernel(self, x1, x2, gamma, p):
+        diff = x1[:, np.newaxis, :] - x2[np.newaxis, :, :]
+        sin_sq = np.sin(np.pi * np.abs(diff) / p) ** 2
+        return np.exp(-2 * sin_sq / gamma**2)
+
+    def _periodic_kernel(self, x1, x2, gamma, p):
+        result = np.empty((x1.shape[0], x2.shape[0]))
+        for i, xi in enumerate(x1):
+            diff = xi - x2
+            sin_sq = (np.sin(np.pi * np.abs(diff) / p) ** 2).sum(axis=1)
+            result[i, :] = np.exp(-2 * sin_sq / gamma**2)
+        return result
+
+    def _old_locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
+        rbf_part = np.exp(
+            -((x1 - x2) ** 2) / (2 * gamma**2)
+        )  #  old: np.exp(-((x1 - x2.T) ** 2) / (2 * gamma**2))
         periodic_part = self._periodic_kernel(x1, x2, lambda_prime, p)
         return rbf_part * periodic_part
 
+    def _locally_periodic_kernel(self, x1, x2, gamma, lambda_prime, p):
+        result = np.empty((x1.shape[0], x2.shape[0]))
+        for i, xi in enumerate(x1):
+            diff = xi - x2
+            rbf_part = np.exp(-np.sum(diff**2, axis=1) / (2 * gamma**2))
+            sin_sq = (np.sin(np.pi * np.abs(diff) / p) ** 2).sum(axis=1)
+            periodic_part = np.exp(-2 * sin_sq / gamma**2)
+            result[i, :] = rbf_part * periodic_part
+        return result
+
     def fit(self, X, Y):
         self.X_train = np.asarray(X)
-        y = np.asarray(Y)
 
         if self.kernel == 'linear':
             K = self._linear_kernel(self.X_train, self.X_train)
@@ -3275,11 +3397,21 @@ class VectorizedMultiOutputGPR:
             raise ValueError("Invalid Kernel")
 
         # Regularized Kernel
-        K_reg = K + self.noise_var * np.eye(K.shape[0])
+        # K_reg = K + self.noise_var * np.eye(K.shape[0])
+        np.fill_diagonal(K, np.diag(K) + self.noise_var)
 
         # Cholesky decomposition and solve for alpha in a vectorized way
-        self.L = np.linalg.cholesky(K_reg)
-        self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, y))
+        if False:
+            from scipy.sparse.linalg import cg
+
+            self.alpha, _ = cg(K, np.asarray(Y))  # _ captures info about convergence
+        else:
+            self.L = np.linalg.cholesky(K)
+            self.alpha = np.linalg.solve(
+                self.L.T, np.linalg.solve(self.L, np.asarray(Y))
+            )
+        del K
+        # Regularized Kernel
         return self
 
     def predict(self, X):

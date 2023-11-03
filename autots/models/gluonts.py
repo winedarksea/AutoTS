@@ -3,8 +3,10 @@ GluonTS
 
 Best neuralnet models currently available, released by Amazon, scale well.
 Except it is really the only thing I use that runs mxnet, and it takes a while to train these guys...
+And MXNet is now sorta-maybe-deprecated? Which is sad because it had excellent CPU-based training speed.
 
-Note that there are routinely package version issues with this and its dependencies. Stability is not the strong suit of GluonTS.
+Note that there are routinely package version issues with this and its dependencies.
+Stability is not the strong suit of GluonTS.
 """
 import logging
 import random
@@ -21,10 +23,13 @@ try:
         from gluonts.dataset.field_names import FieldName  # new way
     except Exception:
         from gluonts.transform import FieldName  # old way (0.3.3 and older)
-    try:  # new way
-        from gluonts.mx.trainer import Trainer
-    except Exception:  # old way < 0.5.x
-        from gluonts.trainer import Trainer
+    try:
+        try:  # new way, but only with mxnet
+            from gluonts.mx.trainer import Trainer
+        except Exception:  # old way < 0.5.x
+            from gluonts.trainer import Trainer
+    except Exception:
+        pass
 except Exception:  # except ImportError
     _has_gluonts = False
 else:
@@ -140,18 +145,58 @@ class GluonTS(ModelObject):
         self.fit_data(df, future_regressor=future_regressor)
         npts_flag = False
 
+        pytorch_models = ['PatchTST', 'DeepAR']  # those supporting
+        if self.gluon_model in pytorch_models:
+            pass
+        """
+        # this attempts to stop model checkpoing saving spam that is typical of lightning
+            try:
+                try:
+                    from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+                except Exception:
+                    from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+    
+                callbacks = []
+                callbacks.append(
+                    ModelCheckpoint(
+                        save_last=False,
+                        save_top_k=0,
+                        every_n_train_steps=0,
+                        every_n_epochs=0,
+                    )
+                )
+            except Exception as e:
+                callbacks = []
+                print(repr(e))
+        """
+
         if self.gluon_model == 'DeepAR':
             try:
-                from gluonts.mx import DeepAREstimator
+                try:
+                    from gluonts.mx import DeepAREstimator
+                except Exception:
+                    from gluonts.model.deepar import DeepAREstimator
+                estimator = DeepAREstimator(
+                    freq=ts_metadata['freq'],
+                    context_length=ts_metadata['context_length'],
+                    prediction_length=ts_metadata['forecast_length'],
+                    trainer=Trainer(
+                        epochs=self.epochs, learning_rate=self.learning_rate
+                    ),
+                )
             except Exception:
-                from gluonts.model.deepar import DeepAREstimator
+                from gluonts.torch import DeepAREstimator
 
-            estimator = DeepAREstimator(
-                freq=ts_metadata['freq'],
-                context_length=ts_metadata['context_length'],
-                prediction_length=ts_metadata['forecast_length'],
-                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
-            )
+                estimator = DeepAREstimator(
+                    freq=ts_metadata['freq'],
+                    context_length=ts_metadata['context_length'],
+                    prediction_length=ts_metadata['forecast_length'],
+                    trainer_kwargs={
+                        'logger': False,
+                        'log_every_n_steps': 0,
+                    },  # , 'callbacks': callbacks
+                )
+
         elif self.gluon_model == 'NPTS':
             try:
                 from gluonts.model.npts import NPTSPredictor
@@ -380,6 +425,16 @@ class GluonTS(ModelObject):
                     learning_rate=self.learning_rate,
                     hybridize=False,
                 ),
+            )
+        elif self.gluon_model == 'PatchTST':
+            from gluonts.torch.model.patch_tst import PatchTSTEstimator
+
+            estimator = PatchTSTEstimator(
+                prediction_length=ts_metadata['forecast_length'],
+                context_length=ts_metadata['context_length'],
+                patch_len=5,
+                lr=self.learning_rate,
+                trainer_kwargs={'logger': False, 'log_every_n_steps': 0},
             )
         else:
             raise ValueError("'gluon_model' not recognized.")
@@ -647,6 +702,7 @@ class GluonTS(ModelObject):
                     'SelfAttention',
                     'TemporalFusionTransformer',
                     'DeepTPP',
+                    'PatchTST',
                 ],
                 [
                     0.1,
@@ -666,6 +722,7 @@ class GluonTS(ModelObject):
                     0.1,
                     0.1,
                     0.1,
+                    0.1,
                 ],
                 k=1,
             )[0]
@@ -677,7 +734,9 @@ class GluonTS(ModelObject):
             [5, 10, 30, '1ForecastLength', '2ForecastLength'],
             [0.2, 0.3, 0.1, 0.1, 0.1],
         )[0]
-        learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
+        learning_rate_choice = random.choices(
+            [0.01, 0.001, 0.0001, 0.00001], [0.3, 0.6, 0.1, 0.1]
+        )[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice in ['NPTS', 'Rotbaum']:
             epochs_choice = 20

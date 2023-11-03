@@ -421,10 +421,11 @@ class PredictionObject(object):
         remove_zeroes: bool = False,
         interpolate: str = None,
         start_date: str = "auto",
-        alpha=0.25,
+        alpha=0.3,
         facecolor="black",
-        loc="upper left",
+        loc="upper right",
         title=None,
+        title_substring=None,
         vline=None,
         colors=None,
         include_bounds=True,
@@ -442,6 +443,8 @@ class PredictionObject(object):
             vline (datetime): datetime of dashed vertical line to plot
             colors (dict): colors mapping dictionary col: color
             alpha (float): intensity of bound interval shading
+            title (str): title
+            title_substring (str): additional title details to pass to existing, moves series name to axis
             include_bounds (bool): if True, shows region of upper and lower forecasts
             **kwargs passed to pd.DataFrame.plot()
         """
@@ -453,6 +456,9 @@ class PredictionObject(object):
                 start_date = df_wide.index[slx]
             else:
                 start_date = self.forecast.index[0]
+
+        if series is None:
+            series = random.choice(self.forecast.columns)
         plot_df = self.plot_df(
             df_wide=df_wide,
             series=series,
@@ -487,7 +493,10 @@ class PredictionObject(object):
                     )
                 else:
                     title_prelim = ensemble_type
-            title = f"{series} with model {title_prelim}"
+            if title_substring is None:
+                title = f"{series} with model {title_prelim}"
+            else:
+                title = f"{title_substring} with model {title_prelim}"
 
         ax = plot_df[['actuals', 'forecast']].plot(title=title, color=colors, **kwargs)
         if include_bounds:
@@ -497,6 +506,7 @@ class PredictionObject(object):
                 plot_df['low_forecast'],
                 alpha=alpha,
                 color="#A5ADAF",
+                label="Prediction Interval",
             )
         if vline is not None:
             ax.vlines(
@@ -507,6 +517,11 @@ class PredictionObject(object):
                 ymin=plot_df.min().min(),
                 ymax=plot_df.max().max(),
             )
+            # ax.text(vline, plot_df.max().max(), "Event", color='darkred', verticalalignment='top')
+        if title_substring is not None:
+            ax.set_ylabel(series)
+        # ax.grid(True, which="both", ls="--", linewidth=0.5)
+        # ax.legend(loc=loc)
         return ax
 
     def plot_grid(
@@ -536,8 +551,8 @@ class PredictionObject(object):
         else:
             nrow = 1
             ncol = 2
-        fig, axes = plt.subplots(nrow, ncol, figsize=figsize)
-        fig.suptitle(title)
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, constrained_layout=True)
+        fig.suptitle(title, fontsize='xx-large')
         count = 0
         for r in range(nrow):
             for c in range(ncol):
@@ -570,6 +585,9 @@ class PredictionObject(object):
         per_timestamp_errors: bool = False,
         full_mae_error: bool = True,
         scaler=None,
+        cumsum_A=None,
+        diff_A=None,
+        last_of_array=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -611,6 +629,9 @@ class PredictionObject(object):
                 columns=self.forecast.columns,
                 scaler=scaler,
                 return_components=True,
+                cumsum_A=cumsum_A,
+                diff_A=diff_A,
+                last_of_array=last_of_array,
             )
 
         if per_timestamp_errors:

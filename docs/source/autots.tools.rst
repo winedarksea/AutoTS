@@ -44,6 +44,14 @@ autots.tools.fast\_kalman module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.fft module
+-----------------------
+
+.. automodule:: autots.tools.fft
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.hierarchial module
 -------------------------------
 

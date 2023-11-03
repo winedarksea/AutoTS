@@ -138,7 +138,7 @@ class AutoTS(object):
         best_model_transformation_params (dict): transformation parameters
         best_model_ensemble (int): Ensemble type int id
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
-        df_wide_numeric (pd.DataFrame): dataframe containing shaped final data
+        df_wide_numeric (pd.DataFrame): dataframe containing shaped final data, will include preclean
         initial_results.model_results (object): contains a collection of result metrics
         score_per_series (pd.DataFrame): generated score of metrics given per input series, if horizontal ensembles
 
@@ -445,7 +445,7 @@ class AutoTS(object):
         stride_size = stride_size if stride_size > 0 else 1
         self.similarity_validation_params = {
             "stride_size": stride_size,
-            "distance_metric": "nan_euclidean",
+            "distance_metric": "canberra",
             "include_differenced": True,
             "window_size": 30,
         }
@@ -539,6 +539,15 @@ class AutoTS(object):
                     [0, 0.05, 3, 1, -0.5, -3], [0.4, 0.1, 0.1, 0.1, 0.2, 0.1]
                 )[0],
                 'ewmae_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'mate_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'wasserstein_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'dwd_weighting': random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
             }
@@ -928,7 +937,12 @@ class AutoTS(object):
             time.sleep(3)  # give the message a chance to be seen
 
         if self.transformer_list == "auto":
-            self.transformer_list = "all" if df_wide_numeric.shape[1] <= 10 else "fast"
+            if df_wide_numeric.shape[1] <= 8:
+                self.transformer_list = "all"
+            elif df_wide_numeric.shape[1] <= 500:
+                self.transformer_list = "fast"
+            else:
+                self.transformer_list = "superfast"
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:
@@ -1440,10 +1454,7 @@ class AutoTS(object):
                     time.sleep(5)
 
         # run validation_results aggregation
-        self.validation_results = copy.copy(self.initial_results)
-        self.validation_results = validation_aggregation(
-            self.validation_results, df_train=self.df_wide_numeric
-        )
+        self = self.validation_agg()
 
         # Construct horizontal style ensembles
         models_to_use = None
@@ -1709,10 +1720,7 @@ class AutoTS(object):
                 hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
-            self.validation_results = copy.copy(self.initial_results)
-            self.validation_results = validation_aggregation(
-                self.validation_results, df_train=self.df_wide_numeric
-            )
+            self = self.validation_agg()
 
             # use the best of these ensembles if any ran successfully
             # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
@@ -1753,11 +1761,21 @@ class AutoTS(object):
         sys.stdout.flush()
         return self
 
+    def validation_agg(self):
+        self.validation_results = copy.copy(self.initial_results)
+        self.validation_results = validation_aggregation(
+            self.validation_results, df_train=self.df_wide_numeric
+        )
+        return self
+
     def _best_non_horizontal(self, metric_weighting=None):
         if self.validation_results is None:
-            raise ValueError(
-                "validation results are None, cannot choose best model without fit"
-            )
+            if not self.initial_results.model_results.empty:
+                self = self.validation_agg()
+            else:
+                raise ValueError(
+                    "validation results are None, cannot choose best model without fit"
+                )
         if metric_weighting is None:
             metric_weighting = self.metric_weighting
         # choose best model, when no horizontal ensembling is done
@@ -2000,11 +2018,7 @@ or otherwise increase models available."""
                 result_file=None,
             )
 
-        self.validation_results = copy.copy(self.initial_results)
-        # aggregate validation results
-        self.validation_results = validation_aggregation(
-            self.validation_results, df_train=self.df_wide_numeric
-        )
+        self = self.validation_agg()
 
     def _predict(
         self,
@@ -2239,7 +2253,7 @@ or otherwise increase models available."""
         Args:
             filename (str): 'csv' or 'json' (in filename).
                 `None` to return a dataframe and not write a file.
-            models (str): 'best' or 'all'
+            models (str): 'best' or 'all', and 'slowest' for diagnostics
             n (int): if models = 'best', how many n-best to export
             max_per_model_class (int): if models = 'best',
                 the max number of each model class to include in template
@@ -2295,6 +2309,13 @@ or otherwise increase models available."""
                     ).drop_duplicates()
                 if not include_results:
                     export_template = export_template[self.template_cols_id]
+        elif models == "slowest":
+            return self.save_template(
+                filename,
+                self.initial_results.model_results.nlargest(
+                    n, columns=['TotalRuntime']
+                ),
+            )
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         return self.save_template(filename, export_template)
@@ -2347,6 +2368,8 @@ or otherwise increase models available."""
         """remove models not in given model list."""
         if model_list is None:
             model_list = self.model_list
+        if isinstance(model_list, dict):
+            model_list = list(model_list.keys())
         if include_ensemble:
             mod_list = model_list + ['Ensemble']
         else:
@@ -2859,68 +2882,7 @@ or otherwise increase models available."""
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
 
-    def plot_validations(
-        self,
-        df_wide=None,
-        models=None,
-        series=None,
-        title=None,
-        start_date="auto",
-        end_date=None,
-        subset=None,
-        compare_horizontal=False,
-        colors=None,
-        include_bounds=True,
-        alpha=0.35,
-        **kwargs,
-    ):
-        """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
-        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
-        'chosen' refers to best_model_id, the model chosen to run for predict
-        Validation sections may overlap (depending on method) which can confuse graph readers.
-
-        Args:
-            models (list): list, str, df or None, models to compare (IDs unless df of model params)
-            series (str): time series to graph
-            title (str): graph title
-            start_date (str): or datetime, place to begin graph, None for full
-            end_date (str): or datetime, end of graph x axis
-            subset (str): overrides series, shows either 'best' or 'worst'
-            compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
-            include_bounds (bool): if True (default) include the upper/lower forecast bounds
-        """
-        if df_wide is None:
-            df_wide = self.df_wide_numeric
-        if series is None:
-            if subset is None:
-                series = random.choice(df_wide.columns)
-            else:
-                scores = self.best_model_per_series_mape().index.tolist()
-                scores = [x for x in scores if "_lltmicro" not in x]
-                mapes = self.best_model_per_series_score().index.tolist()
-                mapes = [x for x in mapes if "_lltmicro" not in x]
-                if str(subset).lower() == "best":
-                    series = mapes[-1]
-                elif str(subset).lower() == "best score":
-                    series = scores[-1]
-                elif str(subset).lower() == "worst":
-                    series = mapes[0]
-                elif str(subset).lower() == "worst score":
-                    series = scores[0]
-                else:
-                    raise ValueError(
-                        "plot_validations arg subset must be None, 'best' or 'worst'"
-                    )
-        if title is None:
-            if subset is not None:
-                if "score" in str(subset).lower():
-                    title = f"Validation Forecasts for {subset} Tested Series {series}"
-                else:
-                    title = (
-                        f"Validation Forecasts for {subset} Tested MAPE Series {series}"
-                    )
-            else:
-                title = f"Validation Forecasts for {series}"
+    def _validation_forecasts(self, models=None, compare_horizontal=False):
         if models is None:
             if self.best_model_non_horizontal is not None and compare_horizontal:
                 validation_template = pd.concat(
@@ -2928,12 +2890,6 @@ or otherwise increase models available."""
                 )
             else:
                 validation_template = self.best_model
-                colors = {
-                    'actuals': '#AFDBF5',
-                    'chosen': '#4D4DFF',
-                    'chosen_lower': '#A7AFB2',
-                    'chosen_upper': '#A7AFB2',
-                }
         elif isinstance(models, str):
             val_results = self.results()
             validation_template = val_results[val_results['ID'].isin([models])][
@@ -2945,12 +2901,14 @@ or otherwise increase models available."""
             ].drop_duplicates()
         elif isinstance(models, pd.DataFrame):
             validation_template = models
+        # the duplicated check is only for exact match, and could be improved
         duplicated = False
         if self.validation_forecasts_template is not None:
             if self.validation_forecasts_template.equals(validation_template):
                 duplicated = True
         if not duplicated:
             self.validation_forecast_cuts = []
+            self.validation_forecast_cuts_ends = []
             # self.validation_forecasts = {}
             for val in range(len(self.validation_indexes)):
                 val_df_train, val_df_test = simple_train_test_split(
@@ -2961,6 +2919,7 @@ or otherwise increase models available."""
                 )
                 sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
+                self.validation_forecast_cuts_ends.append(sec_idx[-1])
                 try:
                     train_reg = self.future_regressor_train.reindex(val_df_train.index)
                     fut_reg = self.future_regressor_train.reindex(sec_idx)
@@ -2993,6 +2952,99 @@ or otherwise increase models available."""
             if self.verbose > 0:
                 print("using stored results for plot_validations")
         self.validation_forecasts_template = validation_template
+
+    def retrieve_validation_forecasts(
+        self,
+        models=None,
+        compare_horizontal=False,
+        id_name="SeriesID",
+        value_name="Value",
+        interval_name='PredictionInterval',
+    ):
+        self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
+        needed_mods = self.validation_forecasts_template['ID'].tolist()
+        df_list = []
+        for x in self.validation_forecasts.keys():
+            mname = x.split("_")[1]
+            if mname == "chosen" or mname in needed_mods:
+                new_df = self.validation_forecasts[x].long_form_results(
+                    id_name=id_name,
+                    value_name=value_name,
+                    interval_name=interval_name,
+                )
+                new_df['ValidationRound'] = x.split("_")[0]
+                df_list.append(new_df)
+        return pd.concat(df_list, sort=True, axis=0)
+
+    def plot_validations(
+        self,
+        df_wide=None,
+        models=None,
+        series=None,
+        title=None,
+        start_date="auto",
+        end_date="auto",
+        subset=None,
+        compare_horizontal=False,
+        colors=None,
+        include_bounds=True,
+        alpha=0.35,
+        start_color="darkred",
+        end_color="#A2AD9C",
+        **kwargs,
+    ):
+        """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
+        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
+        'chosen' refers to best_model_id, the model chosen to run for predict
+        Validation sections may overlap (depending on method) which can confuse graph readers.
+
+        Args:
+            models (list): list, str, df or None, models to compare (IDs unless df of model params)
+            series (str): time series to graph
+            title (str): graph title
+            start_date (str): 'auto' or datetime, place to begin graph, None for full
+            end_date (str): 'auto' or datetime, end of graph x axis
+            subset (str): overrides series, shows either 'best' or 'worst'
+            compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
+            include_bounds (bool): if True (default) include the upper/lower forecast bounds
+            start_color (str): color of vline for val start marker, None to remove vline
+            end_color (str): color of vline for val end marker, None to remove vline
+        """
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
+        # choose which series to plot
+        if series is None:
+            if subset is None:
+                series = random.choice(df_wide.columns)
+            else:
+                scores = self.best_model_per_series_mape().index.tolist()
+                scores = [x for x in scores if "_lltmicro" not in x]
+                mapes = self.best_model_per_series_score().index.tolist()
+                mapes = [x for x in mapes if "_lltmicro" not in x]
+                if str(subset).lower() == "best":
+                    series = mapes[-1]
+                elif str(subset).lower() == "best score":
+                    series = scores[-1]
+                elif str(subset).lower() == "worst":
+                    series = mapes[0]
+                elif str(subset).lower() == "worst score":
+                    series = scores[0]
+                else:
+                    raise ValueError(
+                        "plot_validations arg subset must be None, 'best' or 'worst'"
+                    )
+        # run the forecasts on the past validations
+        self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
+        if (
+            not compare_horizontal
+            and colors is None
+        ):
+            colors = {
+                'actuals': '#AFDBF5',
+                'chosen': '#4D4DFF',
+                'chosen_lower': '#A7AFB2',
+                'chosen_upper': '#A7AFB2',
+            }
         needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []
         for x in self.validation_forecasts.keys():
@@ -3025,6 +3077,10 @@ or otherwise increase models available."""
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
             ).index.min() - pd.Timedelta(days=7)
+        if end_date == "auto":
+            end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
+                how='all', axis=0
+            ).index.max() + pd.Timedelta(days=7)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
@@ -3035,6 +3091,17 @@ or otherwise increase models available."""
                 plot_df.loc[:, 'chosen'] = plot_df['chosen'].fillna(
                     method='bfill', limit=1
                 )
+        # set Title
+        if title is None:
+            if subset is not None:
+                if "score" in str(subset).lower():
+                    title = f"Validation Forecasts for {subset} Tested Series {series}"
+                else:
+                    title = (
+                        f"Validation Forecasts for {subset} Tested MAPE Series {series}"
+                    )
+            else:
+                title = f"Validation Forecasts for {series}"
         # actual plotting section
         if colors is not None:
             # this will need to change is users are allowed to input colors
@@ -3051,14 +3118,24 @@ or otherwise increase models available."""
                 )
         else:
             ax = plot_df.plot(title=title, **kwargs)
-        ax.vlines(
-            x=self.validation_forecast_cuts,
-            ls='--',
-            lw=1,
-            colors='darkred',
-            ymin=plot_df.min().min(),
-            ymax=plot_df.max().max(),
-        )
+        if end_color is not None:
+            ax.vlines(
+                x=self.validation_forecast_cuts_ends,
+                ls='-.',
+                lw=1,
+                colors='#D3D3D3',
+                ymin=plot_df.min().min(),
+                ymax=plot_df.max().max(),
+            )
+        if start_color is not None:
+            ax.vlines(
+                x=self.validation_forecast_cuts,
+                ls='--',
+                lw=1,
+                colors='darkred',
+                ymin=plot_df.min().min(),
+                ymax=plot_df.max().max(),
+            )
         return ax
 
     def list_failed_model_types(self):
@@ -3188,6 +3265,7 @@ or otherwise increase models available."""
         color: str = "#ff9912",
         figsize=(12, 4),
         kind: str = "bar",
+        upper_clip: float = 1000,
         **kwargs,
     ):
         """Plot which series are contributing most to error (Score) of final model. Avg of validations for best_model
@@ -3199,6 +3277,7 @@ or otherwise increase models available."""
             color (str): hex or name of color of plot
             figsize (tuple): passed through to plot axis
             kind (str): bar or pie
+            upper_clip (float): set max error show to this value, to prevent unnecessary distortion
             **kwargs passed to pandas.plot()
         """
         if self.best_model.empty:
@@ -3207,6 +3286,7 @@ or otherwise increase models available."""
         best_model_per = self.best_model_per_series_score().head(max_series)
         temp = best_model_per.reset_index()
         temp.columns = ["Series", "Error"]
+        temp["Error"] = temp["Error"].clip(upper=upper_clip, lower=0)
         if self.best_model["Ensemble"].iloc[0] == 2:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
@@ -3255,11 +3335,101 @@ or otherwise increase models available."""
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
 
-    def diagnose_params(self, target='runtime'):
+    def get_metric_corr(self, percent_best=0.1):
+        """Returns a dataframe of correlation among evaluation metrics across evaluations.
+
+        Args:
+            percent_best (float): percent (ie 0.1 for 10%) of models to use, best by score first
+        """
+        res = self.initial_results.model_results
+        res = res[res['Exceptions'].isnull()]
+        # correlation is much more interesting among the top models than among the full trials
+        res = res.loc[
+            res.sort_values("Score").index[0 : int(res.shape[0] * percent_best) + 1]
+        ]
+        metrics = res.select_dtypes("number")
+        metrics = metrics[[x for x in metrics.columns if "weighted" not in x]]
+        metrics = metrics.drop(
+            columns=[
+                'Ensemble',
+                'Runs',
+                'TransformationRuntime',
+                'FitRuntime',
+                'PredictRuntime',
+                'Generation',
+                'ValidationRound',
+                'PostMemoryPercent',
+                'TotalRuntimeSeconds',
+            ],
+            errors='ignore',
+        )
+        metrics = (metrics) / metrics.std()
+
+        return metrics.corr()
+
+    def plot_metric_corr(self, cols=None, percent_best=0.1):
+        """Plot correlation in results among metrics.
+        The metrics that are highly correlated are those that mostly the unscaled ones
+
+        Args:
+            cols (list): strings of columns to show, 'all' for all
+            percent_best (float): percent (ie 0.1 for 10%) of models to use, best by score first
+        """
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        self.metric_corr = self.get_metric_corr(percent_best=percent_best)
+
+        if cols is None:
+            mostly_one = (self.metric_corr.abs() == 1).sum() == (
+                self.metric_corr.abs() == 1
+            ).sum().max()
+            cols = self.metric_corr[~mostly_one].abs().sum().nlargest(15).index.tolist()
+            if len(cols) < 15:
+                cols.extend(
+                    self.metric_corr[mostly_one].index[0 : 15 - len(cols)].tolist()
+                )
+        elif cols == 'all':
+            cols = self.metric_corr.columns
+
+        if len(cols) <= 2:
+            correlation_matrix = self.metric_corr.loc[cols]
+        else:
+            correlation_matrix = self.metric_corr[cols].loc[cols]
+        # Create a mask for the upper triangle to hide redundant information
+        mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
+
+        # Set up the matplotlib figure and axis
+        fig, ax = plt.subplots(figsize=(16, 12))
+
+        # Generate a diverging colormap
+        cmap = sns.diverging_palette(220, 20, as_cmap=True)
+
+        # Create the correlogram using a heatmap
+        sns.heatmap(
+            correlation_matrix,
+            mask=mask,
+            cmap=cmap,
+            vmax=1,
+            center=0,
+            annot=True,
+            fmt=".2f",
+            square=True,
+            linewidths=0.5,
+            cbar_kws={"shrink": 0.7},
+        )
+        sns.set_style("whitegrid")  # Add a grid for clarity
+
+        # Add a title
+        plt.title("Correlogram of Metric Correlations from Optimized Forecasts")
+        return ax
+
+    def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 
         Args:
             target (str): runtime, smape, mae, oda, or exception, the measured outcome to correlate parameters with
+            waterfall_plots (bool): whether to show waterfall SHAP plots
         """
 
         from autots.tools.transform import transformer_dict
@@ -3323,11 +3493,17 @@ or otherwise increase models available."""
 
         # target = 'runtime'
         y = res[target]
-        y = y.dropna(how='any')
+        # y = y.dropna(how='any')
+        y_reset = y.reset_index()
+        y_drop = y_reset.index[~y_reset.reset_index().isnull().any(axis=1)]
+        y = y.iloc[y_drop]
+        # print(f"y shape {y.shape} and index {y.index[0:10]}")
         # Standardize the features
         scaler = StandardScaler()
         X_train = self.lasso_X.fillna(0)
-        X_train = X_train[X_train.index.isin(y.index)]
+        # print(f"x shape {X_train.shape} and index {X_train.index[0:10]}")
+        # X_train = X_train[X_train.index.isin(y.index)]
+        X_train = X_train.iloc[y_drop]
         X_train_scaled = scaler.fit_transform(X_train)
         feature_names = self.lasso_X.columns.tolist()
 
@@ -3385,19 +3561,57 @@ or otherwise increase models available."""
 
         try:
             import shap
+            import matplotlib.pyplot as plt
 
             # Compute SHAP values
             explainer = shap.Explainer(bst, feature_names=feature_names)
             shap_values = explainer(shap_X)
             # Plot summary plot
-            shap.summary_plot(shap_values, shap_X, feature_names=feature_names)
+            shap.summary_plot(
+                shap_values,
+                shap_X,
+                feature_names=feature_names,
+                title=f"SHAP Summary for {target}",
+            )
             # Plot SHAP values for a single prediction
             try:
-                shap.plots.waterfall(shap_values[0], max_display=15)
-                shap.plots.waterfall(shap_values[1], max_display=15)
-                shap.plots.waterfall(shap_values[2], max_display=15)
-            except Exception:
-                pass
+                if waterfall_plots:
+                    # show impact on biggest or best, as relevant
+                    lvalues = res.reset_index()[target].nlargest(n=2).index
+                    svalues = res.reset_index()[target].nsmallest(n=2).index
+                    if target in ['runtime', 'oda', 'exception']:
+                        val1 = lvalues[0]
+                        val2 = lvalues[1]
+                        val3 = svalues[0]
+                    elif target is not None:
+                        val1 = svalues[0]
+                        val2 = svalues[1]
+                        val3 = lvalues[0]
+                    else:
+                        val1 = 1
+                        val2 = 2
+                        val3 = -4
+                    shap.plots.waterfall(shap_values[0], max_display=15, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row 1")
+                    plt.show()
+                    print(f"val1 {val1} and val2 {val2}")
+                    shap.plots.waterfall(shap_values[val1], max_display=15, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row {val1}")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[val2], max_display=15, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row {val2}")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[-1], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -1")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[val3], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row {val3}")
+                    plt.show()
+                    shap.plots.waterfall(shap_values[-8], max_display=10, show=False)
+                    plt.title(f"SHAP Waterfall for {target} and row -8")
+                    plt.show()
+            except Exception as e:
+                print(repr(e))
 
             # Compute the mean absolute SHAP value for each feature
             mean_shap_values = np.abs(shap_values.values).mean(axis=0)
@@ -3406,9 +3620,9 @@ or otherwise increase models available."""
             # Sort the list of tuples by the SHAP values from smallest to largest
             sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
             # Print the sorted pairs
-            print("Sorted Mean Absolute SHAP Values for Feature Importance:")
-            for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
-                print(f"{feature}: {mean_shap} impact (not direction)")
+            # print("Sorted Mean Absolute SHAP Values for Feature Importance:")
+            # for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
+            #     print(f"{feature}: {mean_shap} impact (not direction)")
 
             # Compute the mean SHAP value for each feature
             mean_shap_values = shap_values.values.mean(axis=0)
@@ -3417,9 +3631,9 @@ or otherwise increase models available."""
             # Sort the list of tuples by the SHAP values from smallest to largest
             sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
             # Print the sorted pairs
-            print("Sorted Mean SHAP Values for Feature Importance:")
-            for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
-                print(f"{feature}: {mean_shap}")
+            # print("Sorted Mean SHAP Values for Feature Importance:")
+            # for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
+            #     print(f"{feature}: {mean_shap}")
         except Exception as e:
             print(repr(e))
             mean_shap_values = 0

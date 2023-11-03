@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autots"
-version = "0.6.1"
+version = "0.6.2"
 authors = [
   { name="Colin Catlin", email="colin.catlin@gmail.com" },
 ]
@@ -29,7 +29,7 @@ additional = [
 	'prophet>=0.4.0',
 	'fredapi',
 	'tensorflow',
-	'xgboost',
+	'xgboost>=1.6',
 	'lightgbm',
 	'joblib',
 	'scipy',

@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>Tutorial &#8212; AutoTS 0.6.0 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.6.2 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
@@ -298,6 +298,7 @@ Accordingly it may be better to reduce the use of<code class="docutils literal n
 This is similar to but faster than MDA (mean directional accuracy) as contour evaluates no change as a positive case.</p>
 <p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is <em>(Scaled) Mean Absolute Differential Error</em>. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to ‘MAE’ when forecast_length=1. It is better for optimization than contour.</p>
 <p>The contour and MADE metrics are useful as they encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.</p>
+<p>If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
@@ -1083,7 +1084,17 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>Univariate/MultivariateMotif</p></td>
+<tr class="row-odd"><td><p>PreprocessingRegression</p></td>
+<td><p>sklearn</p></td>
+<td></td>
+<td><p>False</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-even"><td><p>Univariate/MultivariateMotif</p></td>
 <td><p>scipy.distance.cdist</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1096,7 +1107,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>SectionalMotif</p></td>
+<tr class="row-odd"><td><p>SectionalMotif</p></td>
 <td><p>scipy.distance.cdist</p></td>
 <td><p>sklearn</p></td>
 <td><p>True</p></td>
@@ -1106,13 +1117,23 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>MetricMotif, SeasonalityMotif</p></td>
+<tr class="row-even"><td><p>MetricMotif, SeasonalityMotif</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
 <td></td>
 <td></td>
 <td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>BallTreeMultivariateMotif</p></td>
+<td><p>sklearn, scipy</p></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
 <td></td>
 <td></td>
 </tr>
@@ -1194,6 +1215,26 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 <td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>FFT</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>TiDE</p></td>
+<td><p>tensorflow</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>yes</p></td>
+<td><p>True</p></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>MotifSimulation</p></td>
