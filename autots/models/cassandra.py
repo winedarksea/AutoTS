@@ -436,7 +436,7 @@ class Cassandra(ModelObject):
                 )
             elif self.multivariate_feature == "group_average":
                 multivar_df = (
-                    trs_df.groupby(self.categorical_groups, axis=1)
+                    trs_df.T.groupby(self.categorical_groups)  # axis=1
                     .mean()
                     .iloc[lag_1_indx]
                 )
@@ -890,7 +890,7 @@ class Cassandra(ModelObject):
                 )
             elif self.multivariate_feature == "group_average":
                 multivar_df = (
-                    trs_df.groupby(self.categorical_groups, axis=1)
+                    trs_df.T.groupby(self.categorical_groups)  # axis=1
                     .mean()
                     .iloc[lag_1_indx]
                 )

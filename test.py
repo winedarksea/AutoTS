@@ -374,6 +374,8 @@ if graph:
     ax = model.plot_validations(use_df, subset='Worst Score')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
+    
+    val_df = model.retrieve_validation_forecasts()
 
     try:
         model.plot_metric_corr()

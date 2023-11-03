@@ -102,14 +102,14 @@ fast = {
     'UnivariateMotif': 1,
     # 'MultivariateMotif': 0.8,  # RAM issues at scale it seems
     'SectionalMotif': 1,
-    'NVAR': 1,
-    'MAR': 1,
+    'NVAR': 0.3,
+    'MAR': 0.5,
     'RRVAR': 1,
-    'KalmanStateSpace': 1,
+    'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
-    'Cassandra': 1,
+    'Cassandra': 0.6,
     'SeasonalityMotif': 1,
-    'FFT': 1,
+    'FFT': 0.8,
     "BallTreeMultivariateMotif": 1,
 }
 # models that can scale well if many CPU cores are available
