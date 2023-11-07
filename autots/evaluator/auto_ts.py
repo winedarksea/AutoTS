@@ -912,9 +912,20 @@ class AutoTS(object):
                 aggfunc=self.aggfunc,
             )
 
+        # infer frequency
+        inferred_freq = infer_frequency(df_wide)
+        if self.frequency == 'infer' or self.frequency is None:
+            self.used_frequency = inferred_freq
+        else:
+            self.used_frequency = self.frequency
+        if self.verbose > 0:
+            print(f"Data frequency is: {inferred_freq}, used frequency is: {self.used_frequency}")
+        if (self.used_frequency is None) and (self.verbose >= 0):
+            print("Frequency is 'None'! Data frequency not recognized.")
+
         df_wide = df_cleanup(
             df_wide,
-            frequency=self.frequency,
+            frequency=self.used_frequency,
             prefill_na=self.prefill_na,
             na_tolerance=self.na_tolerance,
             drop_data_older_than_periods=self.drop_data_older_than_periods,
@@ -1882,7 +1893,7 @@ or otherwise increase models available."""
             weights=current_weights,
             model_count=model_count,
             forecast_length=self.forecast_length,
-            frequency=self.frequency,
+            frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
@@ -2060,7 +2071,7 @@ or otherwise increase models available."""
                     model_str=use_model,
                     parameter_dict=use_params,
                     forecast_length=forecast_length,
-                    frequency=self.frequency,
+                    frequency=self.used_frequency,
                     prediction_interval=prediction_interval,
                     no_negatives=self.no_negatives,
                     constraint=self.constraint,
@@ -2087,7 +2098,7 @@ or otherwise increase models available."""
                 model_transform_dict=use_trans,
                 df_train=use_data,
                 forecast_length=forecast_length,
-                frequency=self.frequency,
+                frequency=self.used_frequency,
                 prediction_interval=prediction_interval,
                 no_negatives=self.no_negatives,
                 constraint=self.constraint,
@@ -2573,7 +2584,7 @@ or otherwise increase models available."""
                     model_count=0,
                     current_generation=gen,
                     forecast_length=self.forecast_length,
-                    frequency=self.frequency,
+                    frequency=self.used_frequency,
                     prediction_interval=self.prediction_interval,
                     ensemble=self.ensemble,
                     no_negatives=self.no_negatives,
@@ -2659,7 +2670,7 @@ or otherwise increase models available."""
             future_regressor_train=self.future_regressor_train,
             n_splits=n_splits,
             forecast_length=self.forecast_length,
-            frequency=self.frequency,
+            frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
@@ -3076,7 +3087,7 @@ or otherwise increase models available."""
         if start_date == "auto":
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
-            ).index.min() - pd.Timedelta(days=7)
+            ).index.min() - (pd.to_timedelta(self.used_frequency) * int(self.forecast_length * 3))
         if end_date == "auto":
             end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
@@ -3718,186 +3729,6 @@ colors_list = [
     '#0403A7',
     "#000000",
 ]
-
-
-class AutoTSIntervals(object):
-    """Autots looped to test multiple prediction intervals. Experimental.
-
-    Runs max_generations on first prediction interval, then validates on remainder.
-    Most args are passed through to AutoTS().
-
-    Args:
-        interval_models_to_validate (int): number of models to validate on each prediction interval.
-        import_results (str): results from run on same data to load, `filename.pickle`.
-            Currently result_file and import only save/load initial run, no validations.
-    """
-
-    def fit(
-        self,
-        prediction_intervals,
-        forecast_length,
-        df_long,
-        max_generations,
-        num_validations,
-        validation_method,
-        models_to_validate,
-        interval_models_to_validate,
-        date_col,
-        value_col,
-        id_col=None,
-        import_template=None,
-        import_method='only',
-        import_results=None,
-        result_file=None,
-        model_list='all',
-        metric_weighting: dict = {
-            'smape_weighting': 1,
-            'mae_weighting': 0,
-            'rmse_weighting': 1,
-            'containment_weighting': 0,
-            'runtime_weighting': 0,
-            'spl_weighting': 10,
-            'contour_weighting': 0,
-        },
-        weights: dict = {},
-        grouping_ids=None,
-        future_regressor=None,
-        model_interrupt: bool = False,
-        constraint=2,
-        no_negatives=False,
-        remove_leading_zeroes=False,
-        random_seed=2020,
-    ):
-        """Train and find best."""
-        overall_results = TemplateEvalObject()
-        per_series_spl = pd.DataFrame()
-        runs = 0
-        for interval in prediction_intervals:
-            if runs != 0:
-                max_generations = 0
-                models_to_validate = 0.99
-            print(f"Current interval is {interval}")
-            current_model = AutoTS(
-                forecast_length=forecast_length,
-                prediction_interval=interval,
-                ensemble="horizontal-max",
-                max_generations=max_generations,
-                model_list=model_list,
-                constraint=constraint,
-                no_negatives=no_negatives,
-                remove_leading_zeroes=remove_leading_zeroes,
-                metric_weighting=metric_weighting,
-                subset=None,
-                random_seed=random_seed,
-                num_validations=num_validations,
-                validation_method=validation_method,
-                model_interrupt=model_interrupt,
-                models_to_validate=models_to_validate,
-            )
-            if import_template is not None:
-                current_model = current_model.import_template(
-                    import_template, method=import_method
-                )
-            if import_results is not None:
-                current_model = current_model.import_results(import_results)
-            current_model = current_model.fit(
-                df_long,
-                future_regressor=future_regressor,
-                weights=weights,
-                grouping_ids=grouping_ids,
-                result_file=result_file,
-                date_col=date_col,
-                value_col=value_col,
-                id_col=id_col,
-            )
-            current_model.initial_results.model_results['interval'] = interval
-            temp = current_model.initial_results
-            overall_results = overall_results.concat(temp)
-            temp = current_model.initial_results.per_series_spl
-            per_series_spl = pd.concat([per_series_spl, temp], axis=0)
-            if runs == 0:
-                result_file = None
-                import_results = None
-                import_template = current_model.export_template(
-                    None, models='best', n=interval_models_to_validate
-                )
-            runs += 1
-        self.validation_results = validation_aggregation(overall_results)
-        self.results = overall_results.model_results
-        # remove models not validated
-        temp = per_series_spl.mean(axis=1).groupby(level=0).count()
-        temp = temp[temp >= ((runs) * (num_validations + 1))]
-        per_series_spl = per_series_spl[per_series_spl.index.isin(temp.index)]
-        per_series_spl = per_series_spl.groupby(level=0).mean()
-        # from autots.models.ensemble import HorizontalTemplateGenerator
-        ens_templates = HorizontalTemplateGenerator(
-            per_series_spl,
-            model_results=overall_results.model_results,
-            forecast_length=forecast_length,
-            ensemble='horizontal-max',
-            subset_flag=False,
-        )
-        self.per_series_spl = per_series_spl
-        self.ens_templates = ens_templates
-        self.prediction_intervals = prediction_intervals
-
-        self.future_regressor_train = future_regressor
-        self.forecast_length = forecast_length
-        self.df_wide_numeric = current_model.df_wide_numeric
-        self.frequency = current_model.frequency
-        self.no_negatives = current_model.no_negatives
-        self.constraint = current_model.constraint
-        self.holiday_country = current_model.holiday_country
-        self.startTimeStamps = current_model.startTimeStamps
-        self.random_seed = current_model.random_seed
-        self.verbose = current_model.verbose
-        self.template_cols = current_model.template_cols
-        self.categorical_transformer = current_model.categorical_transformer
-        return self
-
-    def predict(self, future_regressor=None, verbose: int = 'self') -> dict:
-        """Generate forecasts after training complete."""
-        if future_regressor is not None:
-            future_regressor = pd.DataFrame(future_regressor)
-            self.future_regressor_train = self.future_regressor_train.reindex(
-                index=self.df_wide_numeric.index
-            )
-        forecast_objects = {}
-        verbose = self.verbose if verbose == 'self' else verbose
-
-        urow = self.ens_templates.iloc[0]
-        for interval in self.prediction_intervals:
-            df_forecast = model_forecast(
-                model_name=urow['Model'],
-                model_param_dict=urow['ModelParameters'],
-                model_transform_dict=urow['TransformationParameters'],
-                df_train=self.df_wide_numeric,
-                forecast_length=self.forecast_length,
-                frequency=self.frequency,
-                prediction_interval=interval,
-                no_negatives=self.no_negatives,
-                constraint=self.constraint,
-                future_regressor_train=self.future_regressor_train,
-                future_regressor_forecast=future_regressor,
-                holiday_country=self.holiday_country,
-                startTimeStamps=self.startTimeStamps,
-                grouping_ids=self.grouping_ids,
-                random_seed=self.random_seed,
-                verbose=verbose,
-                template_cols=self.template_cols,
-                current_model_file=self.current_model_file,
-            )
-
-            trans = self.categorical_transformer
-            df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
-            df_forecast.lower_forecast = trans.inverse_transform(
-                df_forecast.lower_forecast
-            )
-            df_forecast.upper_forecast = trans.inverse_transform(
-                df_forecast.upper_forecast
-            )
-            forecast_objects[interval] = df_forecast
-        return forecast_objects
 
 
 def fake_regressor(

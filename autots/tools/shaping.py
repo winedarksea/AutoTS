@@ -67,13 +67,9 @@ def df_cleanup(
             print(f"Warning, series ids are not unique: {df_wide.columns[dupes]}")
 
     # infer frequency
-    inferred_freq = infer_frequency(df_wide)
     if frequency == 'infer':
+        inferred_freq = infer_frequency(df_wide)
         frequency = inferred_freq
-    if verbose > 0:
-        print(f"Data frequency is: {inferred_freq}, used frequency is: {frequency}")
-    if (frequency is None) and (verbose >= 0):
-        print("Frequency is 'None'! Data frequency not recognized.")
 
     # trying to avoid resampling if necessary because it can cause unexpected data changes
     # test if dates are missing from index
