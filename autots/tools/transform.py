@@ -4938,7 +4938,7 @@ filters = {
     "bkfilter": 0.1,
     "Slice": 0.01,  # sorta horizontal filter
     "AlignLastValue": 0.15,
-    "KalmanSmoothing": 0.1,
+    "KalmanSmoothing": 0.05,
     "ClipOutliers": 0.1,
     "RegressionFilter": 0.05,
     "FFTFilter": 0.01,

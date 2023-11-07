@@ -23,7 +23,7 @@ from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
     scalers,
-    filters,
+    superfast_transformer_dict,
     decompositions,
     HolidayTransformer,
     AnomalyRemoval,
@@ -109,7 +109,7 @@ class Cassandra(ModelObject):
 
     def __init__(
         self,
-        preprocessing_transformation: dict = None,  # filters by default only
+        preprocessing_transformation: dict = None,
         scaling: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
         past_impacts_intervention: str = None,  # 'remove', 'plot_only', 'regressor'
         seasonalities: dict = [
@@ -2054,7 +2054,7 @@ class Cassandra(ModelObject):
                 seasonalities = random.choices(comp_opts, k=2)
         return {
             "preprocessing_transformation": RandomTransform(
-                transformer_list=filters, transformer_max_depth=2, allow_none=True
+                transformer_list=superfast_transformer_dict, transformer_max_depth=2, allow_none=True
             ),
             "scaling": scaling,
             # "past_impacts_intervention": self.past_impacts_intervention,
