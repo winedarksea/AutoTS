@@ -103,7 +103,7 @@ def rolling_x_regressor(
             local_df.index.shift(-nonzero_last_n, freq=inferred_freq)
         )
         X.append(
-            (local_df.reindex(full_index).fillna(method="bfill") != 0)
+            (local_df.reindex(full_index).bfill() != 0)
             .rolling(nonzero_last_n, min_periods=1)
             .sum()
             .reindex(local_df.index)
@@ -175,7 +175,7 @@ def rolling_x_regressor(
         X['holiday_flag_future_'] = hldflag.reindex(ahead_2_index).to_numpy()
 
     # X = X.replace([np.inf, -np.inf], np.nan)
-    X = X.fillna(method='bfill')
+    X = X.bfill()
 
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
@@ -1325,9 +1325,7 @@ class RollingRegression(ModelObject):
 
         # define X and Y
         self.sktraindata = self.df_train.dropna(how='all', axis=0)
-        self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
-            method='bfill'
-        )
+        self.sktraindata = self.sktraindata.ffill().bfill()
         self.Y = self.sktraindata.drop(self.sktraindata.head(2).index)
         self.Y.columns = [x for x in range(len(self.Y.columns))]
         self.X = rolling_x_regressor(
