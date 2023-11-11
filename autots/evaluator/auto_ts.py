@@ -3085,9 +3085,14 @@ or otherwise increase models available."""
             ]
             plot_df = plot_df[colb]
         if start_date == "auto":
+            frequency_numeric = [x for x in self.used_frequency if x.isdigit()]
+            if not frequency_numeric:
+                used_freq = "1" + self.used_frequency
+            else:
+                used_freq = self.used_frequency
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
-            ).index.min() - (pd.to_timedelta(self.used_frequency) * int(self.forecast_length * 3))
+            ).index.min() - (pd.to_timedelta(used_freq) * int(self.forecast_length * 3))
         if end_date == "auto":
             end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0

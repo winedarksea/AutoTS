@@ -12,19 +12,9 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.2 🏡🏡🏡
-* FFTFilter added
-* FFT model added
-* kdtree to Univariate/Multivariate Motif
-* additional metrics to MetricMotif
-* added BallTreeMultivariateMotif model
-* added FFTDecomposition
-* added ReplaceConstant
-* added TiDE model
-* logging improvements for pytorch and some pytorch backend for gluonts support
-* added AlignLastDiff
-* added plot_metric_corr
-* added mate, wasserstein, dwd metrics
+# 0.6.3 🎐🎐🎐
+* energy datasets to load_live_daily
+* performance improvements
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

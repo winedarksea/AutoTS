@@ -224,7 +224,7 @@ def load_live_daily(
     trends_geo: str = "US",
     weather_data_types: list = ["AWND", "WSF2", "TAVG"],
     weather_stations: list = ["USW00094846", "USW00014925"],
-    weather_years: int = 10,
+    weather_years: int = 5,
     london_air_stations: list = ['CT3', 'SK8'],
     london_air_species: str = "PM25",
     london_air_days: int = 180,
@@ -236,6 +236,7 @@ def load_live_daily(
     wikipedia_pages: list = ['Microsoft_Office', "List_of_highest-grossing_films"],
     wiki_language: str = "en",
     weather_event_types=["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"],
+    caiso_query: str = "ENE_SLRS",
     timeout: float = 300.05,
     sleep_seconds: int = 2,
 ):
@@ -246,7 +247,7 @@ def load_live_daily(
     Args:
         long (bool): whether to return in long format or wide
         observation_start (str): %Y-%m-%d earliest day to retrieve, passed to Fred.get_series and yfinance.history
-            note that apis with more restricts have other default lengths below which ignore this
+            note that apis with more restrictions have other default lengths below which ignore this
         observation_end (str):  %Y-%m-%d most recent day to retrieve
         fred_key (str): https://fred.stlouisfed.org/docs/api/api_key.html
         fred_series (list): list of FRED series IDs. This requires fredapi package
@@ -264,6 +265,7 @@ def load_live_daily(
         gov_domain_limit (int): max number of records. Smaller will be faster. Max is currently 10000.
         wikipedia_pages (list): list of Wikipedia pages, html encoded if needed (underscore for space)
         weather_event_types (list): list of html encoded severe weather event types https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf
+        caiso_query (str): ENE_SLRS or None, can try others but probably won't work due to other hardcoded params
         timeout (float): used by some queries
         sleep_seconds (int): increasing this may reduce probability of server download failures
     """
@@ -495,6 +497,34 @@ def load_live_daily(
         except Exception as e:
             print(f"pytrends data failed: {repr(e)}")
 
+    if caiso_query is not None:
+        try:
+            n_chunks = (364 * weather_years) / 30
+            if n_chunks % 30 != 0:
+                n_chunks = int(n_chunks) + 1
+            energy_df = []
+            for x in range(n_chunks):
+                try:
+                    end_nospace = (current_date - datetime.timedelta(days=30 * x)).strftime("%Y%m%d")
+                    start_nospace = (current_date - datetime.timedelta(days=30 * (x + 1) + 1)).strftime("%Y%m%d")
+                    caiso_url = f"http://oasis.caiso.com/oasisapi/SingleZip?resultformat=6&queryname={caiso_query}&version=1&market_run_id=RTM&tac_zone_name=ALL&schedule=Generation&startdatetime={start_nospace}T00:00-0000&enddatetime={end_nospace}T23:00-0000"
+                    data = pd.read_csv(caiso_url, compression='zip')
+                    data['OPR_DT'] = pd.to_datetime(data['OPR_DT'])
+                    data = data[data['OPR_HR'] < 25]
+                    energy_df.append(data.groupby(['OPR_DT', 'OPR_HR'])['MW'].mean().reset_index().pivot_table(
+                        values='MW', index='OPR_DT', columns='OPR_HR', aggfunc='sum'
+                    ).rename(columns=lambda x: "CAISO_GENERATION_HR_" + str(x)).sort_index().bfill())
+                    time.sleep(sleep_seconds + 8)
+                except Exception as e:
+                    print(f"caiso download failed with error: {repr(e)}")
+                    time.sleep(sleep_seconds)
+            energy_df = pd.concat(energy_df).sort_index()
+            energy_df = energy_df[~energy_df.index.duplicated(keep='last')]
+            dataset_lists.append(energy_df)
+        except Exception as e:
+            print(f"caiso download failed with error: {repr(e)}")
+
+    ### End of data download
     if len(dataset_lists) < 1:
         raise ValueError("No data successfully downloaded!")
     elif len(dataset_lists) == 1:
@@ -508,6 +538,7 @@ def load_live_daily(
         )
     print(f"{df.shape[1]} series downloaded.")
     s.close()
+    df.index.name = "datetime"
 
     if not long:
         return df

@@ -117,6 +117,7 @@ archive/
 kernel_failures/
 lightning_logs/
 current_model_*
+temp*.py
 # ignore in root but not in subdirectories
 /*.zip
 /*.gz
