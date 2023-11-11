@@ -669,7 +669,7 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
-    elif model == "TiDE":
+    elif model in ["TiDE", "TIDE"]:
         from autots.models.tide import TiDE
 
         return TiDE(

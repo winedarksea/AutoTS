@@ -387,6 +387,7 @@ class SeasonalityMotifImputer(object):
             -1,
             1,
         )
+        del full_dist
 
         # mask_positive = (np.cumsum(~brdcst_mask, axis=-1) <= k) & ~brdcst_mask  # True = keeps
         # mask_negative = (np.cumsum(~brdcst_mask, axis=-1) > k) | brdcst_mask  # True = don't keep
