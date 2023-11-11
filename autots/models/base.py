@@ -227,6 +227,24 @@ def apply_constraints(
     return forecast, lower_forecast, upper_forecast
 
 
+def extract_single_series_from_horz(series, model_name, model_parameters):
+    title_prelim = str(model_name)[0:80]
+    if title_prelim == "Ensemble":
+        ensemble_type = model_parameters.get('model_name', "Ensemble")
+        if ensemble_type == "Horizontal":
+            title_prelim = model_parameters['series'].get(
+                series, "Horizontal"
+            )
+            title_prelim = (
+                model_parameters.get("models", {})
+                .get(title_prelim)
+                .get('Model')
+            )
+        else:
+            title_prelim = ensemble_type
+    return title_prelim
+
+
 class PredictionObject(object):
     """Generic class for holding forecast information.
 
@@ -479,20 +497,9 @@ class PredictionObject(object):
                 'actuals': '#AFDBF5',
             }
         if title is None:
-            title_prelim = str(self.model_name)[0:80]
-            if title_prelim == "Ensemble":
-                ensemble_type = self.model_parameters.get('model_name', "unknown")
-                if ensemble_type == "Horizontal":
-                    title_prelim = self.model_parameters['series'].get(
-                        series, "Horizontal"
-                    )
-                    title_prelim = (
-                        self.model_parameters.get("models", {})
-                        .get(title_prelim)
-                        .get('Model')
-                    )
-                else:
-                    title_prelim = ensemble_type
+            title_prelim = extract_single_series_from_horz(
+                series, model_name=self.model_name, model_parameters=self.model_parameters
+            )
             if title_substring is None:
                 title = f"{series} with model {title_prelim}"
             else:

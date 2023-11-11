@@ -1720,53 +1720,17 @@ class AutoTS(object):
                     current_generation=0,
                     result_file=result_file,
                 )
-                hens_model_results = self.initial_results.model_results[
-                    self.initial_results.model_results['Ensemble'] == 2
-                ].copy()
             except Exception as e:
                 if self.verbose >= 0:
                     print(
                         f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                     )
-                hens_model_results = TemplateEvalObject().model_results.copy()
+                # hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
             self = self.validation_agg()
 
-            # use the best of these ensembles if any ran successfully
-            # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
-            # however they are chosen based off of validation results of all validation runs
-            try:
-                self.best_model_non_horizontal = self._best_non_horizontal()
-            except Exception:
-                self.best_model_non_horizontal = pd.DataFrame()
-
-            try:
-                horz_flag = hens_model_results['Exceptions'].isna().any()
-            except Exception:
-                horz_flag = False
-            if not hens_model_results.empty and horz_flag:
-                hens_model_results.loc['Score'] = generate_score(
-                    hens_model_results,
-                    metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval,
-                )
-                self.best_model = hens_model_results.sort_values(
-                    by="Score", ascending=True, na_position='last'
-                ).head(1)[self.template_cols_id]
-                self.ensemble_check = 1
-            # else use the best of the previous
-            else:
-                if self.verbose >= 0:
-                    print("Horizontal ensemble failed. Using best non-horizontal.")
-                    time.sleep(3)
-                self.best_model = self.best_model_non_horizontal
-
-        else:
-            self.best_model = self._best_non_horizontal()
-
-        # give a more convenient dict option
-        self.parse_best_model()
+        self._set_best_model()
 
         # clean up any remaining print statements
         sys.stdout.flush()
@@ -1777,6 +1741,46 @@ class AutoTS(object):
         self.validation_results = validation_aggregation(
             self.validation_results, df_train=self.df_wide_numeric
         )
+        return self
+
+    def _set_best_model(self, metric_weighting=None, allow_horizontal=True):
+        if metric_weighting is None:
+            metric_weighting = self.metric_weighting
+        hens_model_results = self.initial_results.model_results[
+            self.initial_results.model_results['Ensemble'] == 2
+        ].copy()
+        # remove failures
+        hens_model_results = hens_model_results[hens_model_results['Exceptions'].isnull()]
+        requested_H_ens = any(x in self.ensemble for x in self.h_ens_list) and allow_horizontal
+        # here I'm assuming that if some horizontal models ran, we are going to use those
+        # horizontal ensembles can't be compared directly to others because they don't get run through all validations
+        # they are built themselves from cross validation so a full rerun of validations is unnecessary
+        self.best_model_non_horizontal = self._best_non_horizontal(metric_weighting=metric_weighting)
+        if not hens_model_results.empty and requested_H_ens:
+            hens_model_results.loc['Score'] = generate_score(
+                hens_model_results,
+                metric_weighting=metric_weighting,
+                prediction_interval=self.prediction_interval,
+            )
+            self.best_model = hens_model_results.sort_values(
+                by="Score", ascending=True, na_position='last'
+            ).head(1)[self.template_cols_id]
+            self.ensemble_check = 1
+        # print a warning if requested but unable to produce a horz ensemble
+        elif requested_H_ens:
+            if self.verbose >= 0:
+                print("Horizontal ensemble failed. Using best non-horizontal.")
+                time.sleep(3)  # give it a chance to be seen
+            self.best_model = self.best_model_non_horizontal
+        elif not hens_model_results.empty:
+            if self.verbose >= 0:
+                print(f"Horizontal ensemble available but not requested in model selection: {self.ensemble} and allow_horizontal: {allow_horizontal}.")
+                time.sleep(3)  # give it a chance to be seen
+            self.best_model = self.best_model_non_horizontal
+        else:
+            self.best_model = self.best_model_non_horizontal
+        # give a more convenient dict option
+        self.parse_best_model()
         return self
 
     def _best_non_horizontal(self, metric_weighting=None):
@@ -1797,8 +1801,9 @@ class AutoTS(object):
             # this may occur if there is enough data for full validations
             # but a lot of that data is bad leading to complete validation round failures
             print(
-                "your validation results are questionable, perhaps bad data and too many validations"
+                "your validation results are questionable, perhaps bad data and too many num_validations"
             )
+            time.sleep(3)  # give it a chance to be seen
             max_vals = self.validation_results.model_results['Runs'].max()
             eligible_models = self.validation_results.model_results[
                 self.validation_results.model_results['Runs'] >= max_vals
@@ -2374,7 +2379,8 @@ or otherwise increase models available."""
         return import_template
 
     def _enforce_model_list(
-        self, template, model_list=None, include_ensemble=False, addon_flag=False
+        self, template, model_list=None, include_ensemble=False,
+        addon_flag=False, include_horizontal=True,
     ):
         """remove models not in given model list."""
         if model_list is None:
@@ -2390,6 +2396,9 @@ or otherwise increase models available."""
         # double method of removing Ensemble
         if not include_ensemble and "Ensemble" in template.columns:
             template = template[template["Ensemble"] == 0]
+        elif not include_horizontal and "Ensemble" in template.columns:
+            # remove only horizontal ensembles
+            template = template[template["Ensemble"] <= 1]
         if template.shape[0] == 0:
             error_msg = f"Len 0. Model_list {model_list} does not match models in imported template {present}, template import failed."
             if addon_flag:
@@ -2405,6 +2414,7 @@ or otherwise increase models available."""
         method: str = "add_on",
         enforce_model_list: bool = True,
         include_ensemble: bool = False,
+        include_horizontal: bool = False,
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
@@ -2414,6 +2424,7 @@ or otherwise increase models available."""
             method (str): 'add_on' or 'only' - "add_on" keeps `initial_template` generated in init. "only" uses only this template.
             enforce_model_list (bool): if True, remove model types not in model_list
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
+            include_horizontal (bool): if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)
         """
         if method.lower() in ['add on', 'addon', 'add_on']:
             addon_flag = True
@@ -2432,6 +2443,7 @@ or otherwise increase models available."""
                 model_list=None,
                 include_ensemble=include_ensemble,
                 addon_flag=addon_flag,
+                include_horizontal=False,
             )
 
         if addon_flag:

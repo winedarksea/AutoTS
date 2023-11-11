@@ -2423,6 +2423,7 @@ def validation_aggregation(validation_results, df_train=None):
     validation_results.model_results['TotalRuntimeSeconds'] = (
         validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )
+    # MODEL SELECTION CODE EXPECTS THAT VAL RESULTS WILL NOT CONTAIN ANY NaN/FAILED MODELS
     validation_results.model_results = validation_results.model_results[
         pd.isnull(validation_results.model_results['Exceptions'])
     ]

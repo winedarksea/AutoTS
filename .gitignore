@@ -123,3 +123,4 @@ temp*.py
 /*.gz
 /*.png
 /*.csv
+/*.pickle
