@@ -4,6 +4,7 @@ Base model information
 
 @author: Colin
 """
+import json
 import random
 import warnings
 import datetime
@@ -231,18 +232,70 @@ def extract_single_series_from_horz(series, model_name, model_parameters):
     title_prelim = str(model_name)[0:80]
     if title_prelim == "Ensemble":
         ensemble_type = model_parameters.get('model_name', "Ensemble")
-        if ensemble_type == "Horizontal":
-            title_prelim = model_parameters['series'].get(
+        # horizontal and mosaic ensembles
+        if "series" in model_parameters.keys():
+            model_id = model_parameters['series'].get(
                 series, "Horizontal"
             )
-            title_prelim = (
-                model_parameters.get("models", {})
-                .get(title_prelim)
-                .get('Model')
-            )
+            if isinstance(model_id, dict):
+                model_id = list(model_id.values())
+            if not isinstance(model_id, list):
+                model_id = [str(model_id)]
+            res = []
+            for imod in model_id:
+                res.append(
+                    model_parameters.get("models", {})
+                    .get(imod, {})
+                    .get('Model', "Horizontal")
+                )
+            title_prelim = ", ".join(res)
+            if len(model_id) > 1:
+                title_prelim = "Mosaic: " + str(title_prelim)
         else:
             title_prelim = ensemble_type
-    return title_prelim
+    return str(title_prelim)
+
+
+def extract_single_transformer(series, model_name, model_parameters, transformation_params):
+    if model_name == "Ensemble":
+        # horizontal and mosaic ensembles
+        if "series" in model_parameters.keys():
+            model_id = model_parameters['series'].get(
+                series, "Horizontal"
+            )
+            if isinstance(model_id, dict):
+                model_id = list(model_id.values())
+            if not isinstance(model_id, list):
+                model_id = [str(model_id)]
+            res = []
+            for imod in model_id:
+                chosen_mod = model_parameters.get("models", {}).get(imod, {})
+                res.append(
+                    extract_single_transformer(
+                        series, chosen_mod.get("Model"),
+                        chosen_mod.get("ModelParameters"),
+                        transformation_params=chosen_mod.get("TransformationParameters")
+                    )
+                )
+            return ", ".join(res)
+        allz = []
+        for idz, mod in model_parameters.get("models").items():
+            allz.append(
+                extract_single_transformer(
+                    series, mod.get("Model"),
+                    mod.get("ModelParameters"),
+                    transformation_params=mod.get("TransformationParameters")
+                )
+            )
+        return ", ".join(allz)
+    else:
+        if isinstance(transformation_params, str):
+            transformation_params = json.loads(transformation_params)
+        trans_dict = transformation_params.get("transformations")
+        if isinstance(trans_dict, dict):
+            return ", ".join(list(trans_dict.values()))
+        else:
+            return "None"
 
 
 class PredictionObject(object):
@@ -499,7 +552,7 @@ class PredictionObject(object):
         if title is None:
             title_prelim = extract_single_series_from_horz(
                 series, model_name=self.model_name, model_parameters=self.model_parameters
-            )
+            )[0: 80]
             if title_substring is None:
                 title = f"{series} with model {title_prelim}"
             else:

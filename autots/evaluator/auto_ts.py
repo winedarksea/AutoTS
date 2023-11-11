@@ -1783,7 +1783,7 @@ class AutoTS(object):
         self.parse_best_model()
         return self
 
-    def _best_non_horizontal(self, metric_weighting=None):
+    def _best_non_horizontal(self, metric_weighting=None, series=None):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
                 self = self.validation_agg()
@@ -1808,26 +1808,36 @@ class AutoTS(object):
             eligible_models = self.validation_results.model_results[
                 self.validation_results.model_results['Runs'] >= max_vals
             ]
-        # previously I was relying on the mean of Scores calculated for each individual validation
-        eligible_models['Score'] = generate_score(
-            eligible_models,
-            metric_weighting=metric_weighting,
-            prediction_interval=self.prediction_interval,
-        )
-        try:
-            best_model = (
-                eligible_models.sort_values(
-                    by="Score", ascending=True, na_position='last'
+        if series is not None:
+            # return a result based on the performance of only one series
+            score_per_series = generate_score_per_series(
+                self.initial_results,
+                metric_weighting=metric_weighting,
+                total_validations=(self.num_validations + 1),
+            )
+            best_model_id = score_per_series[series].idxmin()
+            best_model = self.initial_results.model_results[self.initial_results.model_results['ID'] == best_model_id].iloc[0:1][self.template_cols_id]
+        else:
+            # previously I was relying on the mean of Scores calculated for each individual validation
+            eligible_models['Score'] = generate_score(
+                eligible_models,
+                metric_weighting=metric_weighting,
+                prediction_interval=self.prediction_interval,
+            )
+            try:
+                best_model = (
+                    eligible_models.sort_values(
+                        by="Score", ascending=True, na_position='last'
+                    )
+                    .drop_duplicates(subset=self.template_cols)
+                    .head(1)[self.template_cols_id]
                 )
-                .drop_duplicates(subset=self.template_cols)
-                .head(1)[self.template_cols_id]
-            )
-        except IndexError:
-            raise ValueError(
-                """No models available from validation.
-Try increasing models_to_validate, max_per_model_class
-or otherwise increase models available."""
-            )
+            except IndexError:
+                raise ValueError(
+                    """No models available from validation.
+    Try increasing models_to_validate, max_per_model_class
+    or otherwise increase models available."""
+                )
         return best_model
 
     def parse_best_model(self):
