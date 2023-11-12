@@ -368,7 +368,7 @@ class SeasonalityMotifImputer(object):
             distance_metric=self.distance_metric,
         )
         full_dist = np.argsort(scores)
-        full_nan_mask = np.isnan(df.to_numpy())
+        full_nan_mask = ~np.isnan(df.to_numpy())
 
         brdcst_mask = np.broadcast_to(
             full_nan_mask[..., None], full_nan_mask.shape + (df.shape[0],)
@@ -391,7 +391,7 @@ class SeasonalityMotifImputer(object):
 
         # mask_positive = (np.cumsum(~brdcst_mask, axis=-1) <= k) & ~brdcst_mask  # True = keeps
         # mask_negative = (np.cumsum(~brdcst_mask, axis=-1) > k) | brdcst_mask  # True = don't keep
-        mask_negative = np.cumsum(~brdcst_mask, axis=-1) > self.k  # True = don't keep
+        mask_negative = np.cumsum(brdcst_mask, axis=-1) > self.k  # True = don't keep
 
         # test = np.ma.masked_array(brdcst.T, mask_negative)
         # temp = np.take(df.to_numpy()[..., None], brdcst)
@@ -417,7 +417,7 @@ class SeasonalityMotifImputer(object):
         # col = "US__sv_feed_interface"
         # pd.concat([df.loc[:, col], df_impt.loc[:, col + "_imputed"]], axis=1).plot()
 
-        return df.where(~full_nan_mask, self.df_impt)
+        return df.where(full_nan_mask, self.df_impt)
 
 
 # accuracy test (not necessarily a test of "best")

@@ -5007,6 +5007,7 @@ def transformer_list_to_dict(transformer_list):
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
         del transformer_list["SinTrend"]
+        del transformer_list["HolidayTransformer"]  # needs more work refining
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
