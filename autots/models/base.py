@@ -248,7 +248,7 @@ def extract_single_series_from_horz(series, model_name, model_parameters):
                     .get(imod, {})
                     .get('Model', "Horizontal")
                 )
-            title_prelim = ", ".join(res)
+            title_prelim = ", ".join(set(res))
             if len(model_id) > 1:
                 title_prelim = "Mosaic: " + str(title_prelim)
         else:
