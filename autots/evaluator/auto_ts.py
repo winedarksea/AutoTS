@@ -90,7 +90,7 @@ class AutoTS(object):
         model_list (list): str alias or list of names of model objects to use
             now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithim takes from there.
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
-            can accept string aliases: "all", "fast", "superfast"
+            can accept string aliases: "all", "fast", "superfast", 'scalable' (scalable is a subset of fast that should have fewer memory issues at scale)
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
         models_mode (str): option to adjust parameter options for newly generated models. Only sporadically utilized. Currently includes:
             'default'/'random', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models),

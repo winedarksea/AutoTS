@@ -19,7 +19,7 @@ from autots.tools.anomaly_utils import (
     holiday_new_params,
     dates_to_holidays,
 )
-from autots.tools.window_functions import window_lin_reg_mean
+from autots.tools.window_functions import window_lin_reg_mean_no_nan
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
@@ -3173,7 +3173,7 @@ class LocalLinearTrend(EmptyTransformer):
                 np.full(shape2, np.nan),
             ]
         )
-        self.slope, self.intercept = window_lin_reg_mean(d, y2, w=self.rolling_window)
+        self.slope, self.intercept = window_lin_reg_mean_no_nan(d, y2, w=self.rolling_window)
 
         if self.method == "mean":
             futslp = np.array([np.mean(self.slope[-self.n_future :], axis=0)])

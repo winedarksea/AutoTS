@@ -468,3 +468,19 @@ def window_lin_reg_mean(x, y, w):
     slope = (sxy - sx * sy) / (sx2 - sx**2)
     intercept = sy - slope * sx
     return slope, intercept
+
+
+def window_sum_mean(x, w, axis=0):
+    # uses much less memory than the nanmean version
+    return np.mean(sliding_window_view(x, w, axis=axis), axis=-1)
+
+
+def window_lin_reg_mean_no_nan(x, y, w):
+    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
+    sx = window_sum_mean(x, w)
+    sy = window_sum_mean(y, w)
+    sx2 = window_sum_mean(x**2, w)
+    sxy = window_sum_mean(x * y, w)
+    slope = (sxy - sx * sy) / (sx2 - sx**2)
+    intercept = sy - slope * sx
+    return slope, intercept

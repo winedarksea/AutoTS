@@ -17,7 +17,7 @@ from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
-from autots.tools.transform import GeneralTransformer, RandomTransform, filters
+from autots.tools.transform import GeneralTransformer, RandomTransform, superfast_transformer_dict
 from autots.tools.fft import fourier_extrapolation
 
 
@@ -2516,11 +2516,11 @@ class MetricMotif(ModelObject):
             "chebyshev",
             "wasserstein",
         ]
-        comparisons = filters.copy()
-        comparisons['CenterLastValue'] = 0.05
-        comparisons['StandardScaler'] = 0.05
-        combinations = filters.copy()
-        combinations['AlignLastValue'] = 0.1
+        # comparisons = filters.copy()
+        # comparisons['CenterLastValue'] = 0.05
+        # comparisons['StandardScaler'] = 0.05
+        # combinations = filters.copy()
+        # combinations['AlignLastValue'] = 0.1
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -2540,10 +2540,10 @@ class MetricMotif(ModelObject):
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
             "comparison_transformation": RandomTransform(
-                transformer_list=comparisons, transformer_max_depth=1, allow_none=True
+                transformer_list=superfast_transformer_dict, transformer_max_depth=1, allow_none=True
             ),
             "combination_transformation": RandomTransform(
-                transformer_list=filters, transformer_max_depth=1, allow_none=True
+                transformer_list=superfast_transformer_dict, transformer_max_depth=1, allow_none=True
             ),
         }
 

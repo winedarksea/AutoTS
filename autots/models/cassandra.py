@@ -2086,7 +2086,7 @@ class Cassandra(ModelObject):
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": random.choices(
                 [None, 'random_normal', 'rolling_trend'],
-                [0.5, 0.4, 0.1],
+                [0.7, 0.3, 0.1],
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
