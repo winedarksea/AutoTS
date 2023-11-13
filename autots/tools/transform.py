@@ -2920,7 +2920,7 @@ class HolidayTransformer(EmptyTransformer):
         self.df_cols = None
         self.verbose = verbose
 
-    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False, max_features=900):
+    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False, max_features=365):
         """
         dates (pd.DatetimeIndex): list of dates
         style (str): option for how to return information
