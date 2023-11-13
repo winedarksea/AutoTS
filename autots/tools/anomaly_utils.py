@@ -918,6 +918,7 @@ def dates_to_holidays(
     lunar_weekday=None,
     islamic_holidays=None,
     hebrew_holidays=None,
+    max_features: int = None,
 ):
     """Populate date information for a given pd.DatetimeIndex.
 
@@ -996,10 +997,14 @@ def dates_to_holidays(
                         categories=holiday_df['holiday_name'].unique(),
                         ordered=True,
                     )
+                    if max_features is not None:
+                        frequent_categories = populated_holidays['holiday_name'].value_counts().index[:max_features]
+                        populated_holidays['holiday_name'] = populated_holidays['holiday_name'].apply(lambda x: x if x in frequent_categories else 'Other')
                     result_per_holiday = pd.get_dummies(
                         populated_holidays['holiday_name'],
                         dtype=float,
                     )
+                    # result_per_holiday = populated_holidays['holiday_name'].astype('category').cat.codes
                     result_per_holiday.index = populated_holidays['date']
                     result.append(result_per_holiday.groupby(level=0).sum())
                 elif style in ["impact", 'series_flag']:

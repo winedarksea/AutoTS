@@ -1133,7 +1133,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
-                    'MultioutputGPR': 0.1,
+                    'MultioutputGPR': 0.01,
                 }
             )
         if holiday_countries_used is None:
@@ -2920,7 +2920,7 @@ class HolidayTransformer(EmptyTransformer):
         self.df_cols = None
         self.verbose = verbose
 
-    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
+    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False, max_features=900):
         """
         dates (pd.DatetimeIndex): list of dates
         style (str): option for how to return information
@@ -2944,6 +2944,7 @@ class HolidayTransformer(EmptyTransformer):
             lunar_weekday=self.lunar_weekday,
             islamic_holidays=self.islamic_holidays,
             hebrew_holidays=self.hebrew_holidays,
+            max_features=max_features,
         )
 
     def fit(self, df):
@@ -2979,6 +2980,7 @@ class HolidayTransformer(EmptyTransformer):
             use_hebrew_holidays=self.use_hebrew_holidays,
         )
         self.df_cols = df.columns
+        return self
 
     def transform(self, df):
         if self.remove_excess_anomalies:
@@ -3067,7 +3069,7 @@ class HolidayTransformer(EmptyTransformer):
                 'datepart_regression',
                 'regression',
             ],
-            [0.1, 0.3, 0.3, 0.2, 0.2],
+            [0.1, 0.3, 0.3, 0.1, 0.1],
         )[0]
         if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
@@ -3401,7 +3403,7 @@ class RegressionFilter(EmptyTransformer):
         holiday_country: str = "US",
         **kwargs,
     ):
-        super().__init__(name="DatepartRegressionTransformer")
+        super().__init__(name=name)
         self.sigma = sigma
         self.rolling_window = rolling_window
         self.run_order = run_order
@@ -3508,7 +3510,7 @@ class RegressionFilter(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
-        regression_params = DatepartRegressionTransformer.get_new_params(method=method)
+        regression_params = DatepartRegressionTransformer.get_new_params(method="fast")
 
         if method == "fast":
             holiday_trans_use = False
@@ -4895,10 +4897,10 @@ transformer_dict = {
     "Cointegration": 0.01,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
-    'HolidayTransformer': 0.02,
+    'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
-    'KalmanSmoothing': 0.04,
-    'RegressionFilter': 0.03,
+    'KalmanSmoothing': 0.02,
+    'RegressionFilter': 0.02,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
@@ -5008,6 +5010,8 @@ def transformer_list_to_dict(transformer_list):
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
         del transformer_list["SinTrend"]
         del transformer_list["HolidayTransformer"]  # needs more work refining
+        del transformer_list["RegressionFilter"]  # needs more work refining
+        del transformer_list["LocalLinearTrend"]  # needs more work refining
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
@@ -5052,7 +5056,7 @@ def RandomTransform(
             fast_params = False
     if superfast_params is None:
         superfast_params = False
-        slow_flags = ["DatepartRegression", "ScipyFilter", "QuantileTransformer"]
+        slow_flags = ["DatepartRegression", "ScipyFilter", "QuantileTransformer", "KalmanSmoothing"]
         intersects = [i for i in slow_flags if i in transformer_list]
         if not intersects:
             superfast_params = True

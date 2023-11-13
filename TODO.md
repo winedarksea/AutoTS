@@ -15,6 +15,7 @@
 # 0.6.3 🎐🎐🎐
 * energy datasets to load_live_daily
 * performance improvements
+* improved the 'Scalable' transformer_list to reduce memory issues on larger datasets
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
