@@ -3061,16 +3061,27 @@ class HolidayTransformer(EmptyTransformer):
         holiday_params['remove_excess_anomalies'] = random.choices(
             [True, False], [0.9, 0.1]
         )[0]
-        holiday_params['impact'] = random.choices(
-            [
-                None,
-                'median_value',
-                'anomaly_score',
-                'datepart_regression',
-                'regression',
-            ],
-            [0.1, 0.3, 0.3, 0.1, 0.1],
-        )[0]
+        if method in ['fast', 'superfast']:
+            # regressions are actually faster at scale due to it making the same flag for all
+            holiday_params['impact'] = random.choices(
+                [
+                    None,
+                    'datepart_regression',
+                    'regression',
+                ],
+                [0.05, 0.4, 0.4],
+            )[0]
+        else:
+            holiday_params['impact'] = random.choices(
+                [
+                    None,
+                    'median_value',
+                    'anomaly_score',
+                    'datepart_regression',
+                    'regression',
+                ],
+                [0.1, 0.3, 0.3, 0.1, 0.1],
+            )[0]
         if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
                 method=method,
@@ -4379,7 +4390,7 @@ shared_trans = [
     "MeanDifference",
     "BTCD",
     "Cointegration",
-    "HolidayTransformer",
+    "HolidayTransformer",  # confirmed
     "RegressionFilter",
 ]
 # transformers not defined in AutoTS
@@ -5008,10 +5019,10 @@ def transformer_list_to_dict(transformer_list):
     elif transformer_list == "scalable":
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
-        del transformer_list["SinTrend"]
-        del transformer_list["HolidayTransformer"]  # needs more work refining
-        del transformer_list["RegressionFilter"]  # needs more work refining
-        del transformer_list["LocalLinearTrend"]  # needs more work refining
+        del transformer_list["SinTrend"]  # no observed issues, but for efficiency
+        # del transformer_list["HolidayTransformer"]  # improved, should be good enough
+        del transformer_list["RegressionFilter"]  # improved, might be good enough
+        del transformer_list["LocalLinearTrend"]  # improved, might be good enough
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())

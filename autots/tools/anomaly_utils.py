@@ -654,21 +654,19 @@ def anomaly_df_to_holidays(
         stacked.where(stacked == -1, 0).abs().rename_axis(index=['date', 'series'])
     )
     agg_dict = {"count": 'sum', "occurrence_rate": 'mean'}
+    if isinstance(stacked, pd.Series):
+        stacked = stacked.to_frame()
     if actuals is not None:
-        stacked = stacked.to_frame().merge(
-            actuals.stack().rename("avg_value").rename_axis(index=['date', 'series']),
-            left_index=True,
-            right_index=True,
-        )
+        mod_act = actuals.stack().rename("avg_value").rename_axis(index=['date', 'series'])
+        # stacked = stacked.merge(mod_act, left_index=True, right_index=True)
+        # I am not sure if these indexes will always be aligned, could be the source of trouble
+        stacked = pd.concat([stacked, mod_act], axis=1)
         agg_dict['avg_value'] = 'mean'
     if anomaly_scores is not None:
-        stacked = pd.DataFrame(stacked).merge(
-            anomaly_scores.stack()
-            .rename("avg_anomaly_score")
-            .rename_axis(index=['date', 'series']),
-            left_index=True,
-            right_index=True,
-        )
+        mod_anom = anomaly_scores.stack().rename("avg_anomaly_score").rename_axis(index=['date', 'series'])
+        # print(f"mod_anom shape {mod_anom.shape}, stacked shape {stacked.shape} and {mod_anom.index} and {stacked.index}")
+        # stacked = stacked.merge(mod_anom, left_index=True, right_index=True)
+        stacked = pd.concat([stacked, mod_anom], axis=1)
         agg_dict['avg_anomaly_score'] = 'mean'
 
     dates = stacked.index.get_level_values('date').unique()
@@ -717,12 +715,16 @@ def anomaly_df_to_holidays(
                 'dom_12_25': "Christmas",
                 'dom_12_26': "BoxingDay",
                 'dom_12_24': "ChristmasEve",
+                'dom_07_01': "CanadaDay",
                 'dom_07_04': "July4th",
+                'dom_07_14': "BastilleDay",
+                'dom_01_26': "RDIndia_AustraliaDay",
                 'dom_01_01': "NewYearsDay",
                 'dom_12_31': "NewYearsEve",
                 'dom_02_14': 'ValentinesDay',
                 'dom_10-31': 'Halloween',
                 'dom_11-11': 'ArmisticeDay',
+                "dom_04_22": "EarthDay",
             }
         )
     else:
@@ -953,6 +955,16 @@ def dates_to_holidays(
     ]:
         if holiday_df is not None:
             if not holiday_df.empty:
+                # various memory usage reduction is done by drop_duplicates, drop(columns)
+                if style == 'flag':
+                    # this might overwrite upstream holiday. If using multiple styles, problem
+                    holiday_df = holiday_df.drop_duplicates(
+                        subset=holiday_df.columns.difference(['series', 'count',
+                               'occurrence_rate', 'avg_value', 'avg_anomaly_score',])
+                    )
+                    drop_colz = ['count', 'occurrence_rate', 'avg_value', 'avg_anomaly_score']
+                else:
+                    drop_colz = ['count', 'occurrence_rate']
                 # handle the different holiday calendars
                 if "lunar_month" in holiday_df.columns:
                     lunar_dates = gregorian_to_chinese(dates)
@@ -964,8 +976,8 @@ def dates_to_holidays(
                         lunar_dates['dayofweek'] = lunar_dates.index.dayofweek
                     else:
                         on = ["lunar_month", "lunar_day"]
-                    populated_holidays = lunar_dates.reset_index(drop=False).merge(
-                        holiday_df, on=on, how="left"
+                    populated_holidays = lunar_dates.reset_index(drop=False).drop(columns=lunar_dates.columns.difference(on + ['date'])).merge(
+                        holiday_df.drop(columns=drop_colz, errors='ignore'), on=on, how="left"
                     )
                 else:
                     on = ['month', 'day']
@@ -975,35 +987,47 @@ def dates_to_holidays(
                         on = ["month", "weekfromend", "dayofweek"]
                     sample = holiday_df['holiday_name'].iloc[0]
                     if "hebrew" in sample:
+                        hdates = gregorian_to_hebrew(dates)
                         populated_holidays = (
-                            gregorian_to_hebrew(dates)
+                            hdates.drop(columns=hdates.columns.difference(on + ['date']), errors='ignore')
                             .reset_index(drop=False)
-                            .merge(holiday_df, on=on, how="left")
+                            .merge(holiday_df.drop(columns=drop_colz, errors='ignore'), on=on, how="left")
                         )
                     elif "islamic" in sample:
+                        idates = gregorian_to_islamic(dates)
                         populated_holidays = (
-                            gregorian_to_islamic(dates)
+                            idates.drop(columns=idates.columns.difference(on + ['date']), errors='ignore')
                             .reset_index(drop=False)
-                            .merge(holiday_df, on=on, how="left")
+                            .merge(holiday_df.drop(columns=drop_colz, errors='ignore'), on=on, how="left")
                         )
                     else:
-                        populated_holidays = dates_df.merge(
-                            holiday_df, on=on, how="left"
+                        populated_holidays = dates_df.drop(columns=dates_df.columns.difference(on + ['date'])).merge(
+                            holiday_df.drop(columns=drop_colz, errors='ignore'), on=on, how="left"
                         )
                 # reorg results depending on style
                 if style == "flag":
+                    populated_holidays = populated_holidays.drop_duplicates(subset=['date', 'holiday_name'])
                     populated_holidays['holiday_name'] = pd.Categorical(
                         populated_holidays['holiday_name'],
                         categories=holiday_df['holiday_name'].unique(),
                         ordered=True,
                     )
                     if max_features is not None:
-                        frequent_categories = populated_holidays['holiday_name'].value_counts().index[:max_features]
+                        # rarest first
+                        frequent_categories = populated_holidays['holiday_name'].value_counts(ascending=True).index[:max_features]
                         populated_holidays['holiday_name'] = populated_holidays['holiday_name'].apply(lambda x: x if x in frequent_categories else 'Other')
                     result_per_holiday = pd.get_dummies(
                         populated_holidays['holiday_name'],
                         dtype=float,
                     )
+                    """
+                    lb = LabelBinarizer()
+                    result_per_holiday = pd.DataFrame(
+                        lb.fit_transform(populated_holidays['holiday_name']),
+                        # columns=lb.classes_, 
+                        index=populated_holidays.index
+                    )
+                    """
                     # result_per_holiday = populated_holidays['holiday_name'].astype('category').cat.codes
                     result_per_holiday.index = populated_holidays['date']
                     result.append(result_per_holiday.groupby(level=0).sum())
