@@ -3377,7 +3377,7 @@ class KalmanSmoothing(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
 
-        result = self.kf.smooth(df.to_numpy().T)
+        result = self.kf.smooth(df.to_numpy().T, covariances=False)
         return pd.DataFrame(
             result.observations.mean.T, index=df.index, columns=df.columns
         )

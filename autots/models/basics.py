@@ -2115,6 +2115,7 @@ class KalmanStateSpace(ModelObject):
                 process_noise=self.process_noise,  # Q
                 observation_model=self.observation_model,  # H
                 observation_noise=param[0],  # R
+                # covariances=False,
             )
             if self.em_iter is not None:
                 kf = kf.em(

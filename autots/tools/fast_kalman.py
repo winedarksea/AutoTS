@@ -595,12 +595,14 @@ class Gaussian:
         self.mean = mean
         if cov is not None:
             self.cov = cov
+        else:
+            self.cov = None
 
     @staticmethod
     def empty(n_states, n_vars, n_measurements, cov=True):
         mean = np.empty((n_vars, n_measurements, n_states))
         if cov:
-            cov = np.empty((n_vars, n_measurements, n_states, n_states))
+            cov = np.empty((n_vars, n_measurements, n_states, n_states), dtype=np.float32)
         else:
             cov = None
         return Gaussian(mean, cov)
