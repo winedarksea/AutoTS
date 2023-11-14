@@ -33,7 +33,7 @@ from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
-from autots.tools.window_functions import window_lin_reg_mean  # sliding_window_view
+from autots.tools.window_functions import window_lin_reg_mean_no_nan
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 from autots.models.model_list import model_list_to_dict
 
@@ -817,7 +817,8 @@ class Cassandra(ModelObject):
                 np.full(shape2, np.nan),
             ]
         )
-        slope, intercept = window_lin_reg_mean(d, y2, wind)
+        # switch back to window_lin_reg_mean for nan tolerance, but it is much more memory intensive
+        slope, intercept = window_lin_reg_mean_no_nan(d, y2, wind)
         trend_posterior = slope * t[..., None] + intercept
         return trend_posterior, slope, intercept
 
