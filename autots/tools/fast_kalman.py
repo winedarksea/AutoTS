@@ -1061,15 +1061,15 @@ class KalmanFilter(object):
                 result.smoothed.states = empty_gaussian()
 
                 # lazy trick to keep last filtered = last smoothed
-                result.smoothed.states.mean = 1 * filtered_states.mean
+                result.smoothed.states.mean = filtered_states.mean
                 if covariances:
-                    result.smoothed.states.cov = 1 * filtered_states.cov
+                    result.smoothed.states.cov = filtered_states.cov
 
             if observations:
                 result.smoothed.observations = empty_gaussian(n_states=n_obs)
-                result.smoothed.observations.mean = 1 * filtered_observations.mean
+                result.smoothed.observations.mean = filtered_observations.mean
                 if covariances:
-                    result.smoothed.observations.cov = 1 * filtered_observations.cov
+                    result.smoothed.observations.cov = filtered_observations.cov
 
             if gains:
                 result.smoothed.gains = np.zeros(

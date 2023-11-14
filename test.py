@@ -295,7 +295,7 @@ runtimes = initial_results[initial_results["Ensemble"] < 1].groupby("Model").agg
 print(runtimes["TotalRuntimeSeconds"].rename(columns={"mean": "slowest_avg_runtime", "max": "slowest_max_runtime"}).idxmax())
 print(runtimes['smape'].idxmin())
 
-### ADD FAILURE RATE PER TRANSFORMER TYPE (ignoring ensembles)
+### Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer
 failures = []
 successes = []
 for idx, row in initial_results.iterrows():
@@ -307,7 +307,8 @@ for idx, row in initial_results.iterrows():
         successes = successes + transforms
 total = pd.concat([pd.Series(failures).value_counts().rename("failures").to_frame(),pd.Series(successes).value_counts().rename("successes")], axis=1).fillna(0)
 total['failure_rate'] = total['failures'] / (total['successes'] + total['failures'])
-total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate')
+total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+plt.show()
 
 if graph:
     start_date = "auto"

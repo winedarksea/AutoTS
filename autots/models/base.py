@@ -297,6 +297,87 @@ def extract_single_transformer(series, model_name, model_parameters, transformat
         else:
             return "None"
 
+def create_seaborn_palette_from_cmap(cmap_name="gist_rainbow", n=10):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Get the colormap from matplotlib
+    cm = plt.get_cmap(cmap_name)
+    
+    # Create a range of colors from the colormap
+    colors = cm(np.linspace(0, 1, n))
+    
+    # Convert to a seaborn palette
+    palette = sns.color_palette(colors)
+    
+    return palette
+
+# Function to calculate the peak density of each model's distribution
+def calculate_peak_density(model, data, group_col='Model', y_col='TotalRuntimeSeconds'):
+    from scipy.stats import gaussian_kde
+
+    model_data = data[data[group_col] == model][y_col]
+    kde = gaussian_kde(model_data)
+    return np.max(kde(model_data))
+
+def plot_distributions(runtimes_data, group_col='Model', y_col='TotalRuntimeSeconds', xlim=None, xlim_right=None):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    single_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) == 1)
+    multi_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) > 1)
+
+    # Calculate the average peak density across all models with multiple observations
+    average_peak_density = np.mean([calculate_peak_density(model, multi_obs_models, group_col, y_col) for model in multi_obs_models[group_col].unique()])
+
+    # Correcting the color palette to match the number of unique models
+    unique_models = runtimes_data[group_col].nunique()
+    # palette = sns.color_palette("tab10", n_colors=unique_models)
+    palette = create_seaborn_palette_from_cmap("gist_rainbow", n=unique_models)
+    sorted_models = runtimes_data[group_col].value_counts().index.tolist()
+    # sorted_models = runtimes_data[group_col].unique()
+    zip_palette = dict(zip(sorted_models, palette))
+
+    # Create a new figure for the plot
+    fig = plt.figure(figsize=(12, 8))
+
+    # Plot the density plots for multi-observation models
+    density_plot = sns.kdeplot(  #noqa
+        data=multi_obs_models, x=y_col, hue=group_col, fill=True,
+        common_norm=False, palette=zip_palette, alpha=0.5
+    )
+
+    # Plot the points for single-observation models at the average peak density
+    if not single_obs_models.empty:
+        point_plot = sns.scatterplot(  #noqa
+            data=single_obs_models, x=y_col,
+            y=[average_peak_density]*len(single_obs_models),
+            hue=group_col, palette=zip_palette, legend=False,
+            marker='o', # s=10
+        )
+    # Adjusting legend - Manually combining elements
+    handles, labels = [], []
+    for model, color in zip_palette.items():
+        handles.append(plt.Line2D([0], [0], linestyle="none", c=color, marker='o'))
+        labels.append(model)
+
+    # Create the combined legend
+    plt.legend(handles, labels, title=group_col)  # , bbox_to_anchor=(1.05, 1), loc=2
+
+    # Adding titles and labels
+    plt.title(f'Distribution of {y_col} by {group_col}', fontsize=16)
+    plt.xlabel(f'{y_col}', fontsize=14)
+    plt.ylabel('Density', fontsize=14)
+
+    # Adjust layout
+    plt.tight_layout()
+    if xlim is not None:
+        plt.xlim(left=xlim)
+    if xlim_right is not None:
+        plt.xlim(right=runtimes_data[y_col].quantile(xlim_right))
+
+    return fig
+
 
 class PredictionObject(object):
     """Generic class for holding forecast information.
@@ -362,6 +443,7 @@ class PredictionObject(object):
         # model attributes, not normally used
         self.model = model
         self.transformer = transformer
+        self.runtime_dict = None
 
     def __repr__(self):
         """Print."""
@@ -432,6 +514,29 @@ class PredictionObject(object):
     def total_runtime(self):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
+
+    def extract_ensemble_runtimes(self):
+        """Return a dataframe of final runtimes per model for standard ensembles."""
+        if self.runtime_dict is None or not bool(self.model_parameters):
+            return None
+        else:
+            runtimes = pd.DataFrame( self.runtime_dict.items(), columns=['ID', 'Runtime'])
+            runtimes['TotalRuntimeSeconds'] = runtimes['Runtime'].dt.total_seconds()
+            new_models = {x: y.get("Model") for x, y in self.model_parameters.get("models").items()}
+            models = pd.DataFrame( new_models.items(), columns=['ID', 'Model'])
+            return runtimes.merge(models, how='left', on='ID')
+
+    def plot_ensemble_runtimes(self, xlim_right=None):
+        """Plot ensemble runtimes by model type."""
+        runtimes_data = self.extract_ensemble_runtimes()
+
+        if runtimes_data is None:
+            return None
+        else:
+            return plot_distributions(
+                runtimes_data, group_col='Model', y_col='TotalRuntimeSeconds',
+                xlim=0, xlim_right=xlim_right,
+            )
 
     def plot_df(
         self,

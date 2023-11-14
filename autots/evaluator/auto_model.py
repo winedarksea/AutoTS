@@ -1339,6 +1339,7 @@ def model_forecast(
             df_train=df_train,
             prematched_series=all_series,
         )
+        ens_forecast.runtime_dict = forecasts_runtime
         return ens_forecast
     # if not an ensemble
     else:
