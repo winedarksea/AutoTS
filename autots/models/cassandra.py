@@ -1836,7 +1836,7 @@ class Cassandra(ModelObject):
                 ['multivariate', 'univariate'], [0.9, 0.1]
             )[0]
         anomaly_intervention = random.choices(
-            [None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.05, 0.05]
+            [None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.02, 0.05]
         )[0]
         if anomaly_intervention is not None:
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
@@ -1869,7 +1869,7 @@ class Cassandra(ModelObject):
                     "KalmanStateSpace",
                     'RRVAR',
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.02, 0.001, 0.05],
+                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.01, 0.001, 0.05],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -1981,7 +1981,7 @@ class Cassandra(ModelObject):
                 'l1_positive',
                 'bayesian_linear',
             ],
-            [0.6, 0.2, 0.1, 0.05, 0.02, 0.05, 0.1],
+            [0.9, 0.2, 0.1, 0.05, 0.02, 0.05, 0.1],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -2004,7 +2004,7 @@ class Cassandra(ModelObject):
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
-                'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
+                'maxiter': random.choices([250, 5000, 15000, 25000], [0.2, 0.6, 0.1, 0.1])[0],
                 'method': random.choices(
                     [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'Powell'],
                     [0.9, 0.02, 0.02, 0.02, 0.02],

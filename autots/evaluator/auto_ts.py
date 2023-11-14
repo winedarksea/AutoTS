@@ -3620,24 +3620,27 @@ class AutoTS(object):
                     if target in ['runtime', 'oda', 'exception']:
                         val1 = lvalues[0]
                         val2 = lvalues[1]
+                        desc = "largest"
                         val3 = svalues[0]
                     elif target is not None:
                         val1 = svalues[0]
                         val2 = svalues[1]
+                        desc = "smallest"
                         val3 = lvalues[0]
                     else:
                         val1 = 1
                         val2 = 2
                         val3 = -4
+                        desc = "fixed"
                     shap.plots.waterfall(shap_values[0], max_display=15, show=False)
                     plt.title(f"SHAP Waterfall for {target} and row 1")
                     plt.show()
                     print(f"val1 {val1} and val2 {val2}")
                     shap.plots.waterfall(shap_values[val1], max_display=15, show=False)
-                    plt.title(f"SHAP Waterfall for {target} and row {val1}")
+                    plt.title(f"SHAP Waterfall for {target} and row {val1} ({desc})")
                     plt.show()
                     shap.plots.waterfall(shap_values[val2], max_display=15, show=False)
-                    plt.title(f"SHAP Waterfall for {target} and row {val2}")
+                    plt.title(f"SHAP Waterfall for {target} and row {val2} ({desc})")
                     plt.show()
                     shap.plots.waterfall(shap_values[-1], max_display=10, show=False)
                     plt.title(f"SHAP Waterfall for {target} and row -1")
