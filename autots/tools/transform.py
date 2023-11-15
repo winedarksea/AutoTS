@@ -1367,7 +1367,6 @@ class DifferencedTransformer(EmptyTransformer):
     def __init__(self, **kwargs):
         super().__init__(name="DifferencedTransformer")
         self.lag = 1
-        self.beta = 1
 
     def fit(self, df):
         """Fit.
@@ -1384,8 +1383,7 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = (df - df.shift(self.lag)).bfill()
-        return df
+        return (df - df.shift(self.lag)).bfill()
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -4304,6 +4302,109 @@ class AlignLastDiff(EmptyTransformer):
         return self.transform(df)
 
 
+class DiffSmoother(EmptyTransformer):
+    def __init__(
+        self,
+        output="multivariate",
+        method=None,
+        transform_dict=None,
+        method_params=None,
+        fillna=None,
+        n_jobs=1,
+        adjustment: int=2,
+    ):
+        """Detect anomalies on a historic dataset in the DIFFS then cumsum back to origin space.
+        No inverse_transform available.
+
+        Args:
+            output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)
+            method (str): method choosen, from sklearn, AutoTS, and basic stats. Use `.get_new_params()` to see potential models
+            transform_dict (dict): option but helpful, often datepart, differencing, or other standard AutoTS transformer params
+            method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
+            fillna (str): how to fill anomaly values removed
+            n_jobs (int): multiprocessing jobs, used by some methods
+        """
+        super().__init__(name="DiffSmoother")
+        self.output = output
+        self.method = method
+        self.transform_dict = transform_dict
+        self.method_params = method_params
+        self.n_jobs = n_jobs
+        self.fillna = fillna
+        self.adjustment = adjustment
+
+    def fit(self, df):
+        """Fit.
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def transform(self, df):
+        """Return differenced data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        diffs = df.diff(-1).head(df.shape[0] - 1)
+        if self.transform_dict is not None:
+            model = GeneralTransformer(**self.transform_dict)
+            diffs = model.fit_transform(diffs)
+        
+        if isinstance(self.fillna, (float, int)):
+            diffs = diffs.clip(
+                upper=diffs[diffs > 0].std() * self.fillna,
+                lower=-(diffs[diffs < 0].std() * self.fillna),
+                axis=1
+            )
+        else:
+            self.anomalies, self.scores = detect_anomalies(
+                diffs.copy().abs(),
+                output=self.output,
+                method=self.method,
+                transform_dict=self.transform_dict,
+                method_params=self.method_params,
+                n_jobs=self.n_jobs,
+            )
+            diffs = diffs.where(self.anomalies != -1, np.nan)
+            if self.fillna is not None:
+                diffs = FillNA(diffs, method=self.fillna, window=10)
+
+        return pd.concat(
+            [
+                diffs,
+                df.tail(1)
+            ]
+        ).iloc[::-1].cumsum().iloc[::-1]
+
+    def fit_transform(self, df):
+        """Fits and Returns Magical DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method="random"):
+        fillna = random.choices(
+            [None, "ffill", "mean", "rolling_mean_24", "linear", 'time',1.0, 1.5, 2.0, 2.5, 3.0],
+            [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1],
+        )[0]
+        if isinstance(fillna, (float, int)):
+            method_choice = None
+            method_params = None
+            transform_dict = None
+        else:
+            method_choice, method_params, transform_dict = anomaly_new_params(method=method)
+
+        return {
+            "method": method_choice,
+            "method_params": method_params,
+            "transform_dict": None,
+            "fillna": fillna,
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4346,6 +4447,7 @@ n_jobs_trans = {
     "AnomalyRemoval": AnomalyRemoval,
     'HolidayTransformer': HolidayTransformer,
     'ReplaceConstant': ReplaceConstant,
+    # 'DiffSmoother': DiffSmoother,
 }
 # transformers with parameter pass through (internal only) MUST be here
 have_params = {
@@ -4381,6 +4483,7 @@ have_params = {
     "FFTDecomposition": FFTDecomposition,
     "ReplaceConstant": ReplaceConstant,
     "AlignLastDiff": AlignLastDiff,
+    "DiffSmoother": DiffSmoother,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4481,6 +4584,7 @@ class GeneralTransformer(object):
             "FFTDecomposition": remove FFT harmonics, later add back
             "ReplaceConstant": replace a value with NaN, optionally fillna then later reintroduce
             "AlignLastDiff": shift forecast to be within range of historical diffs
+            "DiffSmoother": smooth diffs then return to original space
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4918,6 +5022,7 @@ transformer_dict = {
     "FFTDecomposition": 0.01,
     "ReplaceConstant": 0.005,
     "AlignLastDiff": 0.01,
+    "DiffSmoother": 0.001,  # not looking great in testing
 }
 
 # and even more, not just removing slow but also less commonly useful ones

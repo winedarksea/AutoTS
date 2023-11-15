@@ -14,8 +14,9 @@
 
 # 0.6.3 🎐🎐🎐
 * energy datasets to load_live_daily
-* performance improvements
 * improved the 'Scalable' transformer_list to reduce memory issues on larger datasets
+* memory improvements to KalmanSmoother, HolidayTransformer, LocalLinearTrend
+* added DiffSmoother
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

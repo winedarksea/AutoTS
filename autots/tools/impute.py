@@ -210,6 +210,9 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             also most `method` values of pd.DataFrame.interpolate()
         window (int): length of rolling windows for filling na, for rolling methods
     """
+    if isinstance(method, (int, float)):
+        return df.fillna(method)
+
     method = str(method).replace(" ", "_")
 
     if method == 'zero':
@@ -329,7 +332,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         imputer.fit(df)
         return imputer.impute(df)
 
-    elif method is None or method == 'None':
+    elif method is None or method in ['None', 'null']:
         return df
 
     else:

@@ -58,6 +58,8 @@ def cpu_count(modifier: float = 1):
 
 
 def set_n_jobs(n_jobs, verbose=0):
+    if n_jobs is None:
+        return None
     frac_flag = False
     if isinstance(n_jobs, float):
         frac_flag = n_jobs < 1 and n_jobs > 0
