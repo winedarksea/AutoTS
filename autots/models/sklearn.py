@@ -1649,7 +1649,7 @@ class WindowRegression(ModelObject):
         self.normalize_window = normalize_window
         self.shuffle = shuffle
         self.forecast_length = forecast_length
-        self.max_windows = abs(int(max_windows))
+        self.max_windows = max_windows
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1670,6 +1670,8 @@ class WindowRegression(ModelObject):
                     "regression_type='User' but no future_regressor passed"
                 )
         self.df_train = df
+        if isinstance(future_regressor, pd.Series):
+            future_regressor = future_regressor.to_frame()
         self.X, self.Y = window_maker(
             df,
             window_size=self.window_size,
@@ -1698,7 +1700,7 @@ class WindowRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.model = self.model.fit(self.X.astype(float), self.Y.astype(float))
+        self.model = self.model.fit(self.X, self.Y)
         self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1734,6 +1736,8 @@ class WindowRegression(ModelObject):
         if int(forecast_length) > int(self.forecast_length):
             print("Regression must be refit to change forecast length!")
         index = self.create_forecast_index(forecast_length=forecast_length)
+        if isinstance(future_regressor, pd.Series):
+            future_regressor = future_regressor.to_frame()
 
         if self.output_dim == '1step':
             # combined_index = (self.df_train.index.append(index))
@@ -1747,7 +1751,7 @@ class WindowRegression(ModelObject):
                     normalize_window=self.normalize_window,
                 )
                 if self.regression_type in ["User", "user"]:
-                    blasted_thing = future_regressor.iloc[x].to_frame().transpose()
+                    blasted_thing = future_regressor.reindex(index).iloc[x].to_frame().transpose()
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
@@ -1777,7 +1781,7 @@ class WindowRegression(ModelObject):
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
             if isinstance(pred, pd.DataFrame):
-                pred = pred.to_numpy()
+                pred = pred.to_numpy(dtype=np.float32)
             cY = pd.DataFrame(self.model.predict(pred.astype(float)))
             if self.input_dim == 'multivariate':
                 cY.index = ['values']
@@ -1848,7 +1852,10 @@ class WindowRegression(ModelObject):
                     [None, "User"], weights=[0.8, 0.2]
                 )[0]
         normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
-        max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
+        if method == "deep":
+            max_windows_choice = random.choices([5000, 50000, 5000000, None], [0.4, 0.2, 0.9, 0.05])[0]
+        else:
+            max_windows_choice = random.choices([5000, 50000, 5000000], [0.2, 0.2, 0.9])[0]
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
@@ -2201,7 +2208,7 @@ class DatepartRegression(ModelObject):
             multioutput=multioutput,
         )
         self.df_train = df
-        self.model = self.model.fit(self.X.astype(float), y.astype(float))
+        self.model = self.model.fit(self.X.astype(np.float32), y.astype(np.float32))
         self.shape = df.shape
         return self
 

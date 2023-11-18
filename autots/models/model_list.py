@@ -139,6 +139,7 @@ fast_parallel_no_arima = {
         "KalmanStateSpace",
         "MultivariateMotif",
         'Theta',
+        "BallTreeMultivariateMotif",
     ]
 }
 # so this opiniated and not fully updated always

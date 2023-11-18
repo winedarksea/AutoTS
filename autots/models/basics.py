@@ -14,7 +14,7 @@ from autots.tools.seasonal import (
     seasonal_independent_match,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
-from autots.tools.window_functions import window_id_maker, sliding_window_view
+from autots.tools.window_functions import window_id_maker, sliding_window_view, chunk_reshape
 from autots.tools.percentile import nan_quantile
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.transform import GeneralTransformer, RandomTransform, superfast_transformer_dict
@@ -2921,6 +2921,7 @@ class BallTreeMultivariateMotif(ModelObject):
         point_method: str = "mean",
         distance_metric: str = "canberra",
         k: int = 10,
+        sample_fraction=None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2937,6 +2938,7 @@ class BallTreeMultivariateMotif(ModelObject):
         self.point_method = point_method
         self.distance_metric = distance_metric
         self.k = k
+        self.sample_fraction = sample_fraction
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2964,11 +2966,25 @@ class BallTreeMultivariateMotif(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        # keep this at top so it breaks quickly if missing version
-        x = sliding_window_view(
-            self.df.to_numpy(), self.window + forecast_length, axis=0
-        )
-        Xa = x.reshape(-1, x.shape[-1])
+        phrase_n = self.window + forecast_length
+        if False:
+            # OLD WAY
+            x = sliding_window_view(
+                self.df.to_numpy(dtype=np.float32), phrase_n, axis=0
+            )
+            Xa = x.reshape(-1, x.shape[-1])
+            if self.sample_fraction is not None:
+                if 0 < self.sample_fration < 1:
+                    sample_size = int(Xa.shape[0] * self.sample_fraction)
+                else:
+                    sample_size = int(self.sample_fraction) if Xa.shape[0] < self.sample_fraction else int(Xa.shape[0] - 1)
+                Xa = np.random.default_rng().choice(Xa, size=sample_size, axis=0)
+        else:
+            # shared with WindowRegression
+            Xa = chunk_reshape(
+                self.df.to_numpy(dtype=np.float32), phrase_n,
+                sample_fraction=self.sample_fraction, random_seed=self.random_seed
+            )
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         if self.distance_metric in ["euclidean", 'kdtree']:
@@ -3048,6 +3064,13 @@ class BallTreeMultivariateMotif(ModelObject):
             'minkowski',
             'kdtree',
         ]
+        metric_probabilities = [
+            0.05, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.05,
+        ]
+        if method != "deep":
+            sample_fraction = random.choice([0.2, 5000000])
+        else:
+            sample_fraction = random.choice([0.2, 0.5, 100000000, None])
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -3065,8 +3088,9 @@ class BallTreeMultivariateMotif(ModelObject):
                 ["weighted_mean", "mean", "median", "midhinge", "closest"],
                 [0.4, 0.2, 0.2, 0.2, 0.2],
             )[0],
-            "distance_metric": random.choice(metric_list),
+            "distance_metric": random.choices(metric_list, metric_probabilities),
             "k": k_choice,
+            "sample_fraction": sample_fraction,
         }
 
     def get_params(self):
