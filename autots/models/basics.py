@@ -3068,7 +3068,8 @@ class BallTreeMultivariateMotif(ModelObject):
             0.05, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.05,
         ]
         if method != "deep":
-            sample_fraction = random.choice([0.2, 5000000])
+            # evidence suggests 20 million can fit in 5 GB of RAM with a window of 28
+            sample_fraction = random.choice([5000000, 50000000])
         else:
             sample_fraction = random.choice([0.2, 0.5, 100000000, None])
         if method == "event_risk":
