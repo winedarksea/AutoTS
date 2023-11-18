@@ -1261,7 +1261,7 @@ class Motif(ModelObject):
 
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+            df_list = Parallel(n_jobs=(self.n_jobs))(
                 delayed(looped_motif)(
                     Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
                     Xb=self.df.iloc[-self.window :, i].to_numpy().reshape(1, -1),
@@ -2998,9 +2998,9 @@ class BallTreeMultivariateMotif(ModelObject):
             tree = BallTree(Xa[:, : self.window], metric=self.distance_metric)
             # Query the KDTree to find k nearest neighbors for each point in Xa
         Xb = self.df.iloc[-self.window :].to_numpy().T
-        A, idx = tree.query(Xb, k=self.k)
+        A, self.windows = tree.query(Xb, k=self.k)
         # (k, forecast_length, n_series)
-        self.result_windows = Xa[idx][:, :, self.window :].transpose(1, 2, 0)
+        self.result_windows = Xa[self.windows][:, :, self.window :].transpose(1, 2, 0)
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
