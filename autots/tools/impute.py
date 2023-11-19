@@ -286,8 +286,16 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return df_knn
 
     elif method == 'SeasonalityMotifImputer':
-        s_imputer = SimpleSeasonalityMotifImputer(
+        s_imputer = SeasonalityMotifImputer(
             k=3,
+            datepart_method="common_fourier",
+            distance_metric="canberra",
+            linear_mixed=False,
+        )
+        return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
+
+    elif method == 'SimpleSeasonalityMotifImputer':
+        s_imputer = SimpleSeasonalityMotifImputer(
             datepart_method="common_fourier",
             distance_metric="canberra",
             linear_mixed=False,
@@ -296,7 +304,6 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
 
     elif method == 'SeasonalityMotifImputer1K':
         s_imputer = SimpleSeasonalityMotifImputer(
-            k=1,
             datepart_method="common_fourier",
             distance_metric="mae",
             linear_mixed=False,
@@ -305,7 +312,6 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
 
     elif method == 'SeasonalityMotifImputerLinMix':
         s_imputer = SimpleSeasonalityMotifImputer(
-            k=2,
             datepart_method="common_fourier",
             distance_metric="canberra",
             linear_mixed=True,
@@ -423,25 +429,23 @@ class SeasonalityMotifImputer(object):
         return df.where(full_nan_mask, self.df_impt)
 
 
-def SimpleSeasonalityMotifImputer(object):
+class SimpleSeasonalityMotifImputer(object):
     def __init__(
         self,
-        k: int = 3,
         datepart_method: str = "simple_2",
         distance_metric: str = "canberra",
         linear_mixed: bool = False,
         max_iter: int = 100,
     ):
         """Shares arg params with SeasonalityMotif model with which it has much in common.
+        Only takes the nearest one non-nan neighbor.
         This isn't quite as fast as the other version but doesn't explode into terabytes of memory at scale, either.
 
         Args:
-            k (int): n neighbors. More is smoother, fewer is most accurate, usually
             datepart_method (str): standard date part methods accepted
             distance_metirc (str): same as seaonality motif, ie 'mae', 'canberra'
             linear_mixed (bool): if True, take simple average of this and linear interpolation
         """
-        self.k = k
         self.datepart_method = datepart_method
         self.distance_metric = distance_metric
         self.linear_mixed = linear_mixed
@@ -461,13 +465,14 @@ def SimpleSeasonalityMotifImputer(object):
             nan_array=all_nan,
         )
         count = 0
+        arr = df.to_numpy()
         while count < self.max_iter:
-            current_fill = df.iloc[test[:, count]]
-            current_fill.index = df.index
-            df = df.where(~df.isnull(), current_fill)
+            current_fill = arr[test[:, count]]
+            arr = np.where(np.isnan(arr), current_fill, arr)
+            # df.update(df.where(df.notna(), current_fill), overwrite=False)
             count += 1
 
-        return df
+        return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
 
 # accuracy test (not necessarily a test of "best")

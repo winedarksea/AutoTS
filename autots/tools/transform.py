@@ -3826,7 +3826,7 @@ class CenterSplit(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.3, 0.0, 0.2, 0.2, 0.2, 0.2, 0.0],
+                [0.3, 0.0, 0.2, 0.2, 0.2, 0.2, 0.05],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
@@ -4136,14 +4136,13 @@ class ReplaceConstant(EmptyTransformer):
                 [
                     None,
                     "linear",
-                    "SeasonalityMotifImputer",
                     'pchip',
                     'akima',
                     'mean',
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.0, 0.3, 0.2, 0.2, 0.2, 0.2, 0.0],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.05],
             )[0],
         }
 
@@ -5184,7 +5183,7 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("IterativeImputer", None)
         throw_away = df_interpolate.pop("spline", None)  # noqa
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        # throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
