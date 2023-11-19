@@ -1980,8 +1980,8 @@ class Cassandra(ModelObject):
                 'quantile_norm',
                 'l1_positive',
                 'bayesian_linear',
-            ],
-            [0.9, 0.2, 0.1, 0.05, 0.02, 0.05, 0.1],
+            ], # the minimize based norms get slow and memory hungry at scale
+            [0.9, 0.2, 0.01, 0.01, 0.005, 0.01, 0.05],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -2439,6 +2439,8 @@ def lstsq_solve(X, y, lamb=1, identity_matrix=None):
         identity_matrix = np.zeros((X.shape[1], X.shape[1]))
         np.fill_diagonal(identity_matrix, 1)
         identity_matrix[0, 0] = 0
+    if lamb is None:
+        lamb = 1.0
     XtX_lamb = X.T.dot(X) + lamb * identity_matrix
     XtY = X.T.dot(y)
     return np.linalg.solve(XtX_lamb, XtY)
@@ -2524,6 +2526,8 @@ def fit_linear_model(x, y, params=None):
         id_mat = np.zeros((x.shape[1], x.shape[1]))
         np.fill_diagonal(id_mat, 1)
         id_mat[0, 0] = 0
+    else:
+        id_mat = None
     if rec is not None:
         weights = (np.arange(len(x)) + 1) ** rec  # 0.05 - 0.25
         x = x * weights[..., None]

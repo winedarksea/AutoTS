@@ -286,7 +286,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return df_knn
 
     elif method == 'SeasonalityMotifImputer':
-        s_imputer = SeasonalityMotifImputer(
+        s_imputer = SimpleSeasonalityMotifImputer(
             k=3,
             datepart_method="common_fourier",
             distance_metric="canberra",
@@ -295,7 +295,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
 
     elif method == 'SeasonalityMotifImputer1K':
-        s_imputer = SeasonalityMotifImputer(
+        s_imputer = SimpleSeasonalityMotifImputer(
             k=1,
             datepart_method="common_fourier",
             distance_metric="mae",
@@ -304,7 +304,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
 
     elif method == 'SeasonalityMotifImputerLinMix':
-        s_imputer = SeasonalityMotifImputer(
+        s_imputer = SimpleSeasonalityMotifImputer(
             k=2,
             datepart_method="common_fourier",
             distance_metric="canberra",
@@ -421,6 +421,53 @@ class SeasonalityMotifImputer(object):
         # pd.concat([df.loc[:, col], df_impt.loc[:, col + "_imputed"]], axis=1).plot()
 
         return df.where(full_nan_mask, self.df_impt)
+
+
+def SimpleSeasonalityMotifImputer(object):
+    def __init__(
+        self,
+        k: int = 3,
+        datepart_method: str = "simple_2",
+        distance_metric: str = "canberra",
+        linear_mixed: bool = False,
+        max_iter: int = 100,
+    ):
+        """Shares arg params with SeasonalityMotif model with which it has much in common.
+        This isn't quite as fast as the other version but doesn't explode into terabytes of memory at scale, either.
+
+        Args:
+            k (int): n neighbors. More is smoother, fewer is most accurate, usually
+            datepart_method (str): standard date part methods accepted
+            distance_metirc (str): same as seaonality motif, ie 'mae', 'canberra'
+            linear_mixed (bool): if True, take simple average of this and linear interpolation
+        """
+        self.k = k
+        self.datepart_method = datepart_method
+        self.distance_metric = distance_metric
+        self.linear_mixed = linear_mixed
+        self.max_iter = max_iter
+
+    def impute(self, df):
+        """Infer missing values on input df."""
+        # discard rows where all series are NaN
+        all_nan = df.isnull().all(axis=1)
+        test, scores = seasonal_independent_match(
+            DTindex=df.index,
+            DTindex_future=df.index,
+            k=df.shape[0] - 1,  # not really used here
+            datepart_method=self.datepart_method,
+            distance_metric=self.distance_metric,
+            full_sort=True,
+            nan_array=all_nan,
+        )
+        count = 0
+        while count < self.max_iter:
+            current_fill = df.iloc[test[:, count]]
+            current_fill.index = df.index
+            df = df.where(~df.isnull(), current_fill)
+            count += 1
+
+        return df
 
 
 # accuracy test (not necessarily a test of "best")

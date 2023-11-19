@@ -606,17 +606,20 @@ def seasonal_independent_match(
     DTindex,
     DTindex_future,
     k,
-    datepart_method,
-    distance_metric,
+    datepart_method='simple_binarized',
+    distance_metric='canberra',
     full_sort=False,
+    nan_array=None
 ):
-    array = date_part(DTindex, method=datepart_method).to_numpy()
+    array = date_part(DTindex, method=datepart_method)
+    if nan_array is not None:
+        array[nan_array] = np.inf
     future_array = date_part(DTindex_future, method=datepart_method).to_numpy()
 
     # when k is larger, can be more aggressive on allowing a longer portion into view
     min_k = 5
     # compare windows by metrics
-    a = array[:, None]
+    a = array.to_numpy()[:, None]
     b = future_array
     if distance_metric == "mae":
         scores = np.mean(np.abs(a - b), axis=2)
