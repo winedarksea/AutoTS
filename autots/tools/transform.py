@@ -3822,14 +3822,14 @@ class CenterSplit(EmptyTransformer):
             "fillna": random.choices(
                 [
                     "linear",
-                    "SeasonalityMotifImputer",
+                    "SeasonalityMotifImputerLinMix",
                     'pchip',
                     'akima',
                     'mean',
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.3, 0.0, 0.2, 0.2, 0.2, 0.2, 0.05],
+                [0.3, 0.05, 0.2, 0.2, 0.2, 0.2, 0.05],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
@@ -5181,25 +5181,21 @@ def RandomTransform(
 
     # filter na_probs if Fast
     params_method = None
-    if fast_params:
+    if fast_params or superfast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop("IterativeImputer", None)
         throw_away = df_interpolate.pop("spline", None)  # noqa
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         # throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        # throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
+    # in addition to the above, also remove
     if superfast_params:
         params_method = "fast"
-        throw_away = na_prob_dict.pop("IterativeImputer", None)
-        throw_away = df_interpolate.pop("spline", None)  # noqa
-        throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
-        throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
