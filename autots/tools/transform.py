@@ -1816,14 +1816,14 @@ class Discretize(EmptyTransformer):
         else:
             choice = random.choices(
                 [
-                    "center",
+                    "center",  # more memory intensive
                     "upper",
                     "lower",
                     "sklearn-quantile",
                     "sklearn-uniform",
                     "sklearn-kmeans",
                 ],
-                [0.3, 0.2, 0.2, 0.1, 0.1, 0.1],
+                [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                 k=1,
             )[0]
             n_bin_c = random.choice([5, 10, 20, 50])
@@ -1869,12 +1869,15 @@ class Discretize(EmptyTransformer):
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
                     bins = bins[2 - 1 :] / 2
+                    binned = (np.abs(df.to_numpy() - bins)).argmin(axis=0)
                 elif self.discretization == "lower":
                     bins = np.delete(bins, (-1), axis=0)
+                    binned = np.sum(df.to_numpy()[:, np.newaxis, :] < bins[:, np.newaxis, :], axis=0)[:, 0, :] - 1
                 elif self.discretization == "upper":
                     bins = np.delete(bins, (0), axis=0)
+                    binned = np.sum(df.to_numpy()[:, np.newaxis, :] <= bins[:, np.newaxis, :], axis=0)[:, 0, :]
                 self.bins = bins
-                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
+                # binned = (np.abs(df.to_numpy() - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
                 df = pd.DataFrame(
@@ -1909,7 +1912,7 @@ class Discretize(EmptyTransformer):
                 df2.index = df.index
                 df2.columns = self.df_colnames
             else:
-                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
+                binned = (np.abs(df.to_numpy() - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
                 df2 = pd.DataFrame(
@@ -5040,7 +5043,7 @@ superfast_transformer_dict = {
     "SeasonalDifference": 0.1,
     "bkfilter": 0.05,
     "ClipOutliers": 0.05,
-    "Discretize": 0.01,
+    # "Discretize": 0.01,  # excessive memory use for this
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
