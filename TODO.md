@@ -17,6 +17,7 @@
 * improved the 'Scalable' transformer_list to reduce memory issues on larger datasets
 * memory improvements to KalmanSmoother, HolidayTransformer, LocalLinearTrend
 * added DiffSmoother
+* added force_gc arg which can be tried if memory is in short supply relative to data (probably won't help much)
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

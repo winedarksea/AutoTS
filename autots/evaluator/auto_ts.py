@@ -1,12 +1,13 @@
 """Higher-level functions of automated time series modeling."""
-import numpy as np
-import pandas as pd
 import random
 import copy
 import json
+import gc
 import sys
 import time
 import traceback as tb
+import numpy as np
+import pandas as pd
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -128,6 +129,7 @@ class AutoTS(object):
         generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
             This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
+        force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -197,6 +199,7 @@ class AutoTS(object):
         model_interrupt: bool = True,
         generation_timeout: int = None,
         current_model_file: str = None,
+        force_gc: bool = False,
         verbose: int = 1,
         n_jobs: int = -2,
     ):
@@ -234,6 +237,7 @@ class AutoTS(object):
         self.n_jobs = n_jobs
         self.models_mode = models_mode
         self.current_model_file = current_model_file
+        self.force_gc = force_gc
         random.seed(self.random_seed)
         if self.max_generations is None and self.generation_timeout is not None:
             self.max_generations = 99999
@@ -1928,6 +1932,7 @@ class AutoTS(object):
             traceback=self.traceback,
             current_model_file=self.current_model_file,
             current_generation=current_generation,
+            force_gc=self.force_gc,
         )
         if model_count == 0:
             self.model_count += template_result.model_count
@@ -2129,6 +2134,7 @@ class AutoTS(object):
                 template_cols=self.template_cols,
                 current_model_file=self.current_model_file,
                 return_model=True,
+                force_gc=self.force_gc,
             )
         # convert categorical back to numeric
         trans = self.categorical_transformer
@@ -2148,6 +2154,8 @@ class AutoTS(object):
                 df_forecast.upper_forecast
             )
         sys.stdout.flush()
+        if self.force_gc:
+            gc.collect()
         return df_forecast
 
     def predict(
@@ -2624,6 +2632,7 @@ class AutoTS(object):
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
                     current_model_file=self.current_model_file,
+                    force_gc=self.force_gc,
                 )
             )
         # this handles missing runtime information, which really shouldn't be missing

@@ -5022,7 +5022,7 @@ transformer_dict = {
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
     "FFTDecomposition": 0.01,
-    "ReplaceConstant": 0.005,
+    "ReplaceConstant": 0.02,
     "AlignLastDiff": 0.01,
     "DiffSmoother": 0.001,  # not looking great in testing
 }
@@ -5112,6 +5112,8 @@ def transformer_list_to_dict(transformer_list):
     if transformer_list in ["fast", "default", "Fast", "auto", 'scalable']:
         # remove any slow transformers
         fast_transformer_dict = transformer_dict.copy()
+        # downweight some
+        fast_transformer_dict['ReplaceConstant'] = 0.002
         # del fast_transformer_dict["SinTrend"]
         del fast_transformer_dict["FastICA"]
         del fast_transformer_dict["Cointegration"]

@@ -257,6 +257,10 @@ def extract_single_series_from_horz(series, model_name, model_parameters):
 
 
 def extract_single_transformer(series, model_name, model_parameters, transformation_params):
+    if isinstance(transformation_params, str):
+        transformation_params = json.loads(transformation_params)
+    if isinstance(model_parameters, str):
+        model_parameters = json.loads(model_parameters)
     if model_name == "Ensemble":
         # horizontal and mosaic ensembles
         if "series" in model_parameters.keys():
@@ -289,8 +293,6 @@ def extract_single_transformer(series, model_name, model_parameters, transformat
             )
         return ", ".join(allz)
     else:
-        if isinstance(transformation_params, str):
-            transformation_params = json.loads(transformation_params)
         trans_dict = transformation_params.get("transformations")
         if isinstance(trans_dict, dict):
             return ", ".join(list(trans_dict.values()))
