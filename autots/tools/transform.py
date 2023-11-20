@@ -4130,7 +4130,7 @@ class ReplaceConstant(EmptyTransformer):
         """Generate new random parameters"""
         reintroduction_model = random.choices([None, True], [0.3, 0.7])[0]
         if reintroduction_model:
-            reintroduction_model = generate_classifier_params()
+            reintroduction_model = generate_classifier_params(method='fast')
             reintroduction_model['datepart_method'] = random_datepart(method=method)
         return {
             "constant": random.choices([0, 1], [0.9, 0.1])[0],
