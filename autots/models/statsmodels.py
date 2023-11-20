@@ -1485,32 +1485,30 @@ class VECM(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        deterministic_choice = np.random.choice(
-            a=["n", "co", "ci", "lo", "li", "cili", "colo"],
-            size=1,
-            p=[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
-        ).item()
-        k_ar_diff_choice = np.random.choice(
-            a=[0, 1, 2, 3], size=1, p=[0.1, 0.5, 0.2, 0.2]
-        ).item()
+        deterministic_choice = random.choices(
+            ["n", "co", "ci", "lo", "li", "cili", "colo"],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+        )[0]
+        k_ar_diff_choice = random.choices(
+            [0, 1, 2, 3], [0.1, 0.5, 0.2, 0.2]
+        )[0]
 
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_list = [None, 'User', 'Holiday']
             regression_probability = [0.8, 0.15, 0.05]
-            regression_choice = np.random.choice(
-                a=regression_list, size=1, p=regression_probability
-            ).item()
+            regression_choice = random.choices(
+                regression_list, regression_probability
+            )[0]
 
-        parameter_dict = {
+        return {
             'deterministic': deterministic_choice,
             'k_ar_diff': k_ar_diff_choice,
             'seasons': random.choices([0, 7, 12], [0.9, 0.1, 0.1])[0],
             'coint_rank': random.choices([1, 2, 3], [0.6, 0.2, 0.2])[0],
             'regression_type': regression_choice,
         }
-        return parameter_dict
 
     def get_params(self):
         """Return dict of current parameters."""
