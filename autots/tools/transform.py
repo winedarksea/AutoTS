@@ -1608,9 +1608,12 @@ class ClipOutliers(EmptyTransformer):
         if self.method == "remove":
             df2 = df[np.abs(df - self.df_mean) <= (self.std_threshold * self.df_std)]
         else:
+            # splitting it is a bit more memory efficienty if slightly slower
             lower = self.df_mean - (self.df_std * self.std_threshold)
+            df2 = df.where(df >= lower, lower, axis=1)
             upper = self.df_mean + (self.df_std * self.std_threshold)
-            df2 = df.clip(lower=lower, upper=upper, axis=1)
+            df2 = df2.where(df2 <= upper, upper, axis=1)
+            # df2 = df.clip(lower=lower, upper=upper, axis=1)
 
         if self.fillna is not None:
             df2 = FillNA(df2, method=self.fillna, window=10)

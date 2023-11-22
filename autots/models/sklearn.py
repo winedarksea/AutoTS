@@ -558,7 +558,7 @@ sklearn_model_dict = {
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
-    'KerasRNN': 0.02,
+    'KerasRNN': 0.01,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.1,
