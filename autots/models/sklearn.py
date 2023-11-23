@@ -549,7 +549,7 @@ def retrieve_classifier(
 
 # models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict = {
-    'RandomForest': 0.02,
+    # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
@@ -569,7 +569,7 @@ sklearn_model_dict = {
     'RANSAC': 0.05,
     'Ridge': 0.02,
     'GaussianProcessRegressor': 0.000000001,  # slow
-    'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
+    # 'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -637,7 +637,7 @@ no_shared_model_dict = {
 }
 # these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
-    'RandomForest': 0.05,
+    # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
