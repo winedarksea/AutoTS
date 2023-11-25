@@ -1862,14 +1862,15 @@ class Cassandra(ModelObject):
                     "LastValueNaive",
                     'SeasonalityMotif',
                     'WindowRegression',
+                    'SectionalMotif',
                     'ARDL',
                     'VAR',
                     'UnivariateMotif',
-                    'UnobservedComponents',
-                    "KalmanStateSpace",
+                    # 'UnobservedComponents',
+                    # "KalmanStateSpace",
                     'RRVAR',
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.01, 0.001, 0.05],
+                [0.05, 0.05, 0.2, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
