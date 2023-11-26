@@ -541,7 +541,7 @@ class Cassandra(ModelObject):
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            if self.verbose > 1:
+            if self.verbose > 2:
                 print(
                     f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
                 )
@@ -554,7 +554,7 @@ class Cassandra(ModelObject):
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
         if len(nearz) > 0:
-            if self.verbose > 1:
+            if self.verbose > 2:
                 print(f"Dropping zero variance feature columns {nearz}")
             x_array = x_array.drop(columns=nearz)
         # remove colinear features
@@ -567,13 +567,13 @@ class Cassandra(ModelObject):
                 np.min(corr * np.tri(corr.shape[0]), axis=0) > self.max_colinearity
             ]
             if len(corel) > 0:
-                if self.verbose > 1:
+                if self.verbose > 2:
                     print(f"Dropping colinear feature columns {corel}")
                 x_array = x_array.drop(columns=corel)
         if self.max_multicolinearity is not None:
             colin = x_array.columns[w < self.max_multicolinearity]
             if len(colin) > 0:
-                if self.verbose > 1:
+                if self.verbose > 2:
                     print(f"Dropping multi-colinear feature columns {colin}")
                 x_array = x_array.drop(columns=colin)
 
@@ -951,7 +951,7 @@ class Cassandra(ModelObject):
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            if self.verbose > 1:
+            if self.verbose > 2:
                 print(
                     f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
                 )
@@ -1874,6 +1874,8 @@ class Cassandra(ModelObject):
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
+            if model_str in ['WindowRegression', 'MultivariateRegression']:
+                method = "no_gpu"
             trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(
                 method=method
             )
@@ -1972,18 +1974,23 @@ class Cassandra(ModelObject):
             trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
         else:
             trend_anomaly_detector_params = None
-        linear_model = random.choices(
-            [
-                'lstsq',
-                'linalg_solve',
-                'l1_norm',
-                'dwae_norm',
-                'quantile_norm',
-                'l1_positive',
-                'bayesian_linear',
-            ], # the minimize based norms get slow and memory hungry at scale
-            [0.9, 0.2, 0.01, 0.01, 0.005, 0.01, 0.05],
-        )[0]
+        if method == 'deep':
+            linear_model = random.choices(
+                [
+                    'lstsq',
+                    'linalg_solve',
+                    'l1_norm',
+                    'dwae_norm',
+                    'quantile_norm',
+                    'l1_positive',
+                    'bayesian_linear',
+                ], # the minimize based norms get slow and memory hungry at scale
+                [0.9, 0.2, 0.01, 0.01, 0.005, 0.01, 0.05],
+            )[0]
+        else:
+            linear_model = random.choices(
+                ['lstsq', 'linalg_solve', 'bayesian_linear',], [0.8, 0.15, 0.05]
+            )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
         )[0]

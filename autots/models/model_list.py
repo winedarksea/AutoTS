@@ -139,6 +139,7 @@ fast_parallel_no_arima = {
         "KalmanStateSpace",
         "MultivariateMotif",
         'Theta',
+        "VECM",
         # "BallTreeMultivariateMotif",  # might need sample_fraction tuning
         # "WindowRegression"  # same base shaping as BallTreeMM
     ]
