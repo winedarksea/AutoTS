@@ -649,7 +649,7 @@ datepart_model_dict: dict = {
     'RadiusNeighbors': 0.05,
     'MultioutputGPR': 0.0001,
 }
-gpu = ['Transformer', 'KerasRNN']
+gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
 gradient_boosting = {
     'xgboost': 0.09,
     'HistGradientBoost': 0.03,
@@ -777,7 +777,7 @@ def generate_regressor_params(
         model_dict = {method: sklearn_model_dict[method]}
     elif model_dict is None:
         model_dict = sklearn_model_dict
-    # used in Cassandra
+    # used in Cassandra to remove slowest models
     if method == "no_gpu":
         model_dict = {x: y for (x, y) in model_dict.items() if x not in gpu}
     model_list = list(model_dict.keys())
