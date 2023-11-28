@@ -559,11 +559,12 @@ def window_lin_reg_mean(x, y, w):
 def window_sum_mean_nan_tail(x, w, axis=0):
     # uses much less memory than the nanmean version
     end_window = (w - 1) - int((w -1) / 2)
-    end_div = np.arange(end_window, w - 1)[::-1]
-    return np.sum(
+    end_div = np.arange(end_window, w)[::-1]
+    summed = np.sum(
         np.nan_to_num(sliding_window_view(x, w, axis=axis), nan=0.0),
         axis=-1
-    ) / np.concatenate([np.ones(x.shape[0] - w - end_window + 2) * w, end_div])[:, None]
+    )
+    return summed / np.concatenate([np.ones(x.shape[0] - w - end_window + 1) * w, end_div])[:summed.shape[0], None]
 
 
 def window_sum_mean(x, w, axis=0):
