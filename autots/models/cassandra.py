@@ -33,7 +33,7 @@ from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
-from autots.tools.window_functions import window_lin_reg_mean_no_nan
+from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 from autots.models.model_list import model_list_to_dict
 
@@ -801,7 +801,10 @@ class Cassandra(ModelObject):
         w_1 = wind - 1
         steps_ahd = int(w_1 / 2)
         y0 = np.repeat(np.array(trend_residuals[0:1]), steps_ahd, axis=0)
-        d0 = -1 * dates_2d[1 : y0.shape[0] + 1][::-1]
+        # d0 = -1 * dates_2d[1 : y0.shape[0] + 1][::-1]
+        start_pt = dates_2d[0, 0]
+        step = (dates_2d[1, 0] - start_pt)
+        d0 = np_2d_arange(start_pt, stop=start_pt - ((y0.shape[0] + 1) * step), step=-step, num_columns=dates_2d.shape[1])[1:][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
         y2 = np.concatenate(
             [
@@ -1162,7 +1165,7 @@ class Cassandra(ModelObject):
         )
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
         zeros_df = pd.DataFrame(
-            0,
+            0.0,
             index=trend_component.forecast.index,
             columns=trend_component.forecast.columns,
         )

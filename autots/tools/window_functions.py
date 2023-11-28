@@ -556,17 +556,34 @@ def window_lin_reg_mean(x, y, w):
     return slope, intercept
 
 
-def window_sum_mean(x, w, axis=0):
+def window_sum_mean_nan_tail(x, w, axis=0):
     # uses much less memory than the nanmean version
+    end_window = (w - 1) - int((w -1) / 2)
+    end_div = np.arange(end_window, w - 1)[::-1]
+    return np.sum(
+        np.nan_to_num(sliding_window_view(x, w, axis=axis), nan=0.0),
+        axis=-1
+    ) / np.concatenate([np.ones(x.shape[0] - w - end_window + 2) * w, end_div])[:, None]
+
+
+def window_sum_mean(x, w, axis=0):
     return np.mean(sliding_window_view(x, w, axis=axis), axis=-1)
+
+
+def np_2d_arange(start = 0, stop = 3, step = 1, num_columns = 4):
+    # Create a 1D array using np.arange
+    arr = np.arange(start, stop, step) 
+    result = arr[:, np.newaxis]
+    # Repeat the single column 'num_columns' times to create the final array
+    return np.broadcast_to(result, (len(arr), num_columns))
 
 
 def window_lin_reg_mean_no_nan(x, y, w):
     '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
-    sx = window_sum_mean(x, w)
-    sy = window_sum_mean(y, w)
-    sx2 = window_sum_mean(x**2, w)
-    sxy = window_sum_mean(x * y, w)
+    sx = window_sum_mean_nan_tail(x, w)
+    sy = window_sum_mean_nan_tail(y, w)
+    sx2 = window_sum_mean_nan_tail(x**2, w)
+    sxy = window_sum_mean_nan_tail(x * y, w)
     slope = (sxy - sx * sy) / (sx2 - sx**2)
     intercept = sy - slope * sx
     return slope, intercept

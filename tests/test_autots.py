@@ -510,13 +510,13 @@ class ModelTest(unittest.TestCase):
             loaded = json.load(file)
             for x in models:
                 forecasts[x] = pd.DataFrame.from_dict(loaded['forecasts'][x], orient="columns")
-                forecasts[x]['index'] = pd.to_datetime(forecasts[x]['index'], infer_datetime_format=True)
+                forecasts[x]['index'] = pd.to_datetime(forecasts[x]['index'])
                 forecasts[x] = forecasts[x].set_index("index")
                 upper_forecasts[x] = pd.DataFrame.from_dict(loaded['upper_forecasts'][x], orient="columns")
-                upper_forecasts[x]['index'] = pd.to_datetime(upper_forecasts[x]['index'], infer_datetime_format=True)
+                upper_forecasts[x]['index'] = pd.to_datetime(upper_forecasts[x]['index'])
                 upper_forecasts[x] = upper_forecasts[x].set_index("index")
                 lower_forecasts[x] = pd.DataFrame.from_dict(loaded['lower_forecasts'][x], orient="columns")
-                lower_forecasts[x]['index'] = pd.to_datetime(lower_forecasts[x]['index'], infer_datetime_format=True)
+                lower_forecasts[x]['index'] = pd.to_datetime(lower_forecasts[x]['index'])
                 lower_forecasts[x] = lower_forecasts[x].set_index("index")
             timings = loaded['timing']
 
@@ -639,13 +639,13 @@ class ModelTest(unittest.TestCase):
             loaded = json.load(file)
             for x in transforms:
                 forecasts[x] = pd.DataFrame.from_dict(loaded['forecasts'][x], orient="columns")
-                forecasts[x]['index'] = pd.to_datetime(forecasts[x]['index'], infer_datetime_format=True)
+                forecasts[x]['index'] = pd.to_datetime(forecasts[x]['index'])
                 forecasts[x] = forecasts[x].set_index("index")
                 upper_forecasts[x] = pd.DataFrame.from_dict(loaded['upper_forecasts'][x], orient="columns")
-                upper_forecasts[x]['index'] = pd.to_datetime(upper_forecasts[x]['index'], infer_datetime_format=True)
+                upper_forecasts[x]['index'] = pd.to_datetime(upper_forecasts[x]['index'])
                 upper_forecasts[x] = upper_forecasts[x].set_index("index")
                 lower_forecasts[x] = pd.DataFrame.from_dict(loaded['lower_forecasts'][x], orient="columns")
-                lower_forecasts[x]['index'] = pd.to_datetime(lower_forecasts[x]['index'], infer_datetime_format=True)
+                lower_forecasts[x]['index'] = pd.to_datetime(lower_forecasts[x]['index'])
                 lower_forecasts[x] = lower_forecasts[x].set_index("index")
             timings = loaded['timing']
 

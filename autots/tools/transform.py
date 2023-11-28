@@ -19,7 +19,7 @@ from autots.tools.anomaly_utils import (
     holiday_new_params,
     dates_to_holidays,
 )
-from autots.tools.window_functions import window_lin_reg_mean_no_nan
+from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
@@ -3172,8 +3172,13 @@ class LocalLinearTrend(EmptyTransformer):
         # rolling trend
         steps_ahd = int(w_1 / 2)
         y0 = np.repeat(np.array(df[0:1]), steps_ahd, axis=0)
-        d0 = -1 * self.dates_2d[1 : y0.shape[0] + 1][::-1]
+        # d0 = -1 * self.dates_2d[1 : y0.shape[0] + 1][::-1]
+        start_pt = self.dates_2d[0, 0]
+        step = (self.dates_2d[1, 0] - start_pt)
+        d0 = np_2d_arange(start_pt, stop=start_pt - ((y0.shape[0] + 1) * step), step=-step, num_columns=self.dates_2d.shape[1])[1:][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
+        # end_point = self.dates_2d[-1, 0]
+        # d2 = np_2d_arange(start=end_point, stop=end_point+)
         y2 = np.concatenate(
             [
                 y0,

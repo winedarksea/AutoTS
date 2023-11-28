@@ -3040,9 +3040,10 @@ class BallTreeMultivariateMotif(ModelObject):
                 forecast_length=forecast_length,
                 forecast_index=forecast.index,
                 forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
+                # so it's producing float32 but pandas is better with float64
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
                 prediction_interval=self.prediction_interval,
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
