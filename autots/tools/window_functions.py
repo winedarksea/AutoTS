@@ -2,7 +2,14 @@ import numpy as np
 import pandas as pd
 
 
-def chunk_reshape(arr, window_size=10, chunk_size=100, sample_fraction=None, random_seed=7734, dtype=np.float32):
+def chunk_reshape(
+    arr,
+    window_size=10,
+    chunk_size=100,
+    sample_fraction=None,
+    random_seed=7734,
+    dtype=np.float32,
+):
     """Shifts from (n_records, n_series) to (windows, window_size).
     Multivariate.
     More memory efficient, if not quite as fast as x.reshape(-1, x.shape[-1]) for 3D numpy array.
@@ -43,13 +50,15 @@ def chunk_reshape(arr, window_size=10, chunk_size=100, sample_fraction=None, ran
     for start in range(0, num_chunks):
         # print(start_slice, end)
         # print(start_spot, end_spot)
-        xA = sliding_window_view(arr[:, start_slice: end], window_size, axis=0)
+        xA = sliding_window_view(arr[:, start_slice:end], window_size, axis=0)
         if sample_fraction is not None:
-            reshaped_x[start_spot: end_spot, :] = rng.choice(xA.reshape(-1, xA.shape[-1]), size=end_spot - start_spot, axis=0)
+            reshaped_x[start_spot:end_spot, :] = rng.choice(
+                xA.reshape(-1, xA.shape[-1]), size=end_spot - start_spot, axis=0
+            )
         else:
-            reshaped_x[start_spot: end_spot, :] = xA.reshape(-1, xA.shape[-1])
+            reshaped_x[start_spot:end_spot, :] = xA.reshape(-1, xA.shape[-1])
         start_spot = int(end_spot)
-        end_spot += (samples_per_series * chunk_size)
+        end_spot += samples_per_series * chunk_size
         start_slice = end
         end += chunk_size
 
@@ -97,7 +106,7 @@ def window_maker(
             # old way, kept for reference
             x = sliding_window_view(df.to_numpy(dtype=np.float32), phrase_n, axis=0)
             x = x.reshape(-1, x.shape[-1])
-    
+
             if x.base is None:
                 x.resize(-1, x.shape[-1])
             else:
@@ -118,8 +127,10 @@ def window_maker(
                     X = X[r_arr]
         else:
             x = chunk_reshape(
-                df.to_numpy(dtype=np.float32), phrase_n,
-                sample_fraction=max_windows, random_seed=random_seed
+                df.to_numpy(dtype=np.float32),
+                phrase_n,
+                sample_fraction=max_windows,
+                random_seed=random_seed,
             )
             Y = x[:, window_size:]
             if Y.ndim > 1:
@@ -154,7 +165,9 @@ def window_maker(
                     random_seed=random_seed,
                     dtype=int,
                 )[:, 0:1]
-                X = np.concatenate([X, future_regressor.reindex(df.index).iloc[x.ravel()]], axis=1)
+                X = np.concatenate(
+                    [X, future_regressor.reindex(df.index).iloc[x.ravel()]], axis=1
+                )
 
     except Exception:
         if str(regression_type).lower() == "user":
@@ -558,22 +571,26 @@ def window_lin_reg_mean(x, y, w):
 
 def window_sum_mean_nan_tail(x, w, axis=0):
     # uses much less memory than the nanmean version
-    end_window = (w - 1) - int((w -1) / 2)
+    end_window = (w - 1) - int((w - 1) / 2)
     end_div = np.arange(end_window, w)[::-1]
     summed = np.sum(
-        np.nan_to_num(sliding_window_view(x, w, axis=axis), nan=0.0),
-        axis=-1
+        np.nan_to_num(sliding_window_view(x, w, axis=axis), nan=0.0), axis=-1
     )
-    return summed / np.concatenate([np.ones(x.shape[0] - w - end_window + 1) * w, end_div])[:summed.shape[0], None]
+    return (
+        summed
+        / np.concatenate([np.ones(x.shape[0] - w - end_window + 1) * w, end_div])[
+            : summed.shape[0], None
+        ]
+    )
 
 
 def window_sum_mean(x, w, axis=0):
     return np.mean(sliding_window_view(x, w, axis=axis), axis=-1)
 
 
-def np_2d_arange(start = 0, stop = 3, step = 1, num_columns = 4):
+def np_2d_arange(start=0, stop=3, step=1, num_columns=4):
     # Create a 1D array using np.arange
-    arr = np.arange(start, stop, step) 
+    arr = np.arange(start, stop, step)
     result = arr[:, np.newaxis]
     # Repeat the single column 'num_columns' times to create the final array
     return np.broadcast_to(result, (len(arr), num_columns))

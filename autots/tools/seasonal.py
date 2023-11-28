@@ -609,7 +609,7 @@ def seasonal_independent_match(
     datepart_method='simple_binarized',
     distance_metric='canberra',
     full_sort=False,
-    nan_array=None
+    nan_array=None,
 ):
     array = date_part(DTindex, method=datepart_method)
     if nan_array is not None:

@@ -923,7 +923,9 @@ class AutoTS(object):
         else:
             self.used_frequency = self.frequency
         if self.verbose > 0:
-            print(f"Data frequency is: {inferred_freq}, used frequency is: {self.used_frequency}")
+            print(
+                f"Data frequency is: {inferred_freq}, used frequency is: {self.used_frequency}"
+            )
         if (self.used_frequency is None) and (self.verbose >= 0):
             print("Frequency is 'None'! Data frequency not recognized.")
 
@@ -1754,12 +1756,18 @@ class AutoTS(object):
             self.initial_results.model_results['Ensemble'] == 2
         ].copy()
         # remove failures
-        hens_model_results = hens_model_results[hens_model_results['Exceptions'].isnull()]
-        requested_H_ens = any(x in self.ensemble for x in self.h_ens_list) and allow_horizontal
+        hens_model_results = hens_model_results[
+            hens_model_results['Exceptions'].isnull()
+        ]
+        requested_H_ens = (
+            any(x in self.ensemble for x in self.h_ens_list) and allow_horizontal
+        )
         # here I'm assuming that if some horizontal models ran, we are going to use those
         # horizontal ensembles can't be compared directly to others because they don't get run through all validations
         # they are built themselves from cross validation so a full rerun of validations is unnecessary
-        self.best_model_non_horizontal = self._best_non_horizontal(metric_weighting=metric_weighting)
+        self.best_model_non_horizontal = self._best_non_horizontal(
+            metric_weighting=metric_weighting
+        )
         if not hens_model_results.empty and requested_H_ens:
             hens_model_results.loc['Score'] = generate_score(
                 hens_model_results,
@@ -1778,7 +1786,9 @@ class AutoTS(object):
             self.best_model = self.best_model_non_horizontal
         elif not hens_model_results.empty:
             if self.verbose >= 0:
-                print(f"Horizontal ensemble available but not requested in model selection: {self.ensemble} and allow_horizontal: {allow_horizontal}.")
+                print(
+                    f"Horizontal ensemble available but not requested in model selection: {self.ensemble} and allow_horizontal: {allow_horizontal}."
+                )
                 time.sleep(3)  # give it a chance to be seen
             self.best_model = self.best_model_non_horizontal
         else:
@@ -1820,7 +1830,9 @@ class AutoTS(object):
                 total_validations=(self.num_validations + 1),
             )
             best_model_id = score_per_series[series].idxmin()
-            best_model = self.initial_results.model_results[self.initial_results.model_results['ID'] == best_model_id].iloc[0:1][self.template_cols_id]
+            best_model = self.initial_results.model_results[
+                self.initial_results.model_results['ID'] == best_model_id
+            ].iloc[0:1][self.template_cols_id]
         else:
             # previously I was relying on the mean of Scores calculated for each individual validation
             eligible_models['Score'] = generate_score(
@@ -2397,8 +2409,12 @@ class AutoTS(object):
         return import_template
 
     def _enforce_model_list(
-        self, template, model_list=None, include_ensemble=False,
-        addon_flag=False, include_horizontal=True,
+        self,
+        template,
+        model_list=None,
+        include_ensemble=False,
+        addon_flag=False,
+        include_horizontal=True,
     ):
         """remove models not in given model list."""
         if model_list is None:
@@ -3077,10 +3093,7 @@ class AutoTS(object):
                     )
         # run the forecasts on the past validations
         self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
-        if (
-            not compare_horizontal
-            and colors is None
-        ):
+        if not compare_horizontal and colors is None:
             colors = {
                 'actuals': '#AFDBF5',
                 'chosen': '#4D4DFF',

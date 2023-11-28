@@ -1199,7 +1199,7 @@ def model_forecast(
     return_model: bool = False,
     current_model_file: str = None,
     model_count: int = 0,
-    force_gc: bool=False,
+    force_gc: bool = False,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.

@@ -803,8 +803,13 @@ class Cassandra(ModelObject):
         y0 = np.repeat(np.array(trend_residuals[0:1]), steps_ahd, axis=0)
         # d0 = -1 * dates_2d[1 : y0.shape[0] + 1][::-1]
         start_pt = dates_2d[0, 0]
-        step = (dates_2d[1, 0] - start_pt)
-        d0 = np_2d_arange(start_pt, stop=start_pt - ((y0.shape[0] + 1) * step), step=-step, num_columns=dates_2d.shape[1])[1:][::-1]
+        step = dates_2d[1, 0] - start_pt
+        d0 = np_2d_arange(
+            start_pt,
+            stop=start_pt - ((y0.shape[0] + 1) * step),
+            step=-step,
+            num_columns=dates_2d.shape[1],
+        )[1:][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
         y2 = np.concatenate(
             [
@@ -1987,12 +1992,17 @@ class Cassandra(ModelObject):
                     'quantile_norm',
                     'l1_positive',
                     'bayesian_linear',
-                ], # the minimize based norms get slow and memory hungry at scale
+                ],  # the minimize based norms get slow and memory hungry at scale
                 [0.9, 0.2, 0.01, 0.01, 0.005, 0.01, 0.05],
             )[0]
         else:
             linear_model = random.choices(
-                ['lstsq', 'linalg_solve', 'bayesian_linear',], [0.8, 0.15, 0.05]
+                [
+                    'lstsq',
+                    'linalg_solve',
+                    'bayesian_linear',
+                ],
+                [0.8, 0.15, 0.05],
             )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -2015,7 +2025,9 @@ class Cassandra(ModelObject):
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
-                'maxiter': random.choices([250, 5000, 15000, 25000], [0.2, 0.6, 0.1, 0.1])[0],
+                'maxiter': random.choices(
+                    [250, 5000, 15000, 25000], [0.2, 0.6, 0.1, 0.1]
+                )[0],
                 'method': random.choices(
                     [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'Powell'],
                     [0.9, 0.02, 0.02, 0.02, 0.02],
@@ -2066,7 +2078,9 @@ class Cassandra(ModelObject):
                 seasonalities = random.choices(comp_opts, k=2)
         return {
             "preprocessing_transformation": RandomTransform(
-                transformer_list=superfast_transformer_dict, transformer_max_depth=2, allow_none=True
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=2,
+                allow_none=True,
             ),
             "scaling": scaling,
             # "past_impacts_intervention": self.past_impacts_intervention,

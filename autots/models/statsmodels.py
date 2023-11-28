@@ -1489,18 +1489,16 @@ class VECM(ModelObject):
             ["n", "co", "ci", "lo", "li", "cili", "colo"],
             [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
-        k_ar_diff_choice = random.choices(
-            [0, 1, 2, 3], [0.1, 0.5, 0.2, 0.2]
-        )[0]
+        k_ar_diff_choice = random.choices([0, 1, 2, 3], [0.1, 0.5, 0.2, 0.2])[0]
 
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_list = [None, 'User', 'Holiday']
             regression_probability = [0.8, 0.15, 0.05]
-            regression_choice = random.choices(
-                regression_list, regression_probability
-            )[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         return {
             'deterministic': deterministic_choice,

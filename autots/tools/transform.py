@@ -1875,10 +1875,19 @@ class Discretize(EmptyTransformer):
                     binned = (np.abs(df.to_numpy() - bins)).argmin(axis=0)
                 elif self.discretization == "lower":
                     bins = np.delete(bins, (-1), axis=0)
-                    binned = np.sum(df.to_numpy()[:, np.newaxis, :] < bins[:, np.newaxis, :], axis=0)[:, 0, :] - 1
+                    binned = (
+                        np.sum(
+                            df.to_numpy()[:, np.newaxis, :] < bins[:, np.newaxis, :],
+                            axis=0,
+                        )[:, 0, :]
+                        - 1
+                    )
                 elif self.discretization == "upper":
                     bins = np.delete(bins, (0), axis=0)
-                    binned = np.sum(df.to_numpy()[:, np.newaxis, :] <= bins[:, np.newaxis, :], axis=0)[:, 0, :]
+                    binned = np.sum(
+                        df.to_numpy()[:, np.newaxis, :] <= bins[:, np.newaxis, :],
+                        axis=0,
+                    )[:, 0, :]
                 self.bins = bins
                 # binned = (np.abs(df.to_numpy() - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
@@ -2924,7 +2933,9 @@ class HolidayTransformer(EmptyTransformer):
         self.df_cols = None
         self.verbose = verbose
 
-    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False, max_features=365):
+    def dates_to_holidays(
+        self, dates, style="flag", holiday_impacts=False, max_features=365
+    ):
         """
         dates (pd.DatetimeIndex): list of dates
         style (str): option for how to return information
@@ -3174,8 +3185,13 @@ class LocalLinearTrend(EmptyTransformer):
         y0 = np.repeat(np.array(df[0:1]), steps_ahd, axis=0)
         # d0 = -1 * self.dates_2d[1 : y0.shape[0] + 1][::-1]
         start_pt = self.dates_2d[0, 0]
-        step = (self.dates_2d[1, 0] - start_pt)
-        d0 = np_2d_arange(start_pt, stop=start_pt - ((y0.shape[0] + 1) * step), step=-step, num_columns=self.dates_2d.shape[1])[1:][::-1]
+        step = self.dates_2d[1, 0] - start_pt
+        d0 = np_2d_arange(
+            start_pt,
+            stop=start_pt - ((y0.shape[0] + 1) * step),
+            step=-step,
+            num_columns=self.dates_2d.shape[1],
+        )[1:][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
         # end_point = self.dates_2d[-1, 0]
         # d2 = np_2d_arange(start=end_point, stop=end_point+)
@@ -3193,7 +3209,9 @@ class LocalLinearTrend(EmptyTransformer):
                 np.full(shape2, np.nan),
             ]
         )
-        self.slope, self.intercept = window_lin_reg_mean_no_nan(d, y2, w=self.rolling_window)
+        self.slope, self.intercept = window_lin_reg_mean_no_nan(
+            d, y2, w=self.rolling_window
+        )
 
         if self.method == "mean":
             futslp = np.array([np.mean(self.slope[-self.n_future :], axis=0)])
@@ -4321,7 +4339,7 @@ class DiffSmoother(EmptyTransformer):
         method_params=None,
         fillna=None,
         n_jobs=1,
-        adjustment: int=2,
+        adjustment: int = 2,
     ):
         """Detect anomalies on a historic dataset in the DIFFS then cumsum back to origin space.
         No inverse_transform available.
@@ -4360,12 +4378,12 @@ class DiffSmoother(EmptyTransformer):
         if self.transform_dict is not None:
             model = GeneralTransformer(**self.transform_dict)
             diffs = model.fit_transform(diffs)
-        
+
         if isinstance(self.fillna, (float, int)):
             diffs = diffs.clip(
                 upper=diffs[diffs > 0].std() * self.fillna,
                 lower=-(diffs[diffs < 0].std() * self.fillna),
-                axis=1
+                axis=1,
             )
         else:
             self.anomalies, self.scores = detect_anomalies(
@@ -4380,12 +4398,7 @@ class DiffSmoother(EmptyTransformer):
             if self.fillna is not None:
                 diffs = FillNA(diffs, method=self.fillna, window=10)
 
-        return pd.concat(
-            [
-                diffs,
-                df.tail(1)
-            ]
-        ).iloc[::-1].cumsum().iloc[::-1]
+        return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -4397,7 +4410,19 @@ class DiffSmoother(EmptyTransformer):
     @staticmethod
     def get_new_params(method="random"):
         fillna = random.choices(
-            [None, "ffill", "mean", "rolling_mean_24", "linear", 'time',1.0, 1.5, 2.0, 2.5, 3.0],
+            [
+                None,
+                "ffill",
+                "mean",
+                "rolling_mean_24",
+                "linear",
+                'time',
+                1.0,
+                1.5,
+                2.0,
+                2.5,
+                3.0,
+            ],
             [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1],
         )[0]
         if isinstance(fillna, (float, int)):
@@ -4405,7 +4430,9 @@ class DiffSmoother(EmptyTransformer):
             method_params = None
             transform_dict = None
         else:
-            method_choice, method_params, transform_dict = anomaly_new_params(method=method)
+            method_choice, method_params, transform_dict = anomaly_new_params(
+                method=method
+            )
 
         return {
             "method": method_choice,
@@ -5184,7 +5211,12 @@ def RandomTransform(
             fast_params = False
     if superfast_params is None:
         superfast_params = False
-        slow_flags = ["DatepartRegression", "ScipyFilter", "QuantileTransformer", "KalmanSmoothing"]
+        slow_flags = [
+            "DatepartRegression",
+            "ScipyFilter",
+            "QuantileTransformer",
+            "KalmanSmoothing",
+        ]
         intersects = [i for i in slow_flags if i in transformer_list]
         if not intersects:
             superfast_params = True

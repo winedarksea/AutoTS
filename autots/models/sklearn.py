@@ -933,9 +933,7 @@ def generate_regressor_params(
             }
         elif model == 'RandomForest':
             if method == "fast":
-                n_estimators = random.choices(
-                    [4, 300, 100], [0.2, 0.4, 0.4]
-                )[0]
+                n_estimators = random.choices([4, 300, 100], [0.2, 0.4, 0.4])[0]
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.2])[0]
             else:
                 n_estimators = random.choices(
@@ -1760,7 +1758,9 @@ class WindowRegression(ModelObject):
                     normalize_window=self.normalize_window,
                 )
                 if self.regression_type in ["User", "user"]:
-                    blasted_thing = future_regressor.reindex(index).iloc[x].to_frame().transpose()
+                    blasted_thing = (
+                        future_regressor.reindex(index).iloc[x].to_frame().transpose()
+                    )
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
@@ -1863,9 +1863,13 @@ class WindowRegression(ModelObject):
                 )[0]
         normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
         if method == "deep":
-            max_windows_choice = random.choices([5000, 50000, 5000000, None], [0.4, 0.2, 0.9, 0.05])[0]
+            max_windows_choice = random.choices(
+                [5000, 50000, 5000000, None], [0.4, 0.2, 0.9, 0.05]
+            )[0]
         else:
-            max_windows_choice = random.choices([5000, 50000, 5000000], [0.2, 0.2, 0.9])[0]
+            max_windows_choice = random.choices(
+                [5000, 50000, 5000000], [0.2, 0.2, 0.9]
+            )[0]
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,

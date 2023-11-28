@@ -1046,13 +1046,18 @@ class TiDE(ModelObject):
         return {
             # borrowed mostly from the defaults used for the paper results
             "learning_rate": random.choices(
-                [0.00006558, 0.000999999, 0.000030127, 0.01, 0.000001], [0.3, 0.3, 0.3, 0.05, 0.05]
+                [0.00006558, 0.000999999, 0.000030127, 0.01, 0.000001],
+                [0.3, 0.3, 0.3, 0.05, 0.05],
             )[0],
             "transform": random.choices([True, False], [0.3, 0.7])[0],
             "layer_norm": random.choices([True, False], [0.2, 0.8])[0],
             "holiday": random.choices([True, False], [0.3, 0.7])[0],
-            "dropout_rate": random.choices([0.0, 0.3, 0.5, 0.7], [0.3, 0.3, 0.3, 0.05])[0],
-            "batch_size": random.choices([1024, 512, 257, 32], [0.05, 0.4, 0.1, 0.1])[0],
+            "dropout_rate": random.choices([0.0, 0.3, 0.5, 0.7], [0.3, 0.3, 0.3, 0.05])[
+                0
+            ],
+            "batch_size": random.choices([1024, 512, 257, 32], [0.05, 0.4, 0.1, 0.1])[
+                0
+            ],
             "hidden_size": random.choices([1024, 512, 256, 64], [0.1, 0.2, 0.4, 0.1])[
                 0
             ],
@@ -1070,7 +1075,9 @@ class TiDE(ModelObject):
                 0
             ],
             # "patience": random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0],
-            "epoch_len": random.choices([1, 4, 20, 40, None], [0.3, 0.2, 0.1, 0.1, 0.3])[0],
+            "epoch_len": random.choices(
+                [1, 4, 20, 40, None], [0.3, 0.2, 0.1, 0.1, 0.3]
+            )[0],
             "permute": random.choices([True, False], [0.3, 0.7])[0],
             "normalize": random.choices([True, False], [0.5, 0.5])[0],
         }

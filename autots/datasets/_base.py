@@ -505,15 +505,27 @@ def load_live_daily(
             energy_df = []
             for x in range(n_chunks):
                 try:
-                    end_nospace = (current_date - datetime.timedelta(days=30 * x)).strftime("%Y%m%d")
-                    start_nospace = (current_date - datetime.timedelta(days=30 * (x + 1) + 1)).strftime("%Y%m%d")
+                    end_nospace = (
+                        current_date - datetime.timedelta(days=30 * x)
+                    ).strftime("%Y%m%d")
+                    start_nospace = (
+                        current_date - datetime.timedelta(days=30 * (x + 1) + 1)
+                    ).strftime("%Y%m%d")
                     caiso_url = f"http://oasis.caiso.com/oasisapi/SingleZip?resultformat=6&queryname={caiso_query}&version=1&market_run_id=RTM&tac_zone_name=ALL&schedule=Generation&startdatetime={start_nospace}T00:00-0000&enddatetime={end_nospace}T23:00-0000"
                     data = pd.read_csv(caiso_url, compression='zip')
                     data['OPR_DT'] = pd.to_datetime(data['OPR_DT'])
                     data = data[data['OPR_HR'] < 25]
-                    energy_df.append(data.groupby(['OPR_DT', 'OPR_HR'])['MW'].mean().reset_index().pivot_table(
-                        values='MW', index='OPR_DT', columns='OPR_HR', aggfunc='sum'
-                    ).rename(columns=lambda x: "CAISO_GENERATION_HR_" + str(x)).sort_index().bfill())
+                    energy_df.append(
+                        data.groupby(['OPR_DT', 'OPR_HR'])['MW']
+                        .mean()
+                        .reset_index()
+                        .pivot_table(
+                            values='MW', index='OPR_DT', columns='OPR_HR', aggfunc='sum'
+                        )
+                        .rename(columns=lambda x: "CAISO_GENERATION_HR_" + str(x))
+                        .sort_index()
+                        .bfill()
+                    )
                     time.sleep(sleep_seconds + 8)
                 except Exception as e:
                     print(f"caiso download failed with error: {repr(e)}")

@@ -1,3 +1,5 @@
+# Extended Tutorial
+
 ## Table of Contents
 * [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id1)
 * [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id2)
@@ -13,8 +15,6 @@
 * [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
 * [Event Risk Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
 * [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id10)
-
-## Extended Tutorial
 
 ### A simple example
 ```python

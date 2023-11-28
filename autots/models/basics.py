@@ -14,10 +14,18 @@ from autots.tools.seasonal import (
     seasonal_independent_match,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
-from autots.tools.window_functions import window_id_maker, sliding_window_view, chunk_reshape
+from autots.tools.window_functions import (
+    window_id_maker,
+    sliding_window_view,
+    chunk_reshape,
+)
 from autots.tools.percentile import nan_quantile
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
-from autots.tools.transform import GeneralTransformer, RandomTransform, superfast_transformer_dict
+from autots.tools.transform import (
+    GeneralTransformer,
+    RandomTransform,
+    superfast_transformer_dict,
+)
 from autots.tools.fft import fourier_extrapolation
 
 
@@ -2541,10 +2549,14 @@ class MetricMotif(ModelObject):
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
             "comparison_transformation": RandomTransform(
-                transformer_list=superfast_transformer_dict, transformer_max_depth=1, allow_none=True
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
             ),
             "combination_transformation": RandomTransform(
-                transformer_list=superfast_transformer_dict, transformer_max_depth=1, allow_none=True
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
             ),
         }
 
@@ -2977,13 +2989,19 @@ class BallTreeMultivariateMotif(ModelObject):
                 if 0 < self.sample_fration < 1:
                     sample_size = int(Xa.shape[0] * self.sample_fraction)
                 else:
-                    sample_size = int(self.sample_fraction) if Xa.shape[0] < self.sample_fraction else int(Xa.shape[0] - 1)
+                    sample_size = (
+                        int(self.sample_fraction)
+                        if Xa.shape[0] < self.sample_fraction
+                        else int(Xa.shape[0] - 1)
+                    )
                 Xa = np.random.default_rng().choice(Xa, size=sample_size, axis=0)
         else:
             # shared with WindowRegression
             Xa = chunk_reshape(
-                self.df.to_numpy(dtype=np.float32), phrase_n,
-                sample_fraction=self.sample_fraction, random_seed=self.random_seed
+                self.df.to_numpy(dtype=np.float32),
+                phrase_n,
+                sample_fraction=self.sample_fraction,
+                random_seed=self.random_seed,
             )
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
@@ -3066,7 +3084,15 @@ class BallTreeMultivariateMotif(ModelObject):
             'kdtree',
         ]
         metric_probabilities = [
-            0.05, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.05,
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+            0.9,
+            0.05,
+            0.05,
+            0.05,
+            0.05,
         ]
         if method != "deep":
             # evidence suggests 20 million can fit in 5 GB of RAM with a window of 28

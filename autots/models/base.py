@@ -234,9 +234,7 @@ def extract_single_series_from_horz(series, model_name, model_parameters):
         ensemble_type = model_parameters.get('model_name', "Ensemble")
         # horizontal and mosaic ensembles
         if "series" in model_parameters.keys():
-            model_id = model_parameters['series'].get(
-                series, "Horizontal"
-            )
+            model_id = model_parameters['series'].get(series, "Horizontal")
             if isinstance(model_id, dict):
                 model_id = list(model_id.values())
             if not isinstance(model_id, list):
@@ -256,7 +254,9 @@ def extract_single_series_from_horz(series, model_name, model_parameters):
     return str(title_prelim)
 
 
-def extract_single_transformer(series, model_name, model_parameters, transformation_params):
+def extract_single_transformer(
+    series, model_name, model_parameters, transformation_params
+):
     if isinstance(transformation_params, str):
         transformation_params = json.loads(transformation_params)
     if isinstance(model_parameters, str):
@@ -264,9 +264,7 @@ def extract_single_transformer(series, model_name, model_parameters, transformat
     if model_name == "Ensemble":
         # horizontal and mosaic ensembles
         if "series" in model_parameters.keys():
-            model_id = model_parameters['series'].get(
-                series, "Horizontal"
-            )
+            model_id = model_parameters['series'].get(series, "Horizontal")
             if isinstance(model_id, dict):
                 model_id = list(model_id.values())
             if not isinstance(model_id, list):
@@ -276,9 +274,12 @@ def extract_single_transformer(series, model_name, model_parameters, transformat
                 chosen_mod = model_parameters.get("models", {}).get(imod, {})
                 res.append(
                     extract_single_transformer(
-                        series, chosen_mod.get("Model"),
+                        series,
+                        chosen_mod.get("Model"),
                         chosen_mod.get("ModelParameters"),
-                        transformation_params=chosen_mod.get("TransformationParameters")
+                        transformation_params=chosen_mod.get(
+                            "TransformationParameters"
+                        ),
                     )
                 )
             return ", ".join(res)
@@ -286,9 +287,10 @@ def extract_single_transformer(series, model_name, model_parameters, transformat
         for idz, mod in model_parameters.get("models").items():
             allz.append(
                 extract_single_transformer(
-                    series, mod.get("Model"),
+                    series,
+                    mod.get("Model"),
                     mod.get("ModelParameters"),
-                    transformation_params=mod.get("TransformationParameters")
+                    transformation_params=mod.get("TransformationParameters"),
                 )
             )
         return ", ".join(allz)
@@ -299,20 +301,22 @@ def extract_single_transformer(series, model_name, model_parameters, transformat
         else:
             return "None"
 
+
 def create_seaborn_palette_from_cmap(cmap_name="gist_rainbow", n=10):
     import matplotlib.pyplot as plt
     import seaborn as sns
 
     # Get the colormap from matplotlib
     cm = plt.get_cmap(cmap_name)
-    
+
     # Create a range of colors from the colormap
     colors = cm(np.linspace(0, 1, n))
-    
+
     # Convert to a seaborn palette
     palette = sns.color_palette(colors)
-    
+
     return palette
+
 
 # Function to calculate the peak density of each model's distribution
 def calculate_peak_density(model, data, group_col='Model', y_col='TotalRuntimeSeconds'):
@@ -322,7 +326,14 @@ def calculate_peak_density(model, data, group_col='Model', y_col='TotalRuntimeSe
     kde = gaussian_kde(model_data)
     return np.max(kde(model_data))
 
-def plot_distributions(runtimes_data, group_col='Model', y_col='TotalRuntimeSeconds', xlim=None, xlim_right=None):
+
+def plot_distributions(
+    runtimes_data,
+    group_col='Model',
+    y_col='TotalRuntimeSeconds',
+    xlim=None,
+    xlim_right=None,
+):
     import matplotlib.pyplot as plt
     import seaborn as sns
 
@@ -330,7 +341,12 @@ def plot_distributions(runtimes_data, group_col='Model', y_col='TotalRuntimeSeco
     multi_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) > 1)
 
     # Calculate the average peak density across all models with multiple observations
-    average_peak_density = np.mean([calculate_peak_density(model, multi_obs_models, group_col, y_col) for model in multi_obs_models[group_col].unique()])
+    average_peak_density = np.mean(
+        [
+            calculate_peak_density(model, multi_obs_models, group_col, y_col)
+            for model in multi_obs_models[group_col].unique()
+        ]
+    )
 
     # Correcting the color palette to match the number of unique models
     unique_models = runtimes_data[group_col].nunique()
@@ -344,18 +360,26 @@ def plot_distributions(runtimes_data, group_col='Model', y_col='TotalRuntimeSeco
     fig = plt.figure(figsize=(12, 8))
 
     # Plot the density plots for multi-observation models
-    density_plot = sns.kdeplot(  #noqa
-        data=multi_obs_models, x=y_col, hue=group_col, fill=True,
-        common_norm=False, palette=zip_palette, alpha=0.5
+    density_plot = sns.kdeplot(  # noqa
+        data=multi_obs_models,
+        x=y_col,
+        hue=group_col,
+        fill=True,
+        common_norm=False,
+        palette=zip_palette,
+        alpha=0.5,
     )
 
     # Plot the points for single-observation models at the average peak density
     if not single_obs_models.empty:
-        point_plot = sns.scatterplot(  #noqa
-            data=single_obs_models, x=y_col,
-            y=[average_peak_density]*len(single_obs_models),
-            hue=group_col, palette=zip_palette, legend=False,
-            marker='o', # s=10
+        point_plot = sns.scatterplot(  # noqa
+            data=single_obs_models,
+            x=y_col,
+            y=[average_peak_density] * len(single_obs_models),
+            hue=group_col,
+            palette=zip_palette,
+            legend=False,
+            marker='o',  # s=10
         )
     # Adjusting legend - Manually combining elements
     handles, labels = [], []
@@ -522,10 +546,15 @@ class PredictionObject(object):
         if self.runtime_dict is None or not bool(self.model_parameters):
             return None
         else:
-            runtimes = pd.DataFrame( self.runtime_dict.items(), columns=['ID', 'Runtime'])
+            runtimes = pd.DataFrame(
+                self.runtime_dict.items(), columns=['ID', 'Runtime']
+            )
             runtimes['TotalRuntimeSeconds'] = runtimes['Runtime'].dt.total_seconds()
-            new_models = {x: y.get("Model") for x, y in self.model_parameters.get("models").items()}
-            models = pd.DataFrame( new_models.items(), columns=['ID', 'Model'])
+            new_models = {
+                x: y.get("Model")
+                for x, y in self.model_parameters.get("models").items()
+            }
+            models = pd.DataFrame(new_models.items(), columns=['ID', 'Model'])
             return runtimes.merge(models, how='left', on='ID')
 
     def plot_ensemble_runtimes(self, xlim_right=None):
@@ -536,8 +565,11 @@ class PredictionObject(object):
             return None
         else:
             return plot_distributions(
-                runtimes_data, group_col='Model', y_col='TotalRuntimeSeconds',
-                xlim=0, xlim_right=xlim_right,
+                runtimes_data,
+                group_col='Model',
+                y_col='TotalRuntimeSeconds',
+                xlim=0,
+                xlim_right=xlim_right,
             )
 
     def plot_df(
@@ -658,8 +690,10 @@ class PredictionObject(object):
             }
         if title is None:
             title_prelim = extract_single_series_from_horz(
-                series, model_name=self.model_name, model_parameters=self.model_parameters
-            )[0: 80]
+                series,
+                model_name=self.model_name,
+                model_parameters=self.model_parameters,
+            )[0:80]
             if title_substring is None:
                 title = f"{series} with model {title_prelim}"
             else:

@@ -34,14 +34,10 @@ Usage example
 ---------------
 
 
-.. testsetup ::
-
    import numpy.random
    numpy.random.seed(0)
 
 Define model
-
-.. testcode ::
 
    import simdkalman
    import numpy as np
@@ -54,8 +50,6 @@ Define model
 
 Generate some fake data
 
-.. testcode ::
-
    import numpy.random as random
 
    # 100 independent time series
@@ -66,8 +60,6 @@ Generate some fake data
 
 
 Smooth all data
-
-.. testcode ::
 
    smoothed = kf.smooth(data,
                         initial_value = [1,0],
@@ -80,7 +72,6 @@ Smooth all data
    print('covariance')
    print(smoothed.states.cov[1,2,:,:])
 
-.. testoutput ::
 
     mean
     [ 0.29311384 -0.06948961]
@@ -90,7 +81,6 @@ Smooth all data
 
 Predict new data for a single series (1d case)
 
-.. testcode ::
 
    predicted = kf.predict(data[1,:], 123)
 
@@ -99,8 +89,6 @@ Predict new data for a single series (1d case)
    pred_stdev = np.sqrt(predicted.observations.cov[2])
 
    print('%g +- %g' % (pred_mean, pred_stdev))
-
-.. testoutput ::
 
    1.71543 +- 1.65322
 
@@ -602,7 +590,9 @@ class Gaussian:
     def empty(n_states, n_vars, n_measurements, cov=True):
         mean = np.empty((n_vars, n_measurements, n_states))
         if cov:
-            cov = np.empty((n_vars, n_measurements, n_states, n_states), dtype=np.float32)
+            cov = np.empty(
+                (n_vars, n_measurements, n_states, n_states), dtype=np.float32
+            )
         else:
             cov = None
         return Gaussian(mean, cov)
