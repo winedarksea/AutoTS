@@ -210,6 +210,9 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             also most `method` values of pd.DataFrame.interpolate()
         window (int): length of rolling windows for filling na, for rolling methods
     """
+    if isinstance(method, (int, float)):
+        return df.fillna(method)
+
     method = str(method).replace(" ", "_")
 
     if method == 'zero':
@@ -291,9 +294,16 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         )
         return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
 
+    elif method == 'SimpleSeasonalityMotifImputer':
+        s_imputer = SimpleSeasonalityMotifImputer(
+            datepart_method="common_fourier",
+            distance_metric="canberra",
+            linear_mixed=False,
+        )
+        return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
+
     elif method == 'SeasonalityMotifImputer1K':
-        s_imputer = SeasonalityMotifImputer(
-            k=1,
+        s_imputer = SimpleSeasonalityMotifImputer(
             datepart_method="common_fourier",
             distance_metric="mae",
             linear_mixed=False,
@@ -301,8 +311,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return s_imputer.impute(df)  # .rename(lambda x: str(x) + "_motif", axis=1)
 
     elif method == 'SeasonalityMotifImputerLinMix':
-        s_imputer = SeasonalityMotifImputer(
-            k=2,
+        s_imputer = SimpleSeasonalityMotifImputer(
             datepart_method="common_fourier",
             distance_metric="canberra",
             linear_mixed=True,
@@ -329,7 +338,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         imputer.fit(df)
         return imputer.impute(df)
 
-    elif method is None or method == 'None':
+    elif method is None or method in ['None', 'null']:
         return df
 
     else:
@@ -368,7 +377,7 @@ class SeasonalityMotifImputer(object):
             distance_metric=self.distance_metric,
         )
         full_dist = np.argsort(scores)
-        full_nan_mask = np.isnan(df.to_numpy())
+        full_nan_mask = ~np.isnan(df.to_numpy())
 
         brdcst_mask = np.broadcast_to(
             full_nan_mask[..., None], full_nan_mask.shape + (df.shape[0],)
@@ -387,10 +396,11 @@ class SeasonalityMotifImputer(object):
             -1,
             1,
         )
+        del full_dist
 
         # mask_positive = (np.cumsum(~brdcst_mask, axis=-1) <= k) & ~brdcst_mask  # True = keeps
         # mask_negative = (np.cumsum(~brdcst_mask, axis=-1) > k) | brdcst_mask  # True = don't keep
-        mask_negative = np.cumsum(~brdcst_mask, axis=-1) > self.k  # True = don't keep
+        mask_negative = np.cumsum(brdcst_mask, axis=-1) > self.k  # True = don't keep
 
         # test = np.ma.masked_array(brdcst.T, mask_negative)
         # temp = np.take(df.to_numpy()[..., None], brdcst)
@@ -416,7 +426,53 @@ class SeasonalityMotifImputer(object):
         # col = "US__sv_feed_interface"
         # pd.concat([df.loc[:, col], df_impt.loc[:, col + "_imputed"]], axis=1).plot()
 
-        return df.where(~full_nan_mask, self.df_impt)
+        return df.where(full_nan_mask, self.df_impt)
+
+
+class SimpleSeasonalityMotifImputer(object):
+    def __init__(
+        self,
+        datepart_method: str = "simple_2",
+        distance_metric: str = "canberra",
+        linear_mixed: bool = False,
+        max_iter: int = 100,
+    ):
+        """Shares arg params with SeasonalityMotif model with which it has much in common.
+        Only takes the nearest one non-nan neighbor.
+        This isn't quite as fast as the other version but doesn't explode into terabytes of memory at scale, either.
+
+        Args:
+            datepart_method (str): standard date part methods accepted
+            distance_metirc (str): same as seaonality motif, ie 'mae', 'canberra'
+            linear_mixed (bool): if True, take simple average of this and linear interpolation
+        """
+        self.datepart_method = datepart_method
+        self.distance_metric = distance_metric
+        self.linear_mixed = linear_mixed
+        self.max_iter = max_iter
+
+    def impute(self, df):
+        """Infer missing values on input df."""
+        # discard rows where all series are NaN
+        all_nan = df.isnull().all(axis=1)
+        test, scores = seasonal_independent_match(
+            DTindex=df.index,
+            DTindex_future=df.index,
+            k=df.shape[0] - 1,  # not really used here
+            datepart_method=self.datepart_method,
+            distance_metric=self.distance_metric,
+            full_sort=True,
+            nan_array=all_nan,
+        )
+        count = 0
+        arr = df.to_numpy()
+        while count < self.max_iter:
+            current_fill = arr[test[:, count]]
+            arr = np.where(np.isnan(arr), current_fill, arr)
+            # df.update(df.where(df.notna(), current_fill), overwrite=False)
+            count += 1
+
+        return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
 
 # accuracy test (not necessarily a test of "best")

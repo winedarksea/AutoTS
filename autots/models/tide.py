@@ -861,13 +861,14 @@ class TiDE(ModelObject):
 
         try:
             gpus = tf.config.experimental.list_physical_devices("GPU")
-            tf.config.experimental.set_visible_devices(gpus[self.gpu_index], "GPU")
-            if gpus:
-                try:
-                    for gpu in gpus:
-                        tf.config.experimental.set_memory_growth(gpu, True)
-                except RuntimeError as e:
-                    print(e)
+            if False:
+                tf.config.experimental.set_visible_devices(gpus[self.gpu_index], "GPU")
+                if gpus:
+                    try:
+                        for gpu in gpus:
+                            tf.config.experimental.set_memory_growth(gpu, True)
+                    except RuntimeError as e:
+                        print(e)
         except Exception as e:
             print("TF GPU init error:" + repr(e))
 
@@ -1045,32 +1046,39 @@ class TiDE(ModelObject):
         return {
             # borrowed mostly from the defaults used for the paper results
             "learning_rate": random.choices(
-                [0.00006558, 0.000999999, 0.000030127, 0.01], [0.3, 0.3, 0.3, 0.1]
+                [0.00006558, 0.000999999, 0.000030127, 0.01, 0.000001],
+                [0.3, 0.3, 0.3, 0.05, 0.05],
             )[0],
-            "transform": random.choices([True, False], [0.35, 0.65])[0],
-            "layer_norm": random.choices([True, False], [0.65, 0.35])[0],
-            "holiday": random.choices([True, False], [0.35, 0.65])[0],
-            "dropout_rate": random.choices([0.0, 0.3, 0.5], [0.3, 0.3, 0.3])[0],
-            "batch_size": random.choices([512, 257, 32], [0.4, 0.1, 0.1])[0],
-            "hidden_size": random.choices([1024, 512, 256, 64], [0.2, 0.2, 0.2, 0.1])[
+            "transform": random.choices([True, False], [0.3, 0.7])[0],
+            "layer_norm": random.choices([True, False], [0.2, 0.8])[0],
+            "holiday": random.choices([True, False], [0.3, 0.7])[0],
+            "dropout_rate": random.choices([0.0, 0.3, 0.5, 0.7], [0.3, 0.3, 0.3, 0.05])[
                 0
             ],
-            "num_layers": random.choices([1, 2, 3], [0.8, 0.1, 0.1])[0],
+            "batch_size": random.choices([1024, 512, 257, 32], [0.05, 0.4, 0.1, 0.1])[
+                0
+            ],
+            "hidden_size": random.choices([1024, 512, 256, 64], [0.1, 0.2, 0.4, 0.1])[
+                0
+            ],
+            "num_layers": random.choices([1, 2, 3], [0.85, 0.1, 0.02])[0],
             "hist_len": random.choices([720, 10, 364, 21], [0.1, 0.1, 0.1, 0.1])[0],
-            "decoder_output_dim": random.choices([16, 8, 4, 32], [0.4, 0.4, 0.1, 0.1])[
+            "decoder_output_dim": random.choices([16, 8, 4, 32], [0.4, 0.4, 0.4, 0.1])[
                 0
             ],
             "final_decoder_hidden": random.choices(
                 [128, 64, 32, 16], [0.1, 0.8, 0.1, 0.1]
             )[0],
-            "num_split": random.choices([4, 1, 2], [0.8, 0.2, 0.2])[0],
+            "num_split": random.choices([6, 4, 1, 2], [0.1, 0.8, 0.2, 0.2])[0],
             "min_num_epochs": random.choices([5, 10, 20], [0.85, 0.1, 0.1])[0],
-            "train_epochs": random.choices([20, 40, 100, 500], [0.2, 0.2, 0.2, 0.05])[
+            "train_epochs": random.choices([20, 40, 100, 500], [0.2, 0.4, 0.2, 0.05])[
                 0
             ],
             # "patience": random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0],
-            "epoch_len": random.choices([1, None], [0.5, 0.5])[0],
-            "permute": random.choices([True, False], [0.5, 0.5])[0],
+            "epoch_len": random.choices(
+                [1, 4, 20, 40, None], [0.3, 0.2, 0.1, 0.1, 0.3]
+            )[0],
+            "permute": random.choices([True, False], [0.3, 0.7])[0],
             "normalize": random.choices([True, False], [0.5, 0.5])[0],
         }
 

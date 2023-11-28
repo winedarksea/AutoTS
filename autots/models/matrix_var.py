@@ -25,9 +25,10 @@ def rrvar(data, R, pred_step, maxiter=100):
     X1 = data[:, :-1]
     X2 = data[:, 1:]
     V = np.random.randn(R, N)
+    X1_pinv = np.linalg.pinv(X1)
     for it in range(maxiter):
         W = X2 @ np.linalg.pinv((V @ X1))
-        V = np.linalg.pinv(W) @ X2 @ np.linalg.pinv((X1))
+        V = np.linalg.pinv(W) @ X2 @ X1_pinv
     mat = np.append(data, np.zeros((N, pred_step)), axis=1)
     for s in range(pred_step):
         mat[:, T + s] = W @ V @ mat[:, T + s - 1]
@@ -601,7 +602,7 @@ class TMF(ModelObject):
         rho = random.choices([1, 1e-7, 1e-6, 1e-5, 5e-4], [0.5, 0.1, 0.1, 0.1, 0.1])[0]
         return {
             "d": random.choice([1, 2]),
-            "lambda0": random.choice([1, 0, 0.1 * rho, 0.5 * rho, 1 * rho, 10 * rho]),
+            "lambda0": random.choice([1, 0, 0.1 * rho, 0.5 * rho, rho, 10 * rho]),
             "rho": rho,
             'rank': random.choice([2, 4, 0.1, 0.2, 0.5]),
             'maxiter': 100,
@@ -941,7 +942,7 @@ class LATC(ModelObject):
                     0,
                     0.1 * learning_rate,
                     0.5 * learning_rate,
-                    1 * learning_rate,
+                    learning_rate,
                     10 * learning_rate,
                 ]
             ),

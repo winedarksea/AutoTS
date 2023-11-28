@@ -481,8 +481,6 @@
         <li><a href="source/autots.tools.html#module-autots.tools.window_functions">module</a>
 </li>
       </ul></li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTSIntervals">AutoTSIntervals (class in autots.evaluator.auto_ts)</a>
-</li>
       <li><a href="source/autots.models.html#autots.models.basics.AverageValueNaive">AverageValueNaive (class in autots.models.basics)</a>
 </li>
   </ul></td>
@@ -575,6 +573,8 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.models.html#autots.models.base.calculate_peak_density">calculate_peak_density() (in module autots.models.base)</a>
+</li>
       <li><a href="source/autots.html#autots.Cassandra">Cassandra (class in autots)</a>
 
       <ul>
@@ -588,6 +588,8 @@
       <li><a href="source/autots.tools.html#autots.tools.transform.StatsmodelsFilter.cffilter">cffilter() (autots.tools.transform.StatsmodelsFilter method)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.chi_squared_hist_distribution_loss">chi_squared_hist_distribution_loss() (in module autots.evaluator.metrics)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.chunk_reshape">chunk_reshape() (in module autots.tools.window_functions)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.clean_regressor">clean_regressor() (in module autots.models.cassandra)</a>
 </li>
@@ -675,6 +677,8 @@
         <li><a href="source/autots.tools.html#autots.tools.regressor.create_regressor">(in module autots.tools.regressor)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.models.html#autots.models.base.create_seaborn_palette_from_cmap">create_seaborn_palette_from_cmap() (in module autots.models.base)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.create_seasonality_feature">create_seasonality_feature() (in module autots.tools.seasonal)</a>
 </li>
       <li><a href="source/autots.html#autots.Cassandra.create_t">create_t() (autots.Cassandra method)</a>
@@ -769,6 +773,8 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.DifferencedTransformer">DifferencedTransformer (class in autots.tools.transform)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.DiffSmoother">DiffSmoother (class in autots.tools.transform)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.fast_kalman.dinv">dinv() (in module autots.tools.fast_kalman)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.Discretize">Discretize (class in autots.tools.transform)</a>
@@ -819,12 +825,12 @@
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.error_correlations">error_correlations() (in module autots.evaluator.auto_ts)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.statsmodels.ETS">ETS (class in autots.models.statsmodels)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.evaluate">evaluate() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#id1">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.html#autots.EventRiskForecast">EventRiskForecast (class in autots)</a>
 
       <ul>
@@ -847,9 +853,17 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.export_template">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.models.html#autots.models.base.PredictionObject.extract_ensemble_runtimes">extract_ensemble_runtimes() (autots.models.base.PredictionObject method)</a>
+</li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.extract_result_windows">extract_result_windows() (in module autots.evaluator.event_forecasting)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.validation.extract_seasonal_val_periods">extract_seasonal_val_periods() (in module autots.evaluator.validation)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.base.extract_single_series_from_horz">extract_single_series_from_horz() (in module autots.models.base)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.base.extract_single_transformer">extract_single_transformer() (in module autots.models.base)</a>
+</li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.extract_window_index">extract_window_index() (in module autots.evaluator.event_forecasting)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -931,8 +945,6 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction.fit">(autots.evaluator.auto_model.ModelPrediction method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.fit">(autots.evaluator.auto_ts.AutoTS method)</a>
-</li>
-        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTSIntervals.fit">(autots.evaluator.auto_ts.AutoTSIntervals method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.fit">(autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#id0">[1]</a>
 </li>
@@ -1076,6 +1088,8 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DifferencedTransformer.fit">(autots.tools.transform.DifferencedTransformer method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DiffSmoother.fit">(autots.tools.transform.DiffSmoother method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.fit">(autots.tools.transform.Discretize method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.EmptyTransformer.fit">(autots.tools.transform.EmptyTransformer method)</a>
@@ -1191,6 +1205,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.fit_transform">(autots.tools.transform.Detrend method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DifferencedTransformer.fit_transform">(autots.tools.transform.DifferencedTransformer method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DiffSmoother.fit_transform">(autots.tools.transform.DiffSmoother method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.fit_transform">(autots.tools.transform.Discretize method)</a>
 </li>
@@ -1474,6 +1490,8 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.get_new_params">(autots.tools.transform.Detrend static method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DiffSmoother.get_new_params">(autots.tools.transform.DiffSmoother static method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.get_new_params">(autots.tools.transform.Discretize static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.EmptyTransformer.get_new_params">(autots.tools.transform.EmptyTransformer static method)</a>
@@ -1734,6 +1752,8 @@
       <li><a href="source/autots.tools.html#autots.tools.impute.SeasonalityMotifImputer.impute">impute() (autots.tools.impute.SeasonalityMotifImputer method)</a>
 
       <ul>
+        <li><a href="source/autots.tools.html#autots.tools.impute.SimpleSeasonalityMotifImputer.impute">(autots.tools.impute.SimpleSeasonalityMotifImputer method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.impute">(autots.tools.transform.DatepartRegressionTransformer method)</a>
 </li>
       </ul></li>
@@ -2200,6 +2220,8 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.thresholding.NonparametricThreshold">NonparametricThreshold (class in autots.tools.thresholding)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.np_2d_arange">np_2d_arange() (in module autots.tools.window_functions)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.tide.nrmse">nrmse() (in module autots.models.tide)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.NumericTransformer">NumericTransformer (class in autots.tools.shaping)</a>
@@ -2287,6 +2309,10 @@
 </li>
       </ul></li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.plot_df">plot_df() (autots.models.base.PredictionObject method)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.base.plot_distributions">plot_distributions() (in module autots.models.base)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.base.PredictionObject.plot_ensemble_runtimes">plot_ensemble_runtimes() (autots.models.base.PredictionObject method)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.plot_eval">plot_eval() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
 
@@ -2388,8 +2414,6 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction.predict">(autots.evaluator.auto_model.ModelPrediction method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.predict">(autots.evaluator.auto_ts.AutoTS method)</a>
-</li>
-        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTSIntervals.predict">(autots.evaluator.auto_ts.AutoTSIntervals method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.predict">(autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#id11">[1]</a>
 </li>
@@ -2770,6 +2794,8 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.simple_train_test_split">simple_train_test_split() (in module autots.tools.shaping)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.impute.SimpleSeasonalityMotifImputer">SimpleSeasonalityMotifImputer (class in autots.tools.impute)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.transform.SinTrend">SinTrend (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.anomaly_utils.sk_outliers">sk_outliers() (in module autots.tools.anomaly_utils)</a>
@@ -2896,6 +2922,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.transform">(autots.tools.transform.Detrend method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DifferencedTransformer.transform">(autots.tools.transform.DifferencedTransformer method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DiffSmoother.transform">(autots.tools.transform.DiffSmoother method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.transform">(autots.tools.transform.Discretize method)</a>
 </li>
@@ -3064,15 +3092,21 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.window_lin_reg">window_lin_reg() (in module autots.tools.window_functions)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.window_lin_reg_mean">window_lin_reg_mean() (in module autots.tools.window_functions)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_lin_reg_mean_no_nan">window_lin_reg_mean_no_nan() (in module autots.tools.window_functions)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.window_maker">window_maker() (in module autots.tools.window_functions)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.window_maker_2">window_maker_2() (in module autots.tools.window_functions)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.window_maker_3">window_maker_3() (in module autots.tools.window_functions)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_sum_mean">window_sum_mean() (in module autots.tools.window_functions)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_sum_mean_nan_tail">window_sum_mean_nan_tail() (in module autots.tools.window_functions)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.window_sum_nan_mean">window_sum_nan_mean() (in module autots.tools.window_functions)</a>
 </li>
@@ -3141,6 +3175,7 @@
 <li class="toctree-l1"><a class="reference internal" href="source/intro.html">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="source/intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="source/tutorial.html">Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="source/tutorial.html#extended-tutorial">Extended Tutorial</a></li>
 </ul>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="source/modules.html">autots</a></li>

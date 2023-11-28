@@ -1,3 +1,5 @@
+# Extended Tutorial
+
 ## Table of Contents
 * [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id1)
 * [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id2)
@@ -13,8 +15,6 @@
 * [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
 * [Event Risk Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
 * [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id10)
-
-## Extended Tutorial
 
 ### A simple example
 ```python
@@ -868,7 +868,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
 |  KalmanStateSpace       |              |                         |    True       |                 |       |              |              |               |
 |  FFT                    |              |                         |    True       |                 |       |              |              |               |
-|  TiDE                   | tensorflow   |                         |               |                 | yes   | True         | True         |               |
+|  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |    c         |               |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

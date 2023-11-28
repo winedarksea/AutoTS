@@ -96,7 +96,7 @@ fast = {
     'GLM': 1,
     'ETS': 1,
     'VAR': 0.8,
-    'VECM': 1,
+    'VECM': 0.8,  # a bit on the higher side for memory usage
     'WindowRegression': 0.5,  # this gets slow with Transformer, KerasRNN
     'DatepartRegression': 0.8,
     'UnivariateMotif': 1,
@@ -108,9 +108,9 @@ fast = {
     'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
     'Cassandra': 0.6,
-    'SeasonalityMotif': 1,
+    'SeasonalityMotif': 1.5,
     'FFT': 0.8,
-    "BallTreeMultivariateMotif": 1,
+    "BallTreeMultivariateMotif": 1,  # keep an eye on RAM
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -139,6 +139,9 @@ fast_parallel_no_arima = {
         "KalmanStateSpace",
         "MultivariateMotif",
         'Theta',
+        "VECM",
+        # "BallTreeMultivariateMotif",  # might need sample_fraction tuning
+        # "WindowRegression"  # same base shaping as BallTreeMM
     ]
 }
 # so this opiniated and not fully updated always
@@ -354,6 +357,7 @@ model_lists = {
     "parallel": parallel,
     "fast_parallel": fast_parallel,
     "fast_parallel_no_arima": fast_parallel_no_arima,
+    "scalable": fast_parallel_no_arima,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
     "univariate": univariate,

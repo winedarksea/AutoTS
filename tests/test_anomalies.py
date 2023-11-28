@@ -48,6 +48,7 @@ class TestAnomalies(unittest.TestCase):
             gov_domain_list=None,
             weather_event_types=None,
             wikipedia_pages=wiki_pages,
+            caiso_query=None,
             sleep_seconds=5,
         ).fillna(0).replace(np.inf, 0)
 

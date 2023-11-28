@@ -1,5 +1,6 @@
 """Mid-level helper functions for AutoTS."""
 import sys
+import gc
 import traceback as tb
 import random
 from math import ceil
@@ -669,7 +670,7 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
-    elif model == "TiDE":
+    elif model in ["TiDE", "TIDE"]:
         from autots.models.tide import TiDE
 
         return TiDE(
@@ -733,6 +734,7 @@ class ModelPrediction(ModelObject):
         n_jobs: int = None,
         current_model_file: str = None,
         model_count: int = 0,
+        force_gc: bool = False,
     ):
         self.forecast_length = forecast_length
         self.model_str = model_str
@@ -749,6 +751,7 @@ class ModelPrediction(ModelObject):
         self.n_jobs = n_jobs
         self.current_model_file = current_model_file
         self.model_count = model_count
+        self.force_gc = force_gc
         # handle still in JSON form
         if isinstance(transformation_dict, str):
             self.transformation_dict = json.loads(transformation_dict)
@@ -923,6 +926,8 @@ class ModelPrediction(ModelObject):
                     )
                 )
         sys.stdout.flush()
+        if self.force_gc:
+            gc.collect()
 
         return df_forecast
 
@@ -1194,6 +1199,7 @@ def model_forecast(
     return_model: bool = False,
     current_model_file: str = None,
     model_count: int = 0,
+    force_gc: bool = False,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -1225,6 +1231,7 @@ def model_forecast(
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
+        force_gc (bool): if True, run gc.collect() after each model
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -1305,6 +1312,7 @@ def model_forecast(
                     horizontal_subset=horizontal_subset,
                     current_model_file=current_model_file,
                     model_count=model_count,
+                    force_gc=force_gc,
                 )
                 model_id = create_model_id(
                     df_forecast.model_name,
@@ -1339,6 +1347,7 @@ def model_forecast(
             df_train=df_train,
             prematched_series=all_series,
         )
+        ens_forecast.runtime_dict = forecasts_runtime
         return ens_forecast
     # if not an ensemble
     else:
@@ -1385,6 +1394,7 @@ def model_forecast(
             return_model=return_model,
             current_model_file=current_model_file,
             model_count=model_count,
+            force_gc=force_gc,
         )
         model = model.fit(df_train_low, future_regressor_train)
         return model.predict(
@@ -1438,6 +1448,7 @@ def TemplateWizard(
         "mosaic_window",
         "mosaic-crosshair",
     ],
+    force_gc: bool = False,
 ):
     """
     Take Template, returns Results.
@@ -1468,6 +1479,7 @@ def TemplateWizard(
         template_cols (list): column names of columns used as model template
         traceback (bool): include tracebook over just error representation
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
+        force_gc (bool): if True, run gc.collect after every model run
 
     Returns:
         TemplateEvalObject
@@ -1559,6 +1571,7 @@ def TemplateWizard(
                 template_cols=template_cols,
                 current_model_file=current_model_file,
                 model_count=template_result.model_count,
+                force_gc=force_gc,
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
@@ -2423,6 +2436,7 @@ def validation_aggregation(validation_results, df_train=None):
     validation_results.model_results['TotalRuntimeSeconds'] = (
         validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )
+    # MODEL SELECTION CODE EXPECTS THAT VAL RESULTS WILL NOT CONTAIN ANY NaN/FAILED MODELS
     validation_results.model_results = validation_results.model_results[
         pd.isnull(validation_results.model_results['Exceptions'])
     ]
@@ -2878,6 +2892,7 @@ def back_forecast(
     verbose=0,
     eval_periods: int = None,
     current_model_file: str = None,
+    force_gc: bool = False,
     **kwargs,
 ):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
@@ -2963,6 +2978,7 @@ def back_forecast(
                 verbose=verbose,
                 n_jobs=n_jobs,
                 current_model_file=current_model_file,
+                force_gc=force_gc,
             )
             b_forecast = pd.concat([b_forecast, df_forecast.forecast])
             b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])

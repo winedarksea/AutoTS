@@ -1,5 +1,6 @@
 """Informal testing script."""
 from time import sleep
+import json
 import timeit
 import os
 import platform
@@ -17,6 +18,7 @@ from autots.datasets import (  # noqa
     load_artificial,
 )
 from autots import AutoTS, create_regressor, model_forecast, __version__  # noqa
+from autots.models.base import plot_distributions
 import matplotlib.pyplot as plt
 
 print(f"AutoTS version: {__version__}")
@@ -120,8 +122,9 @@ metric_weighting = {
     'rmse_weighting': 2,
     'made_weighting': 1,
     'mage_weighting': 0,
-    'mle_weighting': 0,
-    'imle_weighting': 0,
+    'mate_weighting': 1,
+    'mle_weighting': 0,  # avoid underestimate
+    'imle_weighting': 0,  # avoid overestimate
     'spl_weighting': 0,
     'containment_weighting': 0.1,
     'contour_weighting': 0,
@@ -129,8 +132,11 @@ metric_weighting = {
     'maxe_weighting': 0,
     'oda_weighting': 0,
     'mqae_weighting': 0,
-    'smoothness_weighting': -1,
+    'wasserstein_weighting': 0,
+    'dwd_weighting': 1,
+    'smoothness_weighting': -0.5,
 }
+
 # metric_weighting = {'ewmae_weighting': 1}
 constraint = {
     "constraint_method": "quantile",
@@ -289,6 +295,21 @@ runtimes = initial_results[initial_results["Ensemble"] < 1].groupby("Model").agg
 print(runtimes["TotalRuntimeSeconds"].rename(columns={"mean": "slowest_avg_runtime", "max": "slowest_max_runtime"}).idxmax())
 print(runtimes['smape'].idxmin())
 
+### Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer
+failures = []
+successes = []
+for idx, row in initial_results.iterrows():
+    failed = not pd.isnull(row['Exceptions'])
+    transforms = list(json.loads(row['TransformationParameters']).get('transformations', {}).values())
+    if failed:
+        failures = failures + transforms
+    else:
+        successes = successes + transforms
+total = pd.concat([pd.Series(failures).value_counts().rename("failures").to_frame(),pd.Series(successes).value_counts().rename("successes")], axis=1).fillna(0)
+total['failure_rate'] = total['failures'] / (total['successes'] + total['failures'])
+total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+plt.show()
+
 if graph:
     start_date = "auto"
     # issues with long and preclean vary 'raw' df choice
@@ -345,6 +366,12 @@ if graph:
             mosaic_df = model.mosaic_to_df()
             print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
+        try:
+            prediction.plot_ensemble_runtimes()
+            plt.show()
+        except Exception as e:
+            print(repr(e))
+
     plt.show()
     if back_forecast:
         model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
@@ -378,22 +405,33 @@ if graph:
     val_df = model.retrieve_validation_forecasts()
 
     try:
+        # seaborn plots
         model.plot_metric_corr()
+        plt.show()
+
+        f_res = initial_results[(initial_results['Exceptions'].isnull()) & (initial_results["Ensemble"] == 0)]
+        plot_distributions(f_res, group_col='Model', y_col='TotalRuntimeSeconds', xlim=0, xlim_right=0.98)
         plt.show()
         # model.metric_corr.loc['wasserstein'].sort_values()
     except Exception as e:
         print(repr(e))
 
-    param_impacts_runtime = model.diagnose_params(target="runtime")
-    param_impacts_mae = model.diagnose_params(target="mae")
-    param_impacts_exception = model.diagnose_params(target="exception")
-    param_impacts_smape = model.diagnose_params(target="smape")
-    param_impacts = pd.concat([param_impacts_runtime, param_impacts_mae, param_impacts_smape, param_impacts_exception], axis=1).reset_index(drop=False)
+    if True:
+        param_impacts_runtime = model.diagnose_params(target="runtime")
+        param_impacts_mae = model.diagnose_params(target="mae")
+        param_impacts_exception = model.diagnose_params(target="exception")
+        param_impacts_smape = model.diagnose_params(target="smape")
+        param_impacts = pd.concat([param_impacts_runtime, param_impacts_mae, param_impacts_smape, param_impacts_exception], axis=1).reset_index(drop=False)
 
 df_wide_numeric = model.df_wide_numeric
 
 
-
+from autots.models.base import extract_single_transformer
+print("Transformers used: " + extract_single_transformer(
+    series=df.columns[-1], model_name=model.best_model_name,
+    model_parameters=model.best_model_params,
+    transformation_params=model.best_model_transformation_params,
+))
 
 if not [x for x in interest_series if x in model.df_wide_numeric.columns.tolist()]:
     interest_series = model.df_wide_numeric.columns.tolist()[0:5]

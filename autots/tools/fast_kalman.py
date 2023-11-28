@@ -34,14 +34,10 @@ Usage example
 ---------------
 
 
-.. testsetup ::
-
    import numpy.random
    numpy.random.seed(0)
 
 Define model
-
-.. testcode ::
 
    import simdkalman
    import numpy as np
@@ -54,8 +50,6 @@ Define model
 
 Generate some fake data
 
-.. testcode ::
-
    import numpy.random as random
 
    # 100 independent time series
@@ -66,8 +60,6 @@ Generate some fake data
 
 
 Smooth all data
-
-.. testcode ::
 
    smoothed = kf.smooth(data,
                         initial_value = [1,0],
@@ -80,7 +72,6 @@ Smooth all data
    print('covariance')
    print(smoothed.states.cov[1,2,:,:])
 
-.. testoutput ::
 
     mean
     [ 0.29311384 -0.06948961]
@@ -90,7 +81,6 @@ Smooth all data
 
 Predict new data for a single series (1d case)
 
-.. testcode ::
 
    predicted = kf.predict(data[1,:], 123)
 
@@ -99,8 +89,6 @@ Predict new data for a single series (1d case)
    pred_stdev = np.sqrt(predicted.observations.cov[2])
 
    print('%g +- %g' % (pred_mean, pred_stdev))
-
-.. testoutput ::
 
    1.71543 +- 1.65322
 
@@ -595,12 +583,16 @@ class Gaussian:
         self.mean = mean
         if cov is not None:
             self.cov = cov
+        else:
+            self.cov = None
 
     @staticmethod
     def empty(n_states, n_vars, n_measurements, cov=True):
         mean = np.empty((n_vars, n_measurements, n_states))
         if cov:
-            cov = np.empty((n_vars, n_measurements, n_states, n_states))
+            cov = np.empty(
+                (n_vars, n_measurements, n_states, n_states), dtype=np.float32
+            )
         else:
             cov = None
         return Gaussian(mean, cov)
@@ -1061,15 +1053,15 @@ class KalmanFilter(object):
                 result.smoothed.states = empty_gaussian()
 
                 # lazy trick to keep last filtered = last smoothed
-                result.smoothed.states.mean = 1 * filtered_states.mean
+                result.smoothed.states.mean = filtered_states.mean
                 if covariances:
-                    result.smoothed.states.cov = 1 * filtered_states.cov
+                    result.smoothed.states.cov = filtered_states.cov
 
             if observations:
                 result.smoothed.observations = empty_gaussian(n_states=n_obs)
-                result.smoothed.observations.mean = 1 * filtered_observations.mean
+                result.smoothed.observations.mean = filtered_observations.mean
                 if covariances:
-                    result.smoothed.observations.cov = 1 * filtered_observations.cov
+                    result.smoothed.observations.cov = filtered_observations.cov
 
             if gains:
                 result.smoothed.gains = np.zeros(

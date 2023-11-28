@@ -103,7 +103,7 @@ def rolling_x_regressor(
             local_df.index.shift(-nonzero_last_n, freq=inferred_freq)
         )
         X.append(
-            (local_df.reindex(full_index).fillna(method="bfill") != 0)
+            (local_df.reindex(full_index).bfill() != 0)
             .rolling(nonzero_last_n, min_periods=1)
             .sum()
             .reindex(local_df.index)
@@ -175,7 +175,7 @@ def rolling_x_regressor(
         X['holiday_flag_future_'] = hldflag.reindex(ahead_2_index).to_numpy()
 
     # X = X.replace([np.inf, -np.inf], np.nan)
-    X = X.fillna(method='bfill')
+    X = X.bfill()
 
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
@@ -549,7 +549,7 @@ def retrieve_classifier(
 
 # models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict = {
-    'RandomForest': 0.02,
+    # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
@@ -558,7 +558,7 @@ sklearn_model_dict = {
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
-    'KerasRNN': 0.02,
+    'KerasRNN': 0.01,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.1,
@@ -569,7 +569,7 @@ sklearn_model_dict = {
     'RANSAC': 0.05,
     'Ridge': 0.02,
     'GaussianProcessRegressor': 0.000000001,  # slow
-    'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
+    # 'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -637,7 +637,7 @@ no_shared_model_dict = {
 }
 # these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
-    'RandomForest': 0.05,
+    # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
@@ -647,9 +647,9 @@ datepart_model_dict: dict = {
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
-    'MultioutputGPR': 0.001,
+    'MultioutputGPR': 0.0001,
 }
-gpu = ['Transformer', 'KerasRNN']
+gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
 gradient_boosting = {
     'xgboost': 0.09,
     'HistGradientBoost': 0.03,
@@ -777,6 +777,7 @@ def generate_regressor_params(
         model_dict = {method: sklearn_model_dict[method]}
     elif model_dict is None:
         model_dict = sklearn_model_dict
+    # used in Cassandra to remove slowest models
     if method == "no_gpu":
         model_dict = {x: y for (x, y) in model_dict.items() if x not in gpu}
     model_list = list(model_dict.keys())
@@ -931,13 +932,19 @@ def generate_regressor_params(
                 },
             }
         elif model == 'RandomForest':
+            if method == "fast":
+                n_estimators = random.choices([4, 300, 100], [0.2, 0.4, 0.4])[0]
+                min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.2])[0]
+            else:
+                n_estimators = random.choices(
+                    [4, 300, 100, 1000, 5000], [0.1, 0.4, 0.4, 0.2, 0.01]
+                )[0]
+                min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0]
             param_dict = {
                 "model": 'RandomForest',
                 "model_params": {
-                    "n_estimators": random.choices(
-                        [4, 300, 100, 1000, 5000], [0.1, 0.4, 0.4, 0.2, 0.01]
-                    )[0],
-                    "min_samples_leaf": random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0],
+                    "n_estimators": n_estimators,
+                    "min_samples_leaf": min_samples_leaf,
                     "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
                 },
             }
@@ -1325,9 +1332,7 @@ class RollingRegression(ModelObject):
 
         # define X and Y
         self.sktraindata = self.df_train.dropna(how='all', axis=0)
-        self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
-            method='bfill'
-        )
+        self.sktraindata = self.sktraindata.ffill().bfill()
         self.Y = self.sktraindata.drop(self.sktraindata.head(2).index)
         self.Y.columns = [x for x in range(len(self.Y.columns))]
         self.X = rolling_x_regressor(
@@ -1651,7 +1656,7 @@ class WindowRegression(ModelObject):
         self.normalize_window = normalize_window
         self.shuffle = shuffle
         self.forecast_length = forecast_length
-        self.max_windows = abs(int(max_windows))
+        self.max_windows = max_windows
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1672,6 +1677,8 @@ class WindowRegression(ModelObject):
                     "regression_type='User' but no future_regressor passed"
                 )
         self.df_train = df
+        if isinstance(future_regressor, pd.Series):
+            future_regressor = future_regressor.to_frame()
         self.X, self.Y = window_maker(
             df,
             window_size=self.window_size,
@@ -1700,7 +1707,7 @@ class WindowRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.model = self.model.fit(self.X.astype(float), self.Y.astype(float))
+        self.model = self.model.fit(self.X, self.Y)
         self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1736,6 +1743,8 @@ class WindowRegression(ModelObject):
         if int(forecast_length) > int(self.forecast_length):
             print("Regression must be refit to change forecast length!")
         index = self.create_forecast_index(forecast_length=forecast_length)
+        if isinstance(future_regressor, pd.Series):
+            future_regressor = future_regressor.to_frame()
 
         if self.output_dim == '1step':
             # combined_index = (self.df_train.index.append(index))
@@ -1749,7 +1758,9 @@ class WindowRegression(ModelObject):
                     normalize_window=self.normalize_window,
                 )
                 if self.regression_type in ["User", "user"]:
-                    blasted_thing = future_regressor.iloc[x].to_frame().transpose()
+                    blasted_thing = (
+                        future_regressor.reindex(index).iloc[x].to_frame().transpose()
+                    )
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
@@ -1779,7 +1790,7 @@ class WindowRegression(ModelObject):
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
             if isinstance(pred, pd.DataFrame):
-                pred = pred.to_numpy()
+                pred = pred.to_numpy(dtype=np.float32)
             cY = pd.DataFrame(self.model.predict(pred.astype(float)))
             if self.input_dim == 'multivariate':
                 cY.index = ['values']
@@ -1811,9 +1822,10 @@ class WindowRegression(ModelObject):
                 forecast_length=forecast_length,
                 forecast_index=df.index,
                 forecast_columns=df.columns,
-                lower_forecast=lower_forecast,
-                forecast=df,
-                upper_forecast=upper_forecast,
+                # so it's producing float32 but pandas is better with float64
+                lower_forecast=lower_forecast.astype(float),
+                forecast=df.astype(float),
+                upper_forecast=upper_forecast.astype(float),
                 prediction_interval=self.prediction_interval,
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
@@ -1850,7 +1862,14 @@ class WindowRegression(ModelObject):
                     [None, "User"], weights=[0.8, 0.2]
                 )[0]
         normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
-        max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
+        if method == "deep":
+            max_windows_choice = random.choices(
+                [5000, 50000, 5000000, None], [0.4, 0.2, 0.9, 0.05]
+            )[0]
+        else:
+            max_windows_choice = random.choices(
+                [5000, 50000, 5000000], [0.2, 0.2, 0.9]
+            )[0]
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
@@ -2203,7 +2222,7 @@ class DatepartRegression(ModelObject):
             multioutput=multioutput,
         )
         self.df_train = df
-        self.model = self.model.fit(self.X.astype(float), y.astype(float))
+        self.model = self.model.fit(self.X.astype(np.float32), y.astype(np.float32))
         self.shape = df.shape
         return self
 

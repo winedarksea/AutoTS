@@ -2,6 +2,69 @@ import numpy as np
 import pandas as pd
 
 
+def chunk_reshape(
+    arr,
+    window_size=10,
+    chunk_size=100,
+    sample_fraction=None,
+    random_seed=7734,
+    dtype=np.float32,
+):
+    """Shifts from (n_records, n_series) to (windows, window_size).
+    Multivariate.
+    More memory efficient, if not quite as fast as x.reshape(-1, x.shape[-1]) for 3D numpy array.
+    """
+    if arr.ndim == 1:
+        # arr = arr[:,np.newaxis]
+        arr = np.reshape(arr, (arr.shape[0], -1))
+    num_series = arr.shape[1]
+    full_size = int((arr.shape[0] - window_size + 1) * num_series)
+    if sample_fraction is None or sample_fraction == 1:
+        sample_size = full_size
+    elif 0 < sample_fraction < 1:
+        sample_size = int(full_size * sample_fraction)
+    else:
+        sample_size = int(sample_fraction) if sample_fraction < full_size else full_size
+    if sample_fraction is not None:
+        rng = np.random.default_rng(seed=random_seed)
+
+    # Initialize an empty array if you need to store the entire reshaped data
+    reshaped_x = np.empty((sample_size, window_size), dtype=dtype)
+
+    # Process each chunk
+    num_chunks = int(num_series / chunk_size)
+    if num_chunks < 1:
+        num_chunks = 1
+    excess_series = num_series % num_chunks
+    # samples_per_chunk = int(sample_size / num_chunks)
+    samples_per_series = int(sample_size / num_series)
+    # excess = int(sample_size % samples_per_chunk)
+    excess = int(sample_size % num_series)
+    start_spot = 0
+    start_slice = 0
+    end = chunk_size + excess_series
+    end = end if arr.shape[1] > end else arr.shape[1]
+    end_spot = samples_per_series * end + excess
+    # so we go through each chunk_size of series
+    # the first chunk gets the extra series (modulo remainder) + excess samples if uneven
+    for start in range(0, num_chunks):
+        # print(start_slice, end)
+        # print(start_spot, end_spot)
+        xA = sliding_window_view(arr[:, start_slice:end], window_size, axis=0)
+        if sample_fraction is not None:
+            reshaped_x[start_spot:end_spot, :] = rng.choice(
+                xA.reshape(-1, xA.shape[-1]), size=end_spot - start_spot, axis=0
+            )
+        else:
+            reshaped_x[start_spot:end_spot, :] = xA.reshape(-1, xA.shape[-1])
+        start_spot = int(end_spot)
+        end_spot += samples_per_series * chunk_size
+        start_slice = end
+        end += chunk_size
+
+    return reshaped_x
+
+
 def window_maker(
     df,
     window_size: int = 10,
@@ -38,37 +101,73 @@ def window_maker(
     try:
         if input_dim == "multivariate":
             raise ValueError("input_dim=`multivariate` not supported this way.")
-        x = sliding_window_view(df.to_numpy(), phrase_n, axis=0)
-        x = x.reshape(-1, x.shape[-1])
-        Y = x[:, window_size:]
-        if Y.ndim > 1:
-            if Y.shape[1] == 1:
-                Y = Y.ravel()
-        X = x[:, :window_size]
-        r_arr = None
-        if max_windows is not None:
-            X_size = x.shape[0]
-            if max_windows < X_size:
-                r_arr = np.random.default_rng(random_seed).integers(
-                    0, X_size, size=max_windows
-                )
-                Y = Y[r_arr]
-                X = X[r_arr]
+        # I don't think the np.float32 will usually have much accuracy loss
+        if False:
+            # old way, kept for reference
+            x = sliding_window_view(df.to_numpy(dtype=np.float32), phrase_n, axis=0)
+            x = x.reshape(-1, x.shape[-1])
+
+            if x.base is None:
+                x.resize(-1, x.shape[-1])
+            else:
+                x = np.resize(x, (-1, x.shape[-1]))
+            Y = x[:, window_size:]
+            if Y.ndim > 1:
+                if Y.shape[1] == 1:
+                    Y = Y.ravel()
+            X = x[:, :window_size]
+            r_arr = None
+            if max_windows is not None:
+                X_size = x.shape[0]
+                if max_windows < X_size:
+                    r_arr = np.random.default_rng(random_seed).integers(
+                        0, X_size, size=max_windows
+                    )
+                    Y = Y[r_arr]
+                    X = X[r_arr]
+        else:
+            x = chunk_reshape(
+                df.to_numpy(dtype=np.float32),
+                phrase_n,
+                sample_fraction=max_windows,
+                random_seed=random_seed,
+            )
+            Y = x[:, window_size:]
+            if Y.ndim > 1:
+                if Y.shape[1] == 1:
+                    Y = Y.ravel()
+            X = x[:, :window_size]
         if normalize_window:
             div_sum = np.nansum(X, axis=1).reshape(-1, 1)
             X = X / np.where(div_sum == 0, 1, div_sum)
         # regressors
         if str(regression_type).lower() == "user":
-            shape_1 = df.shape[1] if df.ndim > 1 else 1
-            if isinstance(future_regressor, pd.DataFrame):
-                regr_arr = np.repeat(
-                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
-                    shape_1,
-                    axis=0,
+            if False:
+                # old way, kept for reference
+                shape_1 = df.shape[1] if df.ndim > 1 else 1
+                if isinstance(future_regressor, pd.DataFrame):
+                    regr_arr = np.repeat(
+                        future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
+                        shape_1,
+                        axis=0,
+                    )
+                    if r_arr is not None:
+                        regr_arr = regr_arr[r_arr]
+                    X = np.concatenate([X, regr_arr], axis=1)
+            else:
+                n = df.shape[0]
+                n_cols = df.shape[1]
+                # create an i index identical to windows, then select first
+                x = chunk_reshape(
+                    np.arange(n)[:, None] * np.ones((1, n_cols), dtype=int),
+                    phrase_n,
+                    sample_fraction=max_windows,
+                    random_seed=random_seed,
+                    dtype=int,
+                )[:, 0:1]
+                X = np.concatenate(
+                    [X, future_regressor.reindex(df.index).iloc[x.ravel()]], axis=1
                 )
-                if r_arr is not None:
-                    regr_arr = regr_arr[r_arr]
-                X = np.concatenate([X, regr_arr], axis=1)
 
     except Exception:
         if str(regression_type).lower() == "user":
@@ -465,6 +564,44 @@ def window_lin_reg_mean(x, y, w):
     sy = window_sum_nan_mean(y, w)
     sx2 = window_sum_nan_mean(x**2, w)
     sxy = window_sum_nan_mean(x * y, w)
+    slope = (sxy - sx * sy) / (sx2 - sx**2)
+    intercept = sy - slope * sx
+    return slope, intercept
+
+
+def window_sum_mean_nan_tail(x, w, axis=0):
+    # uses much less memory than the nanmean version
+    end_window = (w - 1) - int((w - 1) / 2)
+    end_div = np.arange(end_window, w)[::-1]
+    summed = np.sum(
+        np.nan_to_num(sliding_window_view(x, w, axis=axis), nan=0.0), axis=-1
+    )
+    return (
+        summed
+        / np.concatenate([np.ones(x.shape[0] - w - end_window + 1) * w, end_div])[
+            : summed.shape[0], None
+        ]
+    )
+
+
+def window_sum_mean(x, w, axis=0):
+    return np.mean(sliding_window_view(x, w, axis=axis), axis=-1)
+
+
+def np_2d_arange(start=0, stop=3, step=1, num_columns=4):
+    # Create a 1D array using np.arange
+    arr = np.arange(start, stop, step)
+    result = arr[:, np.newaxis]
+    # Repeat the single column 'num_columns' times to create the final array
+    return np.broadcast_to(result, (len(arr), num_columns))
+
+
+def window_lin_reg_mean_no_nan(x, y, w):
+    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
+    sx = window_sum_mean_nan_tail(x, w)
+    sy = window_sum_mean_nan_tail(y, w)
+    sx2 = window_sum_mean_nan_tail(x**2, w)
+    sxy = window_sum_mean_nan_tail(x * y, w)
     slope = (sxy - sx * sy) / (sx2 - sx**2)
     intercept = sy - slope * sx
     return slope, intercept

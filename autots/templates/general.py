@@ -425,6 +425,21 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "nearest", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": false}}}',
         'Ensemble': 0,
     },
+    "69": {
+        'Model': 'TiDE',
+        'ModelParameters': '''{
+            "learning_rate": 0.000999999, "transform": true,
+            "layer_norm": false, "holiday": false, "dropout_rate": 0.5,
+            "batch_size": 32, "hidden_size": 256, "num_layers": 1,
+            "hist_len": 21, "decoder_output_dim": 8, "final_decoder_hidden": 64,
+            "num_split": 4, "min_num_epochs": 5, "train_epochs": 40,
+            "epoch_len": null, "permute": true, "normalize": false
+        }''',
+        'TransformationParameters': '''
+        {"fillna": "ffill", "transformations": {"0": "AlignLastValue", "1": "Log", "2": "AlignLastValue", "3": "MinMaxScaler"}, "transformation_params": {"0": {"rows": 4, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "3": {}}}
+        ''',
+        'Ensemble': 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

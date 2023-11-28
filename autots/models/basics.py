@@ -14,10 +14,18 @@ from autots.tools.seasonal import (
     seasonal_independent_match,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
-from autots.tools.window_functions import window_id_maker, sliding_window_view
+from autots.tools.window_functions import (
+    window_id_maker,
+    sliding_window_view,
+    chunk_reshape,
+)
 from autots.tools.percentile import nan_quantile
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
-from autots.tools.transform import GeneralTransformer, RandomTransform, filters
+from autots.tools.transform import (
+    GeneralTransformer,
+    RandomTransform,
+    superfast_transformer_dict,
+)
 from autots.tools.fft import fourier_extrapolation
 
 
@@ -1261,7 +1269,7 @@ class Motif(ModelObject):
 
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+            df_list = Parallel(n_jobs=(self.n_jobs))(
                 delayed(looped_motif)(
                     Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
                     Xb=self.df.iloc[-self.window :, i].to_numpy().reshape(1, -1),
@@ -2115,6 +2123,7 @@ class KalmanStateSpace(ModelObject):
                 process_noise=self.process_noise,  # Q
                 observation_model=self.observation_model,  # H
                 observation_noise=param[0],  # R
+                # covariances=False,
             )
             if self.em_iter is not None:
                 kf = kf.em(
@@ -2516,11 +2525,11 @@ class MetricMotif(ModelObject):
             "chebyshev",
             "wasserstein",
         ]
-        comparisons = filters.copy()
-        comparisons['CenterLastValue'] = 0.05
-        comparisons['StandardScaler'] = 0.05
-        combinations = filters.copy()
-        combinations['AlignLastValue'] = 0.1
+        # comparisons = filters.copy()
+        # comparisons['CenterLastValue'] = 0.05
+        # comparisons['StandardScaler'] = 0.05
+        # combinations = filters.copy()
+        # combinations['AlignLastValue'] = 0.1
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -2540,10 +2549,14 @@ class MetricMotif(ModelObject):
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
             "comparison_transformation": RandomTransform(
-                transformer_list=comparisons, transformer_max_depth=1, allow_none=True
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
             ),
             "combination_transformation": RandomTransform(
-                transformer_list=filters, transformer_max_depth=1, allow_none=True
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
             ),
         }
 
@@ -2920,6 +2933,7 @@ class BallTreeMultivariateMotif(ModelObject):
         point_method: str = "mean",
         distance_metric: str = "canberra",
         k: int = 10,
+        sample_fraction=None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2936,6 +2950,7 @@ class BallTreeMultivariateMotif(ModelObject):
         self.point_method = point_method
         self.distance_metric = distance_metric
         self.k = k
+        self.sample_fraction = sample_fraction
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2963,11 +2978,31 @@ class BallTreeMultivariateMotif(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        # keep this at top so it breaks quickly if missing version
-        x = sliding_window_view(
-            self.df.to_numpy(), self.window + forecast_length, axis=0
-        )
-        Xa = x.reshape(-1, x.shape[-1])
+        phrase_n = self.window + forecast_length
+        if False:
+            # OLD WAY
+            x = sliding_window_view(
+                self.df.to_numpy(dtype=np.float32), phrase_n, axis=0
+            )
+            Xa = x.reshape(-1, x.shape[-1])
+            if self.sample_fraction is not None:
+                if 0 < self.sample_fration < 1:
+                    sample_size = int(Xa.shape[0] * self.sample_fraction)
+                else:
+                    sample_size = (
+                        int(self.sample_fraction)
+                        if Xa.shape[0] < self.sample_fraction
+                        else int(Xa.shape[0] - 1)
+                    )
+                Xa = np.random.default_rng().choice(Xa, size=sample_size, axis=0)
+        else:
+            # shared with WindowRegression
+            Xa = chunk_reshape(
+                self.df.to_numpy(dtype=np.float32),
+                phrase_n,
+                sample_fraction=self.sample_fraction,
+                random_seed=self.random_seed,
+            )
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         if self.distance_metric in ["euclidean", 'kdtree']:
@@ -2981,9 +3016,9 @@ class BallTreeMultivariateMotif(ModelObject):
             tree = BallTree(Xa[:, : self.window], metric=self.distance_metric)
             # Query the KDTree to find k nearest neighbors for each point in Xa
         Xb = self.df.iloc[-self.window :].to_numpy().T
-        A, idx = tree.query(Xb, k=self.k)
+        A, self.windows = tree.query(Xb, k=self.k)
         # (k, forecast_length, n_series)
-        self.result_windows = Xa[idx][:, :, self.window :].transpose(1, 2, 0)
+        self.result_windows = Xa[self.windows][:, :, self.window :].transpose(1, 2, 0)
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
@@ -3023,9 +3058,10 @@ class BallTreeMultivariateMotif(ModelObject):
                 forecast_length=forecast_length,
                 forecast_index=forecast.index,
                 forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
+                # so it's producing float32 but pandas is better with float64
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
                 prediction_interval=self.prediction_interval,
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
@@ -3047,6 +3083,22 @@ class BallTreeMultivariateMotif(ModelObject):
             'minkowski',
             'kdtree',
         ]
+        metric_probabilities = [
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+            0.9,
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+        ]
+        if method != "deep":
+            # evidence suggests 20 million can fit in 5 GB of RAM with a window of 28
+            sample_fraction = random.choice([5000000, 50000000])
+        else:
+            sample_fraction = random.choice([0.2, 0.5, 100000000, None])
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -3064,8 +3116,9 @@ class BallTreeMultivariateMotif(ModelObject):
                 ["weighted_mean", "mean", "median", "midhinge", "closest"],
                 [0.4, 0.2, 0.2, 0.2, 0.2],
             )[0],
-            "distance_metric": random.choice(metric_list),
+            "distance_metric": random.choices(metric_list, metric_probabilities),
             "k": k_choice,
+            "sample_fraction": sample_fraction,
         }
 
     def get_params(self):

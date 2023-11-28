@@ -4,6 +4,7 @@ Base model information
 
 @author: Colin
 """
+import json
 import random
 import warnings
 import datetime
@@ -227,6 +228,183 @@ def apply_constraints(
     return forecast, lower_forecast, upper_forecast
 
 
+def extract_single_series_from_horz(series, model_name, model_parameters):
+    title_prelim = str(model_name)[0:80]
+    if title_prelim == "Ensemble":
+        ensemble_type = model_parameters.get('model_name', "Ensemble")
+        # horizontal and mosaic ensembles
+        if "series" in model_parameters.keys():
+            model_id = model_parameters['series'].get(series, "Horizontal")
+            if isinstance(model_id, dict):
+                model_id = list(model_id.values())
+            if not isinstance(model_id, list):
+                model_id = [str(model_id)]
+            res = []
+            for imod in model_id:
+                res.append(
+                    model_parameters.get("models", {})
+                    .get(imod, {})
+                    .get('Model', "Horizontal")
+                )
+            title_prelim = ", ".join(set(res))
+            if len(model_id) > 1:
+                title_prelim = "Mosaic: " + str(title_prelim)
+        else:
+            title_prelim = ensemble_type
+    return str(title_prelim)
+
+
+def extract_single_transformer(
+    series, model_name, model_parameters, transformation_params
+):
+    if isinstance(transformation_params, str):
+        transformation_params = json.loads(transformation_params)
+    if isinstance(model_parameters, str):
+        model_parameters = json.loads(model_parameters)
+    if model_name == "Ensemble":
+        # horizontal and mosaic ensembles
+        if "series" in model_parameters.keys():
+            model_id = model_parameters['series'].get(series, "Horizontal")
+            if isinstance(model_id, dict):
+                model_id = list(model_id.values())
+            if not isinstance(model_id, list):
+                model_id = [str(model_id)]
+            res = []
+            for imod in model_id:
+                chosen_mod = model_parameters.get("models", {}).get(imod, {})
+                res.append(
+                    extract_single_transformer(
+                        series,
+                        chosen_mod.get("Model"),
+                        chosen_mod.get("ModelParameters"),
+                        transformation_params=chosen_mod.get(
+                            "TransformationParameters"
+                        ),
+                    )
+                )
+            return ", ".join(res)
+        allz = []
+        for idz, mod in model_parameters.get("models").items():
+            allz.append(
+                extract_single_transformer(
+                    series,
+                    mod.get("Model"),
+                    mod.get("ModelParameters"),
+                    transformation_params=mod.get("TransformationParameters"),
+                )
+            )
+        return ", ".join(allz)
+    else:
+        trans_dict = transformation_params.get("transformations")
+        if isinstance(trans_dict, dict):
+            return ", ".join(list(trans_dict.values()))
+        else:
+            return "None"
+
+
+def create_seaborn_palette_from_cmap(cmap_name="gist_rainbow", n=10):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Get the colormap from matplotlib
+    cm = plt.get_cmap(cmap_name)
+
+    # Create a range of colors from the colormap
+    colors = cm(np.linspace(0, 1, n))
+
+    # Convert to a seaborn palette
+    palette = sns.color_palette(colors)
+
+    return palette
+
+
+# Function to calculate the peak density of each model's distribution
+def calculate_peak_density(model, data, group_col='Model', y_col='TotalRuntimeSeconds'):
+    from scipy.stats import gaussian_kde
+
+    model_data = data[data[group_col] == model][y_col]
+    kde = gaussian_kde(model_data)
+    return np.max(kde(model_data))
+
+
+def plot_distributions(
+    runtimes_data,
+    group_col='Model',
+    y_col='TotalRuntimeSeconds',
+    xlim=None,
+    xlim_right=None,
+):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    single_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) == 1)
+    multi_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) > 1)
+
+    # Calculate the average peak density across all models with multiple observations
+    average_peak_density = np.mean(
+        [
+            calculate_peak_density(model, multi_obs_models, group_col, y_col)
+            for model in multi_obs_models[group_col].unique()
+        ]
+    )
+
+    # Correcting the color palette to match the number of unique models
+    unique_models = runtimes_data[group_col].nunique()
+    # palette = sns.color_palette("tab10", n_colors=unique_models)
+    palette = create_seaborn_palette_from_cmap("gist_rainbow", n=unique_models)
+    sorted_models = runtimes_data[group_col].value_counts().index.tolist()
+    # sorted_models = runtimes_data[group_col].unique()
+    zip_palette = dict(zip(sorted_models, palette))
+
+    # Create a new figure for the plot
+    fig = plt.figure(figsize=(12, 8))
+
+    # Plot the density plots for multi-observation models
+    density_plot = sns.kdeplot(  # noqa
+        data=multi_obs_models,
+        x=y_col,
+        hue=group_col,
+        fill=True,
+        common_norm=False,
+        palette=zip_palette,
+        alpha=0.5,
+    )
+
+    # Plot the points for single-observation models at the average peak density
+    if not single_obs_models.empty:
+        point_plot = sns.scatterplot(  # noqa
+            data=single_obs_models,
+            x=y_col,
+            y=[average_peak_density] * len(single_obs_models),
+            hue=group_col,
+            palette=zip_palette,
+            legend=False,
+            marker='o',  # s=10
+        )
+    # Adjusting legend - Manually combining elements
+    handles, labels = [], []
+    for model, color in zip_palette.items():
+        handles.append(plt.Line2D([0], [0], linestyle="none", c=color, marker='o'))
+        labels.append(model)
+
+    # Create the combined legend
+    plt.legend(handles, labels, title=group_col)  # , bbox_to_anchor=(1.05, 1), loc=2
+
+    # Adding titles and labels
+    plt.title(f'Distribution of {y_col} by {group_col}', fontsize=16)
+    plt.xlabel(f'{y_col}', fontsize=14)
+    plt.ylabel('Density', fontsize=14)
+
+    # Adjust layout
+    plt.tight_layout()
+    if xlim is not None:
+        plt.xlim(left=xlim)
+    if xlim_right is not None:
+        plt.xlim(right=runtimes_data[y_col].quantile(xlim_right))
+
+    return fig
+
+
 class PredictionObject(object):
     """Generic class for holding forecast information.
 
@@ -291,6 +469,7 @@ class PredictionObject(object):
         # model attributes, not normally used
         self.model = model
         self.transformer = transformer
+        self.runtime_dict = None
 
     def __repr__(self):
         """Print."""
@@ -361,6 +540,37 @@ class PredictionObject(object):
     def total_runtime(self):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
+
+    def extract_ensemble_runtimes(self):
+        """Return a dataframe of final runtimes per model for standard ensembles."""
+        if self.runtime_dict is None or not bool(self.model_parameters):
+            return None
+        else:
+            runtimes = pd.DataFrame(
+                self.runtime_dict.items(), columns=['ID', 'Runtime']
+            )
+            runtimes['TotalRuntimeSeconds'] = runtimes['Runtime'].dt.total_seconds()
+            new_models = {
+                x: y.get("Model")
+                for x, y in self.model_parameters.get("models").items()
+            }
+            models = pd.DataFrame(new_models.items(), columns=['ID', 'Model'])
+            return runtimes.merge(models, how='left', on='ID')
+
+    def plot_ensemble_runtimes(self, xlim_right=None):
+        """Plot ensemble runtimes by model type."""
+        runtimes_data = self.extract_ensemble_runtimes()
+
+        if runtimes_data is None:
+            return None
+        else:
+            return plot_distributions(
+                runtimes_data,
+                group_col='Model',
+                y_col='TotalRuntimeSeconds',
+                xlim=0,
+                xlim_right=xlim_right,
+            )
 
     def plot_df(
         self,
@@ -479,20 +689,11 @@ class PredictionObject(object):
                 'actuals': '#AFDBF5',
             }
         if title is None:
-            title_prelim = str(self.model_name)[0:80]
-            if title_prelim == "Ensemble":
-                ensemble_type = self.model_parameters.get('model_name', "unknown")
-                if ensemble_type == "Horizontal":
-                    title_prelim = self.model_parameters['series'].get(
-                        series, "Horizontal"
-                    )
-                    title_prelim = (
-                        self.model_parameters.get("models", {})
-                        .get(title_prelim)
-                        .get('Model')
-                    )
-                else:
-                    title_prelim = ensemble_type
+            title_prelim = extract_single_series_from_horz(
+                series,
+                model_name=self.model_name,
+                model_parameters=self.model_parameters,
+            )[0:80]
             if title_substring is None:
                 title = f"{series} with model {title_prelim}"
             else:

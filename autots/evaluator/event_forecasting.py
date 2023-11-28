@@ -11,9 +11,10 @@ from autots.models.model_list import all_result_path, diff_window_motif_list
 
 
 def extract_result_windows(forecasts, model_name=None):
+    """standardize result windows from different models."""
     result_windows = forecasts.model.result_windows
     if model_name is None:
-        model_name = forecasts.model.name
+        model_name = forecasts.model_name
     if model_name in diff_window_motif_list:
         result_windows = np.moveaxis(np.array(list(result_windows.values())), 0, -1)
     if result_windows.ndim == 4:
@@ -31,6 +32,16 @@ def extract_result_windows(forecasts, model_name=None):
             )
         )
     return np.array(transformed_array)
+
+
+def extract_window_index(forecasts):
+    model_name = forecasts.model_name
+    if model_name == "SectionalMotif":
+        return forecasts.model.windows
+    if model_name == "BallTreeMultivariateMotif":
+        return forecasts.model.windows
+    else:
+        raise ValueError("window indexes not supported by this model yet")
 
 
 def set_limit_forecast(

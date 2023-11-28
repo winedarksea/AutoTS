@@ -1,12 +1,13 @@
 """Higher-level functions of automated time series modeling."""
-import numpy as np
-import pandas as pd
 import random
 import copy
 import json
+import gc
 import sys
 import time
 import traceback as tb
+import numpy as np
+import pandas as pd
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -90,7 +91,7 @@ class AutoTS(object):
         model_list (list): str alias or list of names of model objects to use
             now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithim takes from there.
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
-            can accept string aliases: "all", "fast", "superfast"
+            can accept string aliases: "all", "fast", "superfast", 'scalable' (scalable is a subset of fast that should have fewer memory issues at scale)
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
         models_mode (str): option to adjust parameter options for newly generated models. Only sporadically utilized. Currently includes:
             'default'/'random', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models),
@@ -128,6 +129,7 @@ class AutoTS(object):
         generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
             This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
+        force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -197,6 +199,7 @@ class AutoTS(object):
         model_interrupt: bool = True,
         generation_timeout: int = None,
         current_model_file: str = None,
+        force_gc: bool = False,
         verbose: int = 1,
         n_jobs: int = -2,
     ):
@@ -234,6 +237,7 @@ class AutoTS(object):
         self.n_jobs = n_jobs
         self.models_mode = models_mode
         self.current_model_file = current_model_file
+        self.force_gc = force_gc
         random.seed(self.random_seed)
         if self.max_generations is None and self.generation_timeout is not None:
             self.max_generations = 99999
@@ -912,9 +916,22 @@ class AutoTS(object):
                 aggfunc=self.aggfunc,
             )
 
+        # infer frequency
+        inferred_freq = infer_frequency(df_wide)
+        if self.frequency == 'infer' or self.frequency is None:
+            self.used_frequency = inferred_freq
+        else:
+            self.used_frequency = self.frequency
+        if self.verbose > 0:
+            print(
+                f"Data frequency is: {inferred_freq}, used frequency is: {self.used_frequency}"
+            )
+        if (self.used_frequency is None) and (self.verbose >= 0):
+            print("Frequency is 'None'! Data frequency not recognized.")
+
         df_wide = df_cleanup(
             df_wide,
-            frequency=self.frequency,
+            frequency=self.used_frequency,
             prefill_na=self.prefill_na,
             na_tolerance=self.na_tolerance,
             drop_data_older_than_periods=self.drop_data_older_than_periods,
@@ -1709,53 +1726,17 @@ class AutoTS(object):
                     current_generation=0,
                     result_file=result_file,
                 )
-                hens_model_results = self.initial_results.model_results[
-                    self.initial_results.model_results['Ensemble'] == 2
-                ].copy()
             except Exception as e:
                 if self.verbose >= 0:
                     print(
                         f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                     )
-                hens_model_results = TemplateEvalObject().model_results.copy()
+                # hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
             self = self.validation_agg()
 
-            # use the best of these ensembles if any ran successfully
-            # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
-            # however they are chosen based off of validation results of all validation runs
-            try:
-                self.best_model_non_horizontal = self._best_non_horizontal()
-            except Exception:
-                self.best_model_non_horizontal = pd.DataFrame()
-
-            try:
-                horz_flag = hens_model_results['Exceptions'].isna().any()
-            except Exception:
-                horz_flag = False
-            if not hens_model_results.empty and horz_flag:
-                hens_model_results.loc['Score'] = generate_score(
-                    hens_model_results,
-                    metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval,
-                )
-                self.best_model = hens_model_results.sort_values(
-                    by="Score", ascending=True, na_position='last'
-                ).head(1)[self.template_cols_id]
-                self.ensemble_check = 1
-            # else use the best of the previous
-            else:
-                if self.verbose >= 0:
-                    print("Horizontal ensemble failed. Using best non-horizontal.")
-                    time.sleep(3)
-                self.best_model = self.best_model_non_horizontal
-
-        else:
-            self.best_model = self._best_non_horizontal()
-
-        # give a more convenient dict option
-        self.parse_best_model()
+        self._set_best_model()
 
         # clean up any remaining print statements
         sys.stdout.flush()
@@ -1768,7 +1749,55 @@ class AutoTS(object):
         )
         return self
 
-    def _best_non_horizontal(self, metric_weighting=None):
+    def _set_best_model(self, metric_weighting=None, allow_horizontal=True):
+        if metric_weighting is None:
+            metric_weighting = self.metric_weighting
+        hens_model_results = self.initial_results.model_results[
+            self.initial_results.model_results['Ensemble'] == 2
+        ].copy()
+        # remove failures
+        hens_model_results = hens_model_results[
+            hens_model_results['Exceptions'].isnull()
+        ]
+        requested_H_ens = (
+            any(x in self.ensemble for x in self.h_ens_list) and allow_horizontal
+        )
+        # here I'm assuming that if some horizontal models ran, we are going to use those
+        # horizontal ensembles can't be compared directly to others because they don't get run through all validations
+        # they are built themselves from cross validation so a full rerun of validations is unnecessary
+        self.best_model_non_horizontal = self._best_non_horizontal(
+            metric_weighting=metric_weighting
+        )
+        if not hens_model_results.empty and requested_H_ens:
+            hens_model_results.loc['Score'] = generate_score(
+                hens_model_results,
+                metric_weighting=metric_weighting,
+                prediction_interval=self.prediction_interval,
+            )
+            self.best_model = hens_model_results.sort_values(
+                by="Score", ascending=True, na_position='last'
+            ).head(1)[self.template_cols_id]
+            self.ensemble_check = 1
+        # print a warning if requested but unable to produce a horz ensemble
+        elif requested_H_ens:
+            if self.verbose >= 0:
+                print("Horizontal ensemble failed. Using best non-horizontal.")
+                time.sleep(3)  # give it a chance to be seen
+            self.best_model = self.best_model_non_horizontal
+        elif not hens_model_results.empty:
+            if self.verbose >= 0:
+                print(
+                    f"Horizontal ensemble available but not requested in model selection: {self.ensemble} and allow_horizontal: {allow_horizontal}."
+                )
+                time.sleep(3)  # give it a chance to be seen
+            self.best_model = self.best_model_non_horizontal
+        else:
+            self.best_model = self.best_model_non_horizontal
+        # give a more convenient dict option
+        self.parse_best_model()
+        return self
+
+    def _best_non_horizontal(self, metric_weighting=None, series=None):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
                 self = self.validation_agg()
@@ -1786,32 +1815,45 @@ class AutoTS(object):
             # this may occur if there is enough data for full validations
             # but a lot of that data is bad leading to complete validation round failures
             print(
-                "your validation results are questionable, perhaps bad data and too many validations"
+                "your validation results are questionable, perhaps bad data and too many num_validations"
             )
+            time.sleep(3)  # give it a chance to be seen
             max_vals = self.validation_results.model_results['Runs'].max()
             eligible_models = self.validation_results.model_results[
                 self.validation_results.model_results['Runs'] >= max_vals
             ]
-        # previously I was relying on the mean of Scores calculated for each individual validation
-        eligible_models['Score'] = generate_score(
-            eligible_models,
-            metric_weighting=metric_weighting,
-            prediction_interval=self.prediction_interval,
-        )
-        try:
-            best_model = (
-                eligible_models.sort_values(
-                    by="Score", ascending=True, na_position='last'
+        if series is not None:
+            # return a result based on the performance of only one series
+            score_per_series = generate_score_per_series(
+                self.initial_results,
+                metric_weighting=metric_weighting,
+                total_validations=(self.num_validations + 1),
+            )
+            best_model_id = score_per_series[series].idxmin()
+            best_model = self.initial_results.model_results[
+                self.initial_results.model_results['ID'] == best_model_id
+            ].iloc[0:1][self.template_cols_id]
+        else:
+            # previously I was relying on the mean of Scores calculated for each individual validation
+            eligible_models['Score'] = generate_score(
+                eligible_models,
+                metric_weighting=metric_weighting,
+                prediction_interval=self.prediction_interval,
+            )
+            try:
+                best_model = (
+                    eligible_models.sort_values(
+                        by="Score", ascending=True, na_position='last'
+                    )
+                    .drop_duplicates(subset=self.template_cols)
+                    .head(1)[self.template_cols_id]
                 )
-                .drop_duplicates(subset=self.template_cols)
-                .head(1)[self.template_cols_id]
-            )
-        except IndexError:
-            raise ValueError(
-                """No models available from validation.
-Try increasing models_to_validate, max_per_model_class
-or otherwise increase models available."""
-            )
+            except IndexError:
+                raise ValueError(
+                    """No models available from validation.
+    Try increasing models_to_validate, max_per_model_class
+    or otherwise increase models available."""
+                )
         return best_model
 
     def parse_best_model(self):
@@ -1882,7 +1924,7 @@ or otherwise increase models available."""
             weights=current_weights,
             model_count=model_count,
             forecast_length=self.forecast_length,
-            frequency=self.frequency,
+            frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
@@ -1902,6 +1944,7 @@ or otherwise increase models available."""
             traceback=self.traceback,
             current_model_file=self.current_model_file,
             current_generation=current_generation,
+            force_gc=self.force_gc,
         )
         if model_count == 0:
             self.model_count += template_result.model_count
@@ -2060,7 +2103,7 @@ or otherwise increase models available."""
                     model_str=use_model,
                     parameter_dict=use_params,
                     forecast_length=forecast_length,
-                    frequency=self.frequency,
+                    frequency=self.used_frequency,
                     prediction_interval=prediction_interval,
                     no_negatives=self.no_negatives,
                     constraint=self.constraint,
@@ -2087,7 +2130,7 @@ or otherwise increase models available."""
                 model_transform_dict=use_trans,
                 df_train=use_data,
                 forecast_length=forecast_length,
-                frequency=self.frequency,
+                frequency=self.used_frequency,
                 prediction_interval=prediction_interval,
                 no_negatives=self.no_negatives,
                 constraint=self.constraint,
@@ -2103,6 +2146,7 @@ or otherwise increase models available."""
                 template_cols=self.template_cols,
                 current_model_file=self.current_model_file,
                 return_model=True,
+                force_gc=self.force_gc,
             )
         # convert categorical back to numeric
         trans = self.categorical_transformer
@@ -2122,6 +2166,8 @@ or otherwise increase models available."""
                 df_forecast.upper_forecast
             )
         sys.stdout.flush()
+        if self.force_gc:
+            gc.collect()
         return df_forecast
 
     def predict(
@@ -2363,7 +2409,12 @@ or otherwise increase models available."""
         return import_template
 
     def _enforce_model_list(
-        self, template, model_list=None, include_ensemble=False, addon_flag=False
+        self,
+        template,
+        model_list=None,
+        include_ensemble=False,
+        addon_flag=False,
+        include_horizontal=True,
     ):
         """remove models not in given model list."""
         if model_list is None:
@@ -2379,6 +2430,9 @@ or otherwise increase models available."""
         # double method of removing Ensemble
         if not include_ensemble and "Ensemble" in template.columns:
             template = template[template["Ensemble"] == 0]
+        elif not include_horizontal and "Ensemble" in template.columns:
+            # remove only horizontal ensembles
+            template = template[template["Ensemble"] <= 1]
         if template.shape[0] == 0:
             error_msg = f"Len 0. Model_list {model_list} does not match models in imported template {present}, template import failed."
             if addon_flag:
@@ -2394,6 +2448,7 @@ or otherwise increase models available."""
         method: str = "add_on",
         enforce_model_list: bool = True,
         include_ensemble: bool = False,
+        include_horizontal: bool = False,
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
@@ -2403,6 +2458,7 @@ or otherwise increase models available."""
             method (str): 'add_on' or 'only' - "add_on" keeps `initial_template` generated in init. "only" uses only this template.
             enforce_model_list (bool): if True, remove model types not in model_list
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
+            include_horizontal (bool): if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)
         """
         if method.lower() in ['add on', 'addon', 'add_on']:
             addon_flag = True
@@ -2421,6 +2477,7 @@ or otherwise increase models available."""
                 model_list=None,
                 include_ensemble=include_ensemble,
                 addon_flag=addon_flag,
+                include_horizontal=False,
             )
 
         if addon_flag:
@@ -2573,7 +2630,7 @@ or otherwise increase models available."""
                     model_count=0,
                     current_generation=gen,
                     forecast_length=self.forecast_length,
-                    frequency=self.frequency,
+                    frequency=self.used_frequency,
                     prediction_interval=self.prediction_interval,
                     ensemble=self.ensemble,
                     no_negatives=self.no_negatives,
@@ -2591,6 +2648,7 @@ or otherwise increase models available."""
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
                     current_model_file=self.current_model_file,
+                    force_gc=self.force_gc,
                 )
             )
         # this handles missing runtime information, which really shouldn't be missing
@@ -2659,7 +2717,7 @@ or otherwise increase models available."""
             future_regressor_train=self.future_regressor_train,
             n_splits=n_splits,
             forecast_length=self.forecast_length,
-            frequency=self.frequency,
+            frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
@@ -3035,10 +3093,7 @@ or otherwise increase models available."""
                     )
         # run the forecasts on the past validations
         self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
-        if (
-            not compare_horizontal
-            and colors is None
-        ):
+        if not compare_horizontal and colors is None:
             colors = {
                 'actuals': '#AFDBF5',
                 'chosen': '#4D4DFF',
@@ -3074,9 +3129,14 @@ or otherwise increase models available."""
             ]
             plot_df = plot_df[colb]
         if start_date == "auto":
+            frequency_numeric = [x for x in self.used_frequency if x.isdigit()]
+            if not frequency_numeric:
+                used_freq = "1" + self.used_frequency
+            else:
+                used_freq = self.used_frequency
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
-            ).index.min() - pd.Timedelta(days=7)
+            ).index.min() - (pd.to_timedelta(used_freq) * int(self.forecast_length * 3))
         if end_date == "auto":
             end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
@@ -3582,24 +3642,27 @@ or otherwise increase models available."""
                     if target in ['runtime', 'oda', 'exception']:
                         val1 = lvalues[0]
                         val2 = lvalues[1]
+                        desc = "largest"
                         val3 = svalues[0]
                     elif target is not None:
                         val1 = svalues[0]
                         val2 = svalues[1]
+                        desc = "smallest"
                         val3 = lvalues[0]
                     else:
                         val1 = 1
                         val2 = 2
                         val3 = -4
+                        desc = "fixed"
                     shap.plots.waterfall(shap_values[0], max_display=15, show=False)
                     plt.title(f"SHAP Waterfall for {target} and row 1")
                     plt.show()
                     print(f"val1 {val1} and val2 {val2}")
                     shap.plots.waterfall(shap_values[val1], max_display=15, show=False)
-                    plt.title(f"SHAP Waterfall for {target} and row {val1}")
+                    plt.title(f"SHAP Waterfall for {target} and row {val1} ({desc})")
                     plt.show()
                     shap.plots.waterfall(shap_values[val2], max_display=15, show=False)
-                    plt.title(f"SHAP Waterfall for {target} and row {val2}")
+                    plt.title(f"SHAP Waterfall for {target} and row {val2} ({desc})")
                     plt.show()
                     shap.plots.waterfall(shap_values[-1], max_display=10, show=False)
                     plt.title(f"SHAP Waterfall for {target} and row -1")
@@ -3718,186 +3781,6 @@ colors_list = [
     '#0403A7',
     "#000000",
 ]
-
-
-class AutoTSIntervals(object):
-    """Autots looped to test multiple prediction intervals. Experimental.
-
-    Runs max_generations on first prediction interval, then validates on remainder.
-    Most args are passed through to AutoTS().
-
-    Args:
-        interval_models_to_validate (int): number of models to validate on each prediction interval.
-        import_results (str): results from run on same data to load, `filename.pickle`.
-            Currently result_file and import only save/load initial run, no validations.
-    """
-
-    def fit(
-        self,
-        prediction_intervals,
-        forecast_length,
-        df_long,
-        max_generations,
-        num_validations,
-        validation_method,
-        models_to_validate,
-        interval_models_to_validate,
-        date_col,
-        value_col,
-        id_col=None,
-        import_template=None,
-        import_method='only',
-        import_results=None,
-        result_file=None,
-        model_list='all',
-        metric_weighting: dict = {
-            'smape_weighting': 1,
-            'mae_weighting': 0,
-            'rmse_weighting': 1,
-            'containment_weighting': 0,
-            'runtime_weighting': 0,
-            'spl_weighting': 10,
-            'contour_weighting': 0,
-        },
-        weights: dict = {},
-        grouping_ids=None,
-        future_regressor=None,
-        model_interrupt: bool = False,
-        constraint=2,
-        no_negatives=False,
-        remove_leading_zeroes=False,
-        random_seed=2020,
-    ):
-        """Train and find best."""
-        overall_results = TemplateEvalObject()
-        per_series_spl = pd.DataFrame()
-        runs = 0
-        for interval in prediction_intervals:
-            if runs != 0:
-                max_generations = 0
-                models_to_validate = 0.99
-            print(f"Current interval is {interval}")
-            current_model = AutoTS(
-                forecast_length=forecast_length,
-                prediction_interval=interval,
-                ensemble="horizontal-max",
-                max_generations=max_generations,
-                model_list=model_list,
-                constraint=constraint,
-                no_negatives=no_negatives,
-                remove_leading_zeroes=remove_leading_zeroes,
-                metric_weighting=metric_weighting,
-                subset=None,
-                random_seed=random_seed,
-                num_validations=num_validations,
-                validation_method=validation_method,
-                model_interrupt=model_interrupt,
-                models_to_validate=models_to_validate,
-            )
-            if import_template is not None:
-                current_model = current_model.import_template(
-                    import_template, method=import_method
-                )
-            if import_results is not None:
-                current_model = current_model.import_results(import_results)
-            current_model = current_model.fit(
-                df_long,
-                future_regressor=future_regressor,
-                weights=weights,
-                grouping_ids=grouping_ids,
-                result_file=result_file,
-                date_col=date_col,
-                value_col=value_col,
-                id_col=id_col,
-            )
-            current_model.initial_results.model_results['interval'] = interval
-            temp = current_model.initial_results
-            overall_results = overall_results.concat(temp)
-            temp = current_model.initial_results.per_series_spl
-            per_series_spl = pd.concat([per_series_spl, temp], axis=0)
-            if runs == 0:
-                result_file = None
-                import_results = None
-                import_template = current_model.export_template(
-                    None, models='best', n=interval_models_to_validate
-                )
-            runs += 1
-        self.validation_results = validation_aggregation(overall_results)
-        self.results = overall_results.model_results
-        # remove models not validated
-        temp = per_series_spl.mean(axis=1).groupby(level=0).count()
-        temp = temp[temp >= ((runs) * (num_validations + 1))]
-        per_series_spl = per_series_spl[per_series_spl.index.isin(temp.index)]
-        per_series_spl = per_series_spl.groupby(level=0).mean()
-        # from autots.models.ensemble import HorizontalTemplateGenerator
-        ens_templates = HorizontalTemplateGenerator(
-            per_series_spl,
-            model_results=overall_results.model_results,
-            forecast_length=forecast_length,
-            ensemble='horizontal-max',
-            subset_flag=False,
-        )
-        self.per_series_spl = per_series_spl
-        self.ens_templates = ens_templates
-        self.prediction_intervals = prediction_intervals
-
-        self.future_regressor_train = future_regressor
-        self.forecast_length = forecast_length
-        self.df_wide_numeric = current_model.df_wide_numeric
-        self.frequency = current_model.frequency
-        self.no_negatives = current_model.no_negatives
-        self.constraint = current_model.constraint
-        self.holiday_country = current_model.holiday_country
-        self.startTimeStamps = current_model.startTimeStamps
-        self.random_seed = current_model.random_seed
-        self.verbose = current_model.verbose
-        self.template_cols = current_model.template_cols
-        self.categorical_transformer = current_model.categorical_transformer
-        return self
-
-    def predict(self, future_regressor=None, verbose: int = 'self') -> dict:
-        """Generate forecasts after training complete."""
-        if future_regressor is not None:
-            future_regressor = pd.DataFrame(future_regressor)
-            self.future_regressor_train = self.future_regressor_train.reindex(
-                index=self.df_wide_numeric.index
-            )
-        forecast_objects = {}
-        verbose = self.verbose if verbose == 'self' else verbose
-
-        urow = self.ens_templates.iloc[0]
-        for interval in self.prediction_intervals:
-            df_forecast = model_forecast(
-                model_name=urow['Model'],
-                model_param_dict=urow['ModelParameters'],
-                model_transform_dict=urow['TransformationParameters'],
-                df_train=self.df_wide_numeric,
-                forecast_length=self.forecast_length,
-                frequency=self.frequency,
-                prediction_interval=interval,
-                no_negatives=self.no_negatives,
-                constraint=self.constraint,
-                future_regressor_train=self.future_regressor_train,
-                future_regressor_forecast=future_regressor,
-                holiday_country=self.holiday_country,
-                startTimeStamps=self.startTimeStamps,
-                grouping_ids=self.grouping_ids,
-                random_seed=self.random_seed,
-                verbose=verbose,
-                template_cols=self.template_cols,
-                current_model_file=self.current_model_file,
-            )
-
-            trans = self.categorical_transformer
-            df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
-            df_forecast.lower_forecast = trans.inverse_transform(
-                df_forecast.lower_forecast
-            )
-            df_forecast.upper_forecast = trans.inverse_transform(
-                df_forecast.upper_forecast
-            )
-            forecast_objects[interval] = df_forecast
-        return forecast_objects
 
 
 def fake_regressor(

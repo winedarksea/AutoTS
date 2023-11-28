@@ -19,7 +19,7 @@ from autots.tools.anomaly_utils import (
     holiday_new_params,
     dates_to_holidays,
 )
-from autots.tools.window_functions import window_lin_reg_mean
+from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
@@ -1133,7 +1133,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
-                    'MultioutputGPR': 0.1,
+                    'MultioutputGPR': 0.01,
                 }
             )
         if holiday_countries_used is None:
@@ -1367,7 +1367,6 @@ class DifferencedTransformer(EmptyTransformer):
     def __init__(self, **kwargs):
         super().__init__(name="DifferencedTransformer")
         self.lag = 1
-        self.beta = 1
 
     def fit(self, df):
         """Fit.
@@ -1384,8 +1383,7 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = (df - df.shift(self.lag)).bfill()
-        return df
+        return (df - df.shift(self.lag)).bfill()
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -1610,9 +1608,12 @@ class ClipOutliers(EmptyTransformer):
         if self.method == "remove":
             df2 = df[np.abs(df - self.df_mean) <= (self.std_threshold * self.df_std)]
         else:
+            # splitting it is a bit more memory efficienty if slightly slower
             lower = self.df_mean - (self.df_std * self.std_threshold)
+            df2 = df.where(df >= lower, lower, axis=1)
             upper = self.df_mean + (self.df_std * self.std_threshold)
-            df2 = df.clip(lower=lower, upper=upper, axis=1)
+            df2 = df2.where(df2 <= upper, upper, axis=1)
+            # df2 = df.clip(lower=lower, upper=upper, axis=1)
 
         if self.fillna is not None:
             df2 = FillNA(df2, method=self.fillna, window=10)
@@ -1818,14 +1819,14 @@ class Discretize(EmptyTransformer):
         else:
             choice = random.choices(
                 [
-                    "center",
+                    "center",  # more memory intensive
                     "upper",
                     "lower",
                     "sklearn-quantile",
                     "sklearn-uniform",
                     "sklearn-kmeans",
                 ],
-                [0.3, 0.2, 0.2, 0.1, 0.1, 0.1],
+                [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                 k=1,
             )[0]
             n_bin_c = random.choice([5, 10, 20, 50])
@@ -1871,12 +1872,24 @@ class Discretize(EmptyTransformer):
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
                     bins = bins[2 - 1 :] / 2
+                    binned = (np.abs(df.to_numpy() - bins)).argmin(axis=0)
                 elif self.discretization == "lower":
                     bins = np.delete(bins, (-1), axis=0)
+                    binned = (
+                        np.sum(
+                            df.to_numpy()[:, np.newaxis, :] < bins[:, np.newaxis, :],
+                            axis=0,
+                        )[:, 0, :]
+                        - 1
+                    )
                 elif self.discretization == "upper":
                     bins = np.delete(bins, (0), axis=0)
+                    binned = np.sum(
+                        df.to_numpy()[:, np.newaxis, :] <= bins[:, np.newaxis, :],
+                        axis=0,
+                    )[:, 0, :]
                 self.bins = bins
-                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
+                # binned = (np.abs(df.to_numpy() - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
                 df = pd.DataFrame(
@@ -1911,7 +1924,7 @@ class Discretize(EmptyTransformer):
                 df2.index = df.index
                 df2.columns = self.df_colnames
             else:
-                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
+                binned = (np.abs(df.to_numpy() - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
                 df2 = pd.DataFrame(
@@ -2920,7 +2933,9 @@ class HolidayTransformer(EmptyTransformer):
         self.df_cols = None
         self.verbose = verbose
 
-    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
+    def dates_to_holidays(
+        self, dates, style="flag", holiday_impacts=False, max_features=365
+    ):
         """
         dates (pd.DatetimeIndex): list of dates
         style (str): option for how to return information
@@ -2944,6 +2959,7 @@ class HolidayTransformer(EmptyTransformer):
             lunar_weekday=self.lunar_weekday,
             islamic_holidays=self.islamic_holidays,
             hebrew_holidays=self.hebrew_holidays,
+            max_features=max_features,
         )
 
     def fit(self, df):
@@ -2979,6 +2995,7 @@ class HolidayTransformer(EmptyTransformer):
             use_hebrew_holidays=self.use_hebrew_holidays,
         )
         self.df_cols = df.columns
+        return self
 
     def transform(self, df):
         if self.remove_excess_anomalies:
@@ -3059,16 +3076,27 @@ class HolidayTransformer(EmptyTransformer):
         holiday_params['remove_excess_anomalies'] = random.choices(
             [True, False], [0.9, 0.1]
         )[0]
-        holiday_params['impact'] = random.choices(
-            [
-                None,
-                'median_value',
-                'anomaly_score',
-                'datepart_regression',
-                'regression',
-            ],
-            [0.1, 0.3, 0.3, 0.2, 0.2],
-        )[0]
+        if method in ['fast', 'superfast']:
+            # regressions are actually faster at scale due to it making the same flag for all
+            holiday_params['impact'] = random.choices(
+                [
+                    None,
+                    'datepart_regression',
+                    'regression',
+                ],
+                [0.05, 0.4, 0.4],
+            )[0]
+        else:
+            holiday_params['impact'] = random.choices(
+                [
+                    None,
+                    'median_value',
+                    'anomaly_score',
+                    'datepart_regression',
+                    'regression',
+                ],
+                [0.1, 0.3, 0.3, 0.1, 0.1],
+            )[0]
         if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
                 method=method,
@@ -3155,8 +3183,18 @@ class LocalLinearTrend(EmptyTransformer):
         # rolling trend
         steps_ahd = int(w_1 / 2)
         y0 = np.repeat(np.array(df[0:1]), steps_ahd, axis=0)
-        d0 = -1 * self.dates_2d[1 : y0.shape[0] + 1][::-1]
+        # d0 = -1 * self.dates_2d[1 : y0.shape[0] + 1][::-1]
+        start_pt = self.dates_2d[0, 0]
+        step = self.dates_2d[1, 0] - start_pt
+        d0 = np_2d_arange(
+            start_pt,
+            stop=start_pt - ((y0.shape[0] + 1) * step),
+            step=-step,
+            num_columns=self.dates_2d.shape[1],
+        )[1:][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
+        # end_point = self.dates_2d[-1, 0]
+        # d2 = np_2d_arange(start=end_point, stop=end_point+)
         y2 = np.concatenate(
             [
                 y0,
@@ -3171,7 +3209,9 @@ class LocalLinearTrend(EmptyTransformer):
                 np.full(shape2, np.nan),
             ]
         )
-        self.slope, self.intercept = window_lin_reg_mean(d, y2, w=self.rolling_window)
+        self.slope, self.intercept = window_lin_reg_mean_no_nan(
+            d, y2, w=self.rolling_window
+        )
 
         if self.method == "mean":
             futslp = np.array([np.mean(self.slope[-self.n_future :], axis=0)])
@@ -3364,7 +3404,7 @@ class KalmanSmoothing(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
 
-        result = self.kf.smooth(df.to_numpy().T)
+        result = self.kf.smooth(df.to_numpy().T, covariances=False)
         return pd.DataFrame(
             result.observations.mean.T, index=df.index, columns=df.columns
         )
@@ -3401,7 +3441,7 @@ class RegressionFilter(EmptyTransformer):
         holiday_country: str = "US",
         **kwargs,
     ):
-        super().__init__(name="DatepartRegressionTransformer")
+        super().__init__(name=name)
         self.sigma = sigma
         self.rolling_window = rolling_window
         self.run_order = run_order
@@ -3508,7 +3548,7 @@ class RegressionFilter(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
-        regression_params = DatepartRegressionTransformer.get_new_params(method=method)
+        regression_params = DatepartRegressionTransformer.get_new_params(method="fast")
 
         if method == "fast":
             holiday_trans_use = False
@@ -3808,14 +3848,14 @@ class CenterSplit(EmptyTransformer):
             "fillna": random.choices(
                 [
                     "linear",
-                    "SeasonalityMotifImputer",
+                    "SeasonalityMotifImputerLinMix",
                     'pchip',
                     'akima',
                     'mean',
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.3, 0.01, 0.2, 0.2, 0.2, 0.2, 0.01],
+                [0.3, 0.05, 0.2, 0.2, 0.2, 0.2, 0.05],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
@@ -4116,7 +4156,7 @@ class ReplaceConstant(EmptyTransformer):
         """Generate new random parameters"""
         reintroduction_model = random.choices([None, True], [0.3, 0.7])[0]
         if reintroduction_model:
-            reintroduction_model = generate_classifier_params()
+            reintroduction_model = generate_classifier_params(method='fast')
             reintroduction_model['datepart_method'] = random_datepart(method=method)
         return {
             "constant": random.choices([0, 1], [0.9, 0.1])[0],
@@ -4125,14 +4165,13 @@ class ReplaceConstant(EmptyTransformer):
                 [
                     None,
                     "linear",
-                    "SeasonalityMotifImputer",
                     'pchip',
                     'akima',
                     'mean',
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.01, 0.3, 0.2, 0.2, 0.2, 0.2, 0.01],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.05],
             )[0],
         }
 
@@ -4291,6 +4330,118 @@ class AlignLastDiff(EmptyTransformer):
         return self.transform(df)
 
 
+class DiffSmoother(EmptyTransformer):
+    def __init__(
+        self,
+        output="multivariate",
+        method=None,
+        transform_dict=None,
+        method_params=None,
+        fillna=None,
+        n_jobs=1,
+        adjustment: int = 2,
+    ):
+        """Detect anomalies on a historic dataset in the DIFFS then cumsum back to origin space.
+        No inverse_transform available.
+
+        Args:
+            output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)
+            method (str): method choosen, from sklearn, AutoTS, and basic stats. Use `.get_new_params()` to see potential models
+            transform_dict (dict): option but helpful, often datepart, differencing, or other standard AutoTS transformer params
+            method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
+            fillna (str): how to fill anomaly values removed
+            n_jobs (int): multiprocessing jobs, used by some methods
+        """
+        super().__init__(name="DiffSmoother")
+        self.output = output
+        self.method = method
+        self.transform_dict = transform_dict
+        self.method_params = method_params
+        self.n_jobs = n_jobs
+        self.fillna = fillna
+        self.adjustment = adjustment
+
+    def fit(self, df):
+        """Fit.
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def transform(self, df):
+        """Return differenced data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        diffs = df.diff(-1).head(df.shape[0] - 1)
+        if self.transform_dict is not None:
+            model = GeneralTransformer(**self.transform_dict)
+            diffs = model.fit_transform(diffs)
+
+        if isinstance(self.fillna, (float, int)):
+            diffs = diffs.clip(
+                upper=diffs[diffs > 0].std() * self.fillna,
+                lower=-(diffs[diffs < 0].std() * self.fillna),
+                axis=1,
+            )
+        else:
+            self.anomalies, self.scores = detect_anomalies(
+                diffs.copy().abs(),
+                output=self.output,
+                method=self.method,
+                transform_dict=self.transform_dict,
+                method_params=self.method_params,
+                n_jobs=self.n_jobs,
+            )
+            diffs = diffs.where(self.anomalies != -1, np.nan)
+            if self.fillna is not None:
+                diffs = FillNA(diffs, method=self.fillna, window=10)
+
+        return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
+
+    def fit_transform(self, df):
+        """Fits and Returns Magical DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method="random"):
+        fillna = random.choices(
+            [
+                None,
+                "ffill",
+                "mean",
+                "rolling_mean_24",
+                "linear",
+                'time',
+                1.0,
+                1.5,
+                2.0,
+                2.5,
+                3.0,
+            ],
+            [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1],
+        )[0]
+        if isinstance(fillna, (float, int)):
+            method_choice = None
+            method_params = None
+            transform_dict = None
+        else:
+            method_choice, method_params, transform_dict = anomaly_new_params(
+                method=method
+            )
+
+        return {
+            "method": method_choice,
+            "method_params": method_params,
+            "transform_dict": None,
+            "fillna": fillna,
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4333,6 +4484,7 @@ n_jobs_trans = {
     "AnomalyRemoval": AnomalyRemoval,
     'HolidayTransformer': HolidayTransformer,
     'ReplaceConstant': ReplaceConstant,
+    # 'DiffSmoother': DiffSmoother,
 }
 # transformers with parameter pass through (internal only) MUST be here
 have_params = {
@@ -4368,6 +4520,7 @@ have_params = {
     "FFTDecomposition": FFTDecomposition,
     "ReplaceConstant": ReplaceConstant,
     "AlignLastDiff": AlignLastDiff,
+    "DiffSmoother": DiffSmoother,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4377,7 +4530,7 @@ shared_trans = [
     "MeanDifference",
     "BTCD",
     "Cointegration",
-    "HolidayTransformer",
+    "HolidayTransformer",  # confirmed
     "RegressionFilter",
 ]
 # transformers not defined in AutoTS
@@ -4468,6 +4621,7 @@ class GeneralTransformer(object):
             "FFTDecomposition": remove FFT harmonics, later add back
             "ReplaceConstant": replace a value with NaN, optionally fillna then later reintroduce
             "AlignLastDiff": shift forecast to be within range of historical diffs
+            "DiffSmoother": smooth diffs then return to original space
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -4895,16 +5049,17 @@ transformer_dict = {
     "Cointegration": 0.01,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
-    'HolidayTransformer': 0.02,
+    'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
-    'KalmanSmoothing': 0.04,
-    'RegressionFilter': 0.03,
+    'KalmanSmoothing': 0.02,
+    'RegressionFilter': 0.02,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
     "FFTDecomposition": 0.01,
-    "ReplaceConstant": 0.005,
+    "ReplaceConstant": 0.02,
     "AlignLastDiff": 0.01,
+    "DiffSmoother": 0.001,  # not looking great in testing
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -4923,7 +5078,7 @@ superfast_transformer_dict = {
     "SeasonalDifference": 0.1,
     "bkfilter": 0.05,
     "ClipOutliers": 0.05,
-    "Discretize": 0.01,
+    # "Discretize": 0.01,  # excessive memory use for this
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
@@ -4938,7 +5093,7 @@ filters = {
     "bkfilter": 0.1,
     "Slice": 0.01,  # sorta horizontal filter
     "AlignLastValue": 0.15,
-    "KalmanSmoothing": 0.1,
+    "KalmanSmoothing": 0.05,
     "ClipOutliers": 0.1,
     "RegressionFilter": 0.05,
     "FFTFilter": 0.01,
@@ -4992,6 +5147,8 @@ def transformer_list_to_dict(transformer_list):
     if transformer_list in ["fast", "default", "Fast", "auto", 'scalable']:
         # remove any slow transformers
         fast_transformer_dict = transformer_dict.copy()
+        # downweight some
+        fast_transformer_dict['ReplaceConstant'] = 0.002
         # del fast_transformer_dict["SinTrend"]
         del fast_transformer_dict["FastICA"]
         del fast_transformer_dict["Cointegration"]
@@ -5006,7 +5163,10 @@ def transformer_list_to_dict(transformer_list):
     elif transformer_list == "scalable":
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
-        del transformer_list["SinTrend"]
+        del transformer_list["SinTrend"]  # no observed issues, but for efficiency
+        # del transformer_list["HolidayTransformer"]  # improved, should be good enough
+        # del transformer_list["RegressionFilter"]  # improved, might be good enough
+        # del transformer_list["LocalLinearTrend"]  # improved, might be good enough
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
@@ -5051,32 +5211,33 @@ def RandomTransform(
             fast_params = False
     if superfast_params is None:
         superfast_params = False
-        slow_flags = ["DatepartRegression", "ScipyFilter", "QuantileTransformer"]
+        slow_flags = [
+            "DatepartRegression",
+            "ScipyFilter",
+            "QuantileTransformer",
+            "KalmanSmoothing",
+        ]
         intersects = [i for i in slow_flags if i in transformer_list]
         if not intersects:
             superfast_params = True
 
     # filter na_probs if Fast
     params_method = None
-    if fast_params:
+    if fast_params or superfast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop("IterativeImputer", None)
         throw_away = df_interpolate.pop("spline", None)  # noqa
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        # throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
+        # throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
+    # in addition to the above, also remove
     if superfast_params:
         params_method = "fast"
-        throw_away = na_prob_dict.pop("IterativeImputer", None)
-        throw_away = df_interpolate.pop("spline", None)  # noqa
-        throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
-        throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
