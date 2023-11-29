@@ -1,4 +1,5 @@
 """Reshape data."""
+import re
 import numpy as np
 import pandas as pd
 
@@ -27,6 +28,38 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         # hack to get around data which has a few oddities
         frequency = pd.infer_freq(DTindex[:10])
     return frequency
+
+
+def split_digits_and_non_digits(s):
+    # Find all digit and non-digit sequences
+    all_parts = re.findall(r'\d+|\D+', s)
+    
+    # Separate digit and non-digit parts
+    digits = ''.join(part for part in all_parts if part.isdigit())
+    nondigits = ''.join(part for part in all_parts if not part.isdigit())
+
+    return digits, nondigits
+
+
+def freq_to_timedelta(freq):
+    """Working around pandas limitations."""
+    freq = str(freq).split("-")[0]
+    digits, nondigits = split_digits_and_non_digits(freq)
+    # 'month start' is being recognized as miliseconds here
+    if freq == "MS":
+        return pd.to_timedelta(28, units='D')
+    if not digits:
+        freq = "1" + freq
+    try:
+        new_freq = pd.to_timedelta(freq)
+    except Exception:
+        if "M" in freq:
+            new_freq = pd.to_timedelta(28, unit='D')
+        elif 'y' in freq.lower():
+            new_freq = pd.to_timedelta(364, unit='D')
+        else:
+            raise ValueError(f"freq {freq} not recognized for to_timedelta. Please report this issue to AutoTS if found")
+    return new_freq
 
 
 def df_cleanup(

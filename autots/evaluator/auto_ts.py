@@ -17,6 +17,7 @@ from autots.tools.shaping import (
     NumericTransformer,
     clean_weights,
     infer_frequency,
+    freq_to_timedelta,
 )
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.evaluator.auto_model import (
@@ -3136,7 +3137,7 @@ class AutoTS(object):
                 used_freq = self.used_frequency
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
-            ).index.min() - (pd.to_timedelta(used_freq) * int(self.forecast_length * 3))
+            ).index.min() - (freq_to_timedelta(used_freq) * int(self.forecast_length * 3))
         if end_date == "auto":
             end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0

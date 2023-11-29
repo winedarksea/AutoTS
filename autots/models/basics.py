@@ -1269,7 +1269,7 @@ class Motif(ModelObject):
 
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=(self.n_jobs))(
+            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
                 delayed(looped_motif)(
                     Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
                     Xb=self.df.iloc[-self.window :, i].to_numpy().reshape(1, -1),
