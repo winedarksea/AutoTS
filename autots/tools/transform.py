@@ -2865,7 +2865,7 @@ class AnomalyRemoval(EmptyTransformer):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(
-                transformer_list="fast", transformer_max_depth=2
+                transformer_list="scalable", transformer_max_depth=2
             )
 
         return {
@@ -4681,8 +4681,8 @@ class GeneralTransformer(object):
         ]
 
     @staticmethod
-    def get_new_params(method="random"):
-        return RandomTransform()
+    def get_new_params(method="fast"):
+        return RandomTransform(transformer_list=method)
 
     def fill_na(self, df, window: int = 10):
         """
@@ -5161,13 +5161,14 @@ def transformer_list_to_dict(transformer_list):
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict
     elif transformer_list == "scalable":
+        # "scalable" meant to be even smaller than "fast" subset of transformers
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         # temporary removal for testing
         del transformer_list["RegressionFilter"]  # improved, might be good enough
-        del transformer_list["AnomalyRemoval"]  # improved, might be good enough
+        # del transformer_list["AnomalyRemoval"]  # improved, might be good enough
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
@@ -5377,6 +5378,6 @@ def random_cleaners():
     )[0]
     if transform_dict == "random":
         transform_dict = RandomTransform(
-            transformer_list="fast", transformer_max_depth=2
+            transformer_list="scalable", transformer_max_depth=2
         )
     return transform_dict
