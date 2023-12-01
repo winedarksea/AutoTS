@@ -1849,7 +1849,8 @@ class Cassandra(ModelObject):
         if anomaly_intervention is not None:
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if anomaly_intervention == "model":
-                anomaly_intervention = general_template.sample(1).to_dict("records")[
+                model_list, model_prob = model_list_to_dict("scalable")
+                anomaly_intervention = general_template[general_template['Model'].isin(model_list)].sample(1).to_dict("records")[
                     0
                 ]  # placeholder, probably
         else:
@@ -1888,7 +1889,7 @@ class Cassandra(ModelObject):
                 method=method
             )
             trend_transformation = RandomTransform(
-                transformer_list="fast",
+                transformer_list="scalable",
                 transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
             )
         elif trend_base == 'pb1':
@@ -1982,7 +1983,7 @@ class Cassandra(ModelObject):
             trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
         else:
             trend_anomaly_detector_params = None
-        if method == 'deep':
+        if method in ['deep', 'all_linear']:
             linear_model = random.choices(
                 [
                     'lstsq',
@@ -2030,7 +2031,7 @@ class Cassandra(ModelObject):
                 )[0],
                 'method': random.choices(
                     [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'Powell'],
-                    [0.9, 0.02, 0.02, 0.02, 0.02],
+                    [0.95, 0.02, 0.02, 0.02, 0.02],
                 )[0],
             }
         elif linear_model == "bayesian_linear":
