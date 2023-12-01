@@ -543,6 +543,32 @@ def retrieve_classifier(
             n_jobs=n_jobs,
             **model_param_dict,
         )
+    elif model_class == "KNN":
+        from sklearn.neighbors import KNeighborsClassifier
+        return KNeighborsClassifier(
+            n_jobs=n_jobs,
+            **model_param_dict,
+        )
+    elif model_class == "SGD":
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.multioutput import MultiOutputClassifier
+        
+        if multioutput:
+            return MultiOutputClassifier(
+                SGDClassifier(
+                    random_state=random_seed,
+                    verbose=verbose_bool,
+                    n_jobs=n_jobs,
+                    **model_param_dict,
+                )
+            )
+        else:
+            return SGDClassifier(
+                random_state=random_seed,
+                verbose=verbose_bool,
+                n_jobs=n_jobs,
+                **model_param_dict,
+            )
     else:
         raise ValueError(f"classifier {model_class} not a recognized option.")
 
@@ -552,18 +578,18 @@ sklearn_model_dict = {
     # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
     'MLP': 0.05,
-    'DecisionTree': 0.05,
+    'DecisionTree': 0.02,
     'KNN': 0.05,
     'Adaboost': 0.03,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
     'KerasRNN': 0.01,
-    'Transformer': 0.02,
+    'Transformer': 0.01,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.1,
     'LightGBMRegressorChain': 0.03,
-    'ExtraTrees': 0.05,
+    'ExtraTrees': 0.01,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
@@ -645,7 +671,7 @@ datepart_model_dict: dict = {
     'SVM': 0.05,
     'KerasRNN': 0.05,
     'Transformer': 0.02,  # slow
-    'ExtraTrees': 0.07,
+    'ExtraTrees': 0.0001,  # some params cause RAM crash?
     'RadiusNeighbors': 0.05,
     'MultioutputGPR': 0.0001,
 }
@@ -739,7 +765,11 @@ def generate_classifier_params(
     method="default",
 ):
     if model_dict is None:
-        model_dict = {'xgboost': 1, 'ExtraTrees': 1, 'RandomForest': 1}
+        model_dict = {
+            'xgboost': 1, 'ExtraTrees': 0.2,
+            'RandomForest': 0.1, 'KNN': 1,
+            'SGD': 0.1,
+        }
     regr_params = generate_regressor_params(
         model_dict=model_dict,
         method=method,

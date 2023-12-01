@@ -1118,7 +1118,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             choice = generate_regressor_params(
                 model_dict={
                     "ElasticNet": 0.5,
-                    "DecisionTree": 0.5,
+                    "DecisionTree": 0.25,
                     # 'ExtraTrees': 0.25,
                 }
             )
