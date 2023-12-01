@@ -5154,6 +5154,8 @@ def transformer_list_to_dict(transformer_list):
         del fast_transformer_dict["Cointegration"]
         del fast_transformer_dict["BTCD"]
 
+    if transformer_list is None:
+        transformer_list = "superfast"
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
     elif transformer_list in ["fast", "default", "Fast", "auto"]:

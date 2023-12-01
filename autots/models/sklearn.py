@@ -765,11 +765,20 @@ def generate_classifier_params(
     method="default",
 ):
     if model_dict is None:
-        model_dict = {
-            'xgboost': 1, 'ExtraTrees': 0.2,
-            'RandomForest': 0.1, 'KNN': 1,
-            'SGD': 0.1,
-        }
+        if method == "fast":
+            model_dict = {
+                'xgboost': 1,
+                # 'ExtraTrees': 0.2,  # crashes sometimes
+                # 'RandomForest': 0.1,
+                'KNN': 1,
+                'SGD': 0.1,
+            }
+        else:
+            model_dict = {
+                'xgboost': 1, 'ExtraTrees': 0.2,
+                'RandomForest': 0.1, 'KNN': 1,
+                'SGD': 0.1,
+            }
     regr_params = generate_regressor_params(
         model_dict=model_dict,
         method=method,

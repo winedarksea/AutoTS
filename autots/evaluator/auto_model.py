@@ -1007,6 +1007,9 @@ class TemplateEvalObject(object):
             ignore_index=True,
             sort=False,
         ).reset_index(drop=True)
+        self.per_series_metrics = pd.concat(
+            [self.per_series_metrics, another_eval.per_series_metrics], axis=0, sort=False
+        )
         self.per_series_mae = pd.concat(
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
         )
