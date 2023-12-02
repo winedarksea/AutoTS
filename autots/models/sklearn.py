@@ -671,9 +671,9 @@ datepart_model_dict: dict = {
     'SVM': 0.05,
     'KerasRNN': 0.05,
     'Transformer': 0.02,  # slow
-    'ExtraTrees': 0.0001,  # some params cause RAM crash?
+    'ExtraTrees': 0.00001,  # some params cause RAM crash?
     'RadiusNeighbors': 0.05,
-    'MultioutputGPR': 0.0001,
+    'MultioutputGPR': 0.00001,
 }
 gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
 gradient_boosting = {

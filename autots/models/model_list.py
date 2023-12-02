@@ -103,7 +103,7 @@ fast = {
     # 'MultivariateMotif': 0.8,  # RAM issues at scale it seems
     'SectionalMotif': 1,
     'NVAR': 0.3,
-    'MAR': 0.5,
+    'MAR': 0.25,
     'RRVAR': 1,
     'KalmanStateSpace': 0.4,
     'MetricMotif': 1,

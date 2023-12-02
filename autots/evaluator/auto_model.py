@@ -2376,15 +2376,17 @@ def NewGeneticTemplate(
             )
 
 
-def validation_aggregation(validation_results, df_train=None):
+def validation_aggregation(
+        validation_results, df_train=None,
+        groupby_cols = [
+            'ID',
+            'Model',
+            'ModelParameters',
+            'TransformationParameters',
+            'Ensemble',
+        ],
+    ):
     """Aggregate a TemplateEvalObject."""
-    groupby_cols = [
-        'ID',
-        'Model',
-        'ModelParameters',
-        'TransformationParameters',
-        'Ensemble',
-    ]
     col_aggs = {
         'Runs': 'sum',
         'smape': 'mean',
@@ -2446,9 +2448,10 @@ def validation_aggregation(validation_results, df_train=None):
     validation_results.model_results = validation_results.model_results.replace(
         [np.inf, -np.inf], np.nan
     )
-    validation_results.model_results = validation_results.model_results.groupby(
+    grouped = validation_results.model_results.groupby(
         groupby_cols
-    ).agg(col_aggs)
+    )
+    validation_results.model_results = grouped.agg(col_aggs)
     validation_results.model_results = validation_results.model_results.reset_index(
         drop=False
     )
