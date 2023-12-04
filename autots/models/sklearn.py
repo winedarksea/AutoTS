@@ -584,8 +584,8 @@ sklearn_model_dict = {
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
-    'KerasRNN': 0.01,
-    'Transformer': 0.01,
+    'KerasRNN': 0.001,  # slow at scale
+    'Transformer': 0.001,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.1,
     'LightGBMRegressorChain': 0.03,
@@ -665,11 +665,12 @@ no_shared_model_dict = {
 datepart_model_dict: dict = {
     # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
+    'xgboost': 0.01,
     'MLP': 0.05,
-    'DecisionTree': 0.05,
+    'DecisionTree': 0.02,
     'Adaboost': 0.05,
-    'SVM': 0.05,
-    'KerasRNN': 0.05,
+    'SVM': 0.01,
+    'KerasRNN': 0.02,
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.00001,  # some params cause RAM crash?
     'RadiusNeighbors': 0.05,
