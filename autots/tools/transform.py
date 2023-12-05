@@ -5169,8 +5169,8 @@ def transformer_list_to_dict(transformer_list):
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         # temporary removal for testing
-        del transformer_list["RegressionFilter"]  # improved, might be good enough
-        # del transformer_list["AnomalyRemoval"]  # improved, might be good enough
+        del transformer_list["RegressionFilter"]
+        del transformer_list["LocalLinearTrend"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
