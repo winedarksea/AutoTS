@@ -4401,7 +4401,10 @@ class DiffSmoother(EmptyTransformer):
                 diffs = diffs.where(self.anomalies != -1, np.nan)
             else:
                 # also removes any -1 in your first row of data, for giggles
-                diffs = df.where(pd.concat([df.iloc[0:1], self.anomalies]) != -1, np.nan)
+                full_anom = pd.concat([df.iloc[0:1], self.anomalies])
+                full_anom.index = df.index
+                full_anom.columns = df.columns
+                diffs = df.where(full_anom != -1, np.nan)
             if self.fillna is not None:
                 diffs = FillNA(diffs, method=self.fillna, window=10)
 
@@ -4433,22 +4436,24 @@ class DiffSmoother(EmptyTransformer):
                 2.5,
                 3.0,
             ],
-            [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1],
+            [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         if isinstance(fillna, (float, int)):
             method_choice = None
             method_params = None
             transform_dict = None
+            reverse_alignment = True
         else:
             method_choice, method_params, transform_dict = anomaly_new_params(
                 method=method
             )
+            reverse_alignment = random.choice([True, False])
 
         return {
             "method": method_choice,
             "method_params": method_params,
             "transform_dict": None,
-            "reverse_alignment": random.choice([True, False]),
+            "reverse_alignment": reverse_alignment,
             "fillna": fillna,
         }
 

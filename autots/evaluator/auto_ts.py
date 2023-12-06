@@ -727,9 +727,19 @@ class AutoTS(object):
                         },
                     },
                 },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "CenterSplit"},
+                    "transformation_params": {
+                        "0": {
+                            'fillna': 'ffill',
+                            'center': 'zero',
+                        },
+                    },
+                },
                 'random',
             ],
-            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.1],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.05, 0.1],
         )[0]
         if preclean_choice == "random":
             preclean_choice = RandomTransform(
