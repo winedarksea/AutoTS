@@ -4340,6 +4340,7 @@ class DiffSmoother(EmptyTransformer):
         fillna=None,
         n_jobs=1,
         adjustment: int = 2,
+        reverse_alignment=True,
     ):
         """Detect anomalies on a historic dataset in the DIFFS then cumsum back to origin space.
         No inverse_transform available.
@@ -4350,6 +4351,7 @@ class DiffSmoother(EmptyTransformer):
             transform_dict (dict): option but helpful, often datepart, differencing, or other standard AutoTS transformer params
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
+            reverse_alighment (bool): if True, remove diffs then cumsum
             n_jobs (int): multiprocessing jobs, used by some methods
         """
         super().__init__(name="DiffSmoother")
@@ -4360,6 +4362,7 @@ class DiffSmoother(EmptyTransformer):
         self.n_jobs = n_jobs
         self.fillna = fillna
         self.adjustment = adjustment
+        self.reverse_alignment = reverse_alignment
 
     def fit(self, df):
         """Fit.
@@ -4394,11 +4397,18 @@ class DiffSmoother(EmptyTransformer):
                 method_params=self.method_params,
                 n_jobs=self.n_jobs,
             )
-            diffs = diffs.where(self.anomalies != -1, np.nan)
+            if self.reverse_alignment:
+                diffs = diffs.where(self.anomalies != -1, np.nan)
+            else:
+                # also removes any -1 in your first row of data, for giggles
+                diffs = df.where(pd.concat([df.iloc[0:1], self.anomalies]) != -1, np.nan)
             if self.fillna is not None:
                 diffs = FillNA(diffs, method=self.fillna, window=10)
 
-        return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
+        if self.reverse_alignment:
+            return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
+        else:
+            return diffs
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -4408,7 +4418,7 @@ class DiffSmoother(EmptyTransformer):
         return self.transform(df)
 
     @staticmethod
-    def get_new_params(method="random"):
+    def get_new_params(method="fast"):
         fillna = random.choices(
             [
                 None,
@@ -4438,6 +4448,7 @@ class DiffSmoother(EmptyTransformer):
             "method": method_choice,
             "method_params": method_params,
             "transform_dict": None,
+            "reverse_alignment": random.choice([True, False]),
             "fillna": fillna,
         }
 

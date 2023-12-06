@@ -239,6 +239,7 @@ class AutoTS(object):
         self.models_mode = models_mode
         self.current_model_file = current_model_file
         self.force_gc = force_gc
+        self.validate_import = None
         random.seed(self.random_seed)
         if self.max_generations is None and self.generation_timeout is not None:
             self.max_generations = 99999
@@ -1286,6 +1287,7 @@ class AutoTS(object):
                 transformer_max_depth=self.transformer_max_depth,
                 models_mode=self.models_mode,
                 score_per_series=self.score_per_series,
+                model_list=self.model_list,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
@@ -1407,6 +1409,12 @@ class AutoTS(object):
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
         self.validation_template = validation_template[self.template_cols]
+        if self.validate_import is not None:
+            self.validation_template = pd.concat(
+                [self.validation_template, self.validate_import]
+            ).drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
 
         # run validations
         if self.num_validations > 0:
@@ -2450,6 +2458,7 @@ class AutoTS(object):
         enforce_model_list: bool = True,
         include_ensemble: bool = False,
         include_horizontal: bool = False,
+        force_validation: bool = False,
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
@@ -2460,6 +2469,7 @@ class AutoTS(object):
             enforce_model_list (bool): if True, remove model types not in model_list
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
             include_horizontal (bool): if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)
+            force_validation (bool): if True, all models imported here will automatically get sent to full cross validation (regardless of first eval performance)
         """
         if method.lower() in ['add on', 'addon', 'add_on']:
             addon_flag = True
@@ -2496,6 +2506,12 @@ class AutoTS(object):
             self.initial_template = import_template
         else:
             return ValueError("method must be 'addon' or 'only'")
+
+        if force_validation:
+            if self.validate_import is None:
+                self.validate_import = import_template
+            else:
+                self.validate_import = pd.concat([self.validate_import, import_template])
 
         return self
 

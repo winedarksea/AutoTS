@@ -2145,6 +2145,7 @@ def NewGeneticTemplate(
     models_mode: str = "default",
     score_per_series=None,
     recursive_count=0,
+    model_list=None,
     # UPDATE RECURSIVE section if adding or removing params
 ):
     """
@@ -2158,6 +2159,8 @@ def NewGeneticTemplate(
 
     """
     new_template_list = []
+    if model_list is None:
+        model_list = model_results['Model'].unique().tolist()
 
     # filter existing templates
     sorted_results = model_results[
@@ -2213,8 +2216,11 @@ def NewGeneticTemplate(
     sidx = {name: i for i, name in enumerate(list(sorted_results), start=1)}
     for row in sorted_results.itertuples(name=None):
         n = n_list[counter]
-        counter += 1
         model_type = row[sidx["Model"]]
+        # skip models not in the model_list
+        if model_type not in model_list:
+            continue
+        counter += 1
         model_params = row[sidx["ModelParameters"]]
         try:
             trans_params = json.loads(row[sidx["TransformationParameters"]])
@@ -2359,6 +2365,7 @@ def NewGeneticTemplate(
                 models_mode=models_mode,
                 score_per_series=score_per_series,
                 recursive_count=recursive_count,
+                model_list=model_list,
             )
     # enjoy the privilege
     elif new_template.shape[0] < max_results:

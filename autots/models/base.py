@@ -333,6 +333,7 @@ def plot_distributions(
     y_col='TotalRuntimeSeconds',
     xlim=None,
     xlim_right=None,
+    title_suffix="",
 ):
     import matplotlib.pyplot as plt
     import seaborn as sns
@@ -391,7 +392,7 @@ def plot_distributions(
     plt.legend(handles, labels, title=group_col)  # , bbox_to_anchor=(1.05, 1), loc=2
 
     # Adding titles and labels
-    plt.title(f'Distribution of {y_col} by {group_col}', fontsize=16)
+    plt.title(f'Distribution of {y_col} by {group_col}{title_suffix}', fontsize=16)
     plt.xlabel(f'{y_col}', fontsize=14)
     plt.ylabel('Density', fontsize=14)
 
@@ -570,6 +571,7 @@ class PredictionObject(object):
                 y_col='TotalRuntimeSeconds',
                 xlim=0,
                 xlim_right=xlim_right,
+                title_suffix=" in Chosen Ensemble"
             )
 
     def plot_df(
