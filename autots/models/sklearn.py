@@ -580,7 +580,7 @@ sklearn_model_dict = {
     'MLP': 0.05,
     'DecisionTree': 0.02,
     'KNN': 0.05,
-    'Adaboost': 0.03,
+    'Adaboost': 0.01,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
