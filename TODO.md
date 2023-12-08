@@ -15,6 +15,8 @@
 # 0.6.4 🔜🔜🔜
 * adjusted n_jobs back to minus 1 for multivariatemotif
 * fixed bug with plot_validations not working with some frequencies
+* force_validation added to import_template
+* model_list now enforced in new generations
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
