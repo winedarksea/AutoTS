@@ -3,7 +3,7 @@ Nixtla's NeuralForecast. Be warned, as of writing, their package has commercial 
 """
 import logging
 import random
-from datetime import datetime
+import datetime
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
@@ -34,7 +34,7 @@ class NeuralForecast(ModelObject):
         models = "LSTM",
         loss = "MQLoss",
         input_size = "2ForecastLength",
-        max_steps = 1000,
+        max_steps = 100,
         learning_rate = 0.001,
         early_stop_patience_steps = -1,
         activation = 'ReLU',
@@ -138,9 +138,10 @@ class NeuralForecast(ModelObject):
             "random_seed": self.random_seed,
             "learning_rate": self.learning_rate,
             "loss": loss,
-            # "early_stop_patience_steps": self.early_stop_patience_steps,
             'scaler_type': self.scaler_type,
-            # "activation": self.activation,
+            # trying to suppress the stupid file logging lightning does
+            "logger": False,
+            "log_every_n_steps": 0,
         }
         models = self.models
         model_args = self.model_args
@@ -189,6 +190,7 @@ class NeuralForecast(ModelObject):
             long_forecast = self.nf.predict(futr_df=futr_df)
         else:
             long_forecast = self.nf.predict()
+        self.long_forecast = long_forecast
         target_col = [x for x in long_forecast.columns.tolist() if "median" in str(x)][0]
         forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
 
@@ -229,13 +231,17 @@ class NeuralForecast(ModelObject):
         if method in model_list:
             models = method
         else:
-            models = random.choice(model_list)
+            models = random.choices(model_list, [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2])[0]
         if "regressor" in method:
             regression_type_choice = "User"
         else:
             regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
                 0
             ]
+        activation = random.choices(
+            ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
+            [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+        )[0]
         if models == "TFT":
             model_args = {
                 "n_head": random.choice([2, 4]),
@@ -255,17 +261,19 @@ class NeuralForecast(ModelObject):
                                                   [1, 1, 1, 1, 1]]),
                 "batch_size": random.choice([32, 64, 128, 256]),
                 "windows_batch_size": random.choice([128, 256, 512, 1024]),
+                "activation": activation,   
+            }
+        elif models == "MLP":
+            model_args = {
+                'num_layers': random.choice([1, 2, 3, 4]),
+                'activation': activation,
             }
         else:
             model_args = {}
 
         return {
             'models': models,
-            'scaler_type': random.choices([None, 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2])[0],
-            'activation': random.choices(
-                ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
-                [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-            )[0],
+            'scaler_type': random.choices(["identity", 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2])[0],
             'loss': random.choices(
                 ['MQLoss', 'Poisson', 'Bernoulli', 'NegativeBinomial', 'Normal', 'Tweedie', 'HuberLoss', "MAE", "SMAPE", "StudentT"],
                 [0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
@@ -275,8 +283,8 @@ class NeuralForecast(ModelObject):
                 [0.4, 0.1, 0.1, 0.1, 0.1]
             )[0],
             "max_steps": random.choices(
-                [40, 100, 1000, 10000],
-                [0.2, 0.2, 0.8, 0.01],
+                [40, 80, 100, 1000],
+                [0.2, 0.2, 0.2, 0.05],
             )[0],
             'input_size': random.choices(
                 [10, 28, "2ForecastLength", "3ForecastLength"],
@@ -292,7 +300,7 @@ class NeuralForecast(ModelObject):
         return {
             'models': self.models,
             'scaler_type': self.scaler_type,
-            'activation': self.activation,
+            # 'activation': self.activation,
             'loss': self.loss,
             'learning_rate': self.learning_rate,
             "max_steps": self.max_steps,
@@ -303,15 +311,15 @@ class NeuralForecast(ModelObject):
         }
 
 
-from autots import load_daily
-
-df = load_daily(long=False)
-
-params = NeuralForecast().get_new_params()
-print(params)
-mod = NeuralForecast()
-mod = NeuralForecast(**params)
-mod.fit(df)
-prediction = mod.predict()
-prediction.plot_grid()
+if False:
+    from autots import load_daily
+    
+    df = load_daily(long=False)
+    
+    params = NeuralForecast().get_new_params()
+    print(params)
+    mod = NeuralForecast(**params)
+    mod.fit(df)
+    prediction = mod.predict()
+    prediction.plot_grid(df)
 
