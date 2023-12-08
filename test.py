@@ -237,16 +237,16 @@ else:
 
 # model = model.import_results('test.pickle')
 if use_template:
-    model = model.import_template(
-        template_filename, method=template_import_method,
-        enforce_model_list=False, force_validation=True,
-    )
-    model = model.import_template(
-        "/Users/colincatlin/Downloads/template_categories_1.csv", method=template_import_method, enforce_model_list=True
-    )
-    model = model.import_template(
-        "/Users/colincatlin/Downloads/test_import.csv", method=template_import_method, enforce_model_list=False, force_validation=True,
-    )
+    if os.path.exists(template_filename):
+        model = model.import_template(
+            template_filename, method=template_import_method,
+            enforce_model_list=False, force_validation=True,
+        )
+    file2 = "/Users/colincatlin/Downloads/test_import.csv"
+    if os.path.exists(file2):
+        model = model.import_template(
+            file2, method=template_import_method, enforce_model_list=False, force_validation=True,
+        )
 
 start_time_for = timeit.default_timer()
 model = model.fit(
