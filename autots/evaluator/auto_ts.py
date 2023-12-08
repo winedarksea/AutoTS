@@ -1112,6 +1112,7 @@ class AutoTS(object):
         """
         self.model = None
         self.grouping_ids = grouping_ids
+        self.fitStart = pd.Timestamp.now()
 
         # convert class variables to local variables (makes testing easier)
         if self.validation_method == "custom":
@@ -1129,7 +1130,6 @@ class AutoTS(object):
         else:
             self.validation_indexes = []
 
-        prediction_interval = self.prediction_interval
         random_seed = self.random_seed
         metric_weighting = self.metric_weighting
         verbose = self.verbose
@@ -1759,6 +1759,7 @@ class AutoTS(object):
 
         # clean up any remaining print statements
         sys.stdout.flush()
+        self.fitRuntime = pd.Timestamp.now() - self.fitStart
         return self
 
     def validation_agg(self):

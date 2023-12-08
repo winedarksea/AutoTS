@@ -1,0 +1,301 @@
+"""
+Nixtla's NeuralForecast. Be warned, as of writing, their package has commercial restrictions.
+"""
+import logging
+import random
+from datetime import datetime
+import pandas as pd
+from autots.models.base import ModelObject, PredictionObject
+from autots.tools.probabilistic import Point_to_Probability
+
+
+class NeuralForecast(ModelObject):
+    """See NeuralForecast documentation for details.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        regression_type: str = None,
+        model_args (dict): for all model args that aren't in default list, run get_new_params for default
+    """
+
+    def __init__(
+        self,
+        name: str = "NeuralForecast",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2023,
+        verbose: int = 0,
+        forecast_length: int = 28,
+        regression_type: str = None,
+        n_jobs: int = -1,
+        models = "LSTM",
+        loss = "MQLoss",
+        input_size = "2ForecastLength",
+        max_steps = 1000,
+        learning_rate = 0.001,
+        early_stop_patience_steps = 3,
+        activation = 'ReLU',
+        scaler_type = 'robust',
+        model_args = {},
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            regression_type=regression_type,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.models = models
+        self.loss = loss
+        self.input_size = input_size
+        self.max_steps = max_steps
+        self.learning_rate = learning_rate
+        self.early_stop_patience_steps = early_stop_patience_steps
+        self.activation = activation
+        self.scaler_type = scaler_type
+        self.forecast_length = forecast_length
+        self.df_train = None
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        self.basic_profile(df)
+        if self.regression_type in ["User", "user"]:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor passed"
+                )
+
+        from neuralforecast import NeuralForecast
+        from neuralforecast.losses.pytorch import SMAPE, MQLoss, DistributionLoss, MAE, HuberLoss
+        from neuralforecast.models import TFT, LSTM, NHITS, MLP, NBEATS, TimesNet, PatchTST, DeepAR
+
+        prediction_interval = self.prediction_interval
+        forecast_length = self.forecast_length
+        freq = self.frequency
+
+        # Split data and declare panel dataset
+        if isinstance(prediction_interval, list):
+            levels = prediction_interval
+        elif isinstance(prediction_interval, dict):
+            levels = list(prediction_interval.values())
+        else:
+            levels = [int(prediction_interval * 100)]
+        
+        logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
+        loss = self.loss
+        if loss == "MQLoss":
+            loss = MQLoss(level=levels)
+        elif loss == "Poisson":
+            loss = DistributionLoss(distribution='Poisson', level=levels, return_params=False)
+        elif loss == "Bernoulli":
+            loss = DistributionLoss(distribution='Bernoulli', level=levels, return_params=False)
+        elif loss == "StudentT":
+            loss = DistributionLoss(distribution='StudentT', level=levels, return_params=False)
+        elif loss == "NegativeBinomial":
+            loss = DistributionLoss(distribution='NegativeBinomial', level=levels, return_params=False)
+        elif loss == "Normal":
+            loss = DistributionLoss(distribution='Normal', level=levels, return_params=False)
+        elif loss == "Tweedie":
+            loss = DistributionLoss(distribution='Tweedie', level=levels, return_params=False)
+        elif loss == "MAE":
+            self.df_train = df
+            loss = MAE()
+        elif loss == "HuberLoss":
+            self.df_train = df
+            loss = HuberLoss()
+        elif loss == "SMAPE":
+            self.df_train = df
+            loss = SMAPE()
+        elif isinstance(loss, str):
+            raise ValueError(f"loss not recognized: {loss}")
+        else:
+            # allow custom input
+            pass
+
+        str_input = str(self.input_size).lower()
+        if "forecastlength" in str_input:
+            input_size = forecast_length * int(''.join([x for x in str_input if x.isdigit()]))
+        else:
+            input_size = int(self.input_size)
+        base_args = {
+            "h": forecast_length,
+            "input_size": input_size,
+            "max_steps": self.max_steps,
+            "num_workers_loader": self.self.n_jobs,
+            "random_seed": self.random_seed,
+            "learning_rate": self.learning_rate,
+            "loss": self.loss,
+            "early_stop_patience_steps": self.early_stop_patience_steps,
+            'scaler_type': self.scaler_type,
+            "activation": self.activation,
+        }
+        models = self.models
+        model_args = self.model_args
+        if self.regression_type in ['User', 'user']:
+            base_args["futr_exog_list"] = future_regressor.columns.tolist()
+        if isinstance(models, list):
+            # User inputs classes directly
+            pass
+        elif models == 'LSTM':
+            models = [LSTM(**{**base_args, **model_args})]
+        elif models == "NHITS":
+            models = [NHITS(**{**base_args, **model_args})]
+        elif models == "NBEATS":
+            models = [NBEATS(**{**base_args, **model_args})]
+        elif models == "MLP":
+            models = [MLP(**{**base_args, **model_args})]
+        elif models == "TimesNet":
+            models = [TimesNet(**{**base_args, **model_args})]
+        elif models == "TFT":
+            models = [TFT(**{**base_args, **model_args})]
+        elif models == "PatchTST":
+            models = [PatchTST(**{**base_args, **model_args})]
+        elif models == "DeepAR":
+            models = [DeepAR(**{**base_args, **model_args})]
+        else:
+            raise ValueError(f"models not recognized: {models}")
+        
+        # model params  
+
+        silly_format = df.reset_index(names='ds').melt(id_vars='ds', value_name='y', var_name='unique_id')
+        if self.regression_type in ['User', 'user']:
+            silly_format.merge(future_regressor, left_on='ds', right_index=True)
+        self.nf = NeuralForecast(models=models, freq=freq)
+        self.nf.fit(df=silly_format)
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(self, future_regressor=None, just_point_forecast=False):
+        predictStartTime = datetime.datetime.now()
+        if self.regression_type in ['User', 'user']:
+            index = self.create_forecast_index(forecast_length=self.forecast_length)
+            futr_df = pd.concat([pd.Series(col, index=index, name='temp') for col in self.column_names])
+            futr_df = futr_df.merge(future_regressor, left_index=True, right_index=True)
+            futr_df = futr_df.reset_index(names='ds')
+            long_forecast = self.nf.predict(futr_df=futr_df)
+        else:
+            long_forecast = self.nf.predict()
+        target_col = [x for x in long_forecast.columns if "median" in x][0]
+        forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
+
+        if just_point_forecast:
+            return forecast
+        if self.df_train is not None:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
+        else:
+            target_col = [x for x in long_forecast.columns if "hi-" in x][0]
+            upper_forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
+            target_col = [x for x in long_forecast.columns if "lo-" in x][0]
+            lower_forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
+
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        prediction = PredictionObject(
+            model_name=self.name,
+            forecast_length=self.forecast_length,
+            forecast_index=forecast.index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
+        return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        model_list = ['DeepAR', 'MLP', "LSTM", "PatchTST", "NHITS", "TFT", "TimesNet"]
+        if method in model_list:
+            models = method
+        else:
+            models = random.choice(model_list)
+        if "regressor" in method:
+            regression_type_choice = "User"
+        else:
+            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
+                0
+            ]
+        if models == "TFT":
+            model_args = {
+                "n_head": random.choice([2, 4]),
+                "dropout": random.choice([0.05, 0.2, 0.3, 0.6]),
+                "batch_size": random.choice([32, 64, 128, 256]),
+                "hidden_size": random.choice([4, 64, 128, 256]),
+                "windows_batch_size": random.choice([128, 256, 512, 1024]),
+            }
+        elif models == "NHITS":
+            model_args = {
+                "input_size": random.choice([28, 28*2, 28*3, 28*5]),
+                "n_blocks": 5*[1],
+                "mlp_units": 5 * [[512, 512]],
+                "n_pool_kernel_size": random.choice([5*[1], 5*[2], 5*[4],         
+                                                  [8, 4, 2, 1, 1]]),
+                "n_freq_downsample": random.choice([[8, 4, 2, 1, 1],
+                                                  [1, 1, 1, 1, 1]]),
+                "batch_size": random.choice([32, 64, 128, 256]),
+                "windows_batch_size": random.choice([128, 256, 512, 1024]),
+            }
+        else:
+            model_args = {}
+
+        return {
+            'models': models,
+            'scaler_type': random.choices([None, 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2])[0],
+            'activation': random.choices(
+                ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
+                [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+            'loss': random.choices(
+                ['MQLoss', 'Poisson', 'Bernoulli', 'NegativeBinomial', 'Normal', 'Tweedie', 'HuberLoss', "MAE", "SMAPE", "StudentT"],
+                [0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+            'learning_rate': random.choices(
+                [0.001, 0.1, 0.01, 0.0003, 0.00001],
+                [0.4, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+            "max_steps": random.choices(
+                [40, 100, 1000, 10000],
+                [0.2, 0.2, 0.8, 0.01],
+            )[0],
+            'input_size': random.choices(
+                [10, 28, "2ForecastLength", "3ForecastLength"],
+                [0.2, 0.2, 0.2, 0.2]
+            ),      
+            "early_stop_patience_steps": random.choice([1, 3, 5]),
+            "model_args": model_args,
+            'regression_type': regression_type_choice,
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            'models': self.models,
+            'scaler_type': self.scaler_type,
+            'activation': self.activation,
+            'loss': self.loss,
+            'learning_rate': self.learning_rate,
+            "max_steps": self.max_steps,
+            'input_size': self.input_size,      
+            "early_stop_patience_steps": self.early_stop_patience_steps,
+            "model_args": self.model_args,
+            'regression_type': self.regression_type,
+        }
