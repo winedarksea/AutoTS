@@ -17,6 +17,7 @@
 * fixed bug with plot_validations not working with some frequencies
 * force_validation added to import_template
 * model_list now enforced in new generations
+* added NeuralForecast
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

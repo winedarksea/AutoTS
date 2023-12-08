@@ -683,6 +683,19 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model in ["NeuralForecast", "neuralforecast"]:
+        from autots.models.neural_forecast import NeuralForecast
+
+        return NeuralForecast(
+            frequency=frequency,
+            forecast_length=forecast_length,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)

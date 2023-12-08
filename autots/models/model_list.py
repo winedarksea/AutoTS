@@ -45,6 +45,7 @@ all_models = [
     'FFT',
     "BallTreeMultivariateMotif",
     "TiDE",
+    "NeuralForecast",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -162,7 +163,7 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
-gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting', "TiDE"]
+gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting', "TiDE", "NeuralForecast", "NeuralProphet"]
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
@@ -187,6 +188,7 @@ probabilistic = [
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',
+    "NeuralForecast",  # mostly
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -210,6 +212,7 @@ multivariate = [
     'Cassandra',  # depends
     'BallTreeMultivariateMotif',
     "TiDE",
+    "NeuralForecast",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -256,6 +259,7 @@ recombination_approved = [
     'FFT',
     'BallTreeMultivariateMotif',
     "TiDE",
+    "NeuralForecast",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -303,6 +307,7 @@ regressor = [
     'ARCH',
     'Cassandra',
     'PreprocessingRegression',
+    "NeuralForecast",
 ]
 motifs = [
     'UnivariateMotif',

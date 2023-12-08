@@ -30,13 +30,13 @@ class NeuralForecast(ModelObject):
         verbose: int = 0,
         forecast_length: int = 28,
         regression_type: str = None,
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         models = "LSTM",
         loss = "MQLoss",
         input_size = "2ForecastLength",
         max_steps = 1000,
         learning_rate = 0.001,
-        early_stop_patience_steps = 3,
+        early_stop_patience_steps = -1,
         activation = 'ReLU',
         scaler_type = 'robust',
         model_args = {},
@@ -61,6 +61,7 @@ class NeuralForecast(ModelObject):
         self.early_stop_patience_steps = early_stop_patience_steps
         self.activation = activation
         self.scaler_type = scaler_type
+        self.model_args = model_args
         self.forecast_length = forecast_length
         self.df_train = None
 
@@ -108,7 +109,7 @@ class NeuralForecast(ModelObject):
         elif loss == "Normal":
             loss = DistributionLoss(distribution='Normal', level=levels, return_params=False)
         elif loss == "Tweedie":
-            loss = DistributionLoss(distribution='Tweedie', level=levels, return_params=False)
+            loss = DistributionLoss(distribution='Tweedie', level=levels, return_params=False, rho=1.5)
         elif loss == "MAE":
             self.df_train = df
             loss = MAE()
@@ -129,41 +130,42 @@ class NeuralForecast(ModelObject):
             input_size = forecast_length * int(''.join([x for x in str_input if x.isdigit()]))
         else:
             input_size = int(self.input_size)
-        base_args = {
+        self.base_args = {
             "h": forecast_length,
             "input_size": input_size,
             "max_steps": self.max_steps,
-            "num_workers_loader": self.self.n_jobs,
+            "num_workers_loader": self.n_jobs,
             "random_seed": self.random_seed,
             "learning_rate": self.learning_rate,
-            "loss": self.loss,
-            "early_stop_patience_steps": self.early_stop_patience_steps,
+            "loss": loss,
+            # "early_stop_patience_steps": self.early_stop_patience_steps,
             'scaler_type': self.scaler_type,
-            "activation": self.activation,
+            # "activation": self.activation,
         }
         models = self.models
         model_args = self.model_args
         if self.regression_type in ['User', 'user']:
-            base_args["futr_exog_list"] = future_regressor.columns.tolist()
+            self.base_args["futr_exog_list"] = future_regressor.columns.tolist()
+
         if isinstance(models, list):
             # User inputs classes directly
             pass
         elif models == 'LSTM':
-            models = [LSTM(**{**base_args, **model_args})]
+            models = [LSTM(**{**self.base_args, **model_args})]
         elif models == "NHITS":
-            models = [NHITS(**{**base_args, **model_args})]
+            models = [NHITS(**{**self.base_args, **model_args})]
         elif models == "NBEATS":
-            models = [NBEATS(**{**base_args, **model_args})]
+            models = [NBEATS(**{**self.base_args, **model_args})]
         elif models == "MLP":
-            models = [MLP(**{**base_args, **model_args})]
+            models = [MLP(**{**self.base_args, **model_args})]
         elif models == "TimesNet":
-            models = [TimesNet(**{**base_args, **model_args})]
+            models = [TimesNet(**{**self.base_args, **model_args})]
         elif models == "TFT":
-            models = [TFT(**{**base_args, **model_args})]
+            models = [TFT(**{**self.base_args, **model_args})]
         elif models == "PatchTST":
-            models = [PatchTST(**{**base_args, **model_args})]
+            models = [PatchTST(**{**self.base_args, **model_args})]
         elif models == "DeepAR":
-            models = [DeepAR(**{**base_args, **model_args})]
+            models = [DeepAR(**{**self.base_args, **model_args})]
         else:
             raise ValueError(f"models not recognized: {models}")
         
@@ -177,7 +179,7 @@ class NeuralForecast(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, future_regressor=None, just_point_forecast=False):
+    def predict(self, forecast_length=None, future_regressor=None, just_point_forecast=False):
         predictStartTime = datetime.datetime.now()
         if self.regression_type in ['User', 'user']:
             index = self.create_forecast_index(forecast_length=self.forecast_length)
@@ -187,7 +189,7 @@ class NeuralForecast(ModelObject):
             long_forecast = self.nf.predict(futr_df=futr_df)
         else:
             long_forecast = self.nf.predict()
-        target_col = [x for x in long_forecast.columns if "median" in x][0]
+        target_col = [x for x in long_forecast.columns.tolist() if "median" in str(x)][0]
         forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
 
         if just_point_forecast:
@@ -279,8 +281,8 @@ class NeuralForecast(ModelObject):
             'input_size': random.choices(
                 [10, 28, "2ForecastLength", "3ForecastLength"],
                 [0.2, 0.2, 0.2, 0.2]
-            ),      
-            "early_stop_patience_steps": random.choice([1, 3, 5]),
+            )[0],      
+            # "early_stop_patience_steps": random.choice([1, 3, 5]),
             "model_args": model_args,
             'regression_type': regression_type_choice,
         }
@@ -295,7 +297,21 @@ class NeuralForecast(ModelObject):
             'learning_rate': self.learning_rate,
             "max_steps": self.max_steps,
             'input_size': self.input_size,      
-            "early_stop_patience_steps": self.early_stop_patience_steps,
+            # "early_stop_patience_steps": self.early_stop_patience_steps,
             "model_args": self.model_args,
             'regression_type': self.regression_type,
         }
+
+
+from autots import load_daily
+
+df = load_daily(long=False)
+
+params = NeuralForecast().get_new_params()
+print(params)
+mod = NeuralForecast()
+mod = NeuralForecast(**params)
+mod.fit(df)
+prediction = mod.predict()
+prediction.plot_grid()
+
