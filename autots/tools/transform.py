@@ -2421,9 +2421,7 @@ class MeanDifference(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
-        return (df - self.means.shift(self.lag).values[..., None]).fillna(
-            method="bfill"
-        )
+        return (df - self.means.shift(self.lag).values[..., None]).bfill()
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
