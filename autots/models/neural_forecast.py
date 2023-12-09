@@ -17,6 +17,7 @@ class NeuralForecast(ModelObject):
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
         regression_type: str = None,
+        model (str or object): string aliases or passed to the models arg of NeuralForecast
         model_args (dict): for all model args that aren't in default list, run get_new_params for default
     """
 
@@ -31,7 +32,7 @@ class NeuralForecast(ModelObject):
         forecast_length: int = 28,
         regression_type: str = None,
         n_jobs: int = 1,
-        models = "LSTM",
+        model = "LSTM",
         loss = "MQLoss",
         input_size = "2ForecastLength",
         max_steps = 100,
@@ -53,7 +54,7 @@ class NeuralForecast(ModelObject):
             verbose=verbose,
             n_jobs=n_jobs,
         )
-        self.models = models
+        self.model = model
         self.loss = loss
         self.input_size = input_size
         self.max_steps = max_steps
@@ -105,7 +106,7 @@ class NeuralForecast(ModelObject):
         elif loss == "StudentT":
             loss = DistributionLoss(distribution='StudentT', level=levels, return_params=False)
         elif loss == "NegativeBinomial":
-            loss = DistributionLoss(distribution='NegativeBinomial', level=levels, return_params=False)
+            loss = DistributionLoss(distribution='NegativeBinomial', level=levels, total_count=3, return_params=False)
         elif loss == "Normal":
             loss = DistributionLoss(distribution='Normal', level=levels, return_params=False)
         elif loss == "Tweedie":
@@ -143,7 +144,7 @@ class NeuralForecast(ModelObject):
             "logger": False,
             "log_every_n_steps": 0,
         }
-        models = self.models
+        models = self.model
         model_args = self.model_args
         if self.regression_type in ['User', 'user']:
             self.base_args["futr_exog_list"] = future_regressor.columns.tolist()
@@ -236,7 +237,7 @@ class NeuralForecast(ModelObject):
         if method in model_list:
             models = method
         else:
-            models = random.choices(model_list, [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2])[0]
+            models = random.choices(model_list, [0.05, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2])[0]
         if "regressor" in method:
             regression_type_choice = "User"
         else:
@@ -246,6 +247,10 @@ class NeuralForecast(ModelObject):
         activation = random.choices(
             ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
             [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+        )[0]
+        loss = random.choices(
+            ['MQLoss', 'Poisson', 'Bernoulli', 'NegativeBinomial', 'Normal', 'Tweedie', 'HuberLoss', "MAE", "SMAPE", "StudentT"],
+            [0.3, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01]
         )[0]
         if models == "TFT":
             model_args = {
@@ -276,12 +281,9 @@ class NeuralForecast(ModelObject):
             model_args = {}
 
         return {
-            'models': models,
+            'model': models,
             'scaler_type': random.choices(["identity", 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2])[0],
-            'loss': random.choices(
-                ['MQLoss', 'Poisson', 'Bernoulli', 'NegativeBinomial', 'Normal', 'Tweedie', 'HuberLoss', "MAE", "SMAPE", "StudentT"],
-                [0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-            )[0],
+            'loss': loss,
             'learning_rate': random.choices(
                 [0.001, 0.1, 0.01, 0.0003, 0.00001],
                 [0.4, 0.1, 0.1, 0.1, 0.1]
@@ -302,14 +304,13 @@ class NeuralForecast(ModelObject):
     def get_params(self):
         """Return dict of current parameters."""
         return {
-            'models': self.models,
+            # NOTE: `models` (plural) conflicts with AutoTS ensemble setup
+            'model': self.model,
             'scaler_type': self.scaler_type,
-            # 'activation': self.activation,
             'loss': self.loss,
             'learning_rate': self.learning_rate,
             "max_steps": self.max_steps,
             'input_size': self.input_size,      
-            # "early_stop_patience_steps": self.early_stop_patience_steps,
             "model_args": self.model_args,
             'regression_type': self.regression_type,
         }

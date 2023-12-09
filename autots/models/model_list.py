@@ -259,7 +259,6 @@ recombination_approved = [
     'FFT',
     'BallTreeMultivariateMotif',
     "TiDE",
-    "NeuralForecast",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
