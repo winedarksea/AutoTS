@@ -147,12 +147,12 @@ constraint = {
     "bounds": True,
 }
 if not long:
-    forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
-    # sets an extremely high value for the cap, one that should never actually be reached by the data normally
     if isinstance(df, pd.Series):
         cols = [df.name]
     else:
         cols = df.columns
+    forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
+    # sets an extremely high value for the cap, one that should never actually be reached by the data normally
     upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=cols)
     # in this case also assuming negatives won't happen so setting a lower constraint of 0
     lower_constraint = pd.DataFrame(0, index=forecast_index, columns=cols)
@@ -281,19 +281,15 @@ elapsed_for = timeit.default_timer() - start_time_for
 prediction = model.predict(
     future_regressor=regr_fcst, verbose=1, fail_on_forecast_nan=True
 )
+print(prediction.long_form_results().sample(5))
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
 initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
-
-"""
-initial_results["TransformationRuntime"] = initial_results["TransformationRuntime"].dt.total_seconds()
-initial_results["FitRuntime"] = initial_results["FitRuntime"].dt.total_seconds()
-initial_results["PredictRuntime"] = initial_results["PredictRuntime"].dt.total_seconds()
-initial_results["TotalRuntime"] = initial_results["TotalRuntime"].dt.total_seconds()
-"""
+if long:
+    cols = model.df_wide_numeric.columns.tolist()
 
 sleep(5)
 print(model)

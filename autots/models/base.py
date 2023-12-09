@@ -295,9 +295,12 @@ def extract_single_transformer(
             )
         return ", ".join(allz)
     else:
-        trans_dict = transformation_params.get("transformations")
-        if isinstance(trans_dict, dict):
-            return ", ".join(list(trans_dict.values()))
+        if isinstance(transformation_params, dict):
+            trans_dict = transformation_params.get("transformations")
+            if isinstance(trans_dict, dict):
+                return ", ".join(list(trans_dict.values()))
+            else:
+                return "None"
         else:
             return "None"
 
@@ -492,6 +495,7 @@ class PredictionObject(object):
         value_name="Value",
         interval_name='PredictionInterval',
         update_datetime_name=None,
+        datetime_column=None,
     ):
         """Export forecasts (including upper and lower) as single 'long' format output
 
@@ -499,41 +503,38 @@ class PredictionObject(object):
             id_name (str): name of column containing ids
             value_name (str): name of column containing numeric values
             interval_name (str): name of column telling you what is upper/lower
+            datetime_column (str): if None, is index, otherwise, name of column for datetime
             update_datetime_name (str): if not None, adds column with current timestamp and this name
 
         Returns:
             pd.DataFrame
         """
-        try:
-            upload = pd.melt(
-                self.forecast,
-                var_name=id_name,
-                value_name=value_name,
-                ignore_index=False,
-            )
-        except Exception:
-            raise ImportError("Requires pandas>=1.1.0")
+        upload = pd.melt(
+            self.forecast.reset_index(names='datetime'),
+            var_name="SeriesID", value_name="Value",
+            id_vars="datetime",
+        ).set_index("datetime")
         upload[interval_name] = "50%"
         upload_upper = pd.melt(
-            self.upper_forecast,
-            var_name=id_name,
-            value_name=value_name,
-            ignore_index=False,
-        )
+            self.upper_forecast.reset_index(names='datetime'),
+            var_name="SeriesID", value_name="Value",
+            id_vars="datetime",
+        ).set_index("datetime")
         upload_upper[
             interval_name
         ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
         upload_lower = pd.melt(
-            self.lower_forecast,
-            var_name=id_name,
-            value_name=value_name,
-            ignore_index=False,
-        )
+            self.lower_forecast.reset_index(names='datetime'),
+            var_name="SeriesID", value_name="Value",
+            id_vars="datetime",
+        ).set_index("datetime")
         upload_lower[
             interval_name
         ] = f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
 
         upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
+        if datetime_column is not None:
+            upload = upload.reset_index(drop=False, names=datetime_column)
         if update_datetime_name is not None:
             upload[update_datetime_name] = datetime.datetime.utcnow()
         return upload
