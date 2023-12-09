@@ -134,7 +134,7 @@ class NeuralForecast(ModelObject):
             "h": forecast_length,
             "input_size": input_size,
             "max_steps": self.max_steps,
-            "num_workers_loader": self.n_jobs,
+            # "num_workers_loader": self.n_jobs,
             "random_seed": self.random_seed,
             "learning_rate": self.learning_rate,
             "loss": loss,
@@ -174,7 +174,7 @@ class NeuralForecast(ModelObject):
 
         silly_format = df.reset_index(names='ds').melt(id_vars='ds', value_name='y', var_name='unique_id')
         if self.regression_type in ['User', 'user']:
-            silly_format.merge(future_regressor, left_on='ds', right_index=True)
+            silly_format = silly_format.merge(future_regressor, left_on='ds', right_index=True)
         self.nf = NeuralForecast(models=models, freq=freq)
         self.nf.fit(df=silly_format)
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -184,14 +184,19 @@ class NeuralForecast(ModelObject):
         predictStartTime = datetime.datetime.now()
         if self.regression_type in ['User', 'user']:
             index = self.create_forecast_index(forecast_length=self.forecast_length)
-            futr_df = pd.concat([pd.Series(col, index=index, name='temp') for col in self.column_names])
-            futr_df = futr_df.merge(future_regressor, left_index=True, right_index=True)
+            futr_df = pd.concat([pd.Series(col, index=index, name='unique_id') for col in self.column_names])
+            futr_df = futr_df.to_frame().merge(future_regressor, left_index=True, right_index=True)
             futr_df = futr_df.reset_index(names='ds')
+            self.futr_df = futr_df
             long_forecast = self.nf.predict(futr_df=futr_df)
         else:
             long_forecast = self.nf.predict()
-        self.long_forecast = long_forecast
-        target_col = [x for x in long_forecast.columns.tolist() if "median" in str(x)][0]
+        # self.long_forecast = long_forecast
+        target_col = [x for x in long_forecast.columns.tolist() if "median" in str(x)]
+        if len(target_col) < 1:
+            target_col = long_forecast.columns[-1]
+        else:
+            target_col = target_col[0]
         forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
 
         if just_point_forecast:
@@ -266,7 +271,6 @@ class NeuralForecast(ModelObject):
         elif models == "MLP":
             model_args = {
                 'num_layers': random.choice([1, 2, 3, 4]),
-                'activation': activation,
             }
         else:
             model_args = {}
@@ -312,14 +316,42 @@ class NeuralForecast(ModelObject):
 
 
 if False:
-    from autots import load_daily
-    
+    from autots.models.neural_forecast import NeuralForecast
+    from autots import load_daily, create_regressor, infer_frequency
+
     df = load_daily(long=False)
-    
+    forecast_length = 28
+    frequency = infer_frequency(df)
+    regr_train, regr_fcst = create_regressor(
+        df,
+        forecast_length=forecast_length,
+        frequency=frequency,
+        drop_most_recent=0,
+        scale=True,
+        summarize="auto",
+        backfill="bfill",
+        fill_na="pchip",
+        holiday_countries=["US"],
+        datepart_method="recurring",
+        preprocessing_params={
+            "fillna": None,
+            "transformations": {"0": "LocalLinearTrend"},
+            "transformation_params": {
+                "0": {
+                    'rolling_window': 30,
+                     'n_tails': 0.1,
+                     'n_future': 0.2,
+                     'method': 'mean',
+                     'macro_micro': True
+                 },
+            },
+        },
+    )
+
     params = NeuralForecast().get_new_params()
     print(params)
-    mod = NeuralForecast(**params)
-    mod.fit(df)
-    prediction = mod.predict()
+    mod = NeuralForecast(forecast_length=forecast_length, frequency=frequency, **params)
+    mod.fit(df, future_regressor=regr_train)
+    prediction = mod.predict(future_regressor=regr_fcst)
     prediction.plot_grid(df)
 
