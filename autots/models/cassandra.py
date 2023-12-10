@@ -1924,6 +1924,7 @@ class Cassandra(ModelObject):
                 },
             }
         elif trend_base == 'pb2':
+            # REPLACE THIS WITHOUT EXTRA TREES
             trend_model = {'Model': 'WindowRegression'}
             trend_model['ModelParameters'] = {
                 "window_size": 12,
