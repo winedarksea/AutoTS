@@ -149,7 +149,7 @@ fast_parallel_no_arima = {
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting']
+        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting', "MAR"]
     )
 )
 
