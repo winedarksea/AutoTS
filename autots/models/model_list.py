@@ -141,6 +141,7 @@ fast_parallel_no_arima = {
         "MultivariateMotif",
         'Theta',
         "VECM",
+        "MAR",
         # "BallTreeMultivariateMotif",  # might need sample_fraction tuning
         # "WindowRegression"  # same base shaping as BallTreeMM
     ]
@@ -149,7 +150,7 @@ fast_parallel_no_arima = {
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting', "MAR"]
+        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting']
     )
 )
 
