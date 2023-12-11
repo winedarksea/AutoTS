@@ -1850,9 +1850,11 @@ class Cassandra(ModelObject):
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if anomaly_intervention == "model":
                 model_list, model_prob = model_list_to_dict("scalable")
-                anomaly_intervention = general_template[general_template['Model'].isin(model_list)].sample(1).to_dict("records")[
-                    0
-                ]  # placeholder, probably
+                anomaly_intervention = (
+                    general_template[general_template['Model'].isin(model_list)]
+                    .sample(1)
+                    .to_dict("records")[0]
+                )  # placeholder, probably
         else:
             anomaly_detector_params = None
 

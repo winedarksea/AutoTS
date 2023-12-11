@@ -33,7 +33,7 @@ def infer_frequency(df_wide, warn=True, **kwargs):
 def split_digits_and_non_digits(s):
     # Find all digit and non-digit sequences
     all_parts = re.findall(r'\d+|\D+', s)
-    
+
     # Separate digit and non-digit parts
     digits = ''.join(part for part in all_parts if part.isdigit())
     nondigits = ''.join(part for part in all_parts if not part.isdigit())
@@ -58,7 +58,9 @@ def freq_to_timedelta(freq):
         elif 'y' in freq.lower():
             new_freq = pd.to_timedelta(364, unit='D')
         else:
-            raise ValueError(f"freq {freq} not recognized for to_timedelta. Please report this issue to AutoTS if found")
+            raise ValueError(
+                f"freq {freq} not recognized for to_timedelta. Please report this issue to AutoTS if found"
+            )
     return new_freq
 
 

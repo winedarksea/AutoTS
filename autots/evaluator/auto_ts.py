@@ -2522,7 +2522,9 @@ class AutoTS(object):
             if self.validate_import is None:
                 self.validate_import = import_template
             else:
-                self.validate_import = pd.concat([self.validate_import, import_template])
+                self.validate_import = pd.concat(
+                    [self.validate_import, import_template]
+                )
 
         return self
 
@@ -3164,7 +3166,9 @@ class AutoTS(object):
                 used_freq = self.used_frequency
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
-            ).index.min() - (freq_to_timedelta(used_freq) * int(self.forecast_length * 3))
+            ).index.min() - (
+                freq_to_timedelta(used_freq) * int(self.forecast_length * 3)
+            )
         if end_date == "auto":
             end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0

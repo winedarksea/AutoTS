@@ -32,15 +32,15 @@ class NeuralForecast(ModelObject):
         forecast_length: int = 28,
         regression_type: str = None,
         n_jobs: int = 1,
-        model = "LSTM",
-        loss = "MQLoss",
-        input_size = "2ForecastLength",
-        max_steps = 100,
-        learning_rate = 0.001,
-        early_stop_patience_steps = -1,
-        activation = 'ReLU',
-        scaler_type = 'robust',
-        model_args = {},
+        model="LSTM",
+        loss="MQLoss",
+        input_size="2ForecastLength",
+        max_steps=100,
+        learning_rate=0.001,
+        early_stop_patience_steps=-1,
+        activation='ReLU',
+        scaler_type='robust',
+        model_args={},
         **kwargs,
     ):
         ModelObject.__init__(
@@ -80,8 +80,23 @@ class NeuralForecast(ModelObject):
                 )
 
         from neuralforecast import NeuralForecast
-        from neuralforecast.losses.pytorch import SMAPE, MQLoss, DistributionLoss, MAE, HuberLoss
-        from neuralforecast.models import TFT, LSTM, NHITS, MLP, NBEATS, TimesNet, PatchTST, DeepAR
+        from neuralforecast.losses.pytorch import (
+            SMAPE,
+            MQLoss,
+            DistributionLoss,
+            MAE,
+            HuberLoss,
+        )
+        from neuralforecast.models import (
+            TFT,
+            LSTM,
+            NHITS,
+            MLP,
+            NBEATS,
+            TimesNet,
+            PatchTST,
+            DeepAR,
+        )
 
         prediction_interval = self.prediction_interval
         forecast_length = self.forecast_length
@@ -94,23 +109,38 @@ class NeuralForecast(ModelObject):
             levels = list(prediction_interval.values())
         else:
             levels = [int(prediction_interval * 100)]
-        
+
         logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
         loss = self.loss
         if loss == "MQLoss":
             loss = MQLoss(level=levels)
         elif loss == "Poisson":
-            loss = DistributionLoss(distribution='Poisson', level=levels, return_params=False)
+            loss = DistributionLoss(
+                distribution='Poisson', level=levels, return_params=False
+            )
         elif loss == "Bernoulli":
-            loss = DistributionLoss(distribution='Bernoulli', level=levels, return_params=False)
+            loss = DistributionLoss(
+                distribution='Bernoulli', level=levels, return_params=False
+            )
         elif loss == "StudentT":
-            loss = DistributionLoss(distribution='StudentT', level=levels, return_params=False)
+            loss = DistributionLoss(
+                distribution='StudentT', level=levels, return_params=False
+            )
         elif loss == "NegativeBinomial":
-            loss = DistributionLoss(distribution='NegativeBinomial', level=levels, total_count=3, return_params=False)
+            loss = DistributionLoss(
+                distribution='NegativeBinomial',
+                level=levels,
+                total_count=3,
+                return_params=False,
+            )
         elif loss == "Normal":
-            loss = DistributionLoss(distribution='Normal', level=levels, return_params=False)
+            loss = DistributionLoss(
+                distribution='Normal', level=levels, return_params=False
+            )
         elif loss == "Tweedie":
-            loss = DistributionLoss(distribution='Tweedie', level=levels, return_params=False, rho=1.5)
+            loss = DistributionLoss(
+                distribution='Tweedie', level=levels, return_params=False, rho=1.5
+            )
         elif loss == "MAE":
             self.df_train = df
             loss = MAE()
@@ -128,7 +158,9 @@ class NeuralForecast(ModelObject):
 
         str_input = str(self.input_size).lower()
         if "forecastlength" in str_input:
-            input_size = forecast_length * int(''.join([x for x in str_input if x.isdigit()]))
+            input_size = forecast_length * int(
+                ''.join([x for x in str_input if x.isdigit()])
+            )
         else:
             input_size = int(self.input_size)
         self.base_args = {
@@ -170,23 +202,36 @@ class NeuralForecast(ModelObject):
             models = [DeepAR(**{**self.base_args, **model_args})]
         else:
             raise ValueError(f"models not recognized: {models}")
-        
-        # model params  
 
-        silly_format = df.reset_index(names='ds').melt(id_vars='ds', value_name='y', var_name='unique_id')
+        # model params
+
+        silly_format = df.reset_index(names='ds').melt(
+            id_vars='ds', value_name='y', var_name='unique_id'
+        )
         if self.regression_type in ['User', 'user']:
-            silly_format = silly_format.merge(future_regressor, left_on='ds', right_index=True)
+            silly_format = silly_format.merge(
+                future_regressor, left_on='ds', right_index=True
+            )
         self.nf = NeuralForecast(models=models, freq=freq)
         self.nf.fit(df=silly_format)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length=None, future_regressor=None, just_point_forecast=False):
+    def predict(
+        self, forecast_length=None, future_regressor=None, just_point_forecast=False
+    ):
         predictStartTime = datetime.datetime.now()
         if self.regression_type in ['User', 'user']:
             index = self.create_forecast_index(forecast_length=self.forecast_length)
-            futr_df = pd.concat([pd.Series(col, index=index, name='unique_id') for col in self.column_names])
-            futr_df = futr_df.to_frame().merge(future_regressor, left_index=True, right_index=True)
+            futr_df = pd.concat(
+                [
+                    pd.Series(col, index=index, name='unique_id')
+                    for col in self.column_names
+                ]
+            )
+            futr_df = futr_df.to_frame().merge(
+                future_regressor, left_index=True, right_index=True
+            )
             futr_df = futr_df.reset_index(names='ds')
             self.futr_df = futr_df
             long_forecast = self.nf.predict(futr_df=futr_df)
@@ -198,7 +243,9 @@ class NeuralForecast(ModelObject):
             target_col = long_forecast.columns[-1]
         else:
             target_col = target_col[0]
-        forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
+        forecast = long_forecast.reset_index().pivot_table(
+            index='ds', columns='unique_id', values=target_col
+        )[self.column_names]
 
         if just_point_forecast:
             return forecast
@@ -211,9 +258,13 @@ class NeuralForecast(ModelObject):
             )
         else:
             target_col = [x for x in long_forecast.columns if "hi-" in x][0]
-            upper_forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
+            upper_forecast = long_forecast.reset_index().pivot_table(
+                index='ds', columns='unique_id', values=target_col
+            )[self.column_names]
             target_col = [x for x in long_forecast.columns if "lo-" in x][0]
-            lower_forecast = long_forecast.reset_index().pivot_table(index='ds', columns='unique_id', values=target_col)[self.column_names]
+            lower_forecast = long_forecast.reset_index().pivot_table(
+                index='ds', columns='unique_id', values=target_col
+            )[self.column_names]
 
         predict_runtime = datetime.datetime.now() - predictStartTime
         prediction = PredictionObject(
@@ -246,11 +297,22 @@ class NeuralForecast(ModelObject):
             ]
         activation = random.choices(
             ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
-            [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+            [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         loss = random.choices(
-            ['MQLoss', 'Poisson', 'Bernoulli', 'NegativeBinomial', 'Normal', 'Tweedie', 'HuberLoss', "MAE", "SMAPE", "StudentT"],
-            [0.3, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01]
+            [
+                'MQLoss',
+                'Poisson',
+                'Bernoulli',
+                'NegativeBinomial',
+                'Normal',
+                'Tweedie',
+                'HuberLoss',
+                "MAE",
+                "SMAPE",
+                "StudentT",
+            ],
+            [0.3, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
         )[0]
         if models == "TFT":
             model_args = {
@@ -262,16 +324,16 @@ class NeuralForecast(ModelObject):
             }
         elif models == "NHITS":
             model_args = {
-                "input_size": random.choice([28, 28*2, 28*3, 28*5]),
-                "n_blocks": 5*[1],
+                "input_size": random.choice([28, 28 * 2, 28 * 3, 28 * 5]),
+                "n_blocks": 5 * [1],
                 "mlp_units": 5 * [[512, 512]],
-                "n_pool_kernel_size": random.choice([5*[1], 5*[2], 5*[4],         
-                                                  [8, 4, 2, 1, 1]]),
-                "n_freq_downsample": random.choice([[8, 4, 2, 1, 1],
-                                                  [1, 1, 1, 1, 1]]),
+                "n_pool_kernel_size": random.choice(
+                    [5 * [1], 5 * [2], 5 * [4], [8, 4, 2, 1, 1]]
+                ),
+                "n_freq_downsample": random.choice([[8, 4, 2, 1, 1], [1, 1, 1, 1, 1]]),
                 "batch_size": random.choice([32, 64, 128, 256]),
                 "windows_batch_size": random.choice([128, 256, 512, 1024]),
-                "activation": activation,   
+                "activation": activation,
             }
         elif models == "MLP":
             model_args = {
@@ -282,20 +344,20 @@ class NeuralForecast(ModelObject):
 
         return {
             'model': models,
-            'scaler_type': random.choices(["identity", 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2])[0],
+            'scaler_type': random.choices(
+                ["identity", 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2]
+            )[0],
             'loss': loss,
             'learning_rate': random.choices(
-                [0.001, 0.1, 0.01, 0.0003, 0.00001],
-                [0.4, 0.1, 0.1, 0.1, 0.1]
+                [0.001, 0.1, 0.01, 0.0003, 0.00001], [0.4, 0.1, 0.1, 0.1, 0.1]
             )[0],
             "max_steps": random.choices(
                 [40, 80, 100, 1000],
                 [0.2, 0.2, 0.2, 0.05],
             )[0],
             'input_size': random.choices(
-                [10, 28, "2ForecastLength", "3ForecastLength"],
-                [0.2, 0.2, 0.2, 0.2]
-            )[0],      
+                [10, 28, "2ForecastLength", "3ForecastLength"], [0.2, 0.2, 0.2, 0.2]
+            )[0],
             # "early_stop_patience_steps": random.choice([1, 3, 5]),
             "model_args": model_args,
             'regression_type': regression_type_choice,
@@ -310,7 +372,7 @@ class NeuralForecast(ModelObject):
             'loss': self.loss,
             'learning_rate': self.learning_rate,
             "max_steps": self.max_steps,
-            'input_size': self.input_size,      
+            'input_size': self.input_size,
             "model_args": self.model_args,
             'regression_type': self.regression_type,
         }
@@ -340,11 +402,11 @@ if False:
             "transformation_params": {
                 "0": {
                     'rolling_window': 30,
-                     'n_tails': 0.1,
-                     'n_future': 0.2,
-                     'method': 'mean',
-                     'macro_micro': True
-                 },
+                    'n_tails': 0.1,
+                    'n_future': 0.2,
+                    'method': 'mean',
+                    'macro_micro': True,
+                },
             },
         },
     )
@@ -355,4 +417,3 @@ if False:
     mod.fit(df, future_regressor=regr_train)
     prediction = mod.predict(future_regressor=regr_fcst)
     prediction.plot_grid(df)
-

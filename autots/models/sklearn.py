@@ -545,6 +545,7 @@ def retrieve_classifier(
         )
     elif model_class == "KNN":
         from sklearn.neighbors import KNeighborsClassifier
+
         return KNeighborsClassifier(
             n_jobs=n_jobs,
             **model_param_dict,
@@ -552,7 +553,7 @@ def retrieve_classifier(
     elif model_class == "SGD":
         from sklearn.linear_model import SGDClassifier
         from sklearn.multioutput import MultiOutputClassifier
-        
+
         if multioutput:
             return MultiOutputClassifier(
                 SGDClassifier(
@@ -776,8 +777,10 @@ def generate_classifier_params(
             }
         else:
             model_dict = {
-                'xgboost': 1, 'ExtraTrees': 0.2,
-                'RandomForest': 0.1, 'KNN': 1,
+                'xgboost': 1,
+                'ExtraTrees': 0.2,
+                'RandomForest': 0.1,
+                'KNN': 1,
                 'SGD': 0.1,
             }
     regr_params = generate_regressor_params(
@@ -2298,9 +2301,13 @@ class DatepartRegression(ModelObject):
             index, method=self.datepart_method, polynomial_degree=self.polynomial_degree
         )
         if self.regression_type in ['User', 'user']:
-            self.X_pred = pd.concat([self.X_pred, future_regressor], axis=1)
+            self.X_pred = pd.concat(
+                [self.X_pred, future_regressor.reindex(index)], axis=1
+            )
             if self.X_pred.shape[0] > index.shape[0]:
-                raise ValueError("future_regressor and X index failed to align")
+                raise ValueError(
+                    f"future_regressor {future_regressor.index} and X {self.X_pred.index} index failed to align"
+                )
         self.X_pred.columns = [str(xc) for xc in self.X_pred.columns]
 
         forecast = pd.DataFrame(

@@ -163,7 +163,14 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
-gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting', "TiDE", "NeuralForecast", "NeuralProphet"]
+gpu = [
+    'GluonTS',
+    'WindowRegression',
+    'PytorchForecasting',
+    "TiDE",
+    "NeuralForecast",
+    "NeuralProphet",
+]
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',

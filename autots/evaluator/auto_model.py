@@ -1021,7 +1021,9 @@ class TemplateEvalObject(object):
             sort=False,
         ).reset_index(drop=True)
         self.per_series_metrics = pd.concat(
-            [self.per_series_metrics, another_eval.per_series_metrics], axis=0, sort=False
+            [self.per_series_metrics, another_eval.per_series_metrics],
+            axis=0,
+            sort=False,
         )
         self.per_series_mae = pd.concat(
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
@@ -2397,15 +2399,16 @@ def NewGeneticTemplate(
 
 
 def validation_aggregation(
-        validation_results, df_train=None,
-        groupby_cols = [
-            'ID',
-            'Model',
-            'ModelParameters',
-            'TransformationParameters',
-            'Ensemble',
-        ],
-    ):
+    validation_results,
+    df_train=None,
+    groupby_cols=[
+        'ID',
+        'Model',
+        'ModelParameters',
+        'TransformationParameters',
+        'Ensemble',
+    ],
+):
     """Aggregate a TemplateEvalObject."""
     col_aggs = {
         'Runs': 'sum',
@@ -2468,9 +2471,7 @@ def validation_aggregation(
     validation_results.model_results = validation_results.model_results.replace(
         [np.inf, -np.inf], np.nan
     )
-    grouped = validation_results.model_results.groupby(
-        groupby_cols
-    )
+    grouped = validation_results.model_results.groupby(groupby_cols)
     validation_results.model_results = grouped.agg(col_aggs)
     validation_results.model_results = validation_results.model_results.reset_index(
         drop=False

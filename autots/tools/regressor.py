@@ -330,7 +330,9 @@ def create_lagged_regressor(
             dates[-1], periods=(forecast_length + 1), freq=frequency
         )[1:]
     except Exception:
-        raise ValueError("create_regressor doesn't work on data where forecast_length > historical data length")
+        raise ValueError(
+            "create_regressor doesn't work on data where forecast_length > historical data length"
+        )
     regressor_train = df_inner.shift(forecast_length)
     if backfill == "ets":
         model_flag = True
