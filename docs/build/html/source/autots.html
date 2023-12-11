@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>autots package &#8212; AutoTS 0.6.2 documentation</title>
+    <title>autots package &#8212; AutoTS 0.6.4 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
@@ -595,6 +595,16 @@
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.model_list.model_list_to_dict"><code class="docutils literal notranslate"><span class="pre">model_list_to_dict()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.neural_forecast">autots.models.neural_forecast module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.neural_forecast.NeuralForecast"><code class="docutils literal notranslate"><span class="pre">NeuralForecast</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#autots.models.neural_forecast.NeuralForecast.fit"><code class="docutils literal notranslate"><span class="pre">NeuralForecast.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#autots.models.neural_forecast.NeuralForecast.get_new_params"><code class="docutils literal notranslate"><span class="pre">NeuralForecast.get_new_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#autots.models.neural_forecast.NeuralForecast.get_params"><code class="docutils literal notranslate"><span class="pre">NeuralForecast.get_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#autots.models.neural_forecast.NeuralForecast.predict"><code class="docutils literal notranslate"><span class="pre">NeuralForecast.predict()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.prophet">autots.models.prophet module</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.prophet.FBProphet"><code class="docutils literal notranslate"><span class="pre">FBProphet</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#autots.models.prophet.FBProphet.fit"><code class="docutils literal notranslate"><span class="pre">FBProphet.fit()</span></code></a></li>
@@ -1028,9 +1038,11 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.clean_weights"><code class="docutils literal notranslate"><span class="pre">clean_weights()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.df_cleanup"><code class="docutils literal notranslate"><span class="pre">df_cleanup()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.freq_to_timedelta"><code class="docutils literal notranslate"><span class="pre">freq_to_timedelta()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.infer_frequency"><code class="docutils literal notranslate"><span class="pre">infer_frequency()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.long_to_wide"><code class="docutils literal notranslate"><span class="pre">long_to_wide()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.simple_train_test_split"><code class="docutils literal notranslate"><span class="pre">simple_train_test_split()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.split_digits_and_non_digits"><code class="docutils literal notranslate"><span class="pre">split_digits_and_non_digits()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.subset_series"><code class="docutils literal notranslate"><span class="pre">subset_series()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.tools.html#autots.tools.shaping.wide_to_3d"><code class="docutils literal notranslate"><span class="pre">wide_to_3d()</span></code></a></li>
 </ul>
@@ -1836,7 +1848,7 @@ or can be a DataFrame of model results or a full TemplateEvalObject</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.AutoTS.import_template">
-<span class="sig-name descname"><span class="pre">import_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'add_on'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enforce_model_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_ensemble</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_horizontal</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.import_template" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">import_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'add_on'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enforce_model_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_ensemble</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_horizontal</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_validation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.import_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Import a previously exported template of model parameters.
 Must be done before the AutoTS object is .fit().</p>
 <dl class="field-list simple">
@@ -1847,6 +1859,7 @@ Must be done before the AutoTS object is .fit().</p>
 <li><p><strong>enforce_model_list</strong> (<em>bool</em>) – if True, remove model types not in model_list</p></li>
 <li><p><strong>include_ensemble</strong> (<em>bool</em>) – if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)</p></li>
 <li><p><strong>include_horizontal</strong> (<em>bool</em>) – if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)</p></li>
+<li><p><strong>force_validation</strong> (<em>bool</em>) – if True, all models imported here will automatically get sent to full cross validation (regardless of first eval performance)</p></li>
 </ul>
 </dd>
 </dl>
@@ -2765,7 +2778,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.GeneralTransformer.get_new_params">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -2943,6 +2956,20 @@ also can be a dict of {‘country’: “subdiv”} to include subdivision (stat
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>regressor_train, regressor_forecast</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.infer_frequency">
+<span class="sig-prename descclassname"><span class="pre">autots.</span></span><span class="sig-name descname"><span class="pre">infer_frequency</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df_wide</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">warn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.infer_frequency" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer the frequency in a slightly more robust way.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_wide</strong> (<em>pd.Dataframe</em><em> or </em><em>pd.DatetimeIndex</em>) – input to pull frequency from</p></li>
+<li><p><strong>warn</strong> (<em>bool</em>) – unused, here to make swappable with pd.infer_freq</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>

@@ -1118,7 +1118,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             choice = generate_regressor_params(
                 model_dict={
                     "ElasticNet": 0.5,
-                    "DecisionTree": 0.5,
+                    "DecisionTree": 0.25,
                     # 'ExtraTrees': 0.25,
                 }
             )
@@ -2421,9 +2421,7 @@ class MeanDifference(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
-        return (df - self.means.shift(self.lag).values[..., None]).fillna(
-            method="bfill"
-        )
+        return (df - self.means.shift(self.lag).values[..., None]).bfill()
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
@@ -2865,7 +2863,7 @@ class AnomalyRemoval(EmptyTransformer):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(
-                transformer_list="fast", transformer_max_depth=2
+                transformer_list="scalable", transformer_max_depth=2
             )
 
         return {
@@ -4340,6 +4338,7 @@ class DiffSmoother(EmptyTransformer):
         fillna=None,
         n_jobs=1,
         adjustment: int = 2,
+        reverse_alignment=True,
     ):
         """Detect anomalies on a historic dataset in the DIFFS then cumsum back to origin space.
         No inverse_transform available.
@@ -4350,6 +4349,7 @@ class DiffSmoother(EmptyTransformer):
             transform_dict (dict): option but helpful, often datepart, differencing, or other standard AutoTS transformer params
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
+            reverse_alighment (bool): if True, remove diffs then cumsum
             n_jobs (int): multiprocessing jobs, used by some methods
         """
         super().__init__(name="DiffSmoother")
@@ -4360,6 +4360,7 @@ class DiffSmoother(EmptyTransformer):
         self.n_jobs = n_jobs
         self.fillna = fillna
         self.adjustment = adjustment
+        self.reverse_alignment = reverse_alignment
 
     def fit(self, df):
         """Fit.
@@ -4394,11 +4395,21 @@ class DiffSmoother(EmptyTransformer):
                 method_params=self.method_params,
                 n_jobs=self.n_jobs,
             )
-            diffs = diffs.where(self.anomalies != -1, np.nan)
+            if self.reverse_alignment:
+                diffs = diffs.where(self.anomalies != -1, np.nan)
+            else:
+                # also removes any -1 in your first row of data, for giggles
+                full_anom = pd.concat([df.iloc[0:1], self.anomalies])
+                full_anom.index = df.index
+                full_anom.columns = df.columns
+                diffs = df.where(full_anom != -1, np.nan)
             if self.fillna is not None:
                 diffs = FillNA(diffs, method=self.fillna, window=10)
 
-        return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
+        if self.reverse_alignment:
+            return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
+        else:
+            return diffs
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -4408,7 +4419,7 @@ class DiffSmoother(EmptyTransformer):
         return self.transform(df)
 
     @staticmethod
-    def get_new_params(method="random"):
+    def get_new_params(method="fast"):
         fillna = random.choices(
             [
                 None,
@@ -4423,21 +4434,24 @@ class DiffSmoother(EmptyTransformer):
                 2.5,
                 3.0,
             ],
-            [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1],
+            [0.0, 0.3, 0.1, 0.3, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         if isinstance(fillna, (float, int)):
             method_choice = None
             method_params = None
             transform_dict = None
+            reverse_alignment = True
         else:
             method_choice, method_params, transform_dict = anomaly_new_params(
                 method=method
             )
+            reverse_alignment = random.choice([True, False])
 
         return {
             "method": method_choice,
             "method_params": method_params,
             "transform_dict": None,
+            "reverse_alignment": reverse_alignment,
             "fillna": fillna,
         }
 
@@ -4681,8 +4695,8 @@ class GeneralTransformer(object):
         ]
 
     @staticmethod
-    def get_new_params(method="random"):
-        return RandomTransform()
+    def get_new_params(method="fast"):
+        return RandomTransform(transformer_list=method)
 
     def fill_na(self, df, window: int = 10):
         """
@@ -5154,6 +5168,8 @@ def transformer_list_to_dict(transformer_list):
         del fast_transformer_dict["Cointegration"]
         del fast_transformer_dict["BTCD"]
 
+    if transformer_list is None:
+        transformer_list = "superfast"
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
     elif transformer_list in ["fast", "default", "Fast", "auto"]:
@@ -5161,12 +5177,14 @@ def transformer_list_to_dict(transformer_list):
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict
     elif transformer_list == "scalable":
+        # "scalable" meant to be even smaller than "fast" subset of transformers
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
-        # del transformer_list["RegressionFilter"]  # improved, might be good enough
-        # del transformer_list["LocalLinearTrend"]  # improved, might be good enough
+        # temporary removal for testing
+        del transformer_list["RegressionFilter"]
+        del transformer_list["LocalLinearTrend"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
@@ -5376,6 +5394,6 @@ def random_cleaners():
     )[0]
     if transform_dict == "random":
         transform_dict = RandomTransform(
-            transformer_list="fast", transformer_max_depth=2
+            transformer_list="scalable", transformer_max_depth=2
         )
     return transform_dict

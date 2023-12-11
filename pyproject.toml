@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autots"
-version = "0.6.3"
+version = "0.6.4"
 authors = [
   { name="Colin Catlin", email="colin.catlin@gmail.com" },
 ]
@@ -40,6 +40,7 @@ additional = [
 	'pytrends',
 	'matplotlib',
 	'requests',
+	'seaborn',
 ]
 
 [project.urls]

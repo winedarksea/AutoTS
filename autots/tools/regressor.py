@@ -325,10 +325,14 @@ def create_lagged_regressor(
         )
 
     regressor_forecast = df_inner.tail(forecast_length)
-    # also dates.shift(forecast_length)[-forecast_length:]
-    regressor_forecast.index = pd.date_range(
-        dates[-1], periods=(forecast_length + 1), freq=frequency
-    )[1:]
+    try:
+        regressor_forecast.index = pd.date_range(
+            dates[-1], periods=(forecast_length + 1), freq=frequency
+        )[1:]
+    except Exception:
+        raise ValueError(
+            "create_regressor doesn't work on data where forecast_length > historical data length"
+        )
     regressor_train = df_inner.shift(forecast_length)
     if backfill == "ets":
         model_flag = True

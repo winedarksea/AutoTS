@@ -45,6 +45,7 @@ all_models = [
     'FFT',
     "BallTreeMultivariateMotif",
     "TiDE",
+    "NeuralForecast",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -103,7 +104,7 @@ fast = {
     # 'MultivariateMotif': 0.8,  # RAM issues at scale it seems
     'SectionalMotif': 1,
     'NVAR': 0.3,
-    'MAR': 0.5,
+    'MAR': 0.25,
     'RRVAR': 1,
     'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
@@ -148,7 +149,7 @@ fast_parallel_no_arima = {
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting']
+        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting', "MAR"]
     )
 )
 
@@ -162,7 +163,14 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
-gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting', "TiDE"]
+gpu = [
+    'GluonTS',
+    'WindowRegression',
+    'PytorchForecasting',
+    "TiDE",
+    "NeuralForecast",
+    "NeuralProphet",
+]
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
@@ -187,6 +195,7 @@ probabilistic = [
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',
+    "NeuralForecast",  # mostly
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -210,6 +219,7 @@ multivariate = [
     'Cassandra',  # depends
     'BallTreeMultivariateMotif',
     "TiDE",
+    "NeuralForecast",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -303,6 +313,7 @@ regressor = [
     'ARCH',
     'Cassandra',
     'PreprocessingRegression',
+    "NeuralForecast",
 ]
 motifs = [
     'UnivariateMotif',

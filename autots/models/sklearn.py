@@ -543,6 +543,33 @@ def retrieve_classifier(
             n_jobs=n_jobs,
             **model_param_dict,
         )
+    elif model_class == "KNN":
+        from sklearn.neighbors import KNeighborsClassifier
+
+        return KNeighborsClassifier(
+            n_jobs=n_jobs,
+            **model_param_dict,
+        )
+    elif model_class == "SGD":
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.multioutput import MultiOutputClassifier
+
+        if multioutput:
+            return MultiOutputClassifier(
+                SGDClassifier(
+                    random_state=random_seed,
+                    verbose=verbose_bool,
+                    n_jobs=n_jobs,
+                    **model_param_dict,
+                )
+            )
+        else:
+            return SGDClassifier(
+                random_state=random_seed,
+                verbose=verbose_bool,
+                n_jobs=n_jobs,
+                **model_param_dict,
+            )
     else:
         raise ValueError(f"classifier {model_class} not a recognized option.")
 
@@ -552,18 +579,18 @@ sklearn_model_dict = {
     # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
     'MLP': 0.05,
-    'DecisionTree': 0.05,
+    'DecisionTree': 0.02,
     'KNN': 0.05,
-    'Adaboost': 0.03,
+    'Adaboost': 0.01,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
-    'KerasRNN': 0.01,
-    'Transformer': 0.02,
+    'KerasRNN': 0.001,  # slow at scale
+    'Transformer': 0.001,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.1,
     'LightGBMRegressorChain': 0.03,
-    'ExtraTrees': 0.05,
+    'ExtraTrees': 0.01,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
@@ -639,15 +666,16 @@ no_shared_model_dict = {
 datepart_model_dict: dict = {
     # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
+    'xgboost': 0.01,
     'MLP': 0.05,
-    'DecisionTree': 0.05,
+    'DecisionTree': 0.02,
     'Adaboost': 0.05,
-    'SVM': 0.05,
-    'KerasRNN': 0.05,
+    'SVM': 0.01,
+    'KerasRNN': 0.02,
     'Transformer': 0.02,  # slow
-    'ExtraTrees': 0.07,
+    'ExtraTrees': 0.00001,  # some params cause RAM crash?
     'RadiusNeighbors': 0.05,
-    'MultioutputGPR': 0.0001,
+    'MultioutputGPR': 0.00001,
 }
 gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
 gradient_boosting = {
@@ -739,7 +767,22 @@ def generate_classifier_params(
     method="default",
 ):
     if model_dict is None:
-        model_dict = {'xgboost': 1, 'ExtraTrees': 1, 'RandomForest': 1}
+        if method == "fast":
+            model_dict = {
+                'xgboost': 1,
+                # 'ExtraTrees': 0.2,  # crashes sometimes
+                # 'RandomForest': 0.1,
+                'KNN': 1,
+                'SGD': 0.1,
+            }
+        else:
+            model_dict = {
+                'xgboost': 1,
+                'ExtraTrees': 0.2,
+                'RandomForest': 0.1,
+                'KNN': 1,
+                'SGD': 0.1,
+            }
     regr_params = generate_regressor_params(
         model_dict=model_dict,
         method=method,
@@ -2258,9 +2301,13 @@ class DatepartRegression(ModelObject):
             index, method=self.datepart_method, polynomial_degree=self.polynomial_degree
         )
         if self.regression_type in ['User', 'user']:
-            self.X_pred = pd.concat([self.X_pred, future_regressor], axis=1)
+            self.X_pred = pd.concat(
+                [self.X_pred, future_regressor.reindex(index)], axis=1
+            )
             if self.X_pred.shape[0] > index.shape[0]:
-                raise ValueError("future_regressor and X index failed to align")
+                raise ValueError(
+                    f"future_regressor {future_regressor.index} and X {self.X_pred.index} index failed to align"
+                )
         self.X_pred.columns = [str(xc) for xc in self.X_pred.columns]
 
         forecast = pd.DataFrame(

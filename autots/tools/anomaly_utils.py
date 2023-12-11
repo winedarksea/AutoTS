@@ -455,14 +455,14 @@ def anomaly_new_params(method='random'):
                 "LOF",
                 "EE",
                 "zscore",
-                "rolling_zscore",
+                "rolling_zscore",  # Matt likes this one best
                 "mad",
                 "minmax",
                 "IQR",
                 "nonparametric",
                 "IsolationForest",
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1, 0.05],
+            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05],
         )[0]
 
     if method_choice == "IsolationForest":

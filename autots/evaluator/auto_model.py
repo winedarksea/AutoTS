@@ -683,6 +683,19 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model in ["NeuralForecast", "neuralforecast"]:
+        from autots.models.neural_forecast import NeuralForecast
+
+        return NeuralForecast(
+            frequency=frequency,
+            forecast_length=forecast_length,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -1007,6 +1020,11 @@ class TemplateEvalObject(object):
             ignore_index=True,
             sort=False,
         ).reset_index(drop=True)
+        self.per_series_metrics = pd.concat(
+            [self.per_series_metrics, another_eval.per_series_metrics],
+            axis=0,
+            sort=False,
+        )
         self.per_series_mae = pd.concat(
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
         )
@@ -2142,6 +2160,7 @@ def NewGeneticTemplate(
     models_mode: str = "default",
     score_per_series=None,
     recursive_count=0,
+    model_list=None,
     # UPDATE RECURSIVE section if adding or removing params
 ):
     """
@@ -2155,6 +2174,8 @@ def NewGeneticTemplate(
 
     """
     new_template_list = []
+    if model_list is None:
+        model_list = model_results['Model'].unique().tolist()
 
     # filter existing templates
     sorted_results = model_results[
@@ -2210,8 +2231,11 @@ def NewGeneticTemplate(
     sidx = {name: i for i, name in enumerate(list(sorted_results), start=1)}
     for row in sorted_results.itertuples(name=None):
         n = n_list[counter]
-        counter += 1
         model_type = row[sidx["Model"]]
+        # skip models not in the model_list
+        if model_type not in model_list:
+            continue
+        counter += 1
         model_params = row[sidx["ModelParameters"]]
         try:
             trans_params = json.loads(row[sidx["TransformationParameters"]])
@@ -2356,6 +2380,7 @@ def NewGeneticTemplate(
                 models_mode=models_mode,
                 score_per_series=score_per_series,
                 recursive_count=recursive_count,
+                model_list=model_list,
             )
     # enjoy the privilege
     elif new_template.shape[0] < max_results:
@@ -2373,15 +2398,18 @@ def NewGeneticTemplate(
             )
 
 
-def validation_aggregation(validation_results, df_train=None):
-    """Aggregate a TemplateEvalObject."""
-    groupby_cols = [
+def validation_aggregation(
+    validation_results,
+    df_train=None,
+    groupby_cols=[
         'ID',
         'Model',
         'ModelParameters',
         'TransformationParameters',
         'Ensemble',
-    ]
+    ],
+):
+    """Aggregate a TemplateEvalObject."""
     col_aggs = {
         'Runs': 'sum',
         'smape': 'mean',
@@ -2443,9 +2471,8 @@ def validation_aggregation(validation_results, df_train=None):
     validation_results.model_results = validation_results.model_results.replace(
         [np.inf, -np.inf], np.nan
     )
-    validation_results.model_results = validation_results.model_results.groupby(
-        groupby_cols
-    ).agg(col_aggs)
+    grouped = validation_results.model_results.groupby(groupby_cols)
+    validation_results.model_results = grouped.agg(col_aggs)
     validation_results.model_results = validation_results.model_results.reset_index(
         drop=False
     )

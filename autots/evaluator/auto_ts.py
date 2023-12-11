@@ -17,6 +17,7 @@ from autots.tools.shaping import (
     NumericTransformer,
     clean_weights,
     infer_frequency,
+    freq_to_timedelta,
 )
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.evaluator.auto_model import (
@@ -238,6 +239,7 @@ class AutoTS(object):
         self.models_mode = models_mode
         self.current_model_file = current_model_file
         self.force_gc = force_gc
+        self.validate_import = None
         random.seed(self.random_seed)
         if self.max_generations is None and self.generation_timeout is not None:
             self.max_generations = 99999
@@ -725,9 +727,19 @@ class AutoTS(object):
                         },
                     },
                 },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "CenterSplit"},
+                    "transformation_params": {
+                        "0": {
+                            'fillna': 'ffill',
+                            'center': 'zero',
+                        },
+                    },
+                },
                 'random',
             ],
-            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.1],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.05, 0.1],
         )[0]
         if preclean_choice == "random":
             preclean_choice = RandomTransform(
@@ -1100,6 +1112,7 @@ class AutoTS(object):
         """
         self.model = None
         self.grouping_ids = grouping_ids
+        self.fitStart = pd.Timestamp.now()
 
         # convert class variables to local variables (makes testing easier)
         if self.validation_method == "custom":
@@ -1117,7 +1130,6 @@ class AutoTS(object):
         else:
             self.validation_indexes = []
 
-        prediction_interval = self.prediction_interval
         random_seed = self.random_seed
         metric_weighting = self.metric_weighting
         verbose = self.verbose
@@ -1285,6 +1297,7 @@ class AutoTS(object):
                 transformer_max_depth=self.transformer_max_depth,
                 models_mode=self.models_mode,
                 score_per_series=self.score_per_series,
+                model_list=self.model_list,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
@@ -1406,6 +1419,12 @@ class AutoTS(object):
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
         self.validation_template = validation_template[self.template_cols]
+        if self.validate_import is not None:
+            self.validation_template = pd.concat(
+                [self.validation_template, self.validate_import]
+            ).drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
 
         # run validations
         if self.num_validations > 0:
@@ -1740,6 +1759,7 @@ class AutoTS(object):
 
         # clean up any remaining print statements
         sys.stdout.flush()
+        self.fitRuntime = pd.Timestamp.now() - self.fitStart
         return self
 
     def validation_agg(self):
@@ -2449,6 +2469,7 @@ class AutoTS(object):
         enforce_model_list: bool = True,
         include_ensemble: bool = False,
         include_horizontal: bool = False,
+        force_validation: bool = False,
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
@@ -2459,6 +2480,7 @@ class AutoTS(object):
             enforce_model_list (bool): if True, remove model types not in model_list
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
             include_horizontal (bool): if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)
+            force_validation (bool): if True, all models imported here will automatically get sent to full cross validation (regardless of first eval performance)
         """
         if method.lower() in ['add on', 'addon', 'add_on']:
             addon_flag = True
@@ -2495,6 +2517,14 @@ class AutoTS(object):
             self.initial_template = import_template
         else:
             return ValueError("method must be 'addon' or 'only'")
+
+        if force_validation:
+            if self.validate_import is None:
+                self.validate_import = import_template
+            else:
+                self.validate_import = pd.concat(
+                    [self.validate_import, import_template]
+                )
 
         return self
 
@@ -3136,7 +3166,9 @@ class AutoTS(object):
                 used_freq = self.used_frequency
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0
-            ).index.min() - (pd.to_timedelta(used_freq) * int(self.forecast_length * 3))
+            ).index.min() - (
+                freq_to_timedelta(used_freq) * int(self.forecast_length * 3)
+            )
         if end_date == "auto":
             end_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
                 how='all', axis=0

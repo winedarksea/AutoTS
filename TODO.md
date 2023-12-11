@@ -12,12 +12,12 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.3 🎐🎐🎐
-* energy datasets to load_live_daily
-* improved the 'Scalable' transformer_list to reduce memory issues on larger datasets
-* memory improvements to KalmanSmoother, HolidayTransformer, LocalLinearTrend
-* added DiffSmoother
-* added force_gc arg which can be tried if memory is in short supply relative to data (probably won't help much)
+# 0.6.4 🔜🔜🔜
+* adjusted n_jobs back to minus 1 for multivariatemotif
+* fixed bug with plot_validations not working with some frequencies
+* force_validation added to import_template
+* model_list now enforced in new generations
+* added NeuralForecast
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

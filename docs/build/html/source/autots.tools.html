@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.6.2 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.6.4 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
@@ -1526,6 +1526,12 @@ If new categorical series or levels are present in .transform() it won’t work!
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.shaping.freq_to_timedelta">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.shaping.</span></span><span class="sig-name descname"><span class="pre">freq_to_timedelta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">freq</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.freq_to_timedelta" title="Permalink to this definition">¶</a></dt>
+<dd><p>Working around pandas limitations.</p>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.shaping.infer_frequency">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.shaping.</span></span><span class="sig-name descname"><span class="pre">infer_frequency</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df_wide</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">warn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.infer_frequency" title="Permalink to this definition">¶</a></dt>
 <dd><p>Infer the frequency in a slightly more robust way.</p>
@@ -1588,6 +1594,11 @@ note this includes NaNs in current configuration</p>
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.shaping.split_digits_and_non_digits">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.shaping.</span></span><span class="sig-name descname"><span class="pre">split_digits_and_non_digits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">s</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.split_digits_and_non_digits" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.shaping.subset_series">
@@ -2398,7 +2409,7 @@ Will only match original if phi==1</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.tools.transform.DiffSmoother">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">DiffSmoother</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fillna</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adjustment</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DiffSmoother" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">DiffSmoother</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fillna</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adjustment</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reverse_alignment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DiffSmoother" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.DiffSmoother.fit">
@@ -2418,7 +2429,7 @@ Will only match original if phi==1</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.DiffSmoother.get_new_params">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DiffSmoother.get_new_params" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DiffSmoother.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate new random parameters</p>
 </dd></dl>
 
@@ -2989,7 +3000,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.GeneralTransformer.get_new_params">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">

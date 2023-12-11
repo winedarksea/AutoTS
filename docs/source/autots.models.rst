@@ -92,6 +92,14 @@ autots.models.model\_list module
    :undoc-members:
    :show-inheritance:
 
+autots.models.neural\_forecast module
+-------------------------------------
+
+.. automodule:: autots.models.neural_forecast
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.prophet module
 ----------------------------
 

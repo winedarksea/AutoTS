@@ -37,7 +37,7 @@ template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
 random_seed = 2023
 forecast_length = 90
-long = False
+long = True
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
 # df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
 # df = load_artificial(long=long, date_start="2018-01-01")
@@ -65,8 +65,8 @@ verbose = 2
 validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 150
-generation_timeout = 2
+generations = 100
+generation_timeout = 5
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
 if use_template:
@@ -109,29 +109,30 @@ preclean = None
     },
 }
 ensemble = [
-    "simple",
+    # "simple",
     # 'mlensemble',
     'horizontal-max',
     # "mosaic-window",
     # 'mosaic-crosshair',
-]  # "dist", "subsample", "mosaic-window", "horizontal-max"
+]  # "dist", "subsample", "mosaic-window", "horizontal"
 # ensemble = None
 metric_weighting = {
-    'smape_weighting': 3,
+    'smape_weighting': 5,
     'mae_weighting': 2,
-    'rmse_weighting': 2,
+    'rmse_weighting': 1,
     'made_weighting': 1,
     'mage_weighting': 0,
     'mate_weighting': 1,
     'mle_weighting': 0,  # avoid underestimate
     'imle_weighting': 0,  # avoid overestimate
-    'spl_weighting': 0,
+    'spl_weighting': 3,
     'containment_weighting': 0.1,
     'contour_weighting': 0,
-    'runtime_weighting': 0.01,
+    'runtime_weighting': 0.05,
     'maxe_weighting': 0,
     'oda_weighting': 0,
     'mqae_weighting': 0,
+    'uwmse_weighting': 1,
     'wasserstein_weighting': 0,
     'dwd_weighting': 1,
     'smoothness_weighting': -0.5,
@@ -145,17 +146,20 @@ constraint = {
     "lower_constraint": 0.1,
     "bounds": True,
 }
-forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
-# sets an extremely high value for the cap, one that should never actually be reached by the data normally
-if isinstance(df, pd.Series):
-    cols = [df.name]
-else:
-    cols = df.columns
-upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=cols)
-# in this case also assuming negatives won't happen so setting a lower constraint of 0
-lower_constraint = pd.DataFrame(0, index=forecast_index, columns=cols)
-# add in your dates you want as definitely 0
-upper_constraint.loc["2022-10-31"] = 0
+if not long:
+    if isinstance(df, pd.Series):
+        cols = [df.name]
+    else:
+        cols = df.columns
+    forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
+    # sets an extremely high value for the cap, one that should never actually be reached by the data normally
+    upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=cols)
+    # in this case also assuming negatives won't happen so setting a lower constraint of 0
+    lower_constraint = pd.DataFrame(0, index=forecast_index, columns=cols)
+    # add in your dates you want as definitely 0
+    upper_constraint.loc["2022-10-31"] = 0
+upper_constraint = 0
+lower_constraint = 0
 constraint = {
     "constraint_method": "absolute",
     "upper_constraint": upper_constraint,
@@ -198,41 +202,51 @@ model = AutoTS(
     verbose=verbose,
     models_mode=models_mode,
     random_seed=random_seed,
-    current_model_file=f"current_model_{name}",
+    # current_model_file=f"current_model_{name}",
 )
 
-
-regr_train, regr_fcst = create_regressor(
-    df,
-    forecast_length=forecast_length,
-    frequency=frequency,
-    drop_most_recent=drop_most_recent,
-    scale=True,
-    summarize="auto",
-    backfill="bfill",
-    fill_na="pchip",
-    holiday_countries=["US"],
-    datepart_method="recurring",
-    preprocessing_params={
-        "fillna": None,
-        "transformations": {"0": "LocalLinearTrend"},
-        "transformation_params": {
-            "0": {
-                'rolling_window': 30,
-                 'n_tails': 0.1,
-                 'n_future': 0.2,
-                 'method': 'mean',
-                 'macro_micro': True
-             },
+if not long:
+    regr_train, regr_fcst = create_regressor(
+        df,
+        forecast_length=forecast_length,
+        frequency=frequency,
+        drop_most_recent=drop_most_recent,
+        scale=True,
+        summarize="auto",
+        backfill="bfill",
+        fill_na="pchip",
+        holiday_countries=["US"],
+        datepart_method="recurring",
+        preprocessing_params={
+            "fillna": None,
+            "transformations": {"0": "LocalLinearTrend"},
+            "transformation_params": {
+                "0": {
+                    'rolling_window': 30,
+                     'n_tails': 0.1,
+                     'n_future': 0.2,
+                     'method': 'mean',
+                     'macro_micro': True
+                 },
+            },
         },
-    },
-)
+    )
+else:
+    regr_train = None
+    regr_fcst = None
 
 # model = model.import_results('test.pickle')
 if use_template:
-    model = model.import_template(
-        template_filename, method=template_import_method, enforce_model_list=True
-    )
+    if os.path.exists(template_filename):
+        model = model.import_template(
+            template_filename, method=template_import_method,
+            enforce_model_list=False, force_validation=True,
+        )
+    file2 = "/Users/colincatlin/Downloads/test_import.csv"
+    if os.path.exists(file2):
+        model = model.import_template(
+            file2, method=template_import_method, enforce_model_list=False, force_validation=True,
+        )
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -254,31 +268,28 @@ if save_template:
         max_per_model_class=5,
         include_results=True,
     )
-    model.export_template(
-        "slowest_models_template.csv",
-        models="slowest",
-        n=10,
-        include_results=True,
-    )
+    if False:
+        model.export_template(
+            "slowest_models_template.csv",
+            models="slowest",
+            n=10,
+            include_results=True,
+        )
 
 elapsed_for = timeit.default_timer() - start_time_for
 
 prediction = model.predict(
     future_regressor=regr_fcst, verbose=1, fail_on_forecast_nan=True
 )
+print(prediction.long_form_results().sample(5))
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
 initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
-
-"""
-initial_results["TransformationRuntime"] = initial_results["TransformationRuntime"].dt.total_seconds()
-initial_results["FitRuntime"] = initial_results["FitRuntime"].dt.total_seconds()
-initial_results["PredictRuntime"] = initial_results["PredictRuntime"].dt.total_seconds()
-initial_results["TotalRuntime"] = initial_results["TotalRuntime"].dt.total_seconds()
-"""
+if long:
+    cols = model.df_wide_numeric.columns.tolist()
 
 sleep(5)
 print(model)

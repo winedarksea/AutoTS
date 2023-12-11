@@ -174,6 +174,8 @@ class AutoTSTest(unittest.TestCase):
         # self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
         self.assertFalse(np.any(back_forecast.isnull()))
         self.assertEqual(long_form.shape[0], forecasts_df.shape[0] * forecasts_df.shape[1] * 3)
+        # results present
+        self.assertGreater(model.initial_results.per_series_metrics.shape[0], 1)
 
         # TEST EXPORTING A TEMPLATE THEN USING THE BEST MODEL AS A PREDICTION
         df_train = df.iloc[:-forecast_length]
