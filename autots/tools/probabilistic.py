@@ -128,7 +128,7 @@ def Variable_Point_to_Probability(train, forecast, alpha=0.3, beta=1):
     # median_change[median_change <= 0 ] = 0.01  # HANDLE GOING BELOW ZERO
 
     diffs = abs(
-        forecast - (forecast + forecast * median_change).fillna(method='ffill').shift(1)
+        forecast - (forecast + forecast * median_change).ffill().shift(1)
     )
 
     forecast_percent_changes = forecast.replace(0, np.nan).pct_change()
@@ -153,7 +153,7 @@ def Variable_Point_to_Probability(train, forecast, alpha=0.3, beta=1):
     En = quantile_differences * diffs
     Enneg1 = En.cumsum().shift(1).fillna(0)
     ErrorRange = beta * (En + alpha * Enneg1)
-    ErrorRange = ErrorRange.fillna(method='bfill').fillna(method='ffill')
+    ErrorRange = ErrorRange.bfill().ffill()
 
     return ErrorRange
 

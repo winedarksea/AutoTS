@@ -956,7 +956,7 @@ class MotifSimulation(ModelObject):
                 )
                 lower_forecasts = pd.concat(
                     [lower_forecasts, empty_frame], axis=0, sort=False
-                ).fillna(method='ffill')
+                ).ffill()
             lower_forecasts.columns = self.column_names
             lower_forecasts.index = self.create_forecast_index(
                 forecast_length=forecast_length
@@ -969,7 +969,7 @@ class MotifSimulation(ModelObject):
                 )
                 upper_forecasts = pd.concat(
                     [upper_forecasts, empty_frame], axis=0, sort=False
-                ).fillna(method='ffill')
+                ).ffill()
             upper_forecasts.columns = self.column_names
             upper_forecasts.index = self.create_forecast_index(
                 forecast_length=forecast_length

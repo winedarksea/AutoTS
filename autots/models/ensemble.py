@@ -388,8 +388,8 @@ def generalize_horizontal(
         # remove unavailable models
         mosaicy = pd.DataFrame(mosaicy[mosaicy.isin(available_models)])
         # so we can fill some missing by just using a forward fill, should be good enough
-        mosaicy.fillna(method='ffill', limit=5, inplace=True)
-        mosaicy.fillna(method='bfill', limit=5, inplace=True)
+        mosaicy = mosaicy.ffill(limit=5)
+        mosaicy = mosaicy.bfill(limit=5)
         if mosaicy.isna().any().any() or mosaicy.shape[1] != df_train.shape[1]:
             if full_models is not None:
                 k2 = pd.DataFrame(mosaicy[mosaicy.isin(full_models)])
