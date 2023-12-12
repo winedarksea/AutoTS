@@ -288,7 +288,7 @@ class NeuralForecast(ModelObject):
         if method in model_list:
             models = method
         else:
-            models = random.choices(model_list, [0.05, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2])[0]
+            models = random.choices(model_list, [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1])[0]
         if "regressor" in method:
             regression_type_choice = "User"
         else:
@@ -338,6 +338,7 @@ class NeuralForecast(ModelObject):
         elif models == "MLP":
             model_args = {
                 'num_layers': random.choice([1, 2, 3, 4]),
+                'hidden_size': random.choice([1024, 512, 2048, 256, 2560]),
             }
         else:
             model_args = {}
