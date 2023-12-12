@@ -1,4 +1,5 @@
 """Tools for generating and forecasting with ensembles of models."""
+import re
 import datetime
 import numpy as np
 import pandas as pd
@@ -268,6 +269,19 @@ def DistEnsemble(
     return ens_result_obj
 
 
+def horizontal_xy(df_train, known):
+    """Construct X, Y, X_predict features for generalization."""
+    columnz = df_train.columns.tolist()
+    X = summarize_series(df_train).transpose()
+    X = fill_median(X)
+    known_l = list(known.keys())
+    unknown = list(set(columnz) - set(known_l))
+    Xt = X.loc[known_l]
+    Xf = X.loc[unknown]
+    Y = np.array(list(known.values()))
+    return Xt, Y, Xf
+
+
 def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     """
     CLassify unknown series with the appropriate model for horizontal ensembling.
@@ -281,14 +295,7 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
 
     """
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
-    columnz = df_train.columns.tolist()
-    X = summarize_series(df_train).transpose()
-    X = fill_median(X)
-    known_l = list(known.keys())
-    unknown = list(set(columnz) - set(known_l))
-    Xt = X.loc[known_l]
-    Xf = X.loc[unknown]
-    Y = np.array(list(known.values()))
+    Xt, Y, Xf = horizontal_xy(df_train, known)
     from sklearn.naive_bayes import GaussianNB
 
     clf = GaussianNB()
@@ -302,8 +309,7 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     return final
 
 
-def mosaic_classifier(df_train, known):
-    """CLassify unknown series with the appropriate model for mosaic ensembles."""
+def mosaic_xy(df_train, known):
     known.index.name = "forecast_period"
     upload = pd.melt(
         known,
@@ -338,6 +344,13 @@ def mosaic_classifier(df_train, known):
     Y = X['model_id']
     Xf = X.drop(columns=['model_id'])
     Xf = fill_median(Xf)
+    return X, Xf, Y, to_predict
+
+
+def mosaic_classifier(df_train, known):
+    """CLassify unknown series with the appropriate model for mosaic ensembles."""
+
+    X, Xf, Y, to_predict = mosaic_xy(df_train, known)
     # from sklearn.linear_model import RidgeClassifier
     # from sklearn.naive_bayes import GaussianNB
     from sklearn.ensemble import RandomForestClassifier
@@ -1113,6 +1126,20 @@ def EnsembleTemplateGenerator(
     return ensemble_templates
 
 
+def find_pattern(strings, x, sep="-"):
+    pattern = f"({x}){sep}(\\d+)"
+    results = []
+
+    for string in strings:
+        match = re.search(pattern, string)
+        if match:
+            # Extracting the components
+            fixed_string, number = match.groups()
+            results.append((fixed_string, int(number)))
+
+    return results
+
+
 def HorizontalTemplateGenerator(
     per_series,
     model_results,
@@ -1137,27 +1164,29 @@ def HorizontalTemplateGenerator(
         nomen = 'Horizontal'
         metric = 'Score-max'
         if len(mods_per_series) < per_series.shape[1]:
-            raise ValueError(
+            print(
                 "ERROR in Horizontal Generation insufficient series created, horizontal-max"
             )
-        best5_params = {
-            'Model': 'Ensemble',
-            'ModelParameters': json.dumps(
-                {
-                    'model_name': nomen,
-                    'model_count': mods.shape[0],
-                    'model_metric': metric,
-                    'models': best5.to_dict(orient='index'),
-                    'series': mods_per_series.to_dict(),
-                }
-            ),
-            'TransformationParameters': '{}',
-            'Ensemble': 2,
-        }
-        best5_params = pd.DataFrame(best5_params, index=[0])
-        ensemble_templates = pd.concat(
-            [ensemble_templates, best5_params], axis=0, ignore_index=True
-        )
+        else:
+            best5_params = {
+                'Model': 'Ensemble',
+                'ModelParameters': json.dumps(
+                    {
+                        'model_name': nomen,
+                        'model_count': mods.shape[0],
+                        'model_metric': metric,
+                        'models': best5.to_dict(orient='index'),
+                        'series': mods_per_series.to_dict(),
+                    }
+                ),
+                'TransformationParameters': '{}',
+                'Ensemble': 2,
+            }
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5_params], axis=0, ignore_index=True
+            )
+    # this is legacy, replaced by mosaic
     if 'hdist' in ensemble and not subset_flag:
         mods_per_series = per_series.idxmin()
         mods_per_series2 = per_series2.idxmin()
@@ -1189,6 +1218,7 @@ def HorizontalTemplateGenerator(
         ensemble_templates = pd.concat(
             [ensemble_templates, best5_params], axis=0, ignore_index=True
         )
+    # the idea behind running both is for redundancy in the -max case
     if 'horizontal' in ensemble or (
         'horizontal-max' in ensemble and not only_specified
     ):
@@ -1234,86 +1264,98 @@ def HorizontalTemplateGenerator(
         nomen = 'Horizontal'
         metric = 'Score'
         if len(mods_per_series) < per_series.shape[1]:
-            raise ValueError(
+            print(
                 "ERROR in Horizontal Generation insufficient series created, horizontal"
             )
-        best5_params = {
-            'Model': 'Ensemble',
-            'ModelParameters': json.dumps(
-                {
-                    'model_name': nomen,
-                    'model_count': mods.shape[0],
-                    'model_metric': metric,
-                    'models': best5.to_dict(orient='index'),
-                    'series': mods_per_series.to_dict(),
-                }
-            ),
-            'TransformationParameters': '{}',
-            'Ensemble': 2,
-        }
-        best5_params = pd.DataFrame(best5_params, index=[0])
-        ensemble_templates = pd.concat(
-            [ensemble_templates, best5_params], axis=0, ignore_index=True
-        )
-    if 'horizontal-min' in ensemble:
-        mods = pd.Series()
-        per_series_des = per_series.copy()
-        n_models = 15
-        # choose best per series, remove those series, then choose next best
-        for x in range(n_models):
-            n_dep = x + 1
-            n_dep = (
-                n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
+        else:
+            best5_params = {
+                'Model': 'Ensemble',
+                'ModelParameters': json.dumps(
+                    {
+                        'model_name': nomen,
+                        'model_count': mods.shape[0],
+                        'model_metric': metric,
+                        'models': best5.to_dict(orient='index'),
+                        'series': mods_per_series.to_dict(),
+                    }
+                ),
+                'TransformationParameters': '{}',
+                'Ensemble': 2,
+            }
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-            models_pos = []
-            tr_df = pd.DataFrame()
-            for _ in range(n_dep):
-                cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-                tr_df = pd.concat([tr_df, cr_df], axis=0)
-                models_pos.extend(per_series_des.idxmin().tolist())
-                per_series_des[per_series_des == per_series_des.min()] = np.nan
-            cur_mods = pd.Series(models_pos).value_counts()
-            cur_mods = cur_mods.sort_values(ascending=False).head(1)
-            mods = mods.combine(cur_mods, max, fill_value=0)
-            rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-            rm_cols = rm_cols.dropna(how='all', axis=1).columns
-            per_series_des = per_series.copy().drop(mods.index, axis=0)
-            per_series_des = per_series_des.drop(rm_cols, axis=1)
-            if per_series_des.shape[1] == 0:
+    # choose N size ensembles given arg
+    n_horz = find_pattern(ensemble, "horizontal")
+    if n_horz:
+        for patt in n_horz:
+            kn = patt[1]
+    # this is a "greedy" approach to choosing a smaller number of models
+    n_horz_min = find_pattern(ensemble, "horizontal-min")
+    if 'horizontal-min' in ensemble or n_horz_min:
+        if 'horizontal-min' in ensemble:
+            n_horz_min.append(('horizontal-min', 15))
+        for patt in n_horz_min:
+            mods = pd.Series()
+            per_series_des = per_series.copy()
+            n_models = patt[1]
+            # choose best per series, remove those series, then choose next best
+            for x in range(n_models):
+                n_dep = x + 1
+                n_dep = (
+                    n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
+                )
+                models_pos = []
+                tr_df = pd.DataFrame()
+                for _ in range(n_dep):
+                    cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
+                    tr_df = pd.concat([tr_df, cr_df], axis=0)
+                    models_pos.extend(per_series_des.idxmin().tolist())
+                    per_series_des[per_series_des == per_series_des.min()] = np.nan
+                cur_mods = pd.Series(models_pos).value_counts()
+                cur_mods = cur_mods.sort_values(ascending=False).head(1)
+                mods = mods.combine(cur_mods, max, fill_value=0)
+                rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
+                rm_cols = rm_cols.dropna(how='all', axis=1).columns
                 per_series_des = per_series.copy().drop(mods.index, axis=0)
-
-        mods_per_series = per_series.loc[mods.index].idxmin()
-        best5 = (
-            model_results[model_results['ID'].isin(mods_per_series.unique().tolist())]
-            .drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
+                per_series_des = per_series_des.drop(rm_cols, axis=1)
+                if per_series_des.shape[1] == 0:
+                    per_series_des = per_series.copy().drop(mods.index, axis=0)
+    
+            mods_per_series = per_series.loc[mods.index].idxmin()
+            best5 = (
+                model_results[model_results['ID'].isin(mods_per_series.unique().tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
             )
-            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
-        )
-        nomen = 'Horizontal'
-        metric = 'Score-min'
-        if len(mods_per_series) < per_series.shape[1]:
-            raise ValueError(
-                "ERROR in Horizontal Generation insufficient series created, horizontal-min"
+            nomen = 'Horizontal'
+            metric = 'Score-min'
+            if len(mods_per_series) < per_series.shape[1]:
+                print(
+                    "ERROR in Horizontal Generation insufficient series created, horizontal-min"
+                )
+                return ensemble_templates
+            best5_params = {
+                'Model': 'Ensemble',
+                'ModelParameters': json.dumps(
+                    {
+                        'model_name': nomen,
+                        'model_count': mods_per_series.unique().shape[0],
+                        'model_metric': metric,
+                        'models': best5.to_dict(orient='index'),
+                        'series': mods_per_series.to_dict(),
+                    }
+                ),
+                'TransformationParameters': '{}',
+                'Ensemble': 2,
+            }
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-        best5_params = {
-            'Model': 'Ensemble',
-            'ModelParameters': json.dumps(
-                {
-                    'model_name': nomen,
-                    'model_count': mods_per_series.unique().shape[0],
-                    'model_metric': metric,
-                    'models': best5.to_dict(orient='index'),
-                    'series': mods_per_series.to_dict(),
-                }
-            ),
-            'TransformationParameters': '{}',
-            'Ensemble': 2,
-        }
-        best5_params = pd.DataFrame(best5_params, index=[0])
-        ensemble_templates = pd.concat(
-            [ensemble_templates, best5_params], axis=0, ignore_index=True
-        )
     return ensemble_templates
 
 
