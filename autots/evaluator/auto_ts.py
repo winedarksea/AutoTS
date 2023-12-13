@@ -43,7 +43,8 @@ from autots.models.ensemble import (
     generate_crosshair_score,
     process_mosaic_arrays,
     parse_forecast_length,
-    n_limited_horz
+    n_limited_horz,
+    is_horizontal, is_mosaic,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools.cpu_count import set_n_jobs
@@ -252,27 +253,6 @@ class AutoTS(object):
             self.holiday_country = "UA"
         elif holiday_country == 'CN':
             self.holiday_country = 'TW'
-        # just a list of horizontal types in general
-        self.h_ens_list = [
-            'horizontal',
-            'probabilistic',
-            'hdist',
-            "mosaic",
-            'mosaic-window',
-            'mosaic_window',
-            'mosaic_crosshair',
-            'mosaic-crosshair',
-            'horizontal-max',
-            'horizontal-min',
-        ]
-        self.mosaic_list = [
-            'mosaic',
-            'mosaic-window',
-            "mosaic_window",
-            'mosaic_crosshair',
-            "mosaic-crosshair",
-            "n_crosshair"
-        ]
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
         if ensemble == 'all':
@@ -979,23 +959,12 @@ class AutoTS(object):
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:
-            if "simple" in self.ensemble:
-                ens_piece1 = "simple"
-            else:
-                ens_piece1 = ""
-            if "distance" in self.ensemble:
-                ens_piece2 = "distance"
-            else:
-                ens_piece2 = ""
-            if "mosaic" in self.ensemble:
-                ens_piece3 = "mosaic"
-            else:
-                ens_piece3 = ""
-            # self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
-            self.ensemble = [ens_piece1, ens_piece2, ens_piece3]
+            self.ensemble = [x for x in self.ensemble if "horizontal" not in x]
 
         # because horizontal cannot handle non-string columns/series_ids
-        if any(x in self.ensemble for x in self.h_ens_list):
+        self.h_ens_used = is_horizontal(self.ensemble)
+        self.mosaic_used = is_mosaic(self.ensemble)
+        if self.h_ens_used or self.mosaic_used:
             df_wide_numeric.columns = [str(xc) for xc in df_wide_numeric.columns]
 
         # flag if weights are given
@@ -1166,8 +1135,6 @@ class AutoTS(object):
             weights=weights,
         )
 
-        ensemble = self.ensemble
-
         # record if subset or not
         if self.subset is not None:
             self.subset = abs(int(self.subset))
@@ -1334,7 +1301,7 @@ class AutoTS(object):
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results,
                     forecast_length=self.forecast_length,
-                    ensemble=ensemble,
+                    ensemble=self.ensemble,
                     score_per_series=self.score_per_series,
                 )
                 self._run_template(
@@ -1397,7 +1364,7 @@ class AutoTS(object):
             'Score', ascending=True, na_position='last'
         ).head(self.models_to_validate)
         # add on best per_series models (which may not be in the top scoring)
-        if any(x in ensemble for x in self.h_ens_list):
+        if self.h_ens_used or self.mosaic_used:
             model_results = self.initial_results.model_results
             if self.models_to_validate < 50:
                 n_per_series = 1
@@ -1464,7 +1431,7 @@ class AutoTS(object):
                     ensemble_templates = EnsembleTemplateGenerator(
                         ens_copy,
                         forecast_length=self.forecast_length,
-                        ensemble=ensemble,
+                        ensemble=self.ensemble,
                         score_per_series=self.score_per_series,
                     )
                     self.ensemble_templates2 = ensemble_templates
@@ -1498,7 +1465,7 @@ class AutoTS(object):
 
         # Construct horizontal style ensembles
         models_to_use = None
-        if any(x in ensemble for x in self.h_ens_list):
+        if self.h_ens_used or self.mosaic_used:
             ensemble_templates = pd.DataFrame()
             try:
                 self.score_per_series = generate_score_per_series(
@@ -1510,7 +1477,7 @@ class AutoTS(object):
                     self.score_per_series,
                     model_results=self.initial_results.model_results,
                     forecast_length=self.forecast_length,
-                    ensemble=ensemble,
+                    ensemble=self.ensemble,
                     subset_flag=self.subset_flag,
                 )
                 ensemble_templates = pd.concat(
@@ -1523,7 +1490,7 @@ class AutoTS(object):
                     time.sleep(5)
             try:
                 # eventually plan to allow window size to be controlled by params
-                if any([x in self.mosaic_list for x in ensemble]):
+                if self.mosaic_used:
                     weight_per_value = (
                         self.initial_results.full_mae_errors
                         * metric_weighting.get('mae_weighting', 0)
@@ -1532,7 +1499,7 @@ class AutoTS(object):
                         + self.initial_results.squared_errors
                         * metric_weighting.get('rmse_weighting', 0)
                     )
-                if "n_crosshair" in ensemble:
+                if "n_crosshair" in self.ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1564,10 +1531,11 @@ class AutoTS(object):
                         chunks = parse_forecast_length(self.forecast_length)
                         all_pieces = []
                         for piece in chunks:
-                            all_pieces.append(errors_array[:, piece, :].mean(axis=1))
-                        n_pieces = pd.concat(all_pieces, axis=1, index=id_array)
+                            all_pieces.append(pd.DataFrame(errors_array[:, piece, :].mean(axis=1)))
+                        n_pieces = pd.concat(all_pieces, axis=1)
+                        n_pieces.index = id_array
                         # can modify K later
-                        chosen_model_n = n_limited_horz(n_pieces, K=20, safety_model=False)
+                        chosen_model_n = n_limited_horz(n_pieces, K=50, safety_model=False)
                         ens_templates = generate_mosaic_template(
                             initial_results=self.initial_results.model_results,
                             full_mae_ids=self.initial_results.full_mae_ids,
@@ -1575,7 +1543,7 @@ class AutoTS(object):
                             col_names=df_subset.columns,
                             full_mae_errors=full_mae_errors,
                             smoothing_window=None,
-                            metric_name="n-crosshair",
+                            metric_name="n_crosshair",
                             models_to_use=chosen_model_n,
                         )
                         ensemble_templates = pd.concat(
@@ -1583,7 +1551,7 @@ class AutoTS(object):
                         )
                     except Exception as e:
                         print(f"N_CROSSHAIR FAILED WITH ERROR: {repr(e)}")
-                if "mosaic_crosshair" in ensemble or "mosaic-crosshair" in ensemble:
+                if "mosaic_crosshair" in self.ensemble or "mosaic-crosshair" in self.ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1643,7 +1611,7 @@ class AutoTS(object):
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if "mosaic_window" in ensemble or "mosaic-window" in ensemble:
+                if "mosaic_window" in self.ensemble or "mosaic-window" in self.ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1729,7 +1697,7 @@ class AutoTS(object):
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic' in ensemble:
+                if 'mosaic' in self.ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1832,7 +1800,7 @@ class AutoTS(object):
             hens_model_results['Exceptions'].isnull()
         ]
         requested_H_ens = (
-            any(x in self.ensemble for x in self.h_ens_list) and allow_horizontal
+            (self.h_ens_used or self.mosaic_used) and allow_horizontal
         )
         # here I'm assuming that if some horizontal models ran, we are going to use those
         # horizontal ensembles can't be compared directly to others because they don't get run through all validations
@@ -2016,6 +1984,7 @@ class AutoTS(object):
             traceback=self.traceback,
             current_model_file=self.current_model_file,
             current_generation=current_generation,
+            mosaic_used=self.mosaic_used,
             force_gc=self.force_gc,
         )
         if model_count == 0:
@@ -2062,7 +2031,7 @@ class AutoTS(object):
             # subset series (if used) and take a new train/test split
             if self.subset_flag:
                 # mosaic can't handle different cols in each validation
-                if any([x in self.mosaic_list for x in self.ensemble]):
+                if self.mosaic_used:
                     rand_st = self.random_seed
                 else:
                     rand_st = self.random_seed + y + 1
@@ -2391,22 +2360,6 @@ class AutoTS(object):
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
                 ]
-                """
-                if any(x in self.ensemble for x in self.h_ens_list):
-                    temp = self.initial_results.model_results
-                    temp = temp[temp['Ensemble'] >= 2]
-                    temp = temp[temp['Exceptions'].isna()]
-                    export_template = export_template.merge(
-                        temp,
-                        how='outer',
-                        on=export_template.columns.intersection(temp.columns).to_list(),
-                    )
-                    export_template['Score'] = generate_score(
-                        export_template,
-                        metric_weighting=self.metric_weighting,
-                        prediction_interval=self.prediction_interval,
-                    )
-                """
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
@@ -2544,6 +2497,12 @@ class AutoTS(object):
         import_template = unpack_ensemble_models(
             import_template, self.template_cols, keep_ensemble=True, recursive=True
         )
+
+        # _enforce_model_list can handle this but when false this is needed
+        if not include_ensemble:
+            import_template = unpack_ensemble_models(
+                import_template, self.template_cols, keep_ensemble=False, recursive=True
+            )
 
         if enforce_model_list:
             import_template = self._enforce_model_list(
@@ -3763,9 +3722,9 @@ class AutoTS(object):
             # Compute the mean absolute SHAP value for each feature
             mean_shap_values = np.abs(shap_values.values).mean(axis=0)
             # Pair the feature names with their mean absolute SHAP values in a list of tuples
-            feature_shap_pairs = list(zip(feature_names, mean_shap_values))
+            # feature_shap_pairs = list(zip(feature_names, mean_shap_values))
             # Sort the list of tuples by the SHAP values from smallest to largest
-            sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
+            # sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
             # Print the sorted pairs
             # print("Sorted Mean Absolute SHAP Values for Feature Importance:")
             # for feature, mean_shap in sorted_feature_shap_pairs[-10:]:
@@ -3774,9 +3733,9 @@ class AutoTS(object):
             # Compute the mean SHAP value for each feature
             mean_shap_values = shap_values.values.mean(axis=0)
             # Pair the feature names with their mean SHAP values in a list of tuples
-            feature_shap_pairs = list(zip(feature_names, mean_shap_values))
+            # feature_shap_pairs = list(zip(feature_names, mean_shap_values))
             # Sort the list of tuples by the SHAP values from smallest to largest
-            sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
+            # sorted_feature_shap_pairs = sorted(feature_shap_pairs, key=lambda x: x[1])
             # Print the sorted pairs
             # print("Sorted Mean SHAP Values for Feature Importance:")
             # for feature, mean_shap in sorted_feature_shap_pairs[-10:]:

@@ -60,6 +60,40 @@ def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = No
             return [all_series[series_id]]
 
 
+# just a list of horizontal types in general
+h_ens_list = [
+    'horizontal',
+    'probabilistic',
+    'hdist',
+    "mosaic",
+    'mosaic-window',
+    'mosaic_window',
+    'mosaic_crosshair',
+    'mosaic-crosshair',
+    'horizontal-max',
+    'horizontal-min',
+]
+mosaic_list = [
+    'mosaic',
+    'mosaic-window',
+    "mosaic_window",
+    'mosaic_crosshair',
+    "mosaic-crosshair",
+    "n_crosshair"
+]
+
+def is_horizontal(ensemble_list):
+    # check for exact matches
+    check = any(x in ensemble_list for x in h_ens_list)
+    # check for -N matches
+    check2 = any("horizontal" in x for x in ensemble_list)
+    return check or check2
+
+def is_mosaic(ensemble_list):
+    check = any(x in ensemble_list for x in mosaic_list)
+    check2 = any("mosaic" in x for x in ensemble_list)
+    return check or check2
+
 def BestNEnsemble(
     ensemble_params,
     forecasts,
@@ -1141,6 +1175,7 @@ def find_pattern(strings, x, sep="-"):
 
 
 def n_limited_horz(per_series, K, safety_model=False):
+    # progressively remove best models to try and achieve wider coverage with a few
     mods = pd.Series()
     per_series_des = per_series.copy()
     if K <= 1:
@@ -1150,12 +1185,14 @@ def n_limited_horz(per_series, K, safety_model=False):
         safety_model_id = per_series.mean(axis=1).idxmin()
 
     for x in range(K):
+        # gets deeper into the top N per series for the later searches
         n_dep = x + 1
         n_dep = (
             n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
         )
         models_pos = []
         tr_df = pd.DataFrame()
+        # find the most common models at this depth
         for _ in range(n_dep):
             cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
             tr_df = pd.concat([tr_df, cr_df], axis=0)
@@ -1164,10 +1201,12 @@ def n_limited_horz(per_series, K, safety_model=False):
         cur_mods = pd.Series(models_pos).value_counts()
         cur_mods = cur_mods.sort_values(ascending=False).head(1)
         mods = mods.combine(cur_mods, max, fill_value=0)
+        # drop series which have been satisfied by the model selection so far
         rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
         rm_cols = rm_cols.dropna(how='all', axis=1).columns
         per_series_des = per_series.copy().drop(mods.index, axis=0)
         per_series_des = per_series_des.drop(rm_cols, axis=1)
+        # if size reaches zero, start back with the full columns
         if per_series_des.shape[1] == 0:
             per_series_des = per_series.copy().drop(mods.index, axis=0)
     
@@ -1265,20 +1304,25 @@ def HorizontalTemplateGenerator(
         no_shared_select = model_results['Model'].isin(no_shared)
         shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()
         no_shared_mod_lst = model_results[no_shared_select]['ID'].tolist()
+        # another take on "safety" model
         lowest_score_mod = [model_results.iloc[model_results['Score'].idxmin()]['ID']]
         per_series[per_series.index.isin(shared_mod_lst)]
         # remove those where idxmin is in no_shared
         shared_maxes = per_series.idxmin().isin(shared_mod_lst)
         shr_mx_cols = shared_maxes[shared_maxes].index
         per_series_shareds = per_series.filter(shr_mx_cols, axis=1)
-        # select best n shared models (NEEDS improvement)
-        n_md = 5
-        use_shared_lst = (
-            per_series_shareds.median(axis=1).nsmallest(n_md).index.tolist()
-        )
+        # select best n shared models
+        K = 5
+        if False:
+            # old method
+            use_shared_lst = (
+                per_series_shareds.median(axis=1).nsmallest(K).index.tolist()
+            )
+        else:
+            use_shared_lst = n_limited_horz(per_series_shareds, K=K, safety_model=False)
         # combine all of the above as allowed mods
         allowed_list = no_shared_mod_lst + lowest_score_mod + use_shared_lst
-        per_series_filter = per_series[per_series.index.isin(allowed_list)]
+
         # first select a few of the best shared models
         # Option A: Best overall per model type (by different metrics?)
         # Option B: Best per different clusters...
@@ -1290,7 +1334,7 @@ def HorizontalTemplateGenerator(
         # make sure no models are included that don't match to any series
         # ENSEMBLE and NO_SHARED (it could be or it could not be)
         # need to TEST cases where all columns are either shared or no_shared!
-        # concern: choose lots of models, slower to run initial
+        per_series_filter = per_series[per_series.index.isin(allowed_list)]
         mods_per_series = per_series_filter.idxmin()
         mods = mods_per_series.unique()
         best5 = (
