@@ -41,6 +41,9 @@ from autots.models.ensemble import (
     HorizontalTemplateGenerator,
     generate_mosaic_template,
     generate_crosshair_score,
+    process_mosaic_arrays,
+    parse_forecast_length,
+    n_limited_horz
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools.cpu_count import set_n_jobs
@@ -268,6 +271,7 @@ class AutoTS(object):
             "mosaic_window",
             'mosaic_crosshair',
             "mosaic-crosshair",
+            "n_crosshair"
         ]
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
@@ -1528,6 +1532,57 @@ class AutoTS(object):
                         + self.initial_results.squared_errors
                         * metric_weighting.get('rmse_weighting', 0)
                     )
+                if "n_crosshair" in ensemble:
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=self.num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.full_mae_errors,
+                        models_to_use=models_to_use,
+                        smoothing_window=7,
+                        metric_name="H-MAE",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    try:
+                        # find a way of parsing it down to n models to use
+                        total_vals = self.num_validations + 1
+                        local_results = self.initial_results.model_results.copy()
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.full_mae_errors
+                        ]
+                        id_array, errors_array = process_mosaic_arrays(
+                            local_results, full_mae_ids=self.initial_results.full_mae_ids,
+                            full_mae_errors=full_mae_errors,
+                            total_vals=total_vals,
+                            models_to_use=models_to_use, smoothing_window=None
+                        )
+                        # so it's summarized by progressively longer chunks
+                        chunks = parse_forecast_length(self.forecast_length)
+                        all_pieces = []
+                        for piece in chunks:
+                            all_pieces.append(errors_array[:, piece, :].mean(axis=1))
+                        n_pieces = pd.concat(all_pieces, axis=1, index=id_array)
+                        # can modify K later
+                        chosen_model_n = n_limited_horz(n_pieces, K=20, safety_model=False)
+                        ens_templates = generate_mosaic_template(
+                            initial_results=self.initial_results.model_results,
+                            full_mae_ids=self.initial_results.full_mae_ids,
+                            num_validations=self.num_validations,
+                            col_names=df_subset.columns,
+                            full_mae_errors=full_mae_errors,
+                            smoothing_window=None,
+                            metric_name="n-crosshair",
+                            models_to_use=chosen_model_n,
+                        )
+                        ensemble_templates = pd.concat(
+                            [ensemble_templates, ens_templates], axis=0
+                        )
+                    except Exception as e:
+                        print(f"N_CROSSHAIR FAILED WITH ERROR: {repr(e)}")
                 if "mosaic_crosshair" in ensemble or "mosaic-crosshair" in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
@@ -1634,9 +1689,6 @@ class AutoTS(object):
                         models_to_use=models_to_use,
                         smoothing_window=7,
                         metric_name="H-MAE",
-                    )
-                    ensemble_templates = pd.concat(
-                        [ensemble_templates, ens_templates], axis=0
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
