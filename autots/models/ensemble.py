@@ -7,6 +7,7 @@ import json
 from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
+from autots.models.sklearn import retrieve_classifier
 
 
 horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
@@ -58,6 +59,67 @@ def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = No
         else:
             # list(set([mod for ser, mod in all_series.items() if ser == series_id]))
             return [all_series[series_id]]
+
+def parse_mosaic(ensemble):
+    if ensemble == "mosaic":
+        return {
+            'metric': 'mae',
+            'smoothing_window': None,
+            'crosshair': False,
+            'n_models': None,
+        }
+    elif ensemble in ["mosaic_crosshair", 'mosaic-crosshair']:
+        return {
+            'metric': 'mae',
+            'smoothing_window': None,
+            'crosshair': True,
+            'n_models': None,
+        }
+    elif ensemble in ["mosaic_window", "mosaic-window"]:
+        return {
+            'metric': 'mae',
+            'smoothing_window': 7,
+            'crosshair': False,
+            'n_models': None,
+        }
+    else:
+        # mosaic-metric-crosshair-window-n_models
+        split = ensemble.split("-")
+        len_split = len(split)
+        if len_split > 1:
+            metric = split[1]
+            metric = [metric if metric in ['mae', 'spl', 'pl', 'se', 'weighted'] else 'mae']
+            penultimate = split[-2]
+        else:
+            metric = 'mae'
+            penultimate = None
+        # extract the end which is n_models
+        end_split = split[-1]
+        end_split_ls = re.findall(r'\d+', end_split)
+        if len(end_split_ls) >= 1:
+            n_models = int(end_split_ls[0])
+        elif end_split == "horizontal":
+            n_models = "horizontal"
+        else:
+            n_models = None
+        # zero is considered None here
+        if n_models == 0:
+            n_models = None
+        # extra the penultimate number which is smoothing_window
+        penultimate = re.findall(r'\d+', penultimate)
+        if len(penultimate) >= 1:
+            swindow = int(penultimate[0])
+        else:
+            swindow = None
+        # zero is considered None here
+        if swindow == 0:
+            swindow = None
+        return {
+            'metric': metric,
+            'smoothing_window': swindow,
+            'crosshair': "crosshair" in ensemble,
+            'n_models': n_models,
+        }
 
 
 # just a list of horizontal types in general
@@ -316,7 +378,7 @@ def horizontal_xy(df_train, known):
     return Xt, Y, Xf
 
 
-def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
+def horizontal_classifier(df_train, known: dict, method: str = "whatever", classifier_params=None):
     """
     CLassify unknown series with the appropriate model for horizontal ensembling.
 
@@ -328,11 +390,24 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
         dict.
 
     """
+    if classifier_params is None:
+        # found using FLAML
+        classifier_params = {
+            "model": 'KNN',
+            "model_params": {'n_neighbors': 5}
+        }
+
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
     Xt, Y, Xf = horizontal_xy(df_train, known)
-    from sklearn.naive_bayes import GaussianNB
 
-    clf = GaussianNB()
+    clf = retrieve_classifier(
+        regression_model=classifier_params,
+        verbose=0,
+        verbose_bool=False,
+        random_seed=2023,
+        multioutput=False,
+        n_jobs=1,
+    )
     clf.fit(Xt, Y)
     result = clf.predict(Xf)
     result_d = dict(zip(Xf.index.tolist(), result))
@@ -381,15 +456,28 @@ def mosaic_xy(df_train, known):
     return X, Xf, Y, to_predict
 
 
-def mosaic_classifier(df_train, known):
+def mosaic_classifier(df_train, known, classifier_params=None):
     """CLassify unknown series with the appropriate model for mosaic ensembles."""
+    if classifier_params is None:
+        # found using FLAML
+        classifier_params = {
+            "model": 'RandomForest',
+            "model_params": {
+                'n_estimators': 169, 'max_features': 0.25736,
+                'max_leaf_nodes': 126, 'criterion': 'gini'
+            }
+        }
 
     X, Xf, Y, to_predict = mosaic_xy(df_train, known)
-    # from sklearn.linear_model import RidgeClassifier
-    # from sklearn.naive_bayes import GaussianNB
-    from sklearn.ensemble import RandomForestClassifier
 
-    clf = RandomForestClassifier()
+    clf = retrieve_classifier(
+        regression_model=classifier_params,
+        verbose=0,
+        verbose_bool=False,
+        random_seed=2023,
+        multioutput=False,
+        n_jobs=1,
+    )
     clf.fit(Xf, Y)
     predicted = clf.predict(to_predict)
     result = pd.concat(

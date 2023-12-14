@@ -570,6 +570,13 @@ def retrieve_classifier(
                 n_jobs=n_jobs,
                 **model_param_dict,
             )
+    elif model_class == "GaussianNB":
+        from sklearn.naive_bayes import GaussianNB
+
+        if multioutput:
+            return MultiOutputClassifier(GaussianNB(**model_param_dict))
+        else:
+            return GaussianNB(**model_param_dict)
     else:
         raise ValueError(f"classifier {model_class} not a recognized option.")
 
