@@ -245,6 +245,18 @@ class AutoTS(object):
         self.current_model_file = current_model_file
         self.force_gc = force_gc
         self.validate_import = None
+        # do not add 'ID' to the below unless you want to refactor things.
+        self.template_cols = [
+            'Model',
+            'ModelParameters',
+            'TransformationParameters',
+            'Ensemble',
+        ]
+        self.template_cols_id = (
+            self.template_cols
+            if "ID" in self.template_cols
+            else ['ID'] + self.template_cols
+        )
         random.seed(self.random_seed)
         if self.max_generations is None and self.generation_timeout is not None:
             self.max_generations = 99999
@@ -308,45 +320,47 @@ class AutoTS(object):
             self.model_list = ["FBProphet" if x == "Prophet" else x for x in model_list]
 
         # generate template to begin with
-        initial_template = str(initial_template).lower()
-        if initial_template == 'random':
-            self.initial_template = RandomTemplate(
-                len(self.model_list) * 12,
-                model_list=self.model_list,
-                transformer_list=self.transformer_list,
-                transformer_max_depth=self.transformer_max_depth,
-                models_mode=self.models_mode,
-            )
-        elif initial_template == 'general':
-            from autots.templates.general import general_template
-
-            self.initial_template = general_template
-        elif initial_template == 'general+random':
-            from autots.templates.general import general_template
-
-            random_template = RandomTemplate(
-                len(self.model_list) * 5,
-                model_list=self.model_list,
-                transformer_list=self.transformer_list,
-                transformer_max_depth=self.transformer_max_depth,
-                models_mode=self.models_mode,
-            )
-            self.initial_template = (
-                pd.concat([general_template, random_template], axis=0)
-                .drop_duplicates()
-                .reset_index(drop=True)
-            )
-        elif isinstance(initial_template, pd.DataFrame):
-            self.initial_template = initial_template
+        if isinstance(initial_template, pd.DataFrame):
+            # proper use of import_template later is recommended for dfs
+            self.import_template(initial_template, method='only')
         else:
-            print("Input initial_template unrecognized. Using Random.")
-            self.initial_template = RandomTemplate(
-                50,
-                model_list=self.model_list,
-                transformer_list=self.transformer_list,
-                transformer_max_depth=self.transformer_max_depth,
-                models_mode=self.models_mode,
-            )
+            initial_template = str(initial_template).lower()
+            if initial_template == 'random':
+                self.initial_template = RandomTemplate(
+                    len(self.model_list) * 12,
+                    model_list=self.model_list,
+                    transformer_list=self.transformer_list,
+                    transformer_max_depth=self.transformer_max_depth,
+                    models_mode=self.models_mode,
+                )
+            elif initial_template == 'general':
+                from autots.templates.general import general_template
+    
+                self.initial_template = general_template
+            elif initial_template == 'general+random':
+                from autots.templates.general import general_template
+    
+                random_template = RandomTemplate(
+                    len(self.model_list) * 5,
+                    model_list=self.model_list,
+                    transformer_list=self.transformer_list,
+                    transformer_max_depth=self.transformer_max_depth,
+                    models_mode=self.models_mode,
+                )
+                self.initial_template = (
+                    pd.concat([general_template, random_template], axis=0)
+                    .drop_duplicates()
+                    .reset_index(drop=True)
+                )
+            else:
+                print("Input initial_template unrecognized. Using Random.")
+                self.initial_template = RandomTemplate(
+                    50,
+                    model_list=self.model_list,
+                    transformer_list=self.transformer_list,
+                    transformer_max_depth=self.transformer_max_depth,
+                    models_mode=self.models_mode,
+                )
 
         # remove models not in given model list
         self.initial_template = self.initial_template[
@@ -354,7 +368,7 @@ class AutoTS(object):
         ]
         if self.initial_template.shape[0] == 0:
             raise ValueError(
-                "No models in template! Adjust initial_template or model_list"
+                "No models in initial template! Adjust initial_template or model_list"
             )
         # remove transformers not in transformer_list and max_depth
         # yes it is awkward, but I cannot think of a better way at this time
@@ -401,18 +415,6 @@ class AutoTS(object):
                 ] = json.dumps(full_params)
 
         self.regressor_used = False
-        # do not add 'ID' to the below unless you want to refactor things.
-        self.template_cols = [
-            'Model',
-            'ModelParameters',
-            'TransformationParameters',
-            'Ensemble',
-        ]
-        self.template_cols_id = (
-            self.template_cols
-            if "ID" in self.template_cols
-            else ['ID'] + self.template_cols
-        )
         self.grouping_ids = None
         self.initial_results = TemplateEvalObject()
         self.best_model = pd.DataFrame()
