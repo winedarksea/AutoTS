@@ -1119,7 +1119,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 model_dict={
                     "ElasticNet": 0.5,
                     "DecisionTree": 0.25,
-                    # 'ExtraTrees': 0.25,
+                    "KNN": 0.02,
                 }
             )
         else:
@@ -1133,7 +1133,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
-                    'MultioutputGPR': 0.01,
+                    'MultioutputGPR': 0.001,
                 }
             )
         if holiday_countries_used is None:

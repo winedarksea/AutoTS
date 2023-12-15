@@ -1524,10 +1524,10 @@ class Cassandra(ModelObject):
                     ).pow(range(trend_forecast.forecast.shape[0])),
                     axis=0,
                 )
-                # overwrite bounds if using phi
+                # adjust all by same margin
                 trend_forecast.forecast = trend_forecast.forecast + temp
-                trend_forecast.upper_forecast = trend_forecast.forecast
-                trend_forecast.lower_forecast = trend_forecast.forecast
+                trend_forecast.upper_forecast = trend_forecast.upper_forecast + temp
+                trend_forecast.lower_forecast = trend_forecast.lower_forecast + temp
             if include_history:
                 trend_forecast.forecast = pd.concat(
                     [
