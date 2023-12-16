@@ -12,6 +12,9 @@ from autots.tools.probabilistic import Point_to_Probability
 class NeuralForecast(ModelObject):
     """See NeuralForecast documentation for details.
 
+    
+    temp['ModelParameters'].str.extract('model": "([a-zA-Z]+)')
+
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
@@ -337,8 +340,8 @@ class NeuralForecast(ModelObject):
             }
         elif models == "MLP":
             model_args = {
-                'num_layers': random.choice([1, 2, 3, 4]),
-                'hidden_size': random.choice([1024, 512, 2048, 256, 2560]),
+                'num_layers': random.choices([1, 2, 3, 4], [0.6, 0.4, 0.2, 0.1]),
+                'hidden_size': random.choice([1024, 512, 2048, 256, 2560, 3072, 4096]),
             }
         else:
             model_args = {}
