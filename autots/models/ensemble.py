@@ -88,7 +88,7 @@ def parse_mosaic(ensemble):
         len_split = len(split)
         if len_split > 1:
             metric = split[1]
-            metric = [metric if metric in ['mae', 'spl', 'pl', 'se', 'weighted'] else 'mae']
+            metric = metric if metric in ['mae', 'spl', 'pl', 'se', 'weighted'] else 'mae'
             penultimate = split[-2]
         else:
             metric = 'mae'
@@ -141,7 +141,6 @@ mosaic_list = [
     "mosaic_window",
     'mosaic_crosshair',
     "mosaic-crosshair",
-    "n_crosshair"
 ]
 
 def is_horizontal(ensemble_list):
