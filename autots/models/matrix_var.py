@@ -361,7 +361,7 @@ class MAR(ModelObject):
             'seasonality': seasonal_int(include_one=False, very_small=True),
             'family': random.choices(
                 ['gaussian', 'poisson', 'negativebinomial', 'gamma', 'chi2', 'uniform'],
-                [0.6, 0.05, 0.02, 0.2, 0.05, 0.05],
+                [0.6, 0.05, 0.02, 0.1, 0.05, 0.05],
             )[0],
             'maxiter': 200,
         }
