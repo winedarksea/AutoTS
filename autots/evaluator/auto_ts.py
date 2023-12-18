@@ -1492,79 +1492,21 @@ class AutoTS(object):
                     print(f"Horizontal Ensemble Generation Error: {repr(e)}")
                     time.sleep(5)
             try:
-                # eventually plan to allow window size to be controlled by params
                 if self.mosaic_used:
+                    ens_templates = self._generate_mosaic_template(df_subset, models_to_use=models_to_use)
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+
+                if False:
                     weight_per_value = (
                         self.initial_results.full_mae_errors
-                        * metric_weighting.get('mae_weighting', 0)
+                        * self.metric_weighting.get('mae_weighting', 0)
                         + self.initial_results.full_pl_errors
-                        * metric_weighting.get('spl_weighting', 0)
+                        * self.metric_weighting.get('spl_weighting', 0)
                         + self.initial_results.squared_errors
-                        * metric_weighting.get('rmse_weighting', 0)
+                        * self.metric_weighting.get('rmse_weighting', 0)
                     )
-                mosaic_ensembles = [x for x in self.ensemble if "mosaic" in x]
-                for mos in mosaic_ensembles:
-                    try:
-                        mosaic_config = parse_mosaic(mos)
-                        print(mosaic_config)
-                        # choose metric to optimize on
-                        met = mosaic_config.get("metric", "mae")
-                        if met in ["spl", "pl"]:
-                            errs = self.initial_results.full_pl_errors
-                        elif met == "se":
-                            errs = self.initial_results.squared_errors
-                        elif met == "weighted":
-                            errs = weight_per_value
-                        else:
-                            errs = self.initial_results.full_mae_errors
-                        # process for crosshair
-                        if mosaic_config.get("crosshair"):
-                            full_mae_err = [
-                                generate_crosshair_score(x)
-                                for x in errs
-                            ]
-                        else:
-                            full_mae_err = errs
-                        # refine to n_models if necessary
-                        if isinstance(mosaic_config.get("n_models"), (int, float)):
-                            # find a way of parsing it down to n models to use
-                            total_vals = self.num_validations + 1
-                            local_results = self.initial_results.model_results.copy()
-                            id_array, errors_array = process_mosaic_arrays(
-                                local_results, full_mae_ids=self.initial_results.full_mae_ids,
-                                full_mae_errors=full_mae_err,
-                                total_vals=total_vals,
-                                models_to_use=models_to_use, smoothing_window=None
-                            )
-                            # so it's summarized by progressively longer chunks
-                            chunks = parse_forecast_length(self.forecast_length)
-                            all_pieces = []
-                            for piece in chunks:
-                                all_pieces.append(pd.DataFrame(errors_array[:, piece, :].mean(axis=1)))
-                            n_pieces = pd.concat(all_pieces, axis=1)
-                            n_pieces.index = id_array
-                            # can modify K later
-                            modz = n_limited_horz(n_pieces, K=mosaic_config.get("n_models"), safety_model=False)
-                        elif mosaic_config.get("n_models") == "horizontal":
-                            modz = models_to_use
-                        else:
-                            modz = None
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=full_mae_err,
-                            smoothing_window=mosaic_config.get("smoothing_window"),
-                            metric_name=str(mos),
-                            models_to_use=modz,
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                    except Exception as e:
-                        print(f"Error in mosaic template generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
-                if False:
                     if "n_crosshair" in self.ensemble:
                         ens_templates = generate_mosaic_template(
                             initial_results=self.initial_results.model_results,
@@ -2688,6 +2630,85 @@ class AutoTS(object):
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)
         return self
+    
+    def _generate_mosaic_template(self, df_subset=None, models_to_use=None):
+        # can probably replace df_subset.columns with self.initial_results.per_series_mae.columns
+        if df_subset is None:
+            cols = self.initial_results.per_series_mae.columns
+        else:
+            cols = df_subset.columns
+        weight_per_value = (
+            np.asarray(self.initial_results.full_mae_errors)
+            * self.metric_weighting.get('mae_weighting', 0.0)
+            + np.asarray(self.initial_results.full_pl_errors)
+            * self.metric_weighting.get('spl_weighting', 0.0)
+            + np.asarray(self.initial_results.squared_errors)
+            * self.metric_weighting.get('rmse_weighting', 0.0)
+        )
+        mosaic_ensembles = [x for x in self.ensemble if "mosaic" in x]
+        ensemble_templates = pd.DataFrame()
+        for mos in mosaic_ensembles:
+            try:
+                mosaic_config = parse_mosaic(mos)
+                print(mosaic_config)
+                # choose metric to optimize on
+                met = mosaic_config.get("metric", "mae")
+                if met in ["spl", "pl"]:
+                    errs = self.initial_results.full_pl_errors
+                elif met == "se":
+                    errs = self.initial_results.squared_errors
+                elif met == "weighted":
+                    errs = weight_per_value
+                else:
+                    errs = self.initial_results.full_mae_errors
+                # process for crosshair
+                if mosaic_config.get("crosshair"):
+                    full_mae_err = [
+                        generate_crosshair_score(x)
+                        for x in errs
+                    ]
+                else:
+                    full_mae_err = errs
+                # refine to n_models if necessary
+                if isinstance(mosaic_config.get("n_models"), (int, float)):
+                    # find a way of parsing it down to n models to use
+                    total_vals = self.num_validations + 1
+                    local_results = self.initial_results.model_results.copy()
+                    id_array, errors_array = process_mosaic_arrays(
+                        local_results, full_mae_ids=self.initial_results.full_mae_ids,
+                        full_mae_errors=full_mae_err,
+                        total_vals=total_vals,
+                        models_to_use=models_to_use, smoothing_window=None
+                    )
+                    # so it's summarized by progressively longer chunks
+                    chunks = parse_forecast_length(self.forecast_length)
+                    all_pieces = []
+                    for piece in chunks:
+                        all_pieces.append(pd.DataFrame(errors_array[:, piece, :].mean(axis=1)))
+                    n_pieces = pd.concat(all_pieces, axis=1)
+                    n_pieces.index = id_array
+                    # can modify K later
+                    modz = n_limited_horz(n_pieces, K=mosaic_config.get("n_models"), safety_model=False)
+                elif mosaic_config.get("n_models") == "horizontal":
+                    modz = models_to_use
+                else:
+                    modz = None
+                ens_templates = generate_mosaic_template(
+                    initial_results=self.initial_results.model_results,
+                    full_mae_ids=self.initial_results.full_mae_ids,
+                    num_validations=self.num_validations,
+                    col_names=cols,
+                    full_mae_errors=full_mae_err,
+                    smoothing_window=mosaic_config.get("smoothing_window"),
+                    metric_name=str(mos),
+                    models_to_use=modz,
+                )
+                ensemble_templates = pd.concat(
+                    [ensemble_templates, ens_templates], axis=0
+                )
+            except Exception as e:
+                print(f"Error in mosaic template generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+        return ensemble_templates
 
     def horizontal_per_generation(self):
         df_train = self.df_wide_numeric.reindex(self.validation_train_indexes[0])
