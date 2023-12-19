@@ -270,7 +270,7 @@ class NumericTransformer(object):
 
                 df_enc = df[self.categorical_features]
                 if self.categorical_fillna == "ffill":
-                    df_enc = df_enc.fillna(method='ffill').fillna(method='bfill')
+                    df_enc = df_enc.ffill().bfill()
                 df_enc = df_enc.fillna('missing_value')
                 self.cat_transformer = OrdinalEncoder(
                     handle_unknown=self.handle_unknown, unknown_value=np.nan
@@ -321,8 +321,8 @@ class NumericTransformer(object):
             df.replace(self.na_strings, np.nan, inplace=True)
             df = df.apply(pd.to_numeric, errors='ignore')
             if self.categorical_flag:
-                df_enc = (df[self.categorical_features]).fillna(method='ffill')
-                df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
+                df_enc = (df[self.categorical_features]).ffill()
+                df_enc = df_enc.bfill().fillna('missing_value')
                 df_enc = self.cat_transformer.transform(df_enc) + 1
                 df = pd.concat(
                     [

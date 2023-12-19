@@ -452,6 +452,12 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "pad", "transformations": {"0": "EWMAFilter", "1": "LevelShiftTransformer", "2": "StandardScaler", "3": "DatepartRegression"}, "transformation_params": {"0": {"span": 7}, "1": {"window_size": 7, "alpha": 2.0, "grouping_forward_limit": 2, "max_level_shifts": 5, "alignment": "average"}, "2": {}, "3": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": "recurring", "polynomial_degree": null, "transform_dict": {"fillna": null, "transformations": {"0": "ScipyFilter"}, "transformation_params": {"0": {"method": "savgol_filter", "method_args": {"window_length": 31, "polyorder": 3, "deriv": 0, "mode": "interp"}}}}, "holiday_countries_used": false}}}',
         'Ensemble': 0,
     },
+    "72": {
+        'Model': 'NeuralForecast',
+        'ModelParameters': '''{"model": "MLP", "scaler_type": "minmax", "loss": "MQLoss", "learning_rate": 0.001, "max_steps": 100, "input_size": 28, "model_args": {"num_layers": 1, "hidden_size": 2560}, "regression_type": null}''',
+        'TransformationParameters': '''{"fillna": "SeasonalityMotifImputerLinMix", "transformations": {"0": "ClipOutliers", "1": "QuantileTransformer", "2": "SeasonalDifference", "3": "RobustScaler", "4": "ClipOutliers", "5": "MaxAbsScaler"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3.5, "fillna": null}, "1": {"output_distribution": "normal", "n_quantiles": 100}, "2": {"lag_1": 7, "method": "Mean"}, "3": {}, "4": {"method": "clip", "std_threshold": 4, "fillna": null}, "5": {}}}''',
+        'Ensemble': 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

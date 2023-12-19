@@ -402,7 +402,7 @@ class PytorchForecasting(ModelObject):
             ),
             on=self.range_idx_name,
             how='outer',
-        ).fillna(method='ffill')
+        ).ffill()
         encoder_data.index = pd.DatetimeIndex(
             np.concatenate([self.encoder_tail.index, test_index], axis=None)
         )

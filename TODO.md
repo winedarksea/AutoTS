@@ -12,12 +12,9 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.4 🔜🔜🔜
-* adjusted n_jobs back to minus 1 for multivariatemotif
-* fixed bug with plot_validations not working with some frequencies
-* force_validation added to import_template
-* model_list now enforced in new generations
-* added NeuralForecast
+# 0.6.5 🏮🏮🏮
+* horizontal and mosaic upgrades
+* bug fixes and template updates
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

@@ -775,7 +775,7 @@ class GluonTS(ModelObject):
 
 """
 model = GluonTS(epochs=5)
-model = model.fit(df.fillna(method='ffill').fillna(method='bfill'))
+model = model.fit(df.ffill().bfill())
 prediction = model.predict(forecast_length=14)
 prediction.forecast
 """

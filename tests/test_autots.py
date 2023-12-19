@@ -817,7 +817,7 @@ class ModelTest(unittest.TestCase):
             n_jobs=n_jobs,
             **params
         )
-        model.fit(df_train.fillna(method='ffill'))
+        model.fit(df_train.ffill())
         first_forecast = model.predict(future_regressor=future_regressor_forecast)
         # first_forecast.plot_grid(df)
         self.assertListEqual(first_forecast.forecast.index.tolist(), df_test.index.tolist())

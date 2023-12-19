@@ -37,7 +37,7 @@ template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
 random_seed = 2023
 forecast_length = 90
-long = True
+long = False
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
 # df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
 # df = load_artificial(long=long, date_start="2018-01-01")
@@ -337,7 +337,7 @@ if graph:
     # plt.savefig("forecast_grid2.png", dpi=300, bbox_inches="tight")
     plt.show()
     scores = model.best_model_per_series_mape().index.tolist()
-    scores = [x for x in scores if x in df.columns]
+    scores = [x for x in scores if x in use_df]
     worst = scores[0:6]
     prediction.plot_grid(use_df, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
     plt.show()
@@ -412,7 +412,7 @@ if graph:
     ax = model.plot_validations(use_df, subset='Worst Score')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
-    
+
     val_df = model.retrieve_validation_forecasts()
 
     try:

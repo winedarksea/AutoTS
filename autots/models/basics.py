@@ -956,7 +956,7 @@ class MotifSimulation(ModelObject):
                 )
                 lower_forecasts = pd.concat(
                     [lower_forecasts, empty_frame], axis=0, sort=False
-                ).fillna(method='ffill')
+                ).ffill()
             lower_forecasts.columns = self.column_names
             lower_forecasts.index = self.create_forecast_index(
                 forecast_length=forecast_length
@@ -969,7 +969,7 @@ class MotifSimulation(ModelObject):
                 )
                 upper_forecasts = pd.concat(
                     [upper_forecasts, empty_frame], axis=0, sort=False
-                ).fillna(method='ffill')
+                ).ffill()
             upper_forecasts.columns = self.column_names
             upper_forecasts.index = self.create_forecast_index(
                 forecast_length=forecast_length
@@ -2370,20 +2370,26 @@ class MetricMotif(ModelObject):
         # compare windows by metrics
         last_window = array[-window_size:, :]
         if distance_metric == "mae":
+            ae = temp - last_window.T
+            np.absolute(ae, out=ae)
             if nan_flag:
-                scores = np.nanmean(np.abs(temp - last_window.T), axis=2)
+                scores = np.nanmean(ae, axis=2)
             else:
-                scores = np.mean(np.abs(temp - last_window.T), axis=2)
+                scores = np.mean(ae, axis=2)
         elif distance_metric == "canberra":
             divisor = np.abs(temp) + np.abs(last_window.T)
             divisor[divisor == 0] = 1
+            ae = temp - last_window.T
+            np.absolute(ae, out=ae)
             if nan_flag:
-                scores = np.nanmean(np.abs(temp - last_window.T) / divisor, axis=2)
+                scores = np.nanmean(ae / divisor, axis=2)
             else:
-                scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
+                scores = np.mean(ae / divisor, axis=2)
         elif distance_metric == "minkowski":
             p = 2
-            scores = np.sum(np.abs(temp - last_window.T) ** p, axis=2) ** (1 / p)
+            ae = temp - last_window.T
+            np.absolute(ae, out=ae)
+            scores = np.sum(ae**p, axis=2) ** (1 / p)
         elif distance_metric == "cosine":
             scores = 1 - np.sum(temp * last_window.T, axis=2) / (
                 np.linalg.norm(temp, axis=2) * np.linalg.norm(last_window.T, axis=2)
@@ -2399,7 +2405,8 @@ class MetricMotif(ModelObject):
             )
         elif distance_metric == "mqae":
             q = 0.85
-            ae = np.abs(temp - last_window.T)
+            ae = temp - last_window.T
+            np.absolute(ae, out=ae)
             if ae.shape[2] <= 1:
                 vals = ae
             else:
@@ -2542,9 +2549,10 @@ class MetricMotif(ModelObject):
             "window": random.choices(
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
+            # weighted mean is effective but higher memory usage (weights= call)
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge", "closest"],
-                [0.4, 0.2, 0.2, 0.2, 0.1],
+                [0.1, 0.3, 0.2, 0.2, 0.1],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,

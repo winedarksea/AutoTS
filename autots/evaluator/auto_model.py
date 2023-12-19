@@ -18,6 +18,7 @@ from autots.models.ensemble import (
     generalize_horizontal,
     horizontal_aliases,
     parse_horizontal,
+    is_mosaic,
 )
 from autots.tools.shaping import infer_frequency
 from autots.models.model_list import (
@@ -1459,13 +1460,7 @@ def TemplateWizard(
     ],
     traceback: bool = False,
     current_model_file: str = None,
-    mosaic_list=[
-        'mosaic-window',
-        'mosaic',
-        'mosaic_crosshair',
-        "mosaic_window",
-        "mosaic-crosshair",
-    ],
+    mosaic_used=None,
     force_gc: bool = False,
 ):
     """
@@ -1506,6 +1501,8 @@ def TemplateWizard(
     template_result = TemplateEvalObject(
         per_series_metrics=[],
     )
+    if mosaic_used is None:
+        mosaic_used = is_mosaic(ensemble)
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
         template = template.to_frame()
@@ -1725,7 +1722,7 @@ def TemplateWizard(
                 template_result.per_timestamp_smape = pd.concat(
                     [template_result.per_timestamp_smape, cur_smape], axis=0
                 )
-            if any([x in mosaic_list for x in ensemble]):
+            if mosaic_used:
                 template_result.full_mae_errors.extend([model_error.full_mae_errors])
                 template_result.squared_errors.extend([model_error.squared_errors])
                 template_result.full_pl_errors.extend(
