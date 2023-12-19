@@ -127,9 +127,7 @@ def Variable_Point_to_Probability(train, forecast, alpha=0.3, beta=1):
     # median_change = (1  + median_change)
     # median_change[median_change <= 0 ] = 0.01  # HANDLE GOING BELOW ZERO
 
-    diffs = abs(
-        forecast - (forecast + forecast * median_change).ffill().shift(1)
-    )
+    diffs = abs(forecast - (forecast + forecast * median_change).ffill().shift(1))
 
     forecast_percent_changes = forecast.replace(0, np.nan).pct_change()
 

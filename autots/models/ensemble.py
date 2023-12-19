@@ -60,6 +60,7 @@ def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = No
             # list(set([mod for ser, mod in all_series.items() if ser == series_id]))
             return [all_series[series_id]]
 
+
 def parse_mosaic(ensemble):
     if ensemble == "mosaic":
         return {
@@ -88,7 +89,9 @@ def parse_mosaic(ensemble):
         len_split = len(split)
         if len_split > 1:
             metric = split[1]
-            metric = metric if metric in ['mae', 'spl', 'pl', 'se', 'weighted'] else 'mae'
+            metric = (
+                metric if metric in ['mae', 'spl', 'pl', 'se', 'weighted'] else 'mae'
+            )
             penultimate = split[-2]
         else:
             metric = 'mae'
@@ -143,6 +146,7 @@ mosaic_list = [
     "mosaic-crosshair",
 ]
 
+
 def is_horizontal(ensemble_list):
     # check for exact matches
     check = any(x in ensemble_list for x in h_ens_list)
@@ -150,10 +154,12 @@ def is_horizontal(ensemble_list):
     check2 = any("horizontal" in x for x in ensemble_list)
     return check or check2
 
+
 def is_mosaic(ensemble_list):
     check = any(x in ensemble_list for x in mosaic_list)
     check2 = any("mosaic" in x for x in ensemble_list)
     return check or check2
+
 
 def BestNEnsemble(
     ensemble_params,
@@ -377,7 +383,9 @@ def horizontal_xy(df_train, known):
     return Xt, Y, Xf
 
 
-def horizontal_classifier(df_train, known: dict, method: str = "whatever", classifier_params=None):
+def horizontal_classifier(
+    df_train, known: dict, method: str = "whatever", classifier_params=None
+):
     """
     CLassify unknown series with the appropriate model for horizontal ensembling.
 
@@ -391,10 +399,7 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever", class
     """
     if classifier_params is None:
         # found using FLAML
-        classifier_params = {
-            "model": 'KNN',
-            "model_params": {'n_neighbors': 5}
-        }
+        classifier_params = {"model": 'KNN', "model_params": {'n_neighbors': 5}}
 
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
     Xt, Y, Xf = horizontal_xy(df_train, known)
@@ -462,9 +467,11 @@ def mosaic_classifier(df_train, known, classifier_params=None):
         classifier_params = {
             "model": 'RandomForest',
             "model_params": {
-                'n_estimators': 169, 'max_features': 0.25736,
-                'max_leaf_nodes': 126, 'criterion': 'gini'
-            }
+                'n_estimators': 169,
+                'max_features': 0.25736,
+                'max_leaf_nodes': 126,
+                'criterion': 'gini',
+            },
         }
 
     X, Xf, Y, to_predict = mosaic_xy(df_train, known)
@@ -1274,9 +1281,7 @@ def n_limited_horz(per_series, K, safety_model=False):
     for x in range(K):
         # gets deeper into the top N per series for the later searches
         n_dep = x + 1
-        n_dep = (
-            n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
-        )
+        n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
         models_pos = []
         tr_df = pd.DataFrame()
         # find the most common models at this depth
@@ -1296,11 +1301,11 @@ def n_limited_horz(per_series, K, safety_model=False):
         # if size reaches zero, start back with the full columns
         if per_series_des.shape[1] == 0:
             per_series_des = per_series.copy().drop(mods.index, axis=0)
-    
+
     min_selected = mods.index.tolist()
     if safety_model:
         if safety_model_id not in min_selected:
-            min_selected = min_selected[0:(K - 1)]
+            min_selected = min_selected[0 : (K - 1)]
             min_selected.append(safety_model_id)
     return min_selected
 
@@ -1464,11 +1469,15 @@ def HorizontalTemplateGenerator(
             min_selected = n_limited_horz(per_series, K=kn, safety_model=True)
             mods_per_series = per_series.loc[min_selected].idxmin()
             best5 = (
-                model_results[model_results['ID'].isin(mods_per_series.unique().tolist())]
+                model_results[
+                    model_results['ID'].isin(mods_per_series.unique().tolist())
+                ]
                 .drop_duplicates(
                     subset=['Model', 'ModelParameters', 'TransformationParameters']
                 )
-                .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
             nomen = 'Horizontal'
             metric = 'Score-n'
@@ -1505,11 +1514,15 @@ def HorizontalTemplateGenerator(
             min_selected = n_limited_horz(per_series, K=K, safety_model=False)
             mods_per_series = per_series.loc[min_selected].idxmin()
             best5 = (
-                model_results[model_results['ID'].isin(mods_per_series.unique().tolist())]
+                model_results[
+                    model_results['ID'].isin(mods_per_series.unique().tolist())
+                ]
                 .drop_duplicates(
                     subset=['Model', 'ModelParameters', 'TransformationParameters']
                 )
-                .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
             nomen = 'Horizontal'
             metric = 'Score-min'
@@ -1571,8 +1584,12 @@ def generate_crosshair_score_list(error_list):
 
 
 def process_mosaic_arrays(
-        local_results, full_mae_ids, full_mae_errors, total_vals,
-        models_to_use=None, smoothing_window=None
+    local_results,
+    full_mae_ids,
+    full_mae_errors,
+    total_vals,
+    models_to_use=None,
+    smoothing_window=None,
 ):
     # sort by runtime then drop duplicates on metric results
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
@@ -1595,7 +1612,7 @@ def process_mosaic_arrays(
             if y in models_to_use
         ]
     )
-    
+
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
 
@@ -1639,8 +1656,12 @@ def generate_mosaic_template(
     total_vals = num_validations + 1
     local_results = initial_results.copy()
     id_array, errors_array = process_mosaic_arrays(
-        local_results, full_mae_ids, full_mae_errors, total_vals=total_vals,
-        models_to_use=models_to_use, smoothing_window=smoothing_window
+        local_results,
+        full_mae_ids,
+        full_mae_errors,
+        total_vals=total_vals,
+        models_to_use=models_to_use,
+        smoothing_window=smoothing_window,
     )
     # window across multiple time steps to smooth the result
     name = "Mosaic"

@@ -2370,7 +2370,7 @@ class MetricMotif(ModelObject):
         # compare windows by metrics
         last_window = array[-window_size:, :]
         if distance_metric == "mae":
-            ae = (temp - last_window.T)
+            ae = temp - last_window.T
             np.absolute(ae, out=ae)
             if nan_flag:
                 scores = np.nanmean(ae, axis=2)
@@ -2379,7 +2379,7 @@ class MetricMotif(ModelObject):
         elif distance_metric == "canberra":
             divisor = np.abs(temp) + np.abs(last_window.T)
             divisor[divisor == 0] = 1
-            ae = (temp - last_window.T)
+            ae = temp - last_window.T
             np.absolute(ae, out=ae)
             if nan_flag:
                 scores = np.nanmean(ae / divisor, axis=2)
@@ -2387,9 +2387,9 @@ class MetricMotif(ModelObject):
                 scores = np.mean(ae / divisor, axis=2)
         elif distance_metric == "minkowski":
             p = 2
-            ae = (temp - last_window.T)
+            ae = temp - last_window.T
             np.absolute(ae, out=ae)
-            scores = np.sum(ae ** p, axis=2) ** (1 / p)
+            scores = np.sum(ae**p, axis=2) ** (1 / p)
         elif distance_metric == "cosine":
             scores = 1 - np.sum(temp * last_window.T, axis=2) / (
                 np.linalg.norm(temp, axis=2) * np.linalg.norm(last_window.T, axis=2)
@@ -2405,7 +2405,7 @@ class MetricMotif(ModelObject):
             )
         elif distance_metric == "mqae":
             q = 0.85
-            ae = (temp - last_window.T)
+            ae = temp - last_window.T
             np.absolute(ae, out=ae)
             if ae.shape[2] <= 1:
                 vals = ae

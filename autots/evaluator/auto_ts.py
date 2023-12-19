@@ -44,7 +44,8 @@ from autots.models.ensemble import (
     process_mosaic_arrays,
     parse_forecast_length,
     n_limited_horz,
-    is_horizontal, is_mosaic,
+    is_horizontal,
+    is_mosaic,
     parse_mosaic,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
@@ -335,11 +336,11 @@ class AutoTS(object):
                 )
             elif initial_template == 'general':
                 from autots.templates.general import general_template
-    
+
                 self.initial_template = general_template
             elif initial_template == 'general+random':
                 from autots.templates.general import general_template
-    
+
                 random_template = RandomTemplate(
                     len(self.model_list) * 5,
                     model_list=self.model_list,
@@ -1493,7 +1494,9 @@ class AutoTS(object):
                     time.sleep(5)
             try:
                 if self.mosaic_used:
-                    ens_templates = self._generate_mosaic_template(df_subset, models_to_use=models_to_use)
+                    ens_templates = self._generate_mosaic_template(
+                        df_subset, models_to_use=models_to_use
+                    )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
@@ -1525,25 +1528,31 @@ class AutoTS(object):
                             # find a way of parsing it down to n models to use
                             total_vals = self.num_validations + 1
                             local_results = self.initial_results.model_results.copy()
-                            full_mae_errors=[
+                            full_mae_errors = [
                                 generate_crosshair_score(x)
                                 for x in self.initial_results.full_mae_errors
                             ]
                             id_array, errors_array = process_mosaic_arrays(
-                                local_results, full_mae_ids=self.initial_results.full_mae_ids,
+                                local_results,
+                                full_mae_ids=self.initial_results.full_mae_ids,
                                 full_mae_errors=full_mae_errors,
                                 total_vals=total_vals,
-                                models_to_use=models_to_use, smoothing_window=None
+                                models_to_use=models_to_use,
+                                smoothing_window=None,
                             )
                             # so it's summarized by progressively longer chunks
                             chunks = parse_forecast_length(self.forecast_length)
                             all_pieces = []
                             for piece in chunks:
-                                all_pieces.append(pd.DataFrame(errors_array[:, piece, :].mean(axis=1)))
+                                all_pieces.append(
+                                    pd.DataFrame(errors_array[:, piece, :].mean(axis=1))
+                                )
                             n_pieces = pd.concat(all_pieces, axis=1)
                             n_pieces.index = id_array
                             # can modify K later
-                            chosen_model_n = n_limited_horz(n_pieces, K=50, safety_model=False)
+                            chosen_model_n = n_limited_horz(
+                                n_pieces, K=50, safety_model=False
+                            )
                             ens_templates = generate_mosaic_template(
                                 initial_results=self.initial_results.model_results,
                                 full_mae_ids=self.initial_results.full_mae_ids,
@@ -1559,7 +1568,10 @@ class AutoTS(object):
                             )
                         except Exception as e:
                             print(f"N_CROSSHAIR FAILED WITH ERROR: {repr(e)}")
-                    if "mosaic_crosshair" in self.ensemble or "mosaic-crosshair" in self.ensemble:
+                    if (
+                        "mosaic_crosshair" in self.ensemble
+                        or "mosaic-crosshair" in self.ensemble
+                    ):
                         ens_templates = generate_mosaic_template(
                             initial_results=self.initial_results.model_results,
                             full_mae_ids=self.initial_results.full_mae_ids,
@@ -1619,7 +1631,10 @@ class AutoTS(object):
                         ensemble_templates = pd.concat(
                             [ensemble_templates, ens_templates], axis=0
                         )
-                    if "mosaic_window" in self.ensemble or "mosaic-window" in self.ensemble:
+                    if (
+                        "mosaic_window" in self.ensemble
+                        or "mosaic-window" in self.ensemble
+                    ):
                         ens_templates = generate_mosaic_template(
                             initial_results=self.initial_results.model_results,
                             full_mae_ids=self.initial_results.full_mae_ids,
@@ -1757,7 +1772,9 @@ class AutoTS(object):
                             )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Mosaic Ensemble Generation Error: {repr(e)}:  {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                    print(
+                        f"Mosaic Ensemble Generation Error: {repr(e)}:  {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                    )
             try:
                 # test on initial test split to make sure they work
                 self._run_template(
@@ -1807,9 +1824,7 @@ class AutoTS(object):
         hens_model_results = hens_model_results[
             hens_model_results['Exceptions'].isnull()
         ]
-        requested_H_ens = (
-            (self.h_ens_used or self.mosaic_used) and allow_horizontal
-        )
+        requested_H_ens = (self.h_ens_used or self.mosaic_used) and allow_horizontal
         # here I'm assuming that if some horizontal models ran, we are going to use those
         # horizontal ensembles can't be compared directly to others because they don't get run through all validations
         # they are built themselves from cross validation so a full rerun of validations is unnecessary
@@ -2630,7 +2645,7 @@ class AutoTS(object):
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)
         return self
-    
+
     def _generate_mosaic_template(self, df_subset=None, models_to_use=None):
         # can probably replace df_subset.columns with self.initial_results.per_series_mae.columns
         if df_subset is None:
@@ -2663,10 +2678,7 @@ class AutoTS(object):
                     errs = self.initial_results.full_mae_errors
                 # process for crosshair
                 if mosaic_config.get("crosshair"):
-                    full_mae_err = [
-                        generate_crosshair_score(x)
-                        for x in errs
-                    ]
+                    full_mae_err = [generate_crosshair_score(x) for x in errs]
                 else:
                     full_mae_err = errs
                 # refine to n_models if necessary
@@ -2675,20 +2687,26 @@ class AutoTS(object):
                     total_vals = self.num_validations + 1
                     local_results = self.initial_results.model_results.copy()
                     id_array, errors_array = process_mosaic_arrays(
-                        local_results, full_mae_ids=self.initial_results.full_mae_ids,
+                        local_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
                         full_mae_errors=full_mae_err,
                         total_vals=total_vals,
-                        models_to_use=models_to_use, smoothing_window=None
+                        models_to_use=models_to_use,
+                        smoothing_window=None,
                     )
                     # so it's summarized by progressively longer chunks
                     chunks = parse_forecast_length(self.forecast_length)
                     all_pieces = []
                     for piece in chunks:
-                        all_pieces.append(pd.DataFrame(errors_array[:, piece, :].mean(axis=1)))
+                        all_pieces.append(
+                            pd.DataFrame(errors_array[:, piece, :].mean(axis=1))
+                        )
                     n_pieces = pd.concat(all_pieces, axis=1)
                     n_pieces.index = id_array
                     # can modify K later
-                    modz = n_limited_horz(n_pieces, K=mosaic_config.get("n_models"), safety_model=False)
+                    modz = n_limited_horz(
+                        n_pieces, K=mosaic_config.get("n_models"), safety_model=False
+                    )
                 elif mosaic_config.get("n_models") == "horizontal":
                     modz = models_to_use
                 else:
@@ -2707,7 +2725,9 @@ class AutoTS(object):
                     [ensemble_templates, ens_templates], axis=0
                 )
             except Exception as e:
-                print(f"Error in mosaic template generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                print(
+                    f"Error in mosaic template generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                )
         return ensemble_templates
 
     def horizontal_per_generation(self):

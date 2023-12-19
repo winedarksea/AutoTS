@@ -456,8 +456,8 @@ general_template_dict = {
         'Model': 'NeuralForecast',
         'ModelParameters': '''{"model": "MLP", "scaler_type": "minmax", "loss": "MQLoss", "learning_rate": 0.001, "max_steps": 100, "input_size": 28, "model_args": {"num_layers": 1, "hidden_size": 2560}, "regression_type": null}''',
         'TransformationParameters': '''{"fillna": "SeasonalityMotifImputerLinMix", "transformations": {"0": "ClipOutliers", "1": "QuantileTransformer", "2": "SeasonalDifference", "3": "RobustScaler", "4": "ClipOutliers", "5": "MaxAbsScaler"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3.5, "fillna": null}, "1": {"output_distribution": "normal", "n_quantiles": 100}, "2": {"lag_1": 7, "method": "Mean"}, "3": {}, "4": {"method": "clip", "std_threshold": 4, "fillna": null}, "5": {}}}''',
-        'Ensemble': 0
-    }
+        'Ensemble': 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

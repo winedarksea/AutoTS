@@ -12,7 +12,7 @@ from autots.tools.probabilistic import Point_to_Probability
 class NeuralForecast(ModelObject):
     """See NeuralForecast documentation for details.
 
-    
+
     temp['ModelParameters'].str.extract('model": "([a-zA-Z]+)')
 
     Args:
