@@ -207,7 +207,7 @@ class NeuralForecast(ModelObject):
             raise ValueError(f"models not recognized: {models}")
 
         # model params
-
+        # requires pandas >= 1.5
         silly_format = df.reset_index(names='ds').melt(
             id_vars='ds', value_name='y', var_name='unique_id'
         )
