@@ -3397,6 +3397,7 @@ class AutoTS(object):
         scaler[scaler == 0] == 1
         temp = (
             ((best_model_per_series_mae / scaler) * 100)
+            .abs()
             .round(2)
             .sort_values(ascending=False)
         )
