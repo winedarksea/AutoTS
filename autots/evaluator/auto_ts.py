@@ -3387,11 +3387,12 @@ class AutoTS(object):
         return temp[temp <= 0].index.to_list()
 
     def best_model_per_series_mape(self):
+        """This isn't quite classic mape but is a percentage mean error intended for quick visuals not final statistics (see model.results())."""
         best_model_per_series_mae = self.initial_results.per_series_mae[
             self.initial_results.per_series_mae.index == self.best_model_id
         ].mean(axis=0)
         # obsess over avoiding division by zero
-        scaler = self.df_wide_numeric.mean(axis=0)
+        scaler = self.df_wide_numeric.abs().mean(axis=0)
         scaler[scaler == 0] == np.nan
         scaler = scaler.fillna(self.df_wide_numeric.max(axis=0))
         scaler[scaler == 0] == 1
