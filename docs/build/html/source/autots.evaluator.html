@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.6.5 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.6.6 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
@@ -578,7 +578,7 @@ if True, KeyboardInterrupts attempt to only quit current model.
 if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.
 if “end_generation”, as True and also ends entire generation of run. Note skipped models will not be tried again.</p></li>
 <li><p><strong>generation_timeout</strong> (<em>int</em>) – if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
-This is only checked after the end of each generation, so only offers an ‘approximate’ timeout for searching</p></li>
+This is only checked after the end of each generation, so only offers an ‘approximate’ timeout for searching. It is an overall cap for total generation search time, not per generation.</p></li>
 <li><p><strong>current_model_file</strong> (<em>str</em>) – file path to write to disk of current model params (for debugging if computer crashes). .json is appended</p></li>
 <li><p><strong>force_gc</strong> (<em>bool</em>) – if True, run gc.collect() after each model run. Probably won’t make much difference.</p></li>
 <li><p><strong>verbose</strong> (<em>int</em>) – setting to 0 or lower should reduce most output. Higher numbers give more output.</p></li>
@@ -730,7 +730,8 @@ tail (int): df.tail() of the dataset, back_forecast is only run on n most recent
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.auto_ts.AutoTS.best_model_per_series_mape">
 <span class="sig-name descname"><span class="pre">best_model_per_series_mape</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.best_model_per_series_mape" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>This isn’t quite classic mape but is a percentage mean error intended for quick visuals not final statistics (see model.results()).</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.auto_ts.AutoTS.best_model_per_series_score">
