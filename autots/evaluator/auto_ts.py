@@ -134,7 +134,7 @@ class AutoTS(object):
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
             if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
         generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
-            This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching
+            This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching. It is an overall cap for total generation search time, not per generation.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
@@ -1198,7 +1198,7 @@ class AutoTS(object):
 
         # unpack ensemble models so sub models appear at highest level
         self.initial_template = unpack_ensemble_models(
-            self.initial_template,
+            self.initial_template.copy(),
             self.template_cols,
             keep_ensemble=True,
             recursive=True,
@@ -3225,6 +3225,7 @@ class AutoTS(object):
         if df_wide is None:
             df_wide = self.df_wide_numeric
         # choose which series to plot
+        agg_flag = False
         if series is None:
             if subset is None:
                 series = random.choice(df_wide.columns)
@@ -3241,6 +3242,9 @@ class AutoTS(object):
                     series = mapes[0]
                 elif str(subset).lower() == "worst score":
                     series = scores[0]
+                elif str(subset).lower() == "agg":
+                    agg_flag = True
+                    series = "Aggregate Forecasts"
                 else:
                     raise ValueError(
                         "plot_validations arg subset must be None, 'best' or 'worst'"
@@ -3260,23 +3264,40 @@ class AutoTS(object):
             mname = x.split("_")[1]
             if mname == "chosen" or mname in needed_mods:
                 new_df = pd.DataFrame(index=df_wide.index)
-                new_df[mname] = self.validation_forecasts[x].forecast[series]
-                new_df[mname + "_" + "upper"] = self.validation_forecasts[
-                    x
-                ].upper_forecast[series]
-                new_df[mname + "_" + "lower"] = self.validation_forecasts[
-                    x
-                ].lower_forecast[series]
+                if agg_flag:
+                    new_df[mname] = self.validation_forecasts[x].forecast.sum(axis=1)
+                    new_df[mname + "_" + "upper"] = self.validation_forecasts[
+                        x
+                    ].upper_forecast.sum(axis=1)
+                    new_df[mname + "_" + "lower"] = self.validation_forecasts[
+                        x
+                    ].lower_forecast.sum(axis=1)
+                else:
+                    new_df[mname] = self.validation_forecasts[x].forecast[series]
+                    new_df[mname + "_" + "upper"] = self.validation_forecasts[
+                        x
+                    ].upper_forecast[series]
+                    new_df[mname + "_" + "lower"] = self.validation_forecasts[
+                        x
+                    ].lower_forecast[series]
                 df_list.append(new_df)
         plot_df = pd.concat(df_list, sort=True, axis=0)
         # self.val_plot_df = plot_df.copy()
         plot_df = plot_df.groupby(level=0).last()
-        plot_df = (
-            df_wide[series]
-            .rename("actuals")
-            .to_frame()
-            .merge(plot_df, left_index=True, right_index=True, how="left")
-        )
+        if agg_flag:
+            plot_df = (
+                df_wide.sum(axis=1)
+                .rename("actuals")
+                .to_frame()
+                .merge(plot_df, left_index=True, right_index=True, how="left")
+            )
+        else:
+            plot_df = (
+                df_wide[series]
+                .rename("actuals")
+                .to_frame()
+                .merge(plot_df, left_index=True, right_index=True, how="left")
+            )
         if not include_bounds:
             colb = [
                 x for x in plot_df.columns if "_lower" not in x and "_upper" not in x
@@ -3366,11 +3387,12 @@ class AutoTS(object):
         return temp[temp <= 0].index.to_list()
 
     def best_model_per_series_mape(self):
+        """This isn't quite classic mape but is a percentage mean error intended for quick visuals not final statistics (see model.results())."""
         best_model_per_series_mae = self.initial_results.per_series_mae[
             self.initial_results.per_series_mae.index == self.best_model_id
         ].mean(axis=0)
         # obsess over avoiding division by zero
-        scaler = self.df_wide_numeric.mean(axis=0)
+        scaler = self.df_wide_numeric.abs().mean(axis=0)
         scaler[scaler == 0] == np.nan
         scaler = scaler.fillna(self.df_wide_numeric.max(axis=0))
         scaler[scaler == 0] == 1

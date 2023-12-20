@@ -33,6 +33,7 @@ def seasonal_int(include_one: bool = False, small=False, very_small=False):
         60: 0.05,
         96: 0.04,  # quarter in days
         168: 0.01,
+        288: 0.001,  # daily at 5 minute intervals
         364: 0.1,  # year to weekday
         1440: 0.01,
         420: 0.01,

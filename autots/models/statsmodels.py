@@ -2005,12 +2005,16 @@ class Theta(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
+        if method in ["deep"]:
+            period = random.choices([None, 7, 28, 288], [0.8, 0.1, 0.1, 0.01])[0]
+        else:
+            period = None
         return {
             'deseasonalize': random.choices([True, False], [0.8, 0.2])[0],
             'difference': random.choice([True, False]),
             'use_test': random.choices([True, False], [0.4, 0.2])[0],
             'method': "auto",
-            'period': None,
+            'period': period,
             'theta': random.choice([1.2, 1.4, 1.6, 2, 2.5, 3, 4]),
             'use_mle': random.choices([True, False], [0.0001, 0.99])[0],
         }
