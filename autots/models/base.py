@@ -510,14 +510,14 @@ class PredictionObject(object):
             pd.DataFrame
         """
         upload = pd.melt(
-            self.forecast.reset_index(names='datetime'),
+            self.forecast.rename_axis(index='datetime').reset_index(),
             var_name="SeriesID",
             value_name="Value",
             id_vars="datetime",
         ).set_index("datetime")
         upload[interval_name] = "50%"
         upload_upper = pd.melt(
-            self.upper_forecast.reset_index(names='datetime'),
+            self.upper_forecast.rename_axis(index='datetime').reset_index(),
             var_name="SeriesID",
             value_name="Value",
             id_vars="datetime",
@@ -526,7 +526,7 @@ class PredictionObject(object):
             interval_name
         ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
         upload_lower = pd.melt(
-            self.lower_forecast.reset_index(names='datetime'),
+            self.lower_forecast.rename_axis(index='datetime').reset_index(),
             var_name="SeriesID",
             value_name="Value",
             id_vars="datetime",
