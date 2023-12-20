@@ -1198,7 +1198,7 @@ class AutoTS(object):
 
         # unpack ensemble models so sub models appear at highest level
         self.initial_template = unpack_ensemble_models(
-            self.initial_template,
+            self.initial_template.copy(),
             self.template_cols,
             keep_ensemble=True,
             recursive=True,
