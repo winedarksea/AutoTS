@@ -258,3 +258,82 @@ class CassandraTest(unittest.TestCase):
         print(pred.avg_metrics.round(1))
 
         self.assertFalse(pred.forecast.isna().all().all())
+
+    def test_another_version(self):
+        from autots import load_daily
+
+        df = load_daily(long=False)
+        params = {
+            'frequency': 'D',
+          'preprocessing_transformation': {'fillna': 'ffill',
+           'transformations': {'0': 'AlignLastValue', '1': 'ClipOutliers'},
+           'transformation_params': {'0': {'rows': 1,
+             'lag': 1,
+             'method': 'additive',
+             'strength': 1.0,
+             'first_value_only': False},
+            '1': {'method': 'clip', 'std_threshold': 4, 'fillna': None}}},
+          'scaling': 'BaseScaler',
+          'past_impacts_intervention': 'remove',
+          'seasonalities': ['month', 'dayofweek', 'weekdayofmonth'],
+          'ar_lags': None,
+          'ar_interaction_seasonality': None,
+          'anomaly_detector_params': {'method': 'zscore',
+           'transform_dict': {'transformations': {'0': 'DatepartRegression'},
+            'transformation_params': {'0': {'datepart_method': 'simple_3',
+              'regression_model': {'model': 'ElasticNet', 'model_params': {}}}}},
+           'method_params': {'distribution': 'gamma', 'alpha': 0.05},
+           'fillna': 'rolling_mean_24'},
+          'anomaly_intervention': None,
+          'holiday_detector_params': None,
+          'holiday_countries_used': True,
+          'multivariate_feature': None,
+          'multivariate_transformation': None,
+          'regressor_transformation': None,
+          'regressors_used': False,
+          'linear_model': {'model': 'l1_positive',
+           'recency_weighting': None,
+           'maxiter': 15000},
+          'randomwalk_n': 10,
+          'trend_window': 90,
+          'trend_standin': None,
+          'trend_anomaly_detector_params': {'method': 'LOF',
+           'method_params': {'contamination': 'auto',
+            'n_neighbors': 10,
+            'metric': 'minkowski'},
+           'fillna': 'mean',
+           'transform_dict': None},
+          'trend_transformation2': {'fillna': 'zero',
+           'transformations': {'0': 'HPFilter', '1': 'ClipOutliers'},
+           'transformation_params': {'0': {'part': 'trend', 'lamb': 6.25},
+            '1': {'method': 'clip', 'std_threshold': 2, 'fillna': None}}},
+          'trend_model2': {'Model': 'WindowRegression',
+           'ModelParameters': {'window_size': 12,
+            'input_dim': 'univariate',
+            'output_dim': '1step',
+            'normalize_window': False,
+            'max_windows': 8000,
+            'regression_type': None,
+            'regression_model': {'model': 'ExtraTrees',
+             'model_params': {'n_estimators': 100,
+              'min_samples_leaf': 1,
+              'max_depth': 20}}}},
+          'trend_transformation': {'fillna': 'zero',
+           'transformations': {'0': 'HPFilter', '1': 'ClipOutliers'},
+           'transformation_params': {'0': {'part': 'trend', 'lamb': 6.25},
+            '1': {'method': 'clip', 'std_threshold': 2, 'fillna': None}}},
+          'trend_model': {'Model': 'SeasonalityMotif',
+           'ModelParameters': {'window': 10,
+            'point_method': 'weighted_mean',
+            'distance_metric': 'mqae',
+            'k': 10,
+            'datepart_method': 'expanded_binarized'}},
+          'trend_phi': None
+        }
+        mod = Cassandra(**params)
+        
+        mod.fit(df)
+        pred = mod.predict(forecast_length=10)
+
+        self.assertFalse(pred.forecast.isna().all().all())
+        self.assertEqual(pred.forecast.shape[0], 10)

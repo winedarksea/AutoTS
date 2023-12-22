@@ -2021,7 +2021,8 @@ class AutoTS(object):
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
-            print(f"TotalRuntime missing in {current_generation}!")
+            if verbose >= 0:
+                print(f"TotalRuntime missing in {current_generation}!")
             self.template_result_error = template_result.model_results.copy()
             self.template_error = template.copy()
         # gather results of template run
@@ -2665,7 +2666,6 @@ class AutoTS(object):
         for mos in mosaic_ensembles:
             try:
                 mosaic_config = parse_mosaic(mos)
-                print(mosaic_config)
                 # choose metric to optimize on
                 met = mosaic_config.get("metric", "mae")
                 if met in ["spl", "pl"]:
