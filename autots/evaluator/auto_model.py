@@ -2535,6 +2535,7 @@ def generate_score(
     mate_weighting = metric_weighting.get('mate_weighting', 0)
     wasserstein_weighting = metric_weighting.get('wasserstein_weighting', 0)
     dwd_weighting = metric_weighting.get('dwd_weighting', 0)
+    matse_weighting = metric_weighting.get('matse_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         model_results['TotalRuntimeSeconds'] = np.where(
@@ -2652,6 +2653,12 @@ def generate_score(
             ].min()
             dwd_score = model_results['dwd_weighted'] / dwd_scaler
             overall_score = overall_score + (dwd_score * dwd_weighting)
+        if matse_weighting != 0:
+            matse_scaler = model_results['matse_weighted'][
+                model_results['matse_weighted'] != 0
+            ].min()
+            matse_score = model_results['matse_weighted'] / matse_scaler
+            overall_score = overall_score + (matse_score * matse_weighting)
         if smoothness_weighting != 0:
             smoothness_scaler = model_results['smoothness_weighted'][
                 model_results['smoothness_weighted'] != 0
