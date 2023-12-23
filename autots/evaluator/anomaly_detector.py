@@ -44,7 +44,7 @@ class AnomalyDetector(object):
     ):
         """Detect anomalies on a historic dataset.
         Note anomaly score patterns vary by method.
-        Anomaly flag is standard -1 = anomaly; 1 = regular
+        Anomaly flag is standard -1 = anomaly; 1 = regular as per sklearn
 
         Args:
             output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)

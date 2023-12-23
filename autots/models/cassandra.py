@@ -791,7 +791,6 @@ class Cassandra(ModelObject):
         return zero_crossings, changepoints, slope_sign, accel
 
     def rolling_trend(self, trend_residuals, t):
-        print("rolling trend")
         dates_2d = np.repeat(
             t[..., None],
             # df_holiday_scaled.index.to_julian_date().to_numpy()[..., None],
@@ -803,12 +802,8 @@ class Cassandra(ModelObject):
         # and minus one is because there will always be at least one real point
         w_1 = wind - 1
         steps_ahd = int(w_1 / 2)
-        print(f"steps_ahd: {steps_ahd}")
         y0 = np.repeat(np.array(trend_residuals[0:1]), steps_ahd, axis=0)
-        print(y0.shape)
         # d0 = -1 * dates_2d[1 : y0.shape[0] + 1][::-1]
-        self.y0 = y0
-        self.dates_2d = dates_2d
         start_pt = dates_2d[0, 0]
         step = dates_2d[1, 0] - start_pt
         extra_step = y0.shape[0] + 1
@@ -820,7 +815,6 @@ class Cassandra(ModelObject):
             step=-step,
             num_columns=dates_2d.shape[1],
         )[1:extra_step][::-1]
-        print(d0.shape)
         shape2 = (w_1 - steps_ahd, y0.shape[1])
         # these combine a fake first half and fake last half window with real data in between
         y2 = np.concatenate(

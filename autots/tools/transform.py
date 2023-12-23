@@ -26,6 +26,16 @@ from autots.tools.holiday import holiday_flag
 from autots.tools.fft import FFT as fft_class
 from autots.tools.percentile import nan_quantile
 
+try:
+    from scipy.signal import butter, sosfiltfilt, savgol_filter
+    from scipy.optimize import curve_fit
+    from scipy.stats import norm
+except Exception:
+    norm = lambda x: 0.05
+    curve_fit = lambda x: "scipy import failed"
+    butter = lambda x: "scipy import failed"
+    sosfiltfilt = lambda x: "scipy import failed"
+    savgol_filter = lambda x: "scipy import failed"
 
 try:
     from joblib import Parallel, delayed
@@ -580,7 +590,6 @@ class SinTrend(EmptyTransformer):
 
         from user unsym @ https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy
         """
-        from scipy.optimize import curve_fit
 
         tt = np.array(tt)
         yy = np.array(yy)
@@ -975,6 +984,8 @@ class RollingMeanTransformer(EmptyTransformer):
 class SeasonalDifference(EmptyTransformer):
     """Remove seasonal component.
 
+    "Oh that's nice - ash on my tomatoes!" - Pippin
+
     Args:
         lag_1 (int): length of seasonal period to remove.
         method (str): 'LastValue', 'Mean', 'Median' to construct seasonality
@@ -987,7 +998,10 @@ class SeasonalDifference(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        method_c = random.choice(["LastValue", "Mean", "Median"])
+        method_c = random.choices(
+            ["LastValue", "Mean", "Median", 2, 5, 20],
+            [0.5, 0.2, 0.2, 0.1, 0.1, 0.1]
+        )[0]
         if method == "fast":
             choice = random.choice([7, 12])
         else:
@@ -1013,9 +1027,21 @@ class SeasonalDifference(EmptyTransformer):
                 self.tile_values_lag_1 = df2.groupby(level=0).median()
             else:
                 self.tile_values_lag_1 = df2.groupby(level=0).mean()
-        else:
-            self.method == "LastValue"
+        elif isinstance(self.method, (int, float)):
+            # do an exponential weighting with given span
+            arr = np.asarray(df)
+            N = self.lag_1
+            span = self.method
+            num_slices = arr.shape[0] // N
+            # (slices, lag size, num seriesd)
+            arr_3d = arr[-(num_slices * N):].reshape(num_slices, N, -1)
+            alpha = 2 / (span + 1)
+            weights = (alpha * (1 - alpha) ** np.arange(num_slices))[::-1]
+            self.tile_values_lag_1 = np.sum(arr_3d * weights[:, np.newaxis, np.newaxis], axis=0) / np.sum(weights)
+        elif self.method in ['lastvalue', 'LastValue', 'last_value']:
             self.tile_values_lag_1 = df.tail(self.lag_1)
+        else:
+            raise ValueError(f"SeasonalDifference method '{self.method}' not recognized")
         return self
 
     def transform(self, df):
@@ -2145,8 +2171,6 @@ class ScipyFilter(EmptyTransformer):
 
             return pd.DataFrame(wiener(df.values), columns=df.columns, index=df.index)
         elif self.method == "savgol_filter":
-            from scipy.signal import savgol_filter
-
             # args = [5, 2]
             return pd.DataFrame(
                 savgol_filter(df.values, **self.method_args, axis=0),
@@ -2154,8 +2178,6 @@ class ScipyFilter(EmptyTransformer):
                 index=df.index,
             )
         elif self.method == "butter":
-            from scipy.signal import butter, sosfiltfilt
-
             # args = [4, 0.125]
             # [4, 100, 'lowpass'], [1, 0.125, "highpass"]
             if 'window_size' in self.method_args:
@@ -2760,6 +2782,7 @@ class AnomalyRemoval(EmptyTransformer):
         },
         method_params={},
         fillna=None,
+        isolated_only=False,
         n_jobs=1,
     ):
         """Detect anomalies on a historic dataset. No inverse_transform available.
@@ -2770,6 +2793,7 @@ class AnomalyRemoval(EmptyTransformer):
             transform_dict (dict): option but helpful, often datepart, differencing, or other standard AutoTS transformer params
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
+            isolated_only (bool): if True, only removal standalone anomalies
             n_jobs (int): multiprocessing jobs, used by some methods
         """
         super().__init__(name="AnomalyRemoval")
@@ -2779,6 +2803,7 @@ class AnomalyRemoval(EmptyTransformer):
         self.method_params = method_params
         self.n_jobs = n_jobs
         self.fillna = fillna
+        self.isolated_only = isolated_only
         self.anomaly_classifier = None
 
     def fit(self, df):
@@ -2802,6 +2827,13 @@ class AnomalyRemoval(EmptyTransformer):
             method_params=self.method_params,
             n_jobs=self.n_jobs,
         )
+        if self.isolated_only:
+            # replace all anomalies (-1) except those which are isolated (1 before and after)
+            mask_minus_one = self.anomalies == -1
+            mask_prev_one = self.anomalies.shift(1) == 1
+            mask_next_one = self.anomalies.shift(-1) == 1
+            mask_replace = mask_minus_one & ~(mask_prev_one & mask_next_one)
+            self.anomalies[mask_replace] = 1
         return self
 
     def transform(self, df):
@@ -2874,6 +2906,7 @@ class AnomalyRemoval(EmptyTransformer):
                 [0.01, 0.39, 0.1, 0.3, 0.15, 0.05],
             )[0],
             "transform_dict": transform_dict,
+            "isolated_only": random.choices([True, False], [0.2, 0.8])[0],
         }
 
 
@@ -4339,6 +4372,7 @@ class DiffSmoother(EmptyTransformer):
         n_jobs=1,
         adjustment: int = 2,
         reverse_alignment=True,
+        isolated_only=False,
     ):
         """Detect anomalies on a historic dataset in the DIFFS then cumsum back to origin space.
         No inverse_transform available.
@@ -4350,6 +4384,7 @@ class DiffSmoother(EmptyTransformer):
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
             reverse_alighment (bool): if True, remove diffs then cumsum
+            isolated_only (bool): if True, only standalone anomalies are used
             n_jobs (int): multiprocessing jobs, used by some methods
         """
         super().__init__(name="DiffSmoother")
@@ -4361,6 +4396,7 @@ class DiffSmoother(EmptyTransformer):
         self.fillna = fillna
         self.adjustment = adjustment
         self.reverse_alignment = reverse_alignment
+        self.isolated_only = isolated_only
 
     def fit(self, df):
         """Fit.
@@ -4380,13 +4416,27 @@ class DiffSmoother(EmptyTransformer):
             model = GeneralTransformer(**self.transform_dict)
             diffs = model.fit_transform(diffs)
 
-        if isinstance(self.fillna, (float, int)):
+        # integer or float is a clip based approach, others are anomaly detection
+        if isinstance(self.fillna, (float, int)) and self.reverse_alignment:
             diffs = diffs.clip(
                 upper=diffs[diffs > 0].std() * self.fillna,
                 lower=-(diffs[diffs < 0].std() * self.fillna),
                 axis=1,
             )
         else:
+            # for fillna float and not reverse (not in default get_new_params) but just in case
+            if isinstance(self.fillna, (float, int)):
+                self.method = "rolling_zscore"
+                self.method_parmas = {
+                    'distribution': 'norm',
+                     'alpha': norm.sf(self.fillna, 1),
+                     'rolling_periods': 30,
+                     'center': False
+                 }
+                self.transform_dict = None
+                fillna = 'ffill'
+            else:
+                fillna = self.fillna
             self.anomalies, self.scores = detect_anomalies(
                 diffs.copy().abs(),
                 output=self.output,
@@ -4395,6 +4445,14 @@ class DiffSmoother(EmptyTransformer):
                 method_params=self.method_params,
                 n_jobs=self.n_jobs,
             )
+            if self.isolated_only:
+                # replace all anomalies (-1) except those which are isolated (for diffs, 1, -1, -1, 1 pattern)
+                # this rather assumes the anomaly is (up anom, down anom) on the diff, but that's not actually enforced
+                mask = self.anomalies == -1
+                mask = mask & (self.anomalies.shift(1) == 1)
+                mask = mask & (self.anomalies.shift(-1) == -1)
+                mask = mask & (self.anomalies.shift(-2) == 1)
+                self.anomalies[mask] = 1
             if self.reverse_alignment:
                 diffs = diffs.where(self.anomalies != -1, np.nan)
             else:
@@ -4404,7 +4462,7 @@ class DiffSmoother(EmptyTransformer):
                 full_anom.columns = df.columns
                 diffs = df.where(full_anom != -1, np.nan)
             if self.fillna is not None:
-                diffs = FillNA(diffs, method=self.fillna, window=10)
+                diffs = FillNA(diffs, method=fillna, window=10)
 
         if self.reverse_alignment:
             return pd.concat([diffs, df.tail(1)]).iloc[::-1].cumsum().iloc[::-1]
@@ -4441,17 +4499,20 @@ class DiffSmoother(EmptyTransformer):
             method_params = None
             transform_dict = None
             reverse_alignment = True
+            isolated_only = False
         else:
             method_choice, method_params, transform_dict = anomaly_new_params(
                 method=method
             )
             reverse_alignment = random.choice([True, False])
+            isolated_only = random.choice([True, False])
 
         return {
             "method": method_choice,
             "method_params": method_params,
             "transform_dict": None,
             "reverse_alignment": reverse_alignment,
+            "isolated_only": isolated_only,
             "fillna": fillna,
         }
 
