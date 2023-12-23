@@ -1049,7 +1049,7 @@ class SeasonalDifference(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        tile_len = len(self.tile_values_lag_1.index)  # self.lag_1
+        tile_len = self.tile_values_lag_1.shape[0]  # self.lag_1
         df_len = df.shape[0]
         sdf = pd.DataFrame(
             np.tile(self.tile_values_lag_1, (int(np.ceil(df_len / tile_len)), 1))
@@ -1077,7 +1077,7 @@ class SeasonalDifference(EmptyTransformer):
                 - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
-        tile_len = len(self.tile_values_lag_1.index)
+        tile_len = self.tile_values_lag_1.shape[0]
         df_len = df.shape[0]
         sdf = pd.DataFrame(
             np.tile(self.tile_values_lag_1, (int(np.ceil(df_len / tile_len)), 1))
@@ -4504,7 +4504,7 @@ class DiffSmoother(EmptyTransformer):
             method_choice, method_params, transform_dict = anomaly_new_params(
                 method=method
             )
-            reverse_alignment = random.choice([True, False])
+            reverse_alignment = random.choices([True, False], [0.3, 0.7])[0]
             isolated_only = random.choice([True, False])
 
         return {

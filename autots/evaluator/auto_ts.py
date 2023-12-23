@@ -3662,6 +3662,22 @@ class AutoTS(object):
         plt.title("Correlogram of Metric Correlations from Optimized Forecasts")
         return ax
 
+    def plot_transformer_failure_rate(self):
+        """Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer."""
+        initial_results = self.results()
+        failures = []
+        successes = []
+        for idx, row in initial_results.iterrows():
+            failed = not pd.isnull(row['Exceptions'])
+            transforms = list(json.loads(row['TransformationParameters']).get('transformations', {}).values())
+            if failed:
+                failures = failures + transforms
+            else:
+                successes = successes + transforms
+        total = pd.concat([pd.Series(failures).value_counts().rename("failures").to_frame(),pd.Series(successes).value_counts().rename("successes")], axis=1).fillna(0)
+        total['failure_rate'] = total['failures'] / (total['successes'] + total['failures'])
+        return total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 
