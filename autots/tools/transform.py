@@ -4715,6 +4715,7 @@ class GeneralTransformer(object):
         random_seed: int = 2020,
         n_jobs: int = 1,
         holiday_country: list = None,
+        verbose: int = 0,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -4731,6 +4732,7 @@ class GeneralTransformer(object):
         self.random_seed = random_seed
         self.n_jobs = n_jobs
         self.holiday_country = holiday_country
+        self.verbose = verbose
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different

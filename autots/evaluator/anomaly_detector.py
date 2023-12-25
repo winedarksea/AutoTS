@@ -40,6 +40,7 @@ class AnomalyDetector(object):
         forecast_params=None,
         method_params={},
         eval_period=None,
+        isolated_only=False,
         n_jobs=1,
     ):
         """Detect anomalies on a historic dataset.
@@ -53,6 +54,7 @@ class AnomalyDetector(object):
             forecast_params (dict): used to backcast and identify 'unforecastable' values, required only for predict_interval method
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             eval_periods (int): only use this length tail of data, currently only implemented for forecast_params forecasting if used
+            isolated_only (bool): if True, only standalone anomalies reported
             n_jobs (int): multiprocessing jobs, used by some methods
 
         Methods:
@@ -71,6 +73,7 @@ class AnomalyDetector(object):
         self.forecast_params = forecast_params
         self.method_params = method_params
         self.eval_period = eval_period
+        self.isolated_only = isolated_only
         self.n_jobs = n_jobs
         self.anomaly_classifier = None
 
@@ -130,6 +133,13 @@ class AnomalyDetector(object):
                 eval_period=self.eval_period,
                 n_jobs=self.n_jobs,
             )
+        if self.isolated_only:
+            # replace all anomalies (-1) except those which are isolated (1 before and after)
+            mask_minus_one = self.anomalies == -1
+            mask_prev_one = self.anomalies.shift(1) == 1
+            mask_next_one = self.anomalies.shift(-1) == 1
+            mask_replace = mask_minus_one & ~(mask_prev_one & mask_next_one)
+            self.anomalies[mask_replace] = 1
         return self.anomalies, self.scores
 
     def plot(self, series_name=None, title=None, plot_kwargs={}):
