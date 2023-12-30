@@ -673,8 +673,8 @@ no_shared_model_dict = {
 # these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
     # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
-    'ElasticNet': 0.05,
-    'xgboost': 0.01,  # excess memory at scale
+    'ElasticNet': 0.1,
+    'xgboost': 0.001,  # excess memory at scale
     'MLP': 0.05,
     'DecisionTree': 0.02,
     'Adaboost': 0.05,
@@ -682,7 +682,7 @@ datepart_model_dict: dict = {
     'KerasRNN': 0.02,
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.00001,  # some params cause RAM crash?
-    'RadiusNeighbors': 0.05,
+    'RadiusNeighbors': 0.1,
     'MultioutputGPR': 0.00001,
 }
 gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
