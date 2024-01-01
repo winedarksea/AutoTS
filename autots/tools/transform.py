@@ -4517,6 +4517,92 @@ class DiffSmoother(EmptyTransformer):
         }
 
 
+class HistoricValues(EmptyTransformer):
+    """Overwrite (align) all forecast values with the nearest actual value in window (tail) of history.
+    (affected by upstream transformers, as usual)
+
+    Args:
+        window (int): or None, the most recent n history to use for alignment
+    """
+
+    def __init__(
+        self,
+        window: int = None,
+        **kwargs,
+    ):
+        super().__init__(name="HistoricValues")
+        self.window = window
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        # I am not sure a copy is necessary, but certainly is safer
+        if self.window is None:
+            self.df = df
+        else:
+            self.df = df.tail(self.window).copy()
+
+        return df
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        # using loop because experience with vectorized has been high memory usage
+        # also usually forecast length is relatively short
+        result = []
+        m_arr = np.asarray(self.df)
+        for row in np.asarray(df):
+            # find the closest historic value and select those values
+            result.append(
+                m_arr[np.abs(m_arr - row).argmin(axis=0), range(df.shape[1])][..., np.newaxis]
+            )
+
+        return pd.DataFrame(
+            np.concatenate(result, axis=1).T, index=df.index, columns=df.columns
+        )
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "window": random.choices(
+                [None, 10, 28, 100, 364, 730],
+                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1],
+            )[0],
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4596,6 +4682,7 @@ have_params = {
     "ReplaceConstant": ReplaceConstant,
     "AlignLastDiff": AlignLastDiff,
     "DiffSmoother": DiffSmoother,
+    "HistoricValues": HistoricValues,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5136,7 +5223,8 @@ transformer_dict = {
     "FFTDecomposition": 0.01,
     "ReplaceConstant": 0.02,
     "AlignLastDiff": 0.01,
-    "DiffSmoother": 0.001,  # not looking great in testing
+    "DiffSmoother": 0.005,
+    "HistoricValues": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -5155,11 +5243,11 @@ superfast_transformer_dict = {
     "SeasonalDifference": 0.1,
     "bkfilter": 0.05,
     "ClipOutliers": 0.05,
-    # "Discretize": 0.01,  # excessive memory use for this
+    # "Discretize": 0.01,  # excessive memory use for some of this
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
-    "AlignLastDiff": 0.05,  # pending testing
+    "AlignLastDiff": 0.05,
 }
 # Split tranformers by type
 # filters that remain near original space most of the time

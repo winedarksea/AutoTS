@@ -630,6 +630,7 @@ class ModelTest(unittest.TestCase):
             "CenterSplit",   # new 0.6.1
             "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
             # "FFTDecomposition",  # new in 0.6.2
+            # "HistoricValues",  # new in 0.6.7
         ]
 
         timings = {}
