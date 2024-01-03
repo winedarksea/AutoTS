@@ -227,7 +227,10 @@ class AutoTSTest(unittest.TestCase):
         smape1 = prediction.avg_metrics['smape']
         
         model2.fit_data(df, future_regressor=future_regressor_train2d)
-        prediction2 = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+        try:
+            prediction2 = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+        except Exception as e:
+            raise ValueError(f"prediction failed with model {model2.best_model}") from e
         forecasts_df2 = prediction2.forecast
         
         # now retrain on full data

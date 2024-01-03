@@ -49,7 +49,7 @@ class TestAnomalies(unittest.TestCase):
             weather_event_types=None,
             wikipedia_pages=wiki_pages,
             caiso_query=None,
-            sleep_seconds=5,
+            sleep_seconds=10,
         ).fillna(0).replace(np.inf, 0)
 
     def test_anomaly_holiday_detectors(self):
@@ -85,24 +85,25 @@ class TestAnomalies(unittest.TestCase):
 
         while not all(x in tried for x in fast_methods):
             params = HolidayDetector.get_new_params(method="fast")
-            while 'Slice' in dict_loop(params).values():
-                params = HolidayDetector.get_new_params(method="fast")
-            tried.append(params['anomaly_detector_params']['method'])
-            mod = HolidayDetector(**params)
-            mod.detect(self.df)
-            prophet_holidays = mod.dates_to_holidays(full_dates, style="prophet")
-
-            for series in self.df.columns:
-                # series = "wiki_George_Washington"
-                holiday_subset = prophet_holidays[prophet_holidays['series'] == series]
-                if holiday_subset.shape[0] >= 1:
-                    holidays_detected = 1
-                m = Prophet(holidays=holiday_subset)
-                # m = Prophet()
-                m.fit(pd.DataFrame({'ds': self.df.index, 'y': self.df[series]}))
-                future = m.make_future_dataframe(forecast_length)
-                fcst = m.predict(future).set_index('ds')  # noqa
-                # m.plot_components(fcst)
+            with self.subTest(i=params["anomaly_detector_params"]['method']):
+                while 'Slice' in dict_loop(params).values():
+                    params = HolidayDetector.get_new_params(method="fast")
+                tried.append(params['anomaly_detector_params']['method'])
+                mod = HolidayDetector(**params)
+                mod.detect(self.df.copy())
+                prophet_holidays = mod.dates_to_holidays(full_dates, style="prophet")
+    
+                for series in self.df.columns:
+                    # series = "wiki_George_Washington"
+                    holiday_subset = prophet_holidays[prophet_holidays['series'] == series]
+                    if holiday_subset.shape[0] >= 1:
+                        holidays_detected = 1
+                    m = Prophet(holidays=holiday_subset)
+                    # m = Prophet()
+                    m.fit(pd.DataFrame({'ds': self.df.index, 'y': self.df[series]}))
+                    future = m.make_future_dataframe(forecast_length)
+                    fcst = m.predict(future).set_index('ds')  # noqa
+                    # m.plot_components(fcst)
         mod.plot()
         temp = mod.dates_to_holidays(full_dates, style="flag")
         temp = mod.dates_to_holidays(full_dates, style="series_flag")

@@ -5049,9 +5049,10 @@ class GeneralTransformer(object):
             for i in sorted(self.transformations.keys()):
                 df = self._fit_one(df, i)
         except Exception as e:
-            raise Exception(
-                f"Transformer {self.transformations[i]} failed on fit"
-            ) from e
+            err_str = f"Transformer {self.transformations[i]} failed on fit"
+            if self.verbose >= 2:
+                err_str += " from params {self.fillna} {self.transformation_params}"
+            raise Exception(err_str) from e
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
@@ -5146,7 +5147,10 @@ class GeneralTransformer(object):
             for i in sorted(self.transformations.keys(), reverse=True):
                 df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
         except Exception as e:
-            raise Exception(f"Transformer {self.c_trans_n} failed on inverse") from e
+            err_str = f"Transformer {self.c_trans_n} failed on inverse"
+            if self.verbose >= 2:
+                err_str += " from params {self.fillna} {self.transformation_params}"
+            raise Exception(err_str) from e
 
         if fillzero:
             df = df.fillna(0)

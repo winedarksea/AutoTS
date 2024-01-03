@@ -15,7 +15,8 @@
 # 0.6.7 🇺🇦 🇺🇦 🇺🇦
 * Cassandra bug fix
 * isolated_only to anomaly methods
-* matse metric is possibly temporary and not added to weighting options
+* matse metric is possibly temporary and not added to per series weighting options
+* added HistoricValues transformer
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

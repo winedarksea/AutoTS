@@ -89,6 +89,7 @@ class AnomalyDetector(object):
         self.df_anomaly = df.copy()
         if self.transform_dict is not None:
             model = GeneralTransformer(
+                verbose=2,
                 **self.transform_dict
             )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
             self.df_anomaly = model.fit_transform(self.df_anomaly)
