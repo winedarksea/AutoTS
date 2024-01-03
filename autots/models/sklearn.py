@@ -398,13 +398,17 @@ def retrieve_regressor(
     elif model_class in ['xgboost', 'XGBRegressor']:
         import xgboost as xgb
 
+        smaller_n_jobs = int(n_jobs / 2) if n_jobs > 3 else n_jobs
+
         if False:  # this is no longer necessary in 1.6 and beyond
             regr = MultiOutputRegressor(
                 xgb.XGBRegressor(verbosity=0, **model_param_dict, n_jobs=1),
-                n_jobs=n_jobs,
+                n_jobs=smaller_n_jobs,
             )
         else:
-            regr = xgb.XGBRegressor(verbosity=0, **model_param_dict, n_jobs=n_jobs)
+            regr = xgb.XGBRegressor(
+                verbosity=0, **model_param_dict, n_jobs=smaller_n_jobs
+            )
         return regr
     elif model_class == 'SVM':
         from sklearn.svm import LinearSVR
@@ -672,8 +676,8 @@ no_shared_model_dict = {
 # these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
     # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
-    'ElasticNet': 0.05,
-    'xgboost': 0.01,
+    'ElasticNet': 0.1,
+    'xgboost': 0.001,  # excess memory at scale
     'MLP': 0.05,
     'DecisionTree': 0.02,
     'Adaboost': 0.05,
@@ -681,7 +685,7 @@ datepart_model_dict: dict = {
     'KerasRNN': 0.02,
     'Transformer': 0.02,  # slow
     'ExtraTrees': 0.00001,  # some params cause RAM crash?
-    'RadiusNeighbors': 0.05,
+    'RadiusNeighbors': 0.1,
     'MultioutputGPR': 0.00001,
 }
 gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
@@ -888,7 +892,13 @@ def generate_regressor_params(
                 param_dict = {
                     "model": 'xgboost',
                     "model_params": {
+                        "booster": random.choices(['gbtree', 'gblinear'], [0.7, 0.3])[
+                            0
+                        ],
                         "objective": objective,
+                        "max_depth": random.choices(
+                            [6, 3, 2, 8], [0.6, 0.4, 0.2, 0.01]
+                        )[0],
                         "eta": random.choices(
                             [1.0, 0.3, 0.01, 0.03, 0.05, 0.003],
                             [0.05, 0.1, 0.1, 0.1, 0.1, 0.1],
@@ -896,7 +906,7 @@ def generate_regressor_params(
                             0
                         ],  # aka learning_rate
                         "min_child_weight": random.choices(
-                            [0.05, 0.5, 1, 2, 5], [0.1, 0.2, 0.8, 0.1, 0.1]
+                            [0.05, 0.5, 1, 2, 5, 10], [0.01, 0.05, 0.8, 0.1, 0.1, 0.1]
                         )[0],
                         "subsample": random.choices(
                             [1, 0.9, 0.7, 0.5], [0.9, 0.05, 0.05, 0.05]
@@ -2317,11 +2327,16 @@ class DatepartRegression(ModelObject):
                 )
         self.X_pred.columns = [str(xc) for xc in self.X_pred.columns]
 
-        forecast = pd.DataFrame(
-            self.model.predict(self.X_pred.astype(float)),
-            index=index,
-            columns=self.column_names,
-        )
+        try:
+            forecast = pd.DataFrame(
+                self.model.predict(self.X_pred.astype(float)),
+                index=index,
+                columns=self.column_names,
+            )
+        except Exception as e:
+            raise ValueError(
+                f"Datepart prediction with params {self.get_params()} failed"
+            ) from e
 
         if just_point_forecast:
             return forecast

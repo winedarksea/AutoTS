@@ -34,6 +34,8 @@ pip install autots
 ```
 This includes dependencies for basic models, but [additonal packages](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning) are required for some models and methods.
 
+Be advised there are several other projects that have chosen similar names, so make sure you are on the right AutoTS code, papers, and documentation.
+
 ## Basic Use
 
 Input data for AutoTS is expected to come in either a *long* or a *wide* format:

@@ -798,19 +798,25 @@ class Cassandra(ModelObject):
             axis=1,
         )
         wind = 30 if self.trend_window is None else self.trend_window
+        # the uneven fraction of the window goes at the ened
+        # and minus one is because there will always be at least one real point
         w_1 = wind - 1
         steps_ahd = int(w_1 / 2)
         y0 = np.repeat(np.array(trend_residuals[0:1]), steps_ahd, axis=0)
         # d0 = -1 * dates_2d[1 : y0.shape[0] + 1][::-1]
         start_pt = dates_2d[0, 0]
         step = dates_2d[1, 0] - start_pt
+        extra_step = y0.shape[0] + 1
+        # there's some weird float thing that can happen here I still don't understand
+        # when it produces one more step than expected
         d0 = np_2d_arange(
             start_pt,
-            stop=start_pt - ((y0.shape[0] + 1) * step),
+            stop=start_pt - (extra_step * step),
             step=-step,
             num_columns=dates_2d.shape[1],
-        )[1:][::-1]
+        )[1:extra_step][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
+        # these combine a fake first half and fake last half window with real data in between
         y2 = np.concatenate(
             [
                 y0,

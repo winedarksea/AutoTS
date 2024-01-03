@@ -40,11 +40,12 @@ class AnomalyDetector(object):
         forecast_params=None,
         method_params={},
         eval_period=None,
+        isolated_only=False,
         n_jobs=1,
     ):
         """Detect anomalies on a historic dataset.
         Note anomaly score patterns vary by method.
-        Anomaly flag is standard -1 = anomaly; 1 = regular
+        Anomaly flag is standard -1 = anomaly; 1 = regular as per sklearn
 
         Args:
             output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)
@@ -53,6 +54,7 @@ class AnomalyDetector(object):
             forecast_params (dict): used to backcast and identify 'unforecastable' values, required only for predict_interval method
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             eval_periods (int): only use this length tail of data, currently only implemented for forecast_params forecasting if used
+            isolated_only (bool): if True, only standalone anomalies reported
             n_jobs (int): multiprocessing jobs, used by some methods
 
         Methods:
@@ -71,6 +73,7 @@ class AnomalyDetector(object):
         self.forecast_params = forecast_params
         self.method_params = method_params
         self.eval_period = eval_period
+        self.isolated_only = isolated_only
         self.n_jobs = n_jobs
         self.anomaly_classifier = None
 
@@ -86,7 +89,7 @@ class AnomalyDetector(object):
         self.df_anomaly = df.copy()
         if self.transform_dict is not None:
             model = GeneralTransformer(
-                **self.transform_dict
+                verbose=2, **self.transform_dict
             )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
             self.df_anomaly = model.fit_transform(self.df_anomaly)
 
@@ -109,6 +112,10 @@ class AnomalyDetector(object):
                 else:
                     self.df_anomaly = self.df_anomaly - backcast.forecast
 
+        if len(self.df_anomaly.columns) != len(df.columns):
+            raise ValueError(
+                f"anomaly returned a column mismatch from params {self.method_params} and {self.transform_dict}"
+            )
         if not all(self.df_anomaly.columns == df.columns):
             self.df_anomaly.columns = df.columns
 
@@ -130,6 +137,13 @@ class AnomalyDetector(object):
                 eval_period=self.eval_period,
                 n_jobs=self.n_jobs,
             )
+        if self.isolated_only:
+            # replace all anomalies (-1) except those which are isolated (1 before and after)
+            mask_minus_one = self.anomalies == -1
+            mask_prev_one = self.anomalies.shift(1) == 1
+            mask_next_one = self.anomalies.shift(-1) == 1
+            mask_replace = mask_minus_one & ~(mask_prev_one & mask_next_one)
+            self.anomalies[mask_replace] = 1
         return self.anomalies, self.scores
 
     def plot(self, series_name=None, title=None, plot_kwargs={}):
@@ -286,6 +300,8 @@ class HolidayDetector(object):
     def detect(self, df):
         """Run holiday detection. Input wide-style pandas time series."""
         self.anomaly_model.detect(df)
+        self.df = df
+        self.df_cols = df.columns
         if np.min(self.anomaly_model.anomalies.values) != -1:
             print("No anomalies detected.")
         (
@@ -312,8 +328,6 @@ class HolidayDetector(object):
             use_islamic_holidays=self.use_islamic_holidays,
             use_hebrew_holidays=self.use_hebrew_holidays,
         )
-        self.df = df
-        self.df_cols = df.columns
 
     def plot_anomaly(self, kwargs={}):
         self.anomaly_model.plot(**kwargs)

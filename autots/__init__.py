@@ -26,7 +26,7 @@ from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
 
 
-__version__ = '0.6.6'
+__version__ = '0.6.7'
 
 TransformTS = GeneralTransformer
 

@@ -681,6 +681,8 @@ def full_metric_evaluation(
         mate = np.abs(np.nansum(full_errors, axis=0))
     else:
         mate = np.abs(np.sum(full_errors, axis=0))
+    # possibly temporary
+    matse = mate / np.sum(A, axis=0)
 
     direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
     weights = np.geomspace(1, 10, full_mae_errors.shape[0])[:, np.newaxis]
@@ -707,6 +709,7 @@ def full_metric_evaluation(
             # aggregate error
             'mage': mage,  # Gandalf approved
             'mate': mate,  # the British version, of course
+            'matse': matse,  # pronounced like the painter 'Matisse'
             'underestimate': np.nansum(np.where(~ovm, full_errors, 0), axis=0),
             'mle': msle(full_errors, full_mae_errors, log_errors, nan_flag=nan_flag),
             'overestimate': np.nansum(np.where(ovm, full_errors, 0), axis=0),

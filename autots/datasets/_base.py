@@ -239,6 +239,7 @@ def load_live_daily(
     caiso_query: str = "ENE_SLRS",
     timeout: float = 300.05,
     sleep_seconds: int = 2,
+    **kwargs,
 ):
     """Generates a dataframe of data up to the present day. Requires active internet connection.
     Try to be respectful of these free data sources by not calling too much too heavily.
