@@ -999,8 +999,7 @@ class SeasonalDifference(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         method_c = random.choices(
-            ["LastValue", "Mean", "Median", 2, 5, 20],
-            [0.5, 0.2, 0.2, 0.1, 0.1, 0.1]
+            ["LastValue", "Mean", "Median", 2, 5, 20], [0.5, 0.2, 0.2, 0.1, 0.1, 0.1]
         )[0]
         if method == "fast":
             choice = random.choice([7, 12])
@@ -1034,14 +1033,18 @@ class SeasonalDifference(EmptyTransformer):
             span = self.method
             num_slices = arr.shape[0] // N
             # (slices, lag size, num seriesd)
-            arr_3d = arr[-(num_slices * N):].reshape(num_slices, N, -1)
+            arr_3d = arr[-(num_slices * N) :].reshape(num_slices, N, -1)
             alpha = 2 / (span + 1)
             weights = (alpha * (1 - alpha) ** np.arange(num_slices))[::-1]
-            self.tile_values_lag_1 = np.sum(arr_3d * weights[:, np.newaxis, np.newaxis], axis=0) / np.sum(weights)
+            self.tile_values_lag_1 = np.sum(
+                arr_3d * weights[:, np.newaxis, np.newaxis], axis=0
+            ) / np.sum(weights)
         elif self.method in ['lastvalue', 'LastValue', 'last_value']:
             self.tile_values_lag_1 = df.tail(self.lag_1)
         else:
-            raise ValueError(f"SeasonalDifference method '{self.method}' not recognized")
+            raise ValueError(
+                f"SeasonalDifference method '{self.method}' not recognized"
+            )
         return self
 
     def transform(self, df):
@@ -4429,10 +4432,10 @@ class DiffSmoother(EmptyTransformer):
                 self.method = "rolling_zscore"
                 self.method_parmas = {
                     'distribution': 'norm',
-                     'alpha': norm.sf(self.fillna, 1),
-                     'rolling_periods': 30,
-                     'center': False
-                 }
+                    'alpha': norm.sf(self.fillna, 1),
+                    'rolling_periods': 30,
+                    'center': False,
+                }
                 self.transform_dict = None
                 fillna = 'ffill'
             else:
@@ -4547,6 +4550,7 @@ class HistoricValues(EmptyTransformer):
             self.df = df.tail(self.window).copy()
 
         return df
+
     def fit(self, df):
         """Learn behavior of data to change.
 
@@ -4577,7 +4581,9 @@ class HistoricValues(EmptyTransformer):
         for row in np.asarray(df):
             # find the closest historic value and select those values
             result.append(
-                m_arr[np.abs(m_arr - row).argmin(axis=0), range(df.shape[1])][..., np.newaxis]
+                m_arr[np.abs(m_arr - row).argmin(axis=0), range(df.shape[1])][
+                    ..., np.newaxis
+                ]
             )
 
         return pd.DataFrame(

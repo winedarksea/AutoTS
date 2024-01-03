@@ -89,8 +89,7 @@ class AnomalyDetector(object):
         self.df_anomaly = df.copy()
         if self.transform_dict is not None:
             model = GeneralTransformer(
-                verbose=2,
-                **self.transform_dict
+                verbose=2, **self.transform_dict
             )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
             self.df_anomaly = model.fit_transform(self.df_anomaly)
 
@@ -113,6 +112,10 @@ class AnomalyDetector(object):
                 else:
                     self.df_anomaly = self.df_anomaly - backcast.forecast
 
+        if len(self.df_anomaly.columns) != len(df.columns):
+            raise ValueError(
+                f"anomaly returned a column mismatch from params {self.method_params} and {self.transform_dict}"
+            )
         if not all(self.df_anomaly.columns == df.columns):
             self.df_anomaly.columns = df.columns
 
@@ -297,6 +300,8 @@ class HolidayDetector(object):
     def detect(self, df):
         """Run holiday detection. Input wide-style pandas time series."""
         self.anomaly_model.detect(df)
+        self.df = df
+        self.df_cols = df.columns
         if np.min(self.anomaly_model.anomalies.values) != -1:
             print("No anomalies detected.")
         (
@@ -323,8 +328,6 @@ class HolidayDetector(object):
             use_islamic_holidays=self.use_islamic_holidays,
             use_hebrew_holidays=self.use_hebrew_holidays,
         )
-        self.df = df
-        self.df_cols = df.columns
 
     def plot_anomaly(self, kwargs={}):
         self.anomaly_model.plot(**kwargs)
