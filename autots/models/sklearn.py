@@ -2335,7 +2335,7 @@ class DatepartRegression(ModelObject):
             )
         except Exception as e:
             raise ValueError(
-                f"Datepart prediction with params {self.get_params()} failed"
+                f"Datepart prediction with params {self.get_params()} failed. This is often due to an improperly indexed future_regressor (with drop_most_recent especially)"
             ) from e
 
         if just_point_forecast:

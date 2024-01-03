@@ -2021,7 +2021,7 @@ class AutoTS(object):
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
-            if verbose >= 0:
+            if self.verbose >= 0:
                 print(f"TotalRuntime missing in {current_generation}!")
             self.template_result_error = template_result.model_results.copy()
             self.template_error = template.copy()

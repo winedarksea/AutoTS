@@ -216,7 +216,7 @@ class AutoTSTest(unittest.TestCase):
             no_negatives=True,
             subset=100,
             n_jobs=n_jobs,
-            drop_most_recent=1,
+            drop_most_recent=0,
             verbose=2,
         )
         # TEST MODEL PREDICT WITH LOWER LEVEL MODEL TRAINED ON PREVIOUS DATA ONLY
@@ -239,7 +239,7 @@ class AutoTSTest(unittest.TestCase):
         prediction2 = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
         # and see if it got better on past holdout
         model2.fit_data(df_train, future_regressor=future_regressor_train2d.reindex(df_train.index))
-        prediction = model2.predict(future_regressor=future_regressor_forecast2d.reindex(df_test.index), verbose=0)
+        prediction = model2.predict(future_regressor=future_regressor_train2d.reindex(df_test.index), verbose=0)
         prediction.evaluate(df_test, df_train=df_train)
         smape2 = prediction.avg_metrics['smape']
         print("=====================================================")
