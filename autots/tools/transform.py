@@ -3413,7 +3413,7 @@ class KalmanSmoothing(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        return new_kalman_params(method=method)
+        return new_kalman_params(method=method, allow_auto=False)
 
     def fit(self, df):
         """Learn behavior of data to change.
