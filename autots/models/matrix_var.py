@@ -25,7 +25,7 @@ def rrvar(data, R, pred_step, maxiter=100):
     X1 = data[:, :-1]
     X2 = data[:, 1:]
     V = np.random.randn(R, N)
-    X1_pinv = np.linalg.pinv(X1)
+    X1_pinv = np.linalg.pinv(np.nan_to_num(X1))
     for it in range(maxiter):
         W = X2 @ np.linalg.pinv((V @ X1))
         V = np.linalg.pinv(W) @ X2 @ X1_pinv
