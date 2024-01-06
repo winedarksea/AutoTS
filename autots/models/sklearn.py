@@ -798,7 +798,7 @@ def generate_classifier_params(
             }
         else:
             model_dict = {
-                'xgboost': 1,
+                'xgboost': 0.5,
                 'ExtraTrees': 0.2,
                 'RandomForest': 0.1,
                 'KNN': 1,
