@@ -1,8 +1,8 @@
-As an AutoML project, there are many moving parts in this project, and any additions should be done carefully.
+作为一个 AutoML 项目，该项目中有许多移动部件，任何添加都应小心完成。
 
-Non-spurious contributions are welcome, however, for example, a new model type (see the new model checklist in TO-DO). 
-While only limited tests are currently available, it is strongly recommended to include tests for any new code.
+但是，欢迎非虚假贡献，例如新的模型类型（请参阅 TO-DO 中的新模型清单）。
+虽然目前仅提供有限的测试，但强烈建议对任何新代码进行测试。
 
-Submit pull requests to the `dev` branch where they can be integrated and tested with other code before being released onto main.
+将拉取请求提交到“dev”分支，在发布到主分支之前，可以将它们与其他代码集成和测试。
 
-Please utilize the `Discussions` area for discussions and any questions, with `Issues` focused on specifically identified bugs or new features.
+请利用“讨论”区域进行讨论和提出任何问题，“问题”重点关注特别确定的错误或新功能。
