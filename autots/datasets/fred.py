@@ -1,8 +1,9 @@
 """
-FRED (Federal Reserve Economic Data) Data Import
+FRED（美联储经济数据）数据导入
 
-requires API key from FRED
-and pip install fredapi
+需要 FRED 的 API 密钥
+d84151f6309da8996e4f7627d6efc026 
+并 pip install fredapi
 """
 import time
 import pandas as pd
@@ -23,17 +24,17 @@ def get_fred_data(
     sleep_seconds: int = 1,
     **kwargs,
 ):
-    """Imports Data from Federal Reserve.
-    For simplest results, make sure requested series are all of the same frequency.
+    """从美联储导入数据。
+     为了获得最简单的结果，请确保请求的系列都具有相同的频率。
 
-    args:
-        fredkey (str): an API key from FRED
-        SeriesNameDict (dict): pairs of FRED Series IDs and Series Names like: {'SeriesID': 'SeriesName'} or a list of FRED IDs.
-            Series id must match Fred IDs, but name can be anything
-            if None, several default series are returned
-        long (bool): if True, return long style data, else return wide style data with dt index
-        observation_start (datetime): passed to Fred get_series
-        sleep_seconds (int): seconds to sleep between each series call, reduces failure chance usually
+     参数：
+         fredkey (str)：FRED 的 API 密钥
+         SeriesNameDict (dict)：成对的 FRED 系列 ID 和系列名称，例如：{'SeriesID': 'SeriesName'} 或 FRED ID 列表。
+             系列 ID 必须与 Fred ID 匹配，但名称可以是任何内容
+             如果没有，则返回几个默认系列
+         long (bool)：如果为 True，则返回长样式数据，否则返回带有 dt 索引的宽样式数据
+         Observation_start（日期时间）：传递给 Fred get_series
+         sleep_seconds (int): 每个系列调用之间休眠的秒数，通常会减少失败机会
     """
     if not _has_fred:
         raise ImportError("Package fredapi is required")

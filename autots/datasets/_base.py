@@ -41,22 +41,22 @@ def load_daily(long: bool = True):
 
 def load_fred_monthly():
     """
-    Federal Reserve of St. Louis.
-    from autots.datasets.fred import get_fred_data
-    SeriesNameDict = {'GS10':'10-Year Treasury Constant Maturity Rate',
-                              'MCOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma',
-                              'CSUSHPISA': ' U.S. National Home Price Index',
-                              'EXUSEU': 'US Euro Foreign Exchange Rate',
-                              'EXCHUS': 'China US Foreign Exchange Rate',
-                              'EXCAUS' : 'Canadian to US Dollar Exchange Rate Daily',
-                              'EMVOVERALLEMV': 'Equity Market Volatility Tracker Overall',  # this is a more irregular series
-                              'T10YIEM' : '10 Year Breakeven Inflation Rate',
-                              'USEPUINDXM': 'Economic Policy Uncertainty Index for United States' # also very irregular
-                              }
-    monthly_data = get_fred_data(fredkey = 'XXXXXXXXX', SeriesNameDict = SeriesNameDict)
+    圣路易斯联邦储备银行。
+     从 autots.datasets.fred 导入 get_fred_data
+     SeriesNameDict = {'GS10':'10年期国债固定到期利率',
+                               'MCOILWTICO':'俄克拉荷马州库欣西德克萨斯中质原油',
+                               'CSUSHPISA': '美国全国房价指数',
+                               'EXUSEU': '美元欧元外汇汇率',
+                               'EXCHUS': '中美外汇汇率',
+                               'EXCAUS' : '加元兑美元每日汇率',
+                               'EMVOVERALLEMV': '股票市场波动率跟踪总体', # 这是一个更不规则的系列
+                               'T10YIEM'：'10 年盈亏平衡通胀率'，
+                               'USEPUINDXM'：'美国经济政策不确定性指数'#也非常不规则
+                               }
+     Monthly_data = get_fred_data(fredkey = 'XXXXXXXXX', SeriesNameDict = SeriesNameDict)
     """
-    module_path = dirname(__file__)
-    data_file_name = join(module_path, 'data', 'fred_monthly.zip')
+    module_path = dirname(__file__) # 获取当前文件路径
+    data_file_name = join(module_path, 'data', 'fred_monthly.zip') 
 
     df_long = pd.read_csv(data_file_name, compression='zip')
     df_long['datetime'] = pd.to_datetime(df_long['datetime'])

@@ -57,107 +57,106 @@ from autots.evaluator.validation import (
 
 
 class AutoTS(object):
-    """Automate time series modeling using a genetic algorithm.
+    """使用遗传算法自动进行时间序列建模。
+    参数:
+    - 预测长度(Forecast_length)(int):评估预测的时间长度。可以在`.predict()`中覆盖。
+        当历史数据不多时,对于`.fit`使用较短的预测长度,而对于`.predict`使用全部预期的预测长度,通常是鉴于限制情况下最好的方法。
+    - 频率(frequency)(str):'infer' 自动推断或指定的 pandas 日期时间偏移量。可用于改变数据频率(如“M”将日数据转为月数据)。
+    - 预测区间(Prediction_interval) (float):0-1,表示预测的不确定性区间。调整后可能与实际结果不完全匹配。
+    - 遗传算法代数(max_generations(int):要运行的遗传算法代数。代数越多，运行时间越长，但通常准确度更高。
+        之所以称为`max`,是因为将来会有自动提前停止选项,但现在这只是要运行的确切代数。
+    - 不产生负值(no_negatives) (bool):如果为 True,则所有负预测值向上舍入为 0。
+    - 约束(constraint) (float): 非 None 时，使用给定的浮点值乘以数据标准差来约束预测值。
+            也可以是以下包含多个键值对的字典:
+            constraint_method (str):以下之一
+                stdev_min - 阈值是历史数据的最小和最大值 +/- 约束 * 数据的标准差
+                stdev - 阈值是历史数据的均值 +/- 约束 * 数据的标准差
+                absolute - 输入是包含每个阈值最终值的序列长度数组
+                quantile - 约束是用作阈值的历史数据的分位数
+            constraint_regularization 约束正则化 (float):0到1
+                其中0表示无约束,1表示硬阈值截断,在两者之间是惩罚项
+            upper_constraint (float):或数组,取决于方法,如果未使用则为None
+            lower_constraint (float):或数组,取决于方法,如果未使用则为None
+            bounds (bool):如果为True,适用于上下预测,否则False仅适用于预测
+    - 集成方法(ensemble):(str):可以是 None、列表或逗号分隔的字符串,包含多种集成类型。
+        'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
+    - 初始模板(initial_template)(str):'Random' - 随机生成,'General' 使用包中的模板,'General+Random' - 两者的结合。也可以用self.import_template()覆盖。
+    - random_seed (int):随机种子。
+    - 节假日国家(holiday_country)(str):传递给Holidays包,用于某些模型。
+    - 子集(subset)(int):一次评估的最大系列数。用于加快多系列输入的评估速度。
+        在每次验证中取一个新的子集列,除非是mosaic集成,在这种情况下,每次验证中的列是相同的
+    - 聚合函数(aggfunc)(str):在数据频率转换(日 -> 月)或存在重复时间戳时使用。默认的'first'删除重复项,对于汇总尝试使用'mean'或np.sum。
+        警告:像'mean'这样的数值聚合将无法处理非数值输入。
+        像'sum'这样的数值聚合也会将nan值更改为0
+    - NA 容忍度(na_tolerance)(float):0到1。如果系列中的NaN超过此百分比,则将其丢弃。这里0.95将允许包含高达95% NaN值的系列。
+    - 指标加权(metric_weighting) (dict):分配给指标的权重,影响排名得分的生成。
+    - 删除最近数据(drop_most_recent)(int):选择丢弃最近的n个数据点的选项。例如,对于包含当前(未完成)月份的月销售数据很有用。
+        在应用任何聚合之后发生,所以将是频率所指定的内容,将丢弃n个频率
+    - 只取最近时间戳(drop_data_older_than_periods)(int):仅取最近的n个时间戳
+    - 模型列表(model_list)(list):用于随机模板的模型名称列表或字典。
+        现在可以是{"model": prob}的字典,但只影响起始随机模板。遗传算法从这里开始。
+    - 转换器列表(transformer_list) (list):使用的转换器列表,或转换器:概率的字典。注意这不适用于初始模板。
+        可以接受字符串别名:"all", "fast", "superfast", 'scalable'(scalable是fast的子集,应该在大规模时内存问题较少)
+    - 转换器最大深度(transformer_max_depth) (int):为新生成的随机转换器序列设置的最大数量。数量越少，生成速度越快。
+    - 模型模式(models_mode)(str):调整新生成模型的参数选项。只是偶尔使用。目前包括:
+        'default'/'random', 'deep'(搜索更多参数,可能更慢),和'regressor'(在具有回归能力的模型中强制使用'User'回归模式),
+        'gradient_boosting', 'neuralnets'(大约只适用于Regression类模型)
+    - 验证次数(num_validations)(int):执行的交叉验证次数。0 代表只进行最佳拆分的训练/测试。
+        可能引起混淆的是:num_validations是在第一个评估段之后要执行的验证次数,所以总共的评估/验证将是这个数字加1。
+        还有"auto"和"max"别名可用。Max最大为50。
+    - 验证模型数(models_to_validate)(int):通过交叉验证的top n个模型。或者以0到1之间的浮点数表示尝试的百分比。
+        0.99强制为100%验证。1仅评估1个模型。
+        如果是水平或mosaic集成,则在此数字之上额外增加每系列最小模型数以进行验证。
+    - 每个模型类的最大数量(max_per_model_class(int):在验证模型中，任一模型类/家族的最大通过数量。
+    - 验证方法(validation_method)(str):数据划分方法'even', 'backwards', 或 'seasonal n',其中n是一个整数,表示季节性
+        'backwards'更适合最近性和较短的训练集
+        'even'将数据分割成大小相等的部分,最适合更一致的数据,这是一种诗意但不如其他策略有效的策略
+        'seasonal'最相似的索引
+        'seasonal n'例如'seasonal 364'将测试所有数据,在每个预测长度的前一年,这些数据将紧接训练数据之后。
+        'similarity'自动找出与最近数据最相似的数据部分,这些数据将用于预测
+        'custom' - 如果使用,.fit()需要传入validation_indexes - 一系列pd.DatetimeIndex,每个的尾部用作测试
+    - 最小训练百分比(min_allowed_train_percent) (float):允许作为最小训练的预测长度的百分比,否则会引发错误。
+        例如,预测长度为10的0.5意味着需要5个训练点,总共15点。
+        在不推荐的情况下有用,例如预测长度 > 训练长度。
+    - 去除起始零值(remove_leading_zeroes)(bool):将起始的零替换为 NaN。在初始零表示数据收集尚未开始的数据中很有用。
+    - 填充 NA(prefill_na)(str):填充 NaN 的值。建议保留为None并允许模型插值。
+        None, 0, 'mean', 或 'median'。在例如销售案例中,0可能有用,假设所有NaN都等于零。
+    - 引入 NA(introduce_na) (bool):在训练验证中最后的值强制为 NaN,以增强模型的鲁棒性。
+        默认为None,如果训练数据的尾部有任何NaN,则在验证的最后几行引入NaN。如果使用子集,则不会向所有系列引入NaN。
+        如果为True,还将在验证中随机将20%的所有行更改为NaN
+    - 预清理(preclean)(dict):应用于输入数据的转换器参数字典。如果不为None,则为要应用于输入数据的Transformer参数的字典
+        {"fillna": "median", "transformations": {}, "transformation_params": {}}
+        这将改变用于fit和predict的模型输入数据,以及交叉验证中的准确性评估数据！
+    - 模型中断(model_interrupt) (bool):如果为False,KeyboardInterrupts将退出整个程序。
+        如果为True,KeyboardInterrupts将尝试仅退出当前模型。
+        如果为True,建议与`verbose` > 0和`result_file`一起使用,以防意外完全终止。
+        如果为"end_generation",如同True并且还将结束整个代的运行。请注意,跳过的模型将不会再次尝试。
+    - 代超时(generation_timeout)(int):设置遗传算法搜索的总时间上限。
+        如果不为None,这是从开始时刻起,代的搜索结束并进行验证的分钟数。
+        这只在每一代结束后检查,所以只提供搜索的'大约'超时时间。它是总代搜索时间的总上限,不是每代。
+    - 当前模型文件(current_model_file) (str):保存当前模型参数的文件路径。(用于电脑崩溃时调试)。.json将被追加
+    - 强制垃圾收集(force_gc) (bool):是否在每个模型运行后执行垃圾收集。如果为True,在每个模型运行后运行gc.collect()。可能不会有太大差异。
+    - 详细输出(verbose)(int):设置为0或更低应该减少大部分输出。更高的数字会产生更多输出。
+    - 并行作业数量(n_jobs) (int):可用于并行处理的核心数量。可以使用joblib上下文管理器代替(在这种情况下传None)。也可以是'auto'自动选择。
 
-    Args:
-        forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
-            when you don't have much historical data, using a small forecast length for .fit and the full desired forecast lenght for .predict is usually the best possible approach given limitations.
-        frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
-        prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
-        max_generations (int): number of genetic algorithms generations to run.
-            More runs = longer runtime, generally better accuracy.
-            It's called `max` because someday there will be an auto early stopping option, but for now this is just the exact number of generations to run.
-        no_negatives (bool): if True, all negative predictions are rounded up to 0.
-        constraint (float): when not None, use this float value * data st dev above max or below min for constraining forecast values.
-            now also instead accepts a dictionary containing the following key/values:
-                constraint_method (str): one of
-                    stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
-                    stdev - threshold is the mean of historic data +/- constraint * st dev of data
-                    absolute - input is array of length series containing the threshold's final value for each
-                    quantile - constraint is the quantile of historic data to use as threshold
-                constraint_regularization (float): 0 to 1
-                    where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
-                upper_constraint (float): or array, depending on method, None if unused
-                lower_constraint (float): or array, depending on method, None if unused
-                bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
-        ensemble (str): None or list or comma-separated string containing:
-            'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
-        initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
-        random_seed (int): random seed allows (slightly) more consistent results.
-        holiday_country (str): passed through to Holidays package for some models.
-        subset (int): maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.
-            takes a new subset of columns on each validation, unless mosaic ensembling, in which case columns are the same in each validation
-        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum.
-            Beware numeric aggregations like 'mean' will not work with non-numeric inputs.
-            Numeric aggregations like 'sum' will also change nan values to 0
-        na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
-        metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
-        drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
-            occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies
-        drop_data_older_than_periods (int): take only the n most recent timestamps
-        model_list (list): str alias or list of names of model objects to use
-            now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithim takes from there.
-        transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
-            can accept string aliases: "all", "fast", "superfast", 'scalable' (scalable is a subset of fast that should have fewer memory issues at scale)
-        transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
-        models_mode (str): option to adjust parameter options for newly generated models. Only sporadically utilized. Currently includes:
-            'default'/'random', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models),
-            'gradient_boosting', 'neuralnets' (~Regression class models only)
-        num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
-            Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
-            Also "auto" and "max" aliases available. Max maxes out at 50.
-        models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
-            0.99 is forced to 100% validation. 1 evaluates just 1 model.
-            If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
-        max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
-        validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
-            'backwards' is better for recency and for shorter training sets
-            'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
-            'seasonal' most similar indexes
-            'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
-            'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
-            'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
-        min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
-            0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
-            Useful in (unrecommended) cases where forecast_length > training length.
-        remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
-        prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
-            None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
-        introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
-            defaults to None, which introduces NaN in last rows of validations if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
-            if True, will also randomly change 20% of all rows to NaN in the validations
-        preclean (dict): if not None, a dictionary of Transformer params to be applied to input data
-            {"fillna": "median", "transformations": {}, "transformation_params": {}}
-            This will change data used in model inputs for fit and predict, and for accuracy evaluation in cross validation!
-        model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
-            if True, KeyboardInterrupts attempt to only quit current model.
-            if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
-            if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
-        generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
-            This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching. It is an overall cap for total generation search time, not per generation.
-        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
-        force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
-        verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
-        n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
+    属性:
+    - 最佳模型(best_model)(pd.DataFrame):包含最佳排名模型模板的DataFrame
+    - 最佳模型名称(best_model_name) (str):模型名称
+    - 最佳模型参数(best_model_params) (dict):模型参数
+    - 最佳模型转换参数(best_model_transformation_params) (dict):转换参数
+    - 最佳模型集成类型(best_model_ensemble) (int):集成类型的整数ID
+    - 回归检查(regression_check) (bool):如果为 True,则最佳模型使用 'User' 未来回归器。'User' future_regressor
+    - 宽格式数字数据框(df_wide_numeric)(pd.DataFrame):包含最终数据形状的数据框，将包括预清理。
+    - 初始结果(initial_results.model_results) (object):包含一系列结果指标的对象
+    - 每个输入系列的分数(score_per_series) (pd.DataFrame):如果使用水平集成，则生成每个输入系列的指标得分。
 
-    Attributes:
-        best_model (pd.DataFrame): DataFrame containing template for the best ranked model
-        best_model_name (str): model name
-        best_model_params (dict): model params
-        best_model_transformation_params (dict): transformation parameters
-        best_model_ensemble (int): Ensemble type int id
-        regression_check (bool): If True, the best_model uses an input 'User' future_regressor
-        df_wide_numeric (pd.DataFrame): dataframe containing shaped final data, will include preclean
-        initial_results.model_results (object): contains a collection of result metrics
-        score_per_series (pd.DataFrame): generated score of metrics given per input series, if horizontal ensembles
-
-    Methods:
-        fit, predict
-        export_template, import_template, import_results
-        results, failure_rate
-        horizontal_to_df, mosaic_to_df
-        plot_horizontal, plot_horizontal_transformers, plot_generation_loss, plot_backforecast
-    """
+    方法:
+    - 拟合(fit)、预测(predict)。
+    - 导出模板(export_template)、导入模板(import_template)、导入结果(import_results)。
+    - 结果(results)、失败率(failure_rate)。
+    - 水平转换为数据框(horizontal_to_df)、马赛克转换为数据框(mosaic_to_df)。
+    - 绘制水平图(plot_horizontal)、绘制水平转换器图(plot_horizontal_transformers)、绘制代损失图(plot_generation_loss)、绘制回测图（plot_backforecast)。
+        """
 
     def __init__(
         self,
@@ -175,18 +174,18 @@ class AutoTS(object):
         aggfunc: str = 'first',
         na_tolerance: float = 1,
         metric_weighting: dict = {
-            'smape_weighting': 5,
-            'mae_weighting': 2,
-            'rmse_weighting': 2,
-            'made_weighting': 0.5,
-            'mage_weighting': 0,
-            'mle_weighting': 0,
-            'imle_weighting': 0,
-            'spl_weighting': 3,
-            'containment_weighting': 0,
-            'contour_weighting': 1,
-            'runtime_weighting': 0.05,
-            'oda_weighting': 0.001,
+            'smape_weighting': 5, #（对称平均绝对百分比误差）
+            'mae_weighting': 2, #（平均绝对误差）
+            'rmse_weighting': 2, # (均方根误差)
+            'made_weighting': 0.5, # (平均绝对百分比误差)
+            'mage_weighting': 0, # (平均绝对百分比误差)
+            'mle_weighting': 0, # (平均绝对百分比误差)
+            'imle_weighting': 0, # (平均绝对百分比误差)
+            'spl_weighting': 3, # (对称分位数损失)
+            'containment_weighting': 0, # (包含损失)
+            'contour_weighting': 1, # (轮廓损失)
+            'runtime_weighting': 0.05, # (运行时间)
+            'oda_weighting': 0.001, # (一致的异常检测)
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = None,

@@ -1,5 +1,5 @@
 """
-Tools for Importing Sample Data
+用于导入示例数据的工具
 """
 from autots.datasets._base import (
     load_daily,
