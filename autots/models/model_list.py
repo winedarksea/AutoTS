@@ -111,7 +111,7 @@ fast = {
     'Cassandra': 0.6,
     'SeasonalityMotif': 1.5,
     'FFT': 0.8,
-    "BallTreeMultivariateMotif": 1,  # keep an eye on RAM
+    "BallTreeMultivariateMotif": 0.4,  # keep an eye on RAM, not the fastest at scale but works...
 }
 # models that can scale well if many CPU cores are available
 parallel = {

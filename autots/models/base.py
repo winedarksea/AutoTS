@@ -511,15 +511,15 @@ class PredictionObject(object):
         """
         upload = pd.melt(
             self.forecast.rename_axis(index='datetime').reset_index(),
-            var_name="SeriesID",
-            value_name="Value",
+            var_name=id_name,
+            value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
         upload[interval_name] = "50%"
         upload_upper = pd.melt(
             self.upper_forecast.rename_axis(index='datetime').reset_index(),
-            var_name="SeriesID",
-            value_name="Value",
+            var_name=id_name,
+            value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
         upload_upper[
@@ -527,8 +527,8 @@ class PredictionObject(object):
         ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
         upload_lower = pd.melt(
             self.lower_forecast.rename_axis(index='datetime').reset_index(),
-            var_name="SeriesID",
-            value_name="Value",
+            var_name=id_name,
+            value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
         upload_lower[
@@ -537,7 +537,8 @@ class PredictionObject(object):
 
         upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
         if datetime_column is not None:
-            upload = upload.reset_index(drop=False, names=datetime_column)
+            upload.index.name = str(datetime_column)
+            upload = upload.reset_index(drop=False)
         if update_datetime_name is not None:
             upload[update_datetime_name] = datetime.datetime.utcnow()
         return upload
