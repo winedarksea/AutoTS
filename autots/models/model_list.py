@@ -105,7 +105,7 @@ fast = {
     'SectionalMotif': 1,
     'NVAR': 0.3,
     'MAR': 0.25,
-    'RRVAR': 1,
+    'RRVAR': 0.4,
     'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
     'Cassandra': 0.6,

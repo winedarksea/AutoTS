@@ -298,7 +298,7 @@ class GLM(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=3600)(
                 delayed(glm_forecast_by_column)(
                     current_series=df[col],
                     X=X,

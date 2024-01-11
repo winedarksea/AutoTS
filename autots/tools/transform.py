@@ -5301,7 +5301,7 @@ na_probs = {
     "fake_date": 0.1,
     "rolling_mean": 0.1,
     "rolling_mean_24": 0.1,
-    "IterativeImputer": 0.05,  # this parallelizes, uses much memory
+    "IterativeImputer": 0.025,  # this parallelizes, uses much memory
     "mean": 0.06,
     "zero": 0.05,
     "ffill_mean_biased": 0.1,

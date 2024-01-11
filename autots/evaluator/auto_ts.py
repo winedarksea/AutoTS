@@ -2244,6 +2244,7 @@ class AutoTS(object):
         just_point_forecast: bool = False,
         fail_on_forecast_nan: bool = True,
         verbose: int = 'self',
+        df = None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -2272,11 +2273,14 @@ class AutoTS(object):
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
             fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
+            df (pd.DataFrame): wide style df, if present, calls fit_data with this dataframe. Recommended strongly to use model.fit_data(df) first instead as it has more args.
 
         Return:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if df is not None:
+            self.fit_data(df)
         verbose = self.verbose if verbose == 'self' else verbose
         if forecast_length == 'self':
             forecast_length = self.forecast_length
