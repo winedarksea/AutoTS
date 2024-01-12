@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Recommended installs: pip install pytrends fredapi yfinance
-Uses a number of live public data sources to construct an example production case.
+生产实例
 
-While stock price forecasting is shown here, time series forecasting alone is not a recommended basis for managing investments!
+推荐安装： pip install pytrends fredapi yfinance
+使用许多实时公共数据源构建示例生产案例。
 
-This is a highly opinionated approach.
-evolve = True allows the timeseries to automatically adapt to changes.
+虽然此处显示了股价预测，但单独的时间序列预测并不是管理投资的推荐基础！
 
-There is a slight risk of it getting caught in suboptimal position however.
-It should probably be coupled with some basic data sanity checks.
+这是一种非常固执己见的方法。
+evolution = True 允许时间序列自动适应变化。
+
+然而，它存在陷入次优位置的轻微风险。
+它可能应该与一些基本的数据健全性检查相结合。
 
 cd ./AutoTS
 conda activate py38
@@ -33,27 +35,27 @@ fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 gsa_key = None
 
 forecast_name = "example"
-graph = True  # whether to plot graphs
+graph = True  # 是否绘制图形
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = (
-    "D"  # "infer" for automatic alignment, but specific offsets are most reliable, 'D' is daily
+    "D"  # “infer”用于自动对齐，但特定偏移量最可靠，“D”是每日
 )
-forecast_length = 60  # number of periods to forecast ahead
-drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
+forecast_length = 60  #  未来预测的周期数
+drop_most_recent = 1  #  是否丢弃最近的n条记录（视为不完整）
 num_validations = (
-    2  # number of cross validation runs. More is better but slower, usually
+    2  # 交叉验证运行次数。 通常越多越好但速度越慢
 )
 validation_method = "backwards"  # "similarity", "backwards", "seasonal 364"
-n_jobs = "auto"  # or set to number of CPU cores
+n_jobs = "auto"  # 或设置为CPU核心数
 prediction_interval = (
-    0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
+    0.9  # 通过概率范围设置预测范围的上限和下限。 更大=更宽 Bigger = wider
 )
-initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
-evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
-archive_templates = True  # save a copy of the model template used with a timestamp
-save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
+initial_training = "auto"  # 在第一次运行时将其设置为 True，或者在重置时，'auto' 会查找现有模板，如果找到，则设置为 False。
+evolve = True  # 允许时间序列在每次运行中逐步演化，如果为 False，则使用固定模板
+archive_templates = True  # 保存使用时间戳的模型模板的副本
+save_location = None  # "C:/Users/Colin/Downloads"  # 保存模板的目录。 默认为工作目录
 template_filename = f"autots_forecast_template_{forecast_name}.csv"
-forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
+forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv" 或 None，仅写入点预测
 model_list = "scalable"
 transformer_list = "fast"  # 'superfast'
 transformer_max_depth = 5
@@ -84,7 +86,8 @@ if initial_training == "auto":
     else:
         print("Existing template found.")
 
-# set max generations based on settings, increase for slower but greater chance of highest accuracy
+# 根据设置设置最大代数，增加速度会更慢，但获得最高准确度的机会更大
+# 如果在 import_templates 中指定了 include_ensemble，则集成可以逐步嵌套几代
 # if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
 if initial_training:
     gens = 100
@@ -102,11 +105,11 @@ else:
     models_to_validate = 0.99
     ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window",
 
-# only save the very best model if not evolve
+# 如果不进化，只保存最好的模型
 if evolve:
     n_export = 50
 else:
-    n_export = 1  # wouldn't be a bad idea to do > 1, allowing some future adaptability
+    n_export = 1  # > 1 不是一个坏主意，允许一些未来的适应性
 
 """
 Begin dataset retrieval
@@ -143,26 +146,26 @@ if not csv_load:
         weather_event_types=weather_event_types,
         sleep_seconds=15,
     )
-    # be careful of very noisy, large value series mixed into more well-behaved data as they can skew some metrics such that they get most of the attention
-    # remove "volume" data as it skews MAE (other solutions are to adjust metric_weighting towards SMAPE, use series `weights`, or pre-scale data)
+    # 小心混合到表现更好的数据中的非常嘈杂的大值序列，因为它们可能会扭曲某些指标，从而获得大部分关注
+    # 删除 "volume" 数据，因为它会扭曲 MAE（其他解决方案是将 metric_weighting 调整为 SMAPE、使用系列“权重”或预缩放数据）
     df = df[[x for x in df.columns if "_volume" not in x]]
     # remove dividends and stock splits as it skews metrics
     df = df[[x for x in df.columns if "_dividends" not in x]]
     df = df[[x for x in df.columns if "stock_splits" not in x]]
-    # scale 'wiki_all' to millions to prevent too much skew of MAE
+    # 将“wiki_all”扩展到数百万以防止 MAE 出现太大偏差
     if 'wiki_all' in df.columns:
         df['wiki_all_millions'] = df['wiki_all'] / 1000000
         df = df.drop(columns=['wiki_all'])
     
-    # manual NaN cleaning where real values are easily approximated, this is the way
-    # although if you have 'no good idea' why it is random, auto is best
-    # note manual pre-cleaning affects VALIDATION significantly (for better or worse)
-    # as NaN times in history are skipped by metrics, but filled values, as added here, are evaluated
+    # 当真实值容易估计时手动清理NaN是一种方法
+    # 尽管如果你对为何它是随机的“没有好主意”，自动处理是最好的
+    # 注意手动预清理显著影响验证（无论是好是坏）
+    # 因为历史中的NaN时间会被度量标准跳过，但在这里添加的填充值会被评估
     if trend_list is not None:
         for tx in trend_list:
             if tx in df.columns:
                 df[tx] = df[tx].interpolate('akima').fillna(method='ffill', limit=30).fillna(method='bfill', limit=30)
-    # fill weekends
+    # 填补周末
     if tickers is not None:
         for fx in tickers:
             for suffix in ["_high", "_low", "_open", "_close"]:
@@ -176,14 +179,14 @@ if not csv_load:
     if weather_event_types is not None:
         wevnt = [x for x in df.columns if "_Events" in x]
         df[wevnt] = df[wevnt].mask(df[wevnt].notnull().cummax(), df[wevnt].fillna(0))
-    # most of the NaN here are just weekends, when financial series aren't collected, ffill of a few steps is fine
-    # partial forward fill, no back fill
+    # 这里的大部分NaN只是周末时的，当时金融系列数据没有被收集，向前填充几步是可以的
+    # 部分向前填充，不向后填充
     df = df.fillna(method='ffill', limit=3)
     
     df = df[df.index.year > 1999]
-    # remove any data from the future
+    # 移除任何未来的数据
     df = df[df.index <= start_time]
-    # remove series with no recent data
+    # 移除最近没有数据的序列
     df = df.dropna(axis="columns", how="all")
     min_cutoff_date = start_time - datetime.timedelta(days=180)
     most_recent_date = df.notna()[::-1].idxmax()
@@ -193,15 +196,15 @@ if not csv_load:
         f"Series with most NaN: {df.head(365).isnull().sum().sort_values(ascending=False).head(5)}"
     )
 
-    # saving this to make it possible to rerun without waiting for download, but remove this in production
+    # 保存这个以便在不需要等待下载的情况下重新运行，但在生产中移除这个
     df.to_csv(f"training_data_{forecast_name}.csv")
 else:
     df = pd.read_csv(f"training_data_{forecast_name}.csv", index_col=0, parse_dates=[0])
 
-# example future_regressor with some things we can glean from data and datetime index
-# note this only accepts `wide` style input dataframes
-# and this is optional, not required for the modeling
-# also create macro_micro before inclusion
+# future_regressor 示例，其中包含我们可以从数据和日期时间索引中收集的一些内容
+# 请注意，这只接受`wide`样式的输入数据帧
+# 这是可选的，建模不需要
+# 在包含之前也创建 Macro_micro
 regr_train, regr_fcst = create_regressor(
     df,
     forecast_length=forecast_length,
@@ -216,7 +219,7 @@ regr_train, regr_fcst = create_regressor(
     # datepart_method="simple_2",
 )
 
-# remove the first forecast_length rows (because those are lost in regressor)
+# 删除前一个 Forecast_length 行（因为这些行在回归器中丢失）
 df = df.iloc[forecast_length:]
 regr_train = regr_train.iloc[forecast_length:]
 
@@ -258,7 +261,7 @@ model = AutoTS(
     num_validations=num_validations,
     validation_method=validation_method,
     constraint=None,
-    drop_most_recent=drop_most_recent,  # if newest data is incomplete, also remember to increase forecast_length
+    drop_most_recent=drop_most_recent,  # 如果最新数据不完整，也要记得增加forecast_length
     preclean=preclean,
     models_mode=models_mode,
     # no_negatives=True,
@@ -304,14 +307,14 @@ prediction = model.predict(
     future_regressor=regr_fcst, verbose=2, fail_on_forecast_nan=True
 )
 
-# Print the details of the best model
+# 打印最佳模型的详细信息
 print(model)
 
 """
 Process results
 """
 
-# point forecasts dataframe
+# 点预测 dataframe
 forecasts_df = prediction.forecast  # .fillna(0).round(0)
 if forecast_csv_name is not None:
     forecasts_df.to_csv(forecast_csv_name)
@@ -319,7 +322,7 @@ if forecast_csv_name is not None:
 forecasts_upper_df = prediction.upper_forecast
 forecasts_lower_df = prediction.lower_forecast
 
-# accuracy of all tried model results
+# 所有尝试的模型结果的准确性
 model_results = model.results()
 validation_results = model.results("validation")
 

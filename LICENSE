@@ -1,21 +1,21 @@
-MIT License
+麻省理工学院许可证
 
-Copyright (c) 2022 Colin Catlin
+版权所有 (c) 2022 科林·卡特林
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+特此向任何获得副本的人免费授予许可
+本软件和相关文档文件（“软件”）的，以处理
+不受限制地使用软件，包括但不限于权利
+使用、复制、修改、合并、发布、分发、再许可和/或出售
+该软件的副本，并允许该软件的使用者
+可以这样做，但须满足以下条件：
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+上述版权声明和本许可声明应包含在所有内容中
+软件的副本或主要部分。
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+该软件按“原样”提供，不提供任何形式的明示或保证
+默示的保证，包括但不限于适销性保证，
+适用于特定目的且不侵权。 在任何情况下都不得
+作者或版权所有者对任何索赔、损害或其他责任负责
+责任，无论是合同诉讼、侵权诉讼还是其他诉讼，均由以下原因引起：
+与本软件无关或与之相关，或者与本软件相关的使用或其他交易
+软件。

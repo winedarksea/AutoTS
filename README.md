@@ -1,59 +1,58 @@
 # AutoTS
 
-<img src="/img/autots_1280.png" width="400" height="184" title="AutoTS Logo">
+<img src="/img/autots_1280.png" width="400" height="184" title="AutoTS 徽标">
 
-AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale. 
+AutoTS 是一个 Python 时间序列包，旨在大规模快速部署高精度预测。
 
-In 2023, AutoTS has won in the M6 forecasting competition, delivering the highest performance investment decisions across 12 months of stock market forecasting.
+2023 年，AutoTS 在 M6 预测竞赛中获胜，在 12 个月的股市预测中提供了最高绩效的投资决策。
 
-There are dozens of forecasting models usable in the `sklearn` style of `.fit()` and `.predict()`. 
-These includes naive, statistical, machine learning, and deep learning models. 
-Additionally, there are over 30 time series specific transforms usable in the `sklearn` style of `.fit()`, `.transform()` and `.inverse_transform()`. 
-All of these function directly on Pandas Dataframes, without the need for conversion to proprietary objects. 
+有数十种预测模型可用于`sklearn`风格的`.fit()`和`.predict()`。
+其中包括朴素、统计、机器学习和深度学习模型。
+此外，在`sklearn`风格的`.fit()`、`.transform()`和`.inverse_transform()`中，还有超过 30 种特定于时间序列的变换。
+所有这些功能都直接在 Pandas Dataframes 上运行，无需转换为专有对象。
 
-All models support forecasting multivariate (multiple time series) outputs and also support probabilistic (upper/lower bound) forecasts. 
-Most models can readily scale to tens and even hundreds of thousands of input series. 
-Many models also support passing in user-defined exogenous regressors. 
+所有模型都支持预测多元（多个时间序列）输出，并且还支持概率（上限/下限）预测。
+大多数模型可以轻松扩展到数万甚至数十万个输入系列。
+许多模型还支持传入用户定义的外生回归量。
 
-These models are all designed for integration in an AutoML feature search which automatically finds the best models, preprocessing, and ensembling for a given dataset through genetic algorithms. 
+这些模型均设计用于集成到 AutoML 特征搜索中，该搜索可通过遗传算法自动查找给定数据集的最佳模型、预处理和集成。
 
-Horizontal and mosaic style ensembles are the flagship ensembling types, allowing each series to receive the most accurate possible models while still maintaining scalability.
+水平和马赛克风格的合奏是旗舰合奏类型，允许每个系列接收最准确的模型，同时仍然保持可扩展性。
 
-A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, simulation forecasting mode, event risk forecasting, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set. 
+指标和交叉验证选项的组合、应用子集和加权的能力、回归器生成工具、模拟预测模式、事件风险预测、实时数据集、模板导入和导出、绘图以及数据整形参数的集合使 可用的功能集。
 
-## Table of Contents
-* [Installation](https://github.com/winedarksea/AutoTS#installation)
-* [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
-* [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
-* Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
-* [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
+## 目录
+* [安装](https://github.com/winedarksea/AutoTS#installation)
+* [基本使用](https://github.com/winedarksea/AutoTS#basic-use)
+* [速度和大数据提示](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* 扩展教程 [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
+* [生产示例](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
-## Installation
+## 安装
 ```
 pip install autots
 ```
-This includes dependencies for basic models, but [additonal packages](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning) are required for some models and methods.
+这包括基本模型的依赖项，但某些模型和方法需要[附加包](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning) 
 
-Be advised there are several other projects that have chosen similar names, so make sure you are on the right AutoTS code, papers, and documentation.
+请注意，还有其他几个项目选择了类似的名称，因此请确保您使用的是正确的 AutoTS 代码、论文和文档。.
 
-## Basic Use
+##  基本使用
 
-Input data for AutoTS is expected to come in either a *long* or a *wide* format:
-
-- The *wide* format is a `pandas.DataFrame` with a `pandas.DatetimeIndex` and each column a distinct series. 
-- The *long* format has three columns: 
-  - Date (ideally already in pandas-recognized `datetime` format)
-  - Series ID. For a single time series, series_id can be `= None`.
+AutoTS 的输入数据预计采用 *长* 或 *宽* 格式：  （*long* or *wide* ）
+- *wide* 格式是一个带有`pandas.DatetimeIndex`的`pandas.DataFrame`，每列都是一个不同的series。
+- *long* 格式包含三列：
+  - Date（最好已经是 pandas 识别的` 日期时间` 格式）。
+  - Series ID. 对于单个时间序列，series_id 可以 `= None`。 
   - Value
-- For *long* data, the column name for each of these is passed to `.fit()` as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
+- 对于 *long* 数据，每个数据的列名称都会作为`date_col`、`id_col`和`value_col`传递给``.fit()`。 *wide* 数据不需要参数。
 
-Lower-level functions are only designed for `wide` style data.
+Lower-level 的函数仅针对 `wide`类型数据而设计。
 
 ```python
-# also load: _hourly, _monthly, _weekly, _yearly, or _live_daily
+# 其他载入选项: _hourly, _monthly, _weekly, _yearly, or _live_daily
 from autots import AutoTS, load_daily
 
-# sample datasets can be used in either of the long or wide import shapes
+# 示例数据集可用于*长*导入形状或*宽*导入形状
 long = False
 df = load_daily(long=long)
 
@@ -77,58 +76,57 @@ model = model.fit(
 )
 
 prediction = model.predict()
-# plot a sample
+# 绘制一个样本
 prediction.plot(model.df_wide_numeric,
                 series=model.df_wide_numeric.columns[0],
                 start_date="2019-01-01")
-# Print the details of the best model
+# 打印最佳模型的详细信息
 print(model)
 
-# point forecasts dataframe
+# 点预测 dataframe
 forecasts_df = prediction.forecast
-# upper and lower forecasts
+# 预测上限和下限
 forecasts_up, forecasts_low = prediction.upper_forecast, prediction.lower_forecast
 
-# accuracy of all tried model results
+# 所有尝试的模型结果的准确性
 model_results = model.results()
-# and aggregated from cross validation
+# 并从交叉验证中汇总
 validation_results = model.results("validation")
 ```
 
-The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.
+lower-level API，特别是 scikit-learn 风格的大部分time series transformers，也可以独立于 AutoML 框架使用。
 
-Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features.
+查看 [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) 以获取更详细的功能指南。
 
-Also take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
+另请查看[production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
-## Tips for Speed and Large Data:
-* Use appropriate model lists, especially the predefined lists:
-	* `superfast` (simple naive models) and `fast` (more complex but still faster models, optimized for many series)
-	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given many CPU cores are available
-		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
-	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
-* Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
-	* if using `subset`, passing `weights` for series will weight subset selection towards higher priority series.
-	* if limited by RAM, it can be distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
-* Set `model_interrupt=True` which passes over the current model when a `KeyboardInterrupt` ie `crtl+c` is pressed (although if the interrupt falls between generations it will stop the entire training).
-* Use the `result_file` method of `.fit()` which will save progress after each generation - helpful to save progress if a long training is being done. Use `import_results` to recover.
-* While Transformations are pretty fast, setting `transformer_max_depth` to a lower number (say, 2) will increase speed. Also utilize `transformer_list` == 'fast' or 'superfast'.
-* Check out [this example](https://github.com/winedarksea/AutoTS/discussions/76) of using AutoTS with pandas UDF.
-* Ensembles are obviously slower to predict because they run many models, 'distance' models 2x slower, and 'simple' models 3x-5x slower.
-	* `ensemble='horizontal-max'` with `model_list='no_shared_fast'` can scale relatively well given many cpu cores because each model is only run on the series it is needed for.
-* Reducing `num_validations` and `models_to_validate` will decrease runtime but may lead to poorer model selections.
-* For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.
-	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
-* It will be faster if NaN's are already filled. If a search for optimal NaN fill method is not required, then fill any NaN with a satisfactory method before passing to class.
-* Set `runtime_weighting` in `metric_weighting` to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy. 
+## 速度和大数据的提示：
+* 使用适当的模型列表，尤其是预定义的列表：
+	* `superfast` （简单的朴素模型）和 `fast` （更复杂但仍然更快的模型，针对许多系列进行了优化）
+	* `fast_parallel`（`fast`和`parallel`的组合）或`parallel`，假设有许多 CPU 核心可用
+		* `n_jobs` 通常与  `='auto'` 非常接近，但根据环境进行必要的调整
+	* 使用`from autots.models.model_list import model_lists`查看预定义列表的字典（一些定义供内部使用）
+* 使用`subset`参数，当存在许多相似的序列时，`subset=100`通常对成千上万个类似的序列概括得很好。
+	* 如果使用`subset`，为序列传递`weights`会使子集选择偏向于优先级更高的序列。
+	* 如果受到RAM限制，可以通过在不同批次的数据上运行多个AutoTS实例来分布式处理，首先导入一个预先训练好的模板，作为所有实例的起点。
+* 设置`model_interrupt=True`，当按下`KeyboardInterrupt`，即`ctrl+c`时，会跳过当前模型（尽管如果中断发生在生成之间，它会停止整个训练）。
+* 使用`.fit()`的`result_file`方法，它会在每一代结束后保存进度 - 这对于长时间的训练非常有帮助。使用`import_results`来恢复进度。
+* 虽然转换（Transformations）相当快，但将`transformer_max_depth`设置为较低的数值（例如，2）将提高速度。同时使用`transformer_list`设置为'fast'或'superfast'。
+* 查看[这个例子](https://github.com/winedarksea/AutoTS/discussions/76)，了解如何将AutoTS与pandas UDF一起使用。
+* 显然，集成模型（Ensembles）预测较慢，因为它们需要运行多个模型，'distance'模型慢2倍，'simple'模型慢3到5倍。
+	* 使用`ensemble='horizontal-max'`结合`model_list='no_shared_fast'`可以在有许多CPU核的情况下相对好地扩展，因为每个模型只在所需的序列上运行。
+* 减少`num_validations`和`models_to_validate`会减少运行时间，但可能导致模型选择不佳。
+* 对于记录数量较多的数据集，上采样（例如，从每日到每月频率预测）如果合适的话，可以缩短训练时间。
+	* 这可以通过调整`frequency`和`aggfunc`来完成，但最好在将数据传入AutoTS之前进行。
+* 如果NaN已经被填充，则处理会更快。如果不需要寻找最佳NaN填充方法，则在传递给类之前用一种合适的方法填充所有NaN。
+* 在`metric_weighting`中将`runtime_weighting`设置为较高的值。这会引导搜索朝向更快的模型，尽管可能会牺牲一些精度。
 
-## How to Contribute:
-* Give feedback on where you find the documentation confusing
-* Use AutoTS and...
-	* Report errors and request features by adding Issues on GitHub
-	* Posting the top model templates for your data (to help improve the starting templates)
-	* Feel free to recommend different search grid parameters for your favorite models
-* And, of course, contributing to the codebase directly on GitHub.
+## 如何贡献：
+* 对你觉得文档混乱的地方提供反馈
+* 使用AutoTS并且...
+	* 通过在GitHub上添加Issues来报告错误和请求功能
+	* 发布适合你数据的顶级模型模板（以帮助改进起始模板）
+	* 随意推荐你最喜欢的模型的不同搜索网格参数
+* 当然，也可以直接在GitHub上对代码库做出贡献。
 
-
-*Also known as Project CATS (Catlin's Automated Time Series) hence the logo.*
+*也被称为Project CATS（Catlin的自动时间序列），因此有这个logo。*
