@@ -2359,7 +2359,7 @@ class AutoTS(object):
         self,
         filename=None,
         models: str = 'best',
-        n: int = 20,
+        n: int = 40,
         max_per_model_class: int = None,
         include_results: bool = False,
         unpack_ensembles: bool = False,
@@ -2520,6 +2520,7 @@ class AutoTS(object):
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
             include_horizontal (bool): if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)
             force_validation (bool): if True, all models imported here will automatically get sent to full cross validation (regardless of first eval performance)
+                weird behavior can occur wtih force_validation if another template is added later with method=='only'. In that case, model.validate_import should be erased by setting to None
         """
         if method.lower() in ['add on', 'addon', 'add_on']:
             addon_flag = True
