@@ -245,7 +245,7 @@ class AutoTS(object):
         self.current_model_file = current_model_file
         self.force_gc = force_gc
         self.validate_import = None
-        # do not add 'ID' to the below unless you want to refactor things.
+        # 除非您想重构，否则不要在下面添加“ID”。
         self.template_cols = [
             'Model',
             'ModelParameters',
@@ -1069,22 +1069,22 @@ class AutoTS(object):
         grouping_ids=None,
         validation_indexes: list = None,
     ):
-        """Train algorithm given data supplied.
+        """根据提供的数据训练算法。
 
-        Args:
-            df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
-            date_col (str): name of datetime column
-            value_col (str): name of column containing the data of series.
-            id_col (str): name of column identifying different series.
-            future_regressor (numpy.Array): single external regressor matching train.index
-            weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
-                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
-                available aliases: mean, median, min, max
-            result_file (str): results saved on each new generation. Does not include validation rounds.
-                ".csv" save model results table.
-                ".pickle" saves full object, including ensemble information.
-            grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
-                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
+         参数：
+             df (pandas.DataFrame)：系列的日期时间索引数据帧，或三列数据帧，如下所示。
+             date_col (str): 日期时间列的名称
+             value_col (str)：包含系列数据的列的名称。
+             id_col (str)：标识不同系列的列名。
+             future_regressor (numpy.Array)：匹配 train.index 的单个外部回归器
+             权重 (dict): {'colname1': 2, 'colname2': 5} - 增加指标评估中系列的重要性。 任何留下的空白均假定权重为 1。
+                 将别名 'mean' 作为 str 传递，即 `weights='mean'` 自动使用序列的平均值作为其权重
+                 可用别名：平均值、中值、最小值、最大值
+             result_file (str)：保存在每个新生成中的结果。 不包括验证轮次。
+                 “.csv”保存模型结果表。
+                 “.pickle”保存完整的对象，包括整体信息。
+             grouping_ids (dict)：当前是一个包含series_id:group_id映射的一级字典。
+                 在 0.2.x 版本中使用，但不在 0.3.x+ 版本中使用。 保留以供将来使用
         """
         self.model = None
         self.grouping_ids = grouping_ids
@@ -2020,7 +2020,7 @@ class AutoTS(object):
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
-            if verbose >= 0:
+            if self.verbose >= 0:
                 print(f"TotalRuntime missing in {current_generation}!")
             self.template_result_error = template_result.model_results.copy()
             self.template_error = template.copy()
@@ -2244,37 +2244,37 @@ class AutoTS(object):
         fail_on_forecast_nan: bool = True,
         verbose: int = 'self',
     ):
-        """Generate forecast data immediately following dates of index supplied to .fit().
+        """在提供给 .fit() 的索引日期之后立即生成预测数据。
 
-        If using a model from update_fit list, with no ensembling, underlying model will not be retrained when used as below, with a single prediction interval:
-        This designed for high speed forecasting. Full retraining is best when there is sufficient time.
-        ```python
-        model = AutoTS(model_list='update_fit')
-        model.fit(df)
-        model.predict()
-        # for new data without retraining
-        model.fit_data(df)
-        model.predict()
-        # to force retrain of best model (but not full model search)
-        model.model = None
-        model.fit_data(df)
-        model.predict()
-        ```
+         如果使用 update_fit 列表中的模型，没有集成，则在使用单个预测间隔如下时，底层模型将不会被重新训练：
+         这是专为高速预测而设计的。 如果有足够的时间，最好进行全面的再培训。
+         ````蟒蛇
+         模型 = AutoTS(model_list='update_fit')
+         模型.fit(df)
+         模型.预测()
+         # 对于无需重新训练的新数据
+         模型.fit_data(df)
+         模型.预测()
+         # 强制重新训练最佳模型（但不是完整模型搜索）
+         模型.模型=无
+         模型.fit_data(df)
+         模型.预测()
+         ````
 
-        Args:
-            forecast_length (int): Number of periods of data to forecast ahead
-            prediction_interval (float): interval of upper/lower forecasts.
-                defaults to 'self' ie the interval specified in __init__()
-                if prediction_interval is a list, then returns a dict of forecast objects.
-                    {str(interval): prediction_object}
-            future_regressor (numpy.Array): additional regressor
-            hierarchy: Not yet implemented
-            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
-            fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
+         参数：
+             Forecast_length (int): 未来预测的数据周期数
+             Prediction_interval (float)：上/下预测的间隔。
+                 默认为“self”，即 __init__() 中指定的间隔
+                 如果 Prediction_interval 是一个列表，则返回预测对象的字典。
+                     {str(间隔): 预测对象}
+             future_regressor (numpy.Array)：附加回归器
+             层次结构：尚未实施
+             just_point_forecast (bool)：如果为 True，则返回仅点预测的 pandas.DataFrame
+             fail_on_forecast_nan (bool)：如果为 False，则即使存在 NaN，也返回预测；如果为 True，则如果预测中有任何 nan，则会引发错误
 
-        Return:
-            Either a PredictionObject of forecasts and metadata, or
-            if just_point_forecast == True, a dataframe of point forecasts
+         返回：
+             预测和元数据的 PredictionObject，或者
+             if just_point_forecast == True，点预测的数据框
         """
         verbose = self.verbose if verbose == 'self' else verbose
         if forecast_length == 'self':
@@ -2505,16 +2505,16 @@ class AutoTS(object):
         include_horizontal: bool = False,
         force_validation: bool = False,
     ):
-        """Import a previously exported template of model parameters.
-        Must be done before the AutoTS object is .fit().
+        """导入之前导出的模型参数模板。
+         必须在 AutoTS 对象执行 .fit() 之前完成。
 
-        Args:
-            filename (str): file location (or a pd.DataFrame already loaded)
-            method (str): 'add_on' or 'only' - "add_on" keeps `initial_template` generated in init. "only" uses only this template.
-            enforce_model_list (bool): if True, remove model types not in model_list
-            include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
-            include_horizontal (bool): if enforce_model_list is True, this specifies whether to allow ensembles except horizontal (overridden by keep_ensemble)
-            force_validation (bool): if True, all models imported here will automatically get sent to full cross validation (regardless of first eval performance)
+         参数：
+             文件名 (str)：文件位置（或已加载的 pd.DataFrame）
+             method (str): 'add_on' 或 'only' - “add_on”保留 init 中生成的 `initial_template`。 “only”仅使用此模板。
+             force_model_list (bool)：如果为 True，则删除不在 model_list 中的模型类型
+             include_ensemble (bool)：如果enforce_model_list为True，则指定是否允许集成（否则它们将被解包并保留部分）
+             include_horizontal (bool)：如果enforce_model_list为True，则指定是否允许除水平之外的整体（由keep_ensemble覆盖）
+             force_validation (bool)：如果为 True，则此处导入的所有模型将自动发送到完全交叉验证（无论首次评估性能如何）
         """
         if method.lower() in ['add on', 'addon', 'add_on']:
             addon_flag = True
@@ -2834,19 +2834,19 @@ class AutoTS(object):
     def back_forecast(
         self, series=None, n_splits: int = "auto", tail: int = "auto", verbose: int = 0
     ):
-        """Create forecasts for the historical training data, ie. backcast or back forecast. OUT OF SAMPLE
+        """为历史训练数据创建预测，即回溯或回溯预测。样本外
 
-        This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
-        As such, this will be slower, but more representative of real world model performance.
-        There may be jumps in data between chunks.
+         这实际上是根据历史数据进行预测，这些数据与其他包通常返回的模型值不相符。
+         因此，这会更慢，但更能代表现实世界的模型性能。
+         块之间可能存在数据跳跃。
 
-        Args are same as for model_forecast except...
-        n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
-        series (str): if to run on only one column, pass column name. Faster than full.
-        tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.
-            which points at eval_periods of lower-level back_forecast function
+         参数与 model_forecast 相同，除了...
+         n_splits(int)：将数据分割成多少块。 通过 2 可获得最快速度，或通过“自动”获得最佳准确度
+         系列 (str)：如果仅在一列上运行，则传递列名称。 比满还快。
+         tail (int)：数据集的 df.tail()，back_forecast 仅在 n 个最近的观测值上运行。
+             它指向较低级别的 back_forecast 函数的 eval_periods
 
-        Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
+         返回标准预测对象（访问.forecast、.lower_forecast、.upper_forecast）
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
@@ -3204,22 +3204,22 @@ class AutoTS(object):
         end_color="#A2AD9C",
         **kwargs,
     ):
-        """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
-        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
-        'chosen' refers to best_model_id, the model chosen to run for predict
-        Validation sections may overlap (depending on method) which can confuse graph readers.
+        """与plot_backforecast类似，但专门使用模型的验证段。必须重新预测。
+         将结果保存到 self.validation_forecasts 和缓存中。 将其设置为“无”以强制重新运行，否则它将使用存储的（当模型相同时）。
+         'chosen' 指 best_model_id，选择运行预测的模型
+         验证部分可能会重叠（取决于方法），这可能会让图表读者感到困惑。
 
-        Args:
-            models (list): list, str, df or None, models to compare (IDs unless df of model params)
-            series (str): time series to graph
-            title (str): graph title
-            start_date (str): 'auto' or datetime, place to begin graph, None for full
-            end_date (str): 'auto' or datetime, end of graph x axis
-            subset (str): overrides series, shows either 'best' or 'worst'
-            compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
-            include_bounds (bool): if True (default) include the upper/lower forecast bounds
-            start_color (str): color of vline for val start marker, None to remove vline
-            end_color (str): color of vline for val end marker, None to remove vline
+         参数：
+             models（列表）：list、str、df 或 None，要比较的模型（ID，除非模型参数的 df）
+             系列（str）：时间序列到图表
+             title (str): 图表标题
+             start_date (str): 'auto' 或日期时间，开始图表的位置，无完整
+             end_date (str): 'auto' 或日期时间，图形 x 轴的结尾
+             子集（str）：覆盖系列，显示“最佳”或“最差”
+             Compare_horizontal (bool)：如果为 True，则绘制水平整体与最佳非水平模型（如果可用）
+             include_bounds (bool)：如果为 True（默认），则包括预测上限/下限
+             start_color (str): val 开始标记的 vline 颜色，无则删除 vline
+             end_color (str): val 结束标记的 vline 颜色，无则删除 vline
         """
         if df_wide is None:
             df_wide = self.df_wide_numeric

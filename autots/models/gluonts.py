@@ -1,12 +1,12 @@
 """
 GluonTS
 
-Best neuralnet models currently available, released by Amazon, scale well.
-Except it is really the only thing I use that runs mxnet, and it takes a while to train these guys...
-And MXNet is now sorta-maybe-deprecated? Which is sad because it had excellent CPU-based training speed.
+目前可用的最佳神经网络模型由亚马逊发布，具有良好的扩展性。
+除了它确实是我唯一使用的运行 mxnet 的东西，并且需要一段时间来训练这些人......
+MXNet 现在可能已经被弃用了？ 令人遗憾的是，它具有出色的基于 CPU 的训练速度。
 
-Note that there are routinely package version issues with this and its dependencies.
-Stability is not the strong suit of GluonTS.
+请注意，此及其依赖项通常存在软件包版本问题。
+稳定性并不是 GluonTS 的强项。
 """
 import logging
 import random
