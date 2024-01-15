@@ -30,12 +30,14 @@ try:
     from scipy.signal import butter, sosfiltfilt, savgol_filter
     from scipy.optimize import curve_fit
     from scipy.stats import norm
+    from scipy.signal import fftconvolve
 except Exception:
     norm = lambda x: 0.05
     curve_fit = lambda x: "scipy import failed"
     butter = lambda x: "scipy import failed"
     sosfiltfilt = lambda x: "scipy import failed"
     savgol_filter = lambda x: "scipy import failed"
+    fftconvolve = lambda x: "scipy import failed"
 
 try:
     from joblib import Parallel, delayed
@@ -4609,6 +4611,124 @@ class HistoricValues(EmptyTransformer):
         }
 
 
+def bkfilter_st(x, low=6, high=32, K=12, lanczos_factor=False):
+    """This code is mostly from Statsmodel's bkfilter function."""
+    # input is array
+    omega_1 = 2. * np.pi / high  # convert from freq. to periodicity
+    omega_2 = 2. * np.pi / low
+    bweights = np.zeros(2 * K + 1)
+    bweights[K] = (omega_2 - omega_1) / np.pi  # weight at zero freq.
+    j = np.arange(1, int(K) + 1)
+    weights = 1 / (np.pi * j) * (np.sin(omega_2 * j) - np.sin(omega_1 * j))
+    if lanczos_factor:
+        lanczos_factors = np.sinc(2 * j / (2. * K + 1))
+        weights *= lanczos_factors
+    bweights[K + j] = weights  # j is an idx
+    bweights[:K] = weights[::-1]  # make symmetric weights
+    bweights -= bweights.mean()  # make sure weights sum to zero
+    if x.ndim == 2:
+        bweights = bweights[:, None]
+    return fftconvolve(x, bweights, mode='valid')
+
+
+class BKBandpassFilter(EmptyTransformer):
+    """More complete implentation of Baxter King Bandpass Filter
+    based off the successful but somewhat confusing statmodelsfilter transformer.
+
+    Args:
+        window (int): or None, the most recent n history to use for alignment
+    """
+
+    def __init__(
+        self,
+        low: int = 6,
+        high: int = 32,
+        K: int = 1,
+        lanczos_factor: int = False,
+        return_diff: int = True,
+        **kwargs,
+    ):
+        super().__init__(name="HistoricValues")
+        self.low = low
+        self.high = high
+        self.K = K
+        self.lanczos_factor = lanczos_factor
+        self.return_diff = return_diff
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        cycles = bkfilter_st(
+            np.asarray(df), low=self.low, high=self.high, K=self.K,
+            lanczos_factor=self.lanczos_factor
+        )
+        if self.return_diff:
+            N = cycles.shape[0]
+            start_index = (df.shape[0] - N) // 2
+            end_index = start_index + N
+            cycles = pd.DataFrame(
+                cycles, index=df.index[start_index:end_index], columns=df.columns
+            ).reindex(df.index, fill_value=0)
+            return (df - cycles).ffill().bfill()
+        else:
+            # so the output is actually centered but using the tail axis for forecasting effectiveness
+            return pd.DataFrame(
+                cycles,
+                columns=df.columns, index=df.index[-cycles.shape[0]:]
+            )
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "low": random.choices([6, 4, 7, 12, 8, 28], [0.6, 0.1, 0.1, 0.1, 0.05, 0.05])[0],
+            "high": random.choices([32, 40, 90, 28, 364, 728], [0.5, 0.1, 0.1, 0.1, 0.15, 0.05])[0],
+            "K": random.choices([1, 3, 6, 12, 25], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
+            "lanczos_factor": random.choices(
+                [True, False],
+                [0.2, 0.8],
+            )[0],
+            "return_diff": random.choices([True, False], [0.7, 0.3])[0],
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4689,6 +4809,7 @@ have_params = {
     "AlignLastDiff": AlignLastDiff,
     "DiffSmoother": DiffSmoother,
     "HistoricValues": HistoricValues,
+    "BKBandpassFilter": BKBandpassFilter,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4790,6 +4911,8 @@ class GeneralTransformer(object):
             "ReplaceConstant": replace a value with NaN, optionally fillna then later reintroduce
             "AlignLastDiff": shift forecast to be within range of historical diffs
             "DiffSmoother": smooth diffs then return to original space
+            "HistoricValues": match predictions to most similar historic value and overwrite
+            "BKBandpassFilter": another version of the Baxter King bandpass filter
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -5235,6 +5358,7 @@ transformer_dict = {
     "AlignLastDiff": 0.01,
     "DiffSmoother": 0.005,
     "HistoricValues": 0.01,
+    "BKBandpassFilter": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -5258,6 +5382,7 @@ superfast_transformer_dict = {
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
     "AlignLastDiff": 0.05,
+    # "HistoricValues": 0.01,  # need to test more
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -5270,8 +5395,9 @@ filters = {
     "AlignLastValue": 0.15,
     "KalmanSmoothing": 0.05,
     "ClipOutliers": 0.1,
-    "RegressionFilter": 0.05,
+    "RegressionFilter": 0.005,
     "FFTFilter": 0.01,
+    "BKBandpassFilter": 0.005,
 }
 scalers = {
     "MinMaxScaler": 0.05,

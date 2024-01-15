@@ -12,11 +12,9 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.7 🇺🇦 🇺🇦 🇺🇦
-* Cassandra bug fix
-* isolated_only to anomaly methods
-* matse metric is possibly temporary and not added to per series weighting options
-* added HistoricValues transformer
+# 0.6.8 🇺🇦 🇺🇦 🇺🇦
+* bug fixes, robust for OpenBLAS nan handling kernel failures
+* added BKBandpassFilter
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
