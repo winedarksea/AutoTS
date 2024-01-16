@@ -422,6 +422,51 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(forecast_length, len(forecasts_df.index))
         self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
 
+    def test_subset_expansion(self):
+        # probably has room for testing some more things as well
+        df = load_daily(long=True)
+        forecast_length = 28
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='infer',
+            max_generations=10,
+            validation_method="seasonal",
+            model_list="superfast",
+            ensemble = [
+                "horizontal-max",
+                "mosaic-weighted-0-10",
+                "mosaic-mae-crosshair-0-20",
+            ],
+            n_jobs=2,
+            verbose=-1,
+            subset=4,
+        )
+        model = model.fit(
+            df,
+        )
+        model.expand_horizontal()
+        self.assertEqual(
+            sorted(json.loads(model.best_model_original.iloc[0]['ModelParameters'])['models'].keys()),
+            sorted(json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys()),
+            msg="model expansion failed to use the same models (in the same order)"
+        )
+        self.assertEqual(
+            len(json.loads(model.best_model_original.iloc[0]['ModelParameters'])['series'].keys()),
+            df.shape[1],
+            msg="model expansion failed to expand to all df columns"
+        )
+        prediction = model.predict(verbose=0)
+        forecasts_df = prediction.forecast
+        initial_results = model.results()
+
+        check_fails = initial_results.groupby("Model")["mae"].count() > 0
+        self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
+        # check the generated forecasts look right
+        self.assertEqual(forecasts_df.shape[0], forecast_length)
+        self.assertEqual(forecasts_df.shape[1], df.shape[1])
+        self.assertFalse(forecasts_df.isna().any().any())
+        self.assertEqual(forecast_length, len(forecasts_df.index))
+
     def test_all_models_load(self):
         print("Starting test_all_models_load")
         # make sure it can at least load a template of all models
@@ -634,6 +679,7 @@ class ModelTest(unittest.TestCase):
             "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
             # "FFTDecomposition",  # new in 0.6.2
             # "HistoricValues",  # new in 0.6.7
+            # "BKBandpassFilter",  # new in 0.6.8
         ]
 
         timings = {}

@@ -1795,7 +1795,6 @@ class AutoTS(object):
                     print(
                         f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                     )
-                # hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
             self = self.validation_agg()
@@ -1925,11 +1924,17 @@ class AutoTS(object):
                 "no best model present. Run .fit() of the AutoTS class first."
             )
         self.best_model_name = self.best_model['Model'].iloc[0]
-        self.best_model_id = self.best_model['ID'].iloc[0]
         self.best_model_params = json.loads(self.best_model['ModelParameters'].iloc[0])
         self.best_model_transformation_params = json.loads(
             self.best_model['TransformationParameters'].iloc[0]
         )
+        if "ID" not in self.best_model.columns:
+            self.best_model['ID'] = create_model_id(
+                self.best_model_name,
+                self.best_model_params,
+                self.best_model_transformation_params,
+            )
+        self.best_model_id = self.best_model['ID'].iloc[0]
         self.best_model_ensemble = self.best_model['Ensemble'].iloc[0]
         # flag if is any type of ensemble
         self.ensemble_check = int(self.best_model_ensemble > 0)
@@ -1977,6 +1982,7 @@ class AutoTS(object):
         model_count=None,
         current_generation=0,
         result_file=None,
+        return_template=False  # if True, return rather than save to object
     ):
         """Get results for one batch of models."""
         model_count = self.model_count if model_count is None else model_count
@@ -2026,14 +2032,18 @@ class AutoTS(object):
             self.template_result_error = template_result.model_results.copy()
             self.template_error = template.copy()
         # gather results of template run
-        self.initial_results = self.initial_results.concat(template_result)
-        self.initial_results.model_results['Score'] = generate_score(
-            self.initial_results.model_results,
-            metric_weighting=self.metric_weighting,
-            prediction_interval=self.prediction_interval,
-        )
+        if not return_template:
+            self.initial_results = self.initial_results.concat(template_result)
+            self.initial_results.model_results['Score'] = generate_score(
+                self.initial_results.model_results,
+                metric_weighting=self.metric_weighting,
+                prediction_interval=self.prediction_interval,
+            )
+        else:
+            return template_result
         if result_file is not None:
             self.initial_results.save(result_file)
+        return None
 
     def _run_validations(
         self,
@@ -2041,10 +2051,14 @@ class AutoTS(object):
         num_validations,
         validation_template,
         future_regressor,
-        first_validation=True,
-        skip_first_index=True,
+        first_validation=True,  # if any validation run and indices generated
+        skip_first_index=True,  # assuming first eval already done
+        return_template=False,  # if True, return template instead of storing in self
+        subset_override=False,  # if True, force not to subset
     ):
         """Loop through a template for n validation segments."""
+        if return_template:
+            result_overall = TemplateEvalObject()
         for y in range(num_validations):
             cslc = y + 1 if skip_first_index else y
             if self.verbose > 0:
@@ -2053,7 +2067,7 @@ class AutoTS(object):
             current_slice = df_wide_numeric.reindex(self.validation_indexes[cslc])
 
             # subset series (if used) and take a new train/test split
-            if self.subset_flag:
+            if self.subset_flag and not subset_override:
                 # mosaic can't handle different cols in each validation
                 if self.mosaic_used:
                     rand_st = self.random_seed
@@ -2113,7 +2127,7 @@ class AutoTS(object):
                 ] = np.nan
 
             # run validation template on current slice
-            self._run_template(
+            result = self._run_template(
                 validation_template,
                 val_df_train,
                 val_df_test,
@@ -2124,9 +2138,14 @@ class AutoTS(object):
                 max_generations="0",
                 model_count=0,
                 result_file=None,
+                return_template=return_template,
             )
-
-        self = self.validation_agg()
+            if return_template:
+                result_overall = result_overall.concat(result)
+        if return_template:
+            return result_overall
+        else:
+            self = self.validation_agg()
 
     def _predict(
         self,
@@ -2652,21 +2671,30 @@ class AutoTS(object):
             self.initial_results = self.initial_results.concat(new_obj)
         return self
 
-    def _generate_mosaic_template(self, df_subset=None, models_to_use=None):
+    def _generate_mosaic_template(
+            self, df_subset=None, models_to_use=None, ensemble=None,
+            initial_results=None
+        ):
         # can probably replace df_subset.columns with self.initial_results.per_series_mae.columns
+        if initial_results is None:
+            initial_results = self.initial_results
         if df_subset is None:
-            cols = self.initial_results.per_series_mae.columns
+            cols = initial_results.per_series_mae.columns
         else:
             cols = df_subset.columns
+        if ensemble is None:
+            ensemble = self.ensemble
+        
         weight_per_value = (
-            np.asarray(self.initial_results.full_mae_errors)
+            np.asarray(initial_results.full_mae_errors)
             * self.metric_weighting.get('mae_weighting', 0.0)
-            + np.asarray(self.initial_results.full_pl_errors)
+            + np.asarray(initial_results.full_pl_errors)
             * self.metric_weighting.get('spl_weighting', 0.0)
-            + np.asarray(self.initial_results.squared_errors)
+            + np.asarray(initial_results.squared_errors)
             * self.metric_weighting.get('rmse_weighting', 0.0)
         )
-        mosaic_ensembles = [x for x in self.ensemble if "mosaic" in x]
+
+        mosaic_ensembles = [x for x in ensemble if "mosaic" in x]
         ensemble_templates = pd.DataFrame()
         for mos in mosaic_ensembles:
             try:
@@ -2674,13 +2702,13 @@ class AutoTS(object):
                 # choose metric to optimize on
                 met = mosaic_config.get("metric", "mae")
                 if met in ["spl", "pl"]:
-                    errs = self.initial_results.full_pl_errors
+                    errs = initial_results.full_pl_errors
                 elif met == "se":
-                    errs = self.initial_results.squared_errors
+                    errs = initial_results.squared_errors
                 elif met == "weighted":
                     errs = weight_per_value
                 else:
-                    errs = self.initial_results.full_mae_errors
+                    errs = initial_results.full_mae_errors
                 # process for crosshair
                 if mosaic_config.get("crosshair"):
                     full_mae_err = [generate_crosshair_score(x) for x in errs]
@@ -2690,10 +2718,10 @@ class AutoTS(object):
                 if isinstance(mosaic_config.get("n_models"), (int, float)):
                     # find a way of parsing it down to n models to use
                     total_vals = self.num_validations + 1
-                    local_results = self.initial_results.model_results.copy()
+                    local_results = initial_results.model_results.copy()
                     id_array, errors_array = process_mosaic_arrays(
                         local_results,
-                        full_mae_ids=self.initial_results.full_mae_ids,
+                        full_mae_ids=initial_results.full_mae_ids,
                         full_mae_errors=full_mae_err,
                         total_vals=total_vals,
                         models_to_use=models_to_use,
@@ -2717,8 +2745,8 @@ class AutoTS(object):
                 else:
                     modz = None
                 ens_templates = generate_mosaic_template(
-                    initial_results=self.initial_results.model_results,
-                    full_mae_ids=self.initial_results.full_mae_ids,
+                    initial_results=initial_results.model_results,
+                    full_mae_ids=initial_results.full_mae_ids,
                     num_validations=self.num_validations,
                     col_names=cols,
                     full_mae_errors=full_mae_err,
@@ -2819,6 +2847,87 @@ class AutoTS(object):
             prediction_interval=self.prediction_interval,
         )
         return result
+
+    def expand_horizontal(self):
+        # if not horizontal, skip with message if verbose
+        if self.best_model_ensemble != 2:
+            if self.verbose > 0:
+                print("not using horizontal ensemble, expansion unnecessary")
+            return self
+        elif not self.subset_flag:
+            if self.verbose > 0:
+                print("not using subset, expansion unnecessary")
+            return self
+        else:
+            # take the chosen best model and run those models on the full dataset
+            print(f"initial template model_count {self.best_model_params['model_count']}")
+            self.best_model_original = copy.copy(self.best_model)
+        
+            val_temp = unpack_ensemble_models(
+                self.best_model,
+                recursive=True,
+                keep_ensemble=True,
+            )
+            # above didn't remove the horizontal ensembles
+            val_temp = val_temp[val_temp['Ensemble'] < 2]
+            initial_results = self._run_validations(
+                df_wide_numeric=self.df_wide_numeric,
+                num_validations=self.num_validations + 1,
+                validation_template=val_temp,
+                future_regressor=self.future_regressor_train,
+                first_validation=False,  # if any validation run and indices generated
+                skip_first_index=False,  # assuming first eval already done
+                return_template=True,  # if True, return template instead of storing in self
+                subset_override=True,  # if True, force not to subset
+            )
+
+            validation_results = copy.copy(initial_results)
+            validation_results = validation_aggregation(
+                validation_results, df_train=self.df_wide_numeric
+            )
+        
+            # only models in all runs successfully
+            # could modify to filter slow models
+            models_to_use = validation_results.model_results[validation_results.model_results['Runs'] >= self.num_validations]['ID'].tolist()
+        
+            ensemble_type = str(self.best_model_params['model_name']).lower()
+            
+            if 'mosaic' not in ensemble_type:
+                initial_results.model_results['Score'] = generate_score(
+                    initial_results.model_results,
+                    metric_weighting=self.metric_weighting,
+                    prediction_interval=self.prediction_interval,
+                )
+                score_per_series = generate_score_per_series(
+                    initial_results,
+                    metric_weighting=self.metric_weighting,
+                    total_validations=(self.num_validations + 1),
+                )
+                # may return multiple
+                ens_templates = HorizontalTemplateGenerator(
+                    score_per_series,
+                    model_results=initial_results.model_results,
+                    forecast_length=self.forecast_length,
+                    ensemble=['horizontal-max'],
+                    subset_flag=False,
+                    only_specified=True,
+                )
+            else:
+                ens_templates = self._generate_mosaic_template(
+                    self.df_wide_numeric, models_to_use=models_to_use,
+                    ensemble=[self.best_model_params['model_metric']],
+                    initial_results=initial_results
+                )
+            self.expansion_results = initial_results
+            if ens_templates.empty:
+                print(models_to_use)
+                raise ValueError("expansion returned empty template")
+            self.best_model = ens_templates
+            print(f"ensemble expanded model_count: {self.model_count}")
+            
+            # give a more convenient dict option
+            self.parse_best_model()
+            return self
 
     def plot_horizontal_per_generation(
         self,

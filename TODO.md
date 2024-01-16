@@ -15,6 +15,7 @@
 # 0.6.8 🇺🇦 🇺🇦 🇺🇦
 * bug fixes, robust for OpenBLAS nan handling kernel failures
 * added BKBandpassFilter
+* added expand_horizontal for scaling mosaics
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
