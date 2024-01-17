@@ -2849,6 +2849,9 @@ class AutoTS(object):
         return result
 
     def expand_horizontal(self):
+        """Enables expanding horizontal models trained on a subset to full data.
+        Reruns template models and generates new template.
+        """
         # if not horizontal, skip with message if verbose
         if self.best_model_ensemble != 2:
             if self.verbose > 0:
