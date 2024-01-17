@@ -58,7 +58,7 @@ default = {
     'GLM': 1,
     'ETS': 1,
     'FBProphet': 0.5,
-    'GluonTS': 0.5,
+    # 'GluonTS': 0.5,
     'UnobservedComponents': 1,
     'VAR': 1,
     'VECM': 1,
@@ -75,7 +75,7 @@ default = {
     'ARDL': 1,
     'ARCH': 1,
     'MetricMotif': 1,
-    # 'SeasonalityMotif': 1,
+    'SeasonalityMotif': 1,
 }
 # fastest models at any scale
 superfast = [

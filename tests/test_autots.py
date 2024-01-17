@@ -424,7 +424,8 @@ class AutoTSTest(unittest.TestCase):
 
     def test_subset_expansion(self):
         # probably has room for testing some more things as well
-        df = load_daily(long=True)
+        long = True
+        df = load_daily(long=long)
         forecast_length = 28
         model = AutoTS(
             forecast_length=forecast_length,
@@ -443,6 +444,9 @@ class AutoTSTest(unittest.TestCase):
         )
         model = model.fit(
             df,
+            date_col="datetime" if long else None,
+            value_col="value" if long else None,
+            id_col="series_id" if long else None,
         )
         model.expand_horizontal()
         self.assertEqual(
@@ -450,9 +454,10 @@ class AutoTSTest(unittest.TestCase):
             sorted(json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys()),
             msg="model expansion failed to use the same models (in the same order)"
         )
+        num_series = len(df['series_id'].unique().tolist()) if long else df.shape[1]
         self.assertEqual(
-            len(json.loads(model.best_model_original.iloc[0]['ModelParameters'])['series'].keys()),
-            df.shape[1],
+            len(json.loads(model.best_model.iloc[0]['ModelParameters'])['series'].keys()),
+            num_series,
             msg="model expansion failed to expand to all df columns"
         )
         prediction = model.predict(verbose=0)
@@ -463,7 +468,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
         # check the generated forecasts look right
         self.assertEqual(forecasts_df.shape[0], forecast_length)
-        self.assertEqual(forecasts_df.shape[1], df.shape[1])
+        self.assertEqual(forecasts_df.shape[1], num_series)
         self.assertFalse(forecasts_df.isna().any().any())
         self.assertEqual(forecast_length, len(forecasts_df.index))
 
