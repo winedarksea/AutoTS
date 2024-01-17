@@ -119,7 +119,7 @@ def remove_outliers(df, std_threshold: float = 3):
     return df
 
 
-def clip_outliers(df, std_threshold: float = 3):
+def clip_outliers(df, std_threshold: float = 4):
     """Replace outliers above threshold with that threshold. Axis = 0.
 
     Args:
@@ -1612,7 +1612,7 @@ class ClipOutliers(EmptyTransformer):
             if method_c == "remove":
                 fillna_c = random.choice(["ffill", "mean", "rolling_mean_24"])
         choice = random.choices(
-            [1, 2, 3, 3.5, 4, 5], [0.1, 0.2, 0.2, 0.2, 0.2, 0.1], k=1
+            [1, 2, 3, 3.5, 4, 4.5, 5], [0.1, 0.2, 0.2, 0.2, 0.4, 0.1, 0.1], k=1
         )[0]
         return {
             "method": method_c,
@@ -5382,7 +5382,9 @@ superfast_transformer_dict = {
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
     "AlignLastDiff": 0.05,
-    # "HistoricValues": 0.01,  # need to test more
+    "HistoricValues": 0.005,  # need to test more
+    "CenterSplit": 0.005,
+    # "BKBandpassFilter": 0.01,
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -5636,7 +5638,7 @@ def random_cleaners():
                 "fillna": None,
                 "transformations": {"0": "ClipOutliers"},
                 "transformation_params": {
-                    "0": {"method": "clip", "std_threshold": 3},
+                    "0": {"method": "clip", "std_threshold": 4},
                 },
             },
             {
