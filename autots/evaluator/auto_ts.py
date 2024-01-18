@@ -727,7 +727,7 @@ class AutoTS(object):
                 },
                 'random',
             ],
-            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.05, 0.1],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.015, 0.1],
         )[0]
         if preclean_choice == "random":
             preclean_choice = RandomTransform(

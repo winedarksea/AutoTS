@@ -32,6 +32,7 @@ class TestEventRisk(unittest.TestCase):
             lower_limit=lower_limit,
             model_forecast_kwargs={
                 "max_generations": 6,
+                "verbose": 1,
             }
         )
         # .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)

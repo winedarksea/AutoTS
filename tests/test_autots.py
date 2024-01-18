@@ -377,6 +377,7 @@ class AutoTSTest(unittest.TestCase):
     def test_new_params(self):
         params = AutoTS.get_new_params()
         self.assertIsInstance(params, dict)
+        model = AutoTS(**params)  # noqa
 
     def test_univariate1step(self):
         print("Starting test_univariate1step")
@@ -441,6 +442,7 @@ class AutoTSTest(unittest.TestCase):
             n_jobs=2,
             verbose=-1,
             subset=4,
+            remove_leading_zeroes=True,
         )
         model = model.fit(
             df,

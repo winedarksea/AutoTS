@@ -1441,7 +1441,7 @@ class DifferencedTransformer(EmptyTransformer):
         else:
             df_len = df.shape[0]
             df = pd.concat([self.last_values, df], axis=0)
-            if df.isnull().values.any():
+            if df.isnull().to_numpy().any():
                 raise ValueError("NaN in DifferencedTransformer.inverse_transform")
             return df.cumsum().tail(df_len)
 
@@ -5179,8 +5179,8 @@ class GeneralTransformer(object):
                 df = self._fit_one(df, i)
         except Exception as e:
             err_str = f"Transformer {self.transformations[i]} failed on fit"
-            if self.verbose >= 2:
-                err_str += " from params {self.fillna} {self.transformation_params}"
+            if self.verbose >= 1:
+                err_str += f" from params {self.fillna} {self.transformation_params}"
             raise Exception(err_str) from e
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
@@ -5277,8 +5277,8 @@ class GeneralTransformer(object):
                 df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
         except Exception as e:
             err_str = f"Transformer {self.c_trans_n} failed on inverse"
-            if self.verbose >= 2:
-                err_str += " from params {self.fillna} {self.transformation_params}"
+            if self.verbose >= 1:
+                err_str += f" from params {self.fillna} {self.transformation_params}"
             raise Exception(err_str) from e
 
         if fillzero:
