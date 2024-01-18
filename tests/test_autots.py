@@ -216,7 +216,7 @@ class AutoTSTest(unittest.TestCase):
             no_negatives=True,
             subset=100,
             n_jobs=n_jobs,
-            drop_most_recent=1,
+            drop_most_recent=0,
             verbose=2,
         )
         # TEST MODEL PREDICT WITH LOWER LEVEL MODEL TRAINED ON PREVIOUS DATA ONLY
@@ -239,7 +239,7 @@ class AutoTSTest(unittest.TestCase):
         prediction2 = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
         # and see if it got better on past holdout
         model2.fit_data(df_train, future_regressor=future_regressor_train2d.reindex(df_train.index))
-        prediction = model2.predict(future_regressor=future_regressor_forecast2d.reindex(df_test.index), verbose=0)
+        prediction = model2.predict(future_regressor=future_regressor_train2d.reindex(df_test.index), verbose=0)
         prediction.evaluate(df_test, df_train=df_train)
         smape2 = prediction.avg_metrics['smape']
         print("=====================================================")
@@ -377,6 +377,7 @@ class AutoTSTest(unittest.TestCase):
     def test_new_params(self):
         params = AutoTS.get_new_params()
         self.assertIsInstance(params, dict)
+        model = AutoTS(**params)  # noqa
 
     def test_univariate1step(self):
         print("Starting test_univariate1step")
@@ -421,6 +422,57 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(forecasts_df.isna().any().any())
         self.assertEqual(forecast_length, len(forecasts_df.index))
         self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
+
+    def test_subset_expansion(self):
+        # probably has room for testing some more things as well
+        long = True
+        df = load_daily(long=long)
+        forecast_length = 28
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='infer',
+            max_generations=10,
+            validation_method="seasonal",
+            model_list="superfast",
+            ensemble = [
+                "horizontal-max",
+                "mosaic-weighted-0-10",
+                "mosaic-mae-crosshair-0-20",
+            ],
+            n_jobs=2,
+            verbose=-1,
+            subset=4,
+            remove_leading_zeroes=True,
+        )
+        model = model.fit(
+            df,
+            date_col="datetime" if long else None,
+            value_col="value" if long else None,
+            id_col="series_id" if long else None,
+        )
+        model.expand_horizontal()
+        self.assertEqual(
+            sorted(json.loads(model.best_model_original.iloc[0]['ModelParameters'])['models'].keys()),
+            sorted(json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys()),
+            msg="model expansion failed to use the same models (in the same order)"
+        )
+        num_series = len(df['series_id'].unique().tolist()) if long else df.shape[1]
+        self.assertEqual(
+            len(json.loads(model.best_model.iloc[0]['ModelParameters'])['series'].keys()),
+            num_series,
+            msg="model expansion failed to expand to all df columns"
+        )
+        prediction = model.predict(verbose=0)
+        forecasts_df = prediction.forecast
+        initial_results = model.results()
+
+        check_fails = initial_results.groupby("Model")["mae"].count() > 0
+        self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
+        # check the generated forecasts look right
+        self.assertEqual(forecasts_df.shape[0], forecast_length)
+        self.assertEqual(forecasts_df.shape[1], num_series)
+        self.assertFalse(forecasts_df.isna().any().any())
+        self.assertEqual(forecast_length, len(forecasts_df.index))
 
     def test_all_models_load(self):
         print("Starting test_all_models_load")
@@ -634,6 +686,7 @@ class ModelTest(unittest.TestCase):
             "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
             # "FFTDecomposition",  # new in 0.6.2
             # "HistoricValues",  # new in 0.6.7
+            # "BKBandpassFilter",  # new in 0.6.8
         ]
 
         timings = {}

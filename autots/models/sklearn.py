@@ -675,18 +675,28 @@ no_shared_model_dict = {
 }
 # these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
-    # 'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.1,
-    'xgboost': 0.001,  # excess memory at scale
     'MLP': 0.05,
     'DecisionTree': 0.02,
     'Adaboost': 0.05,
     'SVM': 0.01,
     'KerasRNN': 0.02,
     'Transformer': 0.02,  # slow
-    'ExtraTrees': 0.00001,  # some params cause RAM crash?
     'RadiusNeighbors': 0.1,
-    'MultioutputGPR': 0.00001,
+}
+datepart_model_dict_deep = {
+    'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
+    'ElasticNet': 0.1,
+    'xgboost': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.02,
+    'Adaboost': 0.05,
+    'SVM': 0.01,
+    'KerasRNN': 0.02,
+    'Transformer': 0.02,  # slow
+    'ExtraTrees': 0.01,  # some params cause RAM crash?
+    'RadiusNeighbors': 0.1,
+    'MultioutputGPR': 0.001,
 }
 gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
 gradient_boosting = {
@@ -788,7 +798,7 @@ def generate_classifier_params(
             }
         else:
             model_dict = {
-                'xgboost': 1,
+                'xgboost': 0.5,
                 'ExtraTrees': 0.2,
                 'RandomForest': 0.1,
                 'KNN': 1,
@@ -2335,7 +2345,7 @@ class DatepartRegression(ModelObject):
             )
         except Exception as e:
             raise ValueError(
-                f"Datepart prediction with params {self.get_params()} failed"
+                f"Datepart prediction with params {self.get_params()} failed. This is often due to an improperly indexed future_regressor (with drop_most_recent especially)"
             ) from e
 
         if just_point_forecast:
@@ -2366,7 +2376,12 @@ class DatepartRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=datepart_model_dict)
+        if method == 'deep':
+            model_choice = generate_regressor_params(
+                model_dict=datepart_model_dict_deep
+            )
+        else:
+            model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
             [
                 "recurring",

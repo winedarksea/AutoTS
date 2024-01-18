@@ -298,7 +298,7 @@ class GLM(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=3600)(
                 delayed(glm_forecast_by_column)(
                     current_series=df[col],
                     X=X,
@@ -1432,11 +1432,12 @@ class VECM(ModelObject):
             ), "regressor row count not equal to forecast length"
 
         # LinAlgError: SVD did not converge (occurs when NaN in train data)
+        # NaN must be removed for some BLAS packages else they will kill the kernel
         if self.regression_type in ["User", "Holiday", 'user']:
             maModel = VECM(
-                self.df_train,
+                self.df_train.replace([np.inf, -np.inf], np.nan).fillna(0),
                 freq=self.frequency,
-                exog=np.array(self.regressor_train),
+                exog=np.nan_to_num(np.array(self.regressor_train)),
                 deterministic=self.deterministic,
                 k_ar_diff=self.k_ar_diff,
                 coint_rank=self.coint_rank,
@@ -1444,11 +1445,11 @@ class VECM(ModelObject):
             ).fit()
             # don't ask me why it is exog_fc here and not exog like elsewhere
             forecast = maModel.predict(
-                steps=forecast_length, exog_fc=np.array(future_regressor)
+                steps=forecast_length, exog_fc=np.nan_to_num(np.array(future_regressor))
             )
         else:
             maModel = VECM(
-                self.df_train,
+                self.df_train.replace([np.inf, -np.inf], np.nan).fillna(0),
                 freq=self.frequency,
                 deterministic=self.deterministic,
                 k_ar_diff=self.k_ar_diff,

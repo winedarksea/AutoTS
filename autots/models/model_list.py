@@ -58,7 +58,7 @@ default = {
     'GLM': 1,
     'ETS': 1,
     'FBProphet': 0.5,
-    'GluonTS': 0.5,
+    # 'GluonTS': 0.5,
     'UnobservedComponents': 1,
     'VAR': 1,
     'VECM': 1,
@@ -75,7 +75,7 @@ default = {
     'ARDL': 1,
     'ARCH': 1,
     'MetricMotif': 1,
-    # 'SeasonalityMotif': 1,
+    'SeasonalityMotif': 1,
 }
 # fastest models at any scale
 superfast = [
@@ -86,6 +86,7 @@ superfast = [
     'SeasonalNaive',
     # 'MetricMotif',
     'SeasonalityMotif',
+    'SectionalMotif',  # not entirely sure but so far this is pretty fast
 ]
 # relatively fast
 fast = {
@@ -105,13 +106,13 @@ fast = {
     'SectionalMotif': 1,
     'NVAR': 0.3,
     'MAR': 0.25,
-    'RRVAR': 1,
+    'RRVAR': 0.4,
     'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
     'Cassandra': 0.6,
     'SeasonalityMotif': 1.5,
     'FFT': 0.8,
-    "BallTreeMultivariateMotif": 1,  # keep an eye on RAM
+    "BallTreeMultivariateMotif": 0.4,  # keep an eye on RAM, not the fastest at scale but works...
 }
 # models that can scale well if many CPU cores are available
 parallel = {

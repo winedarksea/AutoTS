@@ -69,7 +69,7 @@ class TestAnomalies(unittest.TestCase):
                 # detected = mod.anomalies
                 # print(params)
                 # mod.plot()
-                self.assertEqual(mod.anomalies.shape, (self.df.shape[0], num_cols))
+                self.assertEqual(mod.anomalies.shape, (self.df.shape[0], num_cols), msg=f"from params {params}")
 
                 mod = AnomalyDetector(output='univariate', **params)
                 mod.detect(self.df[np.random.choice(self.df.columns, num_cols, replace=False)])

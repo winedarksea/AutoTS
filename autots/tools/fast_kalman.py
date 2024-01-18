@@ -185,7 +185,7 @@ def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):
     return F, Q, H, R
 
 
-def new_kalman_params(method=None):
+def new_kalman_params(method=None, allow_auto=True):
     if method in ['fast']:
         em_iter = random.choices([None, 10], [0.8, 0.2])[0]
     elif method == "superfast":
@@ -575,6 +575,9 @@ def new_kalman_params(method=None):
             'observation_noise': 0.04,
         }
     params['em_iter'] = em_iter
+    if not allow_auto:
+        if params['observation_noise'] == 'auto':
+            params['observation_noise'] = 0.1
     return params
 
 
@@ -1314,7 +1317,9 @@ def douter(a, b):
 def dinv(A):
     "Matrix inverse applied to last two axes"
     try:
-        res = np.linalg.inv(A)
+        res = np.linalg.inv(
+            np.nan_to_num(A)
+        )  # can cause kernel death in OpenBLAS with NaN
     except Exception:
         res = np.linalg.pinv(A)  # slower but more robust
     return res
@@ -1609,7 +1614,7 @@ def ensure_matrix(x, dim=1):
     # pylint: disable=W0702,W0104,E1136
     try:
         y = np.array(x)
-        y.shape[0]
+        y.shape[0]  # for reasons I don't understand, this line is critical
         x = y
     except Exception:
         x = np.eye(dim) * x

@@ -785,7 +785,10 @@ class ModelPrediction(ModelObject):
         if self.transformation_dict is None:
             self.transformation_dict = {}
         self.transformer_object = GeneralTransformer(
-            **self.transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
+            **self.transformation_dict,
+            n_jobs=n_jobs,
+            holiday_country=holiday_country,
+            verbose=self.verbose,
         )
         self.model = ModelMonster(
             model_str,
