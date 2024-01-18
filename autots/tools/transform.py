@@ -4614,14 +4614,14 @@ class HistoricValues(EmptyTransformer):
 def bkfilter_st(x, low=6, high=32, K=12, lanczos_factor=False):
     """This code is mostly from Statsmodel's bkfilter function."""
     # input is array
-    omega_1 = 2. * np.pi / high  # convert from freq. to periodicity
-    omega_2 = 2. * np.pi / low
+    omega_1 = 2.0 * np.pi / high  # convert from freq. to periodicity
+    omega_2 = 2.0 * np.pi / low
     bweights = np.zeros(2 * K + 1)
     bweights[K] = (omega_2 - omega_1) / np.pi  # weight at zero freq.
     j = np.arange(1, int(K) + 1)
     weights = 1 / (np.pi * j) * (np.sin(omega_2 * j) - np.sin(omega_1 * j))
     if lanczos_factor:
-        lanczos_factors = np.sinc(2 * j / (2. * K + 1))
+        lanczos_factors = np.sinc(2 * j / (2.0 * K + 1))
         weights *= lanczos_factors
     bweights[K + j] = weights  # j is an idx
     bweights[:K] = weights[::-1]  # make symmetric weights
@@ -4680,8 +4680,11 @@ class BKBandpassFilter(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         cycles = bkfilter_st(
-            np.asarray(df), low=self.low, high=self.high, K=self.K,
-            lanczos_factor=self.lanczos_factor
+            np.asarray(df),
+            low=self.low,
+            high=self.high,
+            K=self.K,
+            lanczos_factor=self.lanczos_factor,
         )
         if self.return_diff:
             N = cycles.shape[0]
@@ -4694,8 +4697,7 @@ class BKBandpassFilter(EmptyTransformer):
         else:
             # so the output is actually centered but using the tail axis for forecasting effectiveness
             return pd.DataFrame(
-                cycles,
-                columns=df.columns, index=df.index[-cycles.shape[0]:]
+                cycles, columns=df.columns, index=df.index[-cycles.shape[0] :]
             )
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -4718,8 +4720,12 @@ class BKBandpassFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         return {
-            "low": random.choices([6, 4, 7, 12, 8, 28], [0.6, 0.1, 0.1, 0.1, 0.05, 0.05])[0],
-            "high": random.choices([32, 40, 90, 28, 364, 728], [0.5, 0.1, 0.1, 0.1, 0.15, 0.05])[0],
+            "low": random.choices(
+                [6, 4, 7, 12, 8, 28], [0.6, 0.1, 0.1, 0.1, 0.05, 0.05]
+            )[0],
+            "high": random.choices(
+                [32, 40, 90, 28, 364, 728], [0.5, 0.1, 0.1, 0.1, 0.15, 0.05]
+            )[0],
             "K": random.choices([1, 3, 6, 12, 25], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
             "lanczos_factor": random.choices(
                 [True, False],

@@ -1982,7 +1982,7 @@ class AutoTS(object):
         model_count=None,
         current_generation=0,
         result_file=None,
-        return_template=False  # if True, return rather than save to object
+        return_template=False,  # if True, return rather than save to object
     ):
         """Get results for one batch of models."""
         model_count = self.model_count if model_count is None else model_count
@@ -2263,7 +2263,7 @@ class AutoTS(object):
         just_point_forecast: bool = False,
         fail_on_forecast_nan: bool = True,
         verbose: int = 'self',
-        df = None,
+        df=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -2672,9 +2672,8 @@ class AutoTS(object):
         return self
 
     def _generate_mosaic_template(
-            self, df_subset=None, models_to_use=None, ensemble=None,
-            initial_results=None
-        ):
+        self, df_subset=None, models_to_use=None, ensemble=None, initial_results=None
+    ):
         # can probably replace df_subset.columns with self.initial_results.per_series_mae.columns
         if initial_results is None:
             initial_results = self.initial_results
@@ -2684,7 +2683,7 @@ class AutoTS(object):
             cols = df_subset.columns
         if ensemble is None:
             ensemble = self.ensemble
-        
+
         weight_per_value = (
             np.asarray(initial_results.full_mae_errors)
             * self.metric_weighting.get('mae_weighting', 0.0)
@@ -2863,9 +2862,11 @@ class AutoTS(object):
             return self
         else:
             # take the chosen best model and run those models on the full dataset
-            print(f"initial template model_count {self.best_model_params['model_count']}")
+            print(
+                f"initial template model_count {self.best_model_params['model_count']}"
+            )
             self.best_model_original = copy.copy(self.best_model)
-        
+
             val_temp = unpack_ensemble_models(
                 self.best_model,
                 recursive=True,
@@ -2888,13 +2889,15 @@ class AutoTS(object):
             validation_results = validation_aggregation(
                 validation_results, df_train=self.df_wide_numeric
             )
-        
+
             # only models in all runs successfully
             # could modify to filter slow models
-            models_to_use = validation_results.model_results[validation_results.model_results['Runs'] >= self.num_validations]['ID'].tolist()
-        
+            models_to_use = validation_results.model_results[
+                validation_results.model_results['Runs'] >= self.num_validations
+            ]['ID'].tolist()
+
             ensemble_type = str(self.best_model_params['model_name']).lower()
-            
+
             if 'mosaic' not in ensemble_type:
                 initial_results.model_results['Score'] = generate_score(
                     initial_results.model_results,
@@ -2917,9 +2920,10 @@ class AutoTS(object):
                 )
             else:
                 ens_templates = self._generate_mosaic_template(
-                    self.df_wide_numeric, models_to_use=models_to_use,
+                    self.df_wide_numeric,
+                    models_to_use=models_to_use,
                     ensemble=[self.best_model_params['model_metric']],
-                    initial_results=initial_results
+                    initial_results=initial_results,
                 )
             self.expansion_results = initial_results
             if ens_templates.empty:
@@ -2927,7 +2931,7 @@ class AutoTS(object):
                 raise ValueError("expansion returned empty template")
             self.best_model = ens_templates
             print(f"ensemble expanded model_count: {self.model_count}")
-            
+
             # give a more convenient dict option
             self.parse_best_model()
             return self

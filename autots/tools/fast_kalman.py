@@ -1317,7 +1317,9 @@ def douter(a, b):
 def dinv(A):
     "Matrix inverse applied to last two axes"
     try:
-        res = np.linalg.inv(np.nan_to_num(A))  # can cause kernel death in OpenBLAS with NaN
+        res = np.linalg.inv(
+            np.nan_to_num(A)
+        )  # can cause kernel death in OpenBLAS with NaN
     except Exception:
         res = np.linalg.pinv(A)  # slower but more robust
     return res

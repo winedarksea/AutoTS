@@ -2377,7 +2377,9 @@ class DatepartRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == 'deep':
-            model_choice = generate_regressor_params(model_dict=datepart_model_dict_deep)
+            model_choice = generate_regressor_params(
+                model_dict=datepart_model_dict_deep
+            )
         else:
             model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
