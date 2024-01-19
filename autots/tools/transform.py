@@ -5480,6 +5480,7 @@ def transformer_list_to_dict(transformer_list):
         # temporary removal for testing
         del transformer_list["RegressionFilter"]
         del transformer_list["LocalLinearTrend"]
+        del transformer_list["ReplaceConstant"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())

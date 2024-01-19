@@ -12,10 +12,8 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.8 🇺🇦 🇺🇦 🇺🇦
-* bug fixes, robust for OpenBLAS nan handling kernel failures
-* added BKBandpassFilter
-* added expand_horizontal for scaling mosaics
+# 0.6.9 🇺🇦 🇺🇦 🇺🇦
+
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
