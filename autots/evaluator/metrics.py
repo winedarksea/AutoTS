@@ -682,7 +682,7 @@ def full_metric_evaluation(
     else:
         mate = np.abs(np.sum(full_errors, axis=0))
     # possibly temporary
-    matse = mate / np.sum(A, axis=0)
+    matse = mate / np.sum(A, axis=0).replace(0, 1)
 
     direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
     weights = np.geomspace(1, 10, full_mae_errors.shape[0])[:, np.newaxis]
