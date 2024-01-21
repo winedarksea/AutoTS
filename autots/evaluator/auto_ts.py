@@ -1813,7 +1813,14 @@ class AutoTS(object):
         )
         return self
 
-    def _set_best_model(self, metric_weighting=None, allow_horizontal=True):
+    def _set_best_model(self, metric_weighting=None, allow_horizontal=True, n=1):
+        """Sets best model based on validation results.
+
+        Args:
+            metric_weighting (dict): if not None, overrides input metric weighting this this metric weighting
+            allow_horizontal (bool): if False, force no horizontal, if True, allows if ensemble param and runs occurred
+            n (int): default 1 means chose best model, 2 = use 2nd best, and so on
+        """
         if metric_weighting is None:
             metric_weighting = self.metric_weighting
         hens_model_results = self.initial_results.model_results[
@@ -1828,7 +1835,7 @@ class AutoTS(object):
         # horizontal ensembles can't be compared directly to others because they don't get run through all validations
         # they are built themselves from cross validation so a full rerun of validations is unnecessary
         self.best_model_non_horizontal = self._best_non_horizontal(
-            metric_weighting=metric_weighting
+            metric_weighting=metric_weighting, n=n
         )
         if not hens_model_results.empty and requested_H_ens:
             hens_model_results.loc['Score'] = generate_score(
@@ -1838,7 +1845,7 @@ class AutoTS(object):
             )
             self.best_model = hens_model_results.sort_values(
                 by="Score", ascending=True, na_position='last'
-            ).head(1)[self.template_cols_id]
+            ).iloc[(n-1): n][self.template_cols_id]
             self.ensemble_check = 1
         # print a warning if requested but unable to produce a horz ensemble
         elif requested_H_ens:
@@ -1859,7 +1866,7 @@ class AutoTS(object):
         self.parse_best_model()
         return self
 
-    def _best_non_horizontal(self, metric_weighting=None, series=None):
+    def _best_non_horizontal(self, metric_weighting=None, series=None, n=1):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
                 self = self.validation_agg()
@@ -1908,7 +1915,7 @@ class AutoTS(object):
                         by="Score", ascending=True, na_position='last'
                     )
                     .drop_duplicates(subset=self.template_cols)
-                    .head(1)[self.template_cols_id]
+                    .iloc[(n-1): n][self.template_cols_id]
                 )
             except IndexError:
                 raise ValueError(
