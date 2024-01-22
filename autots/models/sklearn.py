@@ -224,7 +224,7 @@ def rolling_x_regressor_regressor(
     static_regressor=None,
     cointegration: str = None,
     cointegration_lag: int = 1,
-    series_id=None
+    series_id=None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -259,7 +259,10 @@ def rolling_x_regressor_regressor(
         X = X.merge(static_regressor, left_on="series_id", right_index=True, how='left')
         X = X.drop(columns=['series_id'])
     if series_id is not None:
-        hashed = int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+        hashed = (
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
+        )
         X['series_id'] = hashed
     return X
 
@@ -2270,7 +2273,13 @@ class DatepartRegression(ModelObject):
         self.polynomial_degree = polynomial_degree
         self.forecast_length = forecast_length
 
-    def fit(self, df, future_regressor=None, static_regressor=None, regressor_per_series=None):
+    def fit(
+        self,
+        df,
+        future_regressor=None,
+        static_regressor=None,
+        regressor_per_series=None,
+    ):
         """Train algorithm given data supplied.
 
         Args:
@@ -2326,7 +2335,7 @@ class DatepartRegression(ModelObject):
         future_regressor=None,
         just_point_forecast: bool = False,
         df=None,
-        regressor_per_series=None
+        regressor_per_series=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -3023,7 +3032,13 @@ class MultivariateRegression(ModelObject):
         """Take transformed outputs back to original feature space."""
         return df * self.scaler_std + self.scaler_mean
 
-    def fit(self, df, future_regressor=None, static_regressor=None, regressor_per_series=None):
+    def fit(
+        self,
+        df,
+        future_regressor=None,
+        static_regressor=None,
+        regressor_per_series=None,
+    ):
         """Train algorithm given data supplied.
 
         Args:
@@ -3084,8 +3099,12 @@ class MultivariateRegression(ModelObject):
                         window=self.window,
                         future_regressor=cut_regr,
                         # these rely the if part not being run if None
-                        regressor_per_series=self.regressor_per_series_train[x_col] if self.regressor_per_series_train is not None else None,
-                        static_regressor=static_regressor.loc[x_col].to_frame().T if self.static_regressor is not None else None,
+                        regressor_per_series=self.regressor_per_series_train[x_col]
+                        if self.regressor_per_series_train is not None
+                        else None,
+                        static_regressor=static_regressor.loc[x_col].to_frame().T
+                        if self.static_regressor is not None
+                        else None,
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
@@ -3141,7 +3160,13 @@ class MultivariateRegression(ModelObject):
             self.fit_runtime = datetime.datetime.now() - self.startTime
             return self
 
-    def fit_data(self, df, future_regressor=None, static_regressor=None, regressor_per_series=None):
+    def fit_data(
+        self,
+        df,
+        future_regressor=None,
+        static_regressor=None,
+        regressor_per_series=None,
+    ):
         df = self.basic_profile(df)
         self.sktraindata = df.tail(self.min_threshold)
         if self.regression_type is not None:
@@ -3220,8 +3245,12 @@ class MultivariateRegression(ModelObject):
                         window=self.window,
                         future_regressor=cur_regr,
                         # these rely the if part not being run if None
-                        regressor_per_series=regressor_per_series[x_col] if self.regressor_per_series_train is not None else None,
-                        static_regressor=self.static_regressor.loc[x_col].to_frame().T if self.static_regressor is not None else None,
+                        regressor_per_series=regressor_per_series[x_col]
+                        if self.regressor_per_series_train is not None
+                        else None,
+                        static_regressor=self.static_regressor.loc[x_col].to_frame().T
+                        if self.static_regressor is not None
+                        else None,
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,

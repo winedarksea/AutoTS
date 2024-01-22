@@ -227,7 +227,9 @@ class NeuralForecast(ModelObject):
         else:
             another_silly_format = self.static_regressor
             another_silly_format.index.name = "unique_id"
-            self.nf.fit(df=silly_format, static_df=another_silly_format.reset_index(drop=False))
+            self.nf.fit(
+                df=silly_format, static_df=another_silly_format.reset_index(drop=False)
+            )
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 

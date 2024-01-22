@@ -91,7 +91,8 @@ class AnomalyDetector(object):
             model = GeneralTransformer(
                 verbose=2, **self.transform_dict
             )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
-            self.df_anomaly = model.fit_transform(self.df_anomaly)
+            # the post selecting by columns is for CenterSplit and any similar renames or expansions
+            self.df_anomaly = model.fit_transform(self.df_anomaly)[self.df.columns]
 
         if self.forecast_params is not None:
             backcast = back_forecast(

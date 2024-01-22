@@ -1845,7 +1845,7 @@ class AutoTS(object):
             )
             self.best_model = hens_model_results.sort_values(
                 by="Score", ascending=True, na_position='last'
-            ).iloc[(n-1): n][self.template_cols_id]
+            ).iloc[(n - 1) : n][self.template_cols_id]
             self.ensemble_check = 1
         # print a warning if requested but unable to produce a horz ensemble
         elif requested_H_ens:
@@ -1915,7 +1915,7 @@ class AutoTS(object):
                         by="Score", ascending=True, na_position='last'
                     )
                     .drop_duplicates(subset=self.template_cols)
-                    .iloc[(n-1): n][self.template_cols_id]
+                    .iloc[(n - 1) : n][self.template_cols_id]
                 )
             except IndexError:
                 raise ValueError(
