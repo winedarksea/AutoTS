@@ -400,6 +400,8 @@ def horizontal_classifier(
     if classifier_params is None:
         # found using FLAML
         classifier_params = {"model": 'KNN', "model_params": {'n_neighbors': 5}}
+        # newer, but don't like as much
+        # RandomForest {'n_estimators': 69, 'max_features': 0.5418860350847585, 'max_leaves': 439, 'criterion': 'gini'}
 
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
     Xt, Y, Xf = horizontal_xy(df_train, known)
@@ -471,6 +473,16 @@ def mosaic_classifier(df_train, known, classifier_params=None):
                 'max_features': 0.25736,
                 'max_leaf_nodes': 126,
                 'criterion': 'gini',
+            },
+        }
+        # slightly newer, on a mosaic-weighted-0-40
+        classifier_params = {
+            "model": 'ExtraTrees',
+            "model_params": {
+                'n_estimators': 62,
+                'max_features': 0.181116,
+                'max_leaves': 261,
+                'criterion': 'entropy',
             },
         }
 

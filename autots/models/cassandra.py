@@ -1138,7 +1138,7 @@ class Cassandra(ModelObject):
                     pd.DataFrame(
                         self.components[:, comp, :],
                         index=t_indx,
-                        columns=self.column_names,
+                        columns=self.df.columns,
                     ),
                     components=True,
                     bounds=True,
@@ -2537,7 +2537,7 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     elif cost_function == "quantile":
         cost_func = cost_function_quantile
     elif cost_function == "l1_positive":
-        bounds = [(0, 10) for x in x0]
+        bounds = [(0, 14) for x in x0]
         cost_func = cost_function_l1
     else:
         cost_func = cost_function_l1
