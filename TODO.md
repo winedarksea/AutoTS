@@ -13,7 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # 0.6.9 🇺🇦 🇺🇦 🇺🇦
-
+* expanded regressor options for MultivariateRegression, NeuralForecast (currently only available directly, not from AutoTS class)
+* matse bug fix on all 0 history
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

@@ -1393,7 +1393,7 @@ class AutoTS(object):
             validation_template = validation_template.drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-        self.validation_template = validation_template[self.template_cols]
+        self.validation_template = validation_template[self.template_cols_id]
         if self.validate_import is not None:
             self.validation_template = pd.concat(
                 [self.validation_template, self.validate_import]

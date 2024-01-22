@@ -473,6 +473,14 @@ def mosaic_classifier(df_train, known, classifier_params=None):
                 'criterion': 'gini',
             },
         }
+        # slightly newer, on a mosaic-weighted-0-40
+        classifier_params = {
+            "model": 'ExtraTrees',
+            "model_params": {
+                'n_estimators': 62, 'max_features': 0.181116,
+                'max_leaves': 261, 'criterion': 'entropy'
+            },
+        }
 
     X, Xf, Y, to_predict = mosaic_xy(df_train, known)
 
