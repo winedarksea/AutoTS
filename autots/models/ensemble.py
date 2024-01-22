@@ -400,6 +400,8 @@ def horizontal_classifier(
     if classifier_params is None:
         # found using FLAML
         classifier_params = {"model": 'KNN', "model_params": {'n_neighbors': 5}}
+        # newer, but don't like as much
+        # RandomForest {'n_estimators': 69, 'max_features': 0.5418860350847585, 'max_leaves': 439, 'criterion': 'gini'}
 
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
     Xt, Y, Xf = horizontal_xy(df_train, known)
