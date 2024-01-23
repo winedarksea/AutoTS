@@ -2699,6 +2699,16 @@ class AutoTS(object):
             + np.asarray(initial_results.squared_errors)
             * self.metric_weighting.get('rmse_weighting', 0.0)
         )
+        runtime_weighting = self.metric_weighting.get("runtime_weighting", 0)
+        if runtime_weighting != 0:
+            local_results = initial_results.model_results.copy().groupby("ID")["TotalRuntimeSeconds"].mean()
+            runtimes = local_results.loc[initial_results.full_mae_ids].to_numpy()[:, np.newaxis, np.newaxis]
+            # not fully confident in this scaler, trying to put runtime loosely in reference to mae scale
+            mae_min = initial_results.per_series_mae.loc[initial_results.model_results.set_index("ID")['mae'].idxmin()]
+            mae_min = np.min(mae_min[mae_min > 0])
+            basic_scaler = initial_results.model_results['TotalRuntimeSeconds'].mean() / mae_min
+            # making runtime weighting even smaller because generally want this to be a very small component
+            weight_per_value + (runtimes / basic_scaler) * (runtime_weighting / 10)
 
         mosaic_ensembles = [x for x in ensemble if "mosaic" in x]
         ensemble_templates = pd.DataFrame()

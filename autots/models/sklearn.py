@@ -253,7 +253,8 @@ def rolling_x_regressor_regressor(
     if future_regressor is not None:
         X = pd.concat([X, future_regressor], axis=1)
     if regressor_per_series is not None:
-        X = X.merge(regressor_per_series, left_index=True, right_index=True, how='left')
+        # this is actually wrong, merging on an index value that is off by one
+        X = X.merge(regressor_per_series, left_index=True, right_index=True, how='left').bfill()
     if static_regressor is not None:
         X['series_id'] = df.columns[0]
         X = X.merge(static_regressor, left_on="series_id", right_index=True, how='left')
@@ -3349,7 +3350,7 @@ class MultivariateRegression(ModelObject):
             model_choice = generate_regressor_params(
                 model_dict=multivariate_model_dict, method=method
             )
-            window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
+            window_choice = random.choices([None, 3, 7, 10], [0.2, 0.3, 0.1, 0.05])[0]
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
