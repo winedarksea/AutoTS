@@ -2011,8 +2011,9 @@ class Cassandra(ModelObject):
                     'lstsq',
                     'linalg_solve',
                     'bayesian_linear',
+                    'l1_positive',
                 ],
-                [0.8, 0.15, 0.05],
+                [0.8, 0.15, 0.05, 0.01],
             )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -2537,8 +2538,11 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     elif cost_function == "quantile":
         cost_func = cost_function_quantile
     elif cost_function == "l1_positive":
-        bounds = [(0, 14) for x in x0]
+        max_bound = 14
+        bounds = [(0, max_bound) for x in x0]
         cost_func = cost_function_l1
+        x0[x0 <= 0] = 0.000001
+        x0[x0 > max_bound] = max_bound - 0.0001
     else:
         cost_func = cost_function_l1
     return minimize(
