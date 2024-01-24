@@ -2389,6 +2389,8 @@ class AutoTS(object):
         max_per_model_class: int = None,
         include_results: bool = False,
         unpack_ensembles: bool = False,
+        min_metrics: list = ['smape'],
+        max_metrics: list = None,
     ):
         """Export top results as a reusable template.
 
@@ -2401,6 +2403,8 @@ class AutoTS(object):
                 the max number of each model class to include in template
             include_results (bool): whether to include performance metrics
             unpack_ensembles (bool): if True, ensembles are returned only as components (will result in larger n models, as full ensemble counts as 1 model)
+            min_metrics (list): if not None and models=='best', include the lowest for this metric, a way to include even if not a major part of metric weighting as an addon
+            max_metrics (list): for metrics to take the max model for
         """
         if models == 'all':
             export_template = self.initial_results.model_results[self.template_cols_id]
@@ -2416,6 +2420,13 @@ class AutoTS(object):
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
                 ]
+                extra_mods = []
+                if min_metrics is not None:
+                    for metric in min_metrics:
+                        extra_mods.append(export_template.nsmallest(1, columns=metric).copy())
+                if max_metrics is not None:
+                    for metric in max_metrics:
+                        extra_mods.append(export_template.nlargest(1, columns=metric).copy())
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
@@ -2424,6 +2435,9 @@ class AutoTS(object):
                         .reset_index()
                     )
                 export_template = export_template.nsmallest(n, columns=['Score'])
+                if extra_mods:
+                    extra_mods = pd.concat(extra_mods)
+                    export_template = pd.concat([export_template, extra_mods]).drop_duplicates()
                 if self.best_model_id not in export_template['ID']:
                     export_template = pd.concat(
                         [
