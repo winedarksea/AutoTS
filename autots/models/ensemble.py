@@ -481,7 +481,7 @@ def mosaic_classifier(df_train, known, classifier_params=None):
             "model_params": {
                 'n_estimators': 62,
                 'max_features': 0.181116,
-                'max_leaves': 261,
+                'max_leaf_nodes': 261,
                 'criterion': 'entropy',
             },
         }
