@@ -1990,6 +1990,7 @@ class AutoTS(object):
         current_generation=0,
         result_file=None,
         return_template=False,  # if True, return rather than save to object
+        additional_msg="",
     ):
         """Get results for one batch of models."""
         model_count = self.model_count if model_count is None else model_count
@@ -2022,6 +2023,7 @@ class AutoTS(object):
             current_generation=current_generation,
             mosaic_used=self.mosaic_used,
             force_gc=self.force_gc,
+            additional_msg=additional_msg,
         )
         if model_count == 0:
             self.model_count += template_result.model_count
@@ -2062,6 +2064,7 @@ class AutoTS(object):
         skip_first_index=True,  # assuming first eval already done
         return_template=False,  # if True, return template instead of storing in self
         subset_override=False,  # if True, force not to subset
+        additional_msg="",
     ):
         """Loop through a template for n validation segments."""
         if return_template:
@@ -2146,6 +2149,7 @@ class AutoTS(object):
                 model_count=0,
                 result_file=None,
                 return_template=return_template,
+                additional_msg=additional_msg,
             )
             if return_template:
                 result_overall = result_overall.concat(result)
@@ -2914,6 +2918,7 @@ class AutoTS(object):
                 skip_first_index=False,  # assuming first eval already done
                 return_template=True,  # if True, return template instead of storing in self
                 subset_override=True,  # if True, force not to subset
+                additional_msg=" in expand_horizontal",
             )
 
             validation_results = copy.copy(initial_results)
