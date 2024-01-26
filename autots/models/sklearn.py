@@ -1067,7 +1067,7 @@ def generate_regressor_params(
             init_list = [
                 'glorot_uniform',
                 'lecun_uniform',
-                'glorot_normal',
+                # 'glorot_normal',  # evidence it is slow sometimes
                 'RandomUniform',
                 'he_normal',
                 'zeros',
