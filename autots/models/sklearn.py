@@ -3410,9 +3410,9 @@ class MultivariateRegression(ModelObject):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        coint_lag = 1
         if "deep" in method:
             coint_choice = random.choices([None, "BTCD", "Johansen"], [0.8, 0.1, 0.1])[0]
-            coint_lag = 1
         else:
             coint_choice = None
         if coint_choice is not None:
