@@ -44,6 +44,7 @@ class NeuralForecast(ModelObject):
         activation='ReLU',
         scaler_type='robust',
         model_args={},
+        point_quantile=None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -66,6 +67,7 @@ class NeuralForecast(ModelObject):
         self.activation = activation
         self.scaler_type = scaler_type
         self.model_args = model_args
+        self.point_quantile = point_quantile
         self.forecast_length = forecast_length
         self.df_train = None
         self.static_regressor = None
@@ -124,7 +126,12 @@ class NeuralForecast(ModelObject):
         logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
         loss = self.loss
         if loss == "MQLoss":
-            loss = MQLoss(level=levels)
+            if self.point_quantile is None:
+                loss = MQLoss(level=levels)
+            else:
+                div = (1 - self.prediction_interval) / 2
+                quantiles = [div, 1 - div, self.point_quantile]
+                loss = MQLoss(quantiles=quantiles)
         elif loss == "Poisson":
             loss = DistributionLoss(
                 distribution='Poisson', level=levels, return_params=False
@@ -283,6 +290,9 @@ class NeuralForecast(ModelObject):
             target_col = long_forecast.columns[-1]
         else:
             target_col = target_col[0]
+        if self.point_quantile is not None:
+            # print(long_forecast.columns)
+            target_col = long_forecast.columns[-1]
         forecast = long_forecast.reset_index().pivot_table(
             index='ds', columns='unique_id', values=target_col
         )[self.column_names]
@@ -298,10 +308,12 @@ class NeuralForecast(ModelObject):
             )
         else:
             target_col = [x for x in long_forecast.columns if "hi-" in x][0]
+            # print(f"upper target col: {target_col}")
             upper_forecast = long_forecast.reset_index().pivot_table(
                 index='ds', columns='unique_id', values=target_col
             )[self.column_names]
             target_col = [x for x in long_forecast.columns if "lo-" in x][0]
+            # print(f"lower target col {target_col}")
             lower_forecast = long_forecast.reset_index().pivot_table(
                 index='ds', columns='unique_id', values=target_col
             )[self.column_names]
@@ -336,12 +348,12 @@ class NeuralForecast(ModelObject):
                 0
             ]
         if "deep" in method:
-            random.choices(
+            max_steps = random.choices(
                 [40, 80, 100, 1000, 5000, 10000, 50000],
                 [0.2, 0.2, 0.2, 0.1, 0.05, 0.05, 0.01],
             )[0]
         else:
-            random.choices(
+            max_steps = random.choices(
                 [40, 80, 100, 1000, 5000],
                 [0.2, 0.2, 0.2, 0.05, 0.03],
             )[0]
@@ -362,8 +374,11 @@ class NeuralForecast(ModelObject):
                 "SMAPE",
                 "StudentT",
             ],
-            [0.3, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
+            [0.5, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
         )[0]
+        point_quantile = None
+        if loss == "MQLoss":
+            point_quantile = random.choices([None, 0.35, 0.45, 0.55, 0.65, 0.7], [0.5, 0.1, 0.1, 0.1, 0.1, 0.1])[0]
         if models == "TFT":
             model_args = {
                 "n_head": random.choice([2, 4]),
@@ -407,6 +422,7 @@ class NeuralForecast(ModelObject):
                 [10, 28, "2ForecastLength", "3ForecastLength"], [0.2, 0.2, 0.2, 0.2]
             )[0],
             # "early_stop_patience_steps": random.choice([1, 3, 5]),
+            "point_quantile": point_quantile,
             "model_args": model_args,
             'regression_type': regression_type_choice,
         }
@@ -421,6 +437,7 @@ class NeuralForecast(ModelObject):
             'learning_rate': self.learning_rate,
             "max_steps": self.max_steps,
             'input_size': self.input_size,
+            'point_quantile': self.point_quantile,
             "model_args": self.model_args,
             'regression_type': self.regression_type,
         }
