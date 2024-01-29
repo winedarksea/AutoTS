@@ -335,6 +335,16 @@ class NeuralForecast(ModelObject):
             regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
                 0
             ]
+        if "deep" in method:
+            random.choices(
+                [40, 80, 100, 1000, 5000, 10000, 50000],
+                [0.2, 0.2, 0.2, 0.1, 0.05, 0.05, 0.01],
+            )[0]
+        else:
+            random.choices(
+                [40, 80, 100, 1000, 5000],
+                [0.2, 0.2, 0.2, 0.05, 0.03],
+            )[0]
         activation = random.choices(
             ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
             [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
@@ -392,10 +402,7 @@ class NeuralForecast(ModelObject):
             'learning_rate': random.choices(
                 [0.001, 0.1, 0.01, 0.0003, 0.00001], [0.4, 0.1, 0.1, 0.1, 0.1]
             )[0],
-            "max_steps": random.choices(
-                [40, 80, 100, 1000],
-                [0.2, 0.2, 0.2, 0.05],
-            )[0],
+            "max_steps": max_steps,
             'input_size': random.choices(
                 [10, 28, "2ForecastLength", "3ForecastLength"], [0.2, 0.2, 0.2, 0.2]
             )[0],
@@ -420,7 +427,7 @@ class NeuralForecast(ModelObject):
 
 
 if False:
-    from autots.models.neural_forecast import NeuralForecast
+    # from autots.models.neural_forecast import NeuralForecast
     from autots import load_daily, create_regressor, infer_frequency
 
     df = load_daily(long=False)

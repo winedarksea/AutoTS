@@ -702,8 +702,8 @@ datepart_model_dict: dict = {
     'DecisionTree': 0.02,
     'Adaboost': 0.05,
     'SVM': 0.01,
-    'KerasRNN': 0.02,
-    'Transformer': 0.02,  # slow
+    'KerasRNN': 0.01,
+    # 'Transformer': 0.02,  # slow, kernel failed
     'RadiusNeighbors': 0.1,
 }
 datepart_model_dict_deep = {
