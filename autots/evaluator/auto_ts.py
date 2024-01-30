@@ -2199,10 +2199,18 @@ class AutoTS(object):
                         extra_mods.append(
                             export_template.nsmallest(1, columns=metric).copy()
                         )
+                        # and no ensemble version
+                        extra_mods.append(
+                            export_template[export_template['Ensemble'] == 0].nsmallest(1, columns=metric).copy()
+                        )
                 if max_metrics is not None:
                     for metric in max_metrics:
                         extra_mods.append(
                             export_template.nlargest(1, columns=metric).copy()
+                        )
+                        # and no ensemble version
+                        extra_mods.append(
+                            export_template[export_template['Ensemble'] == 0].nlargest(1, columns=metric).copy()
                         )
                 if str(max_per_model_class).isdigit():
                     export_template = (
