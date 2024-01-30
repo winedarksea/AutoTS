@@ -254,7 +254,9 @@ def rolling_x_regressor_regressor(
         X = pd.concat([X, future_regressor], axis=1)
     if regressor_per_series is not None:
         # this is actually wrong, merging on an index value that is off by one
-        X = X.merge(regressor_per_series, left_index=True, right_index=True, how='left').bfill()
+        X = X.merge(
+            regressor_per_series, left_index=True, right_index=True, how='left'
+        ).bfill()
     if static_regressor is not None:
         X['series_id'] = df.columns[0]
         X = X.merge(static_regressor, left_on="series_id", right_index=True, how='left')
@@ -1287,7 +1289,9 @@ def generate_regressor_params(
             param_dict = {
                 'C': random.choices([1.0, 0.5, 2.0, 0.25], [0.6, 0.1, 0.1, 0.1])[0],
                 'tol': random.choices([1e-4, 1e-3, 1e-5], [0.6, 0.1, 0.1])[0],
-                "loss": random.choice(['epsilon_insensitive', 'squared_epsilon_insensitive']),
+                "loss": random.choice(
+                    ['epsilon_insensitive', 'squared_epsilon_insensitive']
+                ),
                 "max_iter": random.choice([500, 1000]),
             }
         else:
@@ -3421,7 +3425,9 @@ class MultivariateRegression(ModelObject):
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         coint_lag = 1
         if "deep" in method:
-            coint_choice = random.choices([None, "BTCD", "Johansen"], [0.8, 0.1, 0.1])[0]
+            coint_choice = random.choices([None, "BTCD", "Johansen"], [0.8, 0.1, 0.1])[
+                0
+            ]
         else:
             coint_choice = None
         if coint_choice is not None:

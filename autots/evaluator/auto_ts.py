@@ -505,16 +505,26 @@ class AutoTS(object):
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
                 ],
-                'mae_weighting': random.choices([0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1])[0],
-                'rmse_weighting': random.choices([0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1])[0],
+                'mae_weighting': random.choices(
+                    [0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1]
+                )[0],
+                'rmse_weighting': random.choices(
+                    [0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1]
+                )[0],
                 'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
                     0
                 ],
-                'mage_weighting': random.choices([0, 1, 3, 5, 0.01], [0.8, 0.1, 0.1, 0.0, 0.2])[0],
+                'mage_weighting': random.choices(
+                    [0, 1, 3, 5, 0.01], [0.8, 0.1, 0.1, 0.0, 0.2]
+                )[0],
                 'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'spl_weighting': random.choices([0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1])[0],
-                'oda_weighting': random.choices([0, 1, 3, 5, 0.1], [0.8, 0.1, 0.1, 0.0, 0.1])[0],
+                'spl_weighting': random.choices(
+                    [0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1]
+                )[0],
+                'oda_weighting': random.choices(
+                    [0, 1, 3, 5, 0.1], [0.8, 0.1, 0.1, 0.0, 0.1]
+                )[0],
                 'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
                 'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
@@ -1544,7 +1554,9 @@ class AutoTS(object):
         )
         return self
 
-    def _return_best_model(self, metric_weighting=None, allow_horizontal=True, n=1, template_cols=None):
+    def _return_best_model(
+        self, metric_weighting=None, allow_horizontal=True, n=1, template_cols=None
+    ):
         """Sets best model based on validation results.
 
         Args:
@@ -1614,7 +1626,9 @@ class AutoTS(object):
         self.parse_best_model()
         return self
 
-    def _best_non_horizontal(self, metric_weighting=None, series=None, n=1, template_cols=None):
+    def _best_non_horizontal(
+        self, metric_weighting=None, series=None, n=1, template_cols=None
+    ):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
                 self = self.validation_agg()
@@ -2177,10 +2191,14 @@ class AutoTS(object):
                 extra_mods = []
                 if min_metrics is not None:
                     for metric in min_metrics:
-                        extra_mods.append(export_template.nsmallest(1, columns=metric).copy())
+                        extra_mods.append(
+                            export_template.nsmallest(1, columns=metric).copy()
+                        )
                 if max_metrics is not None:
                     for metric in max_metrics:
-                        extra_mods.append(export_template.nlargest(1, columns=metric).copy())
+                        extra_mods.append(
+                            export_template.nlargest(1, columns=metric).copy()
+                        )
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
@@ -2191,7 +2209,9 @@ class AutoTS(object):
                 export_template = export_template.nsmallest(n, columns=['Score'])
                 if extra_mods:
                     extra_mods = pd.concat(extra_mods)
-                    export_template = pd.concat([export_template, extra_mods]).drop_duplicates()
+                    export_template = pd.concat(
+                        [export_template, extra_mods]
+                    ).drop_duplicates()
                 if self.best_model_id not in export_template['ID']:
                     export_template = pd.concat(
                         [
@@ -2469,12 +2489,22 @@ class AutoTS(object):
         )
         runtime_weighting = self.metric_weighting.get("runtime_weighting", 0)
         if runtime_weighting != 0:
-            local_results = initial_results.model_results.copy().groupby("ID")["TotalRuntimeSeconds"].mean()
-            runtimes = local_results.loc[initial_results.full_mae_ids].to_numpy()[:, np.newaxis, np.newaxis]
+            local_results = (
+                initial_results.model_results.copy()
+                .groupby("ID")["TotalRuntimeSeconds"]
+                .mean()
+            )
+            runtimes = local_results.loc[initial_results.full_mae_ids].to_numpy()[
+                :, np.newaxis, np.newaxis
+            ]
             # not fully confident in this scaler, trying to put runtime loosely in reference to mae scale
-            mae_min = initial_results.per_series_mae.loc[initial_results.model_results.set_index("ID")['mae'].idxmin()]
+            mae_min = initial_results.per_series_mae.loc[
+                initial_results.model_results.set_index("ID")['mae'].idxmin()
+            ]
             mae_min = np.min(mae_min[mae_min > 0])
-            basic_scaler = initial_results.model_results['TotalRuntimeSeconds'].mean() / mae_min
+            basic_scaler = (
+                initial_results.model_results['TotalRuntimeSeconds'].mean() / mae_min
+            )
             # making runtime weighting even smaller because generally want this to be a very small component
             weight_per_value + (runtimes / basic_scaler) * (runtime_weighting / 10)
 
@@ -2496,7 +2526,9 @@ class AutoTS(object):
                 # process for crosshair
                 crs_hr = mosaic_config.get("crosshair")
                 if crs_hr:
-                    full_mae_err = [generate_crosshair_score(x, method=crs_hr) for x in errs]
+                    full_mae_err = [
+                        generate_crosshair_score(x, method=crs_hr) for x in errs
+                    ]
                 else:
                     full_mae_err = errs
                 # refine to n_models if necessary

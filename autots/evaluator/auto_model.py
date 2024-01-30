@@ -1549,14 +1549,12 @@ def TemplateWizard(
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
-                    base_print = (
-                        "Model Number: {} of {} with model {} for Validation {}{}".format(
-                            str(template_result.model_count),
-                            template.shape[0],
-                            model_str,
-                            str(validation_round),
-                            str(additional_msg),
-                        )
+                    base_print = "Model Number: {} of {} with model {} for Validation {}{}".format(
+                        str(template_result.model_count),
+                        template.shape[0],
+                        model_str,
+                        str(validation_round),
+                        str(additional_msg),
                     )
                 else:
                     base_print = (

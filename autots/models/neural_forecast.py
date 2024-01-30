@@ -72,7 +72,13 @@ class NeuralForecast(ModelObject):
         self.df_train = None
         self.static_regressor = None
 
-    def fit(self, df, future_regressor=None, static_regressor=None, regressor_per_series=None):
+    def fit(
+        self,
+        df,
+        future_regressor=None,
+        static_regressor=None,
+        regressor_per_series=None,
+    ):
         """Train algorithm given data supplied.
 
         Args:
@@ -242,7 +248,9 @@ class NeuralForecast(ModelObject):
                     local_copy = local_copy.reset_index()
                     local_copy['unique_id'] = str(key)
                     full_df.append(local_copy)
-                silly_format = silly_format.merge(pd.concat(full_df), on=['unique_id', 'ds'], how='left').fillna(0)
+                silly_format = silly_format.merge(
+                    pd.concat(full_df), on=['unique_id', 'ds'], how='left'
+                ).fillna(0)
         self.nf = NeuralForecast(models=models, freq=freq)
         if self.static_regressor is None:
             self.nf.fit(df=silly_format)
@@ -256,7 +264,11 @@ class NeuralForecast(ModelObject):
         return self
 
     def predict(
-        self, forecast_length=None, future_regressor=None, just_point_forecast=False, regressor_per_series=None
+        self,
+        forecast_length=None,
+        future_regressor=None,
+        just_point_forecast=False,
+        regressor_per_series=None,
     ):
         predictStartTime = datetime.datetime.now()
         if self.regression_type in ['User', 'user', True]:
@@ -279,7 +291,9 @@ class NeuralForecast(ModelObject):
                     local_copy = local_copy.reset_index()
                     local_copy['unique_id'] = str(key)
                     full_df.append(local_copy)
-                futr_df = futr_df.merge(pd.concat(full_df), on=['unique_id', 'ds'], how='left').fillna(0)
+                futr_df = futr_df.merge(
+                    pd.concat(full_df), on=['unique_id', 'ds'], how='left'
+                ).fillna(0)
             self.futr_df = futr_df
             long_forecast = self.nf.predict(futr_df=futr_df)
         else:
@@ -378,7 +392,9 @@ class NeuralForecast(ModelObject):
         )[0]
         point_quantile = None
         if loss == "MQLoss":
-            point_quantile = random.choices([None, 0.35, 0.45, 0.55, 0.65, 0.7], [0.5, 0.1, 0.1, 0.1, 0.1, 0.1])[0]
+            point_quantile = random.choices(
+                [None, 0.35, 0.45, 0.55, 0.65, 0.7], [0.5, 0.1, 0.1, 0.1, 0.1, 0.1]
+            )[0]
         if models == "TFT":
             model_args = {
                 "n_head": random.choice([2, 4]),

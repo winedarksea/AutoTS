@@ -1578,12 +1578,12 @@ def generate_crosshair_score(error_matrix, method=None):
         arr_size = error_matrix.size
         base_weight = 0.001 / arr_size
         sum_error = np.sum(error_matrix) * base_weight
-    
+
         cross_base = error_matrix * (base_weight * 50)
         row_sums = cross_base.sum(axis=1)
         col_sums = cross_base.sum(axis=0)
         outer_sum = np.add.outer(row_sums, col_sums)
-    
+
         return error_matrix + sum_error + outer_sum
 
 
