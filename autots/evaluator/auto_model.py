@@ -1470,6 +1470,7 @@ def TemplateWizard(
     current_model_file: str = None,
     mosaic_used=None,
     force_gc: bool = False,
+    additional_msg: str = "",
 ):
     """
     Take Template, returns Results.
@@ -1548,13 +1549,12 @@ def TemplateWizard(
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
-                    base_print = (
-                        "Model Number: {} of {} with model {} for Validation {}".format(
-                            str(template_result.model_count),
-                            template.shape[0],
-                            model_str,
-                            str(validation_round),
-                        )
+                    base_print = "Model Number: {} of {} with model {} for Validation {}{}".format(
+                        str(template_result.model_count),
+                        template.shape[0],
+                        model_str,
+                        str(validation_round),
+                        str(additional_msg),
                     )
                 else:
                     base_print = (
@@ -1568,9 +1568,10 @@ def TemplateWizard(
                 if verbose > 1:
                     print(
                         base_print
-                        + " with params {} and transformations {}".format(
+                        + " with params {} and transformations {}{}".format(
                             json.dumps(parameter_dict),
                             json.dumps(transformation_dict),
+                            str(additional_msg),
                         )
                     )
                 else:

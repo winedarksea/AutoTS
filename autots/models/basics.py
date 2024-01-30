@@ -19,7 +19,7 @@ from autots.tools.window_functions import (
     sliding_window_view,
     chunk_reshape,
 )
-from autots.tools.percentile import nan_quantile
+from autots.tools.percentile import nan_quantile, trimmed_mean
 from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
 from autots.tools.transform import (
     GeneralTransformer,
@@ -309,6 +309,12 @@ class AverageValueNaive(ModelObject):
             self.average_values = np.average(
                 df_used.to_numpy(), axis=0, weights=weights
             )
+        elif method == "trimmed_mean_20":
+            self.average_values = trimmed_mean(df_used, percent=0.2, axis=0)
+        elif method == "trimmed_mean_40":
+            self.average_values = trimmed_mean(df_used, percent=0.4, axis=0)
+        else:
+            raise ValueError(f"method {method} not recognized")
         self.fit_runtime = datetime.datetime.now() - self.startTime
         self.lower, self.upper = historic_quantile(
             df_used, prediction_interval=self.prediction_interval
@@ -366,8 +372,10 @@ class AverageValueNaive(ModelObject):
                 "Midhinge",
                 "Weighted_Mean",
                 "Exp_Weighted_Mean",
+                "trimmed_mean_20",
+                "trimmed_mean_40",
             ],
-            [0.3, 0.3, 0.01, 0.1, 0.4, 0.1],
+            [0.3, 0.3, 0.01, 0.1, 0.4, 0.1, 0.05, 0.05],
         )[0]
 
         return {

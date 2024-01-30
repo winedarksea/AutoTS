@@ -11,10 +11,12 @@
 * Series will largely be consistent in period, or at least up-sampled to regular intervals
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
+* trimmed_mean to AverageValueNaive
 
-# 0.6.9 🇺🇦 🇺🇦 🇺🇦
-* expanded regressor options for MultivariateRegression, NeuralForecast (currently only available directly, not from AutoTS class)
-* matse bug fix on all 0 history
+# 0.6.10 🇺🇦 🇺🇦 🇺🇦
+* assorted minor bug fixes
+* bug in mosaic model selection fixed
+* added crosshair_lite mosaic
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

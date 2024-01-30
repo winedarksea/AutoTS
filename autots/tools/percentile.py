@@ -110,3 +110,12 @@ def nan_quantile(arr, q, method="linear", axis=0, errors="raise"):
     Args more limited. If errors="rollover" passes to np.nanpercentile where not supported.
     """
     return nan_percentile(arr, q * 100, method=method, axis=axis, errors=errors)
+
+
+def trimmed_mean(data, percent, axis=0):
+    limit = int(np.ceil(percent * data.shape[axis]))
+    sorted_data = np.sort(data, axis=axis)
+    trimmed = sorted_data.take(
+        indices=range(limit, data.shape[axis] - limit), axis=axis
+    )
+    return np.mean(trimmed, axis=axis)

@@ -44,6 +44,7 @@ class NeuralForecast(ModelObject):
         activation='ReLU',
         scaler_type='robust',
         model_args={},
+        point_quantile=None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -66,11 +67,18 @@ class NeuralForecast(ModelObject):
         self.activation = activation
         self.scaler_type = scaler_type
         self.model_args = model_args
+        self.point_quantile = point_quantile
         self.forecast_length = forecast_length
         self.df_train = None
         self.static_regressor = None
 
-    def fit(self, df, future_regressor=None, static_regressor=None):
+    def fit(
+        self,
+        df,
+        future_regressor=None,
+        static_regressor=None,
+        regressor_per_series=None,
+    ):
         """Train algorithm given data supplied.
 
         Args:
@@ -86,6 +94,9 @@ class NeuralForecast(ModelObject):
             self.static_regressor = static_regressor
             if isinstance(self.static_regressor, pd.DataFrame):
                 static_cols = static_regressor.columns.tolist()
+            if regressor_per_series is not None:
+                if not isinstance(regressor_per_series, dict):
+                    raise ValueError("regressor_per_series in incorrect format")
 
         from neuralforecast import NeuralForecast
         from neuralforecast.losses.pytorch import (
@@ -121,7 +132,12 @@ class NeuralForecast(ModelObject):
         logging.getLogger("pytorch_lightning").setLevel(logging.CRITICAL)
         loss = self.loss
         if loss == "MQLoss":
-            loss = MQLoss(level=levels)
+            if self.point_quantile is None:
+                loss = MQLoss(level=levels)
+            else:
+                div = (1 - self.prediction_interval) / 2
+                quantiles = [div, 1 - div, self.point_quantile]
+                loss = MQLoss(quantiles=quantiles)
         elif loss == "Poisson":
             loss = DistributionLoss(
                 distribution='Poisson', level=levels, return_params=False
@@ -187,7 +203,10 @@ class NeuralForecast(ModelObject):
         models = self.model
         model_args = self.model_args
         if self.regression_type in ['User', 'user', True]:
-            self.base_args["futr_exog_list"] = future_regressor.columns.tolist()
+            regr_cols = future_regressor.columns.tolist()
+            if regressor_per_series is not None:
+                regr_cols + next(iter(regressor_per_series.values())).columns.tolist()
+            self.base_args["futr_exog_list"] = regr_cols
             self.base_args['stat_exog_list'] = static_cols
 
         if isinstance(models, list):
@@ -221,6 +240,17 @@ class NeuralForecast(ModelObject):
             silly_format = silly_format.merge(
                 future_regressor, left_on='ds', right_index=True
             )
+            if regressor_per_series is not None:
+                full_df = []
+                for key, value in regressor_per_series.items():
+                    local_copy = value.copy().reindex(df.index)
+                    local_copy.index.name = 'ds'
+                    local_copy = local_copy.reset_index()
+                    local_copy['unique_id'] = str(key)
+                    full_df.append(local_copy)
+                silly_format = silly_format.merge(
+                    pd.concat(full_df), on=['unique_id', 'ds'], how='left'
+                ).fillna(0)
         self.nf = NeuralForecast(models=models, freq=freq)
         if self.static_regressor is None:
             self.nf.fit(df=silly_format)
@@ -234,7 +264,11 @@ class NeuralForecast(ModelObject):
         return self
 
     def predict(
-        self, forecast_length=None, future_regressor=None, just_point_forecast=False
+        self,
+        forecast_length=None,
+        future_regressor=None,
+        just_point_forecast=False,
+        regressor_per_series=None,
     ):
         predictStartTime = datetime.datetime.now()
         if self.regression_type in ['User', 'user', True]:
@@ -249,6 +283,17 @@ class NeuralForecast(ModelObject):
                 future_regressor, left_index=True, right_index=True
             )
             futr_df = futr_df.reset_index(names='ds')
+            if regressor_per_series is not None:
+                full_df = []
+                for key, value in regressor_per_series.items():
+                    local_copy = value.copy().reindex(index)
+                    local_copy.index.name = 'ds'
+                    local_copy = local_copy.reset_index()
+                    local_copy['unique_id'] = str(key)
+                    full_df.append(local_copy)
+                futr_df = futr_df.merge(
+                    pd.concat(full_df), on=['unique_id', 'ds'], how='left'
+                ).fillna(0)
             self.futr_df = futr_df
             long_forecast = self.nf.predict(futr_df=futr_df)
         else:
@@ -259,6 +304,9 @@ class NeuralForecast(ModelObject):
             target_col = long_forecast.columns[-1]
         else:
             target_col = target_col[0]
+        if self.point_quantile is not None:
+            # print(long_forecast.columns)
+            target_col = long_forecast.columns[-1]
         forecast = long_forecast.reset_index().pivot_table(
             index='ds', columns='unique_id', values=target_col
         )[self.column_names]
@@ -274,10 +322,12 @@ class NeuralForecast(ModelObject):
             )
         else:
             target_col = [x for x in long_forecast.columns if "hi-" in x][0]
+            # print(f"upper target col: {target_col}")
             upper_forecast = long_forecast.reset_index().pivot_table(
                 index='ds', columns='unique_id', values=target_col
             )[self.column_names]
             target_col = [x for x in long_forecast.columns if "lo-" in x][0]
+            # print(f"lower target col {target_col}")
             lower_forecast = long_forecast.reset_index().pivot_table(
                 index='ds', columns='unique_id', values=target_col
             )[self.column_names]
@@ -311,6 +361,16 @@ class NeuralForecast(ModelObject):
             regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
                 0
             ]
+        if "deep" in method:
+            max_steps = random.choices(
+                [40, 80, 100, 1000, 5000, 10000, 50000],
+                [0.2, 0.2, 0.2, 0.1, 0.05, 0.05, 0.01],
+            )[0]
+        else:
+            max_steps = random.choices(
+                [40, 80, 100, 1000, 5000],
+                [0.2, 0.2, 0.2, 0.05, 0.03],
+            )[0]
         activation = random.choices(
             ['ReLU', 'Softplus', 'Tanh', 'SELU', 'LeakyReLU', 'PReLU', 'Sigmoid'],
             [0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
@@ -328,8 +388,13 @@ class NeuralForecast(ModelObject):
                 "SMAPE",
                 "StudentT",
             ],
-            [0.3, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
+            [0.5, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
         )[0]
+        point_quantile = None
+        if loss == "MQLoss":
+            point_quantile = random.choices(
+                [None, 0.35, 0.45, 0.55, 0.65, 0.7], [0.5, 0.1, 0.1, 0.1, 0.1, 0.1]
+            )[0]
         if models == "TFT":
             model_args = {
                 "n_head": random.choice([2, 4]),
@@ -368,14 +433,12 @@ class NeuralForecast(ModelObject):
             'learning_rate': random.choices(
                 [0.001, 0.1, 0.01, 0.0003, 0.00001], [0.4, 0.1, 0.1, 0.1, 0.1]
             )[0],
-            "max_steps": random.choices(
-                [40, 80, 100, 1000],
-                [0.2, 0.2, 0.2, 0.05],
-            )[0],
+            "max_steps": max_steps,
             'input_size': random.choices(
                 [10, 28, "2ForecastLength", "3ForecastLength"], [0.2, 0.2, 0.2, 0.2]
             )[0],
             # "early_stop_patience_steps": random.choice([1, 3, 5]),
+            "point_quantile": point_quantile,
             "model_args": model_args,
             'regression_type': regression_type_choice,
         }
@@ -390,13 +453,14 @@ class NeuralForecast(ModelObject):
             'learning_rate': self.learning_rate,
             "max_steps": self.max_steps,
             'input_size': self.input_size,
+            'point_quantile': self.point_quantile,
             "model_args": self.model_args,
             'regression_type': self.regression_type,
         }
 
 
 if False:
-    from autots.models.neural_forecast import NeuralForecast
+    # from autots.models.neural_forecast import NeuralForecast
     from autots import load_daily, create_regressor, infer_frequency
 
     df = load_daily(long=False)
