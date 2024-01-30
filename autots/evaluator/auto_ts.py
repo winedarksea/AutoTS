@@ -164,7 +164,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 10,
+        max_generations: int = 20,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = None,  # 'auto',
@@ -178,15 +178,16 @@ class AutoTS(object):
             'smape_weighting': 5,
             'mae_weighting': 2,
             'rmse_weighting': 2,
-            'made_weighting': 0.5,
+            'made_weighting': 0.05,
             'mage_weighting': 0,
             'mle_weighting': 0,
             'imle_weighting': 0,
             'spl_weighting': 3,
             'containment_weighting': 0,
-            'contour_weighting': 1,
-            'runtime_weighting': 0.05,
+            'contour_weighting': 0.01,
+            'runtime_weighting': 0.01,
             'oda_weighting': 0.001,
+            'wasserstein_weighting': 0.01,
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = None,
@@ -208,7 +209,7 @@ class AutoTS(object):
         current_model_file: str = None,
         force_gc: bool = False,
         verbose: int = 1,
-        n_jobs: int = -2,
+        n_jobs: int = 0.5,
     ):
         assert forecast_length > 0, "forecast_length must be greater than 0"
         # assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
@@ -504,16 +505,16 @@ class AutoTS(object):
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
                 ],
-                'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'mae_weighting': random.choices([0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1])[0],
+                'rmse_weighting': random.choices([0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1])[0],
                 'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
                     0
                 ],
-                'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mage_weighting': random.choices([0, 1, 3, 5, 0.01], [0.8, 0.1, 0.1, 0.0, 0.2])[0],
                 'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'spl_weighting': random.choices([0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1])[0],
+                'oda_weighting': random.choices([0, 1, 3, 5, 0.1], [0.8, 0.1, 0.1, 0.0, 0.1])[0],
                 'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
                 'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
@@ -524,7 +525,7 @@ class AutoTS(object):
                     [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
                 )[0],
                 'runtime_weighting': random.choices(
-                    [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
+                    [0, 0.05, 0.3, 1, 0.001], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
                 'uwmse_weighting': random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
@@ -542,7 +543,7 @@ class AutoTS(object):
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
                 'dwd_weighting': random.choices(
-                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                    [0, 0.05, 0.3, 1, 5, 0.001], [0.1, 0.6, 0.2, 0.1, 0.1, 0.1]
                 )[0],
             }
             validation_method = random.choices(
@@ -1500,276 +1501,6 @@ class AutoTS(object):
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-
-                if False:
-                    weight_per_value = (
-                        self.initial_results.full_mae_errors
-                        * self.metric_weighting.get('mae_weighting', 0)
-                        + self.initial_results.full_pl_errors
-                        * self.metric_weighting.get('spl_weighting', 0)
-                        + self.initial_results.squared_errors
-                        * self.metric_weighting.get('rmse_weighting', 0)
-                    )
-                    if "n_crosshair" in self.ensemble:
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_mae_errors,
-                            models_to_use=models_to_use,
-                            smoothing_window=7,
-                            metric_name="H-MAE",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        try:
-                            # find a way of parsing it down to n models to use
-                            total_vals = self.num_validations + 1
-                            local_results = self.initial_results.model_results.copy()
-                            full_mae_errors = [
-                                generate_crosshair_score(x)
-                                for x in self.initial_results.full_mae_errors
-                            ]
-                            id_array, errors_array = process_mosaic_arrays(
-                                local_results,
-                                full_mae_ids=self.initial_results.full_mae_ids,
-                                full_mae_errors=full_mae_errors,
-                                total_vals=total_vals,
-                                models_to_use=models_to_use,
-                                smoothing_window=None,
-                            )
-                            # so it's summarized by progressively longer chunks
-                            chunks = parse_forecast_length(self.forecast_length)
-                            all_pieces = []
-                            for piece in chunks:
-                                all_pieces.append(
-                                    pd.DataFrame(errors_array[:, piece, :].mean(axis=1))
-                                )
-                            n_pieces = pd.concat(all_pieces, axis=1)
-                            n_pieces.index = id_array
-                            # can modify K later
-                            chosen_model_n = n_limited_horz(
-                                n_pieces, K=50, safety_model=False
-                            )
-                            ens_templates = generate_mosaic_template(
-                                initial_results=self.initial_results.model_results,
-                                full_mae_ids=self.initial_results.full_mae_ids,
-                                num_validations=self.num_validations,
-                                col_names=df_subset.columns,
-                                full_mae_errors=full_mae_errors,
-                                smoothing_window=None,
-                                metric_name="n_crosshair",
-                                models_to_use=chosen_model_n,
-                            )
-                            ensemble_templates = pd.concat(
-                                [ensemble_templates, ens_templates], axis=0
-                            )
-                        except Exception as e:
-                            print(f"N_CROSSHAIR FAILED WITH ERROR: {repr(e)}")
-                    if (
-                        "mosaic_crosshair" in self.ensemble
-                        or "mosaic-crosshair" in self.ensemble
-                    ):
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=[
-                                generate_crosshair_score(x)
-                                for x in self.initial_results.full_mae_errors
-                            ],
-                            smoothing_window=None,
-                            metric_name="mae-crosshair",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=[
-                                generate_crosshair_score(x)
-                                for x in self.initial_results.squared_errors
-                            ],
-                            smoothing_window=None,
-                            metric_name="se-crosshair",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=[
-                                generate_crosshair_score(x)
-                                for x in self.initial_results.full_pl_errors
-                            ],
-                            smoothing_window=3,
-                            metric_name="spl-crosshair",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=[
-                                generate_crosshair_score(x) for x in weight_per_value
-                            ],
-                            smoothing_window=None,
-                            metric_name="weighted-crosshair",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                    if (
-                        "mosaic_window" in self.ensemble
-                        or "mosaic-window" in self.ensemble
-                    ):
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_mae_errors,
-                            smoothing_window=14,
-                            metric_name="MAE",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_pl_errors,
-                            smoothing_window=10,
-                            metric_name="SPL",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_mae_errors,
-                            smoothing_window=7,
-                            metric_name="MAE",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_mae_errors,
-                            models_to_use=models_to_use,
-                            smoothing_window=7,
-                            metric_name="H-MAE",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_mae_errors,
-                            smoothing_window=3,
-                            metric_name="MAE",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=weight_per_value,
-                            smoothing_window=3,
-                            metric_name="Weighted",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=weight_per_value,
-                            smoothing_window=10,
-                            metric_name="Weighted",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                    if 'mosaic' in self.ensemble:
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.squared_errors,
-                            smoothing_window=None,
-                            metric_name="SE",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=self.initial_results.full_mae_errors,
-                            smoothing_window=None,
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=self.num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=weight_per_value,
-                            smoothing_window=None,
-                            metric_name="Weighted",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
-                        if models_to_use is not None:
-                            ens_templates = generate_mosaic_template(
-                                initial_results=self.initial_results.model_results,
-                                full_mae_ids=self.initial_results.full_mae_ids,
-                                num_validations=self.num_validations,
-                                col_names=df_subset.columns,
-                                full_mae_errors=weight_per_value,
-                                smoothing_window=None,
-                                models_to_use=models_to_use,
-                                metric_name="Horiz-Weighted",
-                            )
-                            ensemble_templates = pd.concat(
-                                [ensemble_templates, ens_templates], axis=0
-                            )
             except Exception as e:
                 if self.verbose >= 0:
                     print(
@@ -1813,16 +1544,21 @@ class AutoTS(object):
         )
         return self
 
-    def _set_best_model(self, metric_weighting=None, allow_horizontal=True, n=1):
+    def _return_best_model(self, metric_weighting=None, allow_horizontal=True, n=1, template_cols=None):
         """Sets best model based on validation results.
 
         Args:
             metric_weighting (dict): if not None, overrides input metric weighting this this metric weighting
             allow_horizontal (bool): if False, force no horizontal, if True, allows if ensemble param and runs occurred
             n (int): default 1 means chose best model, 2 = use 2nd best, and so on
+            template_cols (list): if non standard additional columns are to be returned, pass full list of names of columns
+        Returns:
+            tuple of best_model, best_model_non_horizontal, ensemble_check
         """
         if metric_weighting is None:
             metric_weighting = self.metric_weighting
+        if template_cols is None:
+            template_cols = self.template_cols_id
         hens_model_results = self.initial_results.model_results[
             self.initial_results.model_results['Ensemble'] == 2
         ].copy()
@@ -1834,39 +1570,51 @@ class AutoTS(object):
         # here I'm assuming that if some horizontal models ran, we are going to use those
         # horizontal ensembles can't be compared directly to others because they don't get run through all validations
         # they are built themselves from cross validation so a full rerun of validations is unnecessary
-        self.best_model_non_horizontal = self._best_non_horizontal(
-            metric_weighting=metric_weighting, n=n
+        best_model_non_horizontal = self._best_non_horizontal(
+            metric_weighting=metric_weighting, n=n, template_cols=template_cols
         )
-        if not hens_model_results.empty and requested_H_ens:
-            hens_model_results.loc['Score'] = generate_score(
+        if (not hens_model_results.empty) and requested_H_ens:
+            hens_model_results['Score'] = generate_score(
                 hens_model_results,
                 metric_weighting=metric_weighting,
                 prediction_interval=self.prediction_interval,
             )
-            self.best_model = hens_model_results.sort_values(
+            best_model = hens_model_results.sort_values(
                 by="Score", ascending=True, na_position='last'
-            ).iloc[(n - 1) : n][self.template_cols_id]
-            self.ensemble_check = 1
+            ).iloc[(n - 1) : n][template_cols]
         # print a warning if requested but unable to produce a horz ensemble
         elif requested_H_ens:
             if self.verbose >= 0:
                 print("Horizontal ensemble failed. Using best non-horizontal.")
                 time.sleep(3)  # give it a chance to be seen
-            self.best_model = self.best_model_non_horizontal
+            best_model = best_model_non_horizontal
         elif not hens_model_results.empty:
             if self.verbose >= 0:
                 print(
                     f"Horizontal ensemble available but not requested in model selection: {self.ensemble} and allow_horizontal: {allow_horizontal}."
                 )
                 time.sleep(3)  # give it a chance to be seen
-            self.best_model = self.best_model_non_horizontal
+            best_model = best_model_non_horizontal
         else:
-            self.best_model = self.best_model_non_horizontal
+            best_model = best_model_non_horizontal
+        return best_model, best_model_non_horizontal
+
+    def _set_best_model(self, metric_weighting=None, allow_horizontal=True, n=1):
+        """Sets best model based on validation results.
+
+        Args:
+            metric_weighting (dict): if not None, overrides input metric weighting this this metric weighting
+            allow_horizontal (bool): if False, force no horizontal, if True, allows if ensemble param and runs occurred
+            n (int): default 1 means chose best model, 2 = use 2nd best, and so on
+        """
+        self.best_model, self.best_model_non_horizontal = self._return_best_model(
+            metric_weighting=metric_weighting, allow_horizontal=allow_horizontal, n=n
+        )
         # give a more convenient dict option
         self.parse_best_model()
         return self
 
-    def _best_non_horizontal(self, metric_weighting=None, series=None, n=1):
+    def _best_non_horizontal(self, metric_weighting=None, series=None, n=1, template_cols=None):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
                 self = self.validation_agg()
@@ -1876,6 +1624,8 @@ class AutoTS(object):
                 )
         if metric_weighting is None:
             metric_weighting = self.metric_weighting
+        if template_cols is None:
+            template_cols = self.template_cols_id
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
             self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
@@ -1901,7 +1651,7 @@ class AutoTS(object):
             best_model_id = score_per_series[series].idxmin()
             best_model = self.initial_results.model_results[
                 self.initial_results.model_results['ID'] == best_model_id
-            ].iloc[0:1][self.template_cols_id]
+            ].iloc[0:1][template_cols]
         else:
             # previously I was relying on the mean of Scores calculated for each individual validation
             eligible_models['Score'] = generate_score(
@@ -1915,7 +1665,7 @@ class AutoTS(object):
                         by="Score", ascending=True, na_position='last'
                     )
                     .drop_duplicates(subset=self.template_cols)
-                    .iloc[(n - 1) : n][self.template_cols_id]
+                    .iloc[(n - 1) : n][template_cols]
                 )
             except IndexError:
                 raise ValueError(
@@ -2393,7 +2143,7 @@ class AutoTS(object):
         max_per_model_class: int = None,
         include_results: bool = False,
         unpack_ensembles: bool = False,
-        min_metrics: list = ['smape'],
+        min_metrics: list = ['smape', 'spl'],
         max_metrics: list = None,
     ):
         """Export top results as a reusable template.
@@ -2744,8 +2494,9 @@ class AutoTS(object):
                 else:
                     errs = initial_results.full_mae_errors
                 # process for crosshair
-                if mosaic_config.get("crosshair"):
-                    full_mae_err = [generate_crosshair_score(x) for x in errs]
+                crs_hr = mosaic_config.get("crosshair")
+                if crs_hr:
+                    full_mae_err = [generate_crosshair_score(x, method=crs_hr) for x in errs]
                 else:
                     full_mae_err = errs
                 # refine to n_models if necessary

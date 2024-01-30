@@ -354,7 +354,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
-        self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
+        self.assertGreater(validation_results[validation_results['Runs'] > model.num_validations]['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
         # test metrics
         self.assertTrue(initial_results['Score'].min() > 0)
         self.assertTrue(initial_results['mae'].min() >= 0)
@@ -366,6 +366,28 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(initial_results['spl'].min() >= 0)
         self.assertTrue(initial_results['contour'].min() <= 1)
         self.assertTrue(initial_results['containment'].min() <= 1)
+        
+        # Test that generate_score is actually picking the lowest value on a single metric
+        # minimizing metrics only
+        # no weights present on metrics
+        for target_metric in ['smape', 'mae', 'rmse', 'made', 'spl']:
+            new_weighting = {
+                str(target_metric) + '_weighting': 1,
+            }
+            temp_cols = ['ID', 'Model', 'ModelParameters', 'TransformationParameters', 'Ensemble', target_metric]
+            new_mod = model._return_best_model(metric_weighting=new_weighting, template_cols=temp_cols)
+            new_mod_non = new_mod[1]
+            new_mod = new_mod[0]
+            if new_mod['Ensemble'].iloc[0] == 2:
+                min_pos = validation_results[validation_results['Ensemble'] == 2][target_metric].min()
+                min_pos_non = validation_results[(validation_results['Ensemble'] < 2) & (validation_results['Runs'] > model.num_validations)][target_metric].min()
+                chos_pos = new_mod[target_metric].iloc[0]
+                # print(min_pos)
+                # print(chos_pos)
+                self.assertTrue(np.allclose(chos_pos, min_pos))
+                self.assertTrue(np.allclose(new_mod_non[target_metric].iloc[0], min_pos_non))
+                # print(json.loads(new_mod['ModelParameters'].iloc[0])['model_name'])
+                # print(json.loads(new_mod['ModelParameters'].iloc[0])['model_metric'])
 
     def test_load_datasets(self):
         df = load_artificial(long=True)

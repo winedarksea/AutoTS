@@ -884,6 +884,7 @@ def generate_regressor_params(
         'Ridge',
         'GaussianProcessRegressor',
         'MultioutputGPR',
+        'SVM',
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -1281,6 +1282,14 @@ def generate_regressor_params(
                 )[0]
             if kernel == "locally_periodic":
                 param_dict['lambda_prime'] = random.choice([0.1, 1, 10])
+        elif model == "SVM":
+            # LinearSVR
+            param_dict = {
+                'C': random.choices([1.0, 0.5, 2.0, 0.25], [0.6, 0.1, 0.1, 0.1])[0],
+                'tol': random.choices([1e-4, 1e-3, 1e-5], [0.6, 0.1, 0.1])[0],
+                "loss": random.choice(['epsilon_insensitive', 'squared_epsilon_insensitive']),
+                "max_iter": random.choice([500, 1000]),
+            }
         else:
             min_samples = np.random.choice(
                 [1, 2, 0.05], p=[0.5, 0.3, 0.2], size=1

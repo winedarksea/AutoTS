@@ -117,10 +117,16 @@ def parse_mosaic(ensemble):
         # zero is considered None here
         if swindow == 0:
             swindow = None
+        if "crosshair_lite" in ensemble:
+            crosshair = 'crosshair_lite'
+        elif 'crosshair' in ensemble:
+            crosshair = True
+        else:
+            crosshair = False
         return {
             'metric': metric,
             'smoothing_window': swindow,
-            'crosshair': "crosshair" in ensemble,
+            'crosshair': crosshair,
             'n_models': n_models,
         }
 
@@ -1564,17 +1570,21 @@ def HorizontalTemplateGenerator(
     return ensemble_templates
 
 
-def generate_crosshair_score(error_matrix):
-    arr_size = error_matrix.size
-    base_weight = 0.001 / arr_size
-    sum_error = np.sum(error_matrix) * base_weight
-
-    cross_base = error_matrix * (base_weight * 50)
-    row_sums = cross_base.sum(axis=1)
-    col_sums = cross_base.sum(axis=0)
-    outer_sum = np.add.outer(row_sums, col_sums)
-
-    return error_matrix + sum_error + outer_sum
+def generate_crosshair_score(error_matrix, method=None):
+    # 'lite' only takes the weighted axis down a series not from other series
+    if method == 'crosshair_lite':
+        return error_matrix + (np.median(error_matrix, axis=0) / 3)
+    else:
+        arr_size = error_matrix.size
+        base_weight = 0.001 / arr_size
+        sum_error = np.sum(error_matrix) * base_weight
+    
+        cross_base = error_matrix * (base_weight * 50)
+        row_sums = cross_base.sum(axis=1)
+        col_sums = cross_base.sum(axis=0)
+        outer_sum = np.add.outer(row_sums, col_sums)
+    
+        return error_matrix + sum_error + outer_sum
 
 
 def generate_crosshair_score_list(error_list):
