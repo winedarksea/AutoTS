@@ -1548,6 +1548,11 @@ class AutoTS(object):
         return self
 
     def validation_agg(self):
+        self.initial_results.model_results['Score'] = generate_score(
+            self.initial_results.model_results,
+            metric_weighting=self.metric_weighting,
+            prediction_interval=self.prediction_interval,
+        )
         self.validation_results = copy.copy(self.initial_results)
         self.validation_results = validation_aggregation(
             self.validation_results, df_train=self.df_wide_numeric
