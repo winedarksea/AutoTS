@@ -64,7 +64,7 @@ pygments_style = 'sphinx'
 
 html_theme_options = {
     "show_powered_by": False,
-	'analytics_id': 'G-P2KLF8302E',
+	'google_analytics_id': 'G-P2KLF8302E',
 	'logo': 'autots_logo.png',
 	'description': 'Automated Forecasting',
     "github_user": "winedarksea",
