@@ -76,9 +76,8 @@ html_theme_options = {
 # pip install sphinxcontrib-googleanalytics
 googleanalytics_id = "G-P2KLF8302E"
 # this will give a warning but works at least with pydata theme
-html_theme_options["analytics"] = {
-    "google_analytics_id": googleanalytics_id,
-}
+html_theme_options["analytics"] = {"google_analytics_id": googleanalytics_id}
+# html_theme_options['analytics_id'] = googleanalytics_id
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = "autotsdoc"

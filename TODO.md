@@ -13,10 +13,7 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.10 🇺🇦 🇺🇦 🇺🇦
-* assorted minor bug fixes
-* bug in mosaic model selection fixed
-* added crosshair_lite mosaic
+# 0.6.11 🇺🇦 🇺🇦 🇺🇦
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

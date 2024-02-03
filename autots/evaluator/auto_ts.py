@@ -2526,6 +2526,10 @@ class AutoTS(object):
         for mos in mosaic_ensembles:
             try:
                 mosaic_config = parse_mosaic(mos)
+            except Exception as e:
+                print(repr(e))
+                mosaic_config = "parse mosaic failed"
+            try:
                 # choose metric to optimize on
                 met = mosaic_config.get("metric", "mae")
                 if met in ["spl", "pl"]:
@@ -2589,7 +2593,7 @@ class AutoTS(object):
                 )
             except Exception as e:
                 print(
-                    f"Error in mosaic template generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                    f"Error in mosaic template {mosaic_config} in generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                 )
         return ensemble_templates
 

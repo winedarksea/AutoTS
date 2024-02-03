@@ -1571,6 +1571,9 @@ def HorizontalTemplateGenerator(
 
 
 def generate_crosshair_score(error_matrix, method=None):
+    # handle nan, assume the worst
+    if np.isnan(np.sum(error_matrix)):
+        error_matrix[np.isnan(error_matrix)] = np.nanmax(error_matrix)
     # 'lite' only takes the weighted axis down a series not from other series
     if method == 'crosshair_lite':
         return error_matrix + (np.median(error_matrix, axis=0) / 3)

@@ -106,6 +106,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 	* `superfast` (simple naive models) and `fast` (more complex but still faster models, optimized for many series)
 	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given many CPU cores are available
 		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
+	* 'scalable' is the best list to avoid crashing when many series are present. There is also a transformer_list = 'scalable'
 	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
 * Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
 	* if using `subset`, passing `weights` for series will weight subset selection towards higher priority series.
@@ -121,6 +122,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
 * It will be faster if NaN's are already filled. If a search for optimal NaN fill method is not required, then fill any NaN with a satisfactory method before passing to class.
 * Set `runtime_weighting` in `metric_weighting` to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy. 
+* Memory shortage is the most common cause of random process/kernel crashes. Try testing a data subset and using a different model list if issues occur. Please also report crashes if found to be linked to a specific set of model parameters (not AutoTS parameters but the underlying forecasting model params). Also crashes vary significantly by setup such as underlying linpack/blas so seeing crash differences between environments can be expected. 
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing
