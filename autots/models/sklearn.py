@@ -617,7 +617,7 @@ sklearn_model_dict = {
     'DecisionTree': 0.02,
     'KNN': 0.05,
     'Adaboost': 0.01,
-    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'SVM': 0.02,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
     'KerasRNN': 0.001,  # slow at scale
@@ -640,7 +640,7 @@ multivariate_model_dict = {
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
-    'SVM': 0.05,
+    'SVM': 0.03,
     # 'BayesianRidge': 0.05,
     'xgboost': 0.09,
     # 'KerasRNN': 0.01,  # too slow on big data
@@ -660,7 +660,7 @@ univariate_model_dict = {
     'DecisionTree': 0.05,
     'KNN': 0.03,
     'Adaboost': 0.05,
-    'SVM': 0.05,
+    'SVM': 0.02,
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
     'LightGBM': 0.03,
