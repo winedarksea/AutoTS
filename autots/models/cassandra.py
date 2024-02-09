@@ -2108,11 +2108,11 @@ class Cassandra(ModelObject):
                 [0.9, 0.1, 0.1, 0.0],
             )[0],
             "multivariate_transformation": RandomTransform(
-                transformer_list="fast",
+                transformer_list="scalable",
                 transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
             ),
             "regressor_transformation": RandomTransform(
-                transformer_list={**scalers, **decompositions},
+                transformer_list="scalable",  # {**scalers, **decompositions}
                 transformer_max_depth=1,
                 allow_none=False,
                 no_nan_fill=False,  # probably want some more usable defaults first as many random are senseless
