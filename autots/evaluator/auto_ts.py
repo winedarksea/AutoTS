@@ -1411,6 +1411,7 @@ class AutoTS(object):
             ).drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
+            # might want to add a drop here of models that failed in initial generations
 
         # run validations
         if self.num_validations > 0:
