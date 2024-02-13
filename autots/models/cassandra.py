@@ -2457,7 +2457,7 @@ def clean_regressor(in_d, prefix="regr_"):
         df = pd.DataFrame(in_d)
     else:
         df = in_d.copy()
-    df.columns = [prefix + col for col in df.columns]
+    df.columns = [str(prefix) + str(col) for col in df.columns]
     return df
 
 
