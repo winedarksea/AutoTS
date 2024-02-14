@@ -21,7 +21,7 @@ from autots.evaluator.event_forecasting import EventRiskForecast
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide, infer_frequency
 from autots.tools.regressor import create_lagged_regressor, create_regressor
-from autots.evaluator.auto_model import model_forecast
+from autots.evaluator.auto_model import model_forecast, ModelPrediction
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
 
@@ -54,4 +54,5 @@ __all__ = [
     'HolidayDetector',
     'Cassandra',
     'infer_frequency',
+    'ModelPrediction',
 ]

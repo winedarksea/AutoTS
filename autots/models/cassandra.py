@@ -129,7 +129,7 @@ class Cassandra(ModelObject):
         linear_model: dict = None,  # lstsq WEIGHTED Ridge, bayesian, bayesian hierarchial, l1 normed or other loss (numba),
         randomwalk_n: int = None,  # use stats of source df
         trend_window: int = 30,  # set to None to use raw residuals
-        trend_standin: str = None,  # rolling fit, intercept-only, random.normal features
+        trend_standin: str = None,  # rolling fit, intercept-only, random.normal features, rolling_trend can be memory intensive
         trend_anomaly_detector_params: dict = None,  # difference first, run on slope only, use Window n/2 diff to rule out return to
         # trend_anomaly_intervention: str = None,
         trend_transformation: dict = {},
@@ -1867,9 +1867,17 @@ class Cassandra(ModelObject):
         # random or pretested defaults
         if method in ['deep', 'all']:
             trend_base = 'deep'
+            trend_standin = random.choices(
+                [None, 'random_normal', 'rolling_trend'],
+                [0.7, 0.3, 0.1],
+            )[0]
         else:
             trend_base = random.choices(
                 ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
+            )[0]
+            trend_standin = random.choices(
+                [None, 'random_normal'],
+                [0.7, 0.3],
             )[0]
         if trend_base == "random":
             model_str = random.choices(
@@ -2121,10 +2129,7 @@ class Cassandra(ModelObject):
             "linear_model": linear_model,
             "randomwalk_n": random.choices([None, 10], [0.5, 0.5])[0],
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
-            "trend_standin": random.choices(
-                [None, 'random_normal', 'rolling_trend'],
-                [0.7, 0.3, 0.1],
-            )[0],
+            "trend_standin": trend_standin,
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
             "trend_transformation": trend_transformation,
