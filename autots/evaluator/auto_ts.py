@@ -247,6 +247,8 @@ class AutoTS(object):
         self.current_model_file = current_model_file
         self.force_gc = force_gc
         self.validate_import = None
+        self.best_model_original = None
+        self.best_model_original_id = None
         # do not add 'ID' to the below unless you want to refactor things.
         self.template_cols = [
             'Model',
@@ -2686,6 +2688,8 @@ class AutoTS(object):
     def expand_horizontal(self):
         """Enables expanding horizontal models trained on a subset to full data.
         Reruns template models and generates new template.
+        
+        see best_model_original and best_model_original_id for reference back to original best model after this runs
         """
         # if not horizontal, skip with message if verbose
         if self.best_model_ensemble != 2:
@@ -2702,6 +2706,7 @@ class AutoTS(object):
                 f"initial template model_count {self.best_model_params['model_count']}"
             )
             self.best_model_original = copy.copy(self.best_model)
+            self.best_model_original_id = copy.copy(self.best_model_id)
 
             val_temp = unpack_ensemble_models(
                 self.best_model,
@@ -2710,6 +2715,9 @@ class AutoTS(object):
             )
             # above didn't remove the horizontal ensembles
             val_temp = val_temp[val_temp['Ensemble'] < 2]
+
+            # I could append this to master results
+            # but that might be confusing because they are on different data
             initial_results = self._run_validations(
                 df_wide_numeric=self.df_wide_numeric,
                 num_validations=self.num_validations + 1,
@@ -3346,8 +3354,12 @@ class AutoTS(object):
 
     def best_model_per_series_mape(self):
         """This isn't quite classic mape but is a percentage mean error intended for quick visuals not final statistics (see model.results())."""
+        if self.best_model_original_id is not None:
+            use_id = self.best_model_original_id
+        else:
+            use_id = self.best_model_id
         best_model_per_series_mae = self.initial_results.per_series_mae[
-            self.initial_results.per_series_mae.index == self.best_model_id
+            self.initial_results.per_series_mae.index == use_id
         ].mean(axis=0)
         # obsess over avoiding division by zero
         scaler = self.df_wide_numeric.abs().mean(axis=0)
