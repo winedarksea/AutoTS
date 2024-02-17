@@ -153,7 +153,7 @@ class AutoTS(object):
 
     Methods:
         fit, predict
-        export_template, import_template, import_results
+        export_template, import_template, import_results, import_best_model
         results, failure_rate
         horizontal_to_df, mosaic_to_df
         plot_horizontal, plot_horizontal_transformers, plot_generation_loss, plot_backforecast
@@ -2342,6 +2342,8 @@ class AutoTS(object):
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
+
+        Use import_best_model instead for loading a model for immediate prediction.
 
         Args:
             filename (str): file location (or a pd.DataFrame already loaded)
