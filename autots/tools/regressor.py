@@ -104,7 +104,12 @@ def create_regressor(
         except Exception:
             df = df.asfreq(frequency, fill_value=None)
     # handle categorical
-    df = df.apply(pd.to_numeric, errors='ignore')
+    # df = df.apply(pd.to_numeric, errors='ignore') # another pointless pandas deprecation
+    for col in df.columns:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except ValueError:
+            pass
     df = df.select_dtypes(include=np.number)
     # macro_micro
     if preprocessing_params is not None:

@@ -174,7 +174,7 @@ def fake_date_fill(df, back_method: str = 'slice'):
 df_interpolate = {
     'linear': 0.1,
     'time': 0.1,
-    'pad': 0.1,
+    # 'pad': 0.1,  # deprecated for reasons unknown
     'nearest': 0.1,
     'zero': 0.1,
     'quadratic': 0.1,
