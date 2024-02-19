@@ -176,6 +176,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(long_form.shape[0], forecasts_df.shape[0] * forecasts_df.shape[1] * 3)
         # results present
         self.assertGreater(model.initial_results.per_series_metrics.shape[0], 1)
+        # assert that per_series results have appropriate column names
+        self.assertCountEqual(model.initial_results.per_series_mae.columns.tolist(), df.columns.tolist())
 
         # TEST EXPORTING A TEMPLATE THEN USING THE BEST MODEL AS A PREDICTION
         df_train = df.iloc[:-forecast_length]

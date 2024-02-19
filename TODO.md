@@ -15,7 +15,7 @@
 
 # 0.6.11 🇺🇦 🇺🇦 🇺🇦
 * continually trying to keep up with the Pandas maintainers who are breaking stuff for no good reasonable
-
+* updated RollingMeanTransformer and RegressionFilter, RegressionFilter should now be less memory intensive
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
