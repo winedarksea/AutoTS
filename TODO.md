@@ -14,6 +14,8 @@
 * trimmed_mean to AverageValueNaive
 
 # 0.6.11 🇺🇦 🇺🇦 🇺🇦
+* continually trying to keep up with the Pandas maintainers who are breaking stuff for no good reasonable
+
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

@@ -1610,6 +1610,7 @@ def TemplateWizard(
                 cumsum_A=cumsum_A,
                 diff_A=diff_A,
                 last_of_array=last_of_array,
+                column_names=df_train.columns,
             )
             if validation_round >= 1 and verbose > 0:
                 round_smape = model_error.avg_metrics['smape'].round(2)

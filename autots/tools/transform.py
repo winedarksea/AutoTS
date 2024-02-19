@@ -885,21 +885,35 @@ class RollingMeanTransformer(EmptyTransformer):
 
     Args:
         window (int): number of periods to take mean over
+        fixed (bool): if True, don't inverse to volatile state
+        macro_micro (bool): if True, split on rolling trend vs remainder and later recombine. Overrides fixed arg.
     """
 
-    def __init__(self, window: int = 10, fixed: bool = False, **kwargs):
+    def __init__(
+            self, window: int = 10,
+            fixed: bool = False,
+            macro_micro: bool = False,
+            suffix: str = "_lltmicro",
+            center: bool = False,
+            **kwargs
+    ):
         super().__init__(name="RollingMeanTransformer")
         self.window = window
         self.fixed = fixed
+        self.macro_micro = macro_micro
+        self.suffix = suffix
+        self.center = center
 
     @staticmethod
     def get_new_params(method: str = "random"):
         bool_c = random.choices([True, False], [0.7, 0.3])[0]
+        center = random.choices([True, False], [0.5, 0.5])[0]
+        macro_micro = random.choices([True, False], [0.4, 0.6])[0]
         if method == "fast":
             choice = random.choice([3, 7, 10, 12])
         else:
             choice = seasonal_int(include_one=False)
-        return {"fixed": bool_c, "window": choice}
+        return {"fixed": bool_c, "window": choice, "macro_micro": macro_micro, "center": center}
 
     def fit(self, df):
         """Fits.
@@ -911,7 +925,7 @@ class RollingMeanTransformer(EmptyTransformer):
         self.last_values = df.tail(self.window).ffill().bfill()
         self.first_values = df.head(self.window).ffill().bfill()
 
-        df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1).mean()
+        df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1, center=self.center).mean()
         self.last_rolling = df.tail(1)
         return self
 
@@ -920,9 +934,13 @@ class RollingMeanTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = df.rolling(window=self.window, min_periods=1).mean()
-        # self.last_rolling = df.tail(1)
-        return df
+        macro = df.rolling(window=self.window, min_periods=1, center=self.center).mean()
+        if self.macro_micro:
+            self.columns = df.columns
+            micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
+            return pd.concat([macro, micro], axis=1)
+        else:
+            return macro
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -941,7 +959,14 @@ class RollingMeanTransformer(EmptyTransformer):
                 - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
-        if self.fixed:
+        if self.macro_micro:
+            macro = df[self.columns]
+            micro = df[df.columns.difference(self.columns)]
+            micro = micro.rename(columns=lambda x: str(x)[: -len(self.suffix)])[
+                self.columns
+            ]
+            return macro + micro
+        elif self.fixed:
             return df
         else:
             window = self.window
@@ -1235,7 +1260,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             X = np.concatenate(
                 [X, np.tile(np.eye(y.shape[1]), df_local.shape[0]).T], axis=1
             )
-            y = y.flatten()
+            y = np.asarray(y).flatten()
             y_mask = np.isnan(y)
             y = y[~y_mask]
             X = X[~y_mask]
@@ -2178,7 +2203,7 @@ class ScipyFilter(EmptyTransformer):
         elif self.method == "savgol_filter":
             # args = [5, 2]
             return pd.DataFrame(
-                savgol_filter(df.values, **self.method_args, axis=0),
+                savgol_filter(df.ffill().bfill().values, **self.method_args, axis=0),
                 columns=df.columns,
                 index=df.index,
             )
@@ -3508,24 +3533,29 @@ class RegressionFilter(EmptyTransformer):
             self.seasonal = DatepartRegressionTransformer(
                 **self.regression_params, holiday_country=self.holiday_country
             )
-        self.trend = LocalLinearTrend(rolling_window=self.rolling_window)
+        self.trend = LocalLinearTrend(rolling_window=self.rolling_window)  # memory intensive at times
+        # self.trend = RollingMeanTransformer(rolling_window=self.rolling_window, fixed=False, center=True)
 
         if self.run_order == 'season_first':
             deseason = self.seasonal.fit_transform(df)
             result = self.trend.fit_transform(deseason)
+            # trend_diff = deseason - result
         else:
             detrend = self.trend.fit_transform(df)
+            # trend_diff = df - detrend
             result = self.seasonal.fit_transform(detrend)
 
         std_dev = result.std() * self.sigma
         clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
 
         if self.run_order == 'season_first':
-            retrend = self.trend.inverse_transform(clipped)
+            retrend = self.trend.inverse_transform(clipped, trans_method='original')
+            # retrend = clipped + trend_diff
             original = self.seasonal.inverse_transform(retrend)
         else:
             reseason = self.seasonal.inverse_transform(clipped)
-            original = self.trend.inverse_transform(reseason)
+            # original = reseason + trend_diff
+            original = self.trend.inverse_transform(reseason, trans_method='original')
         return original
 
     def fit(self, df):
@@ -3554,11 +3584,11 @@ class RegressionFilter(EmptyTransformer):
         clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
 
         if self.run_order == 'season_first':
-            retrend = self.trend.inverse_transform(clipped)
+            retrend = self.trend.inverse_transform(clipped, trans_method='original')
             original = self.seasonal.inverse_transform(retrend)
         else:
             reseason = self.seasonal.inverse_transform(clipped)
-            original = self.trend.inverse_transform(reseason)
+            original = self.trend.inverse_transform(reseason, trans_method='original')
         return original
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -3786,7 +3816,7 @@ class CenterSplit(EmptyTransformer):
         self,
         center: str = "zero",
         fillna="linear",
-        suffix: str = "_mdfcrst",
+        suffix: str = "_lltmicro",
         **kwargs,
     ):
         super().__init__(name="CenterSplit")

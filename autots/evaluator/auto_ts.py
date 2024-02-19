@@ -3199,9 +3199,9 @@ class AutoTS(object):
                 series = random.choice(df_wide.columns)
             else:
                 scores = self.best_model_per_series_mape().index.tolist()
-                scores = [x for x in scores if "_lltmicro" not in x]
+                scores = [x for x in scores if "_lltmicro" not in str(x)]
                 mapes = self.best_model_per_series_score().index.tolist()
-                mapes = [x for x in mapes if "_lltmicro" not in x]
+                mapes = [x for x in mapes if "_lltmicro" not in str(x)]
                 if str(subset).lower() == "best":
                     series = mapes[-1]
                 elif str(subset).lower() == "best score":
