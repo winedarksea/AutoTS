@@ -420,7 +420,7 @@ class AutoTS(object):
 
         self.regressor_used = False
         self.grouping_ids = None
-        self.initial_results = TemplateEvalObject()
+        self.validation_results = self.initial_results = TemplateEvalObject()
         self.best_model = pd.DataFrame()
         self.best_model_id = ""
         self.best_model_name = ""
@@ -3634,6 +3634,62 @@ class AutoTS(object):
         plt.title("Correlogram of Metric Correlations from Optimized Forecasts")
         return ax
 
+    def plot_series_corr(self, cols=15):
+        """Plot series correlation. Data must be fit first.
+
+        Args:
+            cols (list): strings of columns to show, 'all' for all, or int of number to sample
+        """
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        corr = self.df_wide_numeric.corr()
+
+        if isinstance(cols, (int, float)):
+            n_cols = int(cols)
+            mostly_one = (corr.abs() == 1).sum() == (
+                corr.abs() == 1
+            ).sum().max()
+            cols = corr[~mostly_one].abs().sum().nlargest(n_cols).index.tolist()
+            if len(cols) < n_cols:
+                cols.extend(
+                    self.metric_corr[mostly_one].index[0 : n_cols - len(cols)].tolist()
+                )
+        elif cols == 'all':
+            cols = self.metric_corr.columns
+
+        if len(cols) <= 2:
+            correlation_matrix = corr.loc[cols]
+        else:
+            correlation_matrix = corr[cols].loc[cols]
+        # Create a mask for the upper triangle to hide redundant information
+        mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
+
+        # Set up the matplotlib figure and axis
+        fig, ax = plt.subplots(figsize=(16, 12))
+
+        # Generate a diverging colormap
+        cmap = sns.diverging_palette(220, 20, as_cmap=True)
+
+        # Create the correlogram using a heatmap
+        sns.heatmap(
+            correlation_matrix,
+            mask=mask,
+            cmap=cmap,
+            vmax=1,
+            center=0,
+            annot=True,
+            fmt=".2f",
+            square=True,
+            linewidths=0.5,
+            cbar_kws={"shrink": 0.7},
+        )
+        sns.set_style("whitegrid")  # Add a grid for clarity
+
+        # Add a title
+        plt.title("Correlogram of Metric Correlations from Optimized Forecasts")
+        return ax
+
     def plot_transformer_failure_rate(self):
         """Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer."""
         initial_results = self.results()
@@ -3665,6 +3721,41 @@ class AutoTS(object):
             .iloc[0:20]
             .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
         )
+
+    def _count_values(self, input_dict, counts=None):
+        """Recursively count occurrences of values in (nested) dictionaries using a basic dictionary."""
+        if counts is None:
+            counts = {}  # Use a basic dictionary instead of defaultdict
+        
+        for key, value in input_dict.items():
+            if isinstance(value, dict):
+                # If the value is a dictionary, recurse into it
+                self._count_values(value, counts)
+            else:
+                # Use .get() to avoid KeyError, setting default count to 0
+                counts[value] = counts.get(value, 0) + 1
+        
+        return counts
+    
+    def get_top_n_counts(self, input_dict=None, n=5):
+        """Get the top n most common value counts using a basic dictionary."""
+        if input_dict is None:
+            input_dict = self.best_model_params.get('series', {})
+        counts = self._count_values(input_dict)
+        # Sort counts by frequency in descending order and return the top n
+        top_n = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:n]
+        return top_n
+
+    def get_params_from_id(self, model_id=None):
+        """Model id must be one that was run in the fit or imported results."""
+        model_id
+        temp = self.initial_results.model_results
+        if temp.empty:
+            # don't always have IDs but sometimes do
+            temp = self.initial_template
+        if temp.empty:
+            raise ValueError("model id not found in results")
+        return temp[temp['ID'] == model_id].iloc[0][self.template_cols_id].to_dict()
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
@@ -3734,7 +3825,7 @@ class AutoTS(object):
         self.lasso_X['intercept'] = 1
 
         # target = 'runtime'
-        y = res[target]
+        y  = res[target]
         # y = y.dropna(how='any')
         y_reset = y.reset_index()
         y_drop = y_reset.index[~y_reset.reset_index().isnull().any(axis=1)]
