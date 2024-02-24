@@ -717,13 +717,12 @@ class AutoTS(object):
                 },
                 {
                     "fillna": None,
-                    "transformations": {"0": "LocalLinearTrend"},
+                    "transformations": {"0": "RollingMeanTransformer"},
                     "transformation_params": {
                         "0": {
-                            'rolling_window': 30,
-                            'n_tails': 0.1,
-                            'n_future': 0.2,
-                            'method': 'mean',
+                            'window': 90,
+                            'fixed': False,
+                            'center': True,
                             'macro_micro': True,
                         },
                     },

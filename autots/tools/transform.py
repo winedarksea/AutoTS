@@ -909,8 +909,10 @@ class RollingMeanTransformer(EmptyTransformer):
         bool_c = random.choices([True, False], [0.7, 0.3])[0]
         center = random.choices([True, False], [0.5, 0.5])[0]
         macro_micro = random.choices([True, False], [0.2, 0.8])[0]
-        if method == "fast":
-            choice = random.choice([3, 7, 10, 12])
+        if macro_micro:
+            choice = random.choice([3, 7, 10, 12, 28, 90, 180, 360])
+        elif method == "fast":
+            choice = random.choice([3, 7, 10, 12, 90])
         else:
             choice = seasonal_int(include_one=False)
         return {"fixed": bool_c, "window": choice, "macro_micro": macro_micro, "center": center}
