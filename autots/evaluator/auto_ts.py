@@ -3114,6 +3114,8 @@ class AutoTS(object):
                         row["ModelParameters"],
                         row["TransformationParameters"],
                     )
+                    if idz == self.best_model_id:
+                        idz = "chosen_model"
                     val_id = str(val) + "_" + str(idz)
                     if val_id not in self.validation_forecasts.keys():
                         df_forecast = self._predict(
@@ -3129,8 +3131,6 @@ class AutoTS(object):
                             future_regressor_train=train_reg,
                             bypass_save=True,
                         )
-                        if idz == self.best_model_id:
-                            idz = "chosen_model"
                         self.validation_forecasts[val_id] = df_forecast
         else:
             if self.verbose > 0:
