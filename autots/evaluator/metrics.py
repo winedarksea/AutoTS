@@ -326,16 +326,19 @@ def medae(ae, nan_flag=True):
 
 def smape(actual, forecast, ae, nan_flag=True):
     """Accepting abs error already calculated"""
+    # some versions you see * 100 then / () /2 instead of 200
+    inner = (ae / (np.abs(forecast) + np.abs(actual)))
+    inner[inner == np.inf] = 0
     if nan_flag:
         # handle fully nan actuals
         div = np.count_nonzero(~np.isnan(actual), axis=0).astype(float)
         div[div == 0] = np.nan
         return (
-            np.nansum((ae / (np.abs(forecast) + np.abs(actual))), axis=0) * 200
+            np.nansum(inner, axis=0) * 200
         ) / div
     else:
         return (
-            np.sum((ae / (np.abs(forecast) + np.abs(actual))), axis=0) * 200
+            np.sum(inner, axis=0) * 200
         ) / actual.shape[0]
 
 
