@@ -163,7 +163,7 @@ class FBProphet(ModelObject):
             logging.getLogger('fbprophet').setLevel(logging.CRITICAL)
             logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
             logging.getLogger('prophet').setLevel(logging.WARNING)
-            logging.getLogger('cmdstanpy').setLevel(logging.WARNING)
+            logging.getLogger('cmdstanpy').setLevel(logging.ERROR)
             m = Prophet(
                 interval_width=args['prediction_interval'],
                 yearly_seasonality=self.yearly_seasonality,
