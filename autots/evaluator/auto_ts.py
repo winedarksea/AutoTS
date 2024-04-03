@@ -137,6 +137,7 @@ class AutoTS(object):
             This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching. It is an overall cap for total generation search time, not per generation.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
+        horizontal_ensemble_validation (bool): True is slower but more reliable model selection on unstable data, if horz. ensembles are used
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -208,6 +209,7 @@ class AutoTS(object):
         generation_timeout: int = None,
         current_model_file: str = None,
         force_gc: bool = False,
+        horizontal_ensemble_validation: bool = False,
         verbose: int = 1,
         n_jobs: int = 0.5,
     ):
@@ -246,6 +248,7 @@ class AutoTS(object):
         self.models_mode = models_mode
         self.current_model_file = current_model_file
         self.force_gc = force_gc
+        self.horizontal_ensemble_validation = horizontal_ensemble_validation
         self.validate_import = None
         self.best_model_original = None
         self.best_model_original_id = None
@@ -1533,6 +1536,18 @@ class AutoTS(object):
                     current_generation=0,
                     result_file=result_file,
                 )
+                if self.horizontal_ensemble_validation:
+                    self._run_validations(
+                        df_wide_numeric=self.df_wide_numeric,
+                        num_validations=self.num_validations,
+                        validation_template=ensemble_templates,
+                        future_regressor=self.future_regressor_train,
+                        first_validation=False,
+                        skip_first_index=True,
+                        return_template=False,
+                        subset_override=False,
+                        additional_msg="horizontal ensemble validations",
+                    )
             except Exception as e:
                 if self.verbose >= 0:
                     print(
@@ -3178,7 +3193,7 @@ class AutoTS(object):
         **kwargs,
     ):
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
-        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
+        Saves results to self.validation_forecasts and caches. Set validation_forecasts_template to None to force rerun otherwise it uses stored (when models is the same).
         'chosen' refers to best_model_id, the model chosen to run for predict
         Validation sections may overlap (depending on method) which can confuse graph readers.
 
