@@ -1627,11 +1627,17 @@ def TemplateWizard(
                         print(validation_accuracy_print)
                 else:
                     print(validation_accuracy_print)
-            model_id = create_model_id(
-                df_forecast.model_name,
-                df_forecast.model_parameters,
-                df_forecast.transformation_parameters,
-            )
+            # for horizontal, use prior params, for others, base ID on params directly
+            if ensemble_input == 2:
+                model_id = create_model_id(
+                    model_str, parameter_dict, transformation_dict
+                )
+            else:
+                model_id = create_model_id(
+                    df_forecast.model_name,
+                    df_forecast.model_parameters,
+                    df_forecast.transformation_parameters,
+                )
             result = pd.DataFrame(
                 {
                     'ID': model_id,
