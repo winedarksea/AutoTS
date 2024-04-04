@@ -2391,7 +2391,11 @@ class PCA(EmptyTransformer):
         self.index = df.index
         self.transformer = PCA(**self.kwargs)
         return_df = self.transformer.fit_transform(df)
-        return pd.DataFrame(return_df, index=self.index)
+        if isinstance(return_df, pd.DataFrame):
+            return_df.columns = self.columns
+            return return_df
+        else:
+            return pd.DataFrame(return_df, index=self.index)
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -2409,7 +2413,11 @@ class PCA(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return_df = self.transformer.transform(df)
-        return pd.DataFrame(return_df, index=df.index)
+        if isinstance(return_df, pd.DataFrame):
+            return_df.columns = self.columns
+            return return_df
+        else:
+            return pd.DataFrame(return_df, index=df.index)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -2418,7 +2426,11 @@ class PCA(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return_df = self.transformer.inverse_transform(df)
-        return pd.DataFrame(return_df, index=df.index, columns=self.columns)
+        if isinstance(return_df, pd.DataFrame):
+            return_df.columns = self.columns
+            return return_df
+        else:
+            return pd.DataFrame(return_df, index=df.index, columns=self.columns)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
