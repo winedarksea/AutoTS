@@ -1593,9 +1593,14 @@ class AutoTS(object):
             metric_weighting = self.metric_weighting
         if template_cols is None:
             template_cols = self.template_cols_id
-        hens_model_results = self.initial_results.model_results[
-            self.initial_results.model_results['Ensemble'] == 2
-        ].copy()
+        if self.horizontal_ensemble_validation:
+            hens_model_results = self.validation_results.model_results[
+                self.validation_results.model_results['Ensemble'] == 2
+            ].copy()
+        else:
+            hens_model_results = self.initial_results.model_results[
+                self.initial_results.model_results['Ensemble'] == 2
+            ].copy()
         # remove failures
         hens_model_results = hens_model_results[
             hens_model_results['Exceptions'].isnull()
