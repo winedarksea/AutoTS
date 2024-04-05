@@ -1601,10 +1601,11 @@ class AutoTS(object):
             hens_model_results = self.initial_results.model_results[
                 self.initial_results.model_results['Ensemble'] == 2
             ].copy()
-        # remove failures
-        hens_model_results = hens_model_results[
-            hens_model_results['Exceptions'].isnull()
-        ]
+        # remove failures if on non validation data
+        if 'Exceptions' in hens_model_results.columns:
+            hens_model_results = hens_model_results[
+                hens_model_results['Exceptions'].isnull()
+            ]
         requested_H_ens = (self.h_ens_used or self.mosaic_used) and allow_horizontal
         # here I'm assuming that if some horizontal models ran, we are going to use those
         # horizontal ensembles can't be compared directly to others because they don't get run through all validations
