@@ -2395,7 +2395,7 @@ class PCA(EmptyTransformer):
             return_df.columns = self.columns
             return return_df
         else:
-            return pd.DataFrame(return_df, index=self.index)
+            return pd.DataFrame(return_df, index=self.index, columns=self.columns)
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -2417,7 +2417,7 @@ class PCA(EmptyTransformer):
             return_df.columns = self.columns
             return return_df
         else:
-            return pd.DataFrame(return_df, index=df.index)
+            return pd.DataFrame(return_df, index=df.index, columns=self.columns)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -5161,7 +5161,7 @@ class GeneralTransformer(object):
 
             return RobustScaler(copy=True)
 
-        elif transformation == "PCA":
+        elif False:  #  OLD  for transformation == "PCA"
             from sklearn.decomposition import PCA
 
             # could probably may it work, but this is simpler

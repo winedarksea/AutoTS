@@ -706,7 +706,7 @@ class ModelTest(unittest.TestCase):
             'LocalLinearTrend',  # new 0.5.1
             "KalmanSmoothing",  # new 0.5.1
             "RegressionFilter",   # new 0.5.7
-            "LevelShiftTransformer"  # new 0.6.0
+            "LevelShiftTransformer",  # new 0.6.0
             "CenterSplit",   # new 0.6.1
             "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
             # "FFTDecomposition",  # new in 0.6.2
