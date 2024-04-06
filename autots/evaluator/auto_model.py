@@ -697,9 +697,13 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == "":
+        raise AttributeError(
+            ("Model name is empty. Likely this means AutoTS has not been fit.")
+        )
     else:
         raise AttributeError(
-            ("Model String '{}' not a recognized model type").format(model)
+            (f"Model String '{model}' not a recognized model type")
         )
 
 
