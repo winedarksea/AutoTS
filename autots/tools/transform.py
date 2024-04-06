@@ -2219,7 +2219,7 @@ class ScipyFilter(EmptyTransformer):
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "cheby1":
-            from scipy.signal import cheby1, sosfiltfilt
+            from scipy.signal import cheby1
 
             # args = [4, 5, 100, 'lowpass', True]
             # args = [10, 1, 15, 'highpass']
@@ -2228,21 +2228,21 @@ class ScipyFilter(EmptyTransformer):
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "cheby2":
-            from scipy.signal import cheby2, sosfiltfilt
+            from scipy.signal import cheby2
 
             sos = cheby2(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "ellip":
-            from scipy.signal import ellip, sosfiltfilt
+            from scipy.signal import ellip
 
             sos = ellip(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "bessel":
-            from scipy.signal import bessel, sosfiltfilt
+            from scipy.signal import bessel
 
             # args = [4, 100, 'lowpass', True]
             # args = [3, 10, 'highpass']
