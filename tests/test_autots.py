@@ -11,7 +11,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots import AutoTS, model_forecast
+from autots import AutoTS, model_forecast, ModelPrediction
 from autots.evaluator.auto_ts import fake_regressor
 from autots.evaluator.auto_model import ModelMonster
 from autots.models.model_list import default as default_model_list
@@ -709,9 +709,9 @@ class ModelTest(unittest.TestCase):
             "LevelShiftTransformer",  # new 0.6.0
             "CenterSplit",   # new 0.6.1
             "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
-            # "FFTDecomposition",  # new in 0.6.2
-            # "HistoricValues",  # new in 0.6.7
-            # "BKBandpassFilter",  # new in 0.6.8
+            "FFTDecomposition",  # new in 0.6.2
+            "HistoricValues",  # new in 0.6.7
+            "BKBandpassFilter",  # new in 0.6.8
         ]
 
         timings = {}
@@ -742,23 +742,25 @@ class ModelTest(unittest.TestCase):
             print(x)
             param = {} if x not in ['QuantileTransformer'] else {"n_quantiles": 100}
             start_time = timeit.default_timer()
-            df_forecast = model_forecast(
-                model_name="LastValueNaive",
-                model_param_dict={},  # 'return_result_windows': True
-                model_transform_dict={
+            model = ModelPrediction(
+                forecast_length=5,
+                transformation_dict={
                     "fillna": "ffill",
                     "transformations": {"0": x},
                     "transformation_params": {"0": param},
                 },
-                df_train=df,
-                forecast_length=5,
-                frequency="M",
+                model_str="LastValueNaive",
+                parameter_dict={},
+                frequency="infer",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=-1,
+                fail_on_forecast_nan=True,
                 n_jobs=n_jobs,
                 return_model=True,
             )
+            model = model.fit(df)
+            df_forecast = model.predict(forecast_length=5)
             forecasts2[x] = df_forecast.forecast.round(2)
             upper_forecasts2[x] = df_forecast.upper_forecast.round(2)
             lower_forecasts2[x] = df_forecast.lower_forecast.round(2)

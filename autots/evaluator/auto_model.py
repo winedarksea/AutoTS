@@ -786,26 +786,31 @@ class ModelPrediction(ModelObject):
             self.transformation_dict = {}
         self.transformer_object = GeneralTransformer(
             **self.transformation_dict,
-            n_jobs=n_jobs,
-            holiday_country=holiday_country,
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
             verbose=self.verbose,
-        )
-        self.model = ModelMonster(
-            model_str,
-            parameters=self.parameter_dict,
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            forecast_length=forecast_length,
-            n_jobs=n_jobs,
+            random_seed=self.random_seed
         )
         self.name = "ModelPrediction"
         self._fit_complete = False
 
     def fit(self, df, future_regressor=None):
         self.df = df
+        if self.frequency == "infer":
+            self.inferred_frequency = infer_frequency(df)
+        else:
+            self.inferred_frequency = self.frequency
+        self.model = ModelMonster(
+            self.model_str,
+            parameters=self.parameter_dict,
+            frequency=self.inferred_frequency,
+            prediction_interval=self.prediction_interval,
+            holiday_country=self.holiday_country,
+            random_seed=self.random_seed,
+            verbose=self.verbose,
+            forecast_length=self.forecast_length,
+            n_jobs=self.n_jobs,
+        )
         transformationStartTime = datetime.datetime.now()
         if self.current_model_file is not None:
             try:
