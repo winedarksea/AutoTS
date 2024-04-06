@@ -768,11 +768,17 @@ class ModelPrediction(ModelObject):
         self.force_gc = force_gc
         # handle still in JSON form
         if isinstance(transformation_dict, str):
-            self.transformation_dict = json.loads(transformation_dict)
+            if transformation_dict == "":
+                self.transformation_dict = {}
+            else:
+                self.transformation_dict = json.loads(transformation_dict)
         else:
             self.transformation_dict = transformation_dict
         if isinstance(parameter_dict, str):
-            self.parameter_dict = json.loads(parameter_dict)
+            if parameter_dict == "":
+                self.parameter_dict = {}
+            else:
+                self.parameter_dict = json.loads(parameter_dict)
         else:
             self.parameter_dict = parameter_dict
         if model_str == "PreprocessingRegression":
@@ -1271,9 +1277,15 @@ def model_forecast(
     full_model_created = False  # make at least one full model, horziontal only
     # handle JSON inputs of the dicts
     if isinstance(model_param_dict, str):
-        model_param_dict = json.loads(model_param_dict)
+        if model_param_dict == "":
+            model_param_dict = {}
+        else:
+            model_param_dict = json.loads(model_param_dict)
     if isinstance(model_transform_dict, str):
-        model_transform_dict = json.loads(model_transform_dict)
+        if model_transform_dict == "":
+            model_transform_dict = {}
+        else:
+            model_transform_dict = json.loads(model_transform_dict)
     if frequency == "infer":
         frequency = infer_frequency(df_train)
     # handle "auto" n_jobs to an integer of local count
