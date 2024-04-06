@@ -1627,22 +1627,26 @@ def TemplateWizard(
                         print(validation_accuracy_print)
                 else:
                     print(validation_accuracy_print)
-            # for horizontal, use prior params, for others, base ID on params directly
+            # for horizontal ensemble, use requested ID and params
             if ensemble_input == 2:
                 model_id = create_model_id(
                     model_str, parameter_dict, transformation_dict
                 )
+                # it's already json
+                deposit_params = row['ModelParameters']
             else:
+                # for non horizontal, recreate based on what model actually used (some change)
                 model_id = create_model_id(
                     df_forecast.model_name,
                     df_forecast.model_parameters,
                     df_forecast.transformation_parameters,
                 )
+                deposit_params = json.dumps(df_forecast.model_parameters)
             result = pd.DataFrame(
                 {
                     'ID': model_id,
                     'Model': df_forecast.model_name,
-                    'ModelParameters': json.dumps(df_forecast.model_parameters),
+                    'ModelParameters': deposit_params,
                     'TransformationParameters': json.dumps(
                         df_forecast.transformation_parameters
                     ),
