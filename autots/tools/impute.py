@@ -1,4 +1,5 @@
 """Fill NA."""
+
 import numpy as np
 import pandas as pd
 from autots.tools.seasonal import seasonal_independent_match
@@ -174,7 +175,7 @@ def fake_date_fill(df, back_method: str = 'slice'):
 df_interpolate = {
     'linear': 0.1,
     'time': 0.1,
-    'pad': 0.1,
+    # 'pad': 0.1,  # deprecated for reasons unknown
     'nearest': 0.1,
     'zero': 0.1,
     'quadratic': 0.1,

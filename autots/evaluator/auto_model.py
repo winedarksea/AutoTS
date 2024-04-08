@@ -1,4 +1,5 @@
 """Mid-level helper functions for AutoTS."""
+
 import sys
 import gc
 import traceback as tb
@@ -697,10 +698,12 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
-    else:
+    elif model == "":
         raise AttributeError(
-            ("Model String '{}' not a recognized model type").format(model)
+            ("Model name is empty. Likely this means AutoTS has not been fit.")
         )
+    else:
+        raise AttributeError((f"Model String '{model}' not a recognized model type"))
 
 
 class ModelPrediction(ModelObject):
@@ -768,11 +771,17 @@ class ModelPrediction(ModelObject):
         self.force_gc = force_gc
         # handle still in JSON form
         if isinstance(transformation_dict, str):
-            self.transformation_dict = json.loads(transformation_dict)
+            if transformation_dict == "":
+                self.transformation_dict = {}
+            else:
+                self.transformation_dict = json.loads(transformation_dict)
         else:
             self.transformation_dict = transformation_dict
         if isinstance(parameter_dict, str):
-            self.parameter_dict = json.loads(parameter_dict)
+            if parameter_dict == "":
+                self.parameter_dict = {}
+            else:
+                self.parameter_dict = json.loads(parameter_dict)
         else:
             self.parameter_dict = parameter_dict
         if model_str == "PreprocessingRegression":
@@ -786,26 +795,31 @@ class ModelPrediction(ModelObject):
             self.transformation_dict = {}
         self.transformer_object = GeneralTransformer(
             **self.transformation_dict,
-            n_jobs=n_jobs,
-            holiday_country=holiday_country,
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
             verbose=self.verbose,
-        )
-        self.model = ModelMonster(
-            model_str,
-            parameters=self.parameter_dict,
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            forecast_length=forecast_length,
-            n_jobs=n_jobs,
+            random_seed=self.random_seed,
         )
         self.name = "ModelPrediction"
         self._fit_complete = False
 
     def fit(self, df, future_regressor=None):
         self.df = df
+        if self.frequency == "infer":
+            self.inferred_frequency = infer_frequency(df)
+        else:
+            self.inferred_frequency = self.frequency
+        self.model = ModelMonster(
+            self.model_str,
+            parameters=self.parameter_dict,
+            frequency=self.inferred_frequency,
+            prediction_interval=self.prediction_interval,
+            holiday_country=self.holiday_country,
+            random_seed=self.random_seed,
+            verbose=self.verbose,
+            forecast_length=self.forecast_length,
+            n_jobs=self.n_jobs,
+        )
         transformationStartTime = datetime.datetime.now()
         if self.current_model_file is not None:
             try:
@@ -1266,9 +1280,15 @@ def model_forecast(
     full_model_created = False  # make at least one full model, horziontal only
     # handle JSON inputs of the dicts
     if isinstance(model_param_dict, str):
-        model_param_dict = json.loads(model_param_dict)
+        if model_param_dict == "":
+            model_param_dict = {}
+        else:
+            model_param_dict = json.loads(model_param_dict)
     if isinstance(model_transform_dict, str):
-        model_transform_dict = json.loads(model_transform_dict)
+        if model_transform_dict == "":
+            model_transform_dict = {}
+        else:
+            model_transform_dict = json.loads(model_transform_dict)
     if frequency == "infer":
         frequency = infer_frequency(df_train)
     # handle "auto" n_jobs to an integer of local count
@@ -1610,6 +1630,7 @@ def TemplateWizard(
                 cumsum_A=cumsum_A,
                 diff_A=diff_A,
                 last_of_array=last_of_array,
+                column_names=df_train.columns,
             )
             if validation_round >= 1 and verbose > 0:
                 round_smape = model_error.avg_metrics['smape'].round(2)
@@ -1626,16 +1647,26 @@ def TemplateWizard(
                         print(validation_accuracy_print)
                 else:
                     print(validation_accuracy_print)
-            model_id = create_model_id(
-                df_forecast.model_name,
-                df_forecast.model_parameters,
-                df_forecast.transformation_parameters,
-            )
+            # for horizontal ensemble, use requested ID and params
+            if ensemble_input == 2:
+                model_id = create_model_id(
+                    model_str, parameter_dict, transformation_dict
+                )
+                # it's already json
+                deposit_params = row['ModelParameters']
+            else:
+                # for non horizontal, recreate based on what model actually used (some change)
+                model_id = create_model_id(
+                    df_forecast.model_name,
+                    df_forecast.model_parameters,
+                    df_forecast.transformation_parameters,
+                )
+                deposit_params = json.dumps(df_forecast.model_parameters)
             result = pd.DataFrame(
                 {
                     'ID': model_id,
                     'Model': df_forecast.model_name,
-                    'ModelParameters': json.dumps(df_forecast.model_parameters),
+                    'ModelParameters': deposit_params,
                     'TransformationParameters': json.dumps(
                         df_forecast.transformation_parameters
                     ),

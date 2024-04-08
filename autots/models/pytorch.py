@@ -192,9 +192,9 @@ class PytorchForecasting(ModelObject):
             group_ids=["series_id"],
             # static_categoricals=["series_id"],  # recommeded for DeepAR
             max_encoder_length=self.max_encoder_length,
-            min_encoder_length=self.max_encoder_length
-            if self.max_encoder_length < 90
-            else 7,
+            min_encoder_length=(
+                self.max_encoder_length if self.max_encoder_length < 90 else 7
+            ),
             max_prediction_length=self.forecast_length,
             target_normalizer=encoder,
             # static_categoricals=[ ... ],
@@ -208,9 +208,9 @@ class PytorchForecasting(ModelObject):
             add_target_scales=self.add_target_scales,
             # min_encoder_length=3,
             lags=self.lags,
-            add_relative_time_idx=False
-            if self.model in ["NHiTS", "DecoderMLP", "NBeats"]
-            else True,
+            add_relative_time_idx=(
+                False if self.model in ["NHiTS", "DecoderMLP", "NBeats"] else True
+            ),
         )
 
         # create validation and training dataset

@@ -3,6 +3,7 @@ Facebook's Prophet
 
 Since Prophet install can be finicky on Windows, it will be an optional dependency.
 """
+
 import random
 import datetime
 import numpy as np
@@ -163,7 +164,7 @@ class FBProphet(ModelObject):
             logging.getLogger('fbprophet').setLevel(logging.CRITICAL)
             logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
             logging.getLogger('prophet').setLevel(logging.WARNING)
-            logging.getLogger('cmdstanpy').setLevel(logging.WARNING)
+            logging.getLogger('cmdstanpy').setLevel(logging.ERROR)
             m = Prophet(
                 interval_width=args['prediction_interval'],
                 yearly_seasonality=self.yearly_seasonality,

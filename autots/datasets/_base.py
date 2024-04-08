@@ -1,8 +1,10 @@
 """Loading example datasets."""
+
 from os.path import dirname, join
 import time
 import datetime
 import io
+import json
 import numpy as np
 import pandas as pd
 
@@ -236,7 +238,9 @@ def load_live_daily(
     wikipedia_pages: list = ['Microsoft_Office', "List_of_highest-grossing_films"],
     wiki_language: str = "en",
     weather_event_types=["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"],
-    caiso_query: str = "ENE_SLRS",
+    caiso_query: str = None,
+    eia_key: str = None,
+    eia_respondents: list = ["MISO", "PJM", "TVA", "US48"],
     timeout: float = 300.05,
     sleep_seconds: int = 2,
     **kwargs,
@@ -498,6 +502,7 @@ def load_live_daily(
         except Exception as e:
             print(f"pytrends data failed: {repr(e)}")
 
+    # this was kinda broken last I checked
     if caiso_query is not None:
         try:
             n_chunks = (364 * weather_years) / 30
@@ -536,6 +541,96 @@ def load_live_daily(
             dataset_lists.append(energy_df)
         except Exception as e:
             print(f"caiso download failed with error: {repr(e)}")
+
+    if eia_key is not None and eia_respondents is not None:
+        api_url = 'https://api.eia.gov/v2/electricity/rto/daily-region-data/data/'  # ?api_key={eia-key}
+        for respond in eia_respondents:
+            try:
+                params = {
+                    "frequency": "daily",
+                    "data": ["value"],
+                    "facets": {
+                        "type": ["D"],
+                        "respondent": [respond],
+                        "timezone": ["Eastern"],
+                    },
+                    "start": None,  # "start": "2018-06-30",
+                    "end": None,  # "end": "2023-11-01",
+                    "sort": [{"column": "period", "direction": "desc"}],
+                    "offset": 0,
+                    "length": 5000,
+                }
+
+                res = s.get(
+                    api_url,
+                    params={
+                        "api_key": eia_key,
+                    },
+                    headers={"X-Params": json.dumps(params)},
+                )
+                eia_df = pd.json_normalize(res.json()['response']['data'])
+                eia_df['datetime'] = pd.to_datetime(eia_df['period'])
+                eia_df['value'] = eia_df['value'].astype('float')
+                eia_df['ID'] = (
+                    eia_df['respondent']
+                    + "_"
+                    + eia_df['type']
+                    + "_"
+                    + eia_df['timezone']
+                )
+                temp = eia_df.pivot(columns='ID', index='datetime', values='value')
+                dataset_lists.append(temp)
+                time.sleep(sleep_seconds)
+            except Exception as e:
+                print(f"eia download failed with error {repr(e)}")
+            try:
+                api_url_mix = (
+                    "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
+                )
+                params = {
+                    "frequency": "daily",
+                    "data": ["value"],
+                    "facets": {
+                        "respondent": [respond],
+                        "timezone": ["Eastern"],
+                        "fueltype": [
+                            "COL",
+                            "NG",
+                            "NUC",
+                            "SUN",
+                            "WAT",
+                            "WND",
+                        ],
+                    },
+                    "start": None,
+                    "end": None,
+                    "sort": [{"column": "period", "direction": "desc"}],
+                    "offset": 0,
+                    "length": 5000,
+                }
+                res = s.get(
+                    api_url_mix,
+                    params={
+                        "api_key": eia_key,
+                    },
+                    headers={"X-Params": json.dumps(params)},
+                )
+                eia_df = pd.json_normalize(res.json()['response']['data'])
+                eia_df['datetime'] = pd.to_datetime(eia_df['period'])
+                eia_df['value'] = eia_df['value'].astype('float')
+                eia_df['type-name'] = eia_df['type-name'].str.replace(" ", "_")
+                eia_df['ID'] = (
+                    eia_df['respondent']
+                    + "_"
+                    + eia_df['type-name']
+                    + "_"
+                    + eia_df['timezone']
+                )
+                temp = eia_df.pivot(columns='ID', index='datetime', values='value')
+                dataset_lists.append(temp)
+                time.sleep(1)
+            except Exception as e:
+                print(f"eia download failed with error {repr(e)}")
 
     ### End of data download
     if len(dataset_lists) < 1:

@@ -283,9 +283,9 @@ class EventRiskForecast(object):
         if isinstance(prediction_interval, list):
             prediction_interval = prediction_interval[0]
         model = AutoTS(
-            forecast_length=self.forecast_length
-            if forecast_length is None
-            else forecast_length,
+            forecast_length=(
+                self.forecast_length if forecast_length is None else forecast_length
+            ),
             prediction_interval=prediction_interval,
             models_mode=models_mode,
             model_list=model_list,

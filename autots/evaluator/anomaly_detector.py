@@ -318,9 +318,9 @@ class HolidayDetector(object):
             splash_threshold=self.splash_threshold,
             threshold=self.threshold,
             actuals=df if self.output != "univariate" else None,
-            anomaly_scores=self.anomaly_model.scores
-            if self.output != "univariate"
-            else None,
+            anomaly_scores=(
+                self.anomaly_model.scores if self.output != "univariate" else None
+            ),
             use_dayofmonth_holidays=self.use_dayofmonth_holidays,
             use_wkdom_holidays=self.use_wkdom_holidays,
             use_wkdeom_holidays=self.use_wkdeom_holidays,

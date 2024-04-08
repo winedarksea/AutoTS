@@ -1,4 +1,5 @@
 """Preprocessing data methods."""
+
 import random
 import warnings
 import numpy as np
@@ -885,21 +886,43 @@ class RollingMeanTransformer(EmptyTransformer):
 
     Args:
         window (int): number of periods to take mean over
+        fixed (bool): if True, don't inverse to volatile state
+        macro_micro (bool): if True, split on rolling trend vs remainder and later recombine. Overrides fixed arg.
     """
 
-    def __init__(self, window: int = 10, fixed: bool = False, **kwargs):
+    def __init__(
+        self,
+        window: int = 10,
+        fixed: bool = False,
+        macro_micro: bool = False,
+        suffix: str = "_lltmicro",
+        center: bool = False,
+        **kwargs,
+    ):
         super().__init__(name="RollingMeanTransformer")
         self.window = window
         self.fixed = fixed
+        self.macro_micro = macro_micro
+        self.suffix = suffix
+        self.center = center
 
     @staticmethod
     def get_new_params(method: str = "random"):
         bool_c = random.choices([True, False], [0.7, 0.3])[0]
-        if method == "fast":
-            choice = random.choice([3, 7, 10, 12])
+        center = random.choices([True, False], [0.5, 0.5])[0]
+        macro_micro = random.choices([True, False], [0.2, 0.8])[0]
+        if macro_micro:
+            choice = random.choice([3, 7, 10, 12, 28, 90, 180, 360])
+        elif method == "fast":
+            choice = random.choice([3, 7, 10, 12, 90])
         else:
             choice = seasonal_int(include_one=False)
-        return {"fixed": bool_c, "window": choice}
+        return {
+            "fixed": bool_c,
+            "window": choice,
+            "macro_micro": macro_micro,
+            "center": center,
+        }
 
     def fit(self, df):
         """Fits.
@@ -911,7 +934,11 @@ class RollingMeanTransformer(EmptyTransformer):
         self.last_values = df.tail(self.window).ffill().bfill()
         self.first_values = df.head(self.window).ffill().bfill()
 
-        df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1).mean()
+        df = (
+            df.tail(self.window + 1)
+            .rolling(window=self.window, min_periods=1, center=self.center)
+            .mean()
+        )
         self.last_rolling = df.tail(1)
         return self
 
@@ -920,9 +947,13 @@ class RollingMeanTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = df.rolling(window=self.window, min_periods=1).mean()
-        # self.last_rolling = df.tail(1)
-        return df
+        macro = df.rolling(window=self.window, min_periods=1, center=self.center).mean()
+        if self.macro_micro:
+            self.columns = df.columns
+            micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
+            return pd.concat([macro, micro], axis=1)
+        else:
+            return macro
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -941,7 +972,14 @@ class RollingMeanTransformer(EmptyTransformer):
                 - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
-        if self.fixed:
+        if self.macro_micro:
+            macro = df[self.columns]
+            micro = df[df.columns.difference(self.columns)]
+            micro = micro.rename(columns=lambda x: str(x)[: -len(self.suffix)])[
+                self.columns
+            ]
+            return macro + micro
+        elif self.fixed:
             return df
         else:
             window = self.window
@@ -1235,7 +1273,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             X = np.concatenate(
                 [X, np.tile(np.eye(y.shape[1]), df_local.shape[0]).T], axis=1
             )
-            y = y.flatten()
+            y = np.asarray(y).flatten()
             y_mask = np.isnan(y)
             y = y[~y_mask]
             X = X[~y_mask]
@@ -2178,7 +2216,7 @@ class ScipyFilter(EmptyTransformer):
         elif self.method == "savgol_filter":
             # args = [5, 2]
             return pd.DataFrame(
-                savgol_filter(df.values, **self.method_args, axis=0),
+                savgol_filter(df.ffill().bfill().values, **self.method_args, axis=0),
                 columns=df.columns,
                 index=df.index,
             )
@@ -2192,7 +2230,7 @@ class ScipyFilter(EmptyTransformer):
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "cheby1":
-            from scipy.signal import cheby1, sosfiltfilt
+            from scipy.signal import cheby1
 
             # args = [4, 5, 100, 'lowpass', True]
             # args = [10, 1, 15, 'highpass']
@@ -2201,21 +2239,21 @@ class ScipyFilter(EmptyTransformer):
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "cheby2":
-            from scipy.signal import cheby2, sosfiltfilt
+            from scipy.signal import cheby2
 
             sos = cheby2(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "ellip":
-            from scipy.signal import ellip, sosfiltfilt
+            from scipy.signal import ellip
 
             sos = ellip(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
         elif self.method == "bessel":
-            from scipy.signal import bessel, sosfiltfilt
+            from scipy.signal import bessel
 
             # args = [4, 100, 'lowpass', True]
             # args = [3, 10, 'highpass']
@@ -2364,7 +2402,11 @@ class PCA(EmptyTransformer):
         self.index = df.index
         self.transformer = PCA(**self.kwargs)
         return_df = self.transformer.fit_transform(df)
-        return pd.DataFrame(return_df, index=self.index)
+        if isinstance(return_df, pd.DataFrame):
+            return_df.columns = self.columns
+            return return_df
+        else:
+            return pd.DataFrame(return_df, index=self.index, columns=self.columns)
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -2382,7 +2424,11 @@ class PCA(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return_df = self.transformer.transform(df)
-        return pd.DataFrame(return_df, index=df.index)
+        if isinstance(return_df, pd.DataFrame):
+            return_df.columns = self.columns
+            return return_df
+        else:
+            return pd.DataFrame(return_df, index=df.index, columns=self.columns)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -2391,7 +2437,11 @@ class PCA(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return_df = self.transformer.inverse_transform(df)
-        return pd.DataFrame(return_df, index=df.index, columns=self.columns)
+        if isinstance(return_df, pd.DataFrame):
+            return_df.columns = self.columns
+            return return_df
+        else:
+            return pd.DataFrame(return_df, index=df.index, columns=self.columns)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3017,9 +3067,9 @@ class HolidayTransformer(EmptyTransformer):
             splash_threshold=self.splash_threshold,
             threshold=self.threshold,
             actuals=df if self.output != "univariate" else None,
-            anomaly_scores=self.anomaly_model.scores
-            if self.output != "univariate"
-            else None,
+            anomaly_scores=(
+                self.anomaly_model.scores if self.output != "univariate" else None
+            ),
             # actuals=df,
             # anomaly_scores=self.anomaly_model.scores,
             use_dayofmonth_holidays=self.use_dayofmonth_holidays,
@@ -3475,6 +3525,7 @@ class RegressionFilter(EmptyTransformer):
         regression_params: dict = None,
         holiday_params: dict = None,
         holiday_country: str = "US",
+        trend_method: str = "local_linear",
         **kwargs,
     ):
         super().__init__(name=name)
@@ -3484,6 +3535,7 @@ class RegressionFilter(EmptyTransformer):
         self.regression_params = regression_params
         self.holiday_params = holiday_params
         self.holiday_country = holiday_country
+        self.trend_method = trend_method
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -3508,24 +3560,48 @@ class RegressionFilter(EmptyTransformer):
             self.seasonal = DatepartRegressionTransformer(
                 **self.regression_params, holiday_country=self.holiday_country
             )
-        self.trend = LocalLinearTrend(rolling_window=self.rolling_window)
+        if self.trend_method == "local_linear":
+            self.trend = LocalLinearTrend(
+                rolling_window=self.rolling_window
+            )  # memory intensive at times
+        # self.trend = RollingMeanTransformer(rolling_window=self.rolling_window, fixed=False, center=True)
 
         if self.run_order == 'season_first':
             deseason = self.seasonal.fit_transform(df)
-            result = self.trend.fit_transform(deseason)
+            if self.trend_method == "local_linear":
+                result = self.trend.fit_transform(deseason)
+            else:
+                trend_diff = deseason.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
+                result = deseason - trend_diff
         else:
-            detrend = self.trend.fit_transform(df)
+            if self.trend_method == "local_linear":
+                detrend = self.trend.fit_transform(df)
+            else:
+                trend_diff = df.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
+                detrend = df - trend_diff
             result = self.seasonal.fit_transform(detrend)
 
         std_dev = result.std() * self.sigma
         clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
 
         if self.run_order == 'season_first':
-            retrend = self.trend.inverse_transform(clipped)
+            if self.trend_method == "local_linear":
+                retrend = self.trend.inverse_transform(clipped, trans_method='original')
+            else:
+                retrend = clipped + trend_diff
             original = self.seasonal.inverse_transform(retrend)
         else:
             reseason = self.seasonal.inverse_transform(clipped)
-            original = self.trend.inverse_transform(reseason)
+            if self.trend_method == "local_linear":
+                original = self.trend.inverse_transform(
+                    reseason, trans_method='original'
+                )
+            else:
+                original = reseason + trend_diff
         return original
 
     def fit(self, df):
@@ -3545,20 +3621,40 @@ class RegressionFilter(EmptyTransformer):
         """
         if self.run_order == 'season_first':
             deseason = self.seasonal.transform(df)
-            result = self.trend.transform(deseason)
+            if self.trend_method == "local_linear":
+                result = self.trend.transform(deseason)
+            else:
+                trend_diff = deseason.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
+                result = deseason - trend_diff
         else:
-            detrend = self.trend.transform(df)
+            if self.trend_method == "local_linear":
+                detrend = self.trend.transform(df)
+            else:
+                trend_diff = deseason.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
+                detrend = df - trend_diff
             result = self.seasonal.transform(detrend)
 
         std_dev = result.std() * self.sigma
         clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
 
         if self.run_order == 'season_first':
-            retrend = self.trend.inverse_transform(clipped)
+            if self.trend_method == "local_linear":
+                retrend = self.trend.inverse_transform(clipped, trans_method='original')
+            else:
+                retrend = clipped + trend_diff
             original = self.seasonal.inverse_transform(retrend)
         else:
             reseason = self.seasonal.inverse_transform(clipped)
-            original = self.trend.inverse_transform(reseason)
+            if self.trend_method == "local_linear":
+                original = self.trend.inverse_transform(
+                    reseason, trans_method='original'
+                )
+            else:
+                original = reseason + trend_diff
         return original
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -3586,10 +3682,14 @@ class RegressionFilter(EmptyTransformer):
         """Generate new random parameters"""
         regression_params = DatepartRegressionTransformer.get_new_params(method="fast")
 
-        if method == "fast":
+        if method in ["fast", 'superfast', 'scalable']:
             holiday_trans_use = False
+            trend_method = "rolling_mean"
         else:
             holiday_trans_use = random.choices([True, False], [0.3, 0.7])[0]
+            trend_method = random.choices(["rolling_mean", "local_linear"], [0.3, 0.7])[
+                0
+            ]
         if holiday_trans_use:
             holiday_params = HolidayTransformer.get_new_params(method="fast")
             holiday_params["regression_params"] = regression_params
@@ -3605,6 +3705,7 @@ class RegressionFilter(EmptyTransformer):
             "run_order": random.choices(["season_first", "trend_first"], [0.7, 0.3])[0],
             "regression_params": regression_params,
             "holiday_params": holiday_params,
+            "trend_method": trend_method,
         }
 
 
@@ -3786,7 +3887,7 @@ class CenterSplit(EmptyTransformer):
         self,
         center: str = "zero",
         fillna="linear",
-        suffix: str = "_mdfcrst",
+        suffix: str = "_lltmicro",
         **kwargs,
     ):
         super().__init__(name="CenterSplit")
@@ -5087,7 +5188,7 @@ class GeneralTransformer(object):
 
             return RobustScaler(copy=True)
 
-        elif transformation == "PCA":
+        elif False:  #  OLD  for transformation == "PCA"
             from sklearn.decomposition import PCA
 
             # could probably may it work, but this is simpler
@@ -5171,7 +5272,13 @@ class GeneralTransformer(object):
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
         # update index reference if sliced
-        if transformation in ["Slice", "FastICA", "PCA", "CenterSplit"]:
+        if transformation in [
+            "Slice",
+            "FastICA",
+            "PCA",
+            "CenterSplit",
+            "RollingMeanTransformer",
+        ]:
             self.df_index = df.index
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -5211,7 +5318,13 @@ class GeneralTransformer(object):
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
         # update index reference if sliced
-        if transformation in ["Slice", "FastICA", "PCA", "CenterSplit"]:
+        if transformation in [
+            "Slice",
+            "FastICA",
+            "PCA",
+            "CenterSplit",
+            "RollingMeanTransformer",
+        ]:
             self.df_index = df.index
             self.df_colnames = df.columns
         return df
@@ -5255,7 +5368,12 @@ class GeneralTransformer(object):
             df = self.transformers[i].inverse_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-        elif self.c_trans_n in ["FastICA", "PCA", "CenterSplit"]:
+        elif self.c_trans_n in [
+            "FastICA",
+            "PCA",
+            "CenterSplit",
+            "RollingMeanTransformer",
+        ]:
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)
         return df
@@ -5462,6 +5580,7 @@ def transformer_list_to_dict(transformer_list):
         del fast_transformer_dict["FastICA"]
         del fast_transformer_dict["Cointegration"]
         del fast_transformer_dict["BTCD"]
+        del fast_transformer_dict["LocalLinearTrend"]
 
     if transformer_list is None:
         transformer_list = "superfast"
@@ -5477,9 +5596,6 @@ def transformer_list_to_dict(transformer_list):
         del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
-        # temporary removal for testing
-        del transformer_list["RegressionFilter"]
-        del transformer_list["LocalLinearTrend"]
         del transformer_list["ReplaceConstant"]
 
     if isinstance(transformer_list, dict):

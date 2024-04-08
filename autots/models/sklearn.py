@@ -3,6 +3,7 @@ Sklearn dependent models
 
 Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost
 """
+
 import hashlib
 import datetime
 import random
@@ -263,8 +264,7 @@ def rolling_x_regressor_regressor(
         X = X.drop(columns=['series_id'])
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -617,7 +617,7 @@ sklearn_model_dict = {
     'DecisionTree': 0.02,
     'KNN': 0.05,
     'Adaboost': 0.01,
-    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'SVM': 0.02,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
     'KerasRNN': 0.001,  # slow at scale
@@ -640,7 +640,7 @@ multivariate_model_dict = {
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
-    'SVM': 0.05,
+    'SVM': 0.03,
     # 'BayesianRidge': 0.05,
     'xgboost': 0.09,
     # 'KerasRNN': 0.01,  # too slow on big data
@@ -660,7 +660,7 @@ univariate_model_dict = {
     'DecisionTree': 0.05,
     'KNN': 0.03,
     'Adaboost': 0.05,
-    'SVM': 0.05,
+    'SVM': 0.02,
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
     'LightGBM': 0.03,
@@ -3113,12 +3113,16 @@ class MultivariateRegression(ModelObject):
                         window=self.window,
                         future_regressor=cut_regr,
                         # these rely the if part not being run if None
-                        regressor_per_series=self.regressor_per_series_train[x_col]
-                        if self.regressor_per_series_train is not None
-                        else None,
-                        static_regressor=static_regressor.loc[x_col].to_frame().T
-                        if self.static_regressor is not None
-                        else None,
+                        regressor_per_series=(
+                            self.regressor_per_series_train[x_col]
+                            if self.regressor_per_series_train is not None
+                            else None
+                        ),
+                        static_regressor=(
+                            static_regressor.loc[x_col].to_frame().T
+                            if self.static_regressor is not None
+                            else None
+                        ),
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
@@ -3259,12 +3263,16 @@ class MultivariateRegression(ModelObject):
                         window=self.window,
                         future_regressor=cur_regr,
                         # these rely the if part not being run if None
-                        regressor_per_series=regressor_per_series[x_col]
-                        if self.regressor_per_series_train is not None
-                        else None,
-                        static_regressor=self.static_regressor.loc[x_col].to_frame().T
-                        if self.static_regressor is not None
-                        else None,
+                        regressor_per_series=(
+                            regressor_per_series[x_col]
+                            if self.regressor_per_series_train is not None
+                            else None
+                        ),
+                        static_regressor=(
+                            self.static_regressor.loc[x_col].to_frame().T
+                            if self.static_regressor is not None
+                            else None
+                        ),
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
@@ -3522,9 +3530,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

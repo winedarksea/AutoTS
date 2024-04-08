@@ -129,7 +129,7 @@ class Cassandra(ModelObject):
         linear_model: dict = None,  # lstsq WEIGHTED Ridge, bayesian, bayesian hierarchial, l1 normed or other loss (numba),
         randomwalk_n: int = None,  # use stats of source df
         trend_window: int = 30,  # set to None to use raw residuals
-        trend_standin: str = None,  # rolling fit, intercept-only, random.normal features
+        trend_standin: str = None,  # rolling fit, intercept-only, random.normal features, rolling_trend can be memory intensive
         trend_anomaly_detector_params: dict = None,  # difference first, run on slope only, use Window n/2 diff to rule out return to
         # trend_anomaly_intervention: str = None,
         trend_transformation: dict = {},
@@ -1295,15 +1295,21 @@ class Cassandra(ModelObject):
                     "future_regressor not provided to Cassandra, using forecasts of historical"
                 )
             future_regressor = model_forecast(
-                model_name=self.trend_model['Model']
-                if regressor_forecast_model is None
-                else regressor_forecast_model,
-                model_param_dict=self.trend_model['ModelParameters']
-                if regressor_forecast_model_params is None
-                else regressor_forecast_model_params,
-                model_transform_dict=self.preprocessing_transformation
-                if regressor_forecast_transformations is None
-                else regressor_forecast_transformations,
+                model_name=(
+                    self.trend_model['Model']
+                    if regressor_forecast_model is None
+                    else regressor_forecast_model
+                ),
+                model_param_dict=(
+                    self.trend_model['ModelParameters']
+                    if regressor_forecast_model_params is None
+                    else regressor_forecast_model_params
+                ),
+                model_transform_dict=(
+                    self.preprocessing_transformation
+                    if regressor_forecast_transformations is None
+                    else regressor_forecast_transformations
+                ),
                 df_train=self.future_regressor_train,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
@@ -1867,9 +1873,17 @@ class Cassandra(ModelObject):
         # random or pretested defaults
         if method in ['deep', 'all']:
             trend_base = 'deep'
+            trend_standin = random.choices(
+                [None, 'random_normal', 'rolling_trend'],
+                [0.7, 0.3, 0.1],
+            )[0]
         else:
             trend_base = random.choices(
                 ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
+            )[0]
+            trend_standin = random.choices(
+                [None, 'random_normal'],
+                [0.7, 0.3],
             )[0]
         if trend_base == "random":
             model_str = random.choices(
@@ -2108,11 +2122,11 @@ class Cassandra(ModelObject):
                 [0.9, 0.1, 0.1, 0.0],
             )[0],
             "multivariate_transformation": RandomTransform(
-                transformer_list="fast",
+                transformer_list="scalable",
                 transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
             ),
             "regressor_transformation": RandomTransform(
-                transformer_list={**scalers, **decompositions},
+                transformer_list="scalable",  # {**scalers, **decompositions}
                 transformer_max_depth=1,
                 allow_none=False,
                 no_nan_fill=False,  # probably want some more usable defaults first as many random are senseless
@@ -2121,10 +2135,7 @@ class Cassandra(ModelObject):
             "linear_model": linear_model,
             "randomwalk_n": random.choices([None, 10], [0.5, 0.5])[0],
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
-            "trend_standin": random.choices(
-                [None, 'random_normal', 'rolling_trend'],
-                [0.7, 0.3, 0.1],
-            )[0],
+            "trend_standin": trend_standin,
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
             "trend_transformation": trend_transformation,
@@ -2139,9 +2150,9 @@ class Cassandra(ModelObject):
             "past_impacts_intervention": self.past_impacts_intervention,  # not in new
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
-            "ar_interaction_seasonality": self.ar_interaction_seasonality
-            if self.ar_lags is not None
-            else None,
+            "ar_interaction_seasonality": (
+                self.ar_interaction_seasonality if self.ar_lags is not None else None
+            ),
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
@@ -2149,12 +2160,14 @@ class Cassandra(ModelObject):
             # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": self.holiday_countries_used,
             "multivariate_feature": self.multivariate_feature,
-            "multivariate_transformation": self.multivariate_transformation
-            if self.multivariate_feature is not None
-            else None,
-            "regressor_transformation": self.regressor_transformation
-            if self.regressors_used
-            else None,
+            "multivariate_transformation": (
+                self.multivariate_transformation
+                if self.multivariate_feature is not None
+                else None
+            ),
+            "regressor_transformation": (
+                self.regressor_transformation if self.regressors_used else None
+            ),
             "regressors_used": self.regressors_used,
             "linear_model": self.linear_model,
             "randomwalk_n": self.randomwalk_n,
@@ -2364,9 +2377,11 @@ class Cassandra(ModelObject):
             else:
                 start_date = prediction.forecast.index[0]
         ax = prediction.plot(
-            actuals_used.loc[prediction.forecast.index]
-            if actuals_flag is not None
-            else None,
+            (
+                actuals_used.loc[prediction.forecast.index]
+                if actuals_flag is not None
+                else None
+            ),
             series=series,
             vline=vline,
             start_date=start_date,
@@ -2457,7 +2472,7 @@ def clean_regressor(in_d, prefix="regr_"):
         df = pd.DataFrame(in_d)
     else:
         df = in_d.copy()
-    df.columns = [prefix + col for col in df.columns]
+    df.columns = [str(prefix) + str(col) for col in df.columns]
     return df
 
 

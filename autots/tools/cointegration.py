@@ -6,6 +6,7 @@ BTCD heavily based on D. Barba
 https://towardsdatascience.com/canonical-decomposition-a-forgotten-method-for-time-series-cointegration-and-beyond-4d1213396da1
 
 """
+
 import datetime
 import numpy as np
 import pandas as pd

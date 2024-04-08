@@ -1,4 +1,5 @@
 """Lists of models grouped by aspects."""
+
 all_models = [
     'ConstantNaive',
     'LastValueNaive',

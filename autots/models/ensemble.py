@@ -1,4 +1,5 @@
 """Tools for generating and forecasting with ensembles of models."""
+
 import re
 import datetime
 import numpy as np
@@ -403,14 +404,18 @@ def horizontal_classifier(
         dict.
 
     """
-    if classifier_params is None:
-        # found using FLAML
-        classifier_params = {"model": 'KNN', "model_params": {'n_neighbors': 5}}
-        # newer, but don't like as much
-        # RandomForest {'n_estimators': 69, 'max_features': 0.5418860350847585, 'max_leaves': 439, 'criterion': 'gini'}
-
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
     Xt, Y, Xf = horizontal_xy(df_train, known)
+
+    if classifier_params is None:
+        # found using FLAML
+        n_neighbors = 5 if Xt.shape[0] > 5 else Xt.shape[0]
+        classifier_params = {
+            "model": 'KNN',
+            "model_params": {'n_neighbors': n_neighbors},
+        }
+        # newer, but don't like as much
+        # RandomForest {'n_estimators': 69, 'max_features': 0.5418860350847585, 'max_leaves': 439, 'criterion': 'gini'}
 
     clf = retrieve_classifier(
         regression_model=classifier_params,
@@ -1571,6 +1576,9 @@ def HorizontalTemplateGenerator(
 
 
 def generate_crosshair_score(error_matrix, method=None):
+    # handle nan, assume the worst
+    if np.isnan(np.sum(error_matrix)):
+        error_matrix[np.isnan(error_matrix)] = np.nanmax(error_matrix)
     # 'lite' only takes the weighted axis down a series not from other series
     if method == 'crosshair_lite':
         return error_matrix + (np.median(error_matrix, axis=0) / 3)
@@ -1830,15 +1838,15 @@ def MosaicEnsemble(
             f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
             + mi
         )
-    melted[
-        'forecast'
-    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    melted[
-        'upper_forecast'
-    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    melted[
-        'lower_forecast'
-    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted['forecast'] = (
+        fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    )
+    melted['upper_forecast'] = (
+        u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    )
+    melted['lower_forecast'] = (
+        l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    )
 
     forecast_df = melted.pivot(
         values="forecast", columns="series_id", index="forecast_period"

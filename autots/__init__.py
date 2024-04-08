@@ -3,6 +3,7 @@ Automated Time Series Model Selection for Python
 
 https://github.com/winedarksea/AutoTS
 """
+
 from autots.datasets import (
     load_hourly,
     load_daily,
@@ -21,12 +22,12 @@ from autots.evaluator.event_forecasting import EventRiskForecast
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide, infer_frequency
 from autots.tools.regressor import create_lagged_regressor, create_regressor
-from autots.evaluator.auto_model import model_forecast
+from autots.evaluator.auto_model import model_forecast, ModelPrediction
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
 
 
-__version__ = '0.6.10'
+__version__ = '0.6.11'
 
 TransformTS = GeneralTransformer
 
@@ -54,4 +55,5 @@ __all__ = [
     'HolidayDetector',
     'Cassandra',
     'infer_frequency',
+    'ModelPrediction',
 ]
