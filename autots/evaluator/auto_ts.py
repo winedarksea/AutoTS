@@ -2280,6 +2280,8 @@ class AutoTS(object):
             export_template = unpack_ensemble_models(
                 export_template, self.template_cols, keep_ensemble=False, recursive=True
             ).drop_duplicates()
+            if include_results:
+                export_template = export_template.drop('smape').merge(self.validation_results.model_results[['ID', 'smape']], on="ID", how='left')
         return self.save_template(filename, export_template)
 
     def save_template(self, filename, export_template, **kwargs):
