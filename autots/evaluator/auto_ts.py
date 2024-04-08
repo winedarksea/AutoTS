@@ -2281,7 +2281,11 @@ class AutoTS(object):
                 export_template, self.template_cols, keep_ensemble=False, recursive=True
             ).drop_duplicates()
             if include_results:
-                export_template = export_template.drop('smape').merge(self.validation_results.model_results[['ID', 'smape']], on="ID", how='left')
+                export_template = export_template.drop(columns=['smape']).merge(self.validation_results.model_results[['ID', 'smape']], on="ID", how='left')
+                # put smape back in the front
+                remaining_columns = [col for col in export_template.columns if col not in self.template_cols_id and col not in ['smape', 'Runs']]
+                new_order = self.template_cols_id + ['Runs', 'smape'] + remaining_columns
+                export_template = export_template.reindex(columns=new_order)
         return self.save_template(filename, export_template)
 
     def save_template(self, filename, export_template, **kwargs):
