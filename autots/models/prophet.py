@@ -3,6 +3,7 @@ Facebook's Prophet
 
 Since Prophet install can be finicky on Windows, it will be an optional dependency.
 """
+
 import random
 import datetime
 import numpy as np

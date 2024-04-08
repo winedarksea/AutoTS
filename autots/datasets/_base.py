@@ -1,4 +1,5 @@
 """Loading example datasets."""
+
 from os.path import dirname, join
 import time
 import datetime
@@ -549,52 +550,49 @@ def load_live_daily(
                     "frequency": "daily",
                     "data": ["value"],
                     "facets": {
-                        "type": [
-                            "D"
-                        ],
-                        "respondent": [
-                            respond
-                        ],
-                        "timezone": [
-                            "Eastern"
-                        ]
+                        "type": ["D"],
+                        "respondent": [respond],
+                        "timezone": ["Eastern"],
                     },
                     "start": None,  # "start": "2018-06-30",
                     "end": None,  # "end": "2023-11-01",
-                    "sort":  [
-                        {
-                            "column": "period",
-                            "direction": "desc"
-                        }
-                    ],
+                    "sort": [{"column": "period", "direction": "desc"}],
                     "offset": 0,
-                    "length": 5000
+                    "length": 5000,
                 }
-                
-                res = s.get(api_url, params={"api_key": eia_key,}, headers={"X-Params": json.dumps(params)})
+
+                res = s.get(
+                    api_url,
+                    params={
+                        "api_key": eia_key,
+                    },
+                    headers={"X-Params": json.dumps(params)},
+                )
                 eia_df = pd.json_normalize(res.json()['response']['data'])
                 eia_df['datetime'] = pd.to_datetime(eia_df['period'])
                 eia_df['value'] = eia_df['value'].astype('float')
-                eia_df['ID'] = eia_df['respondent'] + "_" + eia_df['type'] + "_" + eia_df['timezone']
+                eia_df['ID'] = (
+                    eia_df['respondent']
+                    + "_"
+                    + eia_df['type']
+                    + "_"
+                    + eia_df['timezone']
+                )
                 temp = eia_df.pivot(columns='ID', index='datetime', values='value')
                 dataset_lists.append(temp)
                 time.sleep(sleep_seconds)
             except Exception as e:
                 print(f"eia download failed with error {repr(e)}")
             try:
-                api_url_mix = "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
+                api_url_mix = (
+                    "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
+                )
                 params = {
                     "frequency": "daily",
-                    "data": [
-                        "value"
-                    ],
+                    "data": ["value"],
                     "facets": {
-                        "respondent": [
-                            respond
-                        ],
-                        "timezone": [
-                            "Eastern"
-                        ],
+                        "respondent": [respond],
+                        "timezone": ["Eastern"],
                         "fueltype": [
                             "COL",
                             "NG",
@@ -606,21 +604,28 @@ def load_live_daily(
                     },
                     "start": None,
                     "end": None,
-                    "sort": [
-                        {
-                            "column": "period",
-                            "direction": "desc"
-                        }
-                    ],
+                    "sort": [{"column": "period", "direction": "desc"}],
                     "offset": 0,
                     "length": 5000,
                 }
-                res = s.get(api_url_mix, params={"api_key": eia_key,}, headers={"X-Params": json.dumps(params)})
+                res = s.get(
+                    api_url_mix,
+                    params={
+                        "api_key": eia_key,
+                    },
+                    headers={"X-Params": json.dumps(params)},
+                )
                 eia_df = pd.json_normalize(res.json()['response']['data'])
                 eia_df['datetime'] = pd.to_datetime(eia_df['period'])
                 eia_df['value'] = eia_df['value'].astype('float')
                 eia_df['type-name'] = eia_df['type-name'].str.replace(" ", "_")
-                eia_df['ID'] = eia_df['respondent'] + "_" + eia_df['type-name'] + "_" + eia_df['timezone']
+                eia_df['ID'] = (
+                    eia_df['respondent']
+                    + "_"
+                    + eia_df['type-name']
+                    + "_"
+                    + eia_df['timezone']
+                )
                 temp = eia_df.pivot(columns='ID', index='datetime', values='value')
                 dataset_lists.append(temp)
                 time.sleep(1)

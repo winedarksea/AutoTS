@@ -1,4 +1,5 @@
 """Preprocessing data methods."""
+
 import random
 import warnings
 import numpy as np
@@ -890,12 +891,13 @@ class RollingMeanTransformer(EmptyTransformer):
     """
 
     def __init__(
-            self, window: int = 10,
-            fixed: bool = False,
-            macro_micro: bool = False,
-            suffix: str = "_lltmicro",
-            center: bool = False,
-            **kwargs
+        self,
+        window: int = 10,
+        fixed: bool = False,
+        macro_micro: bool = False,
+        suffix: str = "_lltmicro",
+        center: bool = False,
+        **kwargs,
     ):
         super().__init__(name="RollingMeanTransformer")
         self.window = window
@@ -915,7 +917,12 @@ class RollingMeanTransformer(EmptyTransformer):
             choice = random.choice([3, 7, 10, 12, 90])
         else:
             choice = seasonal_int(include_one=False)
-        return {"fixed": bool_c, "window": choice, "macro_micro": macro_micro, "center": center}
+        return {
+            "fixed": bool_c,
+            "window": choice,
+            "macro_micro": macro_micro,
+            "center": center,
+        }
 
     def fit(self, df):
         """Fits.
@@ -927,7 +934,11 @@ class RollingMeanTransformer(EmptyTransformer):
         self.last_values = df.tail(self.window).ffill().bfill()
         self.first_values = df.head(self.window).ffill().bfill()
 
-        df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1, center=self.center).mean()
+        df = (
+            df.tail(self.window + 1)
+            .rolling(window=self.window, min_periods=1, center=self.center)
+            .mean()
+        )
         self.last_rolling = df.tail(1)
         return self
 
@@ -3056,9 +3067,9 @@ class HolidayTransformer(EmptyTransformer):
             splash_threshold=self.splash_threshold,
             threshold=self.threshold,
             actuals=df if self.output != "univariate" else None,
-            anomaly_scores=self.anomaly_model.scores
-            if self.output != "univariate"
-            else None,
+            anomaly_scores=(
+                self.anomaly_model.scores if self.output != "univariate" else None
+            ),
             # actuals=df,
             # anomaly_scores=self.anomaly_model.scores,
             use_dayofmonth_holidays=self.use_dayofmonth_holidays,
@@ -3550,7 +3561,9 @@ class RegressionFilter(EmptyTransformer):
                 **self.regression_params, holiday_country=self.holiday_country
             )
         if self.trend_method == "local_linear":
-            self.trend = LocalLinearTrend(rolling_window=self.rolling_window)  # memory intensive at times
+            self.trend = LocalLinearTrend(
+                rolling_window=self.rolling_window
+            )  # memory intensive at times
         # self.trend = RollingMeanTransformer(rolling_window=self.rolling_window, fixed=False, center=True)
 
         if self.run_order == 'season_first':
@@ -3558,13 +3571,17 @@ class RegressionFilter(EmptyTransformer):
             if self.trend_method == "local_linear":
                 result = self.trend.fit_transform(deseason)
             else:
-                trend_diff = deseason.rolling(self.rolling_window, center=True, min_periods=1).mean()
+                trend_diff = deseason.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
                 result = deseason - trend_diff
         else:
             if self.trend_method == "local_linear":
                 detrend = self.trend.fit_transform(df)
             else:
-                trend_diff = df.rolling(self.rolling_window, center=True, min_periods=1).mean()
+                trend_diff = df.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
                 detrend = df - trend_diff
             result = self.seasonal.fit_transform(detrend)
 
@@ -3580,7 +3597,9 @@ class RegressionFilter(EmptyTransformer):
         else:
             reseason = self.seasonal.inverse_transform(clipped)
             if self.trend_method == "local_linear":
-                original = self.trend.inverse_transform(reseason, trans_method='original')
+                original = self.trend.inverse_transform(
+                    reseason, trans_method='original'
+                )
             else:
                 original = reseason + trend_diff
         return original
@@ -3605,13 +3624,17 @@ class RegressionFilter(EmptyTransformer):
             if self.trend_method == "local_linear":
                 result = self.trend.transform(deseason)
             else:
-                trend_diff = deseason.rolling(self.rolling_window, center=True, min_periods=1).mean()
+                trend_diff = deseason.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
                 result = deseason - trend_diff
         else:
             if self.trend_method == "local_linear":
                 detrend = self.trend.transform(df)
             else:
-                trend_diff = deseason.rolling(self.rolling_window, center=True, min_periods=1).mean()
+                trend_diff = deseason.rolling(
+                    self.rolling_window, center=True, min_periods=1
+                ).mean()
                 detrend = df - trend_diff
             result = self.seasonal.transform(detrend)
 
@@ -3627,7 +3650,9 @@ class RegressionFilter(EmptyTransformer):
         else:
             reseason = self.seasonal.inverse_transform(clipped)
             if self.trend_method == "local_linear":
-                original = self.trend.inverse_transform(reseason, trans_method='original')
+                original = self.trend.inverse_transform(
+                    reseason, trans_method='original'
+                )
             else:
                 original = reseason + trend_diff
         return original
@@ -3662,7 +3687,9 @@ class RegressionFilter(EmptyTransformer):
             trend_method = "rolling_mean"
         else:
             holiday_trans_use = random.choices([True, False], [0.3, 0.7])[0]
-            trend_method = random.choices(["rolling_mean", "local_linear"], [0.3, 0.7])[0]
+            trend_method = random.choices(["rolling_mean", "local_linear"], [0.3, 0.7])[
+                0
+            ]
         if holiday_trans_use:
             holiday_params = HolidayTransformer.get_new_params(method="fast")
             holiday_params["regression_params"] = regression_params
@@ -5245,7 +5272,13 @@ class GeneralTransformer(object):
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
         # update index reference if sliced
-        if transformation in ["Slice", "FastICA", "PCA", "CenterSplit", "RollingMeanTransformer"]:
+        if transformation in [
+            "Slice",
+            "FastICA",
+            "PCA",
+            "CenterSplit",
+            "RollingMeanTransformer",
+        ]:
             self.df_index = df.index
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -5285,7 +5318,13 @@ class GeneralTransformer(object):
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
         # update index reference if sliced
-        if transformation in ["Slice", "FastICA", "PCA", "CenterSplit", "RollingMeanTransformer"]:
+        if transformation in [
+            "Slice",
+            "FastICA",
+            "PCA",
+            "CenterSplit",
+            "RollingMeanTransformer",
+        ]:
             self.df_index = df.index
             self.df_colnames = df.columns
         return df
@@ -5329,7 +5368,12 @@ class GeneralTransformer(object):
             df = self.transformers[i].inverse_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-        elif self.c_trans_n in ["FastICA", "PCA", "CenterSplit", "RollingMeanTransformer"]:
+        elif self.c_trans_n in [
+            "FastICA",
+            "PCA",
+            "CenterSplit",
+            "RollingMeanTransformer",
+        ]:
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)
         return df

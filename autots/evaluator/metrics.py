@@ -5,6 +5,7 @@ Some common args:
     F or forecast (np.array): forecast values ndim 2 (timesteps, series)
     ae (np.array): precalculated np.abs(A - F)
 """
+
 import warnings
 import numpy as np
 import pandas as pd
@@ -327,19 +328,15 @@ def medae(ae, nan_flag=True):
 def smape(actual, forecast, ae, nan_flag=True):
     """Accepting abs error already calculated"""
     # some versions you see * 100 then / () /2 instead of 200
-    inner = (ae / (np.abs(forecast) + np.abs(actual)))
+    inner = ae / (np.abs(forecast) + np.abs(actual))
     inner[inner == np.inf] = 0
     if nan_flag:
         # handle fully nan actuals
         div = np.count_nonzero(~np.isnan(actual), axis=0).astype(float)
         div[div == 0] = np.nan
-        return (
-            np.nansum(inner, axis=0) * 200
-        ) / div
+        return (np.nansum(inner, axis=0) * 200) / div
     else:
-        return (
-            np.sum(inner, axis=0) * 200
-        ) / actual.shape[0]
+        return (np.sum(inner, axis=0) * 200) / actual.shape[0]
 
 
 def _spl(A, F, quantile, scaler):

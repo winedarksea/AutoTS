@@ -1,4 +1,5 @@
 """Mid-level helper functions for AutoTS."""
+
 import sys
 import gc
 import traceback as tb
@@ -702,9 +703,7 @@ def ModelMonster(
             ("Model name is empty. Likely this means AutoTS has not been fit.")
         )
     else:
-        raise AttributeError(
-            (f"Model String '{model}' not a recognized model type")
-        )
+        raise AttributeError((f"Model String '{model}' not a recognized model type"))
 
 
 class ModelPrediction(ModelObject):
@@ -799,7 +798,7 @@ class ModelPrediction(ModelObject):
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
             verbose=self.verbose,
-            random_seed=self.random_seed
+            random_seed=self.random_seed,
         )
         self.name = "ModelPrediction"
         self._fit_complete = False

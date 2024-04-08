@@ -1,6 +1,7 @@
 """
 Nixtla's NeuralForecast. Be warned, as of writing, their package has commercial restrictions.
 """
+
 import logging
 import random
 import datetime

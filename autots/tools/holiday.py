@@ -1,4 +1,5 @@
 """Manage holiday features."""
+
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency

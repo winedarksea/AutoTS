@@ -151,6 +151,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">n_jobs</span></code> usually gets pretty close with <code class="docutils literal notranslate"><span class="pre">='auto'</span></code> but adjust as necessary for the environment</p></li>
 </ul>
 </li>
+<li><p>‘scalable’ is the best list to avoid crashing when many series are present. There is also a transformer_list = ‘scalable’</p></li>
 <li><p>see a dict of predefined lists (some defined for internal use) with <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">autots.models.model_list</span> <span class="pre">import</span> <span class="pre">model_lists</span></code></p></li>
 </ul>
 </li>
@@ -177,6 +178,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 </li>
 <li><p>It will be faster if NaN’s are already filled. If a search for optimal NaN fill method is not required, then fill any NaN with a satisfactory method before passing to class.</p></li>
 <li><p>Set <code class="docutils literal notranslate"><span class="pre">runtime_weighting</span></code> in <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy.</p></li>
+<li><p>Memory shortage is the most common cause of random process/kernel crashes. Try testing a data subset and using a different model list if issues occur. Please also report crashes if found to be linked to a specific set of model parameters (not AutoTS parameters but the underlying forecasting model params). Also crashes vary significantly by setup such as underlying linpack/blas so seeing crash differences between environments can be expected.</p></li>
 </ul>
 </section>
 <section id="how-to-contribute">

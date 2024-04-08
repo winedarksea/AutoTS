@@ -1,4 +1,5 @@
 """Starting templates for models."""
+
 import pandas as pd
 
 general_template_dict = {

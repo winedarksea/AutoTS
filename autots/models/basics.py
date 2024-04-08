@@ -1,6 +1,7 @@
 """
 Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas
 """
+
 from math import ceil
 import warnings
 import random

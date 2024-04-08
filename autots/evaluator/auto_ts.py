@@ -1,4 +1,5 @@
 """Higher-level functions of automated time series modeling."""
+
 import random
 import copy
 import json
@@ -417,9 +418,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[
-                    index, 'TransformationParameters'
-                ] = json.dumps(full_params)
+                self.initial_template.loc[index, 'TransformationParameters'] = (
+                    json.dumps(full_params)
+                )
 
         self.regressor_used = False
         self.grouping_ids = None
@@ -1066,9 +1067,11 @@ class AutoTS(object):
             self.forecast_length,
             self.num_validations,
             self.df_wide_numeric,
-            validation_params=self.similarity_validation_params
-            if self.validation_method == "similarity"
-            else self.seasonal_validation_params,
+            validation_params=(
+                self.similarity_validation_params
+                if self.validation_method == "similarity"
+                else self.seasonal_validation_params
+            ),
             preclean=None,
             verbose=0,
         )
@@ -1924,9 +1927,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[
-                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
-                ] = np.nan
+                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
+                    np.nan
+                )
 
             # run validation template on current slice
             result = self._run_template(
@@ -2224,7 +2227,9 @@ class AutoTS(object):
                         )
                         # and no ensemble version
                         extra_mods.append(
-                            export_template[export_template['Ensemble'] == 0].nsmallest(1, columns=metric).copy()
+                            export_template[export_template['Ensemble'] == 0]
+                            .nsmallest(1, columns=metric)
+                            .copy()
                         )
                 if max_metrics is not None:
                     for metric in max_metrics:
@@ -2233,7 +2238,9 @@ class AutoTS(object):
                         )
                         # and no ensemble version
                         extra_mods.append(
-                            export_template[export_template['Ensemble'] == 0].nlargest(1, columns=metric).copy()
+                            export_template[export_template['Ensemble'] == 0]
+                            .nlargest(1, columns=metric)
+                            .copy()
                         )
                 if str(max_per_model_class).isdigit():
                     export_template = (
@@ -2710,7 +2717,7 @@ class AutoTS(object):
     def expand_horizontal(self):
         """Enables expanding horizontal models trained on a subset to full data.
         Reruns template models and generates new template.
-        
+
         see best_model_original and best_model_original_id for reference back to original best model after this runs
         """
         # if not horizontal, skip with message if verbose
@@ -3107,7 +3114,12 @@ class AutoTS(object):
         if self.validation_forecasts_template is not None:
             if self.validation_forecasts_template.equals(validation_template):
                 duplicated = True
-            elif all([x in self.validation_forecasts_template['ID'].unique() for x in validation_template['ID'].unique()]):
+            elif all(
+                [
+                    x in self.validation_forecasts_template['ID'].unique()
+                    for x in validation_template['ID'].unique()
+                ]
+            ):
                 duplicated = True
         if not duplicated:
             self.validation_forecast_cuts = []
@@ -3335,9 +3347,7 @@ class AutoTS(object):
             ]
             new_colors = {x: random.choice(colors_list) for x in colb}
             colors = {**new_colors, **colors}
-            ax = plot_df[colb].plot(
-                title=title, color=colors, **kwargs
-            )
+            ax = plot_df[colb].plot(title=title, color=colors, **kwargs)
             if include_bounds:
                 ax.fill_between(
                     plot_df.index,
@@ -3672,9 +3682,7 @@ class AutoTS(object):
 
         if isinstance(cols, (int, float)):
             n_cols = int(cols)
-            mostly_one = (corr.abs() == 1).sum() == (
-                corr.abs() == 1
-            ).sum().max()
+            mostly_one = (corr.abs() == 1).sum() == (corr.abs() == 1).sum().max()
             cols = corr[~mostly_one].abs().sum().nlargest(n_cols).index.tolist()
             if len(cols) < n_cols:
                 cols.extend(
@@ -3751,7 +3759,7 @@ class AutoTS(object):
         """Recursively count occurrences of values in (nested) dictionaries using a basic dictionary."""
         if counts is None:
             counts = {}  # Use a basic dictionary instead of defaultdict
-        
+
         for key, value in input_dict.items():
             if isinstance(value, dict):
                 # If the value is a dictionary, recurse into it
@@ -3759,9 +3767,9 @@ class AutoTS(object):
             else:
                 # Use .get() to avoid KeyError, setting default count to 0
                 counts[value] = counts.get(value, 0) + 1
-        
+
         return counts
-    
+
     def get_top_n_counts(self, input_dict=None, n=5):
         """Get the top n most common value counts using a basic dictionary."""
         if input_dict is None:
@@ -3820,9 +3828,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y[
-                        'Model'
-                    ] = x  # might need to remove this and do analysis independently for each
+                    y['Model'] = (
+                        x  # might need to remove this and do analysis independently for each
+                    )
                     res.append(
                         pd.DataFrame(
                             {
@@ -3850,7 +3858,7 @@ class AutoTS(object):
         self.lasso_X['intercept'] = 1
 
         # target = 'runtime'
-        y  = res[target]
+        y = res[target]
         # y = y.dropna(how='any')
         y_reset = y.reset_index()
         y_drop = y_reset.index[~y_reset.reset_index().isnull().any(axis=1)]

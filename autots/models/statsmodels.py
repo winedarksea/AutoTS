@@ -4,6 +4,7 @@ Statsmodels documentation can be a bit confusing.
 And it seems standard at first, but each model likes to do things differently.
 For example: exog, exog_oos, and exog_fc all sometimes mean the same thing
 """
+
 import datetime
 import warnings
 import random
@@ -1003,7 +1004,7 @@ class UnobservedComponents(ModelObject):
                         # damped_cycle=args['damped_cycle'],
                         # irregular=args['irregular'],
                         autoregressive=args['autoregressive'],
-                        **args['model_kwargs']
+                        **args['model_kwargs'],
                         # stochastic_cycle=args['stochastic_cycle'],
                         # stochastic_level=args['stochastic_level'],
                         # stochastic_trend=args['stochastic_trend'],

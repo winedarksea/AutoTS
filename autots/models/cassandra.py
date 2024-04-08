@@ -1295,15 +1295,21 @@ class Cassandra(ModelObject):
                     "future_regressor not provided to Cassandra, using forecasts of historical"
                 )
             future_regressor = model_forecast(
-                model_name=self.trend_model['Model']
-                if regressor_forecast_model is None
-                else regressor_forecast_model,
-                model_param_dict=self.trend_model['ModelParameters']
-                if regressor_forecast_model_params is None
-                else regressor_forecast_model_params,
-                model_transform_dict=self.preprocessing_transformation
-                if regressor_forecast_transformations is None
-                else regressor_forecast_transformations,
+                model_name=(
+                    self.trend_model['Model']
+                    if regressor_forecast_model is None
+                    else regressor_forecast_model
+                ),
+                model_param_dict=(
+                    self.trend_model['ModelParameters']
+                    if regressor_forecast_model_params is None
+                    else regressor_forecast_model_params
+                ),
+                model_transform_dict=(
+                    self.preprocessing_transformation
+                    if regressor_forecast_transformations is None
+                    else regressor_forecast_transformations
+                ),
                 df_train=self.future_regressor_train,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
@@ -2144,9 +2150,9 @@ class Cassandra(ModelObject):
             "past_impacts_intervention": self.past_impacts_intervention,  # not in new
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
-            "ar_interaction_seasonality": self.ar_interaction_seasonality
-            if self.ar_lags is not None
-            else None,
+            "ar_interaction_seasonality": (
+                self.ar_interaction_seasonality if self.ar_lags is not None else None
+            ),
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
@@ -2154,12 +2160,14 @@ class Cassandra(ModelObject):
             # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": self.holiday_countries_used,
             "multivariate_feature": self.multivariate_feature,
-            "multivariate_transformation": self.multivariate_transformation
-            if self.multivariate_feature is not None
-            else None,
-            "regressor_transformation": self.regressor_transformation
-            if self.regressors_used
-            else None,
+            "multivariate_transformation": (
+                self.multivariate_transformation
+                if self.multivariate_feature is not None
+                else None
+            ),
+            "regressor_transformation": (
+                self.regressor_transformation if self.regressors_used else None
+            ),
             "regressors_used": self.regressors_used,
             "linear_model": self.linear_model,
             "randomwalk_n": self.randomwalk_n,
@@ -2369,9 +2377,11 @@ class Cassandra(ModelObject):
             else:
                 start_date = prediction.forecast.index[0]
         ax = prediction.plot(
-            actuals_used.loc[prediction.forecast.index]
-            if actuals_flag is not None
-            else None,
+            (
+                actuals_used.loc[prediction.forecast.index]
+                if actuals_flag is not None
+                else None
+            ),
             series=series,
             vline=vline,
             start_date=start_date,

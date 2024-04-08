@@ -353,9 +353,11 @@ class MLEnsemble(ModelObject):
             self.forecast_length,
             self.num_validations,
             df,
-            validation_params=self.similarity_validation_params
-            if self.validation_method == "similarity"
-            else self.seasonal_validation_params,
+            validation_params=(
+                self.similarity_validation_params
+                if self.validation_method == "similarity"
+                else self.seasonal_validation_params
+            ),
             preclean=None,
             verbose=0,
         )
