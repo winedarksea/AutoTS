@@ -864,7 +864,7 @@ class ModelPrediction(ModelObject):
         if not self._fit_complete:
             raise ValueError("Model not yet fit.")
         df_forecast = self.model.predict(
-            forecast_length=self.forecast_length, future_regressor=future_regressor
+            forecast_length=forecast_length, future_regressor=future_regressor
         )
 
         # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
@@ -896,11 +896,11 @@ class ModelPrediction(ModelObject):
         # CHECK Forecasts are proper length!
         if df_forecast.forecast.shape[0] != self.forecast_length:
             raise ValueError(
-                f"Model {self.model_str} returned improper forecast_length"
+                f"Model {self.model_str} returned improper forecast_length. Returned: {df_forecast.forecast.shape[0]} and requested: {self.forecast_length}"
             )
 
         if df_forecast.forecast.shape[1] != self.df.shape[1]:
-            raise ValueError("Model failed to return correct number of series.")
+            raise ValueError(f"Model failed to return correct number of series. Returned {df_forecast.forecast.shape[1]} and requested: {self.df.shape[1]}")
 
         df_forecast.transformation_parameters = self.transformation_dict
         # Remove negatives if desired
