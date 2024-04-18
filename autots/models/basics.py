@@ -3133,7 +3133,7 @@ class BallTreeMultivariateMotif(ModelObject):
                 ["weighted_mean", "mean", "median", "midhinge", "closest"],
                 [0.4, 0.2, 0.2, 0.2, 0.2],
             )[0],
-            "distance_metric": random.choices(metric_list, metric_probabilities),
+            "distance_metric": random.choices(metric_list, metric_probabilities)[0],
             "k": k_choice,
             "sample_fraction": sample_fraction,
         }
