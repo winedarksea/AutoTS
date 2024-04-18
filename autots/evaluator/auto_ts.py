@@ -2161,9 +2161,9 @@ class AutoTS(object):
             result_set (str): 'validation' or 'initial'
         """
         if result_set == 'validation':
-            return self.validation_results.model_results
+            return self.validation_results.model_results.sort_values("Score", ascending=True)
         else:
-            return self.initial_results.model_results
+            return self.initial_results.model_results.sort_values("Score", ascending=True)
 
     def failure_rate(self, result_set: str = 'initial'):
         """Return fraction of models passing with exceptions.
