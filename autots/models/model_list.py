@@ -47,6 +47,7 @@ all_models = [
     "BallTreeMultivariateMotif",
     "TiDE",
     "NeuralForecast",
+    "DMD",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -223,6 +224,7 @@ multivariate = [
     'BallTreeMultivariateMotif',
     "TiDE",
     "NeuralForecast",
+    "DMD",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -269,6 +271,7 @@ recombination_approved = [
     'FFT',
     'BallTreeMultivariateMotif',
     "TiDE",
+    "DMD",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

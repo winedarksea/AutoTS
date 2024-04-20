@@ -61,7 +61,7 @@ from autots.models.statsmodels import (
     DynamicFactorMQ,
 )
 from autots.models.arch import ARCH
-from autots.models.matrix_var import RRVAR, MAR, TMF, LATC
+from autots.models.matrix_var import RRVAR, MAR, TMF, LATC, DMD
 
 
 def create_model_id(
@@ -695,6 +695,17 @@ def ModelMonster(
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'DMD':
+        return DMD(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
             n_jobs=n_jobs,
             **parameters,
         )
@@ -2119,7 +2130,7 @@ def NewGeneticTemplate(
 
     # filter existing templates
     sorted_results = model_results[
-        (model_results['Ensemble'] == 0) & (model_results['Exceptions'].isna())
+        (model_results['Ensemble'] == 0) & (model_results['Exceptions'].isna()) & (model_results['Model'].isin(model_list))
     ].copy()
     # remove duplicates by exact same performance
     sorted_results = sorted_results.sort_values(

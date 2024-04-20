@@ -13,12 +13,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.11 🇺🇦 🇺🇦 🇺🇦
+# 0.6.12 🇺🇦 🇺🇦 🇺🇦
 * bug fixes
-* continually trying to keep up with the Pandas maintainers who are breaking stuff for no good reasonable
-* updated RollingMeanTransformer and RegressionFilter, RegressionFilter should now be less memory intensive
-* EIA data call to load_live_daily
-* horizontal_ensemble_validation arg for more complete validation on these ensembles
+* added DMD model
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

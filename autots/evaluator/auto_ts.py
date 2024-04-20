@@ -1826,8 +1826,8 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results['TotalRuntime'].fillna(
-                pd.Timedelta(seconds=60), inplace=True
+            template_result.model_results['TotalRuntime'] = template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60)
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
