@@ -1145,8 +1145,8 @@ class DMD(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         return {
             'rank': random.choices(
-                [2, 4, 10, 0.1, 0.2, 0.5, "ecr"],
-                [0.4, 0.3, 0.1, 0.1, 0.2, 0.2, 0.6],
+                [2, 3, 4, 6, 10, 0.1, 0.2, 0.5, "ecr"],
+                [0.4, 0.1, 0.3, 0.1, 0.1, 0.1, 0.2, 0.2, 0.6],
             )[0],
             'alpha': random.choice([0.0, 0.001, 0.1, 1]),
             'amplitude_threshold': random.choices(

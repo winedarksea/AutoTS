@@ -465,6 +465,11 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "MaxAbsScaler", "1": "FFTDecomposition", "2": "bkfilter"}, "transformation_params": {"0": {}, "1": {"n_harmonics": 10, "detrend": "linear"}, "2": {}}}',
         'Ensemble': 0,
     },
+    "74": {  # optimized 200 minutes on initial model import on load_daily
+        "Model": "DMD",
+        'ModelParameters': '{\\"rank\\": 10, \\"alpha\\": 1, \\"amplitude_threshold\\": null, \\"eigenvalue_threshold\\": null}","TransformationParameters":"{\\"fillna\\": \\"linear\\", \\"transformations\\": {\\"0\\": \\"HistoricValues\\", \\"1\\": \\"AnomalyRemoval\\", \\"2\\": \\"SeasonalDifference\\", \\"3\\": \\"AnomalyRemoval\\"}, \\"transformation_params\\": {\\"0\\": {\\"window\\": 10}, \\"1\\": {\\"method\\": \\"zscore\\", \\"method_params\\": {\\"distribution\\": \\"norm\\", \\"alpha\\": 0.05}, \\"fillna\\": \\"ffill\\", \\"transform_dict\\": {\\"fillna\\": null, \\"transformations\\": {\\"0\\": \\"ClipOutliers\\"}, \\"transformation_params\\": {\\"0\\": {\\"method\\": \\"clip\\", \\"std_threshold\\": 6}}}, \\"isolated_only\\": false}, \\"2\\": {\\"lag_1\\": 7, \\"method\\": \\"Mean\\"}, \\"3\\": {\\"method\\": \\"zscore\\", \\"method_params\\": {\\"distribution\\": \\"norm\\", \\"alpha\\": 0.05}, \\"fillna\\": \\"fake_date\\", \\"transform_dict\\": {\\"transformations\\": {\\"0\\": \\"DifferencedTransformer\\"}, \\"transformation_params\\": {\\"0\\": {}}}, \\"isolated_only\\": false}}}',
+        "Ensemble": 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
