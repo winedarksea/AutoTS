@@ -1075,6 +1075,7 @@ class AutoTS(object):
             preclean=None,
             verbose=0,
         )
+        return self
 
     def fit(
         self,
