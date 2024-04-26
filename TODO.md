@@ -16,6 +16,7 @@
 # 0.6.12 🇺🇦 🇺🇦 🇺🇦
 * bug fixes
 * added DMD model
+* modified the `constraints` options so it now accepts of list of dictionaries of constraints with new last_window and slope options
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

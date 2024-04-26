@@ -152,24 +152,24 @@ def apply_constraint_single(
     if constraint_method == "stdev_min":
         train_std = df_train.std(axis=0)
         if lower_constraint is not None:
-            train_min = df_train.min(axis=0) - (lower_constraint * train_std)
+            train_min = df_train.min(axis=0) - (constraint_value * train_std)
         if upper_constraint is not None:
-            train_max = df_train.max(axis=0) + (upper_constraint * train_std)
+            train_max = df_train.max(axis=0) + (constraint_value * train_std)
     elif constraint_method == "stdev":
         train_std = df_train.std(axis=0)
         train_mean = df_train.mean(axis=0)
         if lower_constraint is not None:
-            train_min = train_mean - (lower_constraint * train_std)
+            train_min = train_mean - (constraint_value * train_std)
         if upper_constraint is not None:
-            train_max = train_mean + (upper_constraint * train_std)
+            train_max = train_mean + (constraint_value * train_std)
     elif constraint_method in ["absolute", "fixed"]:
-        train_min = lower_constraint
-        train_max = upper_constraint
+        train_min = constraint_value
+        train_max = constraint_value
     elif constraint_method == "quantile":
         if lower_constraint is not None:
-            train_min = df_train.quantile(lower_constraint, axis=0)
+            train_min = df_train.quantile(constraint_value, axis=0)
         if upper_constraint is not None:
-            train_max = df_train.quantile(upper_constraint, axis=0)
+            train_max = df_train.quantile(constraint_value, axis=0)
     elif constraint_method == "last_window":
         if isinstance(constraint_value, dict):
             window = constraint_value.get("window", 3)
@@ -216,7 +216,7 @@ def apply_constraint_single(
     else:
         raise ValueError("constraint_method not recognized, adjust constraint")
 
-    if constraint_regularization == 1:
+    if constraint_regularization == 1 or constraint_regularization is None:
         if lower_constraint is not None:
             forecast = forecast.clip(lower=train_min, axis=1)
         if upper_constraint is not None:
@@ -331,6 +331,7 @@ def apply_constraints(
                         "bounds": bounds,
                     }
                 )
+        print(constraints)
     if constraints is None or not constraints:
         print("no constraint applied")
         return forecast, lower_forecast, upper_forecast

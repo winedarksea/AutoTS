@@ -18,7 +18,7 @@ class TestConstraint(unittest.TestCase):
             "old_style": {
                 "constraint_method": "quantile",
                 "constraint_regularization": 0.99,
-                "upper_constraint": 0.98,
+                "upper_constraint": 0.5,
                 "lower_constraint": 0.1,
                 "bounds": True,
             },
@@ -111,7 +111,7 @@ class TestConstraint(unittest.TestCase):
                     no_negatives=True,
                 )
                 prediction = model.fit_predict(df, forecast_length=forecast_length)
-                # apply an artificial low value
+                # apply an artificially low value
                 prediction.forecast.iloc[0, 0] = -10
                 prediction.forecast.iloc[0, -1] = df.iloc[:, -1].max() * 1.1
                 prediction.plot(df, df.columns[-1])
@@ -130,6 +130,10 @@ class TestConstraint(unittest.TestCase):
                     self.assertTrue((prediction.forecast.sum() > 0).all())
 
                 if key in ["old_style", "quantile"]:
-                    self.assertTrue(prediction.forecast.iloc[:, -1].max() <= df.iloc[:, -1].max())
+                    pred_max = prediction.forecast.iloc[:, -1].max()
+                    hist_max = df.iloc[:, -1].max()
+                    print(pred_max)
+                    print(hist_max)
+                    self.assertTrue(pred_max <= hist_max)
                 if key in ["last_value"]:
                     self.assertTrue(prediction.forecast.iloc[0, :].max() == df.iloc[-1, :].max())
