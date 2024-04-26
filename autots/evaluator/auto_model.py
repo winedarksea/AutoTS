@@ -922,33 +922,42 @@ class ModelPrediction(ModelObject):
             df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower=0)
 
         if self.constraint is not None:
-            if isinstance(self.constraint, dict):
-                constraint_method = self.constraint.get("constraint_method", "quantile")
-                constraint_regularization = self.constraint.get(
-                    "constraint_regularization", 1
+            if isinstance(self.constraint, list):
+                constraints = self.constraint
+                df_forecast = df_forecast.apply_constraints(
+                    constraints=constraints,
+                    df_train=self.df,
                 )
-                lower_constraint = self.constraint.get("lower_constraint", 0)
-                upper_constraint = self.constraint.get("upper_constraint", 1)
-                bounds = self.constraint.get("bounds", False)
             else:
-                constraint_method = "stdev_min"
-                lower_constraint = float(self.constraint)
-                upper_constraint = float(self.constraint)
-                constraint_regularization = 1
-                bounds = False
-            if self.verbose > 3:
-                print(
-                    f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
+                constraints = None
+                if isinstance(self.constraint, dict):
+                    constraint_method = self.constraint.get("constraint_method", "quantile")
+                    constraint_regularization = self.constraint.get(
+                        "constraint_regularization", 1
+                    )
+                    lower_constraint = self.constraint.get("lower_constraint", 0)
+                    upper_constraint = self.constraint.get("upper_constraint", 1)
+                    bounds = self.constraint.get("bounds", False)
+                else:
+                    constraint_method = "stdev_min"
+                    lower_constraint = float(self.constraint)
+                    upper_constraint = float(self.constraint)
+                    constraint_regularization = 1
+                    bounds = False
+                if self.verbose > 3:
+                    print(
+                        f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
+                    )
+    
+                df_forecast = df_forecast.apply_constraints(
+                    constraints,
+                    self.df,
+                    constraint_method,
+                    constraint_regularization,
+                    upper_constraint,
+                    lower_constraint,
+                    bounds,
                 )
-
-            df_forecast = df_forecast.apply_constraints(
-                constraint_method,
-                constraint_regularization,
-                upper_constraint,
-                lower_constraint,
-                bounds,
-                self.df,
-            )
 
         self.transformation_runtime = self.transformation_runtime + (
             datetime.datetime.now() - transformationStartTime
@@ -977,6 +986,9 @@ class ModelPrediction(ModelObject):
         self.df = df
         self.model.fit_data(df, future_regressor)
 
+    def fit_predict(self, df, forecast_length, future_regressor_train=None, future_regressor_forecast=None):
+        self.fit(df, future_regressor=future_regressor_train)
+        return self.predict(forecast_length=forecast_length, future_regressor=future_regressor_forecast)
 
 class TemplateEvalObject(object):
     """Object to contain all the failures!.

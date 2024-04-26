@@ -982,7 +982,7 @@ def _DMD(data, r, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None
         print(f"ECR rank is {r}")
     elif r > 0 and r < 1:
         r = int(data.shape[0] * r)
-        print(f"Rational rank is {r}")
+        # print(f"Rational rank is {r}")
 
     regularized_s = s[:r] + alpha
     A_tilde = u[:, :r].conj().T @ X2 @ v[:r, :].conj().T * np.reciprocal(regularized_s)
