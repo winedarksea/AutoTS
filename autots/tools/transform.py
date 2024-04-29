@@ -5473,7 +5473,7 @@ transformer_dict = {
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.02,
-    'RegressionFilter': 0.02,
+    'RegressionFilter': 0.01,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
@@ -5560,12 +5560,12 @@ na_probs = {
     "median": 0.03,
     None: 0.001,
     "interpolate": 0.4,
-    "KNNImputer": 0.05,
+    "KNNImputer": 0.02,  # can get a bit slow
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
-    "SeasonalityMotifImputer": 0.1,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputer": 0.02,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputerLinMix": 0.01,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputer1K": 0.01,  # apparently this is too memory hungry at scale
-    "DatepartRegressionImputer": 0.05,  # also slow
+    "DatepartRegressionImputer": 0.01,  # also slow
 }
 
 

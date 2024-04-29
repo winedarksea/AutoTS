@@ -2675,6 +2675,10 @@ class SeasonalityMotif(ModelObject):
         k = self.k
         full_sort = self.point_method == "closest"
 
+        if forecast_length >= self.df.shape[0]:
+            self.independent = True
+            if self.verbose > 0:
+                print("prediction too long for indepedent=False, falling back on indepdent=True")
         if self.independent:
             # each timestep is considered individually and not as a series
             test, scores = seasonal_independent_match(
@@ -2802,6 +2806,7 @@ class SeasonalityMotif(ModelObject):
             "distance_metric": self.distance_metric,
             "k": self.k,
             "datepart_method": self.datepart_method,
+            "independent": self.independent,
         }
 
 
