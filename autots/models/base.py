@@ -134,8 +134,8 @@ def constant_growth_rate(periods, final_growth):
 
 def apply_constraint_single(
         forecast, lower_forecast, upper_forecast,
-        constraint_method, constraint_value, constraint_direction,
-        constraint_regularization, bounds=True, df_train=None,
+        constraint_method, constraint_value, constraint_direction='upper',
+        constraint_regularization=1.0, bounds=True, df_train=None,
 ):
     # check if training data provided
     if df_train is None and constraint_method in ["quantile", "stdev", "stdev_min", "last_window", "slope"]:
@@ -213,9 +213,28 @@ def apply_constraint_single(
         if threshold is not None:
             end_o_data = end_o_data + end_o_data * threshold
         train_min = train_max = end_o_data.to_numpy() + end_o_data.to_numpy()[np.newaxis, :] * changes[:, np.newaxis]
+    elif constraint_method == "dampening":
+        pass
     else:
-        raise ValueError("constraint_method not recognized, adjust constraint")
+        raise ValueError(f"constraint_method {constraint_method} not recognized, adjust constraint")
 
+    if constraint_method == "dampening":
+        # the idea is to make the forecast plateau by gradually forcing the step to step change closer to zero
+        trend_phi = constraint_value
+        if trend_phi is not None and trend_phi != 1 and forecast.shape[0] > 2:
+            req_len = forecast.shape[0] - 1
+            phi_series = pd.Series(
+                [trend_phi] * req_len,
+                index=forecast.index[1:],
+            ).pow(range(req_len))
+
+            # adjust all by same margin
+            forecast = pd.concat([forecast.iloc[0:1], forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+            
+            if bounds:
+                lower_forecast = pd.concat([lower_forecast.iloc[0:1], lower_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+                upper_forecast = pd.concat([upper_forecast.iloc[0:1], upper_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+        return forecast, lower_forecast, upper_forecast
     if constraint_regularization == 1 or constraint_regularization is None:
         if lower_constraint is not None:
             forecast = forecast.clip(lower=train_min, axis=1)
@@ -335,6 +354,8 @@ def apply_constraints(
     if constraints is None or not constraints:
         print("no constraint applied")
         return forecast, lower_forecast, upper_forecast
+    if isinstance(constraints, dict):
+        constraints = [constraints]
     for constraint in constraints:
         forecast, lower_forecast, upper_forecast = apply_constraint_single(
             forecast, lower_forecast, upper_forecast,

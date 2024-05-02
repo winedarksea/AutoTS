@@ -931,13 +931,21 @@ class ModelPrediction(ModelObject):
             else:
                 constraints = None
                 if isinstance(self.constraint, dict):
-                    constraint_method = self.constraint.get("constraint_method", "quantile")
-                    constraint_regularization = self.constraint.get(
-                        "constraint_regularization", 1
-                    )
-                    lower_constraint = self.constraint.get("lower_constraint", 0)
-                    upper_constraint = self.constraint.get("upper_constraint", 1)
-                    bounds = self.constraint.get("bounds", False)
+                    if "constraints" in self.constraint.keys():
+                        constraints = self.constraint.get("constraints")
+                        constraint_method = None
+                        constraint_regularization = None
+                        lower_constraint = None
+                        upper_constraint = None
+                        bounds = True
+                    else:
+                        constraint_method = self.constraint.get("constraint_method", "quantile")
+                        constraint_regularization = self.constraint.get(
+                            "constraint_regularization", 1
+                        )
+                        lower_constraint = self.constraint.get("lower_constraint", 0)
+                        upper_constraint = self.constraint.get("upper_constraint", 1)
+                        bounds = self.constraint.get("bounds", False)
                 else:
                     constraint_method = "stdev_min"
                     lower_constraint = float(self.constraint)
@@ -948,7 +956,8 @@ class ModelPrediction(ModelObject):
                     print(
                         f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
                     )
-    
+
+                print(constraints)
                 df_forecast = df_forecast.apply_constraints(
                     constraints,
                     self.df,
