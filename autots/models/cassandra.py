@@ -2114,7 +2114,7 @@ class Cassandra(ModelObject):
             # "trend_anomaly_intervention": trend_anomaly_intervention,
             "trend_transformation": trend_transformation,
             "trend_model": trend_model,
-            "trend_phi": random.choices([None, 0.98], [0.9, 0.1])[0],
+            "trend_phi": random.choices([None, 0.995, 0.98], [0.9, 0.05, 0.1])[0],
         }
 
     def get_params(self):
