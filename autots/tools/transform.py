@@ -1425,63 +1425,82 @@ class DatepartRegressionTransformer(EmptyTransformer):
 DatepartRegression = DatepartRegressionTransformer
 
 
-class DifferencedTransformer(EmptyTransformer):
+class DifferencedTransformer:
     """Difference from lag n value.
-    inverse_transform can only be applied to the original series, or an immediately following forecast
+    inverse_transform can only be applied to the original series, or an immediately following forecast.
 
     Args:
-        lag (int): number of periods to shift (not implemented, default = 1)
+        lag (int): number of periods to shift.
+        fill (str): method to fill NaN values created by differencing, options: 'bfill', 'zero'.
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(name="DifferencedTransformer")
-        self.lag = 1
+    def __init__(self, lag=1, fill='bfill'):
+        self.name = "DifferencedTransformer"
+        self.lag = lag
+        self.fill = fill
+        self.last_values = None
+        self.first_values = None
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        method_c = random.choices(
+            ["bfill", "zero", "one"], [0.5, 0.2, 0.01]
+        )[0]
+        choice = random.choices([1, 2, 7], [0.8, 0.1, 0.1])[0]
+        return {"lag": choice, "fill": method_c}
 
     def fit(self, df):
         """Fit.
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): input dataframe.
         """
-        self.last_values = df.tail(self.lag)
-        self.first_values = df.head(self.lag)
+        self.last_values = df.iloc[-self.lag:]
+        self.first_values = df.iloc[:self.lag]
         return self
 
     def transform(self, df):
         """Return differenced data.
 
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): input dataframe.
         """
-        return (df - df.shift(self.lag)).bfill()
+        differenced = df.diff(self.lag)
+        if self.fill == 'bfill':
+            return differenced.bfill()
+        elif self.fill == 'zero':
+            return differenced.fillna(0)
+        elif self.fill == 'one':
+            return differenced.fillna(1)
+        else:
+            raise ValueError(f"DifferencedTransformer fill method {self.fill} not recognized")
 
     def fit_transform(self, df):
-        """Fits and Returns Magical DataFrame
+        """Fits and returns differenced DataFrame.
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): input dataframe.
         """
         self.fit(df)
         return self.transform(df)
 
-    def inverse_transform(self, df, trans_method: str = "forecast"):
+    def inverse_transform(self, df, trans_method="forecast"):
         """Returns data to original *or* forecast form
 
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): input dataframe.
             trans_method (str): whether to inverse on original data, or on a following sequence
                 - 'original' return original data to original numbers
-                - 'forecast' inverse the transform on a dataset immediately following the original
+                - 'forecast' inverse the transform on a dataset immediately following the original.
         """
-        lag = self.lag
-        # add last values, group by lag, cumsum
         if trans_method == "original":
-            df = pd.concat([self.first_values, df.tail(df.shape[0] - lag)])
-            return df.cumsum()
-        else:
+            df_with_first = pd.concat([self.first_values,  df.tail(df.shape[0] - self.lag)])
+            return df_with_first.cumsum()
+        elif trans_method == "forecast":
             df_len = df.shape[0]
-            df = pd.concat([self.last_values, df], axis=0)
-            if df.isnull().to_numpy().any():
-                raise ValueError("NaN in DifferencedTransformer.inverse_transform")
-            return df.cumsum().tail(df_len)
+            df_with_last = pd.concat([self.last_values, df])
+            return df_with_last.cumsum().tail(df_len)
+        else:
+            raise ValueError("Invalid transformation method specified.")
+
 
 
 class PctChangeTransformer(EmptyTransformer):
@@ -4841,7 +4860,7 @@ trans_dict = {
     "None": EmptyTransformer(),
     None: EmptyTransformer(),
     "RollingMean10": RollingMeanTransformer(window=10),
-    "DifferencedTransformer": DifferencedTransformer(),
+    # "DifferencedTransformer": DifferencedTransformer(),
     "PctChangeTransformer": PctChangeTransformer(),
     "SinTrend": SinTrend(),
     "SineTrend": SinTrend(),
@@ -4917,6 +4936,7 @@ have_params = {
     "DiffSmoother": DiffSmoother,
     "HistoricValues": HistoricValues,
     "BKBandpassFilter": BKBandpassFilter,
+    "DifferencedTransformer": DifferencedTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
