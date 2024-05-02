@@ -92,6 +92,13 @@ class TestConstraint(unittest.TestCase):
                     "bounds": True,
                 },
             ]},
+            "dampening": {
+                "constraints": [{
+                    "constraint_method": "dampening",
+                    "constraint_value": 0.98,
+                    "bounds": True,
+                },]
+            },
         }
         for key, constraint in constraint_types.items():
             with self.subTest(i=key):

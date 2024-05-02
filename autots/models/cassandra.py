@@ -1528,18 +1528,17 @@ class Cassandra(ModelObject):
                 n_jobs=self.n_jobs,
             )
             # phi is on future predict step only
-            if self.trend_phi is not None and self.trend_phi != 1:
-                temp = trend_forecast.forecast.mul(
-                    pd.Series(
-                        [self.trend_phi] * trend_forecast.forecast.shape[0],
-                        index=trend_forecast.forecast.index,
-                    ).pow(range(trend_forecast.forecast.shape[0])),
-                    axis=0,
-                )
+            if self.trend_phi is not None and self.trend_phi != 1 and trend_forecast.forecast.shape[0] > 2:
+                req_len = trend_forecast.forecast.shape[0] - 1
+                phi_series = pd.Series(
+                    [self.trend_phi] * req_len,
+                    index=trend_forecast.forecast.index[1:],
+                ).pow(range(req_len))
+
                 # adjust all by same margin
-                trend_forecast.forecast = trend_forecast.forecast + temp
-                trend_forecast.upper_forecast = trend_forecast.upper_forecast + temp
-                trend_forecast.lower_forecast = trend_forecast.lower_forecast + temp
+                trend_forecast.forecast = pd.concat([trend_forecast.forecast.iloc[0:1], trend_forecast.forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+                trend_forecast.upper_forecast = pd.concat([trend_forecast.upper_forecast.iloc[0:1], trend_forecast.upper_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+                trend_forecast.lower_forecast = pd.concat([trend_forecast.lower_forecast.iloc[0:1], trend_forecast.lower_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
             if include_history:
                 trend_forecast.forecast = pd.concat(
                     [
@@ -1759,33 +1758,8 @@ class Cassandra(ModelObject):
                 df_forecast.upper_forecast = df_forecast.upper_forecast * impts
 
         if self.constraint is not None:
-            if isinstance(self.constraint, dict):
-                constraint_method = self.constraint.get("constraint_method", "quantile")
-                constraint_regularization = self.constraint.get(
-                    "constraint_regularization", 1
-                )
-                lower_constraint = self.constraint.get("lower_constraint", 0)
-                upper_constraint = self.constraint.get("upper_constraint", 1)
-                bounds = self.constraint.get("bounds", False)
-            else:
-                constraint_method = "stdev_min"
-                lower_constraint = float(self.constraint)
-                upper_constraint = float(self.constraint)
-                constraint_regularization = 1
-                bounds = False
-            if self.verbose >= 3:
-                print(
-                    f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
-                )
-
-            df_forecast = df_forecast.apply_constraints(
-                constraint_method,
-                constraint_regularization,
-                upper_constraint,
-                lower_constraint,
-                bounds,
-                self.df_original,
-            )
+            print(f"constraint is {self.constraint}")
+            df_forecast = df_forecast.apply_constraints(constraint)
         # RETURN COMPONENTS (long style) option
         df_forecast.predict_runtime = self.time() - predictStartTime
         return df_forecast
@@ -2792,7 +2766,7 @@ if False:
     df_daily = load_daily(long=False)
     # add nan
     df_daily.iloc[100, :] = np.nan
-    forecast_length = 180
+    forecast_length = 240
     include_history = True
     df_train = df_daily[:-forecast_length].iloc[:, 1:]
     df_test = df_daily[-forecast_length:].iloc[:, 1:]
@@ -2816,21 +2790,17 @@ if False:
             np.random.normal(size=(forecast_length, 1)), index=df_test.index
         )
     }
-    constraint = {
-        'constraint_method': 'quantile',
-        'lower_constraint': 0,
-        'upper_constraint': None,
-        "bounds": True,
-    }
-    past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns)
+    constraint = None
+    past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns).astype(float)
     past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100
     past_impacts.iloc[-30:, -1] = np.linspace(1, 10)[0:30] / -100
     past_impacts_full = pd.DataFrame(0, index=df_daily.index, columns=df_daily.columns)
-    future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
+    future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns).astype(float)
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra().get_new_params()
     c_params['regressors_used'] = False
+    # c_params['trend_phi'] = 0.9
 
     mod = Cassandra(
         n_jobs=1,
