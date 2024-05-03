@@ -355,15 +355,16 @@ def fourier_series(t, p=365.25, n=10):
 
 
 def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
-    if history_days is None:
-        history_days = (DTindex.max() - DTindex.min()).days
+    # if history_days is None:
+    #     history_days = (DTindex.max() - DTindex.min()).days
     if t is None:
         # Calculate the time difference in days as a float to preserve the exact time
         t = (DTindex - pd.Timestamp(origin_ts)).total_seconds() / 86400 
         # for only daily: t = (DTindex - pd.Timestamp(origin_ts)).days
         # for nano seconds: t = (DTindex - pd.Timestamp(origin_ts)).to_numpy(dtype=np.int64) // (1000 * 1000 * 1000) / (3600 * 24.) 
+    # formerly seasonality / history_days here
     return pd.DataFrame(
-        fourier_series(np.asarray(t), seasonality / history_days, n=order)
+        fourier_series(np.asarray(t), seasonality, n=order)
     ).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
 
 
