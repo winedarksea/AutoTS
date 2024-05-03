@@ -19,6 +19,7 @@
 * modified the `constraints` options so it now accepts of list of dictionaries of constraints with new last_window and slope options
 * 'dampening' as a constraint method to dampen all forecasts, fixed Cassandra trend_phi dampening
 * new med_diff anomaly method and 'laplace' added as distribution option
+* modified fourier_df to now work with sub daily data
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
