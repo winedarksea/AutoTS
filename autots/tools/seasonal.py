@@ -10,6 +10,7 @@ import pandas as pd
 from autots.tools.lunar import moon_phase
 from autots.tools.window_functions import sliding_window_view
 from autots.tools.holiday import holiday_flag
+from autots.tools.wavelet import offset_wavelet, create_narrowing_wavelets
 
 
 def seasonal_int(include_one: bool = False, small=False, very_small=False):
@@ -274,6 +275,57 @@ def date_part(
         )
         if method == "common_fourier_rw":
             date_part_df['epoch'] = (DTindex.to_julian_date() ** 0.65).astype(int)
+    elif "morlet" in method:
+        parts = method.split("_")
+        if len(parts) >= 2:
+            p = parts[1]
+        else:
+            p = 7
+        if len(parts) >= 3:
+            order = parts[2]
+        else:
+            order = 7
+        if len(parts) >= 4:
+            sigma = parts[3]
+        else:
+            sigma = 4.0
+        date_part_df = seasonal_repeating_wavelet(
+            DTindex, p=p, order=order, sigma=sigma, wavelet_type='morlet'
+        )
+    elif "ricker" in method:
+        parts = method.split("_")
+        if len(parts) >= 2:
+            p = parts[1]
+        else:
+            p = 7
+        if len(parts) >= 3:
+            order = parts[2]
+        else:
+            order = 7
+        if len(parts) >= 4:
+            sigma = parts[3]
+        else:
+            sigma = 4.0
+        date_part_df = seasonal_repeating_wavelet(
+            DTindex, p=p, order=order, sigma=sigma, wavelet_type='ricker'
+        )
+    elif "db2" in method:
+        parts = method.split("_")
+        if len(parts) >= 2:
+            p = parts[1]
+        else:
+            p = 7
+        if len(parts) >= 3:
+            order = parts[2]
+        else:
+            order = 7
+        if len(parts) >= 4:
+            sigma = parts[3]
+        else:
+            sigma = 4.0
+        date_part_df = seasonal_repeating_wavelet(
+            DTindex, p=p, order=order, sigma=sigma, wavelet_type='db2'
+        )
     else:
         # method == "simple"
         date_part_df = pd.DataFrame(
@@ -359,10 +411,10 @@ def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
     #     history_days = (DTindex.max() - DTindex.min()).days
     if t is None:
         # Calculate the time difference in days as a float to preserve the exact time
-        t = (DTindex - pd.Timestamp(origin_ts)).total_seconds() / 86400 
+        t = (DTindex - pd.Timestamp(origin_ts)).total_seconds() / 86400
         # for only daily: t = (DTindex - pd.Timestamp(origin_ts)).days
         # for nano seconds: t = (DTindex - pd.Timestamp(origin_ts)).to_numpy(dtype=np.int64) // (1000 * 1000 * 1000) / (3600 * 24.) 
-    # formerly seasonality / history_days here
+    # formerly seasonality / history_days below
     return pd.DataFrame(
         fourier_series(np.asarray(t), seasonality, n=order)
     ).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
@@ -524,9 +576,12 @@ def random_datepart(method='random'):
             [7, 365.25],
             ["dayofweek", 365.25],
             ['weekdayofmonth', 'common_fourier'],
+            [52, 'quarter'],
+            ["morlet_365.25_12_12", "ricker_7_7_1"],
+            ["db2_365.25_12_0.5", "morlet_7_7_1"],
             "other",
         ],
-        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.2],
+        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.3],
     )[0]
     if seasonalities == "other":
         predefined = random.choices([True, False], [0.5, 0.5])[0]
@@ -665,3 +720,21 @@ def seasonal_independent_match(
     if k > min_k:
         test = np.where(test >= len(DTindex), -1, test)
     return test, scores
+
+
+def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='morlet'):
+    t = (DTindex - pd.Timestamp(origin_ts)).total_seconds() / 86400
+
+    if wavelet_type == "db2":
+        wavelets = create_narrowing_wavelets(p=float(p), max_order=int(order), t=t, sigma=float(sigma))
+    else:
+        wavelets = offset_wavelet(
+            p=float(p),  # Weekly period
+            t=t,  # A full year (365 days)
+            # origin_ts=origin_ts,
+            order=int(order),  # One offset for each day of the week
+            # frequency=2 * np.pi / p,  # Frequency for weekly pattern
+            sigma=float(sigma),  # Smaller sigma for tighter weekly spread
+            wavelet_type=wavelet_type,
+        )
+    return pd.DataFrame(wavelets, index=DTindex).rename(columns=lambda x: f"wavelet_{p}_" + str(x))
