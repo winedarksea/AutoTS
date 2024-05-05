@@ -58,10 +58,21 @@ class CassandraTest(unittest.TestCase):
             )
         }
         constraint = {
-            "constraint_method": "quantile",
-            "lower_constraint": 0,
-            "upper_constraint": None,
-            "bounds": True,
+            "constraints": [{
+                    "constraint_method": "last_window",
+                    "constraint_value": 0.5,
+                    "constraint_direction": "upper",
+                    "constraint_regularization": 1.0,
+                    "bounds": True,
+                },
+                {
+                    "constraint_method": "last_window",
+                    "constraint_value": -0.5,
+                    "constraint_direction": "lower",
+                    "constraint_regularization": 1.0,
+                    "bounds": True,
+                },
+            ]
         }
         past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns)
         past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100

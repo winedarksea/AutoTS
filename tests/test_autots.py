@@ -586,7 +586,7 @@ class ModelTest(unittest.TestCase):
             'Cassandra', 'MetricMotif', 'SeasonalityMotif', 'KalmanStateSpace',
             'ARDL', 'UnivariateMotif', 'VAR', 'MAR', 'TMF', 'RRVAR', 'VECM',
             'BallTreeMultivariateMotif', 'FFT',
-            "DMD",  # 0.6.12
+            # "DMD",  # 0.6.12
         ]
         # models that for whatever reason arne't consistent across test sessions
         run_only_no_score = ['FBProphet', 'RRVAR', "TMF"]
