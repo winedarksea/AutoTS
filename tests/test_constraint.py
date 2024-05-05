@@ -131,7 +131,7 @@ class TestConstraint(unittest.TestCase):
                 prediction.plot(df, df.columns[-1])
                 prediction.plot(df, df.columns[0])
                 # assuming all history was positive as example data currently is
-                if key == "empty":
+                if key in ["empty", "dampening"]:
                     self.assertTrue(prediction.forecast.min().min() == -10)
                 else:
                     self.assertTrue((prediction.forecast.sum() > 0).all())

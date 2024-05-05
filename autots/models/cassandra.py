@@ -1759,7 +1759,7 @@ class Cassandra(ModelObject):
 
         if self.constraint is not None:
             print(f"constraint is {self.constraint}")
-            df_forecast = df_forecast.apply_constraints(constraint)
+            df_forecast = df_forecast.apply_constraints(self.constraint)
         # RETURN COMPONENTS (long style) option
         df_forecast.predict_runtime = self.time() - predictStartTime
         return df_forecast

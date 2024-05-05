@@ -560,35 +560,39 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
 
 
+base_seasonalities = [
+    "recurring",
+    "simple",
+    "expanded",
+    "simple_2",
+    "simple_binarized",
+    "expanded_binarized",
+    'common_fourier',
+    'common_fourier_rw',
+    "simple_poly",
+    [7, 365.25],
+    ["dayofweek", 365.25],
+    ['weekdayofmonth', 'common_fourier'],
+    [52, 'quarter'],
+    [168, "hour"],
+    ["morlet_365.25_12_12", "ricker_7_7_1"],
+    ["db2_365.25_12_0.5", "morlet_7_7_1"],
+    "other",
+]
+
+
 def random_datepart(method='random'):
     """New random parameters for seasonality."""
     seasonalities = random.choices(
-        [
-            "recurring",
-            "simple",
-            "expanded",
-            "simple_2",
-            "simple_binarized",
-            "expanded_binarized",
-            'common_fourier',
-            'common_fourier_rw',
-            "simple_poly",
-            [7, 365.25],
-            ["dayofweek", 365.25],
-            ['weekdayofmonth', 'common_fourier'],
-            [52, 'quarter'],
-            ["morlet_365.25_12_12", "ricker_7_7_1"],
-            ["db2_365.25_12_0.5", "morlet_7_7_1"],
-            "other",
-        ],
-        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.3],
+        base_seasonalities,
+        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3],
     )[0]
     if seasonalities == "other":
         predefined = random.choices([True, False], [0.5, 0.5])[0]
         if predefined:
             seasonalities = [random.choice(date_part_methods)]
         else:
-            comp_opts = datepart_components + [7, 365.25, 12]
+            comp_opts = datepart_components + [7, 365.25, 12, 52, 168]
             seasonalities = random.choices(comp_opts, k=2)
     return seasonalities
 
