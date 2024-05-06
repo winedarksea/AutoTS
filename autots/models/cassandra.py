@@ -1758,8 +1758,9 @@ class Cassandra(ModelObject):
                 df_forecast.upper_forecast = df_forecast.upper_forecast * impts
 
         if self.constraint is not None:
-            print(f"constraint is {self.constraint}")
-            df_forecast = df_forecast.apply_constraints(self.constraint)
+            # print(f"constraint is {self.constraint}")
+            # this might work out weirdly since self.df is scaled
+            df_forecast = df_forecast.apply_constraints(**self.constraint, df_train=self.to_origin_space(self.df, trans_method="original"))
         # RETURN COMPONENTS (long style) option
         df_forecast.predict_runtime = self.time() - predictStartTime
         return df_forecast
