@@ -911,7 +911,9 @@ class ModelPrediction(ModelObject):
             )
 
         if df_forecast.forecast.shape[1] != self.df.shape[1]:
-            raise ValueError(f"Model failed to return correct number of series. Returned {df_forecast.forecast.shape[1]} and requested: {self.df.shape[1]}")
+            raise ValueError(
+                f"Model failed to return correct number of series. Returned {df_forecast.forecast.shape[1]} and requested: {self.df.shape[1]}"
+            )
 
         df_forecast.transformation_parameters = self.transformation_dict
         # Remove negatives if desired
@@ -939,7 +941,9 @@ class ModelPrediction(ModelObject):
                         upper_constraint = None
                         bounds = True
                     else:
-                        constraint_method = self.constraint.get("constraint_method", "quantile")
+                        constraint_method = self.constraint.get(
+                            "constraint_method", "quantile"
+                        )
                         constraint_regularization = self.constraint.get(
                             "constraint_regularization", 1
                         )
@@ -995,9 +999,18 @@ class ModelPrediction(ModelObject):
         self.df = df
         self.model.fit_data(df, future_regressor)
 
-    def fit_predict(self, df, forecast_length, future_regressor_train=None, future_regressor_forecast=None):
+    def fit_predict(
+        self,
+        df,
+        forecast_length,
+        future_regressor_train=None,
+        future_regressor_forecast=None,
+    ):
         self.fit(df, future_regressor=future_regressor_train)
-        return self.predict(forecast_length=forecast_length, future_regressor=future_regressor_forecast)
+        return self.predict(
+            forecast_length=forecast_length, future_regressor=future_regressor_forecast
+        )
+
 
 class TemplateEvalObject(object):
     """Object to contain all the failures!.
@@ -2151,7 +2164,9 @@ def NewGeneticTemplate(
 
     # filter existing templates
     sorted_results = model_results[
-        (model_results['Ensemble'] == 0) & (model_results['Exceptions'].isna()) & (model_results['Model'].isin(model_list))
+        (model_results['Ensemble'] == 0)
+        & (model_results['Exceptions'].isna())
+        & (model_results['Model'].isin(model_list))
     ].copy()
     # remove duplicates by exact same performance
     sorted_results = sorted_results.sort_values(

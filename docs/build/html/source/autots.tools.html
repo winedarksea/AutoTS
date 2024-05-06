@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.tools package &#8212; AutoTS 0.6.10 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.6.11 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=c6a86a76"></script>
+    <script src="../_static/documentation_options.js?v=62d0ee6f"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -1430,6 +1430,11 @@ common_fourier</p></li>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.seasonal.seasonal_repeating_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.seasonal.</span></span><span class="sig-name descname"><span class="pre">seasonal_repeating_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">DTindex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelet_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'morlet'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.seasonal_repeating_wavelet" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.seasonal.seasonal_window_match">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.seasonal.</span></span><span class="sig-name descname"><span class="pre">seasonal_window_match</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">DTindex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datepart_method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance_metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_sort</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.seasonal_window_match" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
@@ -2524,42 +2529,50 @@ Will only match original if phi==1</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.tools.transform.DifferencedTransformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">DifferencedTransformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">DifferencedTransformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fill</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bfill'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Difference from lag n value.
-inverse_transform can only be applied to the original series, or an immediately following forecast</p>
+inverse_transform can only be applied to the original series, or an immediately following forecast.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>lag</strong> (<em>int</em>) – number of periods to shift (not implemented, default = 1)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lag</strong> (<em>int</em>) – number of periods to shift.</p></li>
+<li><p><strong>fill</strong> (<em>str</em>) – method to fill NaN values created by differencing, options: ‘bfill’, ‘zero’.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.DifferencedTransformer.fit">
 <span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.fit" title="Link to this definition">¶</a></dt>
 <dd><p>Fit.
-:param df: input dataframe
+:param df: input dataframe.
 :type df: pandas.DataFrame</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.DifferencedTransformer.fit_transform">
 <span class="sig-name descname"><span class="pre">fit_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.fit_transform" title="Link to this definition">¶</a></dt>
-<dd><p>Fits and Returns Magical DataFrame
-:param df: input dataframe
+<dd><p>Fits and returns differenced DataFrame.
+:param df: input dataframe.
 :type df: pandas.DataFrame</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.DifferencedTransformer.get_new_params">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.get_new_params" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.DifferencedTransformer.inverse_transform">
-<span class="sig-name descname"><span class="pre">inverse_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trans_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'forecast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.inverse_transform" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">inverse_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trans_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'forecast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.inverse_transform" title="Link to this definition">¶</a></dt>
 <dd><p>Returns data to original <em>or</em> forecast form</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe.</p></li>
 <li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
 - ‘original’ return original data to original numbers
-- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+- ‘forecast’ inverse the transform on a dataset immediately following the original.</p></li>
 </ul>
 </dd>
 </dl>
@@ -2571,7 +2584,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dd><p>Return differenced data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3796,7 +3809,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.transform.RandomTransform">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">RandomTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'AlignLastDiff':</span> <span class="pre">0.01,</span> <span class="pre">'AlignLastValue':</span> <span class="pre">0.2,</span> <span class="pre">'AnomalyRemoval':</span> <span class="pre">0.03,</span> <span class="pre">'BKBandpassFilter':</span> <span class="pre">0.01,</span> <span class="pre">'BTCD':</span> <span class="pre">0.01,</span> <span class="pre">'CenterLastValue':</span> <span class="pre">0.01,</span> <span class="pre">'CenterSplit':</span> <span class="pre">0.01,</span> <span class="pre">'ClipOutliers':</span> <span class="pre">0.03,</span> <span class="pre">'Cointegration':</span> <span class="pre">0.01,</span> <span class="pre">'CumSumTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'DatepartRegression':</span> <span class="pre">0.01,</span> <span class="pre">'Detrend':</span> <span class="pre">0.02,</span> <span class="pre">'DiffSmoother':</span> <span class="pre">0.005,</span> <span class="pre">'DifferencedTransformer':</span> <span class="pre">0.05,</span> <span class="pre">'Discretize':</span> <span class="pre">0.01,</span> <span class="pre">'EWMAFilter':</span> <span class="pre">0.02,</span> <span class="pre">'FFTDecomposition':</span> <span class="pre">0.01,</span> <span class="pre">'FFTFilter':</span> <span class="pre">0.01,</span> <span class="pre">'FastICA':</span> <span class="pre">0.01,</span> <span class="pre">'HPFilter':</span> <span class="pre">0.01,</span> <span class="pre">'HistoricValues':</span> <span class="pre">0.01,</span> <span class="pre">'HolidayTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'IntermittentOccurrence':</span> <span class="pre">0.01,</span> <span class="pre">'KalmanSmoothing':</span> <span class="pre">0.02,</span> <span class="pre">'LevelShiftTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'LocalLinearTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Log':</span> <span class="pre">0.01,</span> <span class="pre">'MaxAbsScaler':</span> <span class="pre">0.03,</span> <span class="pre">'MeanDifference':</span> <span class="pre">0.002,</span> <span class="pre">'MinMaxScaler':</span> <span class="pre">0.03,</span> <span class="pre">'PCA':</span> <span class="pre">0.01,</span> <span class="pre">'PctChangeTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'PositiveShift':</span> <span class="pre">0.02,</span> <span class="pre">'PowerTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'QuantileTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'RegressionFilter':</span> <span class="pre">0.02,</span> <span class="pre">'ReplaceConstant':</span> <span class="pre">0.02,</span> <span class="pre">'RobustScaler':</span> <span class="pre">0.03,</span> <span class="pre">'RollingMean100thN':</span> <span class="pre">0.01,</span> <span class="pre">'RollingMeanTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'Round':</span> <span class="pre">0.02,</span> <span class="pre">'STLFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ScipyFilter':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalDifference':</span> <span class="pre">0.06,</span> <span class="pre">'SinTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Slice':</span> <span class="pre">0.02,</span> <span class="pre">'StandardScaler':</span> <span class="pre">0.04,</span> <span class="pre">'bkfilter':</span> <span class="pre">0.05,</span> <span class="pre">'cffilter':</span> <span class="pre">0.01,</span> <span class="pre">'convolution_filter':</span> <span class="pre">0.001,</span> <span class="pre">None:</span> <span class="pre">0.0}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_max_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">na_prob_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'DatepartRegressionImputer':</span> <span class="pre">0.05,</span> <span class="pre">'IterativeImputer':</span> <span class="pre">0.025,</span> <span class="pre">'IterativeImputerExtraTrees':</span> <span class="pre">0.0001,</span> <span class="pre">'KNNImputer':</span> <span class="pre">0.05,</span> <span class="pre">'SeasonalityMotifImputer':</span> <span class="pre">0.1,</span> <span class="pre">'SeasonalityMotifImputer1K':</span> <span class="pre">0.01,</span> <span class="pre">'SeasonalityMotifImputerLinMix':</span> <span class="pre">0.01,</span> <span class="pre">'fake_date':</span> <span class="pre">0.1,</span> <span class="pre">'ffill':</span> <span class="pre">0.4,</span> <span class="pre">'ffill_mean_biased':</span> <span class="pre">0.1,</span> <span class="pre">'interpolate':</span> <span class="pre">0.4,</span> <span class="pre">'mean':</span> <span class="pre">0.06,</span> <span class="pre">'median':</span> <span class="pre">0.03,</span> <span class="pre">'rolling_mean':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean_24':</span> <span class="pre">0.1,</span> <span class="pre">'zero':</span> <span class="pre">0.05,</span> <span class="pre">None:</span> <span class="pre">0.001}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">superfast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">traditional_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_min_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_nan_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">RandomTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'AlignLastDiff':</span> <span class="pre">0.01,</span> <span class="pre">'AlignLastValue':</span> <span class="pre">0.2,</span> <span class="pre">'AnomalyRemoval':</span> <span class="pre">0.03,</span> <span class="pre">'BKBandpassFilter':</span> <span class="pre">0.01,</span> <span class="pre">'BTCD':</span> <span class="pre">0.01,</span> <span class="pre">'CenterLastValue':</span> <span class="pre">0.01,</span> <span class="pre">'CenterSplit':</span> <span class="pre">0.01,</span> <span class="pre">'ClipOutliers':</span> <span class="pre">0.03,</span> <span class="pre">'Cointegration':</span> <span class="pre">0.01,</span> <span class="pre">'CumSumTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'DatepartRegression':</span> <span class="pre">0.01,</span> <span class="pre">'Detrend':</span> <span class="pre">0.02,</span> <span class="pre">'DiffSmoother':</span> <span class="pre">0.005,</span> <span class="pre">'DifferencedTransformer':</span> <span class="pre">0.05,</span> <span class="pre">'Discretize':</span> <span class="pre">0.01,</span> <span class="pre">'EWMAFilter':</span> <span class="pre">0.02,</span> <span class="pre">'FFTDecomposition':</span> <span class="pre">0.01,</span> <span class="pre">'FFTFilter':</span> <span class="pre">0.01,</span> <span class="pre">'FastICA':</span> <span class="pre">0.01,</span> <span class="pre">'HPFilter':</span> <span class="pre">0.01,</span> <span class="pre">'HistoricValues':</span> <span class="pre">0.01,</span> <span class="pre">'HolidayTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'IntermittentOccurrence':</span> <span class="pre">0.01,</span> <span class="pre">'KalmanSmoothing':</span> <span class="pre">0.02,</span> <span class="pre">'LevelShiftTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'LocalLinearTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Log':</span> <span class="pre">0.01,</span> <span class="pre">'MaxAbsScaler':</span> <span class="pre">0.03,</span> <span class="pre">'MeanDifference':</span> <span class="pre">0.002,</span> <span class="pre">'MinMaxScaler':</span> <span class="pre">0.03,</span> <span class="pre">'PCA':</span> <span class="pre">0.01,</span> <span class="pre">'PctChangeTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'PositiveShift':</span> <span class="pre">0.02,</span> <span class="pre">'PowerTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'QuantileTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'RegressionFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ReplaceConstant':</span> <span class="pre">0.02,</span> <span class="pre">'RobustScaler':</span> <span class="pre">0.03,</span> <span class="pre">'RollingMean100thN':</span> <span class="pre">0.01,</span> <span class="pre">'RollingMeanTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'Round':</span> <span class="pre">0.02,</span> <span class="pre">'STLFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ScipyFilter':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalDifference':</span> <span class="pre">0.06,</span> <span class="pre">'SinTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Slice':</span> <span class="pre">0.02,</span> <span class="pre">'StandardScaler':</span> <span class="pre">0.04,</span> <span class="pre">'bkfilter':</span> <span class="pre">0.05,</span> <span class="pre">'cffilter':</span> <span class="pre">0.01,</span> <span class="pre">'convolution_filter':</span> <span class="pre">0.001,</span> <span class="pre">None:</span> <span class="pre">0.0}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_max_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">na_prob_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'DatepartRegressionImputer':</span> <span class="pre">0.01,</span> <span class="pre">'IterativeImputer':</span> <span class="pre">0.025,</span> <span class="pre">'IterativeImputerExtraTrees':</span> <span class="pre">0.0001,</span> <span class="pre">'KNNImputer':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalityMotifImputer':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalityMotifImputer1K':</span> <span class="pre">0.01,</span> <span class="pre">'SeasonalityMotifImputerLinMix':</span> <span class="pre">0.01,</span> <span class="pre">'fake_date':</span> <span class="pre">0.1,</span> <span class="pre">'ffill':</span> <span class="pre">0.4,</span> <span class="pre">'ffill_mean_biased':</span> <span class="pre">0.1,</span> <span class="pre">'interpolate':</span> <span class="pre">0.4,</span> <span class="pre">'mean':</span> <span class="pre">0.06,</span> <span class="pre">'median':</span> <span class="pre">0.03,</span> <span class="pre">'rolling_mean':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean_24':</span> <span class="pre">0.1,</span> <span class="pre">'zero':</span> <span class="pre">0.05,</span> <span class="pre">None:</span> <span class="pre">0.001}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">superfast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">traditional_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_min_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_nan_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Link to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>BTCD is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -4474,6 +4487,116 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dt class="sig sig-object py" id="autots.tools.transform.transformer_list_to_dict">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">transformer_list_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.transformer_list_to_dict" title="Link to this definition">¶</a></dt>
 <dd><p>Convert various possibilities to dict.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.wavelet">
+<span id="autots-tools-wavelet-module"></span><h2>autots.tools.wavelet module<a class="headerlink" href="#module-autots.tools.wavelet" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.continuous_db2_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">continuous_db2_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.continuous_db2_wavelet" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_daubechies_db2_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_daubechies_db2_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_daubechies_db2_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a Daubechies db2 wavelet with specified period <cite>p</cite>.</p>
+<p>Parameters:
+- p (int): The period or length to generate the wavelet.</p>
+<p>Returns:
+- np.ndarray: The generated Daubechies db2 wavelet.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_gaussian_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_gaussian_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_gaussian_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a Gaussian-modulated cosine wavelet with specified frequency and sigma.</p>
+<p>Parameters:
+- p (float): The period or length to generate the wavelet.
+- frequency (int): Frequency of the cosine wave.
+- sigma (float): Standard deviation for the Gaussian envelope.</p>
+<p>Returns:
+- np.ndarray: The generated Gaussian-modulated wavelet.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_haar_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_haar_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_haar_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a Haar wavelet with specified period <cite>p</cite>.</p>
+<p>Parameters:
+- p (float): The period or length to generate the wavelet.</p>
+<p>Returns:
+- np.ndarray: The generated Haar wavelet.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_mexican_hat_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_mexican_hat_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_mexican_hat_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a Mexican Hat wavelet (Ricker wavelet) with specified sigma.</p>
+<p>Parameters:
+- p (float): The period or length to generate the wavelet.
+- sigma (float): Standard deviation for the Gaussian envelope.</p>
+<p>Returns:
+- np.ndarray: The generated Mexican Hat wavelet.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_morlet_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_morlet_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_morlet_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a Morlet wavelet with specified frequency and sigma.</p>
+<p>Parameters:
+- p (float): The period or length to generate the wavelet.
+- frequency (int): Frequency of the cosine wave.
+- sigma (float): Standard deviation for the Gaussian envelope.</p>
+<p>Returns:
+- np.ndarray: The generated complex Morlet wavelet.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_narrowing_wavelets">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_narrowing_wavelets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_narrowing_wavelets" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_real_morlet_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_real_morlet_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_real_morlet_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a real-valued Morlet wavelet with specified frequency and sigma.</p>
+<p>Parameters:
+- p (float): The period or length to generate the wavelet.
+- frequency (int): Frequency of the cosine wave.
+- sigma (float): Standard deviation for the Gaussian envelope.</p>
+<p>Returns:
+- np.ndarray: The generated real Morlet wavelet.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.create_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">create_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phase_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelet_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'morlet'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.create_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create a real-valued wavelet based on real-world anchored time steps in t,
+with an additional phase shift and a choice of wavelet type.</p>
+<p>Parameters:
+- t (np.ndarray): Array of time steps (in days) from a specified origin.
+- p (float): The period of the wavelet in the same units as t (typically days).
+- sigma (float): Standard deviation for the Gaussian envelope.
+- phase_shift (float): Phase shift to adjust the position of the wavelet peak.
+- wavelet_type (str): Type of wavelet (‘morlet’ or ‘ricker’).</p>
+<p>Returns:
+- np.ndarray: The generated wavelet values for each time step.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.wavelet.offset_wavelet">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.wavelet.</span></span><span class="sig-name descname"><span class="pre">offset_wavelet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelet_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'morlet'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.wavelet.offset_wavelet" title="Link to this definition">¶</a></dt>
+<dd><p>Create an offset collection of wavelets with <cite>order</cite> offsets, ensuring that
+peaks are spaced p/order apart.</p>
+<p>Parameters:
+- p (float): Period of the wavelet in the same units as t (typically days).
+- t (np.ndarray): Array of time steps.
+- order (int): The number of offsets.
+- sigma (float): Standard deviation for the Gaussian envelope.
+- wavelet_type (str): Type of wavelet (‘morlet’ or ‘ricker’).</p>
+<p>Returns:
+- np.ndarray: A 2D array with <cite>order</cite> wavelets along axis 1.</p>
 </dd></dl>
 
 </section>

@@ -13,10 +13,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Index &#8212; AutoTS 0.6.10 documentation</title>
+    <title>Index &#8212; AutoTS 0.6.11 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=a4fa0645" />
-    <script src="_static/documentation_options.js?v=c6a86a76"></script>
+    <script src="_static/documentation_options.js?v=62d0ee6f"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="#" />
@@ -97,6 +97,8 @@
 </li>
       </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.AnomalyRemoval">AnomalyRemoval (class in autots.tools.transform)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.base.apply_constraint_single">apply_constraint_single() (in module autots.models.base)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.apply_constraints">apply_constraints() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#id0">[1]</a>
 
@@ -270,8 +272,6 @@
         <li><a href="source/autots.models.html#module-autots.models.greykite">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     autots.models.matrix_var
 
@@ -279,6 +279,8 @@
         <li><a href="source/autots.models.html#module-autots.models.matrix_var">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     autots.models.mlensemble
 
@@ -490,6 +492,13 @@
 </li>
       </ul></li>
       <li>
+    autots.tools.wavelet
+
+      <ul>
+        <li><a href="source/autots.tools.html#module-autots.tools.wavelet">module</a>
+</li>
+      </ul></li>
+      <li>
     autots.tools.window_functions
 
       <ul>
@@ -642,22 +651,26 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.thresholding.consecutive_groups">consecutive_groups() (in module autots.tools.thresholding)</a>
 </li>
+      <li><a href="source/autots.models.html#autots.models.base.constant_growth_rate">constant_growth_rate() (in module autots.models.base)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.basics.ConstantNaive">ConstantNaive (class in autots.models.basics)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.containment">containment() (in module autots.evaluator.metrics)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.continuous_db2_wavelet">continuous_db2_wavelet() (in module autots.tools.wavelet)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.contour">contour() (in module autots.evaluator.metrics)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.StatsmodelsFilter.convolution_filter">convolution_filter() (autots.tools.transform.StatsmodelsFilter method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.basics.KalmanStateSpace.cost_function">cost_function() (autots.models.basics.KalmanStateSpace method)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_dwae">cost_function_dwae() (in module autots.models.cassandra)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l1">cost_function_l1() (in module autots.models.cassandra)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l1_positive">cost_function_l1_positive() (in module autots.models.cassandra)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l2">cost_function_l2() (in module autots.models.cassandra)</a>
@@ -669,6 +682,8 @@
       <li><a href="source/autots.tools.html#autots.tools.seasonal.create_datepart_components">create_datepart_components() (in module autots.tools.seasonal)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.anomaly_utils.create_dates_df">create_dates_df() (in module autots.tools.anomaly_utils)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_daubechies_db2_wavelet">create_daubechies_db2_wavelet() (in module autots.tools.wavelet)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.mlensemble.create_feature">create_feature() (in module autots.models.mlensemble)</a>
 </li>
@@ -682,13 +697,25 @@
         <li><a href="source/autots.models.html#autots.models.base.create_forecast_index">(in module autots.models.base)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_gaussian_wavelet">create_gaussian_wavelet() (in module autots.tools.wavelet)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_haar_wavelet">create_haar_wavelet() (in module autots.tools.wavelet)</a>
+</li>
       <li><a href="source/autots.html#autots.create_lagged_regressor">create_lagged_regressor() (in module autots)</a>
 
       <ul>
         <li><a href="source/autots.tools.html#autots.tools.regressor.create_lagged_regressor">(in module autots.tools.regressor)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_mexican_hat_wavelet">create_mexican_hat_wavelet() (in module autots.tools.wavelet)</a>
+</li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.create_model_id">create_model_id() (in module autots.evaluator.auto_model)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_morlet_wavelet">create_morlet_wavelet() (in module autots.tools.wavelet)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_narrowing_wavelets">create_narrowing_wavelets() (in module autots.tools.wavelet)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_real_morlet_wavelet">create_real_morlet_wavelet() (in module autots.tools.wavelet)</a>
 </li>
       <li><a href="source/autots.html#autots.create_regressor">create_regressor() (in module autots)</a>
 
@@ -708,6 +735,8 @@
         <li><a href="source/autots.models.html#autots.models.cassandra.create_t">(in module autots.models.cassandra)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.create_wavelet">create_wavelet() (in module autots.tools.wavelet)</a>
+</li>
       <li><a href="source/autots.html#autots.Cassandra.cross_validate">cross_validate() (autots.Cassandra method)</a>
 
       <ul>
@@ -768,10 +797,10 @@
         <li><a href="source/autots.html#autots.HolidayDetector.detect">(autots.HolidayDetector method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.anomaly_utils.detect_anomalies">detect_anomalies() (in module autots.tools.anomaly_utils)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.transform.Detrend">Detrend (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.df_cleanup">df_cleanup() (in module autots.tools.shaping)</a>
@@ -800,9 +829,13 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.DistEnsemble">DistEnsemble() (in module autots.models.ensemble)</a>
 </li>
+      <li><a href="source/autots.models.html#autots.models.matrix_var.DMD">DMD (class in autots.models.matrix_var)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.matrix_var.dmd">dmd() (in module autots.models.matrix_var)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.matrix_var.dmd4cast">dmd4cast() (in module autots.models.matrix_var)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.matrix_var.dmd_forecast">dmd_forecast() (in module autots.models.matrix_var)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.fast_kalman.douter">douter() (in module autots.tools.fast_kalman)</a>
 </li>
@@ -1023,6 +1056,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.greykite.Greykite.fit">(autots.models.greykite.Greykite method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.matrix_var.DMD.fit">(autots.models.matrix_var.DMD method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.matrix_var.LATC.fit">(autots.models.matrix_var.LATC method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.matrix_var.MAR.fit">(autots.models.matrix_var.MAR method)</a>
@@ -1212,6 +1247,12 @@
       </ul></li>
       <li><a href="source/autots.models.html#autots.models.cassandra.fit_linear_model">fit_linear_model() (in module autots.models.cassandra)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction.fit_predict">fit_predict() (autots.evaluator.auto_model.ModelPrediction method)</a>
+
+      <ul>
+        <li><a href="source/autots.html#autots.ModelPrediction.fit_predict">(autots.ModelPrediction method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.SinTrend.fit_sin">fit_sin() (autots.tools.transform.SinTrend static method)</a>
 </li>
       <li><a href="source/autots.html#autots.GeneralTransformer.fit_transform">fit_transform() (autots.GeneralTransformer method)</a>
@@ -1453,6 +1494,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.greykite.Greykite.get_new_params">(autots.models.greykite.Greykite method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.matrix_var.DMD.get_new_params">(autots.models.matrix_var.DMD method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.matrix_var.LATC.get_new_params">(autots.models.matrix_var.LATC method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.matrix_var.MAR.get_new_params">(autots.models.matrix_var.MAR method)</a>
@@ -1536,6 +1579,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.get_new_params">(autots.tools.transform.DatepartRegressionTransformer static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.get_new_params">(autots.tools.transform.Detrend static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DifferencedTransformer.get_new_params">(autots.tools.transform.DifferencedTransformer static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DiffSmoother.get_new_params">(autots.tools.transform.DiffSmoother static method)</a>
 </li>
@@ -1628,6 +1673,8 @@
         <li><a href="source/autots.models.html#autots.models.gluonts.GluonTS.get_params">(autots.models.gluonts.GluonTS method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.greykite.Greykite.get_params">(autots.models.greykite.Greykite method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.matrix_var.DMD.get_params">(autots.models.matrix_var.DMD method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.matrix_var.LATC.get_params">(autots.models.matrix_var.LATC method)</a>
 </li>
@@ -2244,6 +2291,8 @@
 </li>
         <li><a href="source/autots.tools.html#module-autots.tools.transform">autots.tools.transform</a>
 </li>
+        <li><a href="source/autots.tools.html#module-autots.tools.wavelet">autots.tools.wavelet</a>
+</li>
         <li><a href="source/autots.tools.html#module-autots.tools.window_functions">autots.tools.window_functions</a>
 </li>
       </ul></li>
@@ -2330,6 +2379,10 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.oda">oda() (in module autots.evaluator.metrics)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.tools.html#autots.tools.wavelet.offset_wavelet">offset_wavelet() (in module autots.tools.wavelet)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -2569,6 +2622,8 @@
         <li><a href="source/autots.models.html#autots.models.gluonts.GluonTS.predict">(autots.models.gluonts.GluonTS method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.greykite.Greykite.predict">(autots.models.greykite.Greykite method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.matrix_var.DMD.predict">(autots.models.matrix_var.DMD method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.matrix_var.LATC.predict">(autots.models.matrix_var.LATC method)</a>
 </li>
@@ -2873,6 +2928,8 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_int">seasonal_int() (in module autots.tools.seasonal)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_repeating_wavelet">seasonal_repeating_wavelet() (in module autots.tools.seasonal)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_window_match">seasonal_window_match() (in module autots.tools.seasonal)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.SeasonalDifference">SeasonalDifference (class in autots.tools.transform)</a>
@@ -2887,6 +2944,8 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.greykite.seek_the_oracle">seek_the_oracle() (in module autots.models.greykite)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.set_limit">set_limit() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
 
       <ul>
@@ -2897,8 +2956,6 @@
         <li><a href="source/autots.html#id16">(autots.EventRiskForecast static method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast">set_limit_forecast() (in module autots.evaluator.event_forecasting)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast_historic">set_limit_forecast_historic() (in module autots.evaluator.event_forecasting)</a>

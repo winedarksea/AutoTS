@@ -161,9 +161,7 @@ def zscore_survival_function(
             cauchy.sf(residual_score, dof), index=df.index, columns=columns
         )
     elif distribution == "laplace":
-        return pd.DataFrame(
-            laplace.sf(residual_score), index=df.index, columns=columns
-        )
+        return pd.DataFrame(laplace.sf(residual_score), index=df.index, columns=columns)
     elif distribution == "uniform":
         return pd.DataFrame(
             uniform.sf(residual_score, dof), index=df.index, columns=columns
@@ -448,7 +446,7 @@ fast_methods = [
     "minmax",
     "IQR",
     "nonparametric",
-    "med_diff"
+    "med_diff",
 ]
 
 
@@ -459,7 +457,9 @@ def anomaly_new_params(method='random'):
             [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1],
         )[0]
     elif method == "fast":
-        method_choice = random.choices(fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1])[0]
+        method_choice = random.choices(
+            fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1]
+        )[0]
     elif method in available_methods:
         method_choice = method
     else:
@@ -511,18 +511,24 @@ def anomaly_new_params(method='random'):
     elif method_choice == "rolling_zscore":
         method_params = {
             'distribution': random.choices(
-                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"], [0.4, 0.2, 0.2, 0.2, 0.1, 0.1]
+                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"],
+                [0.4, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0],
-            'alpha': random.choices([0.01, 0.03, 0.05, 0.1, 0.2, 0.4], [0.1, 0.1, 0.8, 0.1, 0.1, 0.01])[0],
+            'alpha': random.choices(
+                [0.01, 0.03, 0.05, 0.1, 0.2, 0.4], [0.1, 0.1, 0.8, 0.1, 0.1, 0.01]
+            )[0],
             'rolling_periods': random.choice([28, 90, 200, 300]),
             'center': random.choice([True, False]),
         }
     elif method_choice == "med_diff":
         method_params = {
             'distribution': random.choices(
-                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"], [0.4, 0.2, 0.2, 0.2, 0.1, 0.1]
+                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"],
+                [0.4, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0],
-            'alpha': random.choices([0.01, 0.03, 0.05, 0.1, 0.2, 0.6], [0.1, 0.1, 0.8, 0.1, 0.1, 0.05])[0],
+            'alpha': random.choices(
+                [0.01, 0.03, 0.05, 0.1, 0.2, 0.6], [0.1, 0.1, 0.8, 0.1, 0.1, 0.05]
+            )[0],
         }
     elif method_choice == "mad":
         method_params = {

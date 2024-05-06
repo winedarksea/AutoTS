@@ -1528,7 +1528,11 @@ class Cassandra(ModelObject):
                 n_jobs=self.n_jobs,
             )
             # phi is on future predict step only
-            if self.trend_phi is not None and self.trend_phi != 1 and trend_forecast.forecast.shape[0] > 2:
+            if (
+                self.trend_phi is not None
+                and self.trend_phi != 1
+                and trend_forecast.forecast.shape[0] > 2
+            ):
                 req_len = trend_forecast.forecast.shape[0] - 1
                 phi_series = pd.Series(
                     [self.trend_phi] * req_len,
@@ -1536,9 +1540,28 @@ class Cassandra(ModelObject):
                 ).pow(range(req_len))
 
                 # adjust all by same margin
-                trend_forecast.forecast = pd.concat([trend_forecast.forecast.iloc[0:1], trend_forecast.forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
-                trend_forecast.upper_forecast = pd.concat([trend_forecast.upper_forecast.iloc[0:1], trend_forecast.upper_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
-                trend_forecast.lower_forecast = pd.concat([trend_forecast.lower_forecast.iloc[0:1], trend_forecast.lower_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+                trend_forecast.forecast = pd.concat(
+                    [
+                        trend_forecast.forecast.iloc[0:1],
+                        trend_forecast.forecast.diff().iloc[1:].mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
+                trend_forecast.upper_forecast = pd.concat(
+                    [
+                        trend_forecast.upper_forecast.iloc[0:1],
+                        trend_forecast.upper_forecast.diff()
+                        .iloc[1:]
+                        .mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
+                trend_forecast.lower_forecast = pd.concat(
+                    [
+                        trend_forecast.lower_forecast.iloc[0:1],
+                        trend_forecast.lower_forecast.diff()
+                        .iloc[1:]
+                        .mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
             if include_history:
                 trend_forecast.forecast = pd.concat(
                     [
@@ -1760,7 +1783,10 @@ class Cassandra(ModelObject):
         if self.constraint is not None:
             # print(f"constraint is {self.constraint}")
             # this might work out weirdly since self.df is scaled
-            df_forecast = df_forecast.apply_constraints(**self.constraint, df_train=self.to_origin_space(self.df, trans_method="original"))
+            df_forecast = df_forecast.apply_constraints(
+                **self.constraint,
+                df_train=self.to_origin_space(self.df, trans_method="original"),
+            )
         # RETURN COMPONENTS (long style) option
         df_forecast.predict_runtime = self.time() - predictStartTime
         return df_forecast
@@ -2792,11 +2818,15 @@ if False:
         )
     }
     constraint = None
-    past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns).astype(float)
+    past_impacts = pd.DataFrame(
+        0, index=df_train.index, columns=df_train.columns
+    ).astype(float)
     past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100
     past_impacts.iloc[-30:, -1] = np.linspace(1, 10)[0:30] / -100
     past_impacts_full = pd.DataFrame(0, index=df_daily.index, columns=df_daily.columns)
-    future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns).astype(float)
+    future_impacts = pd.DataFrame(
+        0, index=df_test.index, columns=df_test.columns
+    ).astype(float)
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra().get_new_params()

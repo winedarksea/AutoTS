@@ -970,7 +970,14 @@ class LATC(ModelObject):
         }
 
 
-def _DMD(data, r, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None, ecr_threshold=0.95):
+def _DMD(
+    data,
+    r,
+    alpha=0.0,
+    amplitude_threshold=None,
+    eigenvalue_threshold=None,
+    ecr_threshold=0.95,
+):
     X1 = data[:, :-1]
     X2 = data[:, 1:]
     u, s, v = np.linalg.svd(X1, full_matrices=False)
@@ -992,14 +999,14 @@ def _DMD(data, r, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None
         # Calculate mode amplitudes
         b = np.linalg.pinv(Q) @ u[:, :r].conj().T @ X1[:, 0]
         amplitudes = np.abs(b)
-        amp_filter = (amplitudes > amplitude_threshold)
+        amp_filter = amplitudes > amplitude_threshold
     else:
         amp_filter = np.ones_like(Phi, dtype=bool)
 
     if eigenvalue_threshold is not None:
         # Calculate eigenvalue magnitudes
         eigenvalue_magnitudes = np.abs(Phi)
-        eigen_filter = (eigenvalue_magnitudes <= eigenvalue_threshold)
+        eigen_filter = eigenvalue_magnitudes <= eigenvalue_threshold
     else:
         eigen_filter = np.ones_like(Phi, dtype=bool)
 
@@ -1014,9 +1021,17 @@ def _DMD(data, r, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None
     return A_tilde, Phi, A
 
 
-def dmd_forecast(data, r, pred_step, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None):
+def dmd_forecast(
+    data, r, pred_step, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None
+):
     N, T = data.shape
-    _, _, A = _DMD(data, r, alpha, amplitude_threshold=amplitude_threshold, eigenvalue_threshold=eigenvalue_threshold)
+    _, _, A = _DMD(
+        data,
+        r,
+        alpha,
+        amplitude_threshold=amplitude_threshold,
+        eigenvalue_threshold=eigenvalue_threshold,
+    )
     mat = np.append(data, np.zeros((N, pred_step)), axis=1)
     for s in range(pred_step):
         mat[:, T + s] = (A @ mat[:, T + s - 1]).real
@@ -1083,7 +1098,6 @@ class DMD(ModelObject):
                 self.rank = int(self.rank * df.shape[1])
                 self.rank = self.rank if self.rank > 0 else 1
 
-
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -1108,7 +1122,9 @@ class DMD(ModelObject):
 
         data = self.df_train.to_numpy().T
         forecast = dmd_forecast(
-            data, r=self.rank, pred_step=forecast_length,
+            data,
+            r=self.rank,
+            pred_step=forecast_length,
             alpha=self.alpha,
             amplitude_threshold=self.amplitude_threshold,
             eigenvalue_threshold=self.eigenvalue_threshold,

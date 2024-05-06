@@ -1295,7 +1295,7 @@ def generate_regressor_params(
                         ['epsilon_insensitive', 'squared_epsilon_insensitive']
                     ),
                     "max_iter": random.choice([500, 1000]),
-            }
+                },
             }
         else:
             min_samples = np.random.choice(

@@ -2678,7 +2678,9 @@ class SeasonalityMotif(ModelObject):
         if forecast_length >= self.df.shape[0]:
             self.independent = True
             if self.verbose > 0:
-                print("prediction too long for indepedent=False, falling back on indepdent=True")
+                print(
+                    "prediction too long for indepedent=False, falling back on indepdent=True"
+                )
         if self.independent:
             # each timestep is considered individually and not as a series
             test, scores = seasonal_independent_match(

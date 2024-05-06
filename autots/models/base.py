@@ -125,7 +125,7 @@ def constant_growth_rate(periods, final_growth):
     day_indices = np.arange(1, periods + 1)
 
     # Calculate the cumulative growth factor for each day
-    cumulative_growth_factors = daily_growth_factor ** day_indices
+    cumulative_growth_factors = daily_growth_factor**day_indices
 
     # Calculate the perceived growth rates relative to the starting value
     perceived_growth_rates = cumulative_growth_factors - 1
@@ -133,12 +133,24 @@ def constant_growth_rate(periods, final_growth):
 
 
 def apply_constraint_single(
-        forecast, lower_forecast, upper_forecast,
-        constraint_method, constraint_value, constraint_direction='upper',
-        constraint_regularization=1.0, bounds=True, df_train=None,
+    forecast,
+    lower_forecast,
+    upper_forecast,
+    constraint_method,
+    constraint_value,
+    constraint_direction='upper',
+    constraint_regularization=1.0,
+    bounds=True,
+    df_train=None,
 ):
     # check if training data provided
-    if df_train is None and constraint_method in ["quantile", "stdev", "stdev_min", "last_window", "slope"]:
+    if df_train is None and constraint_method in [
+        "quantile",
+        "stdev",
+        "stdev_min",
+        "last_window",
+        "slope",
+    ]:
         raise ValueError("this constraint requires df_train to be provided")
     # set direction
     lower_constraint = None
@@ -212,11 +224,16 @@ def apply_constraint_single(
         # have the slope start above a threshold to allow more volatility
         if threshold is not None:
             end_o_data = end_o_data + end_o_data * threshold
-        train_min = train_max = end_o_data.to_numpy() + end_o_data.to_numpy()[np.newaxis, :] * changes[:, np.newaxis]
+        train_min = train_max = (
+            end_o_data.to_numpy()
+            + end_o_data.to_numpy()[np.newaxis, :] * changes[:, np.newaxis]
+        )
     elif constraint_method == "dampening":
         pass
     else:
-        raise ValueError(f"constraint_method {constraint_method} not recognized, adjust constraint")
+        raise ValueError(
+            f"constraint_method {constraint_method} not recognized, adjust constraint"
+        )
 
     if constraint_method == "dampening":
         # the idea is to make the forecast plateau by gradually forcing the step to step change closer to zero
@@ -229,11 +246,23 @@ def apply_constraint_single(
             ).pow(range(req_len))
 
             # adjust all by same margin
-            forecast = pd.concat([forecast.iloc[0:1], forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
-            
+            forecast = pd.concat(
+                [forecast.iloc[0:1], forecast.diff().iloc[1:].mul(phi_series, axis=0)]
+            ).cumsum()
+
             if bounds:
-                lower_forecast = pd.concat([lower_forecast.iloc[0:1], lower_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
-                upper_forecast = pd.concat([upper_forecast.iloc[0:1], upper_forecast.diff().iloc[1:].mul(phi_series, axis=0)]).cumsum()
+                lower_forecast = pd.concat(
+                    [
+                        lower_forecast.iloc[0:1],
+                        lower_forecast.diff().iloc[1:].mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
+                upper_forecast = pd.concat(
+                    [
+                        upper_forecast.iloc[0:1],
+                        upper_forecast.diff().iloc[1:].mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
         return forecast, lower_forecast, upper_forecast
     if constraint_regularization == 1 or constraint_regularization is None:
         if lower_constraint is not None:
@@ -284,6 +313,7 @@ def apply_constraint_single(
                 )
     return forecast, lower_forecast, upper_forecast
 
+
 def apply_constraints(
     forecast,
     lower_forecast,
@@ -327,7 +357,9 @@ def apply_constraints(
     # handle old style
     if constraint_method is not None:
         if constraints is not None:
-            raise ValueError(f"both constraint_method (old way) and constraints (new way) args passed, this will not work. Constraints: {constraints}")
+            raise ValueError(
+                f"both constraint_method (old way) and constraints (new way) args passed, this will not work. Constraints: {constraints}"
+            )
         else:
             constraints = []
             if upper_constraint is not None:
@@ -358,10 +390,9 @@ def apply_constraints(
         constraints = [constraints]
     for constraint in constraints:
         forecast, lower_forecast, upper_forecast = apply_constraint_single(
-            forecast, lower_forecast, upper_forecast,
-            df_train=df_train, **constraint
+            forecast, lower_forecast, upper_forecast, df_train=df_train, **constraint
         )
-        
+
     return forecast, lower_forecast, upper_forecast
 
 
@@ -1013,18 +1044,18 @@ class PredictionObject(object):
         return self
 
     def apply_constraints(
-            self,
-            constraints=None,
-            df_train=None,
-            # old args
-            constraint_method=None,
-            constraint_regularization=None,
-            upper_constraint=None,
-            lower_constraint=None,
-            bounds=True,
+        self,
+        constraints=None,
+        df_train=None,
+        # old args
+        constraint_method=None,
+        constraint_regularization=None,
+        upper_constraint=None,
+        lower_constraint=None,
+        bounds=True,
     ):
         """Use constraint thresholds to adjust outputs by limit.
-        
+
         Example:
             apply_constraints(
                 constraints=[

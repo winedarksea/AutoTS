@@ -413,11 +413,11 @@ def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
         # Calculate the time difference in days as a float to preserve the exact time
         t = (DTindex - pd.Timestamp(origin_ts)).total_seconds() / 86400
         # for only daily: t = (DTindex - pd.Timestamp(origin_ts)).days
-        # for nano seconds: t = (DTindex - pd.Timestamp(origin_ts)).to_numpy(dtype=np.int64) // (1000 * 1000 * 1000) / (3600 * 24.) 
+        # for nano seconds: t = (DTindex - pd.Timestamp(origin_ts)).to_numpy(dtype=np.int64) // (1000 * 1000 * 1000) / (3600 * 24.)
     # formerly seasonality / history_days below
-    return pd.DataFrame(
-        fourier_series(np.asarray(t), seasonality, n=order)
-    ).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
+    return pd.DataFrame(fourier_series(np.asarray(t), seasonality, n=order)).rename(
+        columns=lambda x: f"seasonality{seasonality}_" + str(x)
+    )
 
 
 datepart_components = [
@@ -585,7 +585,25 @@ def random_datepart(method='random'):
     """New random parameters for seasonality."""
     seasonalities = random.choices(
         base_seasonalities,
-        [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2, 0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3],
+        [
+            0.4,
+            0.3,
+            0.3,
+            0.3,
+            0.4,
+            0.35,
+            0.45,
+            0.2,
+            0.1,
+            0.1,
+            0.05,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.3,
+        ],
     )[0]
     if seasonalities == "other":
         predefined = random.choices([True, False], [0.5, 0.5])[0]
@@ -730,7 +748,9 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
     t = (DTindex - pd.Timestamp(origin_ts)).total_seconds() / 86400
 
     if wavelet_type == "db2":
-        wavelets = create_narrowing_wavelets(p=float(p), max_order=int(order), t=t, sigma=float(sigma))
+        wavelets = create_narrowing_wavelets(
+            p=float(p), max_order=int(order), t=t, sigma=float(sigma)
+        )
     else:
         wavelets = offset_wavelet(
             p=float(p),  # Weekly period
@@ -741,4 +761,6 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
             sigma=float(sigma),  # Smaller sigma for tighter weekly spread
             wavelet_type=wavelet_type,
         )
-    return pd.DataFrame(wavelets, index=DTindex).rename(columns=lambda x: f"wavelet_{p}_" + str(x))
+    return pd.DataFrame(wavelets, index=DTindex).rename(
+        columns=lambda x: f"wavelet_{p}_" + str(x)
+    )

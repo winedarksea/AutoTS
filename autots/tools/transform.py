@@ -1443,9 +1443,7 @@ class DifferencedTransformer:
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        method_c = random.choices(
-            ["bfill", "zero", "one"], [0.5, 0.2, 0.01]
-        )[0]
+        method_c = random.choices(["bfill", "zero", "one"], [0.5, 0.2, 0.01])[0]
         choice = random.choices([1, 2, 7], [0.8, 0.1, 0.1])[0]
         return {"lag": choice, "fill": method_c}
 
@@ -1454,8 +1452,8 @@ class DifferencedTransformer:
         Args:
             df (pandas.DataFrame): input dataframe.
         """
-        self.last_values = df.iloc[-self.lag:]
-        self.first_values = df.iloc[:self.lag]
+        self.last_values = df.iloc[-self.lag :]
+        self.first_values = df.iloc[: self.lag]
         return self
 
     def transform(self, df):
@@ -1472,7 +1470,9 @@ class DifferencedTransformer:
         elif self.fill == 'one':
             return differenced.fillna(1)
         else:
-            raise ValueError(f"DifferencedTransformer fill method {self.fill} not recognized")
+            raise ValueError(
+                f"DifferencedTransformer fill method {self.fill} not recognized"
+            )
 
     def fit_transform(self, df):
         """Fits and returns differenced DataFrame.
@@ -1492,7 +1492,9 @@ class DifferencedTransformer:
                 - 'forecast' inverse the transform on a dataset immediately following the original.
         """
         if trans_method == "original":
-            df_with_first = pd.concat([self.first_values,  df.tail(df.shape[0] - self.lag)])
+            df_with_first = pd.concat(
+                [self.first_values, df.tail(df.shape[0] - self.lag)]
+            )
             return df_with_first.cumsum()
         elif trans_method == "forecast":
             df_len = df.shape[0]
@@ -1500,7 +1502,6 @@ class DifferencedTransformer:
             return df_with_last.cumsum().tail(df_len)
         else:
             raise ValueError("Invalid transformation method specified.")
-
 
 
 class PctChangeTransformer(EmptyTransformer):
