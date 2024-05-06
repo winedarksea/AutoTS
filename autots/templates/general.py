@@ -418,11 +418,7 @@ general_template_dict = {
     },
     "68": {
         'Model': 'SeasonalityMotif',
-        'ModelParameters': '''{
-            "window": 5, "point_method": "weighted_mean",
-            "distance_metric": "mae", "k": 10,
-            "datepart_method": "common_fourier"
-        }''',
+        'ModelParameters': '{"window": 5, "point_method": "weighted_mean", "distance_metric": "mae", "k": 10, "datepart_method": "common_fourier"}',
         'TransformationParameters': '{"fillna": "nearest", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": false}}}',
         'Ensemble': 0,
     },
@@ -464,6 +460,18 @@ general_template_dict = {
         'ModelParameters': '{"preprocessing_transformation": {"fillna": "ffill", "transformations": {"0": "RobustScaler", "1": "SeasonalDifference"}, "transformation_params": {"0": {}, "1": {"lag_1": 7, "method": "LastValue"}}}, "scaling": {"fillna": null, "transformations": {"0": "StandardScaler"}, "transformation_params": {"0": {}}}, "past_impacts_intervention": null, "seasonalities": ["simple_binarized"], "ar_lags": null, "ar_interaction_seasonality": null, "anomaly_detector_params": null, "anomaly_intervention": null, "holiday_detector_params": {"threshold": 1.0, "splash_threshold": null, "use_dayofmonth_holidays": true, "use_wkdom_holidays": true, "use_wkdeom_holidays": false, "use_lunar_holidays": true, "use_lunar_weekday": false, "use_islamic_holidays": false, "use_hebrew_holidays": false, "anomaly_detector_params": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "mean", "transform_dict": null, "isolated_only": false}, "remove_excess_anomalies": false, "impact": null, "regression_params": null, "output": "multivariate"}, "holiday_countries_used": false, "multivariate_feature": null, "multivariate_transformation": null, "regressor_transformation": {"fillna": "nearest", "transformations": {"0": "AlignLastDiff"}, "transformation_params": {"0": {"rows": 7, "displacement_rows": 7, "quantile": 1.0, "decay_span": 2}}}, "regressors_used": true, "linear_model": {"model": "lstsq", "lambda": null, "recency_weighting": null}, "randomwalk_n": 10, "trend_window": 3, "trend_standin": null, "trend_anomaly_detector_params": null, "trend_transformation": {"fillna": "pchip", "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3.5, "fillna": null}}}, "trend_model": {"Model": "ARDL", "ModelParameters": {"lags": 1, "trend": "c", "order": 0, "causal": false, "regression_type": "holiday"}}, "trend_phi": null}',
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "MaxAbsScaler", "1": "FFTDecomposition", "2": "bkfilter"}, "transformation_params": {"0": {}, "1": {"n_harmonics": 10, "detrend": "linear"}, "2": {}}}',
         'Ensemble': 0,
+    },
+    "74": {  # optimized 200 minutes on initial model import on load_daily
+        "Model": "DMD",
+        'ModelParameters': '{"rank": 10, "alpha": 1, "amplitude_threshold": null, "eigenvalue_threshold": null}"',
+        "TransformationParameters": '"{"fillna": "linear", "transformations": {"0": "HistoricValues", "1": "AnomalyRemoval", "2": "SeasonalDifference", "3": "AnomalyRemoval"},"transformation_params": {"0": {"window": 10}, "1": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "ffill", "transform_dict": {"fillna": null, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "isolated_only": false}, "2": {"lag_1": 7, "method": "Mean"}, "3": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "fake_date", "transform_dict": {"transformations": {"0": "DifferencedTransformer"}, "transformation_params": {"0": {}}}, "isolated_only": false}}}',
+        "Ensemble": 0,
+    },
+    "75": {  # short optimization on M5
+        "Model": "DMD",
+        "ModelParameters": "{'rank': 2, 'alpha': 1, 'amplitude_threshold': null, 'eigenvalue_threshold': 1}",
+        "TransformationParameters": "{'fillna': 'ffill', 'transformations': {'0': 'SeasonalDifference', '1': 'AlignLastValue', '2': 'Round', '3': 'Round', '4': 'MinMaxScaler'}, 'transformation_params': {'0': {'lag_1': 7, 'method': 'LastValue'}, '1': {'rows': 1, 'lag': 1, 'method': 'additive', 'strength': 1.0, 'first_value_only': false}, '2': {'decimals': 0, 'on_transform': false, 'on_inverse': true}, '3': {'decimals': 0, 'on_transform': false, 'on_inverse': true}, '4': {}}}",
+        "Ensemble": 0,
     },
 }
 

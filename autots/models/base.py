@@ -113,66 +113,158 @@ class ModelObject(object):
         return datetime.datetime.now()
 
 
-def apply_constraints(
+def constant_growth_rate(periods, final_growth):
+    """Take a final target growth rate (ie 2 % over a year) and convert to a daily (etc) value."""
+    # Convert final growth rate percentage to a growth factor
+    final_growth_factor = 1 + final_growth
+
+    # Calculate the daily growth factor required to achieve the final growth factor in the given days
+    daily_growth_factor = final_growth_factor ** (1 / periods)
+
+    # Generate an array of day indices
+    day_indices = np.arange(1, periods + 1)
+
+    # Calculate the cumulative growth factor for each day
+    cumulative_growth_factors = daily_growth_factor**day_indices
+
+    # Calculate the perceived growth rates relative to the starting value
+    perceived_growth_rates = cumulative_growth_factors - 1
+    return perceived_growth_rates
+
+
+def apply_constraint_single(
     forecast,
     lower_forecast,
     upper_forecast,
     constraint_method,
-    constraint_regularization,
-    upper_constraint,
-    lower_constraint,
-    bounds,
+    constraint_value,
+    constraint_direction='upper',
+    constraint_regularization=1.0,
+    bounds=True,
     df_train=None,
 ):
-    """Use constraint thresholds to adjust outputs by limit.
-    Note that only one method of constraint can be used here, but if different methods are desired,
-    this can be run twice, with None passed to the upper or lower constraint not being used.
-
-    Args:
-        forecast (pd.DataFrame): forecast df, wide style
-        lower_forecast (pd.DataFrame): lower bound forecast df
-            if bounds is False, upper and lower forecast dataframes are unused and can be empty
-        upper_forecast (pd.DataFrame): upper bound forecast df
-        constraint_method (str): one of
-            stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
-            stdev - threshold is the mean of historic data +/- constraint * st dev of data
-            absolute - input is array of length series containing the threshold's final value for each
-            quantile - constraint is the quantile of historic data to use as threshold
-        constraint_regularization (float): 0 to 1
-            where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
-        upper_constraint (float): or array, depending on method, None if unused
-        lower_constraint (float): or array, depending on method, None if unused
-        bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
-        df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
-
-    Returns:
-        forecast, lower, upper (pd.DataFrame)
-    """
+    # check if training data provided
+    if df_train is None and constraint_method in [
+        "quantile",
+        "stdev",
+        "stdev_min",
+        "last_window",
+        "slope",
+    ]:
+        raise ValueError("this constraint requires df_train to be provided")
+    # set direction
+    lower_constraint = None
+    upper_constraint = None
+    if constraint_direction == "lower":
+        lower_constraint = True
+    elif constraint_direction == "upper":
+        upper_constraint = True
+    else:
+        raise ValueError(f"constraint_direction: {constraint_direction} invalid")
     if constraint_method == "stdev_min":
         train_std = df_train.std(axis=0)
         if lower_constraint is not None:
-            train_min = df_train.min(axis=0) - (lower_constraint * train_std)
+            train_min = df_train.min(axis=0) - (constraint_value * train_std)
         if upper_constraint is not None:
-            train_max = df_train.max(axis=0) + (upper_constraint * train_std)
+            train_max = df_train.max(axis=0) + (constraint_value * train_std)
     elif constraint_method == "stdev":
         train_std = df_train.std(axis=0)
         train_mean = df_train.mean(axis=0)
         if lower_constraint is not None:
-            train_min = train_mean - (lower_constraint * train_std)
+            train_min = train_mean - (constraint_value * train_std)
         if upper_constraint is not None:
-            train_max = train_mean + (upper_constraint * train_std)
-    elif constraint_method == "absolute":
-        train_min = lower_constraint
-        train_max = upper_constraint
+            train_max = train_mean + (constraint_value * train_std)
+    elif constraint_method in ["absolute", "fixed"]:
+        train_min = constraint_value
+        train_max = constraint_value
     elif constraint_method == "quantile":
         if lower_constraint is not None:
-            train_min = df_train.quantile(lower_constraint, axis=0)
+            train_min = df_train.quantile(constraint_value, axis=0)
         if upper_constraint is not None:
-            train_max = df_train.quantile(upper_constraint, axis=0)
+            train_max = df_train.quantile(constraint_value, axis=0)
+    elif constraint_method == "last_window":
+        if isinstance(constraint_value, dict):
+            window = constraint_value.get("window", 3)
+            window_agg = constraint_value.get("window_agg", "mean")
+            threshold = constraint_value.get("threshold", 0.05)
+        else:
+            window = 1
+            window_agg = "mean"
+            threshold = constraint_value
+        if window_agg == "mean":
+            end_o_data = df_train.iloc[-window:].mean(axis=0)
+        elif window_agg == "max":
+            end_o_data = df_train.iloc[-window:].max(axis=0)
+        elif window_agg == "min":
+            end_o_data = df_train.iloc[-window:].min(axis=0)
+        else:
+            raise ValueError(f"constraint window_agg not recognized: {window_agg}")
+        train_min = train_max = end_o_data + end_o_data * threshold
+    elif constraint_method == "slope":
+        if isinstance(constraint_value, dict):
+            window = constraint_value.get("window", 1)
+            window_agg = constraint_value.get("window_agg", "mean")
+            slope = constraint_value.get("slope", 0.05)
+            threshold = constraint_value.get("threshold", None)
+        else:
+            window = 1
+            window_agg = "mean"
+            slope = constraint_value
+            threshold = None
+        # slope is given as a final max growth, NOT compounding
+        changes = constant_growth_rate(forecast.shape[0], slope)
+        if window_agg == "mean":
+            end_o_data = df_train.iloc[-window:].mean(axis=0)
+        elif window_agg == "max":
+            end_o_data = df_train.iloc[-window:].max(axis=0)
+        elif window_agg == "min":
+            end_o_data = df_train.iloc[-window:].min(axis=0)
+        else:
+            raise ValueError(f"constraint window_agg not recognized: {window_agg}")
+        # have the slope start above a threshold to allow more volatility
+        if threshold is not None:
+            end_o_data = end_o_data + end_o_data * threshold
+        train_min = train_max = (
+            end_o_data.to_numpy()
+            + end_o_data.to_numpy()[np.newaxis, :] * changes[:, np.newaxis]
+        )
+    elif constraint_method == "dampening":
+        pass
     else:
-        raise ValueError("constraint_method not recognized, adjust constraint")
+        raise ValueError(
+            f"constraint_method {constraint_method} not recognized, adjust constraint"
+        )
 
-    if constraint_regularization == 1:
+    if constraint_method == "dampening":
+        # the idea is to make the forecast plateau by gradually forcing the step to step change closer to zero
+        trend_phi = constraint_value
+        if trend_phi is not None and trend_phi != 1 and forecast.shape[0] > 2:
+            req_len = forecast.shape[0] - 1
+            phi_series = pd.Series(
+                [trend_phi] * req_len,
+                index=forecast.index[1:],
+            ).pow(range(req_len))
+
+            # adjust all by same margin
+            forecast = pd.concat(
+                [forecast.iloc[0:1], forecast.diff().iloc[1:].mul(phi_series, axis=0)]
+            ).cumsum()
+
+            if bounds:
+                lower_forecast = pd.concat(
+                    [
+                        lower_forecast.iloc[0:1],
+                        lower_forecast.diff().iloc[1:].mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
+                upper_forecast = pd.concat(
+                    [
+                        upper_forecast.iloc[0:1],
+                        upper_forecast.diff().iloc[1:].mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
+        return forecast, lower_forecast, upper_forecast
+    if constraint_regularization == 1 or constraint_regularization is None:
         if lower_constraint is not None:
             forecast = forecast.clip(lower=train_min, axis=1)
         if upper_constraint is not None:
@@ -186,45 +278,121 @@ def apply_constraints(
                 upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
     else:
         if lower_constraint is not None:
-            forecast.where(
+            forecast = forecast.where(
                 forecast >= train_min,
                 forecast + (train_min - forecast) * constraint_regularization,
-                inplace=True,
             )
         if upper_constraint is not None:
-            forecast.where(
+            forecast = forecast.where(
                 forecast <= train_max,
                 forecast + (train_max - forecast) * constraint_regularization,
-                inplace=True,
             )
         if bounds:
             if lower_constraint is not None:
-                lower_forecast.where(
+                lower_forecast = lower_forecast.where(
                     lower_forecast >= train_min,
                     lower_forecast
                     + (train_min - lower_forecast) * constraint_regularization,
-                    inplace=True,
                 )
-                upper_forecast.where(
+                upper_forecast = upper_forecast.where(
                     upper_forecast >= train_min,
                     upper_forecast
                     + (train_min - upper_forecast) * constraint_regularization,
-                    inplace=True,
                 )
             if upper_constraint is not None:
-                lower_forecast.where(
+                lower_forecast = lower_forecast.where(
                     lower_forecast <= train_max,
                     lower_forecast
                     + (train_max - lower_forecast) * constraint_regularization,
-                    inplace=True,
                 )
 
-                upper_forecast.where(
+                upper_forecast = upper_forecast.where(
                     upper_forecast <= train_max,
                     upper_forecast
                     + (train_max - upper_forecast) * constraint_regularization,
-                    inplace=True,
                 )
+    return forecast, lower_forecast, upper_forecast
+
+
+def apply_constraints(
+    forecast,
+    lower_forecast,
+    upper_forecast,
+    constraints=None,
+    df_train=None,
+    # old args
+    constraint_method=None,
+    constraint_regularization=None,
+    upper_constraint=None,
+    lower_constraint=None,
+    bounds=True,
+):
+    """Use constraint thresholds to adjust outputs by limit.
+
+    Args:
+        forecast (pd.DataFrame): forecast df, wide style
+        lower_forecast (pd.DataFrame): lower bound forecast df
+            if bounds is False, upper and lower forecast dataframes are unused and can be empty
+        upper_forecast (pd.DataFrame): upper bound forecast df
+        constraints (list): list of dictionaries of constraints to apply
+            keys: "constraint_method" (same as below, old args), "constraint_regularization", "constraint_value", "constraint_direction" (upper/lower), bounds
+        df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
+        # old args
+        constraint_method (str): one of
+            stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+            stdev - threshold is the mean of historic data +/- constraint * st dev of data
+            absolute - input is array of length series containing the threshold's final value for each
+            quantile - constraint is the quantile of historic data to use as threshold
+            last_window - certain percentage above and below the last n data values
+            slope - cannot exceed a certain growth rate from last historical value
+        constraint_regularization (float): 0 to 1
+            where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+        upper_constraint (float): or array, depending on method, None if unused
+        lower_constraint (float): or array, depending on method, None if unused
+        bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+
+    Returns:
+        forecast, lower, upper (pd.DataFrame)
+    """
+    # handle old style
+    if constraint_method is not None:
+        if constraints is not None:
+            raise ValueError(
+                f"both constraint_method (old way) and constraints (new way) args passed, this will not work. Constraints: {constraints}"
+            )
+        else:
+            constraints = []
+            if upper_constraint is not None:
+                constraints.append(
+                    {
+                        "constraint_method": constraint_method,
+                        "constraint_value": upper_constraint,
+                        "constraint_direction": "upper",
+                        "constraint_regularization": constraint_regularization,
+                        "bounds": bounds,
+                    }
+                )
+            if lower_constraint is not None:
+                constraints.append(
+                    {
+                        "constraint_method": constraint_method,
+                        "constraint_value": lower_constraint,
+                        "constraint_direction": "lower",
+                        "constraint_regularization": constraint_regularization,
+                        "bounds": bounds,
+                    }
+                )
+        print(constraints)
+    if constraints is None or not constraints:
+        print("no constraint applied")
+        return forecast, lower_forecast, upper_forecast
+    if isinstance(constraints, dict):
+        constraints = [constraints]
+    for constraint in constraints:
+        forecast, lower_forecast, upper_forecast = apply_constraint_single(
+            forecast, lower_forecast, upper_forecast, df_train=df_train, **constraint
+        )
+
     return forecast, lower_forecast, upper_forecast
 
 
@@ -877,16 +1045,64 @@ class PredictionObject(object):
 
     def apply_constraints(
         self,
-        constraint_method="quantile",
-        constraint_regularization=0.5,
-        upper_constraint=1.0,
-        lower_constraint=0.0,
-        bounds=True,
+        constraints=None,
         df_train=None,
+        # old args
+        constraint_method=None,
+        constraint_regularization=None,
+        upper_constraint=None,
+        lower_constraint=None,
+        bounds=True,
     ):
         """Use constraint thresholds to adjust outputs by limit.
-        Note that only one method of constraint can be used here, but if different methods are desired,
-        this can be run twice, with None passed to the upper or lower constraint not being used.
+
+        Example:
+            apply_constraints(
+                constraints=[
+                    {  # don't exceed historic max
+                        "constraint_method": "quantile",
+                        "constraint_value": 1.0,
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 1.0,
+                        "bounds": True,
+                    },
+                    {  # don't exceed 2% growth by end of forecast horizon
+                        "constraint_method": "slope",
+                        "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01},
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 0.9,
+                        "bounds": False,
+                    },
+                    {  # don't go below the last 10 values - 10%
+                        "constraint_method": "last_window",
+                        "constraint_value": {"window": 10, "threshold": -0.1},
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 1.0,
+                        "bounds": False,
+                    },
+                    {  # don't go below zero
+                        "constraint_method": "absolute",
+                        "constraint_value": 0,  # can also be an array or Series
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 1.0,
+                        "bounds": True,
+                    },
+                    {  # don't go below historic min  - 1 st dev
+                        "constraint_method": "stdev_min",
+                        "constraint_value": 1.0,
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 1.0,
+                        "bounds": True,
+                    },
+                    {  # don't go above historic mean  + 3 st devs, soft limit
+                        "constraint_method": "stdev",
+                        "constraint_value": 3.0,
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 0.5,
+                        "bounds": True,
+                    },
+                ]
+            )
 
         Args:
             constraint_method (str): one of
@@ -908,11 +1124,13 @@ class PredictionObject(object):
             self.forecast,
             self.lower_forecast,
             self.upper_forecast,
-            constraint_method,
-            constraint_regularization,
-            upper_constraint,
-            lower_constraint,
-            bounds,
-            df_train,
+            constraints=constraints,
+            df_train=df_train,
+            # old args
+            constraint_method=constraint_method,
+            constraint_regularization=constraint_regularization,
+            upper_constraint=upper_constraint,
+            lower_constraint=lower_constraint,
+            bounds=bounds,
         )
         return self

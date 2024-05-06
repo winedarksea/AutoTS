@@ -968,3 +968,218 @@ class LATC(ModelObject):
             'alpha': self.alpha,
             'maxiter': self.maxiter,
         }
+
+
+def _DMD(
+    data,
+    r,
+    alpha=0.0,
+    amplitude_threshold=None,
+    eigenvalue_threshold=None,
+    ecr_threshold=0.95,
+):
+    X1 = data[:, :-1]
+    X2 = data[:, 1:]
+    u, s, v = np.linalg.svd(X1, full_matrices=False)
+    if r in ['ecr', 'auto']:
+        total_energy = np.sum(s**2)
+        # Calculate captured energy for each singular value
+        captured_energy = np.cumsum(s**2) / total_energy
+        r = np.searchsorted(captured_energy, ecr_threshold)
+        print(f"ECR rank is {r}")
+    elif r > 0 and r < 1:
+        r = int(data.shape[0] * r)
+        # print(f"Rational rank is {r}")
+
+    regularized_s = s[:r] + alpha
+    A_tilde = u[:, :r].conj().T @ X2 @ v[:r, :].conj().T * np.reciprocal(regularized_s)
+    Phi, Q = np.linalg.eig(A_tilde)
+
+    if amplitude_threshold is not None:
+        # Calculate mode amplitudes
+        b = np.linalg.pinv(Q) @ u[:, :r].conj().T @ X1[:, 0]
+        amplitudes = np.abs(b)
+        amp_filter = amplitudes > amplitude_threshold
+    else:
+        amp_filter = np.ones_like(Phi, dtype=bool)
+
+    if eigenvalue_threshold is not None:
+        # Calculate eigenvalue magnitudes
+        eigenvalue_magnitudes = np.abs(Phi)
+        eigen_filter = eigenvalue_magnitudes <= eigenvalue_threshold
+    else:
+        eigen_filter = np.ones_like(Phi, dtype=bool)
+
+    # Filter modes based on amplitudes and eigenvalue magnitudes
+    filter_mask = amp_filter & eigen_filter
+    Phi = Phi[filter_mask]
+    Q = Q[:, filter_mask]
+
+    # Reconstruct dynamics with filtered modes
+    Psi = X2 @ v[:r, :].conj().T @ np.diag(np.reciprocal(regularized_s)) @ Q
+    A = Psi @ np.diag(Phi) @ np.linalg.pinv(Psi)
+    return A_tilde, Phi, A
+
+
+def dmd_forecast(
+    data, r, pred_step, alpha=0.0, amplitude_threshold=None, eigenvalue_threshold=None
+):
+    N, T = data.shape
+    _, _, A = _DMD(
+        data,
+        r,
+        alpha,
+        amplitude_threshold=amplitude_threshold,
+        eigenvalue_threshold=eigenvalue_threshold,
+    )
+    mat = np.append(data, np.zeros((N, pred_step)), axis=1)
+    for s in range(pred_step):
+        mat[:, T + s] = (A @ mat[:, T + s - 1]).real
+    return mat[:, -pred_step:]
+
+
+class DMD(ModelObject):
+    """Dynamic Mode Decomposition
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        regression_type (str): type of regression (None, 'User', or 'Holiday')
+        n_jobs (int): passed to joblib for multiprocessing. Set to none for context manager.
+
+    """
+
+    def __init__(
+        self,
+        name: str = "DMD",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        alpha: float = 0.0,
+        rank: float = 0.1,
+        amplitude_threshold: float = None,
+        eigenvalue_threshold: float = None,
+        holiday_country: str = 'US',
+        random_seed: int = 2022,
+        verbose: int = 0,
+        n_jobs: int = None,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.alpha = alpha
+        self.rank = rank
+        self.amplitude_threshold = amplitude_threshold
+        self.eigenvalue_threshold = eigenvalue_threshold
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied .
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+
+        df = self.basic_profile(df)
+        self.regressor_train = None
+        self.verbose_bool = False
+        if self.verbose > 1:
+            self.verbose_bool = True
+
+        if isinstance(self.rank, float):
+            if self.rank < 1 and self.rank > 0:
+                self.rank = int(self.rank * df.shape[1])
+                self.rank = self.rank if self.rank > 0 else 1
+
+        self.df_train = df
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generate forecast data immediately following dates of index supplied to .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        data = self.df_train.to_numpy().T
+        forecast = dmd_forecast(
+            data,
+            r=self.rank,
+            pred_step=forecast_length,
+            alpha=self.alpha,
+            amplitude_threshold=self.amplitude_threshold,
+            eigenvalue_threshold=self.eigenvalue_threshold,
+        ).T
+
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        if just_point_forecast:
+            return forecast
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=test_index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        return {
+            'rank': random.choices(
+                [2, 3, 4, 6, 10, 0.1, 0.2, 0.5, "ecr"],
+                [0.4, 0.1, 0.3, 0.1, 0.1, 0.1, 0.2, 0.2, 0.6],
+            )[0],
+            'alpha': random.choice([0.0, 0.001, 0.1, 1]),
+            'amplitude_threshold': random.choices(
+                [None, 0.1, 1, 10],
+                [0.7, 0.1, 0.1, 0.1],
+            )[0],
+            'eigenvalue_threshold': random.choices(
+                [None, 0.1, 1, 10],
+                [0.7, 0.1, 0.1, 0.1],
+            )[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            'rank': self.rank,
+            'alpha': self.alpha,
+            'amplitude_threshold': self.amplitude_threshold,
+            'eigenvalue_threshold': self.eigenvalue_threshold,
+        }

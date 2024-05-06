@@ -34,7 +34,7 @@ try:
     from sklearn.ensemble import IsolationForest
     from sklearn.neighbors import LocalOutlierFactor
     from sklearn.covariance import EllipticEnvelope
-    from scipy.stats import chi2, norm, gamma, uniform
+    from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy
 except Exception:
     pass
 
@@ -127,6 +127,9 @@ def zscore_survival_function(
     elif method == "mad":
         median_diff = np.abs((df - df.median(axis=0)))
         residual_score = median_diff / median_diff.mean(axis=0)
+    elif method == "med_diff":
+        median_diff = df.diff().median()
+        residual_score = (df.diff().fillna(0) / median_diff).abs()
     else:
         raise ValueError("zscore method not recognized")
 
@@ -153,6 +156,12 @@ def zscore_survival_function(
         return pd.DataFrame(
             chi2.sf(residual_score, dof), index=df.index, columns=columns
         )
+    elif distribution == "cauchy":
+        return pd.DataFrame(
+            cauchy.sf(residual_score, dof), index=df.index, columns=columns
+        )
+    elif distribution == "laplace":
+        return pd.DataFrame(laplace.sf(residual_score), index=df.index, columns=columns)
     elif distribution == "uniform":
         return pd.DataFrame(
             uniform.sf(residual_score, dof), index=df.index, columns=columns
@@ -222,7 +231,7 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
                 columns=cols,
             )
         return res, scores
-    elif threshold_method in ["zscore", "rolling_zscore", "mad"]:
+    elif threshold_method in ["zscore", "rolling_zscore", "mad", "med_diff"]:
         alpha = method_params.get("alpha", 0.05)
         distribution = method_params.get("distribution", "norm")
         rolling_periods = method_params.get("rolling_periods", 200)
@@ -382,7 +391,7 @@ def detect_anomalies(
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
             res, scores = loop_sk_outliers(df_anomaly, method, method_params, n_jobs)
-    elif method in ["zscore", "rolling_zscore", "mad", "minmax"]:
+    elif method in ["zscore", "rolling_zscore", "mad", "minmax", "med_diff"]:
         res, scores = values_to_anomalies(df_anomaly, output, method, method_params)
     elif method in ["IQR"]:
         iqr_thresh = method_params.get("iqr_threshold", 2.0)
@@ -428,6 +437,7 @@ available_methods = [
     "prediction_interval",  # ridiculously slow
     "IQR",
     "nonparametric",
+    "med_diff",
 ]
 fast_methods = [
     "zscore",
@@ -436,6 +446,7 @@ fast_methods = [
     "minmax",
     "IQR",
     "nonparametric",
+    "med_diff",
 ]
 
 
@@ -443,10 +454,12 @@ def anomaly_new_params(method='random'):
     if method == "deep":
         method_choice = random.choices(
             available_methods,
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1],
         )[0]
     elif method == "fast":
-        method_choice = random.choices(fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05])[0]
+        method_choice = random.choices(
+            fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1]
+        )[0]
     elif method in available_methods:
         method_choice = method
     else:
@@ -498,11 +511,24 @@ def anomaly_new_params(method='random'):
     elif method_choice == "rolling_zscore":
         method_params = {
             'distribution': random.choices(
-                ['norm', 'gamma', 'chi2', 'uniform'], [0.4, 0.2, 0.2, 0.2]
+                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"],
+                [0.4, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0],
-            'alpha': random.choices([0.03, 0.05, 0.1], [0.1, 0.8, 0.1])[0],
+            'alpha': random.choices(
+                [0.01, 0.03, 0.05, 0.1, 0.2, 0.4], [0.1, 0.1, 0.8, 0.1, 0.1, 0.01]
+            )[0],
             'rolling_periods': random.choice([28, 90, 200, 300]),
             'center': random.choice([True, False]),
+        }
+    elif method_choice == "med_diff":
+        method_params = {
+            'distribution': random.choices(
+                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"],
+                [0.4, 0.2, 0.2, 0.2, 0.1, 0.1],
+            )[0],
+            'alpha': random.choices(
+                [0.01, 0.03, 0.05, 0.1, 0.2, 0.6], [0.1, 0.1, 0.8, 0.1, 0.1, 0.05]
+            )[0],
         }
     elif method_choice == "mad":
         method_params = {

@@ -47,6 +47,7 @@ all_models = [
     "BallTreeMultivariateMotif",
     "TiDE",
     "NeuralForecast",
+    "DMD",
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -60,23 +61,27 @@ default = {
     'ETS': 1,
     'FBProphet': 0.5,
     # 'GluonTS': 0.5,
-    'UnobservedComponents': 1,
+    'UnobservedComponents': 0.6,
     'VAR': 1,
     'VECM': 1,
-    'ARIMA': 0.4,
-    'WindowRegression': 0.5,
+    'ARIMA': 0.3,
+    'WindowRegression': 0.8,
     'DatepartRegression': 1,
-    'UnivariateRegression': 0.3,
+    # 'UnivariateRegression': 0.1,
     'MultivariateRegression': 0.4,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'SectionalMotif': 1,
-    'NVAR': 1,
+    'NVAR': 0.4,
     'Theta': 1,
     'ARDL': 1,
     'ARCH': 1,
     'MetricMotif': 1,
     'SeasonalityMotif': 1,
+    'DMD': 0.3,
+    'RRVAR': 0.8,
+    'FFT': 0.8,
+    'Cassandra': 0.8,
 }
 # fastest models at any scale
 superfast = [
@@ -223,6 +228,7 @@ multivariate = [
     'BallTreeMultivariateMotif',
     "TiDE",
     "NeuralForecast",
+    "DMD",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -269,6 +275,7 @@ recombination_approved = [
     'FFT',
     'BallTreeMultivariateMotif',
     "TiDE",
+    "DMD",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

@@ -434,7 +434,7 @@ def retrieve_regressor(
                 verbosity=0, **model_param_dict, n_jobs=smaller_n_jobs
             )
         return regr
-    elif model_class == 'SVM':
+    elif model_class in ['SVM', "LinearSVR"]:
         from sklearn.svm import LinearSVR
 
         if multioutput:
@@ -640,7 +640,7 @@ multivariate_model_dict = {
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
-    'SVM': 0.03,
+    'SVM': 0.01,
     # 'BayesianRidge': 0.05,
     'xgboost': 0.09,
     # 'KerasRNN': 0.01,  # too slow on big data
@@ -677,7 +677,7 @@ rolling_regression_dict = {
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
-    'SVM': 0.05,
+    'SVM': 0.02,
     'KerasRNN': 0.02,
     'LightGBM': 0.09,
     'LightGBMRegressorChain': 0.03,
@@ -691,7 +691,7 @@ rolling_regression_dict = {
 no_shared_model_dict = {
     'KNN': 0.1,
     'Adaboost': 0.1,
-    'SVM': 0.1,
+    'SVM': 0.01,
     'xgboost': 0.1,
     'LightGBM': 0.1,
     'HistGradientBoost': 0.1,
@@ -703,7 +703,7 @@ datepart_model_dict: dict = {
     'MLP': 0.05,
     'DecisionTree': 0.02,
     'Adaboost': 0.05,
-    'SVM': 0.01,
+    'SVM': 0.001,
     'KerasRNN': 0.01,
     # 'Transformer': 0.02,  # slow, kernel failed
     'RadiusNeighbors': 0.1,
@@ -1287,12 +1287,15 @@ def generate_regressor_params(
         elif model == "SVM":
             # LinearSVR
             param_dict = {
-                'C': random.choices([1.0, 0.5, 2.0, 0.25], [0.6, 0.1, 0.1, 0.1])[0],
-                'tol': random.choices([1e-4, 1e-3, 1e-5], [0.6, 0.1, 0.1])[0],
-                "loss": random.choice(
-                    ['epsilon_insensitive', 'squared_epsilon_insensitive']
-                ),
-                "max_iter": random.choice([500, 1000]),
+                "model": 'SVM',
+                "model_params": {
+                    'C': random.choices([1.0, 0.5, 2.0, 0.25], [0.6, 0.1, 0.1, 0.1])[0],
+                    'tol': random.choices([1e-4, 1e-3, 1e-5], [0.6, 0.1, 0.1])[0],
+                    "loss": random.choice(
+                        ['epsilon_insensitive', 'squared_epsilon_insensitive']
+                    ),
+                    "max_iter": random.choice([500, 1000]),
+                },
             }
         else:
             min_samples = np.random.choice(

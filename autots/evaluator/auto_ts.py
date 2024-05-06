@@ -1075,6 +1075,7 @@ class AutoTS(object):
             preclean=None,
             verbose=0,
         )
+        return self
 
     def fit(
         self,
@@ -1826,8 +1827,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results['TotalRuntime'].fillna(
-                pd.Timedelta(seconds=60), inplace=True
+            template_result.model_results['TotalRuntime'] = (
+                template_result.model_results['TotalRuntime'].fillna(
+                    pd.Timedelta(seconds=60)
+                )
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -2161,9 +2164,13 @@ class AutoTS(object):
             result_set (str): 'validation' or 'initial'
         """
         if result_set == 'validation':
-            return self.validation_results.model_results
+            return self.validation_results.model_results.sort_values(
+                "Score", ascending=True
+            )
         else:
-            return self.initial_results.model_results
+            return self.initial_results.model_results.sort_values(
+                "Score", ascending=True
+            )
 
     def failure_rate(self, result_set: str = 'initial'):
         """Return fraction of models passing with exceptions.
@@ -2280,6 +2287,22 @@ class AutoTS(object):
             export_template = unpack_ensemble_models(
                 export_template, self.template_cols, keep_ensemble=False, recursive=True
             ).drop_duplicates()
+            if include_results:
+                export_template = export_template.drop(columns=['smape']).merge(
+                    self.validation_results.model_results[['ID', 'smape']],
+                    on="ID",
+                    how='left',
+                )
+                # put smape back in the front
+                remaining_columns = [
+                    col
+                    for col in export_template.columns
+                    if col not in self.template_cols_id and col not in ['smape', 'Runs']
+                ]
+                new_order = (
+                    self.template_cols_id + ['Runs', 'smape'] + remaining_columns
+                )
+                export_template = export_template.reindex(columns=new_order)
         return self.save_template(filename, export_template)
 
     def save_template(self, filename, export_template, **kwargs):

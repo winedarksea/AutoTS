@@ -274,13 +274,20 @@ class AutoTSTest(unittest.TestCase):
 
         transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
         transformer_max_depth = 1
+        constraint = {
+            "constraint_method": "quantile",
+            "constraint_regularization": 0.9,
+            "upper_constraint": 0.99,
+            "lower_constraint": 0.01,
+            "bounds": True,
+        }
 
         model = AutoTS(
             forecast_length=forecast_length,
             frequency='infer',
             prediction_interval=0.9,
             ensemble=["horizontal-max"],
-            constraint=None,
+            constraint=constraint,
             max_generations=generations,
             num_validations=num_validations,
             validation_method=validation_method,
@@ -579,6 +586,7 @@ class ModelTest(unittest.TestCase):
             'Cassandra', 'MetricMotif', 'SeasonalityMotif', 'KalmanStateSpace',
             'ARDL', 'UnivariateMotif', 'VAR', 'MAR', 'TMF', 'RRVAR', 'VECM',
             'BallTreeMultivariateMotif', 'FFT',
+            # "DMD",  # 0.6.12
         ]
         # models that for whatever reason arne't consistent across test sessions
         run_only_no_score = ['FBProphet', 'RRVAR', "TMF"]

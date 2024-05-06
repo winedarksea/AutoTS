@@ -148,6 +148,14 @@ autots.tools.transform module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.wavelet module
+---------------------------
+
+.. automodule:: autots.tools.wavelet
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.window\_functions module
 -------------------------------------
 
