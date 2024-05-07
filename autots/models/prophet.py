@@ -57,6 +57,7 @@ class FBProphet(ModelObject):
         changepoint_range: float = 0.8,
         seasonality_prior_scale: float = 10.0,
         holidays_prior_scale: float = 10.0,
+        trend_phi: float = 1,
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = None,
@@ -84,6 +85,7 @@ class FBProphet(ModelObject):
         self.changepoint_range = changepoint_range
         self.seasonality_prior_scale = seasonality_prior_scale
         self.holidays_prior_scale = holidays_prior_scale
+        self.trend_phi = trend_phi
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -219,12 +221,31 @@ class FBProphet(ModelObject):
                     a = np.append(args['regressor_train'], future_regressor.values)
                     future[args['regressor_name']] = a
             fcst = m.predict(future)
-            fcst = fcst.tail(forecast_length)  # remove the backcast
-            forecast = fcst['yhat']
+            # fcst = fcst.tail(forecast_length)  # remove the backcast
+            if self.trend_phi is not None and self.trend_phi != 1 and forecast_length > 2:
+                req_len = fcst.shape[0] - 1
+                phi_series = pd.Series(
+                    [self.trend_phi] * req_len,
+                    index=fcst.index[1:],
+                ).pow(range(req_len))
+
+                # adjust all by same margin
+                fcst['trend'] = pd.concat(
+                    [
+                        fcst['trend'].iloc[0:1],
+                        fcst['trend'].diff().iloc[1:].mul(phi_series, axis=0),
+                    ]
+                ).cumsum()
+                # for now, not doing the dampening on upper and lower bounds as those might still be good to have the full probability
+                forecast = fcst['trend'] * (1 + fcst["multiplicative_terms"]) + fcst['additive_terms']
+                upper_forecast = fcst['trend_upper'] * (1 + fcst["multiplicative_terms_upper"]) + fcst['additive_terms_upper']
+                lower_forecast = fcst['trend_lower'] * (1 + fcst["multiplicative_terms_lower"]) + fcst['additive_terms_lower']
+            else:
+                forecast = fcst['yhat']
+                lower_forecast = fcst['yhat_lower']
+                upper_forecast = fcst['yhat_upper']
             forecast.name = series
-            lower_forecast = fcst['yhat_lower']
             lower_forecast.name = series
-            upper_forecast = fcst['yhat_upper']
             upper_forecast.name = series
             return (forecast, lower_forecast, upper_forecast)
 
@@ -345,6 +366,7 @@ class FBProphet(ModelObject):
             'n_changepoints': random.choices(
                 [5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05]
             )[0],
+            "trend_phi": random.choices([None, 0.98, 0.999, 0.95, 0.8], [0.8, 0.1, 0.2, 0.1, 0.1])[0],
         }
 
     def get_params(self):
@@ -359,6 +381,7 @@ class FBProphet(ModelObject):
             "changepoint_range": self.changepoint_range,
             "seasonality_prior_scale": self.seasonality_prior_scale,
             "holidays_prior_scale": self.holidays_prior_scale,
+            "trend_phi": self.trend_phi,
         }
 
 

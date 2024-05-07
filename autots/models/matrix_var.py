@@ -236,8 +236,8 @@ class RRVAR(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         return {
-            'method': random.choice(['als', 'dmd']),
-            'rank': random.choice([2, 4, 0.1, 0.2, 0.5]),
+            'method': random.choices(['als', 'dmd'], [0.7, 0.3])[0],
+            'rank': random.choice([2, 4, 6, 0.1, 0.2, 0.5]),
             'maxiter': 200,
         }
 
