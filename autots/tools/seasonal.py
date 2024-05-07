@@ -610,8 +610,8 @@ def random_datepart(method='random'):
         if predefined:
             seasonalities = [random.choice(date_part_methods)]
         else:
-            comp_opts = datepart_components + [7, 365.25, 12, 52, 168]
-            seasonalities = random.choices(comp_opts, k=2)
+            comp_opts = datepart_components + [7, 365.25, 12, 52, 168, 24]
+            seasonalities = random.choices(comp_opts, k=3)
     return seasonalities
 
 
