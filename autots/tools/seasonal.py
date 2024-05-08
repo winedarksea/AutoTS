@@ -577,9 +577,10 @@ base_seasonalities = [
     [168, "hour"],
     ["morlet_365.25_12_12", "ricker_7_7_1"],
     ["db2_365.25_12_0.5", "morlet_7_7_1"],
+    ["weekdaymonthofyear", "quarter", "dayofweek"],
+    "lunar_phase",
     "other",
 ]
-
 
 def random_datepart(method='random'):
     """New random parameters for seasonality."""
@@ -602,6 +603,8 @@ def random_datepart(method='random'):
             0.1,
             0.1,
             0.1,
+            0.05,
+            0.05,
             0.3,
         ],
     )[0]
