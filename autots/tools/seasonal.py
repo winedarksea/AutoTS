@@ -437,6 +437,9 @@ datepart_components = [
     "is_quarter_start",
     "is_quarter_end",
     "days_from_epoch",
+    "isoweek",
+    "isoweek_binary",
+    "isoday",
 ]
 
 
@@ -535,6 +538,17 @@ def create_datepart_components(DTindex, seasonality):
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
     elif seasonality == "days_from_epoch":
         return (DTindex - pd.Timestamp('2000-01-01')).days.astype('int32')
+    elif seasonality == "isoweek":
+        return DTindex.isocalendar().week
+    elif seasonality == "isoweek_binary":
+        return pd.get_dummies(
+            pd.Categorical(
+                DTindex.isocalendar().week, categories=list(range(1, 54)), ordered=True
+            ),
+            dtype=np.uint16,
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "isoday":
+        return DTindex.isocalendar().day
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
