@@ -104,7 +104,7 @@ import numpy as np
 from functools import wraps
 
 
-def random_state_space():
+def random_state_space_original():
     """Return randomly generated statespace models."""
     n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
     if n_dims == 1:
@@ -133,6 +133,32 @@ def random_state_space():
     ):
         st, procnois, obsmod, obsnois = random_state_space()
     return st, procnois, obsmod, obsnois
+
+
+def ensure_stability(st):
+    eigenvalues, eigenvectors = np.linalg.eig(st)
+    # Scale eigenvalues to ensure their absolute values are less than 1
+    stable_eigenvalues = eigenvalues / (np.abs(eigenvalues) + 1e-5)
+    st_stable = eigenvectors @ np.diag(stable_eigenvalues) @ np.linalg.inv(eigenvectors)
+    return st_stable.real
+
+def random_matrix(rows, cols, density=0.2):
+    matrix = np.random.randn(rows, cols)
+    sparsity_mask = np.random.rand(rows, cols) < density
+    return np.where(sparsity_mask, matrix, 0)
+
+def random_state_space(tries=10):
+    for _ in range(tries):
+        n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
+        st = random_matrix(n_dims, n_dims, density=0.5)
+        st = ensure_stability(st)
+        obsmod = random_matrix(1, n_dims, density=1.0)  # Full observation for simplicity
+        procnois = np.diag(np.random.exponential(0.01, size=n_dims)).round(3)
+        obsnois = np.random.exponential(1.0)
+        
+        if np.all(np.abs(np.linalg.eigvals(st)) < 1):  # Check stability
+            return st, procnois, obsmod, obsnois
+    raise ValueError("Failed to generate a stable model after several tries")
 
 
 def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):
@@ -457,6 +483,7 @@ def new_kalman_params(method=None, allow_auto=True):
                 'observation_noise': random.choice([0.01, 0.1, 1, 'auto']),
             },
             "dynamic_linear",
+            "random_original",
         ],
         [
             0.1,
@@ -476,6 +503,7 @@ def new_kalman_params(method=None, allow_auto=True):
             0.1,
             0.1,
             0.1,
+            0.1,
         ],
     )[0]
     if params in [364] and method not in ['deep']:
@@ -484,6 +512,15 @@ def new_kalman_params(method=None, allow_auto=True):
         st, procnois, obsmod, obsnois = random_state_space()
         params = {
             'model_name': 'randomly generated',
+            'state_transition': st.tolist(),
+            'process_noise': procnois.tolist(),
+            'observation_model': obsmod.tolist(),
+            'observation_noise': obsnois,
+        }
+    elif params == "random_original":
+        st, procnois, obsmod, obsnois = random_state_space_original()
+        params = {
+            'model_name': 'randomly generated_original',
             'state_transition': st.tolist(),
             'process_noise': procnois.tolist(),
             'observation_model': obsmod.tolist(),
@@ -1313,6 +1350,11 @@ def douter(a, b):
     "Outer product, last two axes"
     return a * b.transpose((0, 2, 1))
 
+def stable_pinv(A, tol=1e-5, regularization=1e-4):
+    n = A.shape[1]
+    U, s, Vt = np.linalg.svd((A + regularization * np.eye(n)), full_matrices=False)
+    s_inv = np.where(s > tol, 1/s, 0)
+    return Vt.T @ np.diag(s_inv) @ U.T
 
 def dinv(A):
     "Matrix inverse applied to last two axes"
@@ -1321,7 +1363,11 @@ def dinv(A):
             np.nan_to_num(A)
         )  # can cause kernel death in OpenBLAS with NaN
     except Exception:
-        res = np.linalg.pinv(A)  # slower but more robust
+        try:
+            res = np.linalg.pinv(A)  # slower but more robust
+        except np.linalg.LinAlgError:
+            print("SVD did not converge, attempting more robust approach...")
+            res = stable_pinv(A)
     return res
 
 

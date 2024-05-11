@@ -15,6 +15,7 @@
 
 # 0.6.13 🇺🇦 🇺🇦 🇺🇦
 * trend_phi directly into Prophet
+* subset arg to make KalmanStateSpace more scalable to memory
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

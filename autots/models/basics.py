@@ -2057,7 +2057,7 @@ class KalmanStateSpace(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
-
+        subset (int): if not None, forecasts in chunks of this size. Reduces memory at the expense of compute time.
     """
 
     def __init__(
@@ -2075,6 +2075,7 @@ class KalmanStateSpace(ModelObject):
         em_iter: int = 10,
         model_name: str = "undefined",
         forecast_length: int = None,
+        subset=None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2093,6 +2094,7 @@ class KalmanStateSpace(ModelObject):
         self.em_iter = em_iter
         self.model_name = model_name
         self.forecast_length = forecast_length
+        self.subset = subset
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2102,31 +2104,55 @@ class KalmanStateSpace(ModelObject):
         """
         self.fit_data(df)
 
+        if self.subset is None:
+            self.kf = self._fit(df, future_regressor=None)
+        elif isinstance(self.subset, (float, int)):
+            if self.subset < 1 and self.subset > 0:
+                self.subset = self.subset * df.shape[1]
+            chunks = df.shape[1] // self.subset
+            if chunks > 1:
+                self.kf = {}
+                self.subset_columns = {}
+                if (df.shape[1] % self.subset) != 0:
+                    chunks += 1
+                for x in range(chunks):
+                    subset = df.iloc[:, self.subset * x: (self.subset * (x + 1))]
+                    self.subset_columns[str(x)] = subset.columns.tolist()
+                    self.kf[str(x)] = self._fit(subset, future_regressor=None)
+            else:
+                self.kf = self._fit(df, future_regressor=None)
+        else:
+            raise ValueError(f"subset arg {self.subset} not recognized")
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def _fit(self, df, future_regressor=None):
         if self.observation_noise == "auto":
             self.fit_noise = self.tune_observational_noise(df)[0]
         else:
             self.fit_noise = self.observation_noise
-        self.kf = KalmanFilter(
+        kf = KalmanFilter(
             state_transition=self.state_transition,  # matrix A
             process_noise=self.process_noise,  # Q
             observation_model=self.observation_model,  # H
             observation_noise=self.fit_noise,  # R
         )
         if self.em_iter is not None:
-            self.kf = self.kf.em(self.df_train, n_iter=self.em_iter)
+            kf = kf.em(df.to_numpy().T, n_iter=self.em_iter)
 
-        self.fit_runtime = datetime.datetime.now() - self.startTime
-        return self
+        return kf
 
     def fit_data(self, df, future_regressor=None):
         df = self.basic_profile(df)
-        self.df_train = df.to_numpy().T
+        self.df_train = df  # df.to_numpy().T
         self.train_index = df.index
         return self
 
     def cost_function(self, param, df):
         try:
             # evaluating on a single, most recent holdout only, for simplicity
+            local = df.to_numpy().T
             kf = KalmanFilter(
                 state_transition=self.state_transition,  # matrix A
                 process_noise=self.process_noise,  # Q
@@ -2136,15 +2162,15 @@ class KalmanStateSpace(ModelObject):
             )
             if self.em_iter is not None:
                 kf = kf.em(
-                    self.df_train[:, : -self.forecast_length], n_iter=self.em_iter
+                    local[:, : -self.forecast_length], n_iter=self.em_iter
                 )
             result = kf.predict(
-                self.df_train[:, : -self.forecast_length], self.forecast_length
+                local[:, : -self.forecast_length], self.forecast_length
             )
             df_smooth = pd.DataFrame(
                 result.observations.mean.T,
                 index=df.index[-self.forecast_length :],
-                columns=self.column_names,
+                columns=df.columns,
             )
             df_stdev = np.sqrt(result.observations.cov).T
             bound = df_stdev * norm.ppf(self.prediction_interval)
@@ -2219,20 +2245,41 @@ class KalmanStateSpace(ModelObject):
                     "must provide forecast_length to KalmanStateSpace predict"
                 )
         predictStartTime = datetime.datetime.now()
-        result = self.kf.predict(self.df_train, forecast_length)
-        df = pd.DataFrame(
-            result.observations.mean.T,
-            index=self.create_forecast_index(forecast_length),
-            columns=self.column_names,
-        )
-
-        if just_point_forecast:
-            return df
+        future_index = self.create_forecast_index(forecast_length)
+        if isinstance(self.kf, dict):
+            forecasts = []
+            uppers = []
+            lowers = []
+            for x in self.subset_columns:
+                current_cols = self.subset_columns[x]
+                result = self.kf[x].predict(self.df_train.reindex(columns=current_cols).to_numpy().T, forecast_length)
+                df = pd.DataFrame(
+                    result.observations.mean.T,
+                    index=future_index,
+                    columns=current_cols,
+                )
+                forecasts.append(df)
+                df_stdev = np.sqrt(result.observations.cov).T
+                bound = df_stdev * norm.ppf(self.prediction_interval)
+                uppers.append(df + bound)
+                lowers.append(df - bound)
+            df = pd.concat(forecasts, axis=1).reindex(columns=self.column_names)
+            upper_forecast = pd.concat(uppers, axis=1).reindex(columns=self.column_names)
+            lower_forecast = pd.concat(lowers, axis=1).reindex(columns=self.column_names)
         else:
+            result = self.kf.predict(self.df_train.to_numpy().T, forecast_length)
+            df = pd.DataFrame(
+                result.observations.mean.T,
+                index=future_index,
+                columns=self.column_names,
+            )
             df_stdev = np.sqrt(result.observations.cov).T
             bound = df_stdev * norm.ppf(self.prediction_interval)
             upper_forecast = df + bound
             lower_forecast = df - bound
+        if just_point_forecast:
+            return df
+        else:
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,
@@ -2251,7 +2298,9 @@ class KalmanStateSpace(ModelObject):
 
     def get_new_params(self, method: str = "random"):
         # predefined, or random
-        return new_kalman_params(method=method)
+        new_params = new_kalman_params(method=method)
+        new_params['subset'] = 200
+        return new_params
 
     def get_params(self):
         """Return dict of current parameters."""
@@ -2261,6 +2310,7 @@ class KalmanStateSpace(ModelObject):
             "process_noise": self.process_noise,
             "observation_model": self.observation_model,
             "observation_noise": self.observation_noise,
+            "subset": self.subset,
         }
 
 
