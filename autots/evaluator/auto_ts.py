@@ -2195,7 +2195,7 @@ class AutoTS(object):
         max_per_model_class: int = None,
         include_results: bool = False,
         unpack_ensembles: bool = False,
-        min_metrics: list = ['smape', 'spl'],
+        min_metrics: list = ['smape', 'spl', 'wasserstein', 'mle', 'imle', 'ewmae'],
         max_metrics: list = None,
     ):
         """Export top results as a reusable template.

@@ -2299,7 +2299,10 @@ class KalmanStateSpace(ModelObject):
     def get_new_params(self, method: str = "random"):
         # predefined, or random
         new_params = new_kalman_params(method=method)
-        new_params['subset'] = 200
+        if method in ['deep']:
+            new_params['subset'] = random.choices([None, 200, 300], [0.3, 0.3, 0.3])[0]
+        else:
+            new_params['subset'] = random.choices([100, 200, 300], [0.3, 0.3, 0.3])[0]  # probably no difference
         return new_params
 
     def get_params(self):
