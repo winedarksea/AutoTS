@@ -17,6 +17,7 @@ from autots.evaluator.auto_model import ModelMonster
 from autots.models.model_list import default as default_model_list
 from autots.models.model_list import all_models
 from autots.evaluator.benchmark import Benchmark
+from autots.templates.general import general_template
 from autots.tools.cpu_count import cpu_count, set_n_jobs
 
 
@@ -545,6 +546,17 @@ class AutoTSTest(unittest.TestCase):
         print(f"Benchmark total_runtime: {bench.total_runtime}")
         print(bench.results)
         time.sleep(5)
+
+    def test_template(self):
+        for index, row in general_template.iterrows():
+            model = row["Model"]
+            with self.subTest(i=model):
+                mod = json.loads(row['ModelParameters'])
+                trans = json.loads(row['TransformationParameters'])
+                ensemble = row["Ensemble"]
+                self.assertIsInstance(mod, dict)
+                self.assertIsInstance(trans, dict)
+                self.assertIsNotNone(ensemble)
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
