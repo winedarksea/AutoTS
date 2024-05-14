@@ -222,7 +222,11 @@ class FBProphet(ModelObject):
                     future[args['regressor_name']] = a
             fcst = m.predict(future)
             # fcst = fcst.tail(forecast_length)  # remove the backcast
-            if self.trend_phi is not None and self.trend_phi != 1 and forecast_length > 2:
+            if (
+                self.trend_phi is not None
+                and self.trend_phi != 1
+                and forecast_length > 2
+            ):
                 req_len = fcst.shape[0] - 1
                 phi_series = pd.Series(
                     [self.trend_phi] * req_len,
@@ -237,9 +241,18 @@ class FBProphet(ModelObject):
                     ]
                 ).cumsum()
                 # for now, not doing the dampening on upper and lower bounds as those might still be good to have the full probability
-                forecast = fcst['trend'] * (1 + fcst["multiplicative_terms"]) + fcst['additive_terms']
-                upper_forecast = fcst['trend_upper'] * (1 + fcst["multiplicative_terms_upper"]) + fcst['additive_terms_upper']
-                lower_forecast = fcst['trend_lower'] * (1 + fcst["multiplicative_terms_lower"]) + fcst['additive_terms_lower']
+                forecast = (
+                    fcst['trend'] * (1 + fcst["multiplicative_terms"])
+                    + fcst['additive_terms']
+                )
+                upper_forecast = (
+                    fcst['trend_upper'] * (1 + fcst["multiplicative_terms_upper"])
+                    + fcst['additive_terms_upper']
+                )
+                lower_forecast = (
+                    fcst['trend_lower'] * (1 + fcst["multiplicative_terms_lower"])
+                    + fcst['additive_terms_lower']
+                )
             else:
                 forecast = fcst['yhat']
                 lower_forecast = fcst['yhat_lower']
@@ -366,7 +379,9 @@ class FBProphet(ModelObject):
             'n_changepoints': random.choices(
                 [5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05]
             )[0],
-            "trend_phi": random.choices([None, 0.98, 0.999, 0.95, 0.8], [0.8, 0.1, 0.2, 0.1, 0.1])[0],
+            "trend_phi": random.choices(
+                [None, 0.98, 0.999, 0.95, 0.8], [0.8, 0.1, 0.2, 0.1, 0.1]
+            )[0],
         }
 
     def get_params(self):

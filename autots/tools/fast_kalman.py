@@ -142,20 +142,24 @@ def ensure_stability(st):
     st_stable = eigenvectors @ np.diag(stable_eigenvalues) @ np.linalg.inv(eigenvectors)
     return st_stable.real
 
+
 def random_matrix(rows, cols, density=0.2):
     matrix = np.random.randn(rows, cols)
     sparsity_mask = np.random.rand(rows, cols) < density
     return np.where(sparsity_mask, matrix, 0)
+
 
 def random_state_space(tries=10):
     for _ in range(tries):
         n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
         st = random_matrix(n_dims, n_dims, density=0.5)
         st = ensure_stability(st)
-        obsmod = random_matrix(1, n_dims, density=1.0)  # Full observation for simplicity
+        obsmod = random_matrix(
+            1, n_dims, density=1.0
+        )  # Full observation for simplicity
         procnois = np.diag(np.random.exponential(0.01, size=n_dims)).round(3)
         obsnois = np.random.exponential(1.0)
-        
+
         if np.all(np.abs(np.linalg.eigvals(st)) < 1):  # Check stability
             return st, procnois, obsmod, obsnois
     raise ValueError("Failed to generate a stable model after several tries")
@@ -1350,11 +1354,13 @@ def douter(a, b):
     "Outer product, last two axes"
     return a * b.transpose((0, 2, 1))
 
+
 def stable_pinv(A, tol=1e-5, regularization=1e-4):
     n = A.shape[1]
     U, s, Vt = np.linalg.svd((A + regularization * np.eye(n)), full_matrices=False)
-    s_inv = np.where(s > tol, 1/s, 0)
+    s_inv = np.where(s > tol, 1 / s, 0)
     return Vt.T @ np.diag(s_inv) @ U.T
+
 
 def dinv(A):
     "Matrix inverse applied to last two axes"

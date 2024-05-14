@@ -2116,7 +2116,7 @@ class KalmanStateSpace(ModelObject):
                 if (df.shape[1] % self.subset) != 0:
                     chunks += 1
                 for x in range(chunks):
-                    subset = df.iloc[:, self.subset * x: (self.subset * (x + 1))]
+                    subset = df.iloc[:, self.subset * x : (self.subset * (x + 1))]
                     self.subset_columns[str(x)] = subset.columns.tolist()
                     self.kf[str(x)] = self._fit(subset, future_regressor=None)
             else:
@@ -2161,12 +2161,8 @@ class KalmanStateSpace(ModelObject):
                 # covariances=False,
             )
             if self.em_iter is not None:
-                kf = kf.em(
-                    local[:, : -self.forecast_length], n_iter=self.em_iter
-                )
-            result = kf.predict(
-                local[:, : -self.forecast_length], self.forecast_length
-            )
+                kf = kf.em(local[:, : -self.forecast_length], n_iter=self.em_iter)
+            result = kf.predict(local[:, : -self.forecast_length], self.forecast_length)
             df_smooth = pd.DataFrame(
                 result.observations.mean.T,
                 index=df.index[-self.forecast_length :],
@@ -2252,7 +2248,10 @@ class KalmanStateSpace(ModelObject):
             lowers = []
             for x in self.subset_columns:
                 current_cols = self.subset_columns[x]
-                result = self.kf[x].predict(self.df_train.reindex(columns=current_cols).to_numpy().T, forecast_length)
+                result = self.kf[x].predict(
+                    self.df_train.reindex(columns=current_cols).to_numpy().T,
+                    forecast_length,
+                )
                 df = pd.DataFrame(
                     result.observations.mean.T,
                     index=future_index,
@@ -2264,8 +2263,12 @@ class KalmanStateSpace(ModelObject):
                 uppers.append(df + bound)
                 lowers.append(df - bound)
             df = pd.concat(forecasts, axis=1).reindex(columns=self.column_names)
-            upper_forecast = pd.concat(uppers, axis=1).reindex(columns=self.column_names)
-            lower_forecast = pd.concat(lowers, axis=1).reindex(columns=self.column_names)
+            upper_forecast = pd.concat(uppers, axis=1).reindex(
+                columns=self.column_names
+            )
+            lower_forecast = pd.concat(lowers, axis=1).reindex(
+                columns=self.column_names
+            )
         else:
             result = self.kf.predict(self.df_train.to_numpy().T, forecast_length)
             df = pd.DataFrame(
@@ -2302,7 +2305,9 @@ class KalmanStateSpace(ModelObject):
         if method in ['deep']:
             new_params['subset'] = random.choices([None, 200, 300], [0.3, 0.3, 0.3])[0]
         else:
-            new_params['subset'] = random.choices([100, 200, 300], [0.3, 0.3, 0.3])[0]  # probably no difference
+            new_params['subset'] = random.choices([100, 200, 300], [0.3, 0.3, 0.3])[
+                0
+            ]  # probably no difference
         return new_params
 
     def get_params(self):

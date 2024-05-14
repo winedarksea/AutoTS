@@ -596,6 +596,7 @@ base_seasonalities = [
     "other",
 ]
 
+
 def random_datepart(method='random'):
     """New random parameters for seasonality."""
     seasonalities = random.choices(

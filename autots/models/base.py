@@ -690,18 +690,18 @@ class PredictionObject(object):
             value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
-        upload_upper[interval_name] = (
-            f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
-        )
+        upload_upper[
+            interval_name
+        ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
         upload_lower = pd.melt(
             self.lower_forecast.rename_axis(index='datetime').reset_index(),
             var_name=id_name,
             value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
-        upload_lower[interval_name] = (
-            f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
-        )
+        upload_lower[
+            interval_name
+        ] = f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
 
         upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
         if datetime_column is not None:
