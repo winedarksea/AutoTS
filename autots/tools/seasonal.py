@@ -437,6 +437,9 @@ datepart_components = [
     "is_quarter_start",
     "is_quarter_end",
     "days_from_epoch",
+    "isoweek",
+    "isoweek_binary",
+    "isoday",
 ]
 
 
@@ -535,6 +538,17 @@ def create_datepart_components(DTindex, seasonality):
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
     elif seasonality == "days_from_epoch":
         return (DTindex - pd.Timestamp('2000-01-01')).days.astype('int32')
+    elif seasonality == "isoweek":
+        return DTindex.isocalendar().week
+    elif seasonality == "isoweek_binary":
+        return pd.get_dummies(
+            pd.Categorical(
+                DTindex.isocalendar().week, categories=list(range(1, 54)), ordered=True
+            ),
+            dtype=np.uint16,
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "isoday":
+        return DTindex.isocalendar().day
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
@@ -577,6 +591,8 @@ base_seasonalities = [
     [168, "hour"],
     ["morlet_365.25_12_12", "ricker_7_7_1"],
     ["db2_365.25_12_0.5", "morlet_7_7_1"],
+    ["weekdaymonthofyear", "quarter", "dayofweek"],
+    "lunar_phase",
     "other",
 ]
 
@@ -602,6 +618,8 @@ def random_datepart(method='random'):
             0.1,
             0.1,
             0.1,
+            0.05,
+            0.05,
             0.3,
         ],
     )[0]
@@ -610,8 +628,8 @@ def random_datepart(method='random'):
         if predefined:
             seasonalities = [random.choice(date_part_methods)]
         else:
-            comp_opts = datepart_components + [7, 365.25, 12, 52, 168]
-            seasonalities = random.choices(comp_opts, k=2)
+            comp_opts = datepart_components + [7, 365.25, 12, 52, 168, 24]
+            seasonalities = random.choices(comp_opts, k=3)
     return seasonalities
 
 

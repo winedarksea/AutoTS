@@ -13,10 +13,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Index &#8212; AutoTS 0.6.11 documentation</title>
+    <title>Index &#8212; AutoTS 0.6.13 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=a4fa0645" />
-    <script src="_static/documentation_options.js?v=62d0ee6f"></script>
+    <script src="_static/documentation_options.js?v=f150e01c"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="#" />
@@ -875,20 +875,22 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.fast_kalman.ensure_matrix">ensure_matrix() (in module autots.tools.fast_kalman)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.fast_kalman.ensure_stability">ensure_stability() (in module autots.tools.fast_kalman)</a>
+</li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.error_correlations">error_correlations() (in module autots.evaluator.auto_ts)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.statsmodels.ETS">ETS (class in autots.models.statsmodels)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.evaluate">evaluate() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#id1">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.html#autots.EventRiskForecast">EventRiskForecast (class in autots)</a>
 
       <ul>
         <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast">(class in autots.evaluator.event_forecasting)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.transform.EWMAFilter">EWMAFilter (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.html#autots.AutoTS.expand_horizontal">expand_horizontal() (autots.AutoTS method)</a>
@@ -2778,9 +2780,13 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.random_datepart">random_datepart() (in module autots.tools.seasonal)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.fast_kalman.random_matrix">random_matrix() (in module autots.tools.fast_kalman)</a>
+</li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.random_model">random_model() (in module autots.evaluator.auto_model)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.fast_kalman.random_state_space">random_state_space() (in module autots.tools.fast_kalman)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.fast_kalman.random_state_space_original">random_state_space_original() (in module autots.tools.fast_kalman)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.RandomTemplate">RandomTemplate() (in module autots.evaluator.auto_model)</a>
 </li>
@@ -2818,14 +2824,14 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.sklearn.retrieve_regressor">retrieve_regressor() (in module autots.models.sklearn)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.html#autots.GeneralTransformer.retrieve_transformer">retrieve_transformer() (autots.GeneralTransformer class method)</a>
 
       <ul>
         <li><a href="source/autots.tools.html#autots.tools.transform.GeneralTransformer.retrieve_transformer">(autots.tools.transform.GeneralTransformer class method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.html#autots.AutoTS.retrieve_validation_forecasts">retrieve_validation_forecasts() (autots.AutoTS method)</a>
 
       <ul>
@@ -2944,8 +2950,6 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.greykite.seek_the_oracle">seek_the_oracle() (in module autots.models.greykite)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.set_limit">set_limit() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
 
       <ul>
@@ -2956,6 +2960,8 @@
         <li><a href="source/autots.html#id16">(autots.EventRiskForecast static method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast">set_limit_forecast() (in module autots.evaluator.event_forecasting)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast_historic">set_limit_forecast_historic() (in module autots.evaluator.event_forecasting)</a>
@@ -2995,6 +3001,8 @@
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.spl">spl() (in module autots.evaluator.metrics)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.split_digits_and_non_digits">split_digits_and_non_digits() (in module autots.tools.shaping)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.fast_kalman.stable_pinv">stable_pinv() (in module autots.tools.fast_kalman)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.StatsmodelsFilter">StatsmodelsFilter (class in autots.tools.transform)</a>
 </li>

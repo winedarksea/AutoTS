@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.tools package &#8212; AutoTS 0.6.11 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.6.13 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=62d0ee6f"></script>
+    <script src="../_static/documentation_options.js?v=f150e01c"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -716,6 +716,11 @@ the prior mean and covariance instead</p>
 <dd></dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.ensure_stability">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">ensure_stability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">st</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.ensure_stability" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.fast_kalman.holt_winters_damped_matrices">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">holt_winters_damped_matrices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.holt_winters_damped_matrices" title="Link to this definition">¶</a></dt>
 <dd><p>Not sure if this is correct. It’s close, at least.</p>
@@ -779,8 +784,18 @@ the distribution of <span class="math notranslate nohighlight">\(x\)</span>.</p>
 <dd></dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.random_matrix">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">random_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rows</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">density</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.random_matrix" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.fast_kalman.random_state_space">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">random_state_space</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.random_state_space" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">random_state_space</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.random_state_space" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.random_state_space_original">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">random_state_space_original</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.random_state_space_original" title="Link to this definition">¶</a></dt>
 <dd><p>Return randomly generated statespace models.</p>
 </dd></dl>
 
@@ -808,6 +823,11 @@ and covariance <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\l
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.fast_kalman.stable_pinv">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.fast_kalman.</span></span><span class="sig-name descname"><span class="pre">stable_pinv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regularization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.stable_pinv" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.fast_kalman.update">

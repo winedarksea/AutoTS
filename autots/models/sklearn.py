@@ -18,7 +18,7 @@ except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
-from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.window_functions import window_maker, last_window, sliding_window_view
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.holiday import holiday_flag
@@ -264,7 +264,8 @@ def rolling_x_regressor_regressor(
         X = X.drop(columns=['series_id'])
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -2429,18 +2430,7 @@ class DatepartRegression(ModelObject):
             )
         else:
             model_choice = generate_regressor_params(model_dict=datepart_model_dict)
-        datepart_choice = random.choices(
-            [
-                "recurring",
-                "simple",
-                "expanded",
-                "simple_2",
-                "simple_binarized",
-                "expanded_binarized",
-                'common_fourier',
-            ],
-            [0.4, 0.3, 0.3, 0.3, 0.4, 0.05, 0.05],
-        )[0]
+        datepart_choice = random_datepart()
         if datepart_choice in ["simple", "simple_2", "recurring", "simple_binarized"]:
             polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
         else:
@@ -3533,7 +3523,9 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

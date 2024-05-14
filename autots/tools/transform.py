@@ -1162,20 +1162,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random", holiday_countries_used=None):
-        datepart_choice = random.choices(
-            [
-                "simple",
-                "expanded",
-                "recurring",
-                "simple_2",
-                "simple_binarized",
-                "lunar_phase",
-                "common_fourier",
-                ["dayofweek", 365.25],
-                ["weekdaymonthofyear", "quarter", "dayofweek"],
-            ],
-            [0.1, 0.25, 0.2, 0.1, 0.3, 0.001, 0.1, 0.1, 0.03],
-        )[0]
+        datepart_choice = random_datepart()
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
         else:
@@ -4094,8 +4081,8 @@ class FFTFilter(EmptyTransformer):
         """Generate new random parameters"""
         return {
             "cutoff": random.choices(
-                [0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8],
-                [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1],
+                [0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8, 7, 365],
+                [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1],
             )[0],
             "reverse": random.choices([False, True], [0.9, 0.1])[0],
         }
