@@ -899,6 +899,7 @@ def generate_regressor_params(
         'MultioutputGPR',
         'SVM',
         "ElasticNetwork",
+        "ElasticNet",
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -913,6 +914,19 @@ def generate_regressor_params(
                         [0.8, 0.1, 0.0],  # SVR slow and crash prone
                     )[0],
                     "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
+                },
+            }
+        elif model == 'ElasticNet':
+            param_dict = {
+                "model": 'ElasticNet',
+                "model_params": {
+                    "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
+                    "fit_intercept": random.choices(
+                        [True, False], [0.9, 0.1]
+                    )[0],
+                    "selection": random.choices(
+                        ["cyclic", "random"], [0.8, 0.1]
+                    )[0],
                 },
             }
         elif model == 'xgboost':

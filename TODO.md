@@ -15,6 +15,9 @@
 
 # 0.6.14 🇺🇦 🇺🇦 🇺🇦
 * prevent excessive use of 'CenterSplit' and other macro_micro style transformers
+* added ElasticNetwork as subsidiary regression model option
+* KalmanSmoothing, BKBandpassFilter added on_inverse option
+* add threshold arg to AlignLastValue
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

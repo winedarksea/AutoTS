@@ -2709,6 +2709,7 @@ class AlignLastValue(EmptyTransformer):
         method: str = "additive",
         strength: float = 1.0,
         first_value_only: bool = False,
+        threshold: int = None,
         **kwargs,
     ):
         super().__init__(name="AlignLastValue")
@@ -2718,6 +2719,7 @@ class AlignLastValue(EmptyTransformer):
         self.strength = strength
         self.first_value_only = first_value_only
         self.adjustment = None
+        self.threshold = threshold
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2729,6 +2731,7 @@ class AlignLastValue(EmptyTransformer):
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
             )[0],
             'first_value_only': random.choices([True, False], [0.1, 0.9])[0],
+            "threshold": random.choices([None, 1, 10], [0.8, 0.9, 0.9])[0],
         }
 
     def fit(self, df):
@@ -2744,7 +2747,11 @@ class AlignLastValue(EmptyTransformer):
             self.center = self.find_centerpoint(df.ffill(axis=0), self.rows, self.lag)
         else:
             self.center = self.find_centerpoint(df, self.rows, self.lag)
-
+        if self.threshold is not None:
+            if self.method == "multiplicative":
+                self.threshold = df.iloc[-self.threshold:].pct_change().abs().max()
+            else:
+                self.threshold = df.iloc[-self.threshold:].diff().abs().max()
         return self
 
     @staticmethod
@@ -2810,11 +2817,17 @@ class AlignLastValue(EmptyTransformer):
                         self.adjustment = (
                             1 + ((self.center / df.iloc[0]) - 1) * self.strength
                         )
-                    return df * self.adjustment
+                        if self.threshold is not None:
+                            return df.where(self.adjustment.abs() <= self.threshold, df * self.adjustment)
+                        else:
+                            return df * self.adjustment
                 else:
                     if self.adjustment is None:
                         self.adjustment = self.strength * (self.center - df.iloc[0])
-                    return df + self.adjustment
+                    if self.threshold is not None:
+                        return df.where(self.adjustment.abs() <= self.threshold, df + self.adjustment)
+                    else:
+                        return df + self.adjustment
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3462,6 +3475,8 @@ class KalmanSmoothing(EmptyTransformer):
         observation_model=[[1, 0]],
         observation_noise: float = 1.0,
         em_iter: int = None,
+        on_transform: bool = True,
+        on_inverse: bool = False,
         **kwargs,
     ):
         super().__init__(name="KalmanSmoothing")
@@ -3470,10 +3485,16 @@ class KalmanSmoothing(EmptyTransformer):
         self.observation_model = observation_model
         self.observation_noise = observation_noise
         self.em_iter = em_iter
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        return new_kalman_params(method=method, allow_auto=False)
+        params = new_kalman_params(method=method, allow_auto=False)
+        selection = random.choices([True, False], [0.8, 0.2])[0]
+        params['on_transform'] = selection
+        params["on_inverse"] = not selection
+        return params
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -3497,11 +3518,13 @@ class KalmanSmoothing(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-
-        result = self.kf.smooth(df.to_numpy().T, covariances=False)
-        return pd.DataFrame(
-            result.observations.mean.T, index=df.index, columns=df.columns
-        )
+        if self.on_transform:
+            result = self.kf.smooth(df.to_numpy().T, covariances=False)
+            return pd.DataFrame(
+                result.observations.mean.T, index=df.index, columns=df.columns
+            )
+        else:
+            return df
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3509,7 +3532,13 @@ class KalmanSmoothing(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df
+        if self.on_inverse:
+            result = self.kf.smooth(df.to_numpy().T, covariances=False)
+            return pd.DataFrame(
+                result.observations.mean.T, index=df.index, columns=df.columns
+            )
+        else:
+            return df
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -4757,6 +4786,8 @@ class BKBandpassFilter(EmptyTransformer):
         K: int = 1,
         lanczos_factor: int = False,
         return_diff: int = True,
+        on_transform: bool = True,
+        on_inverse: bool = False,
         **kwargs,
     ):
         super().__init__(name="HistoricValues")
@@ -4765,6 +4796,8 @@ class BKBandpassFilter(EmptyTransformer):
         self.K = K
         self.lanczos_factor = lanczos_factor
         self.return_diff = return_diff
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -4784,12 +4817,7 @@ class BKBandpassFilter(EmptyTransformer):
         self._fit(df)
         return self
 
-    def transform(self, df):
-        """Return changed data.
-
-        Args:
-            df (pandas.DataFrame): input dataframe
-        """
+    def filter(self, df):
         cycles = bkfilter_st(
             np.asarray(df),
             low=self.low,
@@ -4811,13 +4839,27 @@ class BKBandpassFilter(EmptyTransformer):
                 cycles, columns=df.columns, index=df.index[-cycles.shape[0] :]
             )
 
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_transform:
+            return self.filter(df)
+        else:
+            return df
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df
+        if self.on_inverse:
+            return self.filter(df)
+        else:
+            return df
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -4830,6 +4872,7 @@ class BKBandpassFilter(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
+        selection = random.choices([True, False], [0.8, 0.2])[0]
         return {
             "low": random.choices(
                 [6, 4, 7, 12, 8, 28], [0.6, 0.1, 0.1, 0.1, 0.05, 0.05]
@@ -4843,6 +4886,8 @@ class BKBandpassFilter(EmptyTransformer):
                 [0.2, 0.8],
             )[0],
             "return_diff": random.choices([True, False], [0.7, 0.3])[0],
+            'on_transform': selection,
+            "on_inverse": not selection,
         }
 
 
