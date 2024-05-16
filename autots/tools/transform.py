@@ -5286,6 +5286,7 @@ class GeneralTransformer(object):
             "PCA",
             "CenterSplit",
             "RollingMeanTransformer",
+            "LocalLinearTrend",
         ]:
             self.df_index = df.index
             self.df_colnames = df.columns
@@ -5332,6 +5333,7 @@ class GeneralTransformer(object):
             "PCA",
             "CenterSplit",
             "RollingMeanTransformer",
+            "LocalLinearTrend",
         ]:
             self.df_index = df.index
             self.df_colnames = df.columns
@@ -5381,6 +5383,7 @@ class GeneralTransformer(object):
             "PCA",
             "CenterSplit",
             "RollingMeanTransformer",
+            "LocalLinearTrend",
         ]:
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)
@@ -5722,15 +5725,16 @@ def RandomTransform(
         trans = random.choices(transformer_list, transformer_prob, k=num_trans)
 
     # remove duplication of some which scale memory exponentially
+    # only allow one of these
     prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend"}
     if any(x in prob_trans for x in trans):
         # for loop, only way I saw to do this right now
-        seen = []
+        seen = False
         result = []
         for item in trans:
             if item in prob_trans:
-                if not item in seen:
-                    seen.append(item)
+                if not seen:
+                    seen = True
                     result.append(item)
             else:
                 result.append(item)
