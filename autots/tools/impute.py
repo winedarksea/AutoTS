@@ -22,6 +22,10 @@ def fill_zero(df):
     df = df.fillna(0)
     return df
 
+def fill_one(df):
+    """Fill NaN with zero."""
+    return df.fillna(1)
+
 
 def fillna_np(array, values):
     if np.isnan(array.sum()):
@@ -341,6 +345,9 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
 
     elif method is None or method in ['None', 'null']:
         return df
+
+    elif method == 'one':
+        return fill_one(df)
 
     else:
         print(f"FillNA method `{str(method)}` not known, returning original")

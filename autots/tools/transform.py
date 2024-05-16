@@ -3915,17 +3915,19 @@ class CenterSplit(EmptyTransformer):
             self.median = df.median(axis=0)
             mask = df != self.median
             use_df = df - self.median
+        elif isinstance(self.center, int):
+            mask = df != self.center
+            use_df = df
         else:
             raise ValueError(
-                f"ModifiedCroston arg center `{self.center}` not recognized"
+                f"CenterSplit arg center `{self.center}` not recognized"
             )
 
         macro = use_df.where(mask, np.nan)
-        macro = FillNA(macro, method=self.fillna, window=10)
 
         self.columns = df.columns
         micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
-        return pd.concat([macro, micro], axis=1)
+        return FillNA(macro, method=self.fillna, window=10).join(micro)
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -3955,11 +3957,11 @@ class CenterSplit(EmptyTransformer):
             )
 
         macro = use_df.where(mask, np.nan)
-        macro = FillNA(macro, method=self.fillna, window=10)
 
         # self.columns = df.columns
         micro = use_df.where(~mask, 1).rename(columns=lambda x: str(x) + self.suffix)
-        return pd.concat([macro, micro], axis=1)
+        # return pd.concat([macro, micro], axis=1)
+        return FillNA(macro, method=self.fillna, window=10).join(micro)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3991,15 +3993,15 @@ class CenterSplit(EmptyTransformer):
         return {
             "fillna": random.choices(
                 [
-                    "linear",
-                    "SeasonalityMotifImputerLinMix",
+                    "linear",  # a bit RAM heavier than the others
                     'pchip',
                     'akima',
                     'mean',
                     'ffill',
-                    "SeasonalityMotifImputer1K",
+                    "one",
+                    # "SeasonalityMotifImputer1K",
                 ],
-                [0.3, 0.05, 0.2, 0.2, 0.2, 0.2, 0.05],
+                [0.1, 0.02, 0.2, 0.2, 0.3, 0.1],
             )[0],
             "center": random.choices(["zero", "median"], [0.7, 0.3])[0],
         }
@@ -4315,7 +4317,7 @@ class ReplaceConstant(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.05],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.001],
             )[0],
         }
 
@@ -5573,9 +5575,9 @@ na_probs = {
     "interpolate": 0.4,
     "KNNImputer": 0.02,  # can get a bit slow
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
-    "SeasonalityMotifImputer": 0.02,  # apparently this is too memory hungry at scale
-    "SeasonalityMotifImputerLinMix": 0.01,  # apparently this is too memory hungry at scale
-    "SeasonalityMotifImputer1K": 0.01,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputer": 0.005,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputerLinMix": 0.005,  # apparently this is too memory hungry at scale
+    "SeasonalityMotifImputer1K": 0.005,  # apparently this is too memory hungry at scale
     "DatepartRegressionImputer": 0.01,  # also slow
 }
 
