@@ -5721,7 +5721,24 @@ def RandomTransform(
     else:
         trans = random.choices(transformer_list, transformer_prob, k=num_trans)
 
-    keys = list(range(num_trans))
+    # remove duplication of some which scale memory exponentially
+    prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend"}
+    if any(x in prob_trans for x in trans):
+        # for loop, only way I saw to do this right now
+        seen = []
+        result = []
+        for item in trans:
+            if item in prob_trans:
+                if not item in seen:
+                    seen.append(item)
+                    result.append(item)
+            else:
+                result.append(item)
+        trans = result
+        keys = list(range(len(trans)))
+    else:
+        keys = list(range(num_trans))
+    # now get the parameters for the specified transformers
     params = [get_transformer_params(x, method=params_method) for x in trans]
     return {
         "fillna": na_choice,
