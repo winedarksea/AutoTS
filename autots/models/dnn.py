@@ -1,5 +1,5 @@
 """Neural Nets."""
-
+import random
 import pandas as pd
 from autots.tools.shaping import wide_to_3d
 
@@ -421,3 +421,105 @@ class Transformer(object):
         """Predict on dataframe of X."""
         test = pd.DataFrame(X).to_numpy().reshape((X.shape[0], X.shape[1], 1))
         return pd.DataFrame(self.model.predict(test))
+
+
+class ElasticNetwork(object):
+    def __init__(
+        self,
+        size: int = 256,
+        l1: float = 0.01,
+        l2:     float = 0.02,
+        feature_subsample_rate: float = None,
+        optimizer: str = 'adam',
+        loss: str = 'mse',
+        epochs: int = 20,
+        batch_size: int = 32,
+        activation: str = "relu",
+        verbose: int = 1,
+        random_seed: int = 2024,
+    ):
+        self.name = 'ElasticNetwork'
+        self.verbose = verbose
+        self.random_seed = random_seed
+        self.size = size
+        self.l1 = l1
+        self.l2 = l2
+        self.feature_subsample_rate = feature_subsample_rate
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.optimizer = optimizer
+        self.loss = loss
+        self.activation = activation
+
+    def fit(self, X, y):    
+        from tensorflow.keras.models import Sequential
+        from tensorflow.keras.layers import Dense, Layer
+        from tensorflow.keras.regularizers import L1L2
+
+        # hiding this here as TF is an optional import
+        class SubsetDense(Layer):
+            def __init__(self, units, input_dim, feature_subsample_rate=0.5, **kwargs):
+                super(SubsetDense, self).__init__(**kwargs)
+                self.units = units
+                self.input_dim = input_dim
+                self.feature_subsample_rate = feature_subsample_rate
+                self.selected_features_per_unit = []
+                self.kernels = []
+                self.biases = None
+        
+            def build(self, input_shape):
+                # Select a subset of the input features for each unit
+                num_features = int(self.input_dim * self.feature_subsample_rate)
+                for _ in range(self.units):
+                    selected_features = random.sample(range(self.input_dim), num_features)
+                    self.selected_features_per_unit.append(selected_features)
+                    kernel = self.add_weight(
+                        shape=(num_features,),
+                        initializer='glorot_uniform',
+                        name=f'kernel_{len(self.kernels)}'
+                    )
+                    self.kernels.append(kernel)
+                
+                self.biases = self.add_weight(
+                    shape=(self.units,),
+                    initializer='zeros',
+                    name='biases'
+                )
+        
+            def call(self, inputs):
+                outputs = []
+                for i in range(self.units):
+                    selected_inputs = tf.gather(inputs, self.selected_features_per_unit[i], axis=1)
+                    output = tf.reduce_sum(selected_inputs * self.kernels[i], axis=1) + self.biases[i]
+                    outputs.append(output)
+                return tf.stack(outputs, axis=1)
+
+        # Model configuration
+        input_dim = X.shape[1]  # Number of input features
+        output_dim = y.shape[1]  # Number of outputs
+        
+        # Build the model
+        if self.feature_subsample_rate is None:
+            self.model = Sequential([
+                Dense(self.size, input_dim=input_dim, activation=self.activation, 
+                      kernel_regularizer=L1L2(l1=self.l1, l2=self.l2)),  # Example layer
+                Dense(output_dim)  # Output layer
+            ])
+        else:
+            self.model = Sequential([
+                SubsetDense(self.size, input_dim=input_dim, feature_subsample_rate=self.feature_subsample_rate),
+                tf.keras.layers.Activation(self.activation),
+                SubsetDense(self.size // 2, input_dim=input_dim, feature_subsample_rate=self.feature_subsample_rate),
+                tf.keras.layers.Activation(self.activation),
+                Dense(output_dim)  # Output layer
+            ])
+
+        # Compile the model
+        self.model.compile(optimizer=self.optimizer, loss=self.loss)
+        self.model.fit(X, y, epochs=self.epochs, batch_size=self.batch_size)
+
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X)
+    

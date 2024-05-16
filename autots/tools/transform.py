@@ -1189,7 +1189,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
-                    'MultioutputGPR': 0.001,
+                    'MultioutputGPR': 0.0001,
+                    "ElasticNetwork": 0.05,
                 }
             )
         if holiday_countries_used is None:
