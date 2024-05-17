@@ -264,8 +264,7 @@ def rolling_x_regressor_regressor(
         X = X.drop(columns=['series_id'])
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -518,7 +517,7 @@ def retrieve_regressor(
         )
     elif model_class in ["MultioutputGPR", "VectorizedMultiOutputGPR"]:
         return VectorizedMultiOutputGPR(**model_param_dict)
-    else:
+    elif model_class in ['RandomForest', 'random_forest', 'randomforest']:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
 
@@ -529,6 +528,14 @@ def retrieve_regressor(
             **model_param_dict,
         )
         return regr
+    elif model_class in ["ElasticNetwork"]:
+        from autots.models.dnn import ElasticNetwork
+
+        return ElasticNetwork(
+            random_seed=random_seed, verbose=verbose, **model_param_dict
+        )
+    else:
+        raise ValueError(f"model_class {model_class} regressor not recognized")
 
 
 def retrieve_classifier(
@@ -722,8 +729,9 @@ datepart_model_dict_deep = {
     'ExtraTrees': 0.01,  # some params cause RAM crash?
     'RadiusNeighbors': 0.1,
     'MultioutputGPR': 0.001,
+    "ElasticNetwork": 0.05,
 }
-gpu = ['Transformer', 'KerasRNN', 'MLP']  # or more accurately, no dnn
+gpu = ['Transformer', 'KerasRNN', 'MLP', "ElasticNetwork"]  # or more accurately, no dnn
 gradient_boosting = {
     'xgboost': 0.09,
     'HistGradientBoost': 0.03,
@@ -854,6 +862,7 @@ def generate_regressor_params(
             'KerasRNN': 0.05,
             'Transformer': 0.05,
             'MLP': 0.05,
+            "ElasticNetwork": 0.05,
         }
         method = "deep"
     elif method == "gradient_boosting":
@@ -888,6 +897,8 @@ def generate_regressor_params(
         'GaussianProcessRegressor',
         'MultioutputGPR',
         'SVM',
+        "ElasticNetwork",
+        "ElasticNet",
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -902,6 +913,15 @@ def generate_regressor_params(
                         [0.8, 0.1, 0.0],  # SVR slow and crash prone
                     )[0],
                     "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
+                },
+            }
+        elif model == 'ElasticNet':
+            param_dict = {
+                "model": 'ElasticNet',
+                "model_params": {
+                    "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
+                    "fit_intercept": random.choices([True, False], [0.9, 0.1])[0],
+                    "selection": random.choices(["cyclic", "random"], [0.8, 0.1])[0],
                 },
             }
         elif model == 'xgboost':
@@ -1067,7 +1087,7 @@ def generate_regressor_params(
                     "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
                 },
             }
-        elif model == 'KerasRNN':
+        elif model in ['KerasRNN']:
             init_list = [
                 'glorot_uniform',
                 'lecun_uniform',
@@ -1090,8 +1110,15 @@ def generate_regressor_params(
                         ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
                     )[0],
                     "loss": random.choices(
-                        ['mae', 'Huber', 'poisson', 'mse', 'mape'],
-                        [0.2, 0.3, 0.1, 0.2, 0.2],
+                        [
+                            'mae',
+                            'Huber',
+                            'poisson',
+                            'mse',
+                            'mape',
+                            "mean_squared_logarithmic_error",
+                        ],
+                        [0.2, 0.3, 0.1, 0.2, 0.2, 0.1],
                     )[0],
                     "hidden_layer_sizes": random.choices(
                         [
@@ -1108,6 +1135,47 @@ def generate_regressor_params(
                         ['LSTM', 'GRU', "E2D2", "CNN"], [0.5, 0.3, 0.15, 0.01]
                     )[0],
                     "shape": random.choice([1, 2]),
+                },
+            }
+        elif model in ["ElasticNetwork"]:
+            param_dict = {
+                "model": 'ElasticNetwork',
+                "model_params": {
+                    "size": random.choices(
+                        [
+                            32,
+                            64,
+                            128,
+                            256,
+                        ],
+                        [0.1, 0.3, 0.3, 0.1],
+                    )[0],
+                    "l1": random.choices(
+                        [0.0, 0.0001, 0.01, 0.02, 0.2], [0.5, 0.3, 0.15, 0.1, 0.1]
+                    )[0],
+                    "l2": random.choices(
+                        [0.0, 0.0001, 0.01, 0.02, 0.2], [0.5, 0.3, 0.15, 0.1, 0.1]
+                    )[0],
+                    "epochs": random.choices(
+                        [10, 20, 50, 100], [0.75, 0.2, 0.05, 0.001]
+                    )[0],
+                    "batch_size": random.choices([8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1])[
+                        0
+                    ],
+                    "optimizer": random.choices(
+                        ['adam', 'rmsprop', 'adagrad'], [0.8, 0.5, 0.1]
+                    )[0],
+                    "loss": random.choices(
+                        [
+                            'mae',
+                            'Huber',
+                            'poisson',
+                            'mse',
+                            'mape',
+                            "mean_squared_logarithmic_error",
+                        ],
+                        [0.2, 0.3, 0.1, 0.2, 0.2, 0.1],
+                    )[0],
                 },
             }
         elif model == 'Transformer':
@@ -3523,9 +3591,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

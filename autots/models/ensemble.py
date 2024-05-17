@@ -1838,15 +1838,15 @@ def MosaicEnsemble(
             f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
             + mi
         )
-    melted[
-        'forecast'
-    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    melted[
-        'upper_forecast'
-    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    melted[
-        'lower_forecast'
-    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted['forecast'] = (
+        fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    )
+    melted['upper_forecast'] = (
+        u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    )
+    melted['lower_forecast'] = (
+        l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    )
 
     forecast_df = melted.pivot(
         values="forecast", columns="series_id", index="forecast_period"

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autots"
-version = "0.6.13"
+version = "0.6.14"
 authors = [
   { name="Colin Catlin", email="colin.catlin@gmail.com" },
 ]

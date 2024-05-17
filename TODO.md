@@ -13,10 +13,11 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.13 🇺🇦 🇺🇦 🇺🇦
-* trend_phi directly into Prophet
-* subset arg to make KalmanStateSpace more scalable to memory
-* bug fixes
+# 0.6.14 🇺🇦 🇺🇦 🇺🇦
+* prevent excessive use of 'CenterSplit' and other macro_micro style transformers
+* added ElasticNetwork as subsidiary regression model option
+* KalmanSmoothing, BKBandpassFilter added on_inverse option
+* add threshold arg to AlignLastValue
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

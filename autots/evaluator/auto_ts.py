@@ -418,9 +418,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[
-                    index, 'TransformationParameters'
-                ] = json.dumps(full_params)
+                self.initial_template.loc[index, 'TransformationParameters'] = (
+                    json.dumps(full_params)
+                )
 
         self.regressor_used = False
         self.grouping_ids = None
@@ -1093,9 +1093,9 @@ class AutoTS(object):
 
         Args:
             df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
-            date_col (str): name of datetime column
-            value_col (str): name of column containing the data of series.
-            id_col (str): name of column identifying different series.
+            date_col (str): name of datetime column if long style data
+            value_col (str): name of column containing the data of series if using long style data. NOT for pointing out the most important column if several, that's `weights`
+            id_col (str): name of column identifying different series if long style data.
             future_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
                 pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
@@ -1827,10 +1827,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results[
-                'TotalRuntime'
-            ] = template_result.model_results['TotalRuntime'].fillna(
-                pd.Timedelta(seconds=60)
+            template_result.model_results['TotalRuntime'] = (
+                template_result.model_results['TotalRuntime'].fillna(
+                    pd.Timedelta(seconds=60)
+                )
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -1930,9 +1930,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[
-                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
-                ] = np.nan
+                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
+                    np.nan
+                )
 
             # run validation template on current slice
             result = self._run_template(
@@ -3851,9 +3851,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y[
-                        'Model'
-                    ] = x  # might need to remove this and do analysis independently for each
+                    y['Model'] = (
+                        x  # might need to remove this and do analysis independently for each
+                    )
                     res.append(
                         pd.DataFrame(
                             {

@@ -722,7 +722,7 @@ def seasonal_independent_match(
     a = array.to_numpy()[:, None]
     b = future_array
     if distance_metric == "mae":
-        scores = np.mean(np.abs(a - b), axis=2)
+        scores = np.abs(a - b).mean(axis=2)
     elif distance_metric == "canberra":
         divisor = np.abs(a) + np.abs(b)
         divisor[divisor == 0] = 1
