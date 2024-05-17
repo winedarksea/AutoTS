@@ -264,8 +264,7 @@ def rolling_x_regressor_regressor(
         X = X.drop(columns=['series_id'])
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -531,9 +530,9 @@ def retrieve_regressor(
         return regr
     elif model_class in ["ElasticNetwork"]:
         from autots.models.dnn import ElasticNetwork
+
         return ElasticNetwork(
-            random_seed=random_seed, verbose=verbose,
-            **model_param_dict
+            random_seed=random_seed, verbose=verbose, **model_param_dict
         )
     else:
         raise ValueError(f"model_class {model_class} regressor not recognized")
@@ -921,12 +920,8 @@ def generate_regressor_params(
                 "model": 'ElasticNet',
                 "model_params": {
                     "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
-                    "fit_intercept": random.choices(
-                        [True, False], [0.9, 0.1]
-                    )[0],
-                    "selection": random.choices(
-                        ["cyclic", "random"], [0.8, 0.1]
-                    )[0],
+                    "fit_intercept": random.choices([True, False], [0.9, 0.1])[0],
+                    "selection": random.choices(["cyclic", "random"], [0.8, 0.1])[0],
                 },
             }
         elif model == 'xgboost':
@@ -1115,7 +1110,14 @@ def generate_regressor_params(
                         ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
                     )[0],
                     "loss": random.choices(
-                        ['mae', 'Huber', 'poisson', 'mse', 'mape', "mean_squared_logarithmic_error"],
+                        [
+                            'mae',
+                            'Huber',
+                            'poisson',
+                            'mse',
+                            'mape',
+                            "mean_squared_logarithmic_error",
+                        ],
                         [0.2, 0.3, 0.1, 0.2, 0.2, 0.1],
                     )[0],
                     "hidden_layer_sizes": random.choices(
@@ -1141,7 +1143,10 @@ def generate_regressor_params(
                 "model_params": {
                     "size": random.choices(
                         [
-                            32, 64, 128, 256,
+                            32,
+                            64,
+                            128,
+                            256,
                         ],
                         [0.1, 0.3, 0.3, 0.1],
                     )[0],
@@ -1161,7 +1166,14 @@ def generate_regressor_params(
                         ['adam', 'rmsprop', 'adagrad'], [0.8, 0.5, 0.1]
                     )[0],
                     "loss": random.choices(
-                        ['mae', 'Huber', 'poisson', 'mse', 'mape', "mean_squared_logarithmic_error"],
+                        [
+                            'mae',
+                            'Huber',
+                            'poisson',
+                            'mse',
+                            'mape',
+                            "mean_squared_logarithmic_error",
+                        ],
                         [0.2, 0.3, 0.1, 0.2, 0.2, 0.1],
                     )[0],
                 },
@@ -3579,9 +3591,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

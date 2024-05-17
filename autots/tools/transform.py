@@ -2749,9 +2749,9 @@ class AlignLastValue(EmptyTransformer):
             self.center = self.find_centerpoint(df, self.rows, self.lag)
         if self.threshold is not None:
             if self.method == "multiplicative":
-                self.threshold = df.iloc[-self.threshold:].pct_change().abs().max()
+                self.threshold = df.iloc[-self.threshold :].pct_change().abs().max()
             else:
-                self.threshold = df.iloc[-self.threshold:].diff().abs().max()
+                self.threshold = df.iloc[-self.threshold :].diff().abs().max()
         return self
 
     @staticmethod
@@ -2818,14 +2818,20 @@ class AlignLastValue(EmptyTransformer):
                             1 + ((self.center / df.iloc[0]) - 1) * self.strength
                         )
                         if self.threshold is not None:
-                            return df.where(self.adjustment.abs() <= self.threshold, df * self.adjustment)
+                            return df.where(
+                                self.adjustment.abs() <= self.threshold,
+                                df * self.adjustment,
+                            )
                         else:
                             return df * self.adjustment
                 else:
                     if self.adjustment is None:
                         self.adjustment = self.strength * (self.center - df.iloc[0])
                     if self.threshold is not None:
-                        return df.where(self.adjustment.abs() <= self.threshold, df + self.adjustment)
+                        return df.where(
+                            self.adjustment.abs() <= self.threshold,
+                            df + self.adjustment,
+                        )
                     else:
                         return df + self.adjustment
 
@@ -3949,9 +3955,7 @@ class CenterSplit(EmptyTransformer):
             mask = df != self.center
             use_df = df
         else:
-            raise ValueError(
-                f"CenterSplit arg center `{self.center}` not recognized"
-            )
+            raise ValueError(f"CenterSplit arg center `{self.center}` not recognized")
 
         macro = use_df.where(mask, np.nan)
 
@@ -5603,6 +5607,14 @@ decompositions = {
     "ClipOutliers": 0.05,
     "LocalLinearTrend": 0.03,
     "FFTDecomposition": 0.02,
+}
+postprocessing = {
+    "Round": 0.1,
+    "HistoricValues": 0.1,
+    "BKBandpassFilter": 0.1,
+    "KalmanSmoothing": 0.1,
+    "AlignLastDiff": 0.1,
+    "AlignLastValue": 0.1,
 }
 transformer_class = {}
 

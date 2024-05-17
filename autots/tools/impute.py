@@ -22,6 +22,7 @@ def fill_zero(df):
     df = df.fillna(0)
     return df
 
+
 def fill_one(df):
     """Fill NaN with zero."""
     return df.fillna(1)

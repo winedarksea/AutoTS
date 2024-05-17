@@ -824,9 +824,9 @@ the max number of each model class to include in template</p></li>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed dataframe of series, or dataframe of three columns as below.</p></li>
-<li><p><strong>date_col</strong> (<em>str</em>) – name of datetime column</p></li>
-<li><p><strong>value_col</strong> (<em>str</em>) – name of column containing the data of series.</p></li>
-<li><p><strong>id_col</strong> (<em>str</em>) – name of column identifying different series.</p></li>
+<li><p><strong>date_col</strong> (<em>str</em>) – name of datetime column if long style data</p></li>
+<li><p><strong>value_col</strong> (<em>str</em>) – name of column containing the data of series if using long style data. NOT for pointing out the most important column if several, that’s <cite>weights</cite></p></li>
+<li><p><strong>id_col</strong> (<em>str</em>) – name of column identifying different series if long style data.</p></li>
 <li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
 <li><p><strong>weights</strong> (<em>dict</em>) – {‘colname1’: 2, ‘colname2’: 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
 pass the alias ‘mean’ as a str ie <cite>weights=’mean’</cite> to automatically use the mean value of a series as its weight
