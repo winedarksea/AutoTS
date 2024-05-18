@@ -1674,7 +1674,8 @@ class AutoTS(object):
             template_cols = self.template_cols_id
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
-            self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
+            (self.validation_results.model_results['Runs'] >= (self.num_validations + 1)) &
+            (self.validation_results.model_results['Ensemble'] < 2)
         ].copy()
         if eligible_models.empty:
             # this may occur if there is enough data for full validations
