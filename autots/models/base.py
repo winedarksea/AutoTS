@@ -921,6 +921,7 @@ class PredictionObject(object):
         if num_cols > 4:
             nrow = 2
             ncol = 3
+            num_cols = 6
         elif num_cols > 2:
             nrow = 2
             ncol = 2
@@ -930,6 +931,7 @@ class PredictionObject(object):
         fig, axes = plt.subplots(nrow, ncol, figsize=figsize, constrained_layout=True)
         fig.suptitle(title, fontsize='xx-large')
         count = 0
+        sample_cols = random.choices(cols, k=num_cols)
         for r in range(nrow):
             for c in range(ncol):
                 if nrow > 1:
@@ -939,7 +941,7 @@ class PredictionObject(object):
                 if count + 1 > num_cols:
                     pass
                 else:
-                    col = cols[count]
+                    col = sample_cols[count]
                     self.plot(
                         df_wide=df_wide,
                         series=col,
