@@ -639,6 +639,7 @@ sklearn_model_dict = {
     'RANSAC': 0.05,
     'Ridge': 0.02,
     'GaussianProcessRegressor': 0.000000001,  # slow
+    "ElasticNetwork": 0.01,
     # 'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
@@ -715,6 +716,7 @@ datepart_model_dict: dict = {
     'KerasRNN': 0.01,
     # 'Transformer': 0.02,  # slow, kernel failed
     'RadiusNeighbors': 0.1,
+    "ElasticNetwork": 0.05,
 }
 datepart_model_dict_deep = {
     'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
