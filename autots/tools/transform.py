@@ -4351,7 +4351,7 @@ class ReplaceConstant(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.001],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.0001],
             )[0],
         }
 
@@ -5465,7 +5465,7 @@ class GeneralTransformer(object):
         except Exception as e:
             err_str = f"Transformer {self.c_trans_n} failed on inverse"
             if self.verbose >= 1:
-                err_str += f" from params {self.fillna} {self.transformation_params}"
+                err_str += f" from params {self.fillna} {self.transformation_params} with {repr(e)}"
             raise Exception(err_str) from e
 
         if fillzero:

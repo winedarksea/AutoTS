@@ -1051,7 +1051,7 @@ class Cassandra(ModelObject):
 
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 if np.any(np.isnan(c_x.astype(float))):  # remove later, for debugging
-                    raise ValueError("nan values in predict c_x_array")
+                    raise ValueError(f"nan values in predict c_x_array. Rows with NaN: {c_x.isna().any(axis=1).sum()}. Most nan columns: {c_x.isna().sum().sort_values(ascending=False).head(5)}")
                 predicts.append(
                     pd.Series(
                         np.dot(

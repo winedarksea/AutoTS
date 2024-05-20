@@ -3779,6 +3779,34 @@ class AutoTS(object):
             .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
         )
 
+    def plot_model_failure_rate(self):
+        """Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer."""
+        initial_results = self.results()
+        failures = []
+        successes = []
+        for idx, row in initial_results.iterrows():
+            failed = not pd.isnull(row['Exceptions'])
+            transforms = [row["Model"]]
+            if failed:
+                failures = failures + transforms
+            else:
+                successes = successes + transforms
+        total = pd.concat(
+            [
+                pd.Series(failures).value_counts().rename("failures").to_frame(),
+                pd.Series(successes).value_counts().rename("successes"),
+            ],
+            axis=1,
+        ).fillna(0)
+        total['failure_rate'] = total['failures'] / (
+            total['successes'] + total['failures']
+        )
+        return (
+            total.sort_values("failure_rate", ascending=False)['failure_rate']
+            .iloc[0:20]
+            .plot(kind='bar', title='Models by Failure Rate', color='forestgreen')
+        )
+
     def _count_values(self, input_dict, counts=None):
         """Recursively count occurrences of values in (nested) dictionaries using a basic dictionary."""
         if counts is None:
