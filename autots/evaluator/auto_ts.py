@@ -48,6 +48,7 @@ from autots.models.ensemble import (
     is_horizontal,
     is_mosaic,
     parse_mosaic,
+    full_ensemble_test_list,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools.cpu_count import set_n_jobs
@@ -469,7 +470,7 @@ class AutoTS(object):
     @staticmethod
     def get_new_params(method='random'):
         """Randomly generate new parameters for the class."""
-        if method != 'full':
+        if method not in ['full', "fast"]:
             ensemble_choice = random.choices(
                 [
                     None,
@@ -492,17 +493,7 @@ class AutoTS(object):
                     None,
                     ['simple'],
                     ['simple', 'horizontal-max'],
-                    [
-                        'simple',
-                        "distance",
-                        "horizontal",
-                        "horizontal-max",
-                        "mosaic",
-                        'mosaic-window',
-                        'mosaic-crosshair',
-                        "subsample",
-                        "mlensemble",
-                    ],
+                    full_ensemble_test_list,
                 ],
                 [0.3, 0.1, 0.2, 0.2],
             )[0]

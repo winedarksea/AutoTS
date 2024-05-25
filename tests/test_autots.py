@@ -14,6 +14,7 @@ from autots.datasets import (
 from autots import AutoTS, model_forecast, ModelPrediction
 from autots.evaluator.auto_ts import fake_regressor
 from autots.evaluator.auto_model import ModelMonster
+from autots.models.ensemble import full_ensemble_test_list
 from autots.models.model_list import default as default_model_list
 from autots.models.model_list import all_models
 from autots.evaluator.benchmark import Benchmark
@@ -55,17 +56,7 @@ class AutoTSTest(unittest.TestCase):
             'spl_weighting': 1,
             'contour_weighting': 1,
         }
-        ensemble = [
-            'simple',
-            # 'distance',
-            # 'horizontal',
-            'horizontal-max',
-            # 'mosaic',
-            'mosaic-window',
-            'mosaic-crosshair'
-            # 'subsample',
-            # 'mlensemble',
-        ]
+        ensemble = full_ensemble_test_list
 
         model = AutoTS(
             forecast_length=forecast_length,

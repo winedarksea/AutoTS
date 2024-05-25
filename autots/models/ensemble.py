@@ -12,6 +12,22 @@ from autots.models.sklearn import retrieve_classifier
 
 
 horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
+# try to include all types in here
+full_ensemble_test_list = [
+    'simple',
+    "distance",
+    "horizontal",
+    "horizontal-max",
+    "mosaic",
+    'mosaic-window',
+    'mosaic-crosshair',
+    "subsample",
+    "mlensemble",
+    "mosaic-weighted-crosshair-0-10",
+    "mosaic-weighted-crosshair_lite-0-10",
+    "mosaic-weighted-0-horizontal",
+    "mosaic-mae-0-40",
+]
 
 
 def summarize_series(df):
@@ -1837,7 +1853,7 @@ def MosaicEnsemble(
         raise ValueError(
             f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
             + mi
-        )
+        ) from e
     melted['forecast'] = (
         fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
     )

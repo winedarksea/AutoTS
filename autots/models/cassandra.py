@@ -969,7 +969,7 @@ class Cassandra(ModelObject):
                 print(
                     f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
                 )
-            raise ValueError("nan values in predict_x_array")
+            raise ValueError(f"nan values in predict_x_array in columns {nulz[nulz > 0].index.tolist()[0:5]}")
 
         # RUN LINEAR MODEL
         # add x features that don't apply to all, and need to be looped
