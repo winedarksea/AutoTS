@@ -473,6 +473,11 @@ general_template_dict = {
         "TransformationParameters": '''{"fillna": "ffill", "transformations": {"0": "SeasonalDifference", "1": "AlignLastValue", "2": "Round", "3": "Round", "4": "MinMaxScaler"}, "transformation_params": {"0": {"lag_1": 7, "method": "LastValue"}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "2": {"decimals": 0, "on_transform": false, "on_inverse": true}, "3": {"decimals": 0, "on_transform": false, "on_inverse": true}, "4": {}}}''',
         "Ensemble": 0,
     },
+    "76": {
+        'Model': 'NVAR',
+        'ModelParameters': '{"k": 2, "ridge_param": 2e-06, "warmup_pts": 1, "seed_pts": 1, "seed_weighted": null, "batch_size": 5, "batch_method": "std_sorted"}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "HolidayTransformer", "1": "PositiveShift"}, "transformation_params": {"0": {"threshold": 0.9, "splash_threshold": null, "use_dayofmonth_holidays": true, "use_wkdom_holidays": true, "use_wkdeom_holidays": false, "use_lunar_holidays": false, "use_lunar_weekday": false, "use_islamic_holidays": false, "use_hebrew_holidays": false, "anomaly_detector_params": {"method": "rolling_zscore", "method_params": {"distribution": "uniform", "alpha": 0.03, "rolling_periods": 300, "center": true}, "fillna": "ffill", "transform_dict": {"fillna": "nearest", "transformations": {"0": null}, "transformation_params": {"0": {}}}, "isolated_only": false}, "remove_excess_anomalies": true, "impact": "datepart_regression", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic"}}, "datepart_method": "simple", "polynomial_degree": null, "transform_dict": null, "holiday_countries_used": false}}, "1": {}}}'
+    }
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
