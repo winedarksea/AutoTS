@@ -403,6 +403,10 @@ class AutoTSTest(unittest.TestCase):
         self.assertIsInstance(params, dict)
         model = AutoTS(**params)  # noqa
 
+        params = AutoTS.get_new_params(method='fast')
+        self.assertIsInstance(params, dict)
+        model = AutoTS(**params)  # noqa
+
     def test_univariate1step(self):
         print("Starting test_univariate1step")
         df = load_artificial(long=False)

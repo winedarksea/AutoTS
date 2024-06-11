@@ -186,7 +186,10 @@ def apply_constraint_single(
         if isinstance(constraint_value, dict):
             window = constraint_value.get("window", 3)
             window_agg = constraint_value.get("window_agg", "mean")
-            threshold = constraint_value.get("threshold", 0.05)
+            if upper_constraint is not None:
+                threshold = constraint_value.get("threshold", 0.05)
+            else:
+                threshold = constraint_value.get("threshold", -0.05)
         else:
             window = 1
             window_agg = "mean"
@@ -1067,6 +1070,18 @@ class PredictionObject(object):
                         "constraint_direction": "upper",
                         "constraint_regularization": 1.0,
                         "bounds": True,
+                    },
+                    {  # don't exceed 2% decline by end of forecast horizon
+                        "constraint_method": "slope",
+                        "constraint_value": {
+                            "slope": -0.02,
+                            "window": 28,
+                            "window_agg": "min",
+                            "threshold": -0.01,
+                        },
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 0.9,
+                        "bounds": False,
                     },
                     {  # don't exceed 2% growth by end of forecast horizon
                         "constraint_method": "slope",

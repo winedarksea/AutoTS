@@ -27,6 +27,8 @@ full_ensemble_test_list = [
     "mosaic-weighted-crosshair_lite-0-10",
     "mosaic-weighted-0-horizontal",
     "mosaic-mae-0-40",
+    "mosaic-weighted-0-40",
+    "mosaic-spl-3-10",
 ]
 
 
