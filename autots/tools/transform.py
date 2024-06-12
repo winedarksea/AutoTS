@@ -2383,7 +2383,7 @@ class FastICA(EmptyTransformer):
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
             "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
-            "whiten": random.choices([True, False], [0.9, 0.1])[0],
+            "whiten": random.choices(['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1])[0],
         }
 
 
