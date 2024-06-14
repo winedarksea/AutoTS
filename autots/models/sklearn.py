@@ -1016,25 +1016,26 @@ def generate_regressor_params(
                     "hidden_layer_sizes": random.choices(
                         [
                             (100,),
+                            (2560,),
                             (25, 15, 25),
                             (72, 36, 72),
                             (25, 50, 25),
                             (32, 64, 32),
                             (32, 32, 32),
                         ],
-                        [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
+                        [0.1, 0.3, 0.3, 0.3, 0.1, 0.1, 0.1],
                     )[0],
-                    "max_iter": np.random.choice(
-                        [250, 500, 1000], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "activation": np.random.choice(
+                    "max_iter": random.choices(
+                        [250, 500, 1000], [0.8, 0.1, 0.1],
+                    )[0],
+                    "activation": random.choices(
                         ['identity', 'logistic', 'tanh', 'relu'],
-                        p=[0.05, 0.05, 0.6, 0.3],
-                        size=1,
-                    ).item(),
+                        [0.05, 0.05, 0.6, 0.3],
+                    )[0],
                     "solver": solver,
                     "early_stopping": early_stopping,
                     "learning_rate_init": learning_rate_init,
+                    "alpha": random.choices([None, 0.0001, 0.1, 0.0], [0.5, 0.2, 0.2, 0.2])[0],
                 },
             }
         elif model == 'KNN':
