@@ -2710,6 +2710,7 @@ class AlignLastValue(EmptyTransformer):
         strength: float = 1.0,
         first_value_only: bool = False,
         threshold: int = None,
+        threshold_method: str = "max",
         **kwargs,
     ):
         super().__init__(name="AlignLastValue")
@@ -2720,6 +2721,7 @@ class AlignLastValue(EmptyTransformer):
         self.first_value_only = first_value_only
         self.adjustment = None
         self.threshold = threshold
+        self.threshold_method = threshold_method
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2731,7 +2733,8 @@ class AlignLastValue(EmptyTransformer):
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
             )[0],
             'first_value_only': random.choices([True, False], [0.1, 0.9])[0],
-            "threshold": random.choices([None, 1, 10], [0.8, 0.9, 0.9])[0],
+            "threshold": random.choices([None, 1, 3, 10], [0.8, 0.9, 0.2, 0.9])[0],
+            "threshold_method": random.choices(['max', 'mean'], [0.5, 0.5])[0],
         }
 
     def fit(self, df):
@@ -2749,9 +2752,15 @@ class AlignLastValue(EmptyTransformer):
             self.center = self.find_centerpoint(df, self.rows, self.lag)
         if self.threshold is not None:
             if self.method == "multiplicative":
-                self.threshold = df.iloc[-self.threshold :].pct_change().abs().max()
+                if self.threshold_method == "max":
+                    self.threshold = df.iloc[-self.threshold :].pct_change().abs().max()
+                else:
+                    self.threshold = df.pct_change().abs().mean()* self.threshold
             else:
-                self.threshold = df.iloc[-self.threshold :].diff().abs().max()
+                if self.threshold_method == "max":
+                    self.threshold = df.iloc[-self.threshold :].diff().abs().max()
+                else:
+                    self.threshold = df.diff().abs().mean() * self.threshold
         return self
 
     @staticmethod
