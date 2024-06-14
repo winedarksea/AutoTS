@@ -2815,7 +2815,7 @@ class AlignLastValue(EmptyTransformer):
                         self.adjustment = self.strength * (self.center - df.iloc[0])
                     return pd.concat(
                         [
-                            df.iloc[0:1] + adjustment,
+                            df.iloc[0:1] + self.adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
