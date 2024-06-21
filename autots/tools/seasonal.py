@@ -574,7 +574,7 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
 
 
-base_seasonalities = [
+base_seasonalities = [  # this needs to be a list
     "recurring",
     "simple",
     "expanded",

@@ -682,7 +682,7 @@ def full_metric_evaluation(
     else:
         mate = np.abs(np.sum(full_errors, axis=0))
     # possibly temporary
-    matse_scale = np.sum(A, axis=0)
+    matse_scale = np.sum(np.abs(A), axis=0)
     matse_scale[matse_scale == 0] = 1
     matse = mate / matse_scale
 
