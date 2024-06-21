@@ -427,9 +427,9 @@ def detect_anomalies(
 
 
 available_methods = [
-    "IsolationForest",
-    "LOF",
-    "EE",
+    "IsolationForest",  # (sklearn)
+    "LOF",  # Local Outlier Factor (sklearn)
+    "EE",  # Elliptical Envelope (sklearn)
     "zscore",
     "rolling_zscore",
     "mad",

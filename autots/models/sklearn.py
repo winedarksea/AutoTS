@@ -2048,6 +2048,10 @@ class WindowRegression(ModelObject):
             max_windows_choice = random.choices(
                 [5000, 50000, 5000000, None], [0.4, 0.2, 0.9, 0.05]
             )[0]
+        elif method == "fast":
+            max_windows_choice = random.choices(
+                [10000, 100000], [0.2, 0.2]
+            )[0]
         else:
             max_windows_choice = random.choices(
                 [5000, 50000, 5000000], [0.2, 0.2, 0.9]
