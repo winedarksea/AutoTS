@@ -1109,19 +1109,28 @@ class AutoTS(object):
         )
 
         # generate validation indices (so it can fail now, not after all the generations)
-        self.validation_indexes = generate_validation_indices(
-            self.validation_method,
-            self.forecast_length,
-            self.num_validations,
-            self.df_wide_numeric,
-            validation_params=(
-                self.similarity_validation_params
-                if self.validation_method == "similarity"
-                else self.seasonal_validation_params
-            ),
-            preclean=None,
-            verbose=0,
-        )
+        if self.validation_method != "custom":
+            self.validation_indexes = generate_validation_indices(
+                self.validation_method,
+                self.forecast_length,
+                self.num_validations,
+                self.df_wide_numeric,
+                validation_params=(
+                    self.similarity_validation_params
+                    if self.validation_method == "similarity"
+                    else self.seasonal_validation_params
+                ),
+                preclean=None,
+                verbose=0,
+            )
+        else:
+            if not self.validation_indexes:
+                if self.verbose >= 0:
+                    print("custom validation but provided indexes appear to be missing")
+            elif len(self.validation_indexes) != (self.num_validations + 1):
+                if self.verbose >= 0:
+                    print(f"custom validation index is of length {len(self.validation_indexes)} but requested num_validations + 1 is {(self.num_validations + 1)}")
+                self.num_validations = len(self.validation_indexes) - 1 if (len(self.validation_indexes) - 1) > 0 else 0
         return self
 
     def fit(
@@ -1152,6 +1161,7 @@ class AutoTS(object):
                 ".pickle" saves full object, including ensemble information.
             grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
                 used in 0.2.x but not 0.3.x+ versions. retained for potential future use
+            validation_indexes (list): list of datetime indexes, tail of forecast length is used as holdout
         """
         self.model = None
         self.grouping_ids = grouping_ids

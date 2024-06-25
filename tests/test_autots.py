@@ -553,6 +553,33 @@ class AutoTSTest(unittest.TestCase):
                 self.assertIsInstance(trans, dict)
                 self.assertIsNotNone(ensemble)
 
+    def test_custom_validations(self):
+        long = False
+        df = load_daily(long=long)
+        forecast_length = 28
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='D',
+            max_generations=10,
+            validation_method="custom",
+            model_list="superfast",
+            ensemble=None,
+            n_jobs=1,
+            verbose=2,
+            subset=4,
+            remove_leading_zeroes=True,
+            generation_timeout=1,
+            horizontal_ensemble_validation=True,
+        )
+        custom_idx = [
+            pd.date_range(df.index[0], df.index[-100]),
+            pd.date_range(df.index[0], df.index[-(100 + forecast_length)]),
+        ]
+        model = model.fit(
+            df,
+            validation_indexes=custom_idx
+        )
+
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
         # the big ones are:
