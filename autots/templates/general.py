@@ -485,7 +485,30 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "QuantileTransformer", "1": "QuantileTransformer", "2": "DatepartRegression"}, "transformation_params": 	{"0": {"output_distribution": "uniform", "n_quantiles": 1000}, "1": {"output_distribution": "normal", "n_quantiles": 100}, "2": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic"}}, "datepart_method": "expanded", "polynomial_degree": null, "transform_dict": null, "holiday_countries_used": false}}}',
         "Ensemble": 0,
     },
-
+    "78": {  # optimized on dap, 2.43 SMAPE 2024-06-20
+        'Model': 'SectionalMotif',
+        'ModelParameters': '{"window": 7, "point_method": "median", "distance_metric": "canberra", "include_differenced": true, "k": 5, "stride_size": 1, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "SeasonalDifference", "1": "AlignLastValue", "2": "SeasonalDifference", "3": "LevelShiftTransformer"}, "transformation_params": {"0": {"lag_1": 7, "method": "Median"}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 1.0, "first_value_only": false}, "2": {"lag_1": 12, "method": 5}, "3": {"window_size": 30, "alpha": 2.0, "grouping_forward_limit": 4, "max_level_shifts": 10, "alignment": "average"}}}',
+        "Ensemble": 0,
+    },
+    "79": {  # optimized on dap, 662000 MAE 2024-06-20
+        'Model': 'FBProphet',
+        'ModelParameters': '{"holiday": {"threshold": 1.0, "splash_threshold": null, "use_dayofmonth_holidays": true, "use_wkdom_holidays": true, "use_wkdeom_holidays": false, "use_lunar_holidays": false, "use_lunar_weekday": false, "use_islamic_holidays": false, "use_hebrew_holidays": false, "anomaly_detector_params": {"method": "IQR", "transform_dict": {"fillna": "time", "transformations": {"0": "Slice"}, "transformation_params": {"0": {"method": 0.5}}}, "forecast_params": {"model_name": "RRVAR", "model_param_dict": {"method": "als", "rank": 0.2, "maxiter": 200}, "model_transform_dict": {"fillna": "mean", "transformations": {"0": "DifferencedTransformer", "1": "bkfilter", "2": "AlignLastValue", "3": "ClipOutliers", "4": "SeasonalDifference"}, "transformation_params": {"0": {"lag": 1, "fill": "zero"}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "3": {"method": "clip", "std_threshold": 2, "fillna": null}, "4": {"lag_1": 12, "method": "LastValue"}}}}, "method_params": {"iqr_threshold": 2.0, "iqr_quantiles": [0.4, 0.6]}}}, "regression_type": null, "growth": "linear", "n_changepoints": 10, "changepoint_prior_scale": 0.1, "seasonality_mode": "additive", "changepoint_range": 0.85, "seasonality_prior_scale": 0.01, "holidays_prior_scale": 10.0, "trend_phi": 1}',
+        'TransformationParameters': '{"fillna": "rolling_mean", "transformations": {"0": "SeasonalDifference", "1": "bkfilter", "2": "SeasonalDifference", "3": "LevelShiftTransformer", "4": "AlignLastDiff"}, "transformation_params": {"0": {"lag_1": 7, "method": "Median"}, "1": {}, "2": {"lag_1": 12, "method": 5}, "3": {"window_size": 90, "alpha": 3.0, "grouping_forward_limit": 4, "max_level_shifts": 10, "alignment": "rolling_diff_3nn"}, "4": {"rows": null, "displacement_rows": 1, "quantile": 1.0, "decay_span": null}}}',
+        "Ensemble": 0,
+    },
+    "80": {  # optimized on prod example daily, 13.5 SMAPE, 0.64 ODA, 42750 MAE, 2024-06-22
+        'Model': 'ARDL',
+        'ModelParameters': '{"lags": 3, "trend": "c", "order": 0, "causal": false, "regression_type": "simple_3"}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "ClipOutliers", "1": "Detrend"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 4.5, "fillna": null}, "1": {"model": "Linear", "phi": 1, "window": 90, "transform_dict": {"fillna": null, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 4}}}}}}',
+        "Ensemble": 0,
+    },
+    "81": {  # optimized on prod example daily, 15.67 SMAPE 2024-06-22
+        'Model': 'FFT',
+        'ModelParameters': '{"n_harmonics": 4, "detrend": "linear"}',
+        'TransformationParameters': '{"fillna": "time", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.9, "first_value_only": false}}}',
+        "Ensemble": 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

@@ -149,7 +149,7 @@ fast_parallel_no_arima = {
         'Theta',
         "VECM",
         "MAR",
-        # "BallTreeMultivariateMotif",  # might need sample_fraction tuning
+        "BallTreeMultivariateMotif",  # might need sample_fraction tuning
         # "WindowRegression"  # same base shaping as BallTreeMM
     ]
 }
