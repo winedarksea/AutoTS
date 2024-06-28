@@ -5170,8 +5170,8 @@ class GeneralTransformer(object):
             except Exception as e:
                 self.nan_flag = True
                 print(repr(e))
-                print(df)
-                print(df.shape)
+                # print(df)
+                # print(df.shape)
         else:
             self.nan_flag = np.isnan(np.min(np.array(df)))
         if self.nan_flag:

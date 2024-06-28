@@ -1901,8 +1901,9 @@ class Cassandra(ModelObject):
                     # 'UnobservedComponents',
                     # "KalmanStateSpace",
                     'RRVAR',
+                    "NeuralForecast",
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05],
+                [0.05, 0.05, 0.2, 0.05, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.01],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -2135,7 +2136,7 @@ class Cassandra(ModelObject):
             "regressors_used": regressors_used,
             "linear_model": linear_model,
             "randomwalk_n": random.choices([None, 10], [0.5, 0.5])[0],
-            "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
+            "trend_window": random.choices([None, 3, 15, 90, 364], [0.2, 0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": trend_standin,
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
