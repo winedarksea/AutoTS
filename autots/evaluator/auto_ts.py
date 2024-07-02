@@ -470,7 +470,7 @@ class AutoTS(object):
     @staticmethod
     def get_new_params(method="random"):
         """Randomly generate new parameters for the class."""
-        if method not in ["full", "fast"]:
+        if method not in ["full", "fast", "superfast"]:
             ensemble_choice = random.choices(
                 [
                     None,
