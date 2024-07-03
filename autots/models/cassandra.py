@@ -332,7 +332,7 @@ class Cassandra(ModelObject):
         if self.preprocessing_transformation is not None:
             self.preprocesser = GeneralTransformer(
                 n_jobs=self.n_jobs,
-                holiday_country=self.holiday_country,
+                holiday_country=self.holiday_countries,
                 verbose=self.verbose,
                 random_seed=self.random_seed,
                 forecast_length=self.forecast_length,

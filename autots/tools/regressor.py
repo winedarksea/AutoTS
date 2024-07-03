@@ -107,7 +107,7 @@ def create_regressor(
     # df = df.apply(pd.to_numeric, errors='ignore') # another pointless pandas deprecation
     for col in df.columns:
         try:
-            df.loc[col] = pd.to_numeric(df.loc[col])
+            df.loc[:, col] = pd.to_numeric(df[col])
         except ValueError:
             pass
     df = df.select_dtypes(include=np.number)
