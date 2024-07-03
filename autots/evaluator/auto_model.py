@@ -616,6 +616,7 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
+            forecast_length=forecast_length,
             **parameters,
         )
     elif model == "PreprocessingRegression":
@@ -810,6 +811,7 @@ class ModelPrediction(ModelObject):
             holiday_country=self.holiday_country,
             verbose=self.verbose,
             random_seed=self.random_seed,
+            forecast_length=self.forecast_length,
         )
         self.name = "ModelPrediction"
         self._fit_complete = False

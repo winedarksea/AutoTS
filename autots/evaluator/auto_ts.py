@@ -1069,6 +1069,9 @@ class AutoTS(object):
                 **self.preclean,
                 n_jobs=self.n_jobs,
                 holiday_country=self.holiday_country,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                forecast_length=self.forecast_length,
             )
             df_wide_numeric = self.preclean_transformer.fit_transform(df_wide_numeric)
 

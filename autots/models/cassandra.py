@@ -147,6 +147,7 @@ class Cassandra(ModelObject):
         random_seed: int = 2022,
         verbose: int = 0,
         n_jobs: int = "auto",
+        forecast_length: int = 30,  # currently only used for an single use in the GeneralTransformer
         **kwargs,
     ):
         if preprocessing_transformation is None:
@@ -193,6 +194,7 @@ class Cassandra(ModelObject):
             self.n_jobs = cpu_count(modifier=0.75)
             if verbose > 0:
                 print(f"Using {self.n_jobs} cpus for n_jobs.")
+        self.forecast_length = forecast_length
         self.starting_params = self.get_params()
         self.scaler = EmptyTransformer()
         self.preprocesser = EmptyTransformer()
@@ -329,6 +331,11 @@ class Cassandra(ModelObject):
         # REMOVE NaN but only this so far, for holiday and anomaly detection
         if self.preprocessing_transformation is not None:
             self.preprocesser = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_country,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                forecast_length=self.forecast_length,
                 **{'fillna': self.preprocessing_transformation.get('fillna', "ffill")}
             )
             self.df = self.preprocesser.fit_transform(self.df)
@@ -374,7 +381,14 @@ class Cassandra(ModelObject):
             # detect_only = pass
         # now do standard preprocessing
         if self.preprocessing_transformation is not None:
-            self.preprocesser = GeneralTransformer(**self.preprocessing_transformation)
+            self.preprocesser = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_countries,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                forecast_length=self.forecast_length,
+                **self.preprocessing_transformation
+            )
             self.df = self.preprocesser.fit_transform(self.df)
         if self.scaling is not None:
             if self.scaling == "BaseScaler":
@@ -382,11 +396,23 @@ class Cassandra(ModelObject):
             else:
                 if self.scaling is None:
                     raise ValueError("scaling must not be None. Try 'BaseScaler'")
-                self.scaler = GeneralTransformer(**self.scaling)
+                self.scaler = GeneralTransformer(
+                    n_jobs=self.n_jobs,
+                    holiday_country=self.holiday_countries,
+                    verbose=self.verbose,
+                    random_seed=self.random_seed,
+                    forecast_length=self.forecast_length,
+                    **self.scaling
+                )
                 self.df = self.scaler.fit_transform(self.df)
         # additional transforms before multivariate feature creation
         if self.multivariate_transformation is not None:
             self.multivariate_transformer = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_countries,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                forecast_length=self.forecast_length,
                 **self.multivariate_transformation
             )
         # needs to come after preprocessing because of 'slice' transformer
@@ -512,6 +538,11 @@ class Cassandra(ModelObject):
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(
+                    n_jobs=self.n_jobs,
+                    holiday_country=self.holiday_countries,
+                    verbose=self.verbose,
+                    random_seed=self.random_seed,
+                    forecast_length=self.forecast_length,
                     **self.regressor_transformation
                 )
             else:

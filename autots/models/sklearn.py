@@ -3829,6 +3829,9 @@ class PreprocessingRegression(ModelObject):
         self.transformer_object = GeneralTransformer(
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
+            verbose=self.verbose,
+            random_seed=self.random_seed,
+            forecast_length=self.forecast_length,
             **self.transformation_dict,
         )
         forecast_length = self.forecast_length

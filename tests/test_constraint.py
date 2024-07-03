@@ -91,6 +91,13 @@ class TestConstraint(unittest.TestCase):
                     "constraint_regularization": 0.5,
                     "bounds": True,
                 },
+                {  # use a log curve shaped by the historic min/max growth rate to limit
+                    "constraint_method": "historic_growth",
+                    "constraint_value": 1.0,
+                    "constraint_direction": "upper",
+                    "constraint_regularization": 1.0,
+                    "bounds": True,
+                },
             ]},
             "dampening": {
                 "constraints": [{

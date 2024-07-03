@@ -7,6 +7,7 @@ import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.tools.constraint import fit_constraint, apply_fit_constraint, constraint_new_params
 from autots.models.sklearn import (
     generate_regressor_params,
     retrieve_regressor,
@@ -4909,6 +4910,103 @@ class BKBandpassFilter(EmptyTransformer):
         }
 
 
+class Constraint(EmptyTransformer):
+    """Apply constraints (caps on values based on history).
+    
+    See base.py constraints function for argument documentation
+    """
+
+    def __init__(
+        self,
+        constraint_method: int = "historic_growth",
+        constraint_value: int = 1.0,
+        constraint_direction: str = "upper",
+        constraint_regularization: int = 1.0,
+        forecast_length: int = 30,
+        **kwargs,
+    ):
+        super().__init__(name="Constraint")
+        self.constraint_method = constraint_method
+        self.constraint_value = constraint_value
+        self.constraint_direction = constraint_direction
+        self.constraint_regularization = constraint_regularization
+        self.forecast_length = forecast_length
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        # I am not sure a copy is necessary, but certainly is safer
+        if self.window is None:
+            self.df = df
+        else:
+            self.df = df.tail(self.window).copy()
+
+        return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.lower_constraint, self.upper_constraint, self.train_min, self.train_max = fit_constraint(
+                constraint_method=self.constraint_method,
+                constraint_value=self.constraint_value,
+                constraint_direction=self.constraint_direction,
+                constraint_regularization=self.constraint_regularization,
+                bounds=False,
+                df_train=df,
+                forecast_length=self.forecast_length,
+        )
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        forecast, up, low = apply_fit_constraint(
+                forecast=df,
+                lower_forecast=0,
+                upper_forecast=0,
+                constraint_method=self.constraint_method,
+                constraint_value=self.constraint_value,
+                constraint_direction=self.constraint_direction,
+                constraint_regularization=self.constraint_regularization,
+                bounds=False,
+                lower_constraint=self.lower_constraint,
+                upper_constraint=self.upper_constraint,
+                train_min=self.train_min,
+                train_max=self.train_max,
+        )
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return constraint_new_params(method=method)
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4991,6 +5089,7 @@ have_params = {
     "HistoricValues": HistoricValues,
     "BKBandpassFilter": BKBandpassFilter,
     "DifferencedTransformer": DifferencedTransformer,
+    "Constraint": Constraint,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5094,11 +5193,13 @@ class GeneralTransformer(object):
             "DiffSmoother": smooth diffs then return to original space
             "HistoricValues": match predictions to most similar historic value and overwrite
             "BKBandpassFilter": another version of the Baxter King bandpass filter
+            "Constraint": apply constraints (caps) on values
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
 
         random_seed (int): random state passed through where applicable
+        forecast_length (int): length of forecast, not needed as argument for most transformers/params
     """
 
     def __init__(
@@ -5113,6 +5214,7 @@ class GeneralTransformer(object):
         n_jobs: int = 1,
         holiday_country: list = None,
         verbose: int = 0,
+        forecast_length: int = 30,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -5130,6 +5232,7 @@ class GeneralTransformer(object):
         self.n_jobs = n_jobs
         self.holiday_country = holiday_country
         self.verbose = verbose
+        self.forecast_length = forecast_length
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different
@@ -5193,6 +5296,7 @@ class GeneralTransformer(object):
         random_seed: int = 2020,
         n_jobs: int = 1,
         holiday_country: list = None,
+        forecast_length: int = 30,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -5221,6 +5325,11 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
+        elif transformation in ["Constraint"]:
+            return Constraint(
+                forecast_length=forecast_length, **param
+            )
+
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -5340,6 +5449,7 @@ class GeneralTransformer(object):
             random_seed=self.random_seed,
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
+            forecast_length=self.forecast_length,
         )
         df = self.transformers[i].fit_transform(df)
         # convert to DataFrame only if it isn't already
@@ -5560,6 +5670,7 @@ transformer_dict = {
     "DiffSmoother": 0.005,
     "HistoricValues": 0.01,
     "BKBandpassFilter": 0.01,
+    "Constraint": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -5584,8 +5695,12 @@ superfast_transformer_dict = {
     "AlignLastValue": 0.05,
     "AlignLastDiff": 0.05,
     "HistoricValues": 0.005,  # need to test more
-    "CenterSplit": 0.005,
-    # "BKBandpassFilter": 0.01,
+    "CenterSplit": 0.005,  # need to test more
+    "Round": 0.01,
+    "CenterLastValue": 0.01,
+    "Constraint": 0.005,  # not well tested yet on speed/ram
+    # "BKBandpassFilter": 0.01,  # seems feasible, untested
+    # "DiffSmoother": 0.005,  # seems feasible, untested
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -5629,6 +5744,7 @@ postprocessing = {
     "KalmanSmoothing": 0.1,
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
+    "Constraint": 0.1,
 }
 transformer_class = {}
 
