@@ -170,7 +170,20 @@ class FFT(object):
 
         return self
 
-    def predict(self, forecast_length):
+    def generate_harmonics_dataframe(self, forecast_length=0):
+        extended_m = self.m + forecast_length
+        harmonics_data = np.zeros((extended_m, len(self.use_idx) * 2))
+        
+        for i, idx in enumerate(self.use_idx):
+            freq_component = np.fft.ifft(self.x_freqdom[idx], n=self.m, axis=0)
+            extended_freq_component = np.tile(freq_component, (extended_m // self.m) + 1)[:extended_m]
+            harmonics_data[:, 2 * i] = np.real(extended_freq_component).flatten()
+            harmonics_data[:, 2 * i + 1] = np.imag(extended_freq_component).flatten()
+
+        return harmonics_data
+
+    def predict(self, forecast_length=0):
+        # this rather assumes you care only about historical + fcst of length n after
         t_extended = np.arange(0, self.m + forecast_length)
         restored_sig = np.zeros((t_extended.size, self.n))
 

@@ -19,12 +19,12 @@ from autots.tools.seasonal import (
     datepart_components,
     date_part_methods,
 )
+from autots.tools.fft import FFT
 from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
     scalers,
     superfast_transformer_dict,
-    decompositions,
     HolidayTransformer,
     AnomalyRemoval,
     EmptyTransformer,
@@ -321,7 +321,7 @@ class Cassandra(ModelObject):
         )
         # check if rolling prediction is required
         self.predict_loop_req = (self.ar_lags is not None) or (
-            self.multivariate_feature is not None
+            self.multivariate_feature is not None and self.multivariate_feature != "fft"
         )
         # check if component processing must loop
         # self.component_loop_req = (isinstance(regressor_per_series, dict) and self.regressors_used) or (isinstance(self.holiday_countries, dict) and self.holiday_countries_used)
@@ -404,8 +404,20 @@ class Cassandra(ModelObject):
                     columns=lambda x: "anomalyscores_" + str(x)
                 )
             )
+        if self.multivariate_feature == "fft":
+            self.fft = FFT(n_harm=4, detrend='linear')
+            self.fft.fit(self.df.bfill().to_numpy())
+
+            x_list.append(
+                pd.DataFrame(
+                    self.fft.generate_harmonics_dataframe(0),
+                    index=self.df.index
+                ).rename(
+                    columns=lambda x: "mrktfft_" + str(x)
+                )
+            )
         # all of the following are 1 day past lagged
-        if self.multivariate_feature is not None:
+        elif self.multivariate_feature is not None:
             # includes backfill
             lag_1_indx = np.concatenate([[0], np.arange(len(self.df))])[
                 0 : len(self.df)
@@ -880,8 +892,22 @@ class Cassandra(ModelObject):
                 .reindex(dates)
                 .rename(columns=lambda x: "anomalyscores_" + str(x))
             )
+        if self.multivariate_feature == 'fft':
+            # need to translate the 'dates' into integer time steps ahead
+            full_dates = self.df.index.union(dates)
+            full_dates = pd.date_range(full_dates.min(), full_dates.max(), freq=self.frequency)
+            req_len = len(full_dates) - self.df.index.shape[0]
+            req_len = 0 if req_len < 0 else req_len
+            x_list.append(
+                pd.DataFrame(
+                    self.fft.generate_harmonics_dataframe(req_len),
+                    index=full_dates
+                ).rename(
+                    columns=lambda x: "mrktfft_" + str(x)
+                ).reindex(dates)
+            )
         # all of the following are 1 day past lagged
-        if self.multivariate_feature is not None:
+        elif self.multivariate_feature is not None:
             # includes backfill
             full_idx = history_df.index.union(
                 self.create_forecast_index(
@@ -2089,12 +2115,15 @@ class Cassandra(ModelObject):
             [
                 [7, 365.25],
                 ["dayofweek", 365.25],
+                ["quarterlydayofweek", 365.25],
                 ["month", "dayofweek", "weekdayofmonth"],
                 ['weekdayofmonth', 'common_fourier'],
                 ["simple_binarized"],
+                ['hourlydayofweek', 8766.0],  # for hourly data
+                [12],  # monthly data
                 "other",
             ],
-            [0.1, 0.1, 0.1, 0.05, 0.1, 0.1],
+            [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.1],
         )[0]
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
@@ -2120,8 +2149,8 @@ class Cassandra(ModelObject):
             # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
             "multivariate_feature": random.choices(
-                [None, "feature_agglomeration", 'group_average', 'oscillator'],
-                [0.9, 0.1, 0.1, 0.0],
+                [None, "feature_agglomeration", 'group_average', 'oscillator', 'fft'],
+                [0.9, 0.02, 0.02, 0.0, 0.1],
             )[0],
             "multivariate_transformation": RandomTransform(
                 transformer_list="scalable",
@@ -2254,6 +2283,7 @@ class Cassandra(ModelObject):
         start_date=None,
         **kwargs,
     ):
+        """Trend plots have a bug if AlignLastValue or AlignLastDiff are present. Underlying data is still ok."""
         # YMAX from PLOT ONLY
         if series is None:
             series = random.choice(self.column_names)
@@ -2831,6 +2861,25 @@ if False:
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra().get_new_params()
+    c_params = {
+        "preprocessing_transformation": {
+            "fillna": "ffill",
+            "transformations": {"0": "ClipOutliers", "1": "AlignLastDiff"},
+            "transformation_params": {"0": {"method": "clip", "std_threshold": 4.5, "fillna": None}, "1": {"rows": 7, "displacement_rows": 1, "quantile": 1.0, "decay_span": 90}}},
+        "scaling": {"fillna": None, "transformations": {"0": "MaxAbsScaler"}, "transformation_params": {"0": {}}},
+        "past_impacts_intervention": None, "seasonalities": ["quarterlydayofweek", 365.25],
+        "ar_lags": [1], "ar_interaction_seasonality": "common_fourier",
+        "anomaly_detector_params": {"method": "IQR", "method_params": {"iqr_threshold": 3.0, "iqr_quantiles": [0.25, 0.75]}, "fillna": "fake_date", "transform_dict": {"fillna": "ffill", "transformations": {"0": "StandardScaler"}, "transformation_params": {"0": {}}}, "isolated_only": False},
+        "anomaly_intervention": None,
+        "holiday_detector_params": None, "holiday_countries_used": False,
+        "multivariate_feature": "fft", "multivariate_transformation": None,
+        "regressor_transformation": None, "regressors_used": False,
+        "linear_model": {"model": "lstsq", "lambda": None, "recency_weighting": 0.05},
+        "randomwalk_n": 10, "trend_window": None, "trend_standin": None,
+        "trend_anomaly_detector_params": {"method": "nonparametric", "method_params": {"p": None, "z_init": 2.0, "z_limit": 12, "z_step": 0.25, "inverse": False, "max_contamination": 0.25, "mean_weight": 200, "sd_weight": 100, "anomaly_count_weight": 1.0},"fillna": "fake_date", "transform_dict": {"fillna": "zero", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 7, "method": "additive", "strength": 0.2, "first_value_only": False, "threshold": 1}}}, "isolated_only": False},
+        "trend_transformation": {"fillna": "mean", "transformations": {"0": "DiffSmoother", "1": "RegressionFilter"}, "transformation_params": {"0": {"method": "zscore", "method_params": {"distribution": "uniform", "alpha": 0.05}, "transform_dict": None, "reverse_alignment": False, "isolated_only": True, "fillna": "ffill"}, "1": {"sigma": 1, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.9, "fit_intercept": True, "selection": "cyclic"}}, "datepart_method": ["db2_365.25_12_0.5", "morlet_7_7_1"], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None, "trend_method": "rolling_mean"}}},
+        "trend_model": {"Model": "ARDL", "ModelParameters": {"lags": 1, "trend": "n", "order": 0, "causal": False, "regression_type": "simple"}}, "trend_phi": None
+    }
     c_params['regressors_used'] = False
     # c_params['trend_phi'] = 0.9
 
@@ -2878,7 +2927,7 @@ if False:
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(
-            pred, series=series, to_origin_space=True, start_date=start_date
+            pred, series=series, to_origin_space=False, start_date=start_date
         )
         # plt.savefig("Cassandra_components3.png", dpi=300, bbox_inches="tight")
         plt.show()
@@ -2893,6 +2942,7 @@ if False:
     )
     print(pred.avg_metrics.round(1))
 
+    ################################
     # if not mod.regressors_used:
     dates = df_daily.index.union(
         mod.create_forecast_index(forecast_length, last_date=df_daily.index[-1])

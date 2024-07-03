@@ -247,6 +247,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(forecasts_df2.shape[0], forecast_length)
         self.assertEqual(forecasts_df2.shape[1], df.shape[1])
         self.assertFalse(forecasts_df2.isna().any().any())
+        self.assertFalse(model.initial_results.per_series_metrics.empty)
 
     def test_all_default_models(self):
         print("Starting test_all_default_models")
