@@ -755,6 +755,7 @@ class ModelTest(unittest.TestCase):
             "FFTDecomposition",  # new in 0.6.2
             "HistoricValues",  # new in 0.6.7
             "BKBandpassFilter",  # new in 0.6.8
+            # "Constraint",  # new in 0.6.15
         ]
 
         timings = {}

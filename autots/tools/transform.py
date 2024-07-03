@@ -4932,21 +4932,6 @@ class Constraint(EmptyTransformer):
         self.constraint_regularization = constraint_regularization
         self.forecast_length = forecast_length
 
-    def _fit(self, df):
-        """Learn behavior of data to change.
-
-        Args:
-            df (pandas.DataFrame): input dataframe
-        """
-
-        # I am not sure a copy is necessary, but certainly is safer
-        if self.window is None:
-            self.df = df
-        else:
-            self.df = df.tail(self.window).copy()
-
-        return df
-
     def fit(self, df):
         """Learn behavior of data to change.
 
@@ -4962,7 +4947,6 @@ class Constraint(EmptyTransformer):
                 df_train=df,
                 forecast_length=self.forecast_length,
         )
-        self._fit(df)
         return self
 
     def transform(self, df):
@@ -4979,6 +4963,8 @@ class Constraint(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        if trans_method == "original":
+            return df
         forecast, up, low = apply_fit_constraint(
                 forecast=df,
                 lower_forecast=0,
@@ -4993,6 +4979,7 @@ class Constraint(EmptyTransformer):
                 train_min=self.train_min,
                 train_max=self.train_max,
         )
+        return forecast
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -5000,7 +4987,8 @@ class Constraint(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return self._fit(df)
+        self.fit(df)
+        return df
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -5255,6 +5243,7 @@ class GeneralTransformer(object):
             "MeanDifference",
             "AlignLastValue",
             "AlignLastDiff",
+            "Constraint",
         ]
 
     @staticmethod

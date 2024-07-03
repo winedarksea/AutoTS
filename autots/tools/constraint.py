@@ -86,7 +86,9 @@ def constraint_new_params(method: str = "fast"):
     elif method_choice in ["stdev", "stdev_min"]:
         params["constraint_value"] = random.choices([1.0, 0.5, 2.0, 3.0, 4.0], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
     elif method_choice in ["dampening"]:
-        params["constraint_value"] = random.choices([0.99, 0.9, 0.8, 0.999, 0.98], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+        params["constraint_value"] = random.choices([0.99, 0.9, 0.8, 0.999, 0.98, 0.9999], [0.5, 0.2, 0.1, 0.2, 0.1, 0.2])[0]
+        params['constraint_direction'] = "upper"
+        params["constraint_regularization"] = 1.0
     elif method_choice in ["absolute", "fixed"]:
         params["constraint_value"] = random.choices([0, 0.1, 1], [0.8, 0.1, 0.1])[0]
     elif method_choice in ["historic_growth"]:
@@ -120,6 +122,8 @@ def fit_constraint(
         upper_constraint = True
     else:
         raise ValueError(f"constraint_direction: {constraint_direction} invalid")
+    train_min = None
+    train_max = None
     if constraint_method == "stdev_min":
         train_std = df_train.std(axis=0)
         if lower_constraint is not None:
