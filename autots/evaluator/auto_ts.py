@@ -2635,7 +2635,15 @@ class AutoTS(object):
                 initial_results.model_results['TotalRuntimeSeconds'].mean() / mae_min
             )
             # making runtime weighting even smaller because generally want this to be a very small component
-            weight_per_value + (runtimes / basic_scaler) * (runtime_weighting / 10)
+            try:
+                weight_per_value + (runtimes / basic_scaler) * (runtime_weighting / 10)
+            except Exception as e:
+                # get diagnostics on an unexplained error here
+                print(f"runtime weighting for mosaic failed with error {repr(e)}")
+                print(f"weight_per_value shape {weight_per_value.shape}")
+                print(f"runtimes: {runtimes}")
+                print(f"basic_scaler {basic_scaler}")
+                print(f"runtime_weighting {runtime_weighting}")
 
         mosaic_ensembles = [x for x in ensemble if "mosaic" in x]
         ensemble_templates = pd.DataFrame()
