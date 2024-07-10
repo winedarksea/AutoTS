@@ -442,6 +442,7 @@ datepart_components = [
     "isoday",
     "quarterlydayofweek",
     "hourlydayofweek",
+    "constant",
 ]
 
 
@@ -585,6 +586,8 @@ def create_datepart_components(DTindex, seasonality):
             interaction_feature_names = [f"{day_col}_{quarter_col}" for day_col in day_dummies.columns for quarter_col in quarter_dummies.columns]
             # Create a DataFrame for interaction features
             return pd.DataFrame(interaction_features, columns=interaction_feature_names).astype(int)
+    elif seasonality == "constant":
+        return pd.DataFrame(1, columns=["constant"])
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
