@@ -2464,6 +2464,7 @@ class PCA(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
+            "n_components": random.choices([None, 4, 10, 100], [0.8, 0.05, 0.1, 0.1])[0],
         }
 
 
