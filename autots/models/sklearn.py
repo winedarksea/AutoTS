@@ -2533,8 +2533,8 @@ class DatepartRegression(ModelObject):
             'datepart_method': datepart_choice,
             'polynomial_degree': polynomial_choice,
             "holiday_countries_used": random.choices([True, False], [0.2, 0.8])[0],
-            'lags': random.choices([None, 1, 2, 4], [0.8, 0.1, 0.1, 0.05])[0],
-            'forward_lags': random.choices([None, 1, 2, 4], [0.8, 0.1, 0.1, 0.05])[0],
+            'lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.1, 0.1, 0.05, 0.05])[0],
+            'forward_lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.1, 0.1, 0.05, 0.05])[0],
             'regression_type': regression_choice,
         }
         return parameter_dict

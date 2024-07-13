@@ -47,7 +47,7 @@ all_models = [
     "BallTreeMultivariateMotif",
     "TiDE",
     "NeuralForecast",
-    "DMD",
+    "DMD",  # 45 models
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models

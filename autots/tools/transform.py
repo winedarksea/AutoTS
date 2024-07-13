@@ -1149,6 +1149,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         transform_dict: dict = None,
         holiday_country: list = None,
         holiday_countries_used: bool = False,
+        lags: int = None,
+        forward_lags: int = None,
         n_jobs: int = 1,
         **kwargs,
     ):
@@ -1159,6 +1161,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.transform_dict = transform_dict
         self.holiday_country = holiday_country
         self.holiday_countries_used = holiday_countries_used
+        self.lag = lags
+        self.forward_lags = forward_lags
         self.n_jobs = n_jobs
 
     @staticmethod
@@ -1203,6 +1207,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "polynomial_degree": polynomial_choice,
             "transform_dict": random_cleaners(),
             "holiday_countries_used": holiday_countries_used,
+            'lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02])[0],
+            'forward_lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02])[0],
         }
 
     def fit(self, df, regressor=None):
@@ -1238,6 +1244,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df_local.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -1291,6 +1299,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -1342,6 +1352,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -1384,6 +1396,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -5660,7 +5674,7 @@ transformer_dict = {
     "DiffSmoother": 0.005,
     "HistoricValues": 0.01,
     "BKBandpassFilter": 0.01,
-    "Constraint": 0.01,
+    "Constraint": 0.01,  # 52
 }
 
 # and even more, not just removing slow but also less commonly useful ones
