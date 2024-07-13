@@ -22,6 +22,7 @@
 * threshold_method arg to AlignLastValue
 * general tempate updated
 * slight change to MATSE metric, now only abs values for scaling
+* additional args to DatepartRegression
 * bug fixes
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)

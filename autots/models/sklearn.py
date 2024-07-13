@@ -2348,6 +2348,9 @@ class DatepartRegression(ModelObject):
         },
         datepart_method: str = 'expanded',
         polynomial_degree: int = None,
+        holiday_countries_used: bool = False,
+        lags: int = None,
+        forward_lags: int = None,
         regression_type: str = None,
         **kwargs,
     ):
@@ -2366,6 +2369,9 @@ class DatepartRegression(ModelObject):
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
         self.forecast_length = forecast_length
+        self.lags = lags
+        self.forward_lags = forward_lags
+        self.holiday_countries_used = holiday_countries_used
 
     def fit(
         self,
@@ -2393,6 +2399,9 @@ class DatepartRegression(ModelObject):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+            lags=self.lags, forward_lags=self.forward_lags,
         )
         if self.regression_type in ['User', 'user']:
             # regr = future_regressor.copy()
@@ -2449,7 +2458,11 @@ class DatepartRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         self.X_pred = date_part(
-            index, method=self.datepart_method, polynomial_degree=self.polynomial_degree
+            index, method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+            lags=self.lags, forward_lags=self.forward_lags,
         )
         if self.regression_type in ['User', 'user']:
             self.X_pred = pd.concat(
@@ -2519,6 +2532,9 @@ class DatepartRegression(ModelObject):
             'regression_model': model_choice,
             'datepart_method': datepart_choice,
             'polynomial_degree': polynomial_choice,
+            "holiday_countries_used": random.choices([True, False], [0.2, 0.8])[0],
+            'lags': random.choices([None, 1, 2, 4], [0.8, 0.1, 0.1, 0.05])[0],
+            'forward_lags': random.choices([None, 1, 2, 4], [0.8, 0.1, 0.1, 0.05])[0],
             'regression_type': regression_choice,
         }
         return parameter_dict
@@ -2529,6 +2545,9 @@ class DatepartRegression(ModelObject):
             'regression_model': self.regression_model,
             'datepart_method': self.datepart_method,
             'polynomial_degree': self.polynomial_degree,
+            'holiday_countries_used': self.holiday_countries_used,
+            'lags': self.lags,
+            'forward_lags': self.forward_lags,
             'regression_type': self.regression_type,
         }
         return parameter_dict

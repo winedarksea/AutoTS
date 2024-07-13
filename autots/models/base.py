@@ -733,7 +733,10 @@ class PredictionObject(object):
         fig, axes = plt.subplots(nrow, ncol, figsize=figsize, constrained_layout=True)
         fig.suptitle(title, fontsize='xx-large')
         count = 0
-        sample_cols = random.choices(cols, k=num_cols)
+        if len(cols) != num_cols:
+            sample_cols = random.choices(cols, k=num_cols)
+        else:
+            sample_cols = cols
         for r in range(nrow):
             for c in range(ncol):
                 if nrow > 1:
