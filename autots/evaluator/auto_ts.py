@@ -2839,7 +2839,7 @@ class AutoTS(object):
 
             # I could append this to master results
             # but that might be confusing because they are on different data
-            initial_results = self._run_validations(
+            self.expansion_results = self._run_validations(
                 df_wide_numeric=self.df_wide_numeric,
                 num_validations=self.num_validations + 1,
                 validation_template=val_temp,
@@ -2851,7 +2851,7 @@ class AutoTS(object):
                 additional_msg=" in expand_horizontal",
             )
 
-            validation_results = copy.copy(initial_results)
+            validation_results = copy.copy(self.expansion_results)
             validation_results = validation_aggregation(
                 validation_results, df_train=self.df_wide_numeric
             )
@@ -2865,20 +2865,20 @@ class AutoTS(object):
             ensemble_type = str(self.best_model_params['model_name']).lower()
 
             if 'mosaic' not in ensemble_type:
-                initial_results.model_results['Score'] = generate_score(
-                    initial_results.model_results,
+                self.expansion_results.model_results['Score'] = generate_score(
+                    self.expansion_results.model_results,
                     metric_weighting=self.metric_weighting,
                     prediction_interval=self.prediction_interval,
                 )
                 score_per_series = generate_score_per_series(
-                    initial_results,
+                    self.expansion_results,
                     metric_weighting=self.metric_weighting,
                     total_validations=(self.num_validations + 1),
                 )
                 # may return multiple
                 ens_templates = HorizontalTemplateGenerator(
                     score_per_series,
-                    model_results=initial_results.model_results,
+                    model_results=self.expansion_results.model_results,
                     forecast_length=self.forecast_length,
                     ensemble=['horizontal-max'],
                     subset_flag=False,
@@ -2889,9 +2889,8 @@ class AutoTS(object):
                     self.df_wide_numeric,
                     models_to_use=models_to_use,
                     ensemble=[self.best_model_params['model_metric']],
-                    initial_results=initial_results,
+                    initial_results=self.expansion_results,
                 )
-            self.expansion_results = initial_results
             if ens_templates.empty:
                 print(models_to_use)
                 raise ValueError("expansion returned empty template")
