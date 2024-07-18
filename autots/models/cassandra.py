@@ -1704,6 +1704,7 @@ class Cassandra(ModelObject):
             )
         # undo preprocessing and scaling
         # account for some transformers requiring different methods on original data and forecast
+        self.predicted_trend = trend_forecast.forecast.copy()
         if forecast_length is None:
             df_forecast.forecast = self.to_origin_space(
                 df_forecast.forecast, trans_method='original'
@@ -1714,9 +1715,6 @@ class Cassandra(ModelObject):
             df_forecast.upper_forecast = self.to_origin_space(
                 df_forecast.upper_forecast, trans_method='original'
             )
-            self.predicted_trend = self.to_origin_space(
-                trend_forecast.forecast, trans_method='original'
-            )
         elif not include_history:
             df_forecast.forecast = self.to_origin_space(
                 df_forecast.forecast, trans_method='forecast'
@@ -1726,9 +1724,6 @@ class Cassandra(ModelObject):
             )
             df_forecast.upper_forecast = self.to_origin_space(
                 df_forecast.upper_forecast, trans_method='forecast'
-            )
-            self.predicted_trend = self.to_origin_space(
-                trend_forecast.forecast, trans_method='forecast'
             )
         else:
             hdn = len(df_forecast.forecast) - forecast_length
@@ -1771,29 +1766,6 @@ class Cassandra(ModelObject):
                     ),
                 ]
             )
-            self.predicted_trend = pd.concat(
-                [
-                    self.to_origin_space(
-                        trend_forecast.forecast.head(hdn), trans_method='original'
-                    ),
-                    self.to_origin_space(
-                        trend_forecast.forecast.tail(forecast_length),
-                        trans_method='forecast',
-                    ),
-                ]
-            )
-
-        # update trend analysis based on trend forecast as well
-        if forecast_length is not None and include_history:
-            trend_posterior, self.slope, intercept = self.rolling_trend(
-                self.predicted_trend, np.array(self.t_predict)
-            )
-            (
-                self.zero_crossings,
-                self.changepoints,
-                self.slope_sign,
-                self.accel,
-            ) = self.analyze_trend(self.slope, index=self.predicted_trend.index)
 
         # don't forget to add in past_impacts (use future impacts again?) AFTER unscaling
         if self.past_impacts_intervention != "regressor":
@@ -1847,6 +1819,18 @@ class Cassandra(ModelObject):
         # RETURN COMPONENTS (long style) option
         df_forecast.predict_runtime = self.time() - predictStartTime
         return df_forecast
+
+    def trend_analysis(self):
+        trend_posterior, self.slope, intercept = self.rolling_trend(
+            self.predicted_trend, np.array(self.t_predict)
+        )
+        (
+            self.zero_crossings,
+            self.changepoints,
+            self.slope_sign,
+            self.accel,
+        ) = self.analyze_trend(self.slope, index=self.predicted_trend.index)
+        return self
 
     def auto_fit(self, df, validation_method):  # also add regressor input
         # option to completely skip some things (anomalies, holiday detector, ar lags)
@@ -2252,6 +2236,17 @@ class Cassandra(ModelObject):
         title=None,
         start_date=None,
     ):
+        """Plot breakdown of linear model components.
+
+        Args:
+            prediction: the forecast object
+            series (str): name of series to plot, if desired
+            figsize (tuple): figure size
+            to_origin_space (bool): setting to False can make the graph look right due to preprocessing transformers, but to the wrong scale
+                especially useful if "AlignLastValue" and other transformers present
+            title (str): title
+            start_date (str): slice point for start date, can make some high frequency components easier to see with a shorter window
+        """
         if series is None:
             series = random.choice(self.column_names)
         if title is None:
@@ -2262,7 +2257,9 @@ class Cassandra(ModelObject):
             plt_idx = prediction.forecast.index
         else:
             plt_idx = None
-        plot_list.append(self.predicted_trend[series].rename("trend"))
+        if to_origin_space:
+            trend = self._trend_to_origin()
+        plot_list.append(trend[series].rename("trend"))
         if self.impacts is not None:
             plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
         if plt_idx is None:
@@ -2283,6 +2280,31 @@ class Cassandra(ModelObject):
                 plot_df = plot_df[plot_df.index >= start_date]
         return plot_df.plot(subplots=True, figsize=figsize, title=title)
 
+    def _trend_to_origin(self):
+        if self.predicted_trend.shape[0] == self.forecast_length:
+            trend = self.to_origin_space(
+                self.predicted_trend, trans_method='forecast'
+            )
+        elif self.predicted_trend.shape[0] == self.trend_train.shape[0]:
+            trend = self.to_origin_space(
+                self.predicted_trend, trans_method='original'
+            )
+        else:
+            hdn = self.predicted_trend.shape[0] - self.forecast_length
+            hdn = hdn if hdn > 0 else 0
+            trend = pd.concat(
+                [
+                    self.to_origin_space(
+                        self.predicted_trend.head(hdn), trans_method='original'
+                    ),
+                    self.to_origin_space(
+                        self.predicted_trend.tail(forecast_length),
+                        trans_method='forecast',
+                    ),
+                ]
+            )
+        return trend
+
     def return_components(self, to_origin_space=True, include_impacts=False):
         """Return additive elements of forecast, linear and trend. If impacts included, it is a multiplicative term.
 
@@ -2292,7 +2314,8 @@ class Cassandra(ModelObject):
         """
         plot_list = []
         plot_list.append(self.process_components(to_origin_space=to_origin_space))
-        trend = self.predicted_trend.copy()
+        if to_origin_space:
+            trend = self._trend_to_origin()
         trend.columns = pd.MultiIndex.from_arrays(
             [trend.columns, ['trend'] * len(trend.columns)]
         )
@@ -2314,6 +2337,8 @@ class Cassandra(ModelObject):
         start_date=None,
         **kwargs,
     ):
+        # rerun the analysis with latest
+        self.trend_analysis()
         """Trend plots have a bug if AlignLastValue or AlignLastDiff are present. Underlying data is still ok."""
         # YMAX from PLOT ONLY
         if series is None:
