@@ -56,6 +56,7 @@ from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,
 )
+from autots.tools.constraint import constraint_new_params
 
 
 class AutoTS(object):
@@ -814,6 +815,92 @@ class AutoTS(object):
                 [0.2, 0.3, 0.2, 0.2, 0.05, 0.1],
             )[0]
 
+        constraint = random.choices(
+            [
+                None,
+                {
+                    "constraint_method": "stdev_min",
+                    "constraint_regularization": 0.7,
+                    "upper_constraint": 1,
+                    "lower_constraint": 1,
+                    "bounds": True,
+                },
+                {
+                    "constraint_method": "stdev",
+                    "constraint_regularization": 1,
+                    "upper_constraint": 2,
+                    "lower_constraint": 2,
+                    "bounds": False,
+                },
+                {
+                    "constraint_method": "quantile",
+                    "constraint_regularization": 0.9,
+                    "upper_constraint": 0.99,
+                    "lower_constraint": 0.01,
+                    "bounds": True,
+                },
+                {
+                    "constraint_method": "quantile",
+                    "constraint_regularization": 0.4,
+                    "upper_constraint": 0.9,
+                    "lower_constraint": 0.1,
+                    "bounds": False,
+                },
+                [
+                    {  # don't go below the last 10 values - 10%
+                        "constraint_method": "last_window",
+                        "constraint_value": {"window": 10, "threshold": -0.1},
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 1.0,
+                        "bounds": False,
+                    },
+                    {  # don't go above the last 10 values - 10%
+                        "constraint_method": "last_window",
+                        "constraint_value": {"window": 10, "threshold": 0.1},
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 1.0,
+                        "bounds": False,
+                    },
+                ],
+                [
+                    {  # don't exceed 2% decline by end of forecast horizon
+                        "constraint_method": "slope",
+                        "constraint_value": {
+                            "slope": -0.02,
+                            "window": 28,
+                            "window_agg": "min",
+                            "threshold": -0.01,
+                        },
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 0.9,
+                        "bounds": False,
+                    },
+                    {  # don't exceed 2% growth by end of forecast horizon
+                        "constraint_method": "slope",
+                        "constraint_value": {
+                            "slope": 0.02,
+                            "window": 28,
+                            "window_agg": "max",
+                            "threshold": 0.01,
+                        },
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 0.9,
+                        "bounds": False,
+                    },
+                ],
+                [
+                    {
+                        "constraint_method": "dampening",
+                        "constraint_value": 0.98,
+                        "bounds": True,
+                    },
+                ],
+                "random",
+            ],
+            [0.9, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.9],
+        )[0]
+        if constraint == "random":
+            constraint = constraint_new_params(method=method)
         return {
             "max_generations": max_generations,
             "model_list": model_list,
@@ -842,89 +929,7 @@ class AutoTS(object):
             "introduce_na": random.choice([None, True, False]),
             # 'prefill_na': None,
             # 'remove_leading_zeroes': False,
-            "constraint": random.choices(
-                [
-                    None,
-                    {
-                        "constraint_method": "stdev_min",
-                        "constraint_regularization": 0.7,
-                        "upper_constraint": 1,
-                        "lower_constraint": 1,
-                        "bounds": True,
-                    },
-                    {
-                        "constraint_method": "stdev",
-                        "constraint_regularization": 1,
-                        "upper_constraint": 2,
-                        "lower_constraint": 2,
-                        "bounds": False,
-                    },
-                    {
-                        "constraint_method": "quantile",
-                        "constraint_regularization": 0.9,
-                        "upper_constraint": 0.99,
-                        "lower_constraint": 0.01,
-                        "bounds": True,
-                    },
-                    {
-                        "constraint_method": "quantile",
-                        "constraint_regularization": 0.4,
-                        "upper_constraint": 0.9,
-                        "lower_constraint": 0.1,
-                        "bounds": False,
-                    },
-                    [
-                        {  # don't go below the last 10 values - 10%
-                            "constraint_method": "last_window",
-                            "constraint_value": {"window": 10, "threshold": -0.1},
-                            "constraint_direction": "lower",
-                            "constraint_regularization": 1.0,
-                            "bounds": False,
-                        },
-                        {  # don't go above the last 10 values - 10%
-                            "constraint_method": "last_window",
-                            "constraint_value": {"window": 10, "threshold": 0.1},
-                            "constraint_direction": "upper",
-                            "constraint_regularization": 1.0,
-                            "bounds": False,
-                        },
-                    ],
-                    [
-                        {  # don't exceed 2% decline by end of forecast horizon
-                            "constraint_method": "slope",
-                            "constraint_value": {
-                                "slope": -0.02,
-                                "window": 28,
-                                "window_agg": "min",
-                                "threshold": -0.01,
-                            },
-                            "constraint_direction": "lower",
-                            "constraint_regularization": 0.9,
-                            "bounds": False,
-                        },
-                        {  # don't exceed 2% growth by end of forecast horizon
-                            "constraint_method": "slope",
-                            "constraint_value": {
-                                "slope": 0.02,
-                                "window": 28,
-                                "window_agg": "max",
-                                "threshold": 0.01,
-                            },
-                            "constraint_direction": "upper",
-                            "constraint_regularization": 0.9,
-                            "bounds": False,
-                        },
-                    ],
-                    [
-                        {
-                            "constraint_method": "dampening",
-                            "constraint_value": 0.98,
-                            "bounds": True,
-                        },
-                    ],
-                ],
-                [0.9, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
-            )[0],
+            "constraint": constraint,
             "preclean": preclean_choice,
             "metric_weighting": metric_weighting,
             "horizontal_ensemble_validation": horizontal_ensemble_validation,
