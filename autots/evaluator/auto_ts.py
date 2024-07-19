@@ -1902,11 +1902,14 @@ class AutoTS(object):
         # gather results of template run
         if not return_template:
             self.initial_results = self.initial_results.concat(template_result)
-            self.initial_results.model_results['Score'] = generate_score(
+            scores, score_dict = generate_score(
                 self.initial_results.model_results,
                 metric_weighting=self.metric_weighting,
                 prediction_interval=self.prediction_interval,
+                return_score_dict=True
             )
+            self.initial_results.model_results['Score'] = scores
+            self.score_dict = score_dict
         else:
             return template_result
         if result_file is not None:
