@@ -1909,7 +1909,7 @@ class AutoTS(object):
                 return_score_dict=True
             )
             self.initial_results.model_results['Score'] = scores
-            self.score_dict = score_dict
+            self.score_breakdown = pd.DataFrame(score_dict).set_index("ID")
         else:
             return template_result
         if result_file is not None:
