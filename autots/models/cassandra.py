@@ -2298,7 +2298,7 @@ class Cassandra(ModelObject):
                         self.predicted_trend.head(hdn), trans_method='original'
                     ),
                     self.to_origin_space(
-                        self.predicted_trend.tail(forecast_length),
+                        self.predicted_trend.tail(self.forecast_length),
                         trans_method='forecast',
                     ),
                 ]

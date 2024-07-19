@@ -1161,7 +1161,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.transform_dict = transform_dict
         self.holiday_country = holiday_country
         self.holiday_countries_used = holiday_countries_used
-        self.lag = lags
+        self.lags = lags
         self.forward_lags = forward_lags
         self.n_jobs = n_jobs
 

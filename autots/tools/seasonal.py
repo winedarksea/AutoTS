@@ -617,7 +617,7 @@ def create_datepart_components(DTindex, seasonality):
             # Create a DataFrame for interaction features
             return pd.DataFrame(interaction_features, columns=interaction_feature_names).astype(int)
     elif seasonality == "constant":
-        return pd.DataFrame(1, columns=["constant"])
+        return pd.DataFrame(1, columns=["constant"], index=range(len(DTindex)))
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
