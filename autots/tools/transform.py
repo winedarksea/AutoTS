@@ -4523,12 +4523,8 @@ class AlignLastDiff(EmptyTransformer):
                         ..., np.newaxis
                     ]
                 )
-        # need this for Cassandra where include_history=True
-        if self.adjustment.shape[0] < df.shape[0]:
-            adjust = pd.DataFrame(self.adjustment, index=df.index[-self.adjustment.shape[0]:]).reindex(df.index).fillna(0)
-        else:
-            adjust = self.adjustment
-        return df - adjust
+
+        return df - self.adjustment
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
