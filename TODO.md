@@ -13,11 +13,17 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.14 🇺🇦 🇺🇦 🇺🇦
-* prevent excessive use of 'CenterSplit' and other macro_micro style transformers
-* added ElasticNetwork as subsidiary regression model option
-* KalmanSmoothing, BKBandpassFilter added on_inverse option
-* add threshold arg to AlignLastValue
+# 0.6.15 🇺🇦 🇺🇦 🇺🇦
+* Constraint transformer added
+* historical_growth constraint method added
+* fft as multivariate_feature for Cassandra
+* None trend_window now searched as part of Cassandra
+* "quarterlydayofweek" method added for datepart
+* threshold_method arg to AlignLastValue
+* general tempate updated
+* slight change to MATSE metric, now only abs values for scaling
+* additional args to DatepartRegression
+* bug fixes
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

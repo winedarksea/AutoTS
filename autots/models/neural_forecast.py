@@ -139,6 +139,15 @@ class NeuralForecast(ModelObject):
                 div = (1 - self.prediction_interval) / 2
                 quantiles = [div, 1 - div, self.point_quantile]
                 loss = MQLoss(quantiles=quantiles)
+        elif loss == "HuberMQLoss":
+            from neuralforecast.losses.pytorch import HuberMQLoss
+
+            if self.point_quantile is None:
+                loss = HuberMQLoss(level=levels)
+            else:
+                div = (1 - self.prediction_interval) / 2
+                quantiles = [div, 1 - div, self.point_quantile]
+                loss = HuberMQLoss(quantiles=quantiles)
         elif loss == "Poisson":
             loss = DistributionLoss(
                 distribution='Poisson', level=levels, return_params=False
@@ -379,6 +388,7 @@ class NeuralForecast(ModelObject):
         loss = random.choices(
             [
                 'MQLoss',
+                'HuberMQLoss',
                 'Poisson',
                 'Bernoulli',
                 'NegativeBinomial',
@@ -389,10 +399,10 @@ class NeuralForecast(ModelObject):
                 "SMAPE",
                 "StudentT",
             ],
-            [0.5, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
+            [0.5, 0.1, 0.1, 0.01, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.01],
         )[0]
         point_quantile = None
-        if loss == "MQLoss":
+        if loss in ["MQLoss", "HuberMQLoss"]:
             point_quantile = random.choices(
                 [None, 0.35, 0.45, 0.55, 0.65, 0.7], [0.5, 0.1, 0.1, 0.1, 0.1, 0.1]
             )[0]

@@ -149,20 +149,24 @@ def random_matrix(rows, cols, density=0.2):
     return np.where(sparsity_mask, matrix, 0)
 
 
-def random_state_space(tries=10):
+def random_state_space(tries=15):
     for _ in range(tries):
-        n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
-        st = random_matrix(n_dims, n_dims, density=0.5)
-        st = ensure_stability(st)
-        obsmod = random_matrix(
-            1, n_dims, density=1.0
-        )  # Full observation for simplicity
-        procnois = np.diag(np.random.exponential(0.01, size=n_dims)).round(3)
-        obsnois = np.random.exponential(1.0)
+        try:
+            n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
+            st = random_matrix(n_dims, n_dims, density=0.5)
+            st = ensure_stability(st)
+            obsmod = random_matrix(
+                1, n_dims, density=1.0
+            )  # Full observation for simplicity
+            procnois = np.diag(np.random.exponential(0.01, size=n_dims)).round(3)
+            obsnois = np.random.exponential(1.0)
 
-        if np.all(np.abs(np.linalg.eigvals(st)) < 1):  # Check stability
-            return st, procnois, obsmod, obsnois
-    raise ValueError("Failed to generate a stable model after several tries")
+            if np.all(np.abs(np.linalg.eigvals(st)) < 1):  # Check stability
+                return st, procnois, obsmod, obsnois
+        except Exception:
+            pass
+    # fallback
+    return random_state_space_original()
 
 
 def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):

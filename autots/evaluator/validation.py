@@ -95,7 +95,9 @@ def generate_validation_indices(
                     "0": {},
                 },
             }
-            trans = GeneralTransformer(**params)
+            trans = GeneralTransformer(
+                forecast_length=forecast_length, verbose=verbose, **params
+            )
             sim_df = trans.fit_transform(sim_df)
 
         created_idx = retrieve_closest_indices(

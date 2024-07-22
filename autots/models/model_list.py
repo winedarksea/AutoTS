@@ -47,7 +47,7 @@ all_models = [
     "BallTreeMultivariateMotif",
     "TiDE",
     "NeuralForecast",
-    "DMD",
+    "DMD",  # 45 models
 ]
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -149,7 +149,7 @@ fast_parallel_no_arima = {
         'Theta',
         "VECM",
         "MAR",
-        # "BallTreeMultivariateMotif",  # might need sample_fraction tuning
+        "BallTreeMultivariateMotif",  # might need sample_fraction tuning
         # "WindowRegression"  # same base shaping as BallTreeMM
     ]
 }

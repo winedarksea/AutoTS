@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.evaluator package &#8212; AutoTS 0.6.13 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.6.15 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=f150e01c"></script>
+    <script src="../_static/documentation_options.js?v=9ea1f4c8"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -389,7 +389,7 @@ n_splits(int): how many pieces to split data into. Pass 2 for fastest, or “aut
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.evaluator.auto_model.generate_score">
-<span class="sig-prename descclassname"><span class="pre">autots.evaluator.auto_model.</span></span><span class="sig-name descname"><span class="pre">generate_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_weighting</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_interval</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.9</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.generate_score" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.auto_model.</span></span><span class="sig-name descname"><span class="pre">generate_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_weighting</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_interval</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_score_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.generate_score" title="Link to this definition">¶</a></dt>
 <dd><p>Generate score based on relative accuracies.</p>
 <p>SMAPE - smaller is better
 MAE - smaller is better
@@ -701,7 +701,7 @@ This is only checked after the end of each generation, so only offers an ‘appr
 
 <dl class="py method">
 <dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">fit,</span> <span class="pre">predict</span></span></dt>
+<span class="sig-name descname"><span class="pre">fit,</span> <span class="pre">predict,</span> <span class="pre">get_new_params</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -836,6 +836,7 @@ available aliases: mean, median, min, max</p></li>
 “.pickle” saves full object, including ensemble information.</p></li>
 <li><p><strong>grouping_ids</strong> (<em>dict</em>) – currently a one-level dict containing series_id:group_id mapping.
 used in 0.2.x but not 0.3.x+ versions. retained for potential future use</p></li>
+<li><p><strong>validation_indexes</strong> (<em>list</em>) – list of datetime indexes, tail of forecast length is used as holdout</p></li>
 </ul>
 </dd>
 </dl>
@@ -1042,6 +1043,12 @@ The metrics that are highly correlated are those that mostly the unscaled ones</
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.auto_ts.AutoTS.plot_model_failure_rate">
+<span class="sig-name descname"><span class="pre">plot_model_failure_rate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_model_failure_rate" title="Link to this definition">¶</a></dt>
+<dd><p>Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer.</p>
 </dd></dl>
 
 <dl class="py method">

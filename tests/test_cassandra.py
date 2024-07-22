@@ -306,7 +306,7 @@ class CassandraTest(unittest.TestCase):
            'recency_weighting': None,
            'maxiter': 15000},
           'randomwalk_n': 10,
-          'trend_window': 90,
+          'trend_window': None,
           'trend_standin': None,
           'trend_anomaly_detector_params': {'method': 'LOF',
            'method_params': {'contamination': 'auto',

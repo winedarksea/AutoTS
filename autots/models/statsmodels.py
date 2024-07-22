@@ -12,7 +12,12 @@ import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
-from autots.tools.seasonal import date_part, seasonal_int, date_part_methods
+from autots.tools.seasonal import (
+    date_part,
+    seasonal_int,
+    date_part_methods,
+    base_seasonalities,
+)
 from autots.tools.holiday import holiday_flag
 
 # these are optional packages
@@ -252,6 +257,8 @@ class GLM(ModelObject):
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').values
+        elif self.regression_type in base_seasonalities:
+            X = date_part(self.df_train.index, method=self.regression_type).values
         else:
             X = pd.to_numeric(
                 self.df_train.index, errors='coerce', downcast='integer'
@@ -272,6 +279,8 @@ class GLM(ModelObject):
         self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
         if self.regression_type == 'datepart':
             Xf = date_part(test_index, method='expanded').values
+        elif self.regression_type in base_seasonalities:
+            X = date_part(test_index, method=self.regression_type).values
         else:
             Xf = pd.to_numeric(test_index, errors='coerce', downcast='integer').values
         if self.constant or self.constant == 'True':
@@ -363,6 +372,8 @@ class GLM(ModelObject):
             regression_type_choice = random.choices(
                 [None, 'datepart', 'User'], [0.4, 0.4, 0.2]
             )[0]
+            if regression_type_choice == "datepart":
+                regression_type_choice = random.choice(base_seasonalities)
         return {
             'family': family_choice,
             'constant': constant_choice,

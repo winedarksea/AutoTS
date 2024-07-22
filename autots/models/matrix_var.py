@@ -323,7 +323,7 @@ class MAR(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         shifted = wide_to_3d(self.df_train.to_numpy())
-        pred_steps = int(np.ceil(forecast_length / self.seasonality))
+        pred_steps = int(np.ceil(forecast_length / self.seasonality) + 1)
         forecast = np.hstack(
             mar(shifted, pred_steps, family=self.family, maxiter=self.maxiter).T
         ).T[:forecast_length]

@@ -221,7 +221,7 @@ class AnomalyDetector(object):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(
-                transformer_list='fast', transformer_max_depth=2
+                transformer_list='scalable', transformer_max_depth=2
             )
         if method == "fast":
             preforecast = False

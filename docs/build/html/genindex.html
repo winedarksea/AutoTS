@@ -13,10 +13,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Index &#8212; AutoTS 0.6.13 documentation</title>
+    <title>Index &#8212; AutoTS 0.6.15 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=a4fa0645" />
-    <script src="_static/documentation_options.js?v=f150e01c"></script>
+    <script src="_static/documentation_options.js?v=9ea1f4c8"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="#" />
@@ -98,7 +98,7 @@
       </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.AnomalyRemoval">AnomalyRemoval (class in autots.tools.transform)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.base.apply_constraint_single">apply_constraint_single() (in module autots.models.base)</a>
+      <li><a href="source/autots.tools.html#autots.tools.constraint.apply_constraint_single">apply_constraint_single() (in module autots.tools.constraint)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.apply_constraints">apply_constraints() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#id0">[1]</a>
 
@@ -106,6 +106,8 @@
         <li><a href="source/autots.models.html#autots.models.base.apply_constraints">(in module autots.models.base)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.constraint.apply_fit_constraint">apply_fit_constraint() (in module autots.tools.constraint)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.arch.ARCH">ARCH (class in autots.models.arch)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.statsmodels.ARDL">ARDL (class in autots.models.statsmodels)</a>
@@ -387,6 +389,13 @@
 </li>
       </ul></li>
       <li>
+    autots.tools.constraint
+
+      <ul>
+        <li><a href="source/autots.tools.html#module-autots.tools.constraint">module</a>
+</li>
+      </ul></li>
+      <li>
     autots.tools.cpu_count
 
       <ul>
@@ -651,9 +660,13 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.thresholding.consecutive_groups">consecutive_groups() (in module autots.tools.thresholding)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.base.constant_growth_rate">constant_growth_rate() (in module autots.models.base)</a>
+      <li><a href="source/autots.tools.html#autots.tools.constraint.constant_growth_rate">constant_growth_rate() (in module autots.tools.constraint)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.ConstantNaive">ConstantNaive (class in autots.models.basics)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.Constraint">Constraint (class in autots.tools.transform)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.constraint.constraint_new_params">constraint_new_params() (in module autots.tools.constraint)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.containment">containment() (in module autots.evaluator.metrics)</a>
 </li>
@@ -667,10 +680,10 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_dwae">cost_function_dwae() (in module autots.models.cassandra)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l1">cost_function_l1() (in module autots.models.cassandra)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l1">cost_function_l1() (in module autots.models.cassandra)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l1_positive">cost_function_l1_positive() (in module autots.models.cassandra)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.cassandra.cost_function_l2">cost_function_l2() (in module autots.models.cassandra)</a>
@@ -1158,6 +1171,8 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Cointegration.fit">(autots.tools.transform.Cointegration method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Constraint.fit">(autots.tools.transform.Constraint method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.fit">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.fit">(autots.tools.transform.DatepartRegressionTransformer method)</a>
@@ -1227,6 +1242,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.AnomalyRemoval.fit_anomaly_classifier">(autots.tools.transform.AnomalyRemoval method)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.constraint.fit_constraint">fit_constraint() (in module autots.tools.constraint)</a>
+</li>
       <li><a href="source/autots.html#autots.AutoTS.fit_data">fit_data() (autots.AutoTS method)</a>
 
       <ul>
@@ -1287,6 +1304,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.ClipOutliers.fit_transform">(autots.tools.transform.ClipOutliers method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Cointegration.fit_transform">(autots.tools.transform.Cointegration method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Constraint.fit_transform">(autots.tools.transform.Constraint method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.fit_transform">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
@@ -1400,6 +1419,8 @@
       <li><a href="source/autots.models.html#autots.models.ensemble.generate_crosshair_score">generate_crosshair_score() (in module autots.models.ensemble)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.generate_crosshair_score_list">generate_crosshair_score_list() (in module autots.models.ensemble)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.fft.FFT.generate_harmonics_dataframe">generate_harmonics_dataframe() (autots.tools.fft.FFT method)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_historic_risk_array">generate_historic_risk_array() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
 
@@ -1585,6 +1606,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.ClipOutliers.get_new_params">(autots.tools.transform.ClipOutliers static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Cointegration.get_new_params">(autots.tools.transform.Cointegration static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Constraint.get_new_params">(autots.tools.transform.Constraint static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.get_new_params">(autots.tools.transform.DatepartRegressionTransformer static method)</a>
 </li>
@@ -1911,6 +1934,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.ClipOutliers.inverse_transform">(autots.tools.transform.ClipOutliers method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Cointegration.inverse_transform">(autots.tools.transform.Cointegration method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Constraint.inverse_transform">(autots.tools.transform.Constraint method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.inverse_transform">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
@@ -2271,6 +2296,8 @@
 </li>
         <li><a href="source/autots.tools.html#module-autots.tools.cointegration">autots.tools.cointegration</a>
 </li>
+        <li><a href="source/autots.tools.html#module-autots.tools.constraint">autots.tools.constraint</a>
+</li>
         <li><a href="source/autots.tools.html#module-autots.tools.cpu_count">autots.tools.cpu_count</a>
 </li>
         <li><a href="source/autots.tools.html#module-autots.tools.fast_kalman">autots.tools.fast_kalman</a>
@@ -2522,6 +2549,12 @@
 
       <ul>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.plot_metric_corr">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.html#autots.AutoTS.plot_model_failure_rate">plot_model_failure_rate() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.plot_model_failure_rate">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
       </ul></li>
       <li><a href="source/autots.html#autots.AutoTS.plot_per_series_error">plot_per_series_error() (autots.AutoTS method)</a>
@@ -3109,6 +3142,8 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Cointegration.transform">(autots.tools.transform.Cointegration method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Constraint.transform">(autots.tools.transform.Constraint method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.transform">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.transform">(autots.tools.transform.DatepartRegressionTransformer method)</a>
@@ -3194,6 +3229,12 @@
 
       <ul>
         <li><a href="source/autots.models.html#autots.models.cassandra.Cassandra.treatment_causal_impact">(autots.models.cassandra.Cassandra method)</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.html#autots.Cassandra.trend_analysis">trend_analysis() (autots.Cassandra method)</a>
+
+      <ul>
+        <li><a href="source/autots.models.html#autots.models.cassandra.Cassandra.trend_analysis">(autots.models.cassandra.Cassandra method)</a>
 </li>
       </ul></li>
       <li><a href="source/autots.html#autots.Cassandra..trend_train">trend_train (autots.Cassandra. attribute)</a>

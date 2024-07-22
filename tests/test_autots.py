@@ -14,6 +14,7 @@ from autots.datasets import (
 from autots import AutoTS, model_forecast, ModelPrediction
 from autots.evaluator.auto_ts import fake_regressor
 from autots.evaluator.auto_model import ModelMonster
+from autots.models.ensemble import full_ensemble_test_list
 from autots.models.model_list import default as default_model_list
 from autots.models.model_list import all_models
 from autots.evaluator.benchmark import Benchmark
@@ -55,17 +56,7 @@ class AutoTSTest(unittest.TestCase):
             'spl_weighting': 1,
             'contour_weighting': 1,
         }
-        ensemble = [
-            'simple',
-            # 'distance',
-            # 'horizontal',
-            'horizontal-max',
-            # 'mosaic',
-            'mosaic-window',
-            'mosaic-crosshair'
-            # 'subsample',
-            # 'mlensemble',
-        ]
+        ensemble = full_ensemble_test_list
 
         model = AutoTS(
             forecast_length=forecast_length,
@@ -256,6 +247,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(forecasts_df2.shape[0], forecast_length)
         self.assertEqual(forecasts_df2.shape[1], df.shape[1])
         self.assertFalse(forecasts_df2.isna().any().any())
+        self.assertFalse(model.initial_results.per_series_metrics.empty)
 
     def test_all_default_models(self):
         print("Starting test_all_default_models")
@@ -412,6 +404,10 @@ class AutoTSTest(unittest.TestCase):
         self.assertIsInstance(params, dict)
         model = AutoTS(**params)  # noqa
 
+        params = AutoTS.get_new_params(method='fast')
+        self.assertIsInstance(params, dict)
+        model = AutoTS(**params)  # noqa
+
     def test_univariate1step(self):
         print("Starting test_univariate1step")
         df = load_artificial(long=False)
@@ -557,6 +553,33 @@ class AutoTSTest(unittest.TestCase):
                 self.assertIsInstance(mod, dict)
                 self.assertIsInstance(trans, dict)
                 self.assertIsNotNone(ensemble)
+
+    def test_custom_validations(self):
+        long = False
+        df = load_daily(long=long)
+        forecast_length = 28
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='D',
+            max_generations=10,
+            validation_method="custom",
+            model_list="superfast",
+            ensemble=None,
+            n_jobs=1,
+            verbose=2,
+            subset=4,
+            remove_leading_zeroes=True,
+            generation_timeout=1,
+            horizontal_ensemble_validation=True,
+        )
+        custom_idx = [
+            pd.date_range(df.index[0], df.index[-100]),
+            pd.date_range(df.index[0], df.index[-(100 + forecast_length)]),
+        ]
+        model = model.fit(
+            df,
+            validation_indexes=custom_idx
+        )
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
@@ -732,6 +755,7 @@ class ModelTest(unittest.TestCase):
             "FFTDecomposition",  # new in 0.6.2
             "HistoricValues",  # new in 0.6.7
             "BKBandpassFilter",  # new in 0.6.8
+            # "Constraint",  # new in 0.6.15
         ]
 
         timings = {}

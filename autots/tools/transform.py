@@ -7,6 +7,11 @@ import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.tools.constraint import (
+    fit_constraint,
+    apply_fit_constraint,
+    constraint_new_params,
+)
 from autots.models.sklearn import (
     generate_regressor_params,
     retrieve_regressor,
@@ -1148,6 +1153,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         transform_dict: dict = None,
         holiday_country: list = None,
         holiday_countries_used: bool = False,
+        lags: int = None,
+        forward_lags: int = None,
         n_jobs: int = 1,
         **kwargs,
     ):
@@ -1158,6 +1165,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.transform_dict = transform_dict
         self.holiday_country = holiday_country
         self.holiday_countries_used = holiday_countries_used
+        self.lags = lags
+        self.forward_lags = forward_lags
         self.n_jobs = n_jobs
 
     @staticmethod
@@ -1202,6 +1211,12 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "polynomial_degree": polynomial_choice,
             "transform_dict": random_cleaners(),
             "holiday_countries_used": holiday_countries_used,
+            'lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02])[
+                0
+            ],
+            'forward_lags': random.choices(
+                [None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02]
+            )[0],
         }
 
     def fit(self, df, regressor=None):
@@ -1237,6 +1252,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df_local.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -1290,6 +1307,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -1341,6 +1360,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -1383,6 +1404,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat(
@@ -2383,7 +2406,9 @@ class FastICA(EmptyTransformer):
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
             "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
-            "whiten": random.choices([True, False], [0.9, 0.1])[0],
+            "whiten": random.choices(
+                ['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1]
+            )[0],
         }
 
 
@@ -2463,6 +2488,9 @@ class PCA(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
+            "n_components": random.choices([None, 4, 10, 100], [0.8, 0.05, 0.1, 0.1])[
+                0
+            ],
         }
 
 
@@ -2710,6 +2738,7 @@ class AlignLastValue(EmptyTransformer):
         strength: float = 1.0,
         first_value_only: bool = False,
         threshold: int = None,
+        threshold_method: str = "max",
         **kwargs,
     ):
         super().__init__(name="AlignLastValue")
@@ -2720,6 +2749,7 @@ class AlignLastValue(EmptyTransformer):
         self.first_value_only = first_value_only
         self.adjustment = None
         self.threshold = threshold
+        self.threshold_method = threshold_method
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2731,7 +2761,8 @@ class AlignLastValue(EmptyTransformer):
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
             )[0],
             'first_value_only': random.choices([True, False], [0.1, 0.9])[0],
-            "threshold": random.choices([None, 1, 10], [0.8, 0.9, 0.9])[0],
+            "threshold": random.choices([None, 1, 3, 10], [0.8, 0.9, 0.2, 0.9])[0],
+            "threshold_method": random.choices(['max', 'mean'], [0.5, 0.5])[0],
         }
 
     def fit(self, df):
@@ -2749,9 +2780,15 @@ class AlignLastValue(EmptyTransformer):
             self.center = self.find_centerpoint(df, self.rows, self.lag)
         if self.threshold is not None:
             if self.method == "multiplicative":
-                self.threshold = df.iloc[-self.threshold :].pct_change().abs().max()
+                if self.threshold_method == "max":
+                    self.threshold = df.iloc[-self.threshold :].pct_change().abs().max()
+                else:
+                    self.threshold = df.pct_change().abs().mean() * self.threshold
             else:
-                self.threshold = df.iloc[-self.threshold :].diff().abs().max()
+                if self.threshold_method == "max":
+                    self.threshold = df.iloc[-self.threshold :].diff().abs().max()
+                else:
+                    self.threshold = df.diff().abs().mean() * self.threshold
         return self
 
     @staticmethod
@@ -2806,7 +2843,7 @@ class AlignLastValue(EmptyTransformer):
                         self.adjustment = self.strength * (self.center - df.iloc[0])
                     return pd.concat(
                         [
-                            df.iloc[0:1] + adjustment,
+                            df.iloc[0:1] + self.adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
@@ -4351,7 +4388,7 @@ class ReplaceConstant(EmptyTransformer):
                     'ffill',
                     "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.001],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.0001],
             )[0],
         }
 
@@ -4498,6 +4535,7 @@ class AlignLastDiff(EmptyTransformer):
                         ..., np.newaxis
                     ]
                 )
+
         return df - self.adjustment
 
     def fit_transform(self, df):
@@ -4895,6 +4933,94 @@ class BKBandpassFilter(EmptyTransformer):
         }
 
 
+class Constraint(EmptyTransformer):
+    """Apply constraints (caps on values based on history).
+
+    See base.py constraints function for argument documentation
+    """
+
+    def __init__(
+        self,
+        constraint_method: int = "historic_growth",
+        constraint_value: int = 1.0,
+        constraint_direction: str = "upper",
+        constraint_regularization: int = 1.0,
+        forecast_length: int = 30,
+        **kwargs,
+    ):
+        super().__init__(name="Constraint")
+        self.constraint_method = constraint_method
+        self.constraint_value = constraint_value
+        self.constraint_direction = constraint_direction
+        self.constraint_regularization = constraint_regularization
+        self.forecast_length = forecast_length
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.lower_constraint, self.upper_constraint, self.train_min, self.train_max = (
+            fit_constraint(
+                constraint_method=self.constraint_method,
+                constraint_value=self.constraint_value,
+                constraint_direction=self.constraint_direction,
+                constraint_regularization=self.constraint_regularization,
+                bounds=False,
+                df_train=df,
+                forecast_length=self.forecast_length,
+            )
+        )
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if trans_method == "original":
+            return df
+        forecast, up, low = apply_fit_constraint(
+            forecast=df,
+            lower_forecast=0,
+            upper_forecast=0,
+            constraint_method=self.constraint_method,
+            constraint_value=self.constraint_value,
+            constraint_direction=self.constraint_direction,
+            constraint_regularization=self.constraint_regularization,
+            bounds=False,
+            lower_constraint=self.lower_constraint,
+            upper_constraint=self.upper_constraint,
+            train_min=self.train_min,
+            train_max=self.train_max,
+        )
+        return forecast
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return df
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return constraint_new_params(method=method)
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -4977,6 +5103,7 @@ have_params = {
     "HistoricValues": HistoricValues,
     "BKBandpassFilter": BKBandpassFilter,
     "DifferencedTransformer": DifferencedTransformer,
+    "Constraint": Constraint,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5080,11 +5207,13 @@ class GeneralTransformer(object):
             "DiffSmoother": smooth diffs then return to original space
             "HistoricValues": match predictions to most similar historic value and overwrite
             "BKBandpassFilter": another version of the Baxter King bandpass filter
+            "Constraint": apply constraints (caps) on values
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
 
         random_seed (int): random state passed through where applicable
+        forecast_length (int): length of forecast, not needed as argument for most transformers/params
     """
 
     def __init__(
@@ -5099,6 +5228,7 @@ class GeneralTransformer(object):
         n_jobs: int = 1,
         holiday_country: list = None,
         verbose: int = 0,
+        forecast_length: int = 30,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -5116,6 +5246,7 @@ class GeneralTransformer(object):
         self.n_jobs = n_jobs
         self.holiday_country = holiday_country
         self.verbose = verbose
+        self.forecast_length = forecast_length
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different
@@ -5138,6 +5269,7 @@ class GeneralTransformer(object):
             "MeanDifference",
             "AlignLastValue",
             "AlignLastDiff",
+            "Constraint",
         ]
 
     @staticmethod
@@ -5161,8 +5293,8 @@ class GeneralTransformer(object):
             except Exception as e:
                 self.nan_flag = True
                 print(repr(e))
-                print(df)
-                print(df.shape)
+                # print(df)
+                # print(df.shape)
         else:
             self.nan_flag = np.isnan(np.min(np.array(df)))
         if self.nan_flag:
@@ -5179,6 +5311,7 @@ class GeneralTransformer(object):
         random_seed: int = 2020,
         n_jobs: int = 1,
         holiday_country: list = None,
+        forecast_length: int = 30,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -5207,6 +5340,8 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
+        elif transformation in ["Constraint"]:
+            return Constraint(forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -5326,6 +5461,7 @@ class GeneralTransformer(object):
             random_seed=self.random_seed,
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
+            forecast_length=self.forecast_length,
         )
         df = self.transformers[i].fit_transform(df)
         # convert to DataFrame only if it isn't already
@@ -5465,7 +5601,7 @@ class GeneralTransformer(object):
         except Exception as e:
             err_str = f"Transformer {self.c_trans_n} failed on inverse"
             if self.verbose >= 1:
-                err_str += f" from params {self.fillna} {self.transformation_params}"
+                err_str += f" from params {self.fillna} {self.transformation_params} with {repr(e)}"
             raise Exception(err_str) from e
 
         if fillzero:
@@ -5546,6 +5682,7 @@ transformer_dict = {
     "DiffSmoother": 0.005,
     "HistoricValues": 0.01,
     "BKBandpassFilter": 0.01,
+    "Constraint": 0.01,  # 52
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -5570,8 +5707,12 @@ superfast_transformer_dict = {
     "AlignLastValue": 0.05,
     "AlignLastDiff": 0.05,
     "HistoricValues": 0.005,  # need to test more
-    "CenterSplit": 0.005,
-    # "BKBandpassFilter": 0.01,
+    "CenterSplit": 0.005,  # need to test more
+    "Round": 0.01,
+    "CenterLastValue": 0.01,
+    "Constraint": 0.005,  # not well tested yet on speed/ram
+    # "BKBandpassFilter": 0.01,  # seems feasible, untested
+    # "DiffSmoother": 0.005,  # seems feasible, untested
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -5615,6 +5756,7 @@ postprocessing = {
     "KalmanSmoothing": 0.1,
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
+    "Constraint": 0.1,
 }
 transformer_class = {}
 

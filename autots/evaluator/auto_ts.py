@@ -48,6 +48,7 @@ from autots.models.ensemble import (
     is_horizontal,
     is_mosaic,
     parse_mosaic,
+    full_ensemble_test_list,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools.cpu_count import set_n_jobs
@@ -55,6 +56,7 @@ from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,
 )
+from autots.tools.constraint import constraint_new_params
 
 
 class AutoTS(object):
@@ -154,7 +156,7 @@ class AutoTS(object):
         score_per_series (pd.DataFrame): generated score of metrics given per input series, if horizontal ensembles
 
     Methods:
-        fit, predict
+        fit, predict, get_new_params
         export_template, import_template, import_results, import_best_model
         results, failure_rate
         horizontal_to_df, mosaic_to_df
@@ -467,16 +469,16 @@ class AutoTS(object):
                 print(msg)
 
     @staticmethod
-    def get_new_params(method='random'):
+    def get_new_params(method="random"):
         """Randomly generate new parameters for the class."""
-        if method != 'full':
+        if method not in ["full", "fast", "superfast"]:
             ensemble_choice = random.choices(
                 [
                     None,
-                    ['simple'],
-                    ['simple', 'horizontal-max'],
+                    ["simple"],
+                    ["simple", "horizontal-max"],
                     [
-                        'simple',
+                        "simple",
                         "distance",
                         "horizontal",
                         "horizontal-max",
@@ -490,111 +492,112 @@ class AutoTS(object):
             ensemble_choice = random.choices(
                 [
                     None,
-                    ['simple'],
-                    ['simple', 'horizontal-max'],
+                    ["simple"],
+                    ["simple", "horizontal-max"],
                     [
-                        'simple',
-                        "distance",
-                        "horizontal",
-                        "horizontal-max",
-                        "mosaic",
-                        'mosaic-window',
-                        'mosaic-crosshair',
-                        "subsample",
-                        "mlensemble",
+                        "mosaic-weighted-0-40",
+                        "mosaic-weighted-0-20",
+                        "horizontal-min-20",
                     ],
+                    full_ensemble_test_list,
                 ],
-                [0.3, 0.1, 0.2, 0.2],
+                [0.3, 0.1, 0.2, 0.2, 0.1],
             )[0]
+        if ensemble_choice in [None, ['simple']]:
+            horizontal_ensemble_validation = False
+        else:
+            horizontal_ensemble_validation = random.choices([True, False], [0.5, 0.5])[
+                0
+            ]
         if method in ["full", "fast", "superfast"]:
             metric_weighting = {
-                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
+                "smape_weighting": random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
                 ],
-                'mae_weighting': random.choices(
+                "mae_weighting": random.choices(
                     [0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1]
                 )[0],
-                'rmse_weighting': random.choices(
+                "rmse_weighting": random.choices(
                     [0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1]
                 )[0],
-                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
+                "made_weighting": random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
                     0
                 ],
-                'mage_weighting': random.choices(
+                "mage_weighting": random.choices(
                     [0, 1, 3, 5, 0.01], [0.8, 0.1, 0.1, 0.0, 0.2]
                 )[0],
-                'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'spl_weighting': random.choices(
+                "mle_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "imle_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "spl_weighting": random.choices(
                     [0, 1, 3, 5, 0.1], [0.1, 0.3, 0.3, 0.3, 0.1]
                 )[0],
-                'oda_weighting': random.choices(
+                "oda_weighting": random.choices(
                     [0, 1, 3, 5, 0.1], [0.8, 0.1, 0.1, 0.0, 0.1]
                 )[0],
-                'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
-                'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'containment_weighting': random.choices(
+                "mqae_weighting": random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+                "dwae_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "maxe_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "containment_weighting": random.choices(
                     [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
                 )[0],
-                'contour_weighting': random.choices(
+                "contour_weighting": random.choices(
                     [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
                 )[0],
-                'runtime_weighting': random.choices(
+                "runtime_weighting": random.choices(
                     [0, 0.05, 0.3, 1, 0.001], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
-                'uwmse_weighting': random.choices(
+                "uwmse_weighting": random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
-                'smoothness_weighting': random.choices(
+                "smoothness_weighting": random.choices(
                     [0, 0.05, 3, 1, -0.5, -3], [0.4, 0.1, 0.1, 0.1, 0.2, 0.1]
                 )[0],
-                'ewmae_weighting': random.choices(
+                "ewmae_weighting": random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
-                'mate_weighting': random.choices(
+                "mate_weighting": random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
-                'wasserstein_weighting': random.choices(
+                "wasserstein_weighting": random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
-                'dwd_weighting': random.choices(
+                "dwd_weighting": random.choices(
                     [0, 0.05, 0.3, 1, 5, 0.001], [0.1, 0.6, 0.2, 0.1, 0.1, 0.1]
                 )[0],
             }
             validation_method = random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
+                ["backwards", "even", "similarity", "seasonal 364", "seasonal"],
                 [0.4, 0.1, 0.3, 0.3, 0.2],
             )[0]
         else:
             metric_weighting = {
-                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
+                "smape_weighting": random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
                 ],
-                'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
+                "mae_weighting": random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                "rmse_weighting": random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                "made_weighting": random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
                     0
                 ],
-                'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
-                'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-                'containment_weighting': random.choices(
+                "mage_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "mle_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "imle_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "spl_weighting": random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                "oda_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "mqae_weighting": random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+                "maxe_weighting": random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                "containment_weighting": random.choices(
                     [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
                 )[0],
-                'contour_weighting': random.choices(
+                "contour_weighting": random.choices(
                     [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
                 )[0],
-                'runtime_weighting': random.choices(
+                "runtime_weighting": random.choices(
                     [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
                 )[0],
             }
             validation_method = random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                ["backwards", "even", "similarity", "seasonal 364"],
                 [0.4, 0.1, 0.3, 0.3],
             )[0]
         preclean_choice = random.choices(
@@ -635,24 +638,24 @@ class AutoTS(object):
                                 "iqr_threshold": 2.0,
                                 "iqr_quantiles": [0.4, 0.6],
                             },
-                            "fillna": 'ffill',
+                            "fillna": "ffill",
                         }
                     },
                 },
                 {
-                    'fillna': None,
-                    'transformations': {
-                        '0': 'ClipOutliers',
-                        '1': 'RegressionFilter',
-                        '2': 'ClipOutliers',
+                    "fillna": None,
+                    "transformations": {
+                        "0": "ClipOutliers",
+                        "1": "RegressionFilter",
+                        "2": "ClipOutliers",
                     },
-                    'transformation_params': {
-                        '0': {
-                            'method': 'remove',
-                            'std_threshold': 2.5,
-                            'fillna': None,
+                    "transformation_params": {
+                        "0": {
+                            "method": "remove",
+                            "std_threshold": 2.5,
+                            "fillna": None,
                         },  # "SeasonalityMotifImputerLinMix"
-                        '1': {
+                        "1": {
                             "sigma": 2,
                             "rolling_window": 90,
                             "run_order": "season_first",
@@ -661,42 +664,42 @@ class AutoTS(object):
                                     "model": "ElasticNet",
                                     "model_params": {},
                                 },
-                                "datepart_method": ['common_fourier'],
+                                "datepart_method": ["common_fourier"],
                                 "polynomial_degree": None,
                                 "transform_dict": None,
                                 "holiday_countries_used": False,
                             },
                             "holiday_params": None,
                         },
-                        '2': {
-                            'method': 'remove',
-                            'std_threshold': 3.0,
-                            'fillna': "SeasonalityMotifImputerLinMix",
+                        "2": {
+                            "method": "remove",
+                            "std_threshold": 3.0,
+                            "fillna": "SeasonalityMotifImputerLinMix",
                         },
                     },
                 },
                 {
-                    'fillna': None,
-                    'transformations': {
-                        '0': 'ClipOutliers',
-                        '1': "LevelShiftMagic",
-                        '2': 'RegressionFilter',
-                        '3': 'ClipOutliers',
+                    "fillna": None,
+                    "transformations": {
+                        "0": "ClipOutliers",
+                        "1": "LevelShiftMagic",
+                        "2": "RegressionFilter",
+                        "3": "ClipOutliers",
                     },
-                    'transformation_params': {
-                        '0': {
-                            'method': 'remove',
-                            'std_threshold': 2.5,
-                            'fillna': None,
+                    "transformation_params": {
+                        "0": {
+                            "method": "remove",
+                            "std_threshold": 2.5,
+                            "fillna": None,
                         },  # "SeasonalityMotifImputerLinMix"
-                        '1': {
-                            'window_size': 90,
-                            'alpha': 2.5,
-                            'grouping_forward_limit': 3,
-                            'max_level_shifts': 5,
-                            'alignment': 'average',
+                        "1": {
+                            "window_size": 90,
+                            "alpha": 2.5,
+                            "grouping_forward_limit": 3,
+                            "max_level_shifts": 5,
+                            "alignment": "average",
                         },
-                        '2': {
+                        "2": {
                             "sigma": 2,
                             "rolling_window": 90,
                             "run_order": "season_first",
@@ -705,17 +708,17 @@ class AutoTS(object):
                                     "model": "ElasticNet",
                                     "model_params": {},
                                 },
-                                "datepart_method": ['common_fourier'],
+                                "datepart_method": ["common_fourier"],
                                 "polynomial_degree": None,
                                 "transform_dict": None,
                                 "holiday_countries_used": False,
                             },
                             "holiday_params": None,
                         },
-                        '3': {
-                            'method': 'remove',
-                            'std_threshold': 3.0,
-                            'fillna': "SeasonalityMotifImputerLinMix",
+                        "3": {
+                            "method": "remove",
+                            "std_threshold": 3.0,
+                            "fillna": "SeasonalityMotifImputerLinMix",
                         },
                     },
                 },
@@ -724,10 +727,10 @@ class AutoTS(object):
                     "transformations": {"0": "RollingMeanTransformer"},
                     "transformation_params": {
                         "0": {
-                            'window': 90,
-                            'fixed': False,
-                            'center': True,
-                            'macro_micro': True,
+                            "window": 90,
+                            "fixed": False,
+                            "center": True,
+                            "macro_micro": True,
                         },
                     },
                 },
@@ -736,12 +739,12 @@ class AutoTS(object):
                     "transformations": {"0": "CenterSplit"},
                     "transformation_params": {
                         "0": {
-                            'fillna': 'ffill',
-                            'center': 'zero',
+                            "fillna": "ffill",
+                            "center": "zero",
                         },
                     },
                 },
-                'random',
+                "random",
             ],
             [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.015, 0.1],
         )[0]
@@ -749,24 +752,24 @@ class AutoTS(object):
             preclean_choice = RandomTransform(
                 transformer_list="fast", transformer_max_depth=2
             )
-        if method == 'full':
+        if method == "full":
             model_list = random.choices(
                 [
-                    'fast',
-                    'superfast',
-                    'default',
-                    'fast_parallel_no_arima',
-                    'all',
-                    'motifs',
-                    'no_shared_fast',
-                    'multivariate',
-                    'univariate',
-                    'all_result_path',
-                    'regressions',
-                    'best',
-                    'regressor',
-                    'probabilistic',
-                    'no_shared',
+                    "fast",
+                    "superfast",
+                    "default",
+                    "fast_parallel_no_arima",
+                    "all",
+                    "motifs",
+                    "no_shared_fast",
+                    "multivariate",
+                    "univariate",
+                    "all_result_path",
+                    "regressions",
+                    "best",
+                    "regressor",
+                    "probabilistic",
+                    "no_shared",
                 ],
                 [
                     0.2,
@@ -786,102 +789,159 @@ class AutoTS(object):
                     0.05,
                 ],
             )[0]
-        elif method == 'fast':
+        elif method == "fast":
             model_list = random.choices(
                 [
-                    'fast',
-                    'superfast',
-                    'motifs',
-                    'no_shared_fast',
-                    'fast_parallel_no_arima',
+                    "fast",
+                    "superfast",
+                    "motifs",
+                    "no_shared_fast",
+                    "scalable",
                 ],
                 [
                     0.2,
-                    0.3,
+                    0.6,
                     0.2,
                     0.2,
-                    0.05,
+                    0.1,
                 ],
             )[0]
         elif method == "superfast":
-            model_list = 'superfast'
+            model_list = "superfast"
         else:
             model_list = random.choices(
                 [
-                    'fast',
-                    'superfast',
-                    'default',
-                    'fast_parallel',
-                    'motifs',
-                    'no_shared_fast',
+                    "fast",
+                    "superfast",
+                    "default",
+                    "fast_parallel",
+                    "motifs",
+                    "no_shared_fast",
                 ],
                 [0.2, 0.3, 0.2, 0.2, 0.05, 0.1],
             )[0]
 
-        return {
-            'max_generations': max_generations,
-            'model_list': model_list,
-            'transformer_list': random.choices(
-                ['all', 'fast', 'superfast'],
-                [0.2, 0.5, 0.3],
-            )[0],
-            'transformer_max_depth': random.choices(
-                [1, 2, 4, 6, 8, 10],
-                [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
-            )[0],
-            'num_validations': random.choices(
-                [0, 1, 2, 3, 4, 6], [0.1, 0.2, 0.3, 0.2, 0.1, 0.05]
-            )[0],
-            'validation_method': validation_method,
-            'models_to_validate': random.choices(
-                [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
-            )[0],
-            'ensemble': ensemble_choice,
-            'initial_template': random.choices(
-                ['random', 'general+random'], [0.8, 0.2]
-            )[0],
-            'subset': random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
-            'models_mode': random.choices(['random', 'regressor'], [0.95, 0.05])[0],
-            # 'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
-            'introduce_na': random.choice([None, True, False]),
-            'prefill_na': None,
-            'remove_leading_zeroes': False,
-            'constraint': random.choices(
+        constraint = random.choices(
+            [
+                None,
+                {
+                    "constraint_method": "stdev_min",
+                    "constraint_regularization": 0.7,
+                    "upper_constraint": 1,
+                    "lower_constraint": 1,
+                    "bounds": True,
+                },
+                {
+                    "constraint_method": "stdev",
+                    "constraint_regularization": 1,
+                    "upper_constraint": 2,
+                    "lower_constraint": 2,
+                    "bounds": False,
+                },
+                {
+                    "constraint_method": "quantile",
+                    "constraint_regularization": 0.9,
+                    "upper_constraint": 0.99,
+                    "lower_constraint": 0.01,
+                    "bounds": True,
+                },
+                {
+                    "constraint_method": "quantile",
+                    "constraint_regularization": 0.4,
+                    "upper_constraint": 0.9,
+                    "lower_constraint": 0.1,
+                    "bounds": False,
+                },
                 [
-                    None,
-                    {
-                        "constraint_method": "stdev_min",
-                        "constraint_regularization": 0.7,
-                        "upper_constraint": 1,
-                        "lower_constraint": 1,
-                        "bounds": True,
-                    },
-                    {
-                        "constraint_method": "stdev",
-                        "constraint_regularization": 1,
-                        "upper_constraint": 2,
-                        "lower_constraint": 2,
+                    {  # don't go below the last 10 values - 10%
+                        "constraint_method": "last_window",
+                        "constraint_value": {"window": 10, "threshold": -0.1},
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 1.0,
                         "bounds": False,
                     },
-                    {
-                        "constraint_method": "quantile",
-                        "constraint_regularization": 0.9,
-                        "upper_constraint": 0.99,
-                        "lower_constraint": 0.01,
-                        "bounds": True,
-                    },
-                    {
-                        "constraint_method": "quantile",
-                        "constraint_regularization": 0.4,
-                        "upper_constraint": 0.9,
-                        "lower_constraint": 0.1,
+                    {  # don't go above the last 10 values - 10%
+                        "constraint_method": "last_window",
+                        "constraint_value": {"window": 10, "threshold": 0.1},
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 1.0,
                         "bounds": False,
                     },
                 ],
-                [0.9, 0.1, 0.1, 0.1, 0.1],
+                [
+                    {  # don't exceed 2% decline by end of forecast horizon
+                        "constraint_method": "slope",
+                        "constraint_value": {
+                            "slope": -0.02,
+                            "window": 28,
+                            "window_agg": "min",
+                            "threshold": -0.01,
+                        },
+                        "constraint_direction": "lower",
+                        "constraint_regularization": 0.9,
+                        "bounds": False,
+                    },
+                    {  # don't exceed 2% growth by end of forecast horizon
+                        "constraint_method": "slope",
+                        "constraint_value": {
+                            "slope": 0.02,
+                            "window": 28,
+                            "window_agg": "max",
+                            "threshold": 0.01,
+                        },
+                        "constraint_direction": "upper",
+                        "constraint_regularization": 0.9,
+                        "bounds": False,
+                    },
+                ],
+                [
+                    {
+                        "constraint_method": "dampening",
+                        "constraint_value": 0.98,
+                        "bounds": True,
+                    },
+                ],
+                "random",
+            ],
+            [0.9, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.9],
+        )[0]
+        if constraint == "random":
+            constraint = constraint_new_params(method=method)
+        return {
+            "max_generations": max_generations,
+            "model_list": model_list,
+            "transformer_list": random.choices(
+                ["all", "fast", "superfast"],
+                [0.1, 0.5, 0.3],
             )[0],
-            'preclean': preclean_choice,
-            'metric_weighting': metric_weighting,
+            "transformer_max_depth": random.choices(
+                [1, 2, 4, 6, 8, 10],
+                [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
+            )[0],
+            "num_validations": random.choices(
+                [0, 1, 2, 3, 4, 6], [0.1, 0.2, 0.3, 0.2, 0.1, 0.05]
+            )[0],
+            "validation_method": validation_method,
+            "models_to_validate": random.choices(
+                [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
+            )[0],
+            "ensemble": ensemble_choice,
+            "initial_template": random.choices(
+                ["random", "general+random"], [0.8, 0.2]
+            )[0],
+            "subset": random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
+            "models_mode": random.choices(
+                ["random", "regressor", "neuralnets", "gradient_boosting"],
+                [0.95, 0.05, 0.02, 0.02],
+            )[0],
+            # 'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
+            "introduce_na": random.choice([None, True, False]),
+            # 'prefill_na': None,
+            # 'remove_leading_zeroes': False,
+            "constraint": constraint,
+            "preclean": preclean_choice,
+            "metric_weighting": metric_weighting,
+            "horizontal_ensemble_validation": horizontal_ensemble_validation,
         }
 
     def __repr__(self):
@@ -1022,6 +1082,9 @@ class AutoTS(object):
                 **self.preclean,
                 n_jobs=self.n_jobs,
                 holiday_country=self.holiday_country,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                forecast_length=self.forecast_length,
             )
             df_wide_numeric = self.preclean_transformer.fit_transform(df_wide_numeric)
 
@@ -1062,19 +1125,34 @@ class AutoTS(object):
         )
 
         # generate validation indices (so it can fail now, not after all the generations)
-        self.validation_indexes = generate_validation_indices(
-            self.validation_method,
-            self.forecast_length,
-            self.num_validations,
-            self.df_wide_numeric,
-            validation_params=(
-                self.similarity_validation_params
-                if self.validation_method == "similarity"
-                else self.seasonal_validation_params
-            ),
-            preclean=None,
-            verbose=0,
-        )
+        if self.validation_method != "custom":
+            self.validation_indexes = generate_validation_indices(
+                self.validation_method,
+                self.forecast_length,
+                self.num_validations,
+                self.df_wide_numeric,
+                validation_params=(
+                    self.similarity_validation_params
+                    if self.validation_method == "similarity"
+                    else self.seasonal_validation_params
+                ),
+                preclean=None,
+                verbose=0,
+            )
+        else:
+            if not self.validation_indexes:
+                if self.verbose >= 0:
+                    print("custom validation but provided indexes appear to be missing")
+            elif len(self.validation_indexes) != (self.num_validations + 1):
+                if self.verbose >= 0:
+                    print(
+                        f"custom validation index is of length {len(self.validation_indexes)} but requested num_validations + 1 is {(self.num_validations + 1)}"
+                    )
+                self.num_validations = (
+                    len(self.validation_indexes) - 1
+                    if (len(self.validation_indexes) - 1) > 0
+                    else 0
+                )
         return self
 
     def fit(
@@ -1105,6 +1183,7 @@ class AutoTS(object):
                 ".pickle" saves full object, including ensemble information.
             grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
                 used in 0.2.x but not 0.3.x+ versions. retained for potential future use
+            validation_indexes (list): list of datetime indexes, tail of forecast length is used as holdout
         """
         self.model = None
         self.grouping_ids = grouping_ids
@@ -1674,7 +1753,11 @@ class AutoTS(object):
             template_cols = self.template_cols_id
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
-            self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
+            (
+                self.validation_results.model_results['Runs']
+                >= (self.num_validations + 1)
+            )
+            & (self.validation_results.model_results['Ensemble'] < 2)
         ].copy()
         if eligible_models.empty:
             # this may occur if there is enough data for full validations
@@ -1841,11 +1924,14 @@ class AutoTS(object):
         # gather results of template run
         if not return_template:
             self.initial_results = self.initial_results.concat(template_result)
-            self.initial_results.model_results['Score'] = generate_score(
+            scores, score_dict = generate_score(
                 self.initial_results.model_results,
                 metric_weighting=self.metric_weighting,
                 prediction_interval=self.prediction_interval,
+                return_score_dict=True,
             )
+            self.initial_results.model_results['Score'] = scores
+            self.score_breakdown = pd.DataFrame(score_dict).set_index("ID")
         else:
             return template_result
         if result_file is not None:
@@ -2574,7 +2660,15 @@ class AutoTS(object):
                 initial_results.model_results['TotalRuntimeSeconds'].mean() / mae_min
             )
             # making runtime weighting even smaller because generally want this to be a very small component
-            weight_per_value + (runtimes / basic_scaler) * (runtime_weighting / 10)
+            try:
+                weight_per_value + (runtimes / basic_scaler) * (runtime_weighting / 10)
+            except Exception as e:
+                # get diagnostics on an unexplained error here
+                print(f"runtime weighting for mosaic failed with error {repr(e)}")
+                print(f"weight_per_value shape {weight_per_value.shape}")
+                print(f"runtimes: {runtimes}")
+                print(f"basic_scaler {basic_scaler}")
+                print(f"runtime_weighting {runtime_weighting}")
 
         mosaic_ensembles = [x for x in ensemble if "mosaic" in x]
         ensemble_templates = pd.DataFrame()
@@ -2770,7 +2864,7 @@ class AutoTS(object):
 
             # I could append this to master results
             # but that might be confusing because they are on different data
-            initial_results = self._run_validations(
+            self.expansion_results = self._run_validations(
                 df_wide_numeric=self.df_wide_numeric,
                 num_validations=self.num_validations + 1,
                 validation_template=val_temp,
@@ -2782,7 +2876,7 @@ class AutoTS(object):
                 additional_msg=" in expand_horizontal",
             )
 
-            validation_results = copy.copy(initial_results)
+            validation_results = copy.copy(self.expansion_results)
             validation_results = validation_aggregation(
                 validation_results, df_train=self.df_wide_numeric
             )
@@ -2796,20 +2890,20 @@ class AutoTS(object):
             ensemble_type = str(self.best_model_params['model_name']).lower()
 
             if 'mosaic' not in ensemble_type:
-                initial_results.model_results['Score'] = generate_score(
-                    initial_results.model_results,
+                self.expansion_results.model_results['Score'] = generate_score(
+                    self.expansion_results.model_results,
                     metric_weighting=self.metric_weighting,
                     prediction_interval=self.prediction_interval,
                 )
                 score_per_series = generate_score_per_series(
-                    initial_results,
+                    self.expansion_results,
                     metric_weighting=self.metric_weighting,
                     total_validations=(self.num_validations + 1),
                 )
                 # may return multiple
                 ens_templates = HorizontalTemplateGenerator(
                     score_per_series,
-                    model_results=initial_results.model_results,
+                    model_results=self.expansion_results.model_results,
                     forecast_length=self.forecast_length,
                     ensemble=['horizontal-max'],
                     subset_flag=False,
@@ -2820,9 +2914,8 @@ class AutoTS(object):
                     self.df_wide_numeric,
                     models_to_use=models_to_use,
                     ensemble=[self.best_model_params['model_metric']],
-                    initial_results=initial_results,
+                    initial_results=self.expansion_results,
                 )
-            self.expansion_results = initial_results
             if ens_templates.empty:
                 print(models_to_use)
                 raise ValueError("expansion returned empty template")
@@ -3776,6 +3869,34 @@ class AutoTS(object):
             total.sort_values("failure_rate", ascending=False)['failure_rate']
             .iloc[0:20]
             .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+        )
+
+    def plot_model_failure_rate(self):
+        """Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer."""
+        initial_results = self.results()
+        failures = []
+        successes = []
+        for idx, row in initial_results.iterrows():
+            failed = not pd.isnull(row['Exceptions'])
+            transforms = [row["Model"]]
+            if failed:
+                failures = failures + transforms
+            else:
+                successes = successes + transforms
+        total = pd.concat(
+            [
+                pd.Series(failures).value_counts().rename("failures").to_frame(),
+                pd.Series(successes).value_counts().rename("successes"),
+            ],
+            axis=1,
+        ).fillna(0)
+        total['failure_rate'] = total['failures'] / (
+            total['successes'] + total['failures']
+        )
+        return (
+            total.sort_values("failure_rate", ascending=False)['failure_rate']
+            .iloc[0:20]
+            .plot(kind='bar', title='Models by Failure Rate', color='forestgreen')
         )
 
     def _count_values(self, input_dict, counts=None):

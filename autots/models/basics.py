@@ -1040,7 +1040,7 @@ class MotifSimulation(ModelObject):
                     'dice',
                     'hamming',
                     'jaccard',
-                    'kulsinski',
+                    'kulczynski1',
                     'mahalanobis',
                     'minkowski',
                     'rogerstanimoto',
@@ -1998,7 +1998,7 @@ class SectionalMotif(ModelObject):
             'hamming',
             'jaccard',
             # 'jensenshannon',
-            'kulsinski',
+            'kulczynski1',
             'mahalanobis',
             'matching',
             'minkowski',
@@ -2971,8 +2971,8 @@ class FFT(ModelObject):
         """Returns dict of new parameters for parameter tuning"""
         return {
             "n_harmonics": random.choices(
-                [2, 4, 6, 10, 20, 100, 1000, 5000],
-                [0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1],
+                [2, 3, 4, 5, 6, 10, 20, 100, 1000, 5000],
+                [0.1, 0.02, 0.2, 0.02, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1],
             )[0],
             "detrend": random.choices([None, "linear", 'quadratic'], [0.2, 0.7, 0.1])[
                 0

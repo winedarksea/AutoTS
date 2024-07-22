@@ -11,6 +11,7 @@ from autots.tools.lunar import moon_phase
 from autots.tools.window_functions import sliding_window_view
 from autots.tools.holiday import holiday_flag
 from autots.tools.wavelet import offset_wavelet, create_narrowing_wavelets
+from autots.tools.shaping import infer_frequency
 
 
 def seasonal_int(include_one: bool = False, small=False, very_small=False):
@@ -82,6 +83,8 @@ def date_part(
     polynomial_degree: int = None,
     holiday_country: str = None,
     holiday_countries_used: bool = True,
+    lags: int = None,  # inspired by ARDL
+    forward_lags: int = None,
 ):
     """Create date part columns from pd.DatetimeIndex.
 
@@ -98,7 +101,10 @@ def date_part(
             common_fourier
         set_index (bool): if True, return DTindex as index of df
         polynomial_degree (int): add this degree of sklearn polynomial features if not None
-
+        holdiay_country (list or str): names of countries to pull calendar holidays for
+        holiday_countries_used (bool): to use holiday_country if given
+        lags (int): if not None, include the past N previous index date parts
+        forward_lags (int): if not None, include the future N index date parts
     Returns:
         pd.Dataframe with DTindex
     """
@@ -115,6 +121,7 @@ def date_part(
     if isinstance(method, (int, float)):
         date_part_df = fourier_df(DTindex, seasonality=method, order=6)
     elif isinstance(method, list):
+        # this handles it already having been run recursively
         # remove duplicate columns if present
         date_part_df = date_part_df.loc[:, ~date_part_df.columns.duplicated()]
     elif method in datepart_components:
@@ -394,6 +401,33 @@ def date_part(
             axis=1,
             ignore_index=not set_index,
         )
+    # recursive
+    if lags is not None:
+        frequency = infer_frequency(DTindex)
+        longer_idx = pd.date_range(
+            end=DTindex[-1], periods=len(DTindex) + lags, freq=frequency
+        )
+        for laggy in range(lags):
+            add_X = date_part(
+                longer_idx[lags - (laggy + 1) :][0 : len(DTindex)],
+                method=method,
+                polynomial_degree=polynomial_degree,
+            ).rename(columns=lambda x: str(x) + f"_lag{laggy}")
+            add_X.index = DTindex
+            date_part_df = pd.concat([date_part_df, add_X], axis=1)
+    if forward_lags is not None:
+        frequency = infer_frequency(DTindex)
+        longer_idx = pd.date_range(
+            start=DTindex[0], periods=len(DTindex) + forward_lags, freq=frequency
+        )
+        for laggy in range(forward_lags):
+            add_X = date_part(
+                longer_idx[laggy + 1 :][0 : len(DTindex)],
+                method=method,
+                polynomial_degree=polynomial_degree,
+            ).rename(columns=lambda x: str(x) + f"_flag{laggy}")
+            add_X.index = DTindex
+            date_part_df = pd.concat([date_part_df, add_X], axis=1)
     return date_part_df
 
 
@@ -440,6 +474,9 @@ datepart_components = [
     "isoweek",
     "isoweek_binary",
     "isoday",
+    "quarterlydayofweek",
+    "hourlydayofweek",
+    "constant",
 ]
 
 
@@ -549,6 +586,64 @@ def create_datepart_components(DTindex, seasonality):
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "isoday":
         return DTindex.isocalendar().day
+    elif seasonality == "quarterlydayofweek":
+        day_dummies = pd.get_dummies(
+            pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
+            dtype=np.uint8,
+            prefix='day',
+        )
+        quarter_dummies = pd.get_dummies(
+            pd.Categorical(DTindex.quarter, categories=list(range(1, 5)), ordered=True),
+            dtype=np.uint8,
+            prefix='Q',
+        )
+        # Create interaction terms by multiplying day and quarter dummy variables
+        interaction_features = (
+            day_dummies.values[:, :, np.newaxis]
+            * quarter_dummies.values[:, np.newaxis, :]
+        )
+        # Reshape the interaction_features to a 2D array
+        interaction_features = interaction_features.reshape(DTindex.shape[0], -1)
+        # Create column names for interaction features
+        interaction_feature_names = [
+            f"{day_col}_{quarter_col}"
+            for day_col in day_dummies.columns
+            for quarter_col in quarter_dummies.columns
+        ]
+        # Create a DataFrame for interaction features
+        return pd.DataFrame(
+            interaction_features, columns=interaction_feature_names
+        ).astype(int)
+    elif seasonality == "hourlydayofweek":
+        day_dummies = pd.get_dummies(
+            pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
+            dtype=np.uint8,
+            prefix='day',
+        )
+        quarter_dummies = pd.get_dummies(
+            pd.Categorical(DTindex.hour, categories=list(range(1, 25)), ordered=True),
+            dtype=np.uint8,
+            prefix='h',
+        )
+        # Create interaction terms by multiplying day and quarter dummy variables
+        interaction_features = (
+            day_dummies.values[:, :, np.newaxis]
+            * quarter_dummies.values[:, np.newaxis, :]
+        )
+        # Reshape the interaction_features to a 2D array
+        interaction_features = interaction_features.reshape(DTindex.shape[0], -1)
+        # Create column names for interaction features
+        interaction_feature_names = [
+            f"{day_col}_{quarter_col}"
+            for day_col in day_dummies.columns
+            for quarter_col in quarter_dummies.columns
+        ]
+        # Create a DataFrame for interaction features
+        return pd.DataFrame(
+            interaction_features, columns=interaction_feature_names
+        ).astype(int)
+    elif seasonality == "constant":
+        return pd.DataFrame(1, columns=["constant"], index=range(len(DTindex)))
     else:
         raise ValueError(
             f"create_datepart_components `{seasonality}` is not recognized"
@@ -574,7 +669,7 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
 
 
-base_seasonalities = [
+base_seasonalities = [  # this needs to be a list
     "recurring",
     "simple",
     "expanded",

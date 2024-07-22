@@ -869,7 +869,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  KalmanStateSpace       |              |                         |    True       |                 |       |              |              |               |
 |  FFT                    |              |                         |    True       |                 |       |              |              |               |
 |  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |              |               |
-|  NeuralForecast         | NeuralForecast |                       |    True       |                 | yes   | True         | True         | True          |
+|  NeuralForecast         | NeuralForecast |                       |    True       |                 | yes   | True         |              | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |
