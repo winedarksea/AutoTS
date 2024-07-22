@@ -141,6 +141,7 @@ class NeuralForecast(ModelObject):
                 loss = MQLoss(quantiles=quantiles)
         elif loss == "HuberMQLoss":
             from neuralforecast.losses.pytorch import HuberMQLoss
+
             if self.point_quantile is None:
                 loss = HuberMQLoss(level=levels)
             else:

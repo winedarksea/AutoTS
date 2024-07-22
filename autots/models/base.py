@@ -114,8 +114,6 @@ class ModelObject(object):
         return datetime.datetime.now()
 
 
-
-
 def apply_constraints(
     forecast,
     lower_forecast,

@@ -1026,7 +1026,8 @@ def generate_regressor_params(
                         [0.1, 0.3, 0.3, 0.3, 0.1, 0.1, 0.1],
                     )[0],
                     "max_iter": random.choices(
-                        [250, 500, 1000], [0.8, 0.1, 0.1],
+                        [250, 500, 1000],
+                        [0.8, 0.1, 0.1],
                     )[0],
                     "activation": random.choices(
                         ['identity', 'logistic', 'tanh', 'relu'],
@@ -1035,7 +1036,9 @@ def generate_regressor_params(
                     "solver": solver,
                     "early_stopping": early_stopping,
                     "learning_rate_init": learning_rate_init,
-                    "alpha": random.choices([None, 0.0001, 0.1, 0.0], [0.5, 0.2, 0.2, 0.2])[0],
+                    "alpha": random.choices(
+                        [None, 0.0001, 0.1, 0.0], [0.5, 0.2, 0.2, 0.2]
+                    )[0],
                 },
             }
         elif model == 'KNN':
@@ -2050,9 +2053,7 @@ class WindowRegression(ModelObject):
                 [5000, 50000, 5000000, None], [0.4, 0.2, 0.9, 0.05]
             )[0]
         elif method == "fast":
-            max_windows_choice = random.choices(
-                [10000, 100000], [0.2, 0.2]
-            )[0]
+            max_windows_choice = random.choices([10000, 100000], [0.2, 0.2])[0]
         else:
             max_windows_choice = random.choices(
                 [5000, 50000, 5000000], [0.2, 0.2, 0.9]
@@ -2401,7 +2402,8 @@ class DatepartRegression(ModelObject):
             polynomial_degree=self.polynomial_degree,
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
-            lags=self.lags, forward_lags=self.forward_lags,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.regression_type in ['User', 'user']:
             # regr = future_regressor.copy()
@@ -2458,11 +2460,13 @@ class DatepartRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         self.X_pred = date_part(
-            index, method=self.datepart_method,
+            index,
+            method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
-            lags=self.lags, forward_lags=self.forward_lags,
+            lags=self.lags,
+            forward_lags=self.forward_lags,
         )
         if self.regression_type in ['User', 'user']:
             self.X_pred = pd.concat(
@@ -2534,7 +2538,9 @@ class DatepartRegression(ModelObject):
             'polynomial_degree': polynomial_choice,
             "holiday_countries_used": random.choices([True, False], [0.2, 0.8])[0],
             'lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.1, 0.1, 0.05, 0.05])[0],
-            'forward_lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.1, 0.1, 0.05, 0.05])[0],
+            'forward_lags': random.choices(
+                [None, 1, 2, 3, 4], [0.9, 0.1, 0.1, 0.05, 0.05]
+            )[0],
             'regression_type': regression_choice,
         }
         return parameter_dict

@@ -160,7 +160,7 @@ def random_state_space(tries=15):
             )  # Full observation for simplicity
             procnois = np.diag(np.random.exponential(0.01, size=n_dims)).round(3)
             obsnois = np.random.exponential(1.0)
-    
+
             if np.all(np.abs(np.linalg.eigvals(st)) < 1):  # Check stability
                 return st, procnois, obsmod, obsnois
         except Exception:

@@ -12,7 +12,12 @@ import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
-from autots.tools.seasonal import date_part, seasonal_int, date_part_methods, base_seasonalities
+from autots.tools.seasonal import (
+    date_part,
+    seasonal_int,
+    date_part_methods,
+    base_seasonalities,
+)
 from autots.tools.holiday import holiday_flag
 
 # these are optional packages

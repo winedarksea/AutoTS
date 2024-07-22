@@ -2491,7 +2491,10 @@ def validation_aggregation(
 
 
 def generate_score(
-    model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9, return_score_dict: bool = False,
+    model_results,
+    metric_weighting: dict = {},
+    prediction_interval: float = 0.9,
+    return_score_dict: bool = False,
 ):
     """Generate score based on relative accuracies.
 

@@ -96,9 +96,7 @@ def generate_validation_indices(
                 },
             }
             trans = GeneralTransformer(
-                forecast_length=forecast_length,
-                verbose=verbose,
-                **params
+                forecast_length=forecast_length, verbose=verbose, **params
             )
             sim_df = trans.fit_transform(sim_df)
 

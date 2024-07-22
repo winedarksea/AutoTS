@@ -494,7 +494,11 @@ class AutoTS(object):
                     None,
                     ["simple"],
                     ["simple", "horizontal-max"],
-                    ["mosaic-weighted-0-40", "mosaic-weighted-0-20", "horizontal-min-20"],
+                    [
+                        "mosaic-weighted-0-40",
+                        "mosaic-weighted-0-20",
+                        "horizontal-min-20",
+                    ],
                     full_ensemble_test_list,
                 ],
                 [0.3, 0.1, 0.2, 0.2, 0.1],
@@ -502,7 +506,9 @@ class AutoTS(object):
         if ensemble_choice in [None, ['simple']]:
             horizontal_ensemble_validation = False
         else:
-            horizontal_ensemble_validation = random.choices([True, False], [0.5, 0.5])[0]
+            horizontal_ensemble_validation = random.choices([True, False], [0.5, 0.5])[
+                0
+            ]
         if method in ["full", "fast", "superfast"]:
             metric_weighting = {
                 "smape_weighting": random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
@@ -924,7 +930,10 @@ class AutoTS(object):
                 ["random", "general+random"], [0.8, 0.2]
             )[0],
             "subset": random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
-            "models_mode": random.choices(["random", "regressor", "neuralnets", "gradient_boosting"], [0.95, 0.05, 0.02, 0.02])[0],
+            "models_mode": random.choices(
+                ["random", "regressor", "neuralnets", "gradient_boosting"],
+                [0.95, 0.05, 0.02, 0.02],
+            )[0],
             # 'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
             "introduce_na": random.choice([None, True, False]),
             # 'prefill_na': None,
@@ -934,7 +943,6 @@ class AutoTS(object):
             "metric_weighting": metric_weighting,
             "horizontal_ensemble_validation": horizontal_ensemble_validation,
         }
-
 
     def __repr__(self):
         """Print."""
@@ -1137,8 +1145,14 @@ class AutoTS(object):
                     print("custom validation but provided indexes appear to be missing")
             elif len(self.validation_indexes) != (self.num_validations + 1):
                 if self.verbose >= 0:
-                    print(f"custom validation index is of length {len(self.validation_indexes)} but requested num_validations + 1 is {(self.num_validations + 1)}")
-                self.num_validations = len(self.validation_indexes) - 1 if (len(self.validation_indexes) - 1) > 0 else 0
+                    print(
+                        f"custom validation index is of length {len(self.validation_indexes)} but requested num_validations + 1 is {(self.num_validations + 1)}"
+                    )
+                self.num_validations = (
+                    len(self.validation_indexes) - 1
+                    if (len(self.validation_indexes) - 1) > 0
+                    else 0
+                )
         return self
 
     def fit(
@@ -1739,8 +1753,11 @@ class AutoTS(object):
             template_cols = self.template_cols_id
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
-            (self.validation_results.model_results['Runs'] >= (self.num_validations + 1)) &
-            (self.validation_results.model_results['Ensemble'] < 2)
+            (
+                self.validation_results.model_results['Runs']
+                >= (self.num_validations + 1)
+            )
+            & (self.validation_results.model_results['Ensemble'] < 2)
         ].copy()
         if eligible_models.empty:
             # this may occur if there is enough data for full validations
@@ -1911,7 +1928,7 @@ class AutoTS(object):
                 self.initial_results.model_results,
                 metric_weighting=self.metric_weighting,
                 prediction_interval=self.prediction_interval,
-                return_score_dict=True
+                return_score_dict=True,
             )
             self.initial_results.model_results['Score'] = scores
             self.score_breakdown = pd.DataFrame(score_dict).set_index("ID")

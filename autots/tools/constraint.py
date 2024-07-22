@@ -1,9 +1,11 @@
 """
 Constraint generation functions
 """
+
 import random
 import numpy as np
 import pandas as pd
+
 
 def constant_growth_rate(periods, final_growth):
     """Take a final target growth rate (ie 2 % over a year) and convert to a daily (etc) value."""
@@ -38,71 +40,149 @@ constraint_method_dict = {
 
 
 def constraint_new_params(method: str = "fast"):
-    method_choice = random.choices(list(constraint_method_dict.keys()), list(constraint_method_dict.values()))[0]
+    method_choice = random.choices(
+        list(constraint_method_dict.keys()), list(constraint_method_dict.values())
+    )[0]
     params = {
         "constraint_method": method_choice,
         "constraint_direction": random.choices(["upper", "lower"], [0.5, 0.5])[0],
-        "constraint_regularization": random.choices([1.0, 0.2, 0.5, 0.7, 0.9], [0.7, 0.05, 0.1, 0.05, 0.1])[0],
+        "constraint_regularization": random.choices(
+            [1.0, 0.2, 0.5, 0.7, 0.9], [0.7, 0.05, 0.1, 0.05, 0.1]
+        )[0],
     }
     if method_choice == "quantile":
         if params["constraint_direction"] == "upper":
-            params["constraint_value"] = random.choices([1.0, 0.5, 0.7, 0.9, 0.98], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+            params["constraint_value"] = random.choices(
+                [1.0, 0.5, 0.7, 0.9, 0.98], [0.5, 0.2, 0.1, 0.2, 0.1]
+            )[0]
         else:
-            params["constraint_value"] = random.choices([0.01, 0.5, 0.1, 0.2, 0.02], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+            params["constraint_value"] = random.choices(
+                [0.01, 0.5, 0.1, 0.2, 0.02], [0.5, 0.2, 0.1, 0.2, 0.1]
+            )[0]
     elif method_choice == "slope":
         if params["constraint_direction"] == "upper":
-            params["constraint_value"] = random.choices([
-                {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01},
-                {"slope": 0.05, "window": 10, "window_agg": "max", "threshold": 0.01},
-                {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01},
-                {"slope": 0.2, "window": 10, "window_agg": "mean", "threshold": 0.01},
-                {"slope": 0.001, "window": 10, "window_agg": "max", "threshold": 0.1},
-            ], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+            params["constraint_value"] = random.choices(
+                [
+                    {
+                        "slope": 0.02,
+                        "window": 10,
+                        "window_agg": "max",
+                        "threshold": 0.01,
+                    },
+                    {
+                        "slope": 0.05,
+                        "window": 10,
+                        "window_agg": "max",
+                        "threshold": 0.01,
+                    },
+                    {
+                        "slope": 0.1,
+                        "window": 30,
+                        "window_agg": "max",
+                        "threshold": 0.01,
+                    },
+                    {
+                        "slope": 0.2,
+                        "window": 10,
+                        "window_agg": "mean",
+                        "threshold": 0.01,
+                    },
+                    {
+                        "slope": 0.001,
+                        "window": 10,
+                        "window_agg": "max",
+                        "threshold": 0.1,
+                    },
+                ],
+                [0.5, 0.2, 0.1, 0.2, 0.1],
+            )[0]
         else:
-            params["constraint_value"] = random.choices([
-                {"slope": -0.02, "window": 7, "window_agg": "min", "threshold": -0.01},
-                {"slope": -0.05, "window": 10, "window_agg": "min", "threshold": -0.01},
-                {"slope": -0.1, "window": 30, "window_agg": "min", "threshold": 0.01},
-                {"slope": -0.2, "window": 10, "window_agg": "mean", "threshold": -0.01},
-                {"slope": -0.001, "window": 10, "window_agg": "min", "threshold": -0.1},
-            ], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+            params["constraint_value"] = random.choices(
+                [
+                    {
+                        "slope": -0.02,
+                        "window": 7,
+                        "window_agg": "min",
+                        "threshold": -0.01,
+                    },
+                    {
+                        "slope": -0.05,
+                        "window": 10,
+                        "window_agg": "min",
+                        "threshold": -0.01,
+                    },
+                    {
+                        "slope": -0.1,
+                        "window": 30,
+                        "window_agg": "min",
+                        "threshold": 0.01,
+                    },
+                    {
+                        "slope": -0.2,
+                        "window": 10,
+                        "window_agg": "mean",
+                        "threshold": -0.01,
+                    },
+                    {
+                        "slope": -0.001,
+                        "window": 10,
+                        "window_agg": "min",
+                        "threshold": -0.1,
+                    },
+                ],
+                [0.5, 0.2, 0.1, 0.2, 0.1],
+            )[0]
     elif method_choice == "last_window":
         if params["constraint_direction"] == "upper":
-            params["constraint_value"] = random.choices([
-                {"window": 10, "threshold": 0.1},
-                {"window": 10, "threshold": 0.2},
-                {"window": 20, "threshold": 0.1},
-                {"window": 364, "threshold": 0.01},
-                {"window": 10, "threshold": -0.01},
-            ], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+            params["constraint_value"] = random.choices(
+                [
+                    {"window": 10, "threshold": 0.1},
+                    {"window": 10, "threshold": 0.2},
+                    {"window": 20, "threshold": 0.1},
+                    {"window": 364, "threshold": 0.01},
+                    {"window": 10, "threshold": -0.01},
+                ],
+                [0.5, 0.2, 0.1, 0.2, 0.1],
+            )[0]
         else:
-            params["constraint_value"] = random.choices([
-                {"window": 10, "threshold": -0.1},
-                {"window": 28, "threshold": -0.1},
-                {"window": 364, "threshold": -0.01},
-                {"window": 10, "threshold": -0.1},
-                {"window": 10, "threshold": 0.01},
-            ], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+            params["constraint_value"] = random.choices(
+                [
+                    {"window": 10, "threshold": -0.1},
+                    {"window": 28, "threshold": -0.1},
+                    {"window": 364, "threshold": -0.01},
+                    {"window": 10, "threshold": -0.1},
+                    {"window": 10, "threshold": 0.01},
+                ],
+                [0.5, 0.2, 0.1, 0.2, 0.1],
+            )[0]
     elif method_choice in ["stdev", "stdev_min"]:
-        params["constraint_value"] = random.choices([1.0, 0.5, 2.0, 3.0, 4.0], [0.5, 0.2, 0.1, 0.2, 0.1])[0]
+        params["constraint_value"] = random.choices(
+            [1.0, 0.5, 2.0, 3.0, 4.0], [0.5, 0.2, 0.1, 0.2, 0.1]
+        )[0]
     elif method_choice in ["dampening"]:
-        params["constraint_value"] = random.choices([0.99, 0.9, 0.8, 0.999, 0.98, 0.9999, 0.95], [0.5, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1])[0]
+        params["constraint_value"] = random.choices(
+            [0.99, 0.9, 0.8, 0.999, 0.98, 0.9999, 0.95],
+            [0.5, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1],
+        )[0]
         params['constraint_direction'] = "upper"
         params["constraint_regularization"] = 1.0
     elif method_choice in ["absolute", "fixed"]:
         params["constraint_value"] = random.choices([0, 0.1, 1], [0.8, 0.1, 0.1])[0]
     elif method_choice in ["historic_growth"]:
-        params["constraint_value"] = random.choices([1.0, 0.5, 2.0, 0.2], [0.6, 0.2, 0.2, 0.04])[0]
+        params["constraint_value"] = random.choices(
+            [1.0, 0.5, 2.0, 0.2], [0.6, 0.2, 0.2, 0.04]
+        )[0]
     return params
 
+
 def fit_constraint(
-        constraint_method,
-        constraint_value,
-        constraint_direction='upper',
-        constraint_regularization=1.0,
-        bounds=True,
-        df_train=None,
-        forecast_length=None,
+    constraint_method,
+    constraint_value,
+    constraint_direction='upper',
+    constraint_regularization=1.0,
+    bounds=True,
+    df_train=None,
+    forecast_length=None,
 ):
     # check if training data provided
     if df_train is None and constraint_method in [
@@ -208,8 +288,16 @@ def fit_constraint(
         # and apply a log growth rate to that (to better allow for peaks like holidays)
         t = np.arange(forecast_length + 1).reshape(-1, 1)
         t2 = np.log1p(t) + 1
-        train_max = df_train.iloc[-1].to_numpy() + (((slopes.max().to_numpy() * forecast_length)) * t2 / t2.max())[1:] * threshold
-        train_min = df_train.iloc[-1].to_numpy() + (((slopes.min().to_numpy() * forecast_length)) * t2 / t2.max())[1:] * threshold
+        train_max = (
+            df_train.iloc[-1].to_numpy()
+            + (((slopes.max().to_numpy() * forecast_length)) * t2 / t2.max())[1:]
+            * threshold
+        )
+        train_min = (
+            df_train.iloc[-1].to_numpy()
+            + (((slopes.min().to_numpy() * forecast_length)) * t2 / t2.max())[1:]
+            * threshold
+        )
 
     elif constraint_method == "dampening":
         pass
@@ -221,18 +309,18 @@ def fit_constraint(
 
 
 def apply_fit_constraint(
-        forecast,
-        lower_forecast,
-        upper_forecast,
-        constraint_method,
-        constraint_value,
-        constraint_direction='upper',
-        constraint_regularization=1.0,
-        bounds=True,
-        lower_constraint=None,
-        upper_constraint=None,
-        train_min=None,
-        train_max=None,
+    forecast,
+    lower_forecast,
+    upper_forecast,
+    constraint_method,
+    constraint_value,
+    constraint_direction='upper',
+    constraint_regularization=1.0,
+    bounds=True,
+    lower_constraint=None,
+    upper_constraint=None,
+    train_min=None,
+    train_max=None,
 ):
     if constraint_method == "dampening":
         # the idea is to make the forecast plateau by gradually forcing the step to step change closer to zero
@@ -312,6 +400,7 @@ def apply_fit_constraint(
                 )
     return forecast, lower_forecast, upper_forecast
 
+
 def apply_constraint_single(
     forecast,
     lower_forecast,
@@ -325,25 +414,25 @@ def apply_constraint_single(
 ):
     # note the Constraint Transformer also uses the same API so adjust changes there too
     lower_constraint, upper_constraint, train_min, train_max = fit_constraint(
-            constraint_method=constraint_method,
-            constraint_value=constraint_value,
-            constraint_direction=constraint_direction,
-            constraint_regularization=constraint_regularization,
-            bounds=bounds,
-            df_train=df_train,
-            forecast_length=forecast.shape[0],
+        constraint_method=constraint_method,
+        constraint_value=constraint_value,
+        constraint_direction=constraint_direction,
+        constraint_regularization=constraint_regularization,
+        bounds=bounds,
+        df_train=df_train,
+        forecast_length=forecast.shape[0],
     )
     return apply_fit_constraint(
-            forecast=forecast,
-            lower_forecast=lower_forecast,
-            upper_forecast=upper_forecast,
-            constraint_method=constraint_method,
-            constraint_value=constraint_value,
-            constraint_direction=constraint_direction,
-            constraint_regularization=constraint_regularization,
-            bounds=bounds,
-            lower_constraint=lower_constraint,
-            upper_constraint=upper_constraint,
-            train_min=train_min,
-            train_max=train_max,
+        forecast=forecast,
+        lower_forecast=lower_forecast,
+        upper_forecast=upper_forecast,
+        constraint_method=constraint_method,
+        constraint_value=constraint_value,
+        constraint_direction=constraint_direction,
+        constraint_regularization=constraint_regularization,
+        bounds=bounds,
+        lower_constraint=lower_constraint,
+        upper_constraint=upper_constraint,
+        train_min=train_min,
+        train_max=train_max,
     )

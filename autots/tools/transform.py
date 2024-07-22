@@ -7,7 +7,11 @@ import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int, random_datepart
 from autots.tools.cointegration import coint_johansen, btcd_decompose
-from autots.tools.constraint import fit_constraint, apply_fit_constraint, constraint_new_params
+from autots.tools.constraint import (
+    fit_constraint,
+    apply_fit_constraint,
+    constraint_new_params,
+)
 from autots.models.sklearn import (
     generate_regressor_params,
     retrieve_regressor,
@@ -1207,8 +1211,12 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "polynomial_degree": polynomial_choice,
             "transform_dict": random_cleaners(),
             "holiday_countries_used": holiday_countries_used,
-            'lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02])[0],
-            'forward_lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02])[0],
+            'lags': random.choices([None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02])[
+                0
+            ],
+            'forward_lags': random.choices(
+                [None, 1, 2, 3, 4], [0.9, 0.05, 0.05, 0.02, 0.02]
+            )[0],
         }
 
     def fit(self, df, regressor=None):
@@ -2398,7 +2406,9 @@ class FastICA(EmptyTransformer):
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
             "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
-            "whiten": random.choices(['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1])[0],
+            "whiten": random.choices(
+                ['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1]
+            )[0],
         }
 
 
@@ -2478,7 +2488,9 @@ class PCA(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
-            "n_components": random.choices([None, 4, 10, 100], [0.8, 0.05, 0.1, 0.1])[0],
+            "n_components": random.choices([None, 4, 10, 100], [0.8, 0.05, 0.1, 0.1])[
+                0
+            ],
         }
 
 
@@ -2771,7 +2783,7 @@ class AlignLastValue(EmptyTransformer):
                 if self.threshold_method == "max":
                     self.threshold = df.iloc[-self.threshold :].pct_change().abs().max()
                 else:
-                    self.threshold = df.pct_change().abs().mean()* self.threshold
+                    self.threshold = df.pct_change().abs().mean() * self.threshold
             else:
                 if self.threshold_method == "max":
                     self.threshold = df.iloc[-self.threshold :].diff().abs().max()
@@ -4923,7 +4935,7 @@ class BKBandpassFilter(EmptyTransformer):
 
 class Constraint(EmptyTransformer):
     """Apply constraints (caps on values based on history).
-    
+
     See base.py constraints function for argument documentation
     """
 
@@ -4949,7 +4961,8 @@ class Constraint(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.lower_constraint, self.upper_constraint, self.train_min, self.train_max = fit_constraint(
+        self.lower_constraint, self.upper_constraint, self.train_min, self.train_max = (
+            fit_constraint(
                 constraint_method=self.constraint_method,
                 constraint_value=self.constraint_value,
                 constraint_direction=self.constraint_direction,
@@ -4957,6 +4970,7 @@ class Constraint(EmptyTransformer):
                 bounds=False,
                 df_train=df,
                 forecast_length=self.forecast_length,
+            )
         )
         return self
 
@@ -4977,18 +4991,18 @@ class Constraint(EmptyTransformer):
         if trans_method == "original":
             return df
         forecast, up, low = apply_fit_constraint(
-                forecast=df,
-                lower_forecast=0,
-                upper_forecast=0,
-                constraint_method=self.constraint_method,
-                constraint_value=self.constraint_value,
-                constraint_direction=self.constraint_direction,
-                constraint_regularization=self.constraint_regularization,
-                bounds=False,
-                lower_constraint=self.lower_constraint,
-                upper_constraint=self.upper_constraint,
-                train_min=self.train_min,
-                train_max=self.train_max,
+            forecast=df,
+            lower_forecast=0,
+            upper_forecast=0,
+            constraint_method=self.constraint_method,
+            constraint_value=self.constraint_value,
+            constraint_direction=self.constraint_direction,
+            constraint_regularization=self.constraint_regularization,
+            bounds=False,
+            lower_constraint=self.lower_constraint,
+            upper_constraint=self.upper_constraint,
+            train_min=self.train_min,
+            train_max=self.train_max,
         )
         return forecast
 
@@ -5005,6 +5019,7 @@ class Constraint(EmptyTransformer):
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         return constraint_new_params(method=method)
+
 
 # lookup dict for all non-parameterized transformers
 trans_dict = {
@@ -5326,10 +5341,7 @@ class GeneralTransformer(object):
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
         elif transformation in ["Constraint"]:
-            return Constraint(
-                forecast_length=forecast_length, **param
-            )
-
+            return Constraint(forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
