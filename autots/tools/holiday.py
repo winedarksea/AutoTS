@@ -101,7 +101,7 @@ def query_holidays(
 
     years = list(range(DTindex[0].year, DTindex[-1].year + 1))
     try:
-        country_holidays_base = holidays.CountryHoliday(
+        country_holidays_base = holidays.country_holidays(
             country, years=years, subdiv=holidays_subdiv
         )
     except Exception:
