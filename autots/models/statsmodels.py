@@ -142,36 +142,36 @@ def glm_forecast_by_column(current_series, X, Xf, args):
     if str(family).lower() == 'poisson':
         from statsmodels.genmod.families.family import Poisson
 
-        model = SM_GLM(current_series.values, X, family=Poisson(), missing='drop').fit(
+        model = SM_GLM(current_series.to_numpy(), X, family=Poisson(), missing='drop').fit(
             disp=verbose
         )
     elif str(family).lower() == 'binomial':
         from statsmodels.genmod.families.family import Binomial
 
-        model = SM_GLM(current_series.values, X, family=Binomial(), missing='drop').fit(
+        model = SM_GLM(current_series.to_numpy(), X, family=Binomial(), missing='drop').fit(
             disp=verbose
         )
     elif str(family).lower() == 'negativebinomial':
         from statsmodels.genmod.families.family import NegativeBinomial
 
         model = SM_GLM(
-            current_series.values, X, family=NegativeBinomial(), missing='drop'
+            current_series.to_numpy(), X, family=NegativeBinomial(), missing='drop'
         ).fit(disp=verbose)
     elif str(family).lower() == 'tweedie':
         from statsmodels.genmod.families.family import Tweedie
 
-        model = SM_GLM(current_series.values, X, family=Tweedie(), missing='drop').fit(
+        model = SM_GLM(current_series.to_numpy(), X, family=Tweedie(), missing='drop').fit(
             disp=verbose
         )
     elif str(family).lower() == 'gamma':
         from statsmodels.genmod.families.family import Gamma
 
-        model = SM_GLM(current_series.values, X, family=Gamma(), missing='drop').fit(
+        model = SM_GLM(current_series.to_numpy(), X, family=Gamma(), missing='drop').fit(
             disp=verbose
         )
     else:
         family = 'Gaussian'
-        model = SM_GLM(current_series.values, X, missing='drop').fit(disp=verbose)
+        model = SM_GLM(current_series.to_numpy(), X, missing='drop').fit(disp=verbose)
     Pred = model.predict((Xf))
     Pred = pd.Series(Pred)
     Pred.name = series_name
@@ -256,13 +256,13 @@ class GLM(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         if self.regression_type == 'datepart':
-            X = date_part(self.df_train.index, method='expanded').values
+            X = date_part(self.df_train.index, method='expanded').to_numpy()
         elif self.regression_type in base_seasonalities:
-            X = date_part(self.df_train.index, method=self.regression_type).values
+            X = date_part(self.df_train.index, method=self.regression_type).to_numpy()
         else:
             X = pd.to_numeric(
                 self.df_train.index, errors='coerce', downcast='integer'
-            ).values
+            ).to_numpy()
         if self.constant in [True, 'True', 'true']:
             from statsmodels.tools import add_constant
 
@@ -278,11 +278,11 @@ class GLM(ModelObject):
         fill_vals = self.df_train.abs().min(axis=0, skipna=True)
         self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
         if self.regression_type == 'datepart':
-            Xf = date_part(test_index, method='expanded').values
+            Xf = date_part(test_index, method='expanded').to_numpy()
         elif self.regression_type in base_seasonalities:
-            X = date_part(test_index, method=self.regression_type).values
+            Xf = date_part(test_index, method=self.regression_type).to_numpy()
         else:
-            Xf = pd.to_numeric(test_index, errors='coerce', downcast='integer').values
+            Xf = pd.to_numeric(test_index, errors='coerce', downcast='integer').to_numpy()
         if self.constant or self.constant == 'True':
             Xf = add_constant(Xf, has_constant='add')
         if self.regression_type == 'User':
