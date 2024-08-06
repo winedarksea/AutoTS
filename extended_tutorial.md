@@ -289,6 +289,9 @@ The contour and MADE metrics are useful as they encourages 'wavy' forecasts, ie,
 
 If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.
 
+It may be worth viewing something like: `model.score_breakdown[model.score_breakdown.index == model.best_model_id].iloc[0]` to see if any one score is skewing selection. 
+Generally you would want the numbers here to follow the balance requested in the `metric_weighting`.
+
 ##### Plots
 ```python
 import matplotlib.pyplot as plt
