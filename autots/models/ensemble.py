@@ -21,6 +21,7 @@ full_ensemble_test_list = [
     "mosaic",
     'mosaic-window',
     'mosaic-crosshair',
+    'horizontal-min-3',
     "subsample",
     "mlensemble",
     "mosaic-weighted-crosshair-0-10",
@@ -1300,10 +1301,10 @@ def find_pattern(strings, x, sep="-"):
     results = []
 
     for string in strings:
-        match = re.search(pattern, string)
-        if match:
+        matched = re.search(pattern, string)
+        if matched:
             # Extracting the components
-            fixed_string, number = match.groups()
+            fixed_string, number = matched.groups()
             results.append((fixed_string, int(number)))
 
     return results
