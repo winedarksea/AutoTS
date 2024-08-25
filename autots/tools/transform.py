@@ -4946,6 +4946,7 @@ class Constraint(EmptyTransformer):
         constraint_direction: str = "upper",
         constraint_regularization: int = 1.0,
         forecast_length: int = 30,
+        bounds_only: bool = False,
         **kwargs,
     ):
         super().__init__(name="Constraint")
@@ -4954,6 +4955,7 @@ class Constraint(EmptyTransformer):
         self.constraint_direction = constraint_direction
         self.constraint_regularization = constraint_regularization
         self.forecast_length = forecast_length
+        self.bounds_only = bounds_only
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -4982,7 +4984,7 @@ class Constraint(EmptyTransformer):
         """
         return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast"):
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
         """Return data to original *or* forecast form.
 
         Args:
@@ -4990,21 +4992,27 @@ class Constraint(EmptyTransformer):
         """
         if trans_method == "original":
             return df
-        forecast, up, low = apply_fit_constraint(
-            forecast=df,
-            lower_forecast=0,
-            upper_forecast=0,
-            constraint_method=self.constraint_method,
-            constraint_value=self.constraint_value,
-            constraint_direction=self.constraint_direction,
-            constraint_regularization=self.constraint_regularization,
-            bounds=False,
-            lower_constraint=self.lower_constraint,
-            upper_constraint=self.upper_constraint,
-            train_min=self.train_min,
-            train_max=self.train_max,
-        )
-        return forecast
+        # reusing the adjustments style arg from alignlastvalue for determining if bounds
+        if not self.bounds_only or (self.bounds_only and adjustment is not None):
+            forecast, up, low = apply_fit_constraint(
+                forecast=df,
+                lower_forecast=0,
+                upper_forecast=0,
+                constraint_method=self.constraint_method,
+                constraint_value=self.constraint_value,
+                constraint_direction=self.constraint_direction,
+                constraint_regularization=self.constraint_regularization,
+                bounds=False,
+                lower_constraint=self.lower_constraint,
+                upper_constraint=self.upper_constraint,
+                train_min=self.train_min,
+                train_max=self.train_max,
+            )
+            return forecast
+        else:
+            # if point forecast, don't do anything for bounds_only
+            self.adjustment = True
+            return df
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -5018,7 +5026,9 @@ class Constraint(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
-        return constraint_new_params(method=method)
+        params = constraint_new_params(method=method)
+        params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]
+        return 
 
 
 # lookup dict for all non-parameterized transformers
@@ -5250,7 +5260,7 @@ class GeneralTransformer(object):
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different
-        self.bounded_oddities = ["AlignLastValue", "AlignLastDiff"]
+        self.bounded_oddities = ["AlignLastValue", "AlignLastDiff", "Constraint"]
         # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",

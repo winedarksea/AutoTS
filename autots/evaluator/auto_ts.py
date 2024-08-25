@@ -2283,6 +2283,7 @@ class AutoTS(object):
         unpack_ensembles: bool = False,
         min_metrics: list = ['smape', 'spl', 'wasserstein', 'mle', 'imle', 'ewmae'],
         max_metrics: list = None,
+        focus_models: list = None,
     ):
         """Export top results as a reusable template.
 
@@ -2297,6 +2298,7 @@ class AutoTS(object):
             unpack_ensembles (bool): if True, ensembles are returned only as components (will result in larger n models, as full ensemble counts as 1 model)
             min_metrics (list): if not None and models=='best', include the lowest for this metric, a way to include even if not a major part of metric weighting as an addon
             max_metrics (list): for metrics to take the max model for
+            focus_models (list): also pull the best score/min/max metrics as per just this model
         """
         if models == 'all':
             export_template = self.initial_results.model_results[self.template_cols_id]
@@ -2335,6 +2337,23 @@ class AutoTS(object):
                             .nlargest(1, columns=metric)
                             .copy()
                         )
+                # do it all again but for best metrics templates for each focus model
+                if focus_models is not None:
+                    for mod in focus_models:
+                        one_model = export_template[export_template["Model"] == mod]
+                        extra_mods.append(extra_mods.append(
+                            one_model.nsmallest(1, columns=['Score']).copy()
+                        ))
+                        if min_metrics is not None:
+                            for metric in min_metrics:
+                                extra_mods.append(
+                                    one_model.nsmallest(1, columns=metric).copy()
+                                )
+                        if max_metrics is not None:
+                            for metric in max_metrics:
+                                extra_mods.append(
+                                    one_model.nlargest(1, columns=metric).copy()
+                                )
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
@@ -2368,7 +2387,8 @@ class AutoTS(object):
                 ),
             )
         else:
-            raise ValueError("`models` must be 'all' or 'best'")
+            raise ValueError("`models` must be 'all' or 'best' or 'slowest'")
+
         if unpack_ensembles:
             export_template = unpack_ensemble_models(
                 export_template, self.template_cols, keep_ensemble=False, recursive=True

@@ -1071,6 +1071,7 @@ class TemplateEvalObject(object):
         self.per_series_wasserstein = per_series_wasserstein
         self.per_series_dwd = per_series_dwd
         self.full_mae_ids = []
+        self.full_mae_vals = []
         self.full_mae_errors = []
         self.full_pl_errors = []
         self.squared_errors = []
@@ -1163,6 +1164,7 @@ class TemplateEvalObject(object):
         self.full_pl_errors.extend(another_eval.full_pl_errors)
         self.squared_errors.extend(another_eval.squared_errors)
         self.full_mae_ids.extend(another_eval.full_mae_ids)
+        self.full_mae_vals.extend(another_eval.full_mae_vals)
         self.model_count = self.model_count + another_eval.model_count
         return self
 
@@ -1765,6 +1767,7 @@ def TemplateWizard(
                     [model_error.upper_pl + model_error.lower_pl]
                 )
                 template_result.full_mae_ids.extend([model_id])
+                template_result.full_mae_vals.extend([validation_round])
 
         except KeyboardInterrupt:
             if model_interrupt:

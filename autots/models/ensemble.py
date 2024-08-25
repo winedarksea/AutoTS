@@ -1648,8 +1648,15 @@ def process_mosaic_arrays(
     # remove slow models... tbd
     # select only models run through all validations
     run_count = local_results[['Model', 'ID']].groupby("ID").count()
+    fully_validated = run_count[run_count['Model'] == total_vals].index.tolist()
     if models_to_use is None:
-        models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
+        models_to_use = fully_validated
+    else:
+        # so the logic makes it that it must be EXACTLY the right number of vals
+        # which can create problems, some models get duplicated and will be excluded
+        filtered_use = list(set(models_to_use).union(set(fully_validated)))
+        if len(filtered_use) > 1:
+            models_to_use = filtered_use
     # begin figuring out which are the min models for each point
     id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
     errors_array = np.array(
@@ -1714,6 +1721,7 @@ def generate_mosaic_template(
     )
     # window across multiple time steps to smooth the result
     name = "Mosaic"
+    # since it is sorted by id and filtered to only those run through all vals, this is the slice step after each val
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
     best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
