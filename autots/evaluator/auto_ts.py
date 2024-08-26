@@ -3954,6 +3954,81 @@ class AutoTS(object):
             raise ValueError("model id not found in results")
         return temp[temp['ID'] == model_id].iloc[0][self.template_cols_id].to_dict()
 
+    def plot_unpredictability(self, df_wide=None, series=None, **kwargs):
+        import matplotlib.pyplot as plt
+
+        total_vals = self.num_validations + 1
+
+        # full_mae_ids = self.initial_results.full_mae_ids
+        full_mae_errors = self.initial_results.full_mae_errors
+        full_mae_vals = self.initial_results.full_mae_vals
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
+
+        if series is None:
+            col = df_wide.columns[-1]
+        else:
+            col = str(series)
+
+        results = []
+        threshold = np.median(full_mae_errors) * 0.8
+        for val in range(total_vals):
+            errors_array = np.array(
+                [
+                    x
+                    for y, x in sorted(
+                        zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
+                    )
+                    if y == val
+                ]
+            )
+            
+            performance_summary = np.median(errors_array, axis=(1, 2))
+            threshold = np.median(performance_summary) * 1.2
+            filtered_models = errors_array[performance_summary <= threshold]
+            median_error = np.median(filtered_models, axis=0)
+            min_error = np.min(filtered_models, axis=0)
+            score = (median_error * 0.01 + min_error)
+            score = score / np.min(score)
+            score = pd.DataFrame(score, index=self.validation_test_indexes[val], columns=df_wide.columns)
+            results.append(score)
+
+        unpredictability_scores = pd.concat(results).sort_index()
+        unpredictability_scores = unpredictability_scores.where(
+            unpredictability_scores > unpredictability_scores.median() * 1.4,
+            unpredictability_scores.min(), axis=1
+        )
+        time_series = df_wide[col]
+        time_series = time_series[time_series.index > "2022-01-01"]
+        unpredictability_score = unpredictability_scores[col]
+        # unpredictability_score = unpredictability_score[unpredictability_score.index >= "2023-02-01"]
+
+        # Assuming `time_series` is your original time series data (e.g., shape: (timesteps,))
+        # and `unpredictability_score` is your computed unpredictability score (shape: (timesteps,))
+
+        # Create a figure and axis
+        fig, ax1 = plt.subplots(figsize=(12, 6), **kwargs)
+
+        # Plot the original time series on the primary y-axis (left)
+        ax1.plot(time_series, color='blue', label=str(col))
+        ax1.set_xlabel('Time')
+        ax1.set_ylabel('Original Time Series', color='blue')
+        ax1.tick_params(axis='y', labelcolor='blue')
+
+        # Create a secondary y-axis (right) for the unpredictability score
+        ax2 = ax1.twinx()
+        ax2.plot(unpredictability_score, color='red', label='Unpredictability Score', alpha=0.8)  # , linestyle='--'
+        ax2.set_ylabel('Unpredictability Score', color='red')
+        ax2.tick_params(axis='y', labelcolor='red')
+
+        # Add a title
+        plt.title(f'{col} Unpredictability Score')
+
+        # Optional: Add legends to distinguish the two lines
+        fig.legend(loc="upper right", bbox_to_anchor=(0.9, 0.9))
+
+        return fig
+
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 
