@@ -65,7 +65,11 @@ def sk_outliers(df, method, method_params={}):
         model = GaussianMixture(**method_params)
         model.fit(df)
         scores = -model.score_samples(df)
-        res = np.where(scores > np.percentile(scores, 95), -1, 1)
+        responsibilities = model.predict_proba(df)
+        max_responsibilities = responsibilities.max(axis=1)
+        threshold = 0.05
+        res = np.where(max_responsibilities < threshold, -1, 1)
+        # res = np.where(scores > np.percentile(scores, 95), -1, 1)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
         {"anomaly_score": scores}, index=df.index
     )
@@ -541,6 +545,7 @@ def anomaly_new_params(method='random'):
             'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'max_iter': random.choices([50, 100, 200], [0.3, 0.5, 0.2])[0],
+            "responsibility_threshold": random.choices([0.05, 0.01, 0.1], [0.3, 0.2, 0.2])[0],
         }
     elif method_choice == "zscore":
         method_params = {
@@ -1241,13 +1246,12 @@ def holiday_new_params(method='random'):
         'use_hebrew_holidays': random.choices([True, False], [0.1, 0.9])[0],
     }
 
-def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100):
+def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_threshold=0.05):
     from scipy.stats import multivariate_normal
 
     n, d = df.shape
     data = df.to_numpy()
 
-    # Initialize the parameters randomly
     np.random.seed(42)
     means = np.random.rand(n_components, d)
     covariances = np.array([np.eye(d)] * n_components)
@@ -1284,7 +1288,7 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100):
 
         log_likelihood = new_log_likelihood
 
-    # Calculate anomaly scores
+    # Calculate anomaly scores using responsibilities
     scores = np.zeros((n, d))
     for i in range(n_components):
         comp_pdf = multivariate_normal.pdf(data, means[i], covariances[i])
@@ -1294,7 +1298,9 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100):
     # Normalize the scores across components
     scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
 
-    # Anomalies: lower score indicates higher anomaly
-    anomalies = pd.DataFrame(np.where(scores > np.percentile(scores, 95, axis=0), -1, 1), index=df.index, columns=df.columns)
-    
+    # Use responsibility matrix to define anomalies
+    max_responsibilities = responsibilities.max(axis=1)
+    anomalies = pd.DataFrame(np.where(max_responsibilities < responsibility_threshold, -1, 1), 
+                             index=df.index, columns=["anomaly"])
+
     return anomalies, scores
