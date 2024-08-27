@@ -34,6 +34,8 @@ try:
     from sklearn.ensemble import IsolationForest
     from sklearn.neighbors import LocalOutlierFactor
     from sklearn.covariance import EllipticEnvelope
+    from sklearn.svm import OneClassSVM
+    from sklearn.mixture import GaussianMixture
     from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy
 except Exception:
     pass
@@ -49,12 +51,21 @@ def sk_outliers(df, method, method_params={}):
         model = LocalOutlierFactor(n_jobs=1, **method_params)  # n_neighbors=5
         res = model.fit_predict(df)
         scores = model.negative_outlier_factor_ + 1.45
+    elif method == "OneClassSVM":
+        model = OneClassSVM(**method_params)  # n_neighbors=5
+        res = model.fit_predict(df)
+        scores = model.decision_function(df)
     elif method == "EE":
         if method_params['contamination'] == "auto":
             method_params['contamination'] = 0.1
         model = EllipticEnvelope(**method_params)
         res = model.fit_predict(df)
         scores = model.decision_function(df)
+    elif method == "GaussianMixture":
+        model = GaussianMixture(**method_params)
+        model.fit(df)
+        scores = -model.score_samples(df)
+        res = np.where(scores > np.percentile(scores, 95), -1, 1)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
         {"anomaly_score": scores}, index=df.index
     )
@@ -386,13 +397,15 @@ def detect_anomalies(
         df_anomaly = model.fit_transform(df_anomaly)
     """
 
-    if method in ["IsolationForest", "LOF", "EE"]:
+    if method in ["IsolationForest", "LOF", "EE", "OneClassSVM", "GaussianMixture"]:
         if output == "univariate":
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
             res, scores = loop_sk_outliers(df_anomaly, method, method_params, n_jobs)
     elif method in ["zscore", "rolling_zscore", "mad", "minmax", "med_diff"]:
         res, scores = values_to_anomalies(df_anomaly, output, method, method_params)
+    elif method == "GaussianMixtureBase":
+        res, scores = gaussian_mixture(df, **method_params)
     elif method in ["IQR"]:
         iqr_thresh = method_params.get("iqr_threshold", 2.0)
         iqr_quantiles = method_params.get("iqr_quantiles", [0.25, 0.75])
@@ -430,6 +443,9 @@ available_methods = [
     "IsolationForest",  # (sklearn)
     "LOF",  # Local Outlier Factor (sklearn)
     "EE",  # Elliptical Envelope (sklearn)
+    "OneClassSVM",
+    "GaussianMixture",
+    "GaussianMixtureBase",
     "zscore",
     "rolling_zscore",
     "mad",
@@ -474,8 +490,11 @@ def anomaly_new_params(method='random'):
                 "IQR",
                 "nonparametric",
                 "IsolationForest",
+                "OneClassSVM",
+                "GaussianMixture"
+                "GaussianMixtureBase"
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05],
+            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.05, 0.05, 0.05],
         )[0]
 
     if method_choice == "IsolationForest":
@@ -493,6 +512,14 @@ def anomaly_new_params(method='random'):
             'n_neighbors': random.choices([3, 5, 10, 20], [0.3, 0.4, 0.3, 0.1])[0],
             'metric': random.choices(['minkowski', 'canberra'], [0.9, 0.1])[0],
         }
+    elif method_choice == "OneClassSVM":
+        method_params = {
+            'kernel': random.choices(['linear', "poly", "rbf", "sigmoid"], [0.1, 0.1, 0.4, 0.1])[0],
+            'degree': random.choices([3, 5, 10, 20], [0.3, 0.4, 0.3, 0.1])[0],
+            'gamma': random.choices(['scale', 'auto'], [0.5, 0.5])[0],
+            'shrinking': random.choices([True, False], [0.5, 0.5])[0],
+            'nu': random.choices([0.3, 0.5, 0.7, 0.9, 0.1], [0.3, 0.5, 0.3, 0.1, 0.1])[0],
+        }
     elif method_choice == "EE":
         method_params = {
             'contamination': random.choices(
@@ -500,6 +527,20 @@ def anomaly_new_params(method='random'):
             )[0],
             'assume_centered': random.choices([False, True], [0.9, 0.1])[0],
             'support_fraction': random.choices([None, 0.2, 0.8], [0.9, 0.1, 0.1])[0],
+        }
+    elif method_choice == "GaussianMixture":
+        method_params = {
+            'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
+            'covariance_type': random.choices(['full', 'tied', 'diag', 'spherical'], [0.4, 0.3, 0.2, 0.1])[0],
+            'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
+            'reg_covar': random.choices([1e-6, 1e-5, 1e-4], [0.3, 0.4, 0.3])[0],
+            'max_iter': random.choices([100, 200, 300], [0.3, 0.4, 0.3])[0],
+        }
+    elif method_choice == "GaussianMixtureBase":
+        method_params = {
+            'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
+            'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
+            'max_iter': random.choices([50, 100, 200], [0.3, 0.5, 0.2])[0],
         }
     elif method_choice == "zscore":
         method_params = {
@@ -1199,3 +1240,61 @@ def holiday_new_params(method='random'):
         'use_islamic_holidays': random.choices([True, False], [0.1, 0.9])[0],
         'use_hebrew_holidays': random.choices([True, False], [0.1, 0.9])[0],
     }
+
+def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100):
+    from scipy.stats import multivariate_normal
+
+    n, d = df.shape
+    data = df.to_numpy()
+
+    # Initialize the parameters randomly
+    np.random.seed(42)
+    means = np.random.rand(n_components, d)
+    covariances = np.array([np.eye(d)] * n_components)
+    weights = np.ones(n_components) / n_components
+
+    log_likelihood = -np.inf
+
+    for iteration in range(max_iter):
+        # E-step: compute responsibilities
+        responsibilities = np.zeros((n, n_components))
+
+        for i in range(n_components):
+            responsibilities[:, i] = weights[i] * multivariate_normal.pdf(data, means[i], covariances[i])
+
+        sum_responsibilities = responsibilities.sum(axis=1)[:, np.newaxis]
+        responsibilities /= sum_responsibilities
+
+        # M-step: update parameters
+        Nk = responsibilities.sum(axis=0)
+
+        for i in range(n_components):
+            means[i] = (responsibilities[:, i][:, np.newaxis] * data).sum(axis=0) / Nk[i]
+            diff = data - means[i]
+            covariances[i] = (responsibilities[:, i][:, np.newaxis] * diff).T @ diff / Nk[i]
+            covariances[i] += tol * np.eye(d)  # regularization to avoid singular matrix
+
+        weights = Nk / n
+
+        # Compute log-likelihood and check convergence
+        new_log_likelihood = np.sum(np.log(responsibilities.sum(axis=1)))
+
+        if np.abs(new_log_likelihood - log_likelihood) < tol:
+            break
+
+        log_likelihood = new_log_likelihood
+
+    # Calculate anomaly scores
+    scores = np.zeros((n, d))
+    for i in range(n_components):
+        comp_pdf = multivariate_normal.pdf(data, means[i], covariances[i])
+        comp_scores = -np.log(comp_pdf).reshape(-1, 1)
+        scores += responsibilities[:, i][:, np.newaxis] * comp_scores
+
+    # Normalize the scores across components
+    scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
+
+    # Anomalies: lower score indicates higher anomaly
+    anomalies = pd.DataFrame(np.where(scores > np.percentile(scores, 95, axis=0), -1, 1), index=df.index, columns=df.columns)
+    
+    return anomalies, scores
