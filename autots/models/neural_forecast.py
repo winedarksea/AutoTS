@@ -116,6 +116,8 @@ class NeuralForecast(ModelObject):
             TimesNet,
             PatchTST,
             DeepAR,
+            TiDE,
+            FEDformer,
         )
 
         prediction_interval = self.prediction_interval
@@ -238,6 +240,10 @@ class NeuralForecast(ModelObject):
             models = [PatchTST(**{**self.base_args, **model_args})]
         elif models == "DeepAR":
             models = [DeepAR(**{**self.base_args, **model_args})]
+        elif models == "TiDE":
+            models = [TiDE(**{**self.base_args, **model_args})]
+        elif models == "FEDformer":
+            models = [FEDformer(**{**self.base_args, **model_args})]
         else:
             raise ValueError(f"models not recognized: {models}")
 
@@ -360,7 +366,7 @@ class NeuralForecast(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_list = ['DeepAR', 'MLP', "LSTM", "PatchTST", "NHITS", "TFT", "TimesNet"]
+        model_list = ['DeepAR', 'MLP', "LSTM", "PatchTST", "NHITS", "TFT", "TimesNet", "TiDE", "FEDformer"]
         if method in model_list:
             models = method
         else:
@@ -414,6 +420,16 @@ class NeuralForecast(ModelObject):
                 "hidden_size": random.choice([4, 64, 128, 256]),
                 "windows_batch_size": random.choice([128, 256, 512, 1024]),
             }
+        elif models == "PatchTST":
+            model_args = {
+                "n_heads": random.choice([2, 4, 16, 32]),
+                "dropout": random.choice([0.05, 0.2, 0.3, 0.6]),
+                "batch_size": random.choice([32, 64, 128, 256]),
+                "hidden_size": random.choice([4, 64, 128, 256]),
+                "linear_hidden_size": random.choice([4, 64, 128, 256, 512, 1024]),
+                "windows_batch_size": random.choice([128, 256, 512, 1024]),
+                'encoder_layers': random.choices([1, 2, 3, 4], [0.2, 0.4, 0.6, 0.1]),
+            }
         elif models == "NHITS":
             model_args = {
                 "input_size": random.choice([28, 28 * 2, 28 * 3, 28 * 5]),
@@ -432,6 +448,28 @@ class NeuralForecast(ModelObject):
                 'num_layers': random.choices([1, 2, 3, 4], [0.6, 0.4, 0.2, 0.1]),
                 'hidden_size': random.choice([1024, 512, 2048, 256, 2560, 3072, 4096]),
             }
+        elif models == "TiDE":
+            model_args = {
+                # borrowed mostly from the defaults used for the paper results
+                "layernorm": random.choices([True, False], [0.2, 0.8])[0],
+                "dropout": random.choices([0.0, 0.3, 0.5, 0.7], [0.3, 0.3, 0.3, 0.05])[
+                    0
+                ],
+                "batch_size": random.choices([1024, 512, 257, 32], [0.05, 0.4, 0.1, 0.1])[
+                    0
+                ],
+                "hidden_size": random.choices([1024, 512, 256, 64], [0.1, 0.2, 0.4, 0.1])[
+                    0
+                ],
+                "num_encoder_layers": random.choices([1, 2, 3], [0.85, 0.1, 0.02])[0],
+                "num_decoder_layers": random.choices([1, 2, 3], [0.85, 0.1, 0.02])[0],
+                "decoder_output_dim": random.choices([16, 8, 4, 32], [0.4, 0.4, 0.4, 0.1])[
+                    0
+                ],
+                "temporal_decoder_dim": random.choices(
+                    [128, 64, 32, 16], [0.1, 0.8, 0.1, 0.1]
+                )[0],
+            }
         else:
             model_args = {}
 
@@ -442,7 +480,7 @@ class NeuralForecast(ModelObject):
             )[0],
             'loss': loss,
             'learning_rate': random.choices(
-                [0.001, 0.1, 0.01, 0.0003, 0.00001], [0.4, 0.1, 0.1, 0.1, 0.1]
+                [0.001, 0.1, 0.01, 0.0003, 0.00001, 0.000001], [0.4, 0.1, 0.1, 0.1, 0.1, 0.02]
             )[0],
             "max_steps": max_steps,
             'input_size': random.choices(

@@ -155,7 +155,10 @@ class Cassandra(ModelObject):
         self.preprocessing_transformation = preprocessing_transformation
         self.scaling = scaling
         self.past_impacts_intervention = past_impacts_intervention
-        self.seasonalities = seasonalities
+        if not seasonalities:
+            self.seasonalities = None
+        else:
+            self.seasonalities = seasonalities
         self.ar_lags = ar_lags
         self.ar_interaction_seasonality = ar_interaction_seasonality
         self.anomaly_detector_params = anomaly_detector_params
@@ -2138,9 +2141,10 @@ class Cassandra(ModelObject):
                 ["simple_binarized"],
                 ['hourlydayofweek', 8766.0],  # for hourly data
                 [12],  # monthly data
+                None,
                 "other",
             ],
-            [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.1],
+            [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.01, 0.1],
         )[0]
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
@@ -3072,7 +3076,7 @@ if False:
     series = 'wiki_all'
     mod.regressors_used
     mod.holiday_countries_used
-    with plt.style.context("seaborn-white"):
+    with plt.style.context("ggplot"):
         start_date = "auto"
         mod.plot_forecast(
             pred,
