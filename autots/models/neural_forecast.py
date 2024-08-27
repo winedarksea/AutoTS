@@ -370,7 +370,7 @@ class NeuralForecast(ModelObject):
         if method in model_list:
             models = method
         else:
-            models = random.choices(model_list, [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1])[0]
+            models = random.choices(model_list, [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1])[0]
         if "regressor" in method:
             regression_type_choice = "User"
         else:
@@ -428,7 +428,7 @@ class NeuralForecast(ModelObject):
                 "hidden_size": random.choice([4, 64, 128, 256]),
                 "linear_hidden_size": random.choice([4, 64, 128, 256, 512, 1024]),
                 "windows_batch_size": random.choice([128, 256, 512, 1024]),
-                'encoder_layers': random.choices([1, 2, 3, 4], [0.2, 0.4, 0.6, 0.1]),
+                'encoder_layers': random.choices([1, 2, 3, 4], [0.2, 0.4, 0.6, 0.1])[0],
             }
         elif models == "NHITS":
             model_args = {
@@ -445,7 +445,7 @@ class NeuralForecast(ModelObject):
             }
         elif models == "MLP":
             model_args = {
-                'num_layers': random.choices([1, 2, 3, 4], [0.6, 0.4, 0.2, 0.1]),
+                'num_layers': random.choices([1, 2, 3, 4], [0.6, 0.4, 0.2, 0.1])[0],
                 'hidden_size': random.choice([1024, 512, 2048, 256, 2560, 3072, 4096]),
             }
         elif models == "TiDE":
