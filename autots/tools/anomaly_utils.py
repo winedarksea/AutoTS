@@ -1250,7 +1250,7 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
     from scipy.stats import multivariate_normal
 
     n, d = df.shape
-    data = df.to_numpy()
+    data = df.fillna(0).to_numpy()
 
     np.random.seed(42)
     means = np.random.rand(n_components, d)
