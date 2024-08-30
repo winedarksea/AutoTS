@@ -449,7 +449,6 @@ available_methods = [
     "EE",  # Elliptical Envelope (sklearn)
     "OneClassSVM",
     "GaussianMixture",
-    "GaussianMixtureBase",
     "zscore",
     "rolling_zscore",
     "mad",
@@ -458,6 +457,7 @@ available_methods = [
     "IQR",
     "nonparametric",
     "med_diff",
+    # "GaussianMixtureBase",
 ]
 fast_methods = [
     "zscore",
@@ -474,7 +474,7 @@ def anomaly_new_params(method='random'):
     if method == "deep":
         method_choice = random.choices(
             available_methods,
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1, 0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1, 0.1, 0.1, 0.1],
         )[0]
     elif method == "fast":
         method_choice = random.choices(
@@ -496,9 +496,9 @@ def anomaly_new_params(method='random'):
                 "IsolationForest",
                 "OneClassSVM",
                 "GaussianMixture",
-                "GaussianMixtureBase",
+                # "GaussianMixtureBase",
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.05, 0.05, 0.05],
+            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.05, 0.05],
         )[0]
 
     if method_choice == "IsolationForest":
@@ -1252,6 +1252,9 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
     n, d = df.shape
     data = df.fillna(0).to_numpy()
 
+    # Normalize the data
+    data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
+
     np.random.seed(42)
     means = np.random.rand(n_components, d)
     covariances = np.array([np.eye(d)] * n_components)
@@ -1276,7 +1279,11 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
             means[i] = (responsibilities[:, i][:, np.newaxis] * data).sum(axis=0) / Nk[i]
             diff = data - means[i]
             covariances[i] = (responsibilities[:, i][:, np.newaxis] * diff).T @ diff / Nk[i]
-            covariances[i] += tol * np.eye(d)  # regularization to avoid singular matrix
+            covariances[i] += (tol * 10) * np.eye(d)  # Increased regularization
+
+            # Check for invalid values in covariance matrix
+            if np.any(np.isnan(covariances[i])) or np.any(np.isinf(covariances[i])):
+                raise ValueError(f"Covariance matrix for component {i} contains NaNs or infs")
 
         weights = Nk / n
 
@@ -1288,19 +1295,20 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
 
         log_likelihood = new_log_likelihood
 
-    # Calculate anomaly scores using responsibilities
+    # Calculate anomaly scores using responsibility threshold
+    max_responsibilities = responsibilities.max(axis=1)
+    
+    # Identify anomalies: low responsibility indicates a higher likelihood of being an anomaly
+    anomalies = pd.DataFrame(np.where(max_responsibilities < responsibility_threshold, -1, 1), 
+                             index=df.index, columns=['anomaly'])
+
+    # Score: can still calculate log-likelihood-based scores per data point if needed
     scores = np.zeros((n, d))
     for i in range(n_components):
         comp_pdf = multivariate_normal.pdf(data, means[i], covariances[i])
         comp_scores = -np.log(comp_pdf).reshape(-1, 1)
         scores += responsibilities[:, i][:, np.newaxis] * comp_scores
 
-    # Normalize the scores across components
     scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
-
-    # Use responsibility matrix to define anomalies
-    max_responsibilities = responsibilities.max(axis=1)
-    anomalies = pd.DataFrame(np.where(max_responsibilities < responsibility_threshold, -1, 1), 
-                             index=df.index, columns=["anomaly"])
-
+    
     return anomalies, scores
