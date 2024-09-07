@@ -3966,7 +3966,7 @@ class AutoTS(object):
         
         if full_mae_errors:
             results = []
-            threshold = np.median(full_mae_errors) * 0.8
+            threshold = np.nanmedian(full_mae_errors) * 0.8
             for val in range(total_vals):
                 errors_array = np.array(
                     [
@@ -3978,8 +3978,8 @@ class AutoTS(object):
                     ]
                 )
                 
-                performance_summary = np.median(errors_array, axis=(1, 2))
-                threshold = np.median(performance_summary) * 1.2
+                performance_summary = np.nanmedian(errors_array, axis=(1, 2))
+                # threshold = np.median(performance_summary) * 1.2
                 filtered_models = errors_array[performance_summary <= threshold]
                 median_error = np.median(filtered_models, axis=0)
                 min_error = np.min(filtered_models, axis=0)
