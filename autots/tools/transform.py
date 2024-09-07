@@ -31,6 +31,7 @@ from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
 from autots.tools.fft import FFT as fft_class
 from autots.tools.percentile import nan_quantile
+from autots.tools.fir_filter import generate_random_fir_params, fft_fir_filter_to_timeseries
 
 try:
     from scipy.signal import butter, sosfiltfilt, savgol_filter
@@ -5028,8 +5029,98 @@ class Constraint(EmptyTransformer):
         """Generate new random parameters"""
         params = constraint_new_params(method=method)
         params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]
-        return 
+        return params
 
+
+class FIRFilter(EmptyTransformer):
+    """Scipy firwin
+    """
+
+    def __init__(
+        self,
+        sampling_frequency: int = 365,
+        numtaps: int = 512,
+        cutoff_hz: float = 30,
+        window: str = "hamming",
+        on_transform: bool = True,
+        on_inverse: bool = False,
+        **kwargs,
+    ):
+        super().__init__(name="FIRFilter")
+        self.sampling_frequency = sampling_frequency
+        self.numtaps = numtaps
+        self.cutoff_hz = cutoff_hz
+        self.window = window
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def filter(self, df):
+        return pd.DataFrame(
+            fft_fir_filter_to_timeseries(
+                df.to_numpy(),
+                sampling_frequency=self.sampling_frequency,
+                numtaps=self.numtaps,
+                cutoff_hz=self.cutoff_hz,
+                window=self.window,
+            ), index=df.index, columns=df.columns
+        )
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_transform:
+            return self.filter(df)
+        else:
+            return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_inverse:
+            return self.filter(df)
+        else:
+            return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        selection = random.choices([True, False], [0.8, 0.2])[0]
+        params = generate_random_fir_params(method=method)
+        params["sampling_frequency"] = seasonal_int(include_one=False)
+        params["on_transform"] = selection
+        params["on_inverse"] = not selection
+        return params
 
 # lookup dict for all non-parameterized transformers
 trans_dict = {
@@ -5114,6 +5205,7 @@ have_params = {
     "BKBandpassFilter": BKBandpassFilter,
     "DifferencedTransformer": DifferencedTransformer,
     "Constraint": Constraint,
+    "FIRFilter": FIRFilter,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5218,6 +5310,7 @@ class GeneralTransformer(object):
             "HistoricValues": match predictions to most similar historic value and overwrite
             "BKBandpassFilter": another version of the Baxter King bandpass filter
             "Constraint": apply constraints (caps) on values
+            "FIRFilter": apply a FIR filter (firwin)
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -5693,6 +5786,7 @@ transformer_dict = {
     "HistoricValues": 0.01,
     "BKBandpassFilter": 0.01,
     "Constraint": 0.01,  # 52
+    "FIRFilter": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -5723,6 +5817,7 @@ superfast_transformer_dict = {
     "Constraint": 0.005,  # not well tested yet on speed/ram
     # "BKBandpassFilter": 0.01,  # seems feasible, untested
     # "DiffSmoother": 0.005,  # seems feasible, untested
+    # "FIRFilter": 0.005,  # seems feasible, untested
 }
 # Split tranformers by type
 # filters that remain near original space most of the time
@@ -5738,6 +5833,7 @@ filters = {
     "RegressionFilter": 0.005,
     "FFTFilter": 0.01,
     "BKBandpassFilter": 0.005,
+    "FIRFilter": 0.01,
 }
 scalers = {
     "MinMaxScaler": 0.05,
@@ -5767,6 +5863,7 @@ postprocessing = {
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
     "Constraint": 0.1,
+    "FIRFilter": 0.1,
 }
 transformer_class = {}
 
