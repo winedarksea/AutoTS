@@ -4004,7 +4004,7 @@ class AutoTS(object):
             col = str(series)
 
         unpredictability_scores = self.create_unpredictability_score(df_wide=df_wide)
-        if unpredictability_scores:
+        if isinstance(unpredictability_scores, pd.DataFrame):
             unpredictability_scores = unpredictability_scores.where(
                 unpredictability_scores > unpredictability_scores.median() * 1.4,
                 unpredictability_scores.min(), axis=1

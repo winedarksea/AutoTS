@@ -5593,7 +5593,7 @@ class GeneralTransformer(object):
         except Exception as e:
             err_str = f"Transformer {self.transformations[i]} failed on fit"
             if self.verbose >= 1:
-                err_str += f" from params {self.fillna} {self.transformation_params}"
+                err_str += f" from params {self.fillna} {self.transformation_params} with error {repr(e)}"
             raise Exception(err_str) from e
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df

@@ -147,8 +147,8 @@ def generate_random_fir_params(method='random', data_type="time_series"):
 
     # Random window type
     params["window"] = random.choices(
-        ["hamming", "hann", "blackman", "kaiser"],  # Removed rectangular, added kaiser
-        [0.4, 0.3, 0.2, 0.1]  # Higher probability for smoother window types
+        ["hamming", "hann", "blackman", "kaiser", "tukey", "boxcar", "taylor"],
+        [0.4, 0.3, 0.2, 0.1, 0.05, 0.05, 0.05],
     )[0]
 
     return params
