@@ -769,14 +769,26 @@ def load_artificial(long=False, date_start=None, date_end=None):
         date_end = date_end.date()
     if date_start is None:
         if isinstance(date_end, datetime.date):
-            date_start = date_end - datetime.timedelta(days=720)
+            date_start = date_end - datetime.timedelta(days=740)
         else:
-            date_start = datetime.datetime.now().date() - datetime.timedelta(days=720)
+            date_start = datetime.datetime.now().date() - datetime.timedelta(days=740)
     if isinstance(date_start, datetime.datetime):
         date_start = date_start.date()
     dates = pd.date_range(date_start, date_end)
     size = dates.size
     rng = np.random.default_rng()
+    holiday = pd.Series(np.arange(size) * 0.025 + rng.normal(0, 0.1, size), index=dates)
+    # January 1st
+    holiday[holiday.index.month == 1 & (holiday.index.day == 1)] += 10
+    # December 25th
+    holiday[(holiday.index.month == 12) & (holiday.index.day == 25)] += -4
+    # Second Tuesday of April
+    # Find all Tuesdays in April
+    second_tuesday_of_april = (holiday.index.month == 4) & (holiday.index.weekday == 1)& (holiday.index.day >= 8) & (holiday.index.day <= 14)
+    holiday[second_tuesday_of_april] += 10
+    # Last Monday of August
+    last_monday_of_august = (holiday.index.month == 8) & (holiday.index.weekday == 0) & ((holiday.index + pd.Timedelta(7, unit='D')).month == 9)
+    holiday[last_monday_of_august] += 12
 
     df_wide = pd.DataFrame(
         {

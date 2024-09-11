@@ -420,7 +420,7 @@ class FBProphet(ModelObject):
             )[0],
             'seasonality_mode': random.choice(['additive', 'multiplicative']),
             'changepoint_range': random.choices(
-                [0.8, 0.85, 0.9, 0.98, 30, 60], [0.9, 0.1, 0.1, 0.1, 0.05, 0.1]
+                [0.8, 0.85, 0.9, 0.95, 0.98, 30, 60], [0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2]
             )[0],
             'growth': random.choices(["linear", "flat"], [0.9, 0.1])[0],
             'n_changepoints': random.choices(
