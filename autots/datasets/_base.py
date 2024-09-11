@@ -777,7 +777,7 @@ def load_artificial(long=False, date_start=None, date_end=None):
     dates = pd.date_range(date_start, date_end)
     size = dates.size
     rng = np.random.default_rng()
-    holiday = pd.Series(np.arange(size) * 0.025 + rng.normal(0, 0.1, size), index=dates)
+    holiday = pd.Series(np.arange(size) * 0.025 + rng.normal(0, 0.1, size), index=dates, name='holiday')
     # January 1st
     holiday[holiday.index.month == 1 & (holiday.index.day == 1)] += 10
     # December 25th
@@ -914,6 +914,7 @@ def load_artificial(long=False, date_start=None, date_end=None):
         },
         index=dates,
     )
+    df_wide = df_wide.merge(holiday, left_index=True, right_index=True)
 
     if not long:
         return df_wide
