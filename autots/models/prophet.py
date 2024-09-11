@@ -59,6 +59,7 @@ class FBProphet(ModelObject):
         seasonality_prior_scale: float = 10.0,
         weekly_seasonality_prior_scale: float = None,
         yearly_seasonality_prior_scale: float = None,
+        yearly_seasonality_order: int = None,
         holidays_prior_scale: float = 10.0,
         trend_phi: float = 1,
         random_seed: int = 2024,
@@ -90,6 +91,7 @@ class FBProphet(ModelObject):
         self.seasonality_prior_scale = seasonality_prior_scale
         self.weekly_seasonality_prior_scale = weekly_seasonality_prior_scale
         self.yearly_seasonality_prior_scale = yearly_seasonality_prior_scale
+        self.yearly_seasonality_order = yearly_seasonality_order
         self.holidays_prior_scale = holidays_prior_scale
         self.trend_phi = trend_phi
 
@@ -207,8 +209,10 @@ class FBProphet(ModelObject):
                     name='weekly', period=7, fourier_order=3, prior_scale=int(self.weekly_seasonality_prior_scale)
                 )
             if self.yearly_seasonality_prior_scale not in [None, "None"]:
+                if self.yearly_seasonality_order in [None, "None"]:
+                    self.yearly_seasonality_order = 12
                 m.add_seasonality(
-                    name='yearly', period=365.25, fourier_order=3, prior_scale=int(self.yearly_seasonality_prior_scale)
+                    name='yearly', period=365.25, fourier_order=int(self.yearly_seasonality_order), prior_scale=int(self.yearly_seasonality_prior_scale)
                 )
             if isinstance(args['holiday'], pd.DataFrame):
                 m.holidays = args['holiday'][args['holiday']['series'] == series]
@@ -385,6 +389,13 @@ class FBProphet(ModelObject):
             regression_choice = random.choices(regression_list, regression_probability)[
                 0
             ]
+        yearly_seasonality_order = None
+        yearly_seasonality_prior_scale = random.choices(
+            [None, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
+            [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
+        )[0]
+        if yearly_seasonality_prior_scale is not None:
+            yearly_seasonality_order = random.choices([2, 6, 12, 30], [0.1, 0.2, 0.5, 0.1])[0]
 
         return {
             'holiday': holiday_choice,
@@ -397,10 +408,8 @@ class FBProphet(ModelObject):
                 [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
                 [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05],
             )[0],
-            'yearly_seasonality_prior_scale': random.choices(
-                [None, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
-                [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
-            )[0],
+            'yearly_seasonality_prior_scale': yearly_seasonality_prior_scale,
+            "yearly_seasonality_order": yearly_seasonality_order,
             'weekly_seasonality_prior_scale': random.choices(
                 [None, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
                 [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
