@@ -6,6 +6,8 @@ import random
 import numpy as np
 import pandas as pd
 
+from autots.tools.impute import FillNA, df_interpolate
+
 
 def constant_growth_rate(periods, final_growth):
     """Take a final target growth rate (ie 2 % over a year) and convert to a daily (etc) value."""
@@ -321,6 +323,7 @@ def apply_fit_constraint(
     upper_constraint=None,
     train_min=None,
     train_max=None,
+    fillna=None,  # only used with regularization of 1 / None
 ):
     if constraint_method == "dampening":
         # the idea is to make the forecast plateau by gradually forcing the step to step change closer to zero
@@ -352,17 +355,54 @@ def apply_fit_constraint(
                 ).cumsum()
         return forecast, lower_forecast, upper_forecast
     if constraint_regularization == 1 or constraint_regularization is None:
-        if lower_constraint is not None:
-            forecast = forecast.clip(lower=train_min, axis=1)
-        if upper_constraint is not None:
-            forecast = forecast.clip(upper=train_max, axis=1)
-        if bounds:
+        if fillna in [None, "None", "none", ""]:
             if lower_constraint is not None:
-                lower_forecast = lower_forecast.clip(lower=train_min, axis=1)
-                upper_forecast = upper_forecast.clip(lower=train_min, axis=1)
+                forecast = forecast.clip(lower=train_min, axis=1)
             if upper_constraint is not None:
-                lower_forecast = lower_forecast.clip(upper=train_max, axis=1)
-                upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
+                forecast = forecast.clip(upper=train_max, axis=1)
+            if bounds:
+                if lower_constraint is not None:
+                    lower_forecast = lower_forecast.clip(lower=train_min, axis=1)
+                    upper_forecast = upper_forecast.clip(lower=train_min, axis=1)
+                if upper_constraint is not None:
+                    lower_forecast = lower_forecast.clip(upper=train_max, axis=1)
+                    upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
+        else:
+            # if FILLNA present, don't clip but replace with NaN then fill NaN
+            if lower_constraint is not None:
+                forecast = forecast.where(
+                    forecast >= train_min,
+                    np.nan,
+                )
+            if upper_constraint is not None:
+                forecast = forecast.where(
+                    forecast <= train_max,
+                    np.nan,
+                )
+            if bounds:
+                if lower_constraint is not None:
+                    lower_forecast = lower_forecast.where(
+                        lower_forecast >= train_min,
+                        np.nan,
+                    )
+                    upper_forecast = upper_forecast.where(
+                        upper_forecast >= train_min,
+                        np.nan,
+                    )
+                if upper_constraint is not None:
+                    lower_forecast = lower_forecast.where(
+                        lower_forecast <= train_max,
+                        np.nan,
+                    )
+
+                    upper_forecast = upper_forecast.where(
+                        lower_forecast <= train_max,
+                        np.nan
+                    )
+            forecast = FillNA(forecast, method=str(fillna), window=10)
+            if bounds:
+                lower_forecast = FillNA(lower_forecast, method=str(fillna), window=10)
+                upper_forecast = FillNA(upper_forecast, method=str(fillna), window=10)
     else:
         if lower_constraint is not None:
             forecast = forecast.where(

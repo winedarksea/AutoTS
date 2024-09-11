@@ -4948,6 +4948,7 @@ class Constraint(EmptyTransformer):
         constraint_regularization: int = 1.0,
         forecast_length: int = 30,
         bounds_only: bool = False,
+        fillna: str = None,
         **kwargs,
     ):
         super().__init__(name="Constraint")
@@ -4957,6 +4958,7 @@ class Constraint(EmptyTransformer):
         self.constraint_regularization = constraint_regularization
         self.forecast_length = forecast_length
         self.bounds_only = bounds_only
+        self.fillna = fillna
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -5008,6 +5010,7 @@ class Constraint(EmptyTransformer):
                 upper_constraint=self.upper_constraint,
                 train_min=self.train_min,
                 train_max=self.train_max,
+                fillna=self.fillna,
             )
             return forecast
         else:
@@ -5029,6 +5032,7 @@ class Constraint(EmptyTransformer):
         """Generate new random parameters"""
         params = constraint_new_params(method=method)
         params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]
+        params['fillna'] = random.choices([None, "ffill", "linear"], [0.95, 0.05, 0.05])[0]
         return params
 
 

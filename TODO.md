@@ -20,6 +20,7 @@
 * added a few more NeuralForecast search options
 * bounds_only to Constraint transformer
 * updates for deprecated upstream args
+* FIRFilter transformer added
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
