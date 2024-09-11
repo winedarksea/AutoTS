@@ -206,13 +206,13 @@ class FBProphet(ModelObject):
             )
             if self.weekly_seasonality_prior_scale not in [None, "None"]:
                 m.add_seasonality(
-                    name='weekly', period=7, fourier_order=3, prior_scale=int(self.weekly_seasonality_prior_scale)
+                    name='weekly', period=7, fourier_order=4, prior_scale=self.weekly_seasonality_prior_scale
                 )
             if self.yearly_seasonality_prior_scale not in [None, "None"]:
                 if self.yearly_seasonality_order in [None, "None"]:
                     self.yearly_seasonality_order = 12
                 m.add_seasonality(
-                    name='yearly', period=365.25, fourier_order=int(self.yearly_seasonality_order), prior_scale=int(self.yearly_seasonality_prior_scale)
+                    name='yearly', period=365.25, fourier_order=int(self.yearly_seasonality_order), prior_scale=self.yearly_seasonality_prior_scale
                 )
             if isinstance(args['holiday'], pd.DataFrame):
                 m.holidays = args['holiday'][args['holiday']['series'] == series]
