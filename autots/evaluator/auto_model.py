@@ -2602,14 +2602,14 @@ def generate_score(
             mle_scaler = model_results['mle_weighted'][
                 model_results['mle_weighted'] != 0
             ].min()
-            mle_score = model_results['mle_weighted'] / mle_scaler
+            mle_score = model_results['mle_weighted'] / mle_scaler / 10  # / 10 due to imbalance often with this
             score_dict['mle'] = mle_score * mle_weighting
             overall_score = overall_score + (mle_score * mle_weighting)
         if imle_weighting != 0:
             imle_scaler = model_results['imle_weighted'][
                 model_results['imle_weighted'] != 0
             ].min()
-            imle_score = model_results['imle_weighted'] / imle_scaler
+            imle_score = model_results['imle_weighted'] / imle_scaler / 10  # / 10 due to imbalance often with this
             score_dict['imle'] = imle_score * imle_weighting
             overall_score = overall_score + (imle_score * imle_weighting)
         if maxe_weighting != 0:
@@ -2788,7 +2788,7 @@ def generate_score_per_series(
             .min()
             .fillna(1)
         )
-        mle_score = results_object.per_series_mle / mle_scaler
+        mle_score = results_object.per_series_mle / mle_scaler / 10  # / 10 due to imbalance often with this
         overall_score = overall_score + (mle_score * mle_weighting)
     if imle_weighting != 0:
         imle_scaler = (
@@ -2796,7 +2796,7 @@ def generate_score_per_series(
             .min()
             .fillna(1)
         )
-        imle_score = results_object.per_series_imle / imle_scaler
+        imle_score = results_object.per_series_imle / imle_scaler / 10  # / 10 due to imbalance often with this
         overall_score = overall_score + (imle_score * imle_weighting)
     if maxe_weighting != 0:
         maxe_scaler = (

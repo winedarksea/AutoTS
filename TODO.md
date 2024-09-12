@@ -21,6 +21,7 @@
 * bounds_only to Constraint transformer
 * updates for deprecated upstream args
 * FIRFilter transformer added
+* mle and imle downscaled to reduce score imbalance issues with these two in generate score
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
