@@ -480,10 +480,10 @@ class AutoTSTest(unittest.TestCase):
             id_col="series_id" if long else None,
         )
         model.expand_horizontal()
-        self.assertEqual(
-            sorted(json.loads(model.best_model_original.iloc[0]['ModelParameters'])['models'].keys()),
-            sorted(json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys()),
-            msg="model expansion failed to use the same models (in the same order)"
+        self.assertCountEqual(
+            json.loads(model.best_model_original.iloc[0]['ModelParameters'])['models'].keys(),
+            json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys(),
+            msg="model expansion failed to use the same models"
         )
         num_series = len(df['series_id'].unique().tolist()) if long else df.shape[1]
         self.assertEqual(
