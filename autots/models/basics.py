@@ -28,6 +28,7 @@ from autots.tools.transform import (
     superfast_transformer_dict,
 )
 from autots.tools.fft import fourier_extrapolation
+from autots.tools.impute import FillNA
 
 
 # these are all optional packages
@@ -1795,6 +1796,7 @@ class SectionalMotif(ModelObject):
         include_differenced: bool = False,
         k: int = 10,
         stride_size: int = 1,
+        fillna: str = "SimpleSeasonalityMotifImputer",  # excessive forecast length only
         **kwargs,
     ):
         ModelObject.__init__(
@@ -1813,6 +1815,7 @@ class SectionalMotif(ModelObject):
         self.include_differenced = include_differenced
         self.k = k
         self.stride_size = stride_size
+        self.fillna = fillna
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1863,10 +1866,14 @@ class SectionalMotif(ModelObject):
         else:
             array = self.df.to_numpy()
         tlt_len = array.shape[0]
-        combined_window_size = window_size + forecast_length
-        max_steps = array.shape[0] - combined_window_size
+        self.combined_window_size = window_size + forecast_length
+        self.excessive_size_flag = False
+        if self.combined_window_size > (array.shape[0]):
+            self.combined_window_size = int(array.shape[0] / 2)
+            self.excessive_size_flag = True
+        max_steps = array.shape[0] - self.combined_window_size
         window_idxs = window_id_maker(
-            window_size=combined_window_size,
+            window_size=self.combined_window_size,
             start_index=0,
             max_steps=max_steps,
             stride_size=self.stride_size,
@@ -1956,13 +1963,21 @@ class SectionalMotif(ModelObject):
         upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
         lower_forecast = nan_quantile(results, q=pred_int, axis=0)
 
-        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        if self.excessive_size_flag:
+            local_index = test_index[0:self.combined_window_size - self.window]
+        else:
+            local_index = test_index
+        forecast = pd.DataFrame(forecast, index=local_index, columns=self.column_names)
         lower_forecast = pd.DataFrame(
-            lower_forecast, index=test_index, columns=self.column_names
+            lower_forecast, index=local_index, columns=self.column_names
         )
         upper_forecast = pd.DataFrame(
-            upper_forecast, index=test_index, columns=self.column_names
+            upper_forecast, index=local_index, columns=self.column_names
         )
+        if self.excessive_size_flag:
+            forecast = FillNA(forecast.reindex(test_index), method=self.fillna)
+            lower_forecast = FillNA(lower_forecast.reindex(test_index), method=self.fillna)
+            upper_forecast = FillNA(upper_forecast.reindex(test_index), method=self.fillna)
         self.result_windows = results
         if just_point_forecast:
             return forecast
