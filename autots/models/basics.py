@@ -13,6 +13,8 @@ from autots.tools.seasonal import (
     seasonal_int,
     seasonal_window_match,
     seasonal_independent_match,
+    date_part,
+    base_seasonalities,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import (
@@ -1863,6 +1865,9 @@ class SectionalMotif(ModelObject):
             full_regr = full_regr.tail(self.df.shape[0])
             full_regr.index = self.df.index
             array = pd.concat([self.df, full_regr], axis=1).to_numpy()
+        elif regression_type in base_seasonalities or isinstance(self.regression_type, list):
+            X = date_part(self.df.index, method=self.regression_type)
+            array = pd.concat([self.df, X], axis=1).to_numpy()
         else:
             array = self.df.to_numpy()
         tlt_len = array.shape[0]
@@ -1942,7 +1947,7 @@ class SectionalMotif(ModelObject):
         if results.ndim == 4:
             res_shape = results.shape
             results = results.reshape((res_shape[0], res_shape[2], res_shape[3]))
-        if regression_type == "user":
+        if regression_type == "user" or regression_type in base_seasonalities or isinstance(self.regression_type, list):
             results = results[:, :, : self.df.shape[1]]
         # now aggregate results into point and bound forecasts
         if point_method == "weighted_mean":
@@ -2037,7 +2042,11 @@ class SectionalMotif(ModelObject):
         if "regressor" in method:
             regression_choice = "User"
         else:
-            regression_choice = random.choices([None, "User"], [0.9, 0.1])[0]
+            regression_choice = random.choices(
+                [None, 'datepart', 'User'], [0.9, 0.1, 0.2]
+            )[0]
+            if regression_choice == "datepart":
+                regression_choice = random.choice(base_seasonalities)
         return {
             "window": random.choices(
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]

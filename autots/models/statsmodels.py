@@ -257,7 +257,7 @@ class GLM(ModelObject):
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').to_numpy()
-        elif self.regression_type in base_seasonalities:
+        elif self.regression_type in base_seasonalities or isinstance(self.regression_type, list):
             X = date_part(self.df_train.index, method=self.regression_type).to_numpy()
         else:
             X = pd.to_numeric(
@@ -279,7 +279,7 @@ class GLM(ModelObject):
         self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
         if self.regression_type == 'datepart':
             Xf = date_part(test_index, method='expanded').to_numpy()
-        elif self.regression_type in base_seasonalities:
+        elif self.regression_type in base_seasonalities or isinstance(self.regression_type, list):
             Xf = date_part(test_index, method=self.regression_type).to_numpy()
         else:
             Xf = pd.to_numeric(test_index, errors='coerce', downcast='integer').to_numpy()
