@@ -698,6 +698,14 @@ def full_metric_evaluation(
     # over/under estimate mask
     ovm = full_errors > 0
 
+    if True:
+        submission = F
+        objective = A
+        abs_err = np.nansum(np.abs(submission - objective))
+        err = np.nansum((submission - objective))
+        score = abs_err + abs(err)
+        score /= objective.sum().sum()
+
     # note a number of these are created from my own imagination (winedarksea)
     # those are also subject to change as they are tested and refined
     result_df = pd.DataFrame(
@@ -765,6 +773,7 @@ def full_metric_evaluation(
             'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler,
             "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A))
             / scaler,  # differential wasserstein distance, pronounced "DUDE"
+            "competition": score,
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),

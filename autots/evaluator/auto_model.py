@@ -2410,6 +2410,7 @@ def validation_aggregation(
         'medae': 'mean',
         'made': 'mean',
         'mage': 'mean',
+        'competition': 'mean',
         'underestimate': 'sum',
         'mle': 'mean',
         'overestimate': 'sum',
@@ -2434,6 +2435,7 @@ def validation_aggregation(
         'medae_weighted': 'mean',
         'made_weighted': 'mean',
         'mage_weighted': 'mean',
+        'competition_weighted': 'mean',
         'mle_weighted': 'mean',
         'imle_weighted': 'mean',
         'spl_weighted': 'mean',
@@ -2523,6 +2525,7 @@ def generate_score(
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     made_weighting = metric_weighting.get('made_weighting', 0)
     mage_weighting = metric_weighting.get('mage_weighting', 0)
+    competition_weighting = metric_weighting.get('competition_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
     maxe_weighting = metric_weighting.get('maxe_weighting', 0)
@@ -2598,6 +2601,13 @@ def generate_score(
             mage_score = model_results['mage_weighted'] / mage_scaler
             score_dict['mage'] = mage_score * mage_weighting
             overall_score = overall_score + (mage_score * mage_weighting)
+        if competition_weighting != 0:
+            competition_scaler = model_results['competition_weighted'][
+                model_results['competition_weighted'] != 0
+            ].min()
+            competition_score = model_results['competition_weighted'] / competition_scaler
+            score_dict['competition'] = competition_score * competition_weighting
+            overall_score = overall_score + (competition_score * competition_weighting)
         if mle_weighting != 0:
             mle_scaler = model_results['mle_weighted'][
                 model_results['mle_weighted'] != 0
