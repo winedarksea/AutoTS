@@ -483,8 +483,8 @@ def mosaic_xy(df_train, known):
         .transpose()
         .merge(upload, left_index=True, right_on="series_id")
     )
-    X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
-    to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
+    X = X.set_index("series_id").replace([np.inf, -np.inf], 0)  # .drop(columns=['series_id'], inplace=True)
+    to_predict = fill_median(X[X['model_id'].isna()].drop(columns=['model_id']))
     X = X[~X['model_id'].isna()]
     Y = X['model_id']
     Xf = X.drop(columns=['model_id'])
