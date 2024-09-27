@@ -1828,7 +1828,7 @@ def MosaicEnsemble(
         value_name="model_id",
         ignore_index=False,
     ).reset_index(drop=False)
-    melted["forecast_period"] = melted["forecast_period"].astype(int)
+    melted["forecast_period"] = pd.to_numeric(melted["forecast_period"], downcast="integer")
     max_forecast_period = melted["forecast_period"].max()
     # handle forecast length being longer than template
     len_sample_index = len(sample_idx)
