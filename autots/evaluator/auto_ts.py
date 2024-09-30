@@ -2250,13 +2250,19 @@ class AutoTS(object):
             result_set (str): 'validation' or 'initial'
         """
         if result_set == 'validation':
-            return self.validation_results.model_results.sort_values(
-                "Score", ascending=True
-            )
+            if self.validation_results is None:
+                return "No validation results found! Model fit not performed."
+            else:
+                return self.validation_results.model_results.sort_values(
+                    "Score", ascending=True
+                )
         else:
-            return self.initial_results.model_results.sort_values(
-                "Score", ascending=True
-            )
+            if self.initial_results.model_results.empty:
+                return "No results found. Model fit not performed."
+            else:
+                return self.initial_results.model_results.sort_values(
+                    "Score", ascending=True
+                )
 
     def failure_rate(self, result_set: str = 'initial'):
         """Return fraction of models passing with exceptions.
@@ -2269,9 +2275,10 @@ class AutoTS(object):
 
         """
         initial_results = self.results(result_set=result_set)
-        n = initial_results.shape[0]
-        x = (n - initial_results['Exceptions'].isna().sum()) / n
-        return x
+        if not isinstance(initial_results, str):
+            n = initial_results.shape[0]
+            x = (n - initial_results['Exceptions'].isna().sum()) / n
+            return x
 
     def export_template(
         self,
