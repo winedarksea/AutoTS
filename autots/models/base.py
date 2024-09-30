@@ -918,6 +918,14 @@ class PredictionObject(object):
                         "constraint_regularization": 0.5,
                         "bounds": True,
                     },
+                    {  # round decimals to 2 places
+                        "constraint_method": "round",
+                        "constraint_value": 2,
+                    },
+                    {  # apply dampening (gradually flatten out forecast)
+                        "constraint_method": "dampening",
+                        "constraint_value": 0.98,
+                    },
                 ]
             )
 

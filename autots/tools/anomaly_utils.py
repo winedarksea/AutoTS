@@ -1158,7 +1158,7 @@ def dates_to_holidays(
                         index='date', columns='series', values='holiday_name'
                     ).reindex(columns=df_cols)
                     if style == "series_flag":
-                        result = result + temp.where(temp.isnull(), 1).fillna(0)
+                        result = result + temp.where(temp.isnull(), 1).fillna(0.0)
                     else:
                         if isinstance(holiday_impacts, dict):
                             result = result + temp.replace(holiday_impacts).astype(

@@ -2725,6 +2725,9 @@ def generate_score(
             ) * smape_median
             score_dict['contaiment'] = containment_score * containment_weighting
             overall_score = overall_score + (containment_score * containment_weighting)
+        if overall_score.sum() == 0:
+            print("something is seriously wrong with one of the input metrics, score is NaN or all 0")
+            overall_score = smape_score
 
     except Exception as e:
         raise KeyError(

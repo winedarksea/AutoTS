@@ -6,7 +6,7 @@ import random
 import numpy as np
 import pandas as pd
 
-from autots.tools.impute import FillNA, df_interpolate
+from autots.tools.impute import FillNA
 
 
 def constant_growth_rate(periods, final_growth):
@@ -38,6 +38,7 @@ constraint_method_dict = {
     "fixed": 0,
     "historic_growth": 0.1,
     "dampening": 0.1,
+    "round": 0.05,
 }
 
 
@@ -166,6 +167,11 @@ def constraint_new_params(method: str = "fast"):
             [0.99, 0.9, 0.8, 0.999, 0.98, 0.9999, 0.95],
             [0.5, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1],
         )[0]
+        params['constraint_direction'] = "upper"
+        params["constraint_regularization"] = 1.0
+    elif method_choice in ["round"]:
+        params["constraint_value"] = random.choices([0, 2], [0.4, 0.6])[0]
+        # not used, just setting to fixed
         params['constraint_direction'] = "upper"
         params["constraint_regularization"] = 1.0
     elif method_choice in ["absolute", "fixed"]:
@@ -358,7 +364,10 @@ def apply_fit_constraint(
         return forecast, lower_forecast, upper_forecast
     elif constraint_method == "round":
         decimals = int(constraint_value)
-        return forecast.round(decimals=decimals), lower_forecast.round(decimals=decimals), upper_forecast.round(decimals=decimals)
+        if bounds:
+            return forecast.round(decimals=decimals), lower_forecast.round(decimals=decimals), upper_forecast.round(decimals=decimals)
+        else:
+            return forecast.round(decimals=decimals), lower_forecast, upper_forecast
     if constraint_regularization == 1 or constraint_regularization is None:
         if fillna in [None, "None", "none", ""]:
             if lower_constraint is not None:
