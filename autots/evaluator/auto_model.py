@@ -2605,7 +2605,7 @@ def generate_score(
             competition_scaler = model_results['competition_weighted'][
                 model_results['competition_weighted'] != 0
             ].min()
-            competition_score = model_results['competition_weighted'] / competition_scaler
+            competition_score = model_results['competition_weighted']  #  / competition_scaler
             score_dict['competition'] = competition_score * competition_weighting
             overall_score = overall_score + (competition_score * competition_weighting)
         if mle_weighting != 0:
