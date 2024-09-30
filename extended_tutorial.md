@@ -69,7 +69,7 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 ### What to Worry About
 There are some basic things to beware of that can commonly lead to poor results:
 
-1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
+1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. Also remove all time series that are entirely NaN or entirely zero.
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
 3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. Along with this, beware of a changing pattern of NaN occurrences, as learned FillNA may not longer apply.
 4. Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events. 

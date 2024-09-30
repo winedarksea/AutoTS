@@ -303,6 +303,8 @@ def fit_constraint(
 
     elif constraint_method == "dampening":
         pass
+    elif constraint_method == "round":
+        pass
     else:
         raise ValueError(
             f"constraint_method {constraint_method} not recognized, adjust constraint"
@@ -354,6 +356,9 @@ def apply_fit_constraint(
                     ]
                 ).cumsum()
         return forecast, lower_forecast, upper_forecast
+    elif constraint_method == "round":
+        decimals = int(constraint_value)
+        return forecast.round(decimals=decimals), lower_forecast.round(decimals=decimals), upper_forecast.round(decimals=decimals)
     if constraint_regularization == 1 or constraint_regularization is None:
         if fillna in [None, "None", "none", ""]:
             if lower_constraint is not None:
