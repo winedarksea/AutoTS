@@ -1423,82 +1423,7 @@ class AutoTS(object):
                     f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                 )
 
-        # drop any duplicates in results
-        self.initial_results.model_results = (
-            self.initial_results.model_results.drop_duplicates(
-                subset=(['ID'] + self.template_cols)
-            )
-        )
-
-        # validation model count if float
-        if (self.models_to_validate < 1) and (self.models_to_validate > 0):
-            val_frac = self.models_to_validate
-            val_frac = 1 if val_frac >= 0.99 else val_frac
-            temp_len = self.initial_results.model_results.shape[0]
-            self.models_to_validate = val_frac * temp_len
-            self.models_to_validate = int(np.ceil(self.models_to_validate))
-        if self.max_per_model_class is None:
-            temp_len = len(self.model_list)
-            self.max_per_model_class = (self.models_to_validate / temp_len) + 1
-            self.max_per_model_class = int(np.ceil(self.max_per_model_class))
-
-        # construct validation template
-        validation_template = self.initial_results.model_results[
-            self.initial_results.model_results['Exceptions'].isna()
-        ]
-        validation_template = validation_template[validation_template['Ensemble'] <= 1]
-        validation_template = validation_template.drop_duplicates(
-            subset=template_cols, keep='first'
-        )
-        validation_template = validation_template.sort_values(
-            by="Score", ascending=True, na_position='last'
-        )
-        if str(self.max_per_model_class).isdigit():
-            validation_template = (
-                validation_template.sort_values(
-                    'Score', ascending=True, na_position='last'
-                )
-                .groupby('Model')
-                .head(self.max_per_model_class)
-                .reset_index(drop=True)
-            )
-        validation_template = validation_template.sort_values(
-            'Score', ascending=True, na_position='last'
-        ).head(self.models_to_validate)
-        # add on best per_series models (which may not be in the top scoring)
-        if self.h_ens_used or self.mosaic_used:
-            model_results = self.initial_results.model_results
-            if self.models_to_validate < 50:
-                n_per_series = 1
-            elif self.models_to_validate > 500:
-                n_per_series = 5
-            else:
-                n_per_series = 3
-            self.score_per_series = generate_score_per_series(
-                self.initial_results, self.metric_weighting, 1
-            )
-            mods = self.score_per_series.index[
-                np.argsort(-self.score_per_series.values, axis=0)[
-                    -1 : -1 - n_per_series : -1
-                ].flatten()
-            ]
-            per_series_val = model_results[
-                model_results['ID'].isin(mods.unique().tolist())
-            ]
-            validation_template = pd.concat(
-                [validation_template, per_series_val], axis=0
-            )
-            validation_template = validation_template.drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-        self.validation_template = validation_template[self.template_cols_id]
-        if self.validate_import is not None:
-            self.validation_template = pd.concat(
-                [self.validation_template, self.validate_import]
-            ).drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-            # might want to add a drop here of models that failed in initial generations
+        self = self._construct_validation_template()
 
         # run validations
         if self.num_validations > 0:
@@ -1645,6 +1570,84 @@ class AutoTS(object):
         # clean up any remaining print statements
         sys.stdout.flush()
         self.fitRuntime = pd.Timestamp.now() - self.fitStart
+        return self
+
+    def _construct_validation_template(self):
+        # drop any duplicates in results
+        self.initial_results.model_results = (
+            self.initial_results.model_results.drop_duplicates(
+                subset=(['ID'] + self.template_cols)
+            )
+        )
+        # validation model count if float
+        if (self.models_to_validate < 1) and (self.models_to_validate > 0):
+            val_frac = self.models_to_validate
+            val_frac = 1 if val_frac >= 0.99 else val_frac
+            temp_len = self.initial_results.model_results.shape[0]
+            self.models_to_validate = val_frac * temp_len
+            self.models_to_validate = int(np.ceil(self.models_to_validate))
+        if self.max_per_model_class is None:
+            temp_len = len(self.model_list)
+            self.max_per_model_class = (self.models_to_validate / temp_len) + 1
+            self.max_per_model_class = int(np.ceil(self.max_per_model_class))
+
+        # construct validation template
+        validation_template = self.initial_results.model_results[
+            self.initial_results.model_results['Exceptions'].isna()
+        ]
+        validation_template = validation_template[validation_template['Ensemble'] <= 1]
+        validation_template = validation_template.drop_duplicates(
+            subset=self.template_cols, keep='first'
+        )
+        validation_template = validation_template.sort_values(
+            by="Score", ascending=True, na_position='last'
+        )
+        if str(self.max_per_model_class).isdigit():
+            validation_template = (
+                validation_template.sort_values(
+                    'Score', ascending=True, na_position='last'
+                )
+                .groupby('Model')
+                .head(self.max_per_model_class)
+                .reset_index(drop=True)
+            )
+        validation_template = validation_template.sort_values(
+            'Score', ascending=True, na_position='last'
+        ).head(self.models_to_validate)
+        # add on best per_series models (which may not be in the top scoring)
+        if self.h_ens_used or self.mosaic_used:
+            model_results = self.initial_results.model_results
+            if self.models_to_validate < 50:
+                n_per_series = 1
+            elif self.models_to_validate > 500:
+                n_per_series = 5
+            else:
+                n_per_series = 3
+            self.score_per_series = generate_score_per_series(
+                self.initial_results, self.metric_weighting, 1
+            )
+            mods = self.score_per_series.index[
+                np.argsort(-self.score_per_series.values, axis=0)[
+                    -1 : -1 - n_per_series : -1
+                ].flatten()
+            ]
+            per_series_val = model_results[
+                model_results['ID'].isin(mods.unique().tolist())
+            ]
+            validation_template = pd.concat(
+                [validation_template, per_series_val], axis=0
+            )
+            validation_template = validation_template.drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
+        self.validation_template = validation_template[self.template_cols_id]
+        if self.validate_import is not None:
+            self.validation_template = pd.concat(
+                [self.validation_template, self.validate_import]
+            ).drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
+            # might want to add a drop here of models that failed in initial generations
         return self
 
     def validation_agg(self):
@@ -1940,10 +1943,10 @@ class AutoTS(object):
 
     def _run_validations(
         self,
-        df_wide_numeric,
-        num_validations,
-        validation_template,
-        future_regressor,
+        df_wide_numeric=None,
+        num_validations=None,
+        validation_template=None,
+        future_regressor=None,
         first_validation=True,  # if any validation run and indices generated
         skip_first_index=True,  # assuming first eval already done
         return_template=False,  # if True, return template instead of storing in self
@@ -1951,6 +1954,14 @@ class AutoTS(object):
         additional_msg="",
     ):
         """Loop through a template for n validation segments."""
+        if df_wide_numeric is None:
+            df_wide_numeric = self.df_wide_numeric
+        if num_validations is None:
+            num_validations = self.num_validations
+        if validation_template is None:
+            validation_template = self.validation_template
+        if future_regressor is None:
+            future_regressor = self.future_regressor_train
         if return_template:
             result_overall = TemplateEvalObject()
         for y in range(num_validations):
