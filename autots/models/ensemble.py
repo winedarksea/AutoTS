@@ -29,7 +29,7 @@ full_ensemble_test_list = [
     "mosaic-weighted-0-horizontal",
     "mosaic-mae-0-40",
     "mosaic-weighted-0-40",
-    "mosaic-spl-3-10",
+    "mosaic-spl-3-10",  # this one in particular hard-coded for testing
 ]
 
 
@@ -1654,7 +1654,7 @@ def process_mosaic_arrays(
     else:
         # so the logic makes it that it must be EXACTLY the right number of vals
         # which can create problems, some models get duplicated and will be excluded
-        filtered_use = list(set(models_to_use).union(set(fully_validated)))
+        filtered_use = list(set(models_to_use).intersection(set(fully_validated)))
         if len(filtered_use) > 1:
             models_to_use = filtered_use
     # begin figuring out which are the min models for each point

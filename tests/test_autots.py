@@ -160,6 +160,18 @@ class AutoTSTest(unittest.TestCase):
         if tested_horizontal:
             self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
+        # check that the create number of models were available that were requested
+        one_mos = initial_results[initial_results["ModelParameters"].str.contains("mosaic-spl-3-10")]
+        res = []
+        for x in json.loads(one_mos["ModelParameters"].iloc[0])["series"].values():
+            for y in x.values():
+                res.append(y)
+        self.assertLessEqual(len(set(res)), 10)
+        # check all mosaic and horizontal styles were created
+        count_horz = len([x for x in ensemble if "horizontal" in x or "mosaic" in x])
+        self.assertEqual(len(initial_results[initial_results["Ensemble"] == 2]["ModelParameters"].unique()), count_horz)
+        # check at least 1 'simple' ensemble worked
+        self.assertGreater(initial_results[initial_results["Ensemble"] == 1]['Exceptions'].isnull().sum(), 0)
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
         # test back_forecast
@@ -580,6 +592,7 @@ class AutoTSTest(unittest.TestCase):
             df,
             validation_indexes=custom_idx
         )
+        self.assertEqual(model.ensemble_check, 0)
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
