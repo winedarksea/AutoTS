@@ -2591,8 +2591,8 @@ def generate_score(
             made_score = model_results['made_weighted'] / made_scaler
             score_dict['made'] = made_score * made_weighting
             # fillna, but only if all are nan (forecast_length = 1)
-            # if pd.isnull(made_score.max()):
-            #     made_score.fillna(0, inplace=True)
+            if pd.isnull(made_score.max()):
+                made_score = made_score.fillna(100)
             overall_score = overall_score + (made_score * made_weighting)
         if mage_weighting != 0:
             mage_scaler = model_results['mage_weighted'][

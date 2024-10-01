@@ -682,7 +682,10 @@ def full_metric_evaluation(
     else:
         mate = np.abs(np.sum(full_errors, axis=0))
     # possibly temporary
-    matse_scale = np.sum(np.abs(A), axis=0)
+    if nan_flag:
+        matse_scale = np.nansum(np.abs(A), axis=0)
+    else:
+        matse_scale = np.sum(np.abs(A), axis=0)
     matse_scale[matse_scale == 0] = 1
     matse = mate / matse_scale
 
@@ -704,7 +707,9 @@ def full_metric_evaluation(
         abs_err = np.nansum(np.abs(submission - objective))
         err = np.nansum((submission - objective))
         score = abs_err + abs(err)
-        score /= objective.sum().sum()
+        epsilon = 1
+        big_sum = np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum() + epsilon
+        score /= big_sum
 
     # note a number of these are created from my own imagination (winedarksea)
     # those are also subject to change as they are tested and refined

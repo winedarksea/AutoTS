@@ -716,7 +716,7 @@ class PredictionObject(object):
         import matplotlib.pyplot as plt
 
         if cols is None:
-            cols = self.forecast_columns
+            cols = self.forecast.columns.tolist()
         num_cols = len(cols)
         if num_cols > 4:
             nrow = 2
@@ -846,6 +846,17 @@ class PredictionObject(object):
             axis=1, skipna=True
         ) / sum(series_weights.values())
         self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
+        if True:
+            submission = self.forecast
+            objective = actual
+            abs_err = np.nansum(np.abs(submission - objective))
+            err = np.nansum((submission - objective))
+            score = abs_err + abs(err)
+            epsilon = 1
+            big_sum = np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum() + epsilon
+            score /= big_sum
+            self.avg_metrics["competition"] = score
+            self.avg_metrics_weighted["competition"] = score
         return self
 
     def apply_constraints(
