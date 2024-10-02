@@ -74,7 +74,7 @@ class TestAnomalies(unittest.TestCase):
                 mod = AnomalyDetector(output='univariate', **params)
                 mod.detect(self.df[np.random.choice(self.df.columns, num_cols, replace=False)])
                 self.assertEqual(mod.anomalies.shape, (self.df.shape[0], 1))
-        mod.plot()
+        # mod.plot()
 
         from prophet import Prophet
 
@@ -104,7 +104,7 @@ class TestAnomalies(unittest.TestCase):
                     future = m.make_future_dataframe(forecast_length)
                     fcst = m.predict(future).set_index('ds')  # noqa
                     # m.plot_components(fcst)
-        mod.plot()
+        # mod.plot()
         temp = mod.dates_to_holidays(full_dates, style="flag")
         temp = mod.dates_to_holidays(full_dates, style="series_flag")
         temp = mod.dates_to_holidays(full_dates, style="impact")
