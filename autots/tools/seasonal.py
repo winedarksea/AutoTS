@@ -120,6 +120,8 @@ def date_part(
 
     if isinstance(method, (int, float)):
         date_part_df = fourier_df(DTindex, seasonality=method, order=6)
+    elif isinstance(method, tuple):
+        date_part_df = fourier_df(DTindex, seasonality=method[0], order=method[1])
     elif isinstance(method, list):
         # this handles it already having been run recursively
         # remove duplicate columns if present
@@ -658,6 +660,10 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         return fourier_df(
             DTindex, seasonality=seasonality, t=t, history_days=history_days
         )
+    if isinstance(seasonality, tuple):
+        return fourier_df(
+            DTindex, seasonality=seasonality[0], order=seasonality[1], t=t, history_days=history_days
+        )
     # dateparts
     elif seasonality in datepart_components:
         return create_datepart_components(DTindex, seasonality)
@@ -688,6 +694,8 @@ base_seasonalities = [  # this needs to be a list
     ["db2_365.25_12_0.5", "morlet_7_7_1"],
     ["weekdaymonthofyear", "quarter", "dayofweek"],
     "lunar_phase",
+    ["dayofweek", (365.25, 4)],
+    ["dayofweek", (365.25, 14)],
     "other",
 ]
 
@@ -713,6 +721,8 @@ def random_datepart(method='random'):
             0.1,
             0.1,
             0.1,
+            0.05,
+            0.05,
             0.05,
             0.05,
             0.3,
