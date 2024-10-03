@@ -20,6 +20,7 @@ from autots.tools.calendar import (
     gregorian_to_chinese,
     gregorian_to_islamic,
     gregorian_to_hebrew,
+    gregorian_to_hindu,
 )
 
 
@@ -706,6 +707,7 @@ def anomaly_df_to_holidays(
     use_lunar_weekday=False,
     use_islamic_holidays=False,
     use_hebrew_holidays=False,
+    use_hindu_holidays=False,
 ):
     if isinstance(anomaly_df, pd.Series):
         stacked = anomaly_df.copy()  # [anomaly_df == -1]
@@ -975,6 +977,30 @@ def anomaly_df_to_holidays(
         )
     else:
         hebrew_holidays = None
+    if use_hindu_holidays:
+        hindu_df = gregorian_to_hindu(dates)
+        hindu_df.index.name = "date"
+        hindu_df = hindu_df.merge(stacked, left_index=True, right_index=True, how="outer")
+        hindu_df['occurrence_rate'] = hindu_df['count']
+        
+        # Group by Hindu calendar components to find significant dates
+        hindu_holidays = (
+            hindu_df.groupby(["series", "hindu_month_number", "lunar_day"])
+            .agg(agg_dict)
+            .loc[
+                lambda df: (df["occurrence_rate"] >= threshold)
+                & (df["count"] >= min_occurrences),
+            ]
+        ).reset_index(drop=False)
+        
+        hindu_holidays['holiday_name'] = (
+            'hindu_'
+            + hindu_holidays['hindu_month_number'].astype(str).str.pad(2, side='left', fillchar="0")
+            + "_"
+            + hindu_holidays['lunar_day'].astype(str).str.pad(2, side='left', fillchar="0")
+        )
+    else:
+        hindu_holidays = None
     return (
         day_holidays,
         wkdom_holidays,
@@ -983,6 +1009,7 @@ def anomaly_df_to_holidays(
         lunar_weekday,
         islamic_holidays,
         hebrew_holidays,
+        hindu_holidays,
     )
 
 
@@ -998,6 +1025,7 @@ def dates_to_holidays(
     lunar_weekday=None,
     islamic_holidays=None,
     hebrew_holidays=None,
+    hindu_holidays=None,
     max_features: int = None,
 ):
     """Populate date information for a given pd.DatetimeIndex.
@@ -1030,6 +1058,7 @@ def dates_to_holidays(
         lunar_weekday,
         islamic_holidays,
         hebrew_holidays,
+        hindu_holidays,
     ]:
         if holiday_df is not None:
             if not holiday_df.empty:
@@ -1244,6 +1273,7 @@ def holiday_new_params(method='random'):
         'use_lunar_weekday': random.choices([True, False], [0.05, 0.95])[0],
         'use_islamic_holidays': random.choices([True, False], [0.1, 0.9])[0],
         'use_hebrew_holidays': random.choices([True, False], [0.1, 0.9])[0],
+        'use_hindu_holidays': random.choices([True, False], [0.1, 0.9])[0],
     }
 
 def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_threshold=0.05):
