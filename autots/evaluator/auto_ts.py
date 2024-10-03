@@ -3071,12 +3071,16 @@ class AutoTS(object):
         results.name = "Model"
         series = series.merge(results, left_on="ID", right_index=True)
         # series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")  # old
-        series = series.merge(
-            self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
-        )
-        series = series.merge(
-            self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
-        )
+        if "profile" not in self.best_model_params["model_metric"]:
+            series = series.merge(
+                self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
+            )
+            series = series.merge(
+                self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
+            )
+        else:
+            series["Mean"] = 1
+            series["Volatility"] = 1
         series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
         series['Transformers'] = series['ID'].copy()
         series['FillNA'] = series['ID'].copy()
@@ -3703,11 +3707,12 @@ class AutoTS(object):
         temp.columns = ["Series", "Error"]
         temp["Error"] = temp["Error"].clip(upper=upper_clip, lower=0)
         if self.best_model["Ensemble"].iloc[0] == 2:
-            series = self.horizontal_to_df()
-            temp = temp.merge(series, on='Series')
-            temp['Series'] = (
-                temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
-            )
+            if "profile" not in self.best_model_params["model_metric"]:
+                series = self.horizontal_to_df()
+                temp = temp.merge(series, on='Series')
+                temp['Series'] = (
+                    temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+                )
 
         if kind == "pie":
             temp.set_index("Series").plot(

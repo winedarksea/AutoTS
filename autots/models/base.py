@@ -13,6 +13,7 @@ import pandas as pd
 from autots.tools.constraint import apply_constraint_single
 from autots.tools.shaping import infer_frequency, clean_weights
 from autots.evaluator.metrics import full_metric_evaluation
+from autots.tools.profile import profile_time_series
 
 
 def create_forecast_index(frequency, forecast_length, train_last_date, last_date=None):
@@ -561,7 +562,12 @@ class PredictionObject(object):
         model_name = self.model_name
         if model_name == "Ensemble":
             if 'series' in self.model_parameters.keys():
-                h_params = self.model_parameters['series'][series]
+                if "profile" in self.model_parameters["model_metric"]:
+                    df = df_wide if df_wide is not None else self.forecast
+                    profile = profile_time_series(df)
+                    h_params = self.model_parameters['series'][profile[profile["SERIES"] == series]["PROFILE"].iloc[0]]
+                else:
+                    h_params = self.model_parameters['series'][series]
                 if isinstance(h_params, str):
                     model_name = self.model_parameters['models'][h_params]['Model']
 
