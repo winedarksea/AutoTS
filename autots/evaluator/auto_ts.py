@@ -57,6 +57,7 @@ from autots.evaluator.validation import (
     generate_validation_indices,
 )
 from autots.tools.constraint import constraint_new_params
+from autots.tools.profile import profile_time_series
 
 
 class AutoTS(object):
@@ -2771,6 +2772,14 @@ class AutoTS(object):
                     modz = models_to_use
                 else:
                     modz = None
+                id_to_group_mapping = None
+                if mosaic_config.get("profiled", False):
+                    if df_subset is None:
+                        df = self.df_wide_numeric
+                    else:
+                        df = df_subset
+                    id_to_group_mapping = profile_time_series(df).set_index("SERIES").to_dict()["PROFILE"]
+                # and actually generate the template
                 ens_templates = generate_mosaic_template(
                     initial_results=initial_results.model_results,
                     full_mae_ids=initial_results.full_mae_ids,
@@ -2780,6 +2789,7 @@ class AutoTS(object):
                     smoothing_window=mosaic_config.get("smoothing_window"),
                     metric_name=str(mos),
                     models_to_use=modz,
+                    id_to_group_mapping=id_to_group_mapping,
                 )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0

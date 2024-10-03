@@ -1367,11 +1367,15 @@ def model_forecast(
         )
         # horizontal generalization
         if horizontal_flag == 2:
-            available_models = list(model_param_dict['models'].keys())
-            known_matches = model_param_dict['series']
-            all_series = generalize_horizontal(
-                df_train, known_matches, available_models
-            )
+            profiled = "profile" in model_param_dict.get("model_metric")
+            if profiled:
+                all_series = None
+            else:
+                available_models = list(model_param_dict['models'].keys())
+                known_matches = model_param_dict['series']
+                all_series = generalize_horizontal(
+                    df_train, known_matches, available_models
+                )
         else:
             all_series = None
         total_ens = ens_template.shape[0]

@@ -9,6 +9,7 @@ from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 from autots.models.sklearn import retrieve_classifier
+from autots.tools.profile import profile_time_series
 
 
 horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
@@ -88,6 +89,7 @@ def parse_mosaic(ensemble):
             'smoothing_window': None,
             'crosshair': False,
             'n_models': None,
+            'profiled': False,
         }
     elif ensemble in ["mosaic_crosshair", 'mosaic-crosshair']:
         return {
@@ -95,6 +97,7 @@ def parse_mosaic(ensemble):
             'smoothing_window': None,
             'crosshair': True,
             'n_models': None,
+            'profiled': False,
         }
     elif ensemble in ["mosaic_window", "mosaic-window"]:
         return {
@@ -102,6 +105,7 @@ def parse_mosaic(ensemble):
             'smoothing_window': 7,
             'crosshair': False,
             'n_models': None,
+            'profiled': False,
         }
     else:
         # mosaic-metric-crosshair-window-n_models
@@ -148,6 +152,7 @@ def parse_mosaic(ensemble):
             'smoothing_window': swindow,
             'crosshair': crosshair,
             'n_models': n_models,
+            "profiled": "profile" in ensemble,
         }
 
 
@@ -1706,6 +1711,7 @@ def generate_mosaic_template(
     smoothing_window=None,
     metric_name="MAE",
     models_to_use=None,
+    id_to_group_mapping=None,
     **kwargs,
 ):
     """Generate an ensemble template from results."""
@@ -1724,21 +1730,22 @@ def generate_mosaic_template(
     # since it is sorted by id and filtered to only those run through all vals, this is the slice step after each val
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
-    best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
-    model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
-    if False:
+    if id_to_group_mapping is None:
+        best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
+        model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
+    else:
         # group by profile
-        from autots.tools.profile import profile_time_series
-        id_to_group_mapping = profile_time_series(df, cvar_threshold=0.5).set_index("SERIES").to_dict()["PROFILE"]
-        column_names = df.columns
         res = []
         for group in set(list(id_to_group_mapping.values())):
-            idz = [column_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group]
+            idz = [col_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group]
             subsetz = errors_array[:, :, idz].mean(axis=2)
             best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(axis=0)
             res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=[group]))
+        # add on the overall for any missing groups
+        best_points = np.add.reduceat(errors_array.mean(axis=2), slice_points, axis=0).argmin(axis=0)
+        res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=["overall"]))
+        # combines
         model_id_array = pd.concat(res, axis=1)
-        # need to add missing profiles
 
     used_models = pd.unique(model_id_array.values.flatten())
     used_models_results = local_results[
@@ -1812,6 +1819,17 @@ def MosaicEnsemble(
     """
     # work with forecast_lengths longer or shorter than provided by template
 
+    # handle profiled mosaic
+    profiled = "profile" in ensemble_params.get("model_metric")
+    if profiled:
+        profiled = profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
+        known_matches = ensemble_params['series']
+        valid_values = list(known_matches.keys())
+        profiled = {key: value if value in valid_values else "overall" for key, value in profiled.items()}
+        # json.loads(ensemble_params["ModelParameters"])["series"][profiled[col]]
+        prematched_series = {col: known_matches[profiled[col]] for col in df_train.columns}
+    elif prematched_series is None:
+        prematched_series = ensemble_params['series']
     # this is meant to fill in any failures
     startTime = datetime.datetime.now()
     sample_idx = next(iter(forecasts.values())).index
@@ -1823,8 +1841,6 @@ def MosaicEnsemble(
     if not full_models:
         print("No full models available for mosaic generalization.")
         full_models = available_models  # hope it doesn't need to fill
-    if prematched_series is None:
-        prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(
         df_train,
         prematched_series,
@@ -1911,7 +1927,9 @@ def MosaicEnsemble(
     except Exception:
         ens_runtime = datetime.timedelta(0)
 
-    ensemble_params['series'] = all_series
+    # don't overwrite with mapping if profile type mosaic is used
+    if not profiled:
+        ensemble_params['series'] = all_series
     ens_result = PredictionObject(
         model_name="Ensemble",
         forecast_length=len(sample_idx),
