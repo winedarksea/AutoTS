@@ -4013,8 +4013,10 @@ class AutoTS(object):
                 )
                 
                 performance_summary = np.nanmedian(errors_array, axis=(1, 2))
-                # threshold = np.median(performance_summary) * 1.2
-                filtered_models = errors_array[performance_summary <= threshold]
+                filtered_models = errors_array[performance_summary <= threshold].copy()
+                if filtered_models.shape[0] == 0:
+                    inner_threshold = np.median(performance_summary) * 1.2
+                    filtered_models = errors_array[performance_summary <= inner_threshold].copy()
                 median_error = np.median(filtered_models, axis=0)
                 min_error = np.min(filtered_models, axis=0)
                 score = (median_error * 0.01 + min_error)

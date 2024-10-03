@@ -1645,14 +1645,18 @@ def process_mosaic_arrays(
     models_to_use=None,
     smoothing_window=None,
 ):
-    # sort by runtime then drop duplicates on metric results
+    # sort by runtime then drop duplicates on metric results to remove functionally equivalent model duplication
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
-    local_results.drop_duplicates(
-        subset=['ValidationRound', 'smape', 'mae', 'spl'], inplace=True
+    temp = local_results.drop_duplicates(
+        subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first",
     )
+    # there is still a possible edge case where a model matches different, but equal models on each validation round but is better overall
+    # but as models being identical on point and probabilistic and this occurring seems unlikely
+    local_results = local_results[local_results["ID"].isin(temp["ID"].unique())]
     # remove slow models... tbd
     # select only models run through all validations
-    run_count = local_results[['Model', 'ID']].groupby("ID").count()
+    # previous version was failing to remove models that failed on validation
+    run_count = local_results[local_results["Exceptions"].isnull()][['Model', 'ID']].groupby("ID").count()
     fully_validated = run_count[run_count['Model'] == total_vals].index.tolist()
     if models_to_use is None:
         models_to_use = fully_validated
@@ -1725,6 +1729,9 @@ def generate_mosaic_template(
         models_to_use=models_to_use,
         smoothing_window=smoothing_window,
     )
+    checksum = pd.Series(id_array).value_counts()
+    # should be the same because all should have the same num validations
+    assert checksum.min() == checksum.max(), "id array wrong in mosaic generation"
     # window across multiple time steps to smooth the result
     name = "Mosaic"
     # since it is sorted by id and filtered to only those run through all vals, this is the slice step after each val
@@ -1738,9 +1745,12 @@ def generate_mosaic_template(
         res = []
         for group in set(list(id_to_group_mapping.values())):
             idz = [col_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group and key in col_names]
-            subsetz = errors_array[:, :, idz].mean(axis=2)
-            best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(axis=0)
-            res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=[group]))
+            if len(idz) < 1:
+                pass
+            else:
+                subsetz = errors_array[:, :, idz].mean(axis=2)
+                best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(axis=0)
+                res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=[group]))
         # add on the overall for any missing groups
         best_points = np.add.reduceat(errors_array.mean(axis=2), slice_points, axis=0).argmin(axis=0)
         res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=["overall"]))
