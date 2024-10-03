@@ -1737,7 +1737,7 @@ def generate_mosaic_template(
         # group by profile
         res = []
         for group in set(list(id_to_group_mapping.values())):
-            idz = [col_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group]
+            idz = [col_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group and key in col_names]
             subsetz = errors_array[:, :, idz].mean(axis=2)
             best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(axis=0)
             res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=[group]))
