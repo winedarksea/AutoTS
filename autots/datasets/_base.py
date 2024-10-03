@@ -776,6 +776,7 @@ def load_artificial(long=False, date_start=None, date_end=None):
         date_start = date_start.date()
     dates = pd.date_range(date_start, date_end)
     size = dates.size
+    new_size = int(size / 10)
     rng = np.random.default_rng()
     holiday = pd.Series(np.arange(size) * 0.025 + rng.normal(0, 0.2, size) + (np.sin((np.pi / 7) * np.arange(size)) * 0.5), index=dates, name='holiday')
     # January 1st
@@ -822,6 +823,8 @@ def load_artificial(long=False, date_start=None, date_end=None):
                 / 2,
             ),
             "linear": np.arange(size) * 0.025,
+            "flat": 1,
+            "new_product": np.concatenate([np.zeros(int(size - new_size)), np.random.choice(a=[-0.8, 0, 0.8], size=new_size).cumsum()]), 
             "sine_wave": np.sin(np.arange(size)),
             "sine_seasonality_monthweek": (
                 (np.sin((np.pi / 7) * np.arange(size)) * 0.25 + 0.25)

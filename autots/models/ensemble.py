@@ -1726,6 +1726,20 @@ def generate_mosaic_template(
     id_sliced = id_array[slice_points]
     best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
     model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
+    if False:
+        # group by profile
+        from autots.tools.profile import profile_time_series
+        id_to_group_mapping = profile_time_series(df, cvar_threshold=0.5).set_index("SERIES").to_dict()["PROFILE"]
+        column_names = df.columns
+        res = []
+        for group in set(list(id_to_group_mapping.values())):
+            idz = [column_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group]
+            subsetz = errors_array[:, :, idz].mean(axis=2)
+            best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(axis=0)
+            res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=[group]))
+        model_id_array = pd.concat(res, axis=1)
+        # need to add missing profiles
+
     used_models = pd.unique(model_id_array.values.flatten())
     used_models_results = local_results[
         ["ID", "Model", "ModelParameters", "TransformationParameters"]
