@@ -2083,6 +2083,12 @@ class AutoTS(object):
             if future_regressor_train is None
             else future_regressor_train
         )
+        if verbose == "self":
+            verbose = self.verbose
+        if forecast_length == "self":
+            forecast_length = self.forecast_length
+        if prediction_interval == "self":
+            prediction_interval = self.prediction_interval
         self.update_fit_check = (
             use_model in update_fit
         )  # True means model can be updated without retraining
