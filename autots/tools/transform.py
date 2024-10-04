@@ -4091,11 +4091,15 @@ class FFTFilter(EmptyTransformer):
         self,
         cutoff: float = 0.1,
         reverse: bool = False,
+        on_transform: bool = True,
+        on_inverse: bool = False,
         **kwargs,
     ):
         super().__init__(name="FFTFilter")
         self.cutoff = cutoff
         self.reverse = reverse
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -4114,12 +4118,7 @@ class FFTFilter(EmptyTransformer):
         self._fit(df)
         return self
 
-    def transform(self, df):
-        """Return changed data.
-
-        Args:
-            df (pandas.DataFrame): input dataframe
-        """
+    def _filter(self, df):
         data = df.to_numpy()
         spectrum = np.fft.fft(data, axis=0)
         frequencies = np.fft.fftfreq(data.shape[0])
@@ -4134,13 +4133,27 @@ class FFTFilter(EmptyTransformer):
         smoothed_data = np.real(np.fft.ifft(spectrum, axis=0))
         return pd.DataFrame(smoothed_data, index=df.index, columns=df.columns)
 
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_transform:
+            return self._filter(df)
+        else:
+            return df
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df
+        if self.on_inverse:
+            return self._filter(df)
+        else:
+            return df
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -4159,6 +4172,8 @@ class FFTFilter(EmptyTransformer):
                 [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1],
             )[0],
             "reverse": random.choices([False, True], [0.9, 0.1])[0],
+            "on_transform": random.choices([False, True], [0.1, 0.9])[0],
+            "on_inverse": random.choices([False, True], [0.9, 0.1])[0],
         }
 
 

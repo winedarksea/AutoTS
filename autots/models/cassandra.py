@@ -2648,7 +2648,7 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
         max_bound = 14
         bounds = [(0, max_bound) for x in x0]
         cost_func = cost_function_l1
-        x0[x0 <= 0] = 0.000001
+        x0[x0 <= 0] = 0.01
         x0[x0 > max_bound] = max_bound - 0.0001
     else:
         cost_func = cost_function_l1
