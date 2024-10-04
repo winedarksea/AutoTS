@@ -2098,14 +2098,14 @@ class SectionalMotif(ModelObject):
         trans_dict = superfast_transformer_dict.copy()
         trans_dict["FFTFilter"] = 0.1
         trans_dict["FFTDecomposition"] = 0.1
-        comparison_transformation = random.choice([None, True], [0.6, 0.4])[0]
+        comparison_transformation = random.choices([None, True], [0.6, 0.4])[0]
         if comparison_transformation is not None:
             comparison_transformation = RandomTransform(
                 transformer_list=trans_dict,
                 transformer_max_depth=2,
                 allow_none=True,
             )
-        combination_transformation = random.choice([None, True], [0.6, 0.4])[0]
+        combination_transformation = random.choices([None, True], [0.6, 0.4])[0]
         if combination_transformation is not None:
             combination_transformation = RandomTransform(
                 transformer_list=trans_dict,
