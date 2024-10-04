@@ -18,6 +18,7 @@ from autots.tools.seasonal import (
     seasonal_int,
     datepart_components,
     date_part_methods,
+    create_changepoint_features,
 )
 from autots.tools.fft import FFT
 from autots.tools.transform import (
@@ -535,6 +536,16 @@ class Cassandra(ModelObject):
                     columns=df.columns,
                 )
                 x_list.append(resid.rename(columns=lambda x: "rolling_trend_" + str(x)))
+            elif self.trend_standin == "changepoints":
+                x_t = create_changepoint_features(
+                    self.df.index, changepoint_spacing=60,
+                    changepoint_distance_end=120,
+                )
+                x_list.append(
+                    x_t
+                )
+            else:
+                raise ValueError(f"trend_standin arg `{self.trend_standin}` not recognized")
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(
@@ -1921,16 +1932,16 @@ class Cassandra(ModelObject):
         if method in ['deep', 'all']:
             trend_base = 'deep'
             trend_standin = random.choices(
-                [None, 'random_normal', 'rolling_trend'],
-                [0.7, 0.3, 0.1],
+                [None, 'random_normal', 'rolling_trend', "changepoints"],
+                [0.7, 0.3, 0.1, 0.2],
             )[0]
         else:
             trend_base = random.choices(
                 ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
             )[0]
             trend_standin = random.choices(
-                [None, 'random_normal'],
-                [0.7, 0.3],
+                [None, 'random_normal', 'changepoints'],
+                [0.7, 0.2, 0.2],
             )[0]
         if trend_base == "random":
             model_str = random.choices(

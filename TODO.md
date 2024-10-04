@@ -23,10 +23,12 @@
 * FIRFilter transformer added
 * mle and imle downscaled to reduce score imbalance issues with these two in generate score
 * SectionalMotif now more robust to forecast lengths longer than history
+* new transformer and metric options for SectionalMotif
 * NaN robustness to matse
 * 'round' option to Constraint
 * minor change to mosaic min style ensembles to remove edge case errors
 * 'mosaic-profile' and 'median' styles mosaic added
+* changepoint style trend as an option to GLM
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

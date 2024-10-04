@@ -887,3 +887,31 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
     return pd.DataFrame(wavelets, index=DTindex).rename(
         columns=lambda x: f"wavelet_{p}_" + str(x)
     )
+
+
+def create_changepoint_features(DTindex, changepoint_spacing=60, changepoint_distance_end=120):
+    """
+    Creates a feature set for estimating trend changepoints using linear regression.
+    
+    Parameters:
+    DTindex (pd.DatetimeIndex): a datetimeindex
+    changepoint_spacing (int): Distance between consecutive changepoints.
+    changepoint_distance_end (int): Distance of the final changepoint from the last row of the DataFrame.
+    
+    Returns:
+    pd.DataFrame: DataFrame containing changepoint features for linear regression.
+    """
+    n = len(DTindex)
+    
+    # Create an array of changepoint positions based on the spacing and distance from the end
+    changepoints = np.arange(0, n - changepoint_distance_end, changepoint_spacing)
+    
+    # Initialize an empty DataFrame to store changepoint features
+    changepoint_features = pd.DataFrame(index=DTindex)
+    
+    # For each changepoint, create a feature column with 0's before the changepoint and increasing time after
+    for i, cp in enumerate(changepoints):
+        feature_name = f'changepoint_{i+1}'
+        changepoint_features[feature_name] = np.maximum(0, np.arange(n) - cp)
+    
+    return changepoint_features

@@ -591,10 +591,13 @@ def anomaly_new_params(method='random'):
     elif method_choice == "prediction_interval":
         method_params = {"prediction_interval": random.choice([0.9, 0.99])}
     elif method_choice == "IQR":
+        iqr_threshold = random.choices([1.5, 2.0, 2.5, 3.0, 'other'], [0.1, 0.2, 0.2, 0.2, 0.1])[
+            0
+        ]
+        if iqr_threshold == "other":
+            iqr_threshold = random.randint(2, 5) + (random.randint(0, 10) / 10)
         method_params = {
-            'iqr_threshold': random.choices([1.5, 2.0, 2.5, 3.0], [0.1, 0.4, 0.2, 0.1])[
-                0
-            ],
+            'iqr_threshold': iqr_threshold,
             'iqr_quantiles': random.choices([[0.25, 0.75], [0.4, 0.6]], [0.8, 0.2])[0],
         }
     elif method_choice == "nonparametric":

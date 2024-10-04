@@ -17,6 +17,7 @@ from autots.tools.seasonal import (
     seasonal_int,
     date_part_methods,
     base_seasonalities,
+    create_changepoint_features,
 )
 from autots.tools.holiday import holiday_flag
 
@@ -199,6 +200,7 @@ class GLM(ModelObject):
         regression_type: str = None,
         family='Gaussian',
         constant: bool = False,
+        changepoint_spacing: int = None,
         verbose: int = 1,
         n_jobs: int = None,
         **kwargs,
@@ -216,6 +218,7 @@ class GLM(ModelObject):
         )
         self.family = family
         self.constant = constant
+        self.changepoint_spacing = changepoint_spacing
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied
@@ -263,6 +266,12 @@ class GLM(ModelObject):
             X = pd.to_numeric(
                 self.df_train.index, errors='coerce', downcast='integer'
             ).to_numpy()
+        if self.changepoint_spacing is not None:
+            x_t = create_changepoint_features(
+                self.df_train.index, changepoint_spacing=self.changepoint_spacing,
+                changepoint_distance_end=self.changepoint_spacing,
+            )
+            X = np.concatenate((X, x_t.to_numpy()), axis=1)
         if self.constant in [True, 'True', 'true']:
             from statsmodels.tools import add_constant
 
@@ -283,6 +292,11 @@ class GLM(ModelObject):
             Xf = date_part(test_index, method=self.regression_type).to_numpy()
         else:
             Xf = pd.to_numeric(test_index, errors='coerce', downcast='integer').to_numpy()
+
+        if self.changepoint_spacing is not None:
+            # this a funny little hack for making a dataframe from a row
+            x_tf = pd.DataFrame(index=test_index, columns=x_t.columns).fillna(x_t.iloc[-1])
+            Xf = np.concatenate((Xf, x_tf.to_numpy()), axis=1)
         if self.constant or self.constant == 'True':
             Xf = add_constant(Xf, has_constant='add')
         if self.regression_type == 'User':
@@ -378,6 +392,7 @@ class GLM(ModelObject):
             'family': family_choice,
             'constant': constant_choice,
             'regression_type': regression_type_choice,
+            'changepoint_spacing': random.choices([None, 30, 60, 180, 5040], [0.5, 0.1, 0.1, 0.1, 0.1])[0],
         }
 
     def get_params(self):
@@ -386,6 +401,7 @@ class GLM(ModelObject):
             'family': self.family,
             'constant': self.constant,
             'regression_type': self.regression_type,
+            'changepoint_spacing': self.changepoint_spacing,
         }
 
 
