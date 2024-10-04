@@ -5922,6 +5922,7 @@ def transformer_list_to_dict(transformer_list):
         del fast_transformer_dict["Cointegration"]
         del fast_transformer_dict["BTCD"]
         del fast_transformer_dict["LocalLinearTrend"]
+        del fast_transformer_dict["KalmanSmoothing"]  # potential kernel/RAM issues
 
     if transformer_list is None:
         transformer_list = "superfast"
@@ -5934,7 +5935,6 @@ def transformer_list_to_dict(transformer_list):
     elif transformer_list == "scalable":
         # "scalable" meant to be even smaller than "fast" subset of transformers
         transformer_list = fast_transformer_dict.copy()
-        del transformer_list["KalmanSmoothing"]  # potential kernel/RAM issues
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         del transformer_list["ReplaceConstant"]
