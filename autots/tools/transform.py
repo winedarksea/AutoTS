@@ -4168,8 +4168,8 @@ class FFTFilter(EmptyTransformer):
         """Generate new random parameters"""
         return {
             "cutoff": random.choices(
-                [0.005, 0.01, 0.05, 0.1, 0.2, 0.4, 0.8, 7, 365],
-                [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1],
+                [0.005, 0.01, 0.05, 0.1, 0.14, 0.2, 0.4, 0.6, 0.8, 7, 365],
+                [0.1, 0.2, 0.1, 0.24, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1],
             )[0],
             "reverse": random.choices([False, True], [0.9, 0.1])[0],
             "on_transform": random.choices([False, True], [0.1, 0.9])[0],
@@ -5837,6 +5837,8 @@ superfast_transformer_dict = {
     # "BKBandpassFilter": 0.01,  # seems feasible, untested
     # "DiffSmoother": 0.005,  # seems feasible, untested
     # "FIRFilter": 0.005,  # seems feasible, untested
+    # "FFTFilter": 0.01,  # seems feasible, untested
+    # "FFTDecomposition": 0.01,  # seems feasible, untested
 }
 # Split tranformers by type
 # filters that remain near original space most of the time

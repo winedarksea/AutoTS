@@ -36,7 +36,7 @@ def data_profile(df):
     return profile_df
 
 
-def profile_time_series(df, adi_threshold=1.32, cvar_threshold=0.49, flat_threshold=0.9, new_product_threshold=0.9):
+def profile_time_series(df, adi_threshold=1.3, cvar_threshold=0.5, flat_threshold=0.9, new_product_threshold=0.9):
     """
     Profiles time series data into categories: 
         smooth, intermittent, erratic, lumpy, flat, new_product

@@ -31,6 +31,7 @@ from autots.tools.transform import (
 )
 from autots.tools.fft import fourier_extrapolation
 from autots.tools.impute import FillNA
+from autots.evaluator.metrics import wasserstein
 
 
 # these are all optional packages
@@ -1799,6 +1800,8 @@ class SectionalMotif(ModelObject):
         k: int = 10,
         stride_size: int = 1,
         fillna: str = "SimpleSeasonalityMotifImputer",  # excessive forecast length only
+        comparison_transformation: dict = None,
+        combination_transformation: dict = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -1818,6 +1821,8 @@ class SectionalMotif(ModelObject):
         self.k = k
         self.stride_size = stride_size
         self.fillna = fillna
+        self.comparison_transformation = comparison_transformation
+        self.combination_transformation = combination_transformation
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1858,18 +1863,26 @@ class SectionalMotif(ModelObject):
         distance_metric = self.distance_metric
         regression_type = str(self.regression_type).lower()
 
+        if self.comparison_transformation is not None:
+            self.comparison_transformer = GeneralTransformer(
+                **self.comparison_transformation
+            )
+            use_df = self.comparison_transformer.fit_transform(self.df)
+        else:
+            use_df = self.df
+
         # the regressor can be tacked on to provide (minor) influence to the distance metric
         if regression_type == "user":
             # here unlagging the regressor to match with history only
             full_regr = pd.concat([self.future_regressor, future_regressor], axis=0)
-            full_regr = full_regr.tail(self.df.shape[0])
-            full_regr.index = self.df.index
-            array = pd.concat([self.df, full_regr], axis=1).to_numpy()
+            full_regr = full_regr.tail(use_df.shape[0])
+            full_regr.index = use_df.index
+            array = pd.concat([use_df, full_regr], axis=1).to_numpy()
         elif regression_type in base_seasonalities or isinstance(self.regression_type, list):
-            X = date_part(self.df.index, method=self.regression_type)
-            array = pd.concat([self.df, X], axis=1).to_numpy()
+            X = date_part(use_df.index, method=self.regression_type)
+            array = pd.concat([use_df, X], axis=1).to_numpy()
         else:
-            array = self.df.to_numpy()
+            array = use_df.to_numpy()
         tlt_len = array.shape[0]
         self.combined_window_size = window_size + forecast_length
         self.excessive_size_flag = False
@@ -1910,6 +1923,39 @@ class SectionalMotif(ModelObject):
                     ]
                 )
                 res = np.mean([res, res_diff], axis=0)
+        elif distance_metric == "wasserstein":
+            res = np.array(
+                [
+                    np.array(
+                        [
+                            wasserstein(
+                                array[:, a][window_idxs[i, :window_size]],
+                                array[(tlt_len - window_size):tlt_len, a]
+                            )
+                            for i in range(window_idxs.shape[0])
+                        ]
+                    )
+                    for a in range(array.shape[1])
+                ]
+            )
+            if self.include_differenced:
+                array_diff = np.diff(array, n=1, axis=0)
+                array_diff = np.concatenate([array_diff[0:1], array_diff])
+                res_diff = np.array(
+                    [
+                        np.array(
+                            [
+                                wasserstein(
+                                    array_diff[:, a][window_idxs[i, :window_size]],
+                                    array_diff[(tlt_len - window_size):tlt_len, a]
+                                )
+                                for i in range(window_idxs.shape[0])
+                            ]
+                        )
+                        for a in range(array_diff.shape[1])
+                    ]
+                )
+                res = np.mean([res, res_diff], axis=0)
         else:
             res = np.array(
                 [
@@ -1942,13 +1988,21 @@ class SectionalMotif(ModelObject):
         num_top = self.k
         res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
         self.windows = window_idxs[res_idx, window_size:]
+
+        if self.combination_transformation is not None:
+            self.combination_transformer = GeneralTransformer(
+                **self.combination_transformation
+            )
+            array = self.combination_transformer.fit_transform(self.df).to_numpy()
+        else:
+            array = self.df.to_numpy()
         results = array[self.windows]
         # reshape results to (num_windows, forecast_length, num_series)
         if results.ndim == 4:
             res_shape = results.shape
             results = results.reshape((res_shape[0], res_shape[2], res_shape[3]))
         if regression_type == "user" or regression_type in base_seasonalities or isinstance(self.regression_type, list):
-            results = results[:, :, : self.df.shape[1]]
+            results = results[:, :, : use_df.shape[1]]
         # now aggregate results into point and bound forecasts
         if point_method == "weighted_mean":
             weights = res_sum[res_idx].flatten()
@@ -1983,6 +2037,14 @@ class SectionalMotif(ModelObject):
             forecast = FillNA(forecast.reindex(test_index), method=self.fillna)
             lower_forecast = FillNA(lower_forecast.reindex(test_index), method=self.fillna)
             upper_forecast = FillNA(upper_forecast.reindex(test_index), method=self.fillna)
+        if self.combination_transformation is not None:
+            forecast = self.combination_transformer.inverse_transform(forecast)
+            lower_forecast = self.combination_transformer.inverse_transform(
+                lower_forecast
+            )
+            upper_forecast = self.combination_transformer.inverse_transform(
+                upper_forecast
+            )
         self.result_windows = results
         if just_point_forecast:
             return forecast
@@ -2013,7 +2075,7 @@ class SectionalMotif(ModelObject):
             'cityblock',
             'correlation',
             'cosine',
-            'dice',
+            # 'dice',
             'euclidean',
             'hamming',
             'jaccard',
@@ -2030,7 +2092,27 @@ class SectionalMotif(ModelObject):
             'sqeuclidean',
             'yule',
             "nan_euclidean",
+            "wasserstein",
         ]
+        # note this custom override
+        trans_dict = superfast_transformer_dict.copy()
+        trans_dict["FFTFilter"] = 0.1
+        trans_dict["FFTDecomposition"] = 0.1
+        comparison_transformation = random.choice([None, True], [0.6, 0.4])[0]
+        if comparison_transformation is not None:
+            comparison_transformation = RandomTransform(
+                transformer_list=trans_dict,
+                transformer_max_depth=2,
+                allow_none=True,
+            )
+        combination_transformation = random.choice([None, True], [0.6, 0.4])[0]
+        if combination_transformation is not None:
+            combination_transformation = RandomTransform(
+                transformer_list=trans_dict,
+                transformer_max_depth=2,
+                allow_none=True,
+            )
+
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -2059,6 +2141,8 @@ class SectionalMotif(ModelObject):
             "k": k_choice,
             "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
             'regression_type': regression_choice,
+            "comparison_transformation": comparison_transformation,
+            "combination_transformation": combination_transformation,
         }
 
     def get_params(self):
@@ -2071,6 +2155,8 @@ class SectionalMotif(ModelObject):
             "k": self.k,
             "stride_size": self.stride_size,
             'regression_type': self.regression_type,
+            'comparison_transformation': self.comparison_transformation,
+            'combination_transformation': self.combination_transformation,
         }
 
 
