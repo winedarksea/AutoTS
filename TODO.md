@@ -26,7 +26,7 @@
 * NaN robustness to matse
 * 'round' option to Constraint
 * minor change to mosaic min style ensembles to remove edge case errors
-* 'mosaic-profile' style mosaic added
+* 'mosaic-profile' and 'median' styles mosaic added
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

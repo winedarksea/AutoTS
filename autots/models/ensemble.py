@@ -31,6 +31,8 @@ full_ensemble_test_list = [
     "mosaic-mae-0-40",
     "mosaic-weighted-0-40",
     "mosaic-spl-3-10",  # this one in particular hard-coded for testing
+    "mosaic-mae-profile-0-36",
+    "mosaic-weighted-median",
 ]
 
 
@@ -1831,6 +1833,7 @@ def MosaicEnsemble(
 
     # handle profiled mosaic
     profiled = "profile" in ensemble_params.get("model_metric")
+    medianed = "median" in ensemble_params.get("model_metric")
     if profiled:
         profiled = profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
         known_matches = ensemble_params['series']
@@ -1862,6 +1865,65 @@ def MosaicEnsemble(
 
     final = pd.DataFrame.from_dict(all_series)
     final.index.name = "forecast_period"
+    if medianed:
+        # this doesn't assure all three models are unique, but mostly should
+        nx1 = final.shift(1).bfill()
+        nx2 = final.shift(-1).ffill()
+        nx3 = final.shift(2).bfill()
+        nx4 = final.shift(-2).ffill()
+        nx1 = nx1.where(final != nx1, nx2)
+        nx2 = nx2.where((nx1 != nx2) & (final != nx2), nx3)
+        nx2 = nx2.where((nx1 != nx2) & (final != nx2), nx4)
+
+    forecast_df, u_forecast_df, l_forecast_df = _buildup_mosaics(
+        final, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx
+    )
+    if medianed:
+        forecast_df2, u_forecast_df2, l_forecast_df2 = _buildup_mosaics(
+            nx1, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx
+        )
+        forecast_df3, u_forecast_df3, l_forecast_df3 = _buildup_mosaics(
+            nx2, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx
+        )
+        # Stack the three DataFrames into a 3D NumPy array
+        stacked = np.stack([forecast_df.to_numpy(), forecast_df2.to_numpy(), forecast_df3.to_numpy()], axis=2)
+        median_array = np.median(stacked, axis=2)
+        forecast_df = pd.DataFrame(median_array, index=forecast_df.index, columns=forecast_df.columns)
+        # upper
+        stacked = np.stack([u_forecast_df.to_numpy(), u_forecast_df2.to_numpy(), u_forecast_df3.to_numpy()], axis=2)
+        median_array = np.median(stacked, axis=2)
+        u_forecast_df = pd.DataFrame(median_array, index=u_forecast_df.index, columns=u_forecast_df.columns)
+        # lower
+        stacked = np.stack([l_forecast_df.to_numpy(), l_forecast_df2.to_numpy(), l_forecast_df3.to_numpy()], axis=2)
+        median_array = np.median(stacked, axis=2)
+        l_forecast_df = pd.DataFrame(median_array, index=l_forecast_df.index, columns=l_forecast_df.columns)
+
+    # combine runtimes
+    try:
+        ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
+    except Exception:
+        ens_runtime = datetime.timedelta(0)
+
+    # don't overwrite with mapping if profile type mosaic is used
+    if not profiled:
+        ensemble_params['series'] = all_series
+    ens_result = PredictionObject(
+        model_name="Ensemble",
+        forecast_length=len(sample_idx),
+        forecast_index=sample_idx,
+        forecast_columns=org_idx,
+        lower_forecast=l_forecast_df,
+        forecast=forecast_df,
+        upper_forecast=u_forecast_df,
+        prediction_interval=prediction_interval,
+        predict_runtime=datetime.datetime.now() - startTime,
+        fit_runtime=ens_runtime,
+        model_parameters=ensemble_params,
+    )
+    return ens_result
+
+
+def _buildup_mosaics(final, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx):
     melted = pd.melt(
         final,
         var_name="series_id",
@@ -1931,26 +1993,4 @@ def MosaicEnsemble(
     forecast_df = forecast_df.reindex(columns=org_idx)
     u_forecast_df = u_forecast_df.reindex(columns=org_idx)
     l_forecast_df = l_forecast_df.reindex(columns=org_idx)
-    # combine runtimes
-    try:
-        ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
-    except Exception:
-        ens_runtime = datetime.timedelta(0)
-
-    # don't overwrite with mapping if profile type mosaic is used
-    if not profiled:
-        ensemble_params['series'] = all_series
-    ens_result = PredictionObject(
-        model_name="Ensemble",
-        forecast_length=len(sample_idx),
-        forecast_index=sample_idx,
-        forecast_columns=org_idx,
-        lower_forecast=l_forecast_df,
-        forecast=forecast_df,
-        upper_forecast=u_forecast_df,
-        prediction_interval=prediction_interval,
-        predict_runtime=datetime.datetime.now() - startTime,
-        fit_runtime=ens_runtime,
-        model_parameters=ensemble_params,
-    )
-    return ens_result
+    return forecast_df, u_forecast_df, l_forecast_df
