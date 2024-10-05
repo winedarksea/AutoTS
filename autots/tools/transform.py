@@ -3097,8 +3097,9 @@ class HolidayTransformer(EmptyTransformer):
         use_wkdeom_holidays=True,
         use_lunar_holidays=True,
         use_lunar_weekday=False,
-        use_islamic_holidays=True,
-        use_hebrew_holidays=True,
+        use_islamic_holidays=False,
+        use_hebrew_holidays=False,
+        use_hindu_holidays=False,
         remove_excess_anomalies=True,
         impact=None,
         regression_params=None,
@@ -3126,6 +3127,7 @@ class HolidayTransformer(EmptyTransformer):
         self.use_lunar_weekday = use_lunar_weekday
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
+        self.use_hindu_holidays = use_hindu_holidays
         self.output = output
         self.anomaly_model = AnomalyRemoval(
             output=output, **self.anomaly_detector_params, n_jobs=n_jobs
@@ -3165,6 +3167,7 @@ class HolidayTransformer(EmptyTransformer):
             lunar_weekday=self.lunar_weekday,
             islamic_holidays=self.islamic_holidays,
             hebrew_holidays=self.hebrew_holidays,
+            hindu_holidays=self.hindu_holidays,
             max_features=max_features,
         )
 
@@ -3182,6 +3185,7 @@ class HolidayTransformer(EmptyTransformer):
             self.lunar_weekday,
             self.islamic_holidays,
             self.hebrew_holidays,
+            self.hindu_holidays,
         ) = anomaly_df_to_holidays(
             self.anomaly_model.anomalies,
             splash_threshold=self.splash_threshold,
@@ -3199,6 +3203,7 @@ class HolidayTransformer(EmptyTransformer):
             use_lunar_weekday=self.use_lunar_weekday,
             use_islamic_holidays=self.use_islamic_holidays,
             use_hebrew_holidays=self.use_hebrew_holidays,
+            use_hindu_holidays=self.use_hindu_holidays,
         )
         self.df_cols = df.columns
         return self
