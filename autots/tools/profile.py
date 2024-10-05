@@ -4,11 +4,11 @@ Profiling
 
 import numpy as np
 import pandas as pd
-from autots.tools.seasonal import date_part, create_changepoint_features
+from autots.tools.seasonal import date_part, create_changepoint_features, half_yr_spacing
 from autots.models.basics import BasicLinearModel
 
 def data_profile(df):
-    """
+    """Legacy profiler.
     Input: a pd DataFrame of columns which are time series, and a datetime index
 
     Output: a pd DataFrame of column per time series, with rows which are statistics
@@ -70,16 +70,21 @@ def summarize_series(df):
     return df_sum
 
 
-def profile_time_series(df, adi_threshold=1.3, cvar_threshold=0.5, flat_threshold=0.9, new_product_threshold=0.9, seasonal_threshold=0.5):
+def profile_time_series(
+        df, adi_threshold=1.3, cvar_threshold=0.5, flat_threshold=0.9,
+        new_product_threshold='auto',
+        seasonal_threshold=0.5
+):
     """
     Profiles time series data into categories: 
         smooth, intermittent, erratic, lumpy, flat, new_product
 
-    Parameters:
-    df (pd.DataFrame): Wide format DataFrame with datetime index and each column as a time series.
-
+    Args:
+        df (pd.DataFrame): Wide format DataFrame with datetime index and each column as a time series.
+        new_product_threshold (float): one of the more finiky thresholds, percent of null or zero data from beginning to declare new product
+        new_product_correct (bool): use dt index to correct
     Returns:
-    pd.DataFrame: DataFrame with 'SERIES' and 'DEMAND_PROFILE' columns.
+        pd.DataFrame: DataFrame with 'SERIES' and 'DEMAND_PROFILE' columns.
     """
 
     metrics_df = summarize_series(df).transpose()
@@ -87,6 +92,13 @@ def profile_time_series(df, adi_threshold=1.3, cvar_threshold=0.5, flat_threshol
     # Initialize demand profile as 'smooth'
     metrics_df['PROFILE'] = 'smooth'
 
+    if new_product_threshold == "auto":
+        half_yr_space = half_yr_spacing(df)
+        new_product_threshold = 1 - (half_yr_space * 0.65 / df.shape[0])
+        if new_product_threshold < 0.85:
+            new_product_threshold = 0.85
+        if new_product_threshold > 0.99:
+            new_product_threshold = 0.99
     # Apply conditions to classify the demand profiles
     metrics_df.loc[(metrics_df['adi'] >= adi_threshold) & (metrics_df['cv_squared'] < cvar_threshold), 'PROFILE'] = 'intermittent'
     metrics_df.loc[(metrics_df['adi'] < adi_threshold) & (metrics_df['cv_squared'] >= cvar_threshold), 'PROFILE'] = 'erratic'

@@ -18,6 +18,7 @@ from autots.tools.seasonal import (
     create_changepoint_features,
     changepoint_fcst_from_last_row,
     random_datepart,
+    half_yr_spacing,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import (
@@ -3434,11 +3435,11 @@ class BasicLinearModel(ModelObject):
         df = self.basic_profile(df)
         self.df = df
         if self.changepoint_spacing is None or self.changepoint_distance_end is None:
-            half_yr_spacing = int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))
+            half_yr_space = half_yr_spacing(df)
             if self.changepoint_spacing is None:
-                self.changepoint_spacing = half_yr_spacing
-            if self.changepoint_spacing is None:
-                self.changepoint_distance_end = int(half_yr_spacing / 2)
+                self.changepoint_spacing = int(half_yr_space)
+            if self.changepoint_distance_end is None:
+                self.changepoint_distance_end = int(half_yr_space / 2)
         if str(self.regression_type).lower() == "user":
             if future_regressor is None:
                 raise ValueError(
@@ -3457,7 +3458,7 @@ class BasicLinearModel(ModelObject):
         else:
             # Perform linear regression using the normal equation: (X.T @ X)^(-1) @ X.T @ Y
             self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
-    
+
         # Calculate predicted values for Y
         Y_pred = X_values @ self.beta
         
@@ -3590,8 +3591,8 @@ class BasicLinearModel(ModelObject):
             )[0]
         return {
             "datepart_method": random_datepart(method=method),
-            "changepoint_spacing": random.choices([6, 28, 60, 90, 180, 360, 5040], [0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
-            "changepoint_distance_end": random.choices([6, 28, 60, 90, 180, 360, 5040], [0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
+            "changepoint_spacing": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
+            "changepoint_distance_end": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
             "regression_type": regression_choice,
             "λ": random.choices([None, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000], [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], k=1)[0],
         }

@@ -28,8 +28,10 @@
 * 'round' option to Constraint
 * minor change to mosaic min style ensembles to remove edge case errors
 * 'mosaic-profile' and 'median' styles mosaic added
+* updated profiler, and improved feature generation for horizontal generalization
 * changepoint style trend as an option to GLM and GLS
 * added ShiftFirstValue which is only a minor nuance on PositiveShift transformer
+* added BasicLinearModel model
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

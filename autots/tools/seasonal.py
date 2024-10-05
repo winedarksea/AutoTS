@@ -935,3 +935,6 @@ def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
     forecast_steps = np.arange(n_forecast).reshape(-1, 1)  # Shape it as multiple rows, 1 column
     extended_features = np.maximum(0, last_values + forecast_steps)
     return pd.DataFrame(extended_features, columns=x_t_last_row.index)
+
+def half_yr_spacing(df):
+    return int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))
