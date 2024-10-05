@@ -28,7 +28,7 @@
 * 'round' option to Constraint
 * minor change to mosaic min style ensembles to remove edge case errors
 * 'mosaic-profile' and 'median' styles mosaic added
-* changepoint style trend as an option to GLM
+* changepoint style trend as an option to GLM and GLS
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

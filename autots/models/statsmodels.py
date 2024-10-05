@@ -18,6 +18,7 @@ from autots.tools.seasonal import (
     date_part_methods,
     base_seasonalities,
     create_changepoint_features,
+    changepoint_fcst_from_last_row,
 )
 from autots.tools.holiday import holiday_flag
 
@@ -52,6 +53,9 @@ class GLS(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
+        changepoint_spacing: int = None,
+        changepoint_distance_end: int = None,
+        constant: bool = False,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -62,6 +66,9 @@ class GLS(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
         )
+        self.changepoint_spacing = changepoint_spacing
+        self.changepoint_distance_end = changepoint_distance_end
+        self.constant = constant
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied
@@ -74,6 +81,23 @@ class GLS(ModelObject):
         df = self.basic_profile(df)
         self.df_train = df
         Xf = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        if self.constant:
+            Xf = np.concatenate((Xf.reshape(-1, 1), np.ones_like(Xf).reshape(-1, 1)), axis=1)
+        if self.changepoint_spacing is not None:
+            if self.changepoint_distance_end is None:
+                changepoint_distance_end = self.changepoint_spacing
+            else:
+                changepoint_distance_end = self.changepoint_distance_end
+            x_t = create_changepoint_features(
+                self.df_train.index, changepoint_spacing=self.changepoint_spacing,
+                changepoint_distance_end=changepoint_distance_end,
+            )
+            self.last_row = x_t.iloc[-1]
+            if Xf.ndim == 1:
+                Xf = np.concatenate((Xf.reshape(-1, 1), x_t.to_numpy()), axis=1)
+            else:
+                Xf = np.concatenate((Xf, x_t.to_numpy()), axis=1)
+        self.X = Xf
         self.model = GLS(df.values, Xf, missing='drop').fit()
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -95,6 +119,16 @@ class GLS(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         Xf = pd.to_numeric(index, errors='coerce', downcast='integer').values
+        if self.constant:
+            Xf = np.concatenate((Xf.reshape(-1, 1), np.ones_like(Xf).reshape(-1, 1)), axis=1)
+        if self.changepoint_spacing is not None:
+            # this a funny little hack for making a dataframe from a row
+            x_tf = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
+            if Xf.ndim == 1:
+                Xf = np.concatenate((Xf.reshape(-1, 1), x_tf.to_numpy()), axis=1)
+            else:
+                Xf = np.concatenate((Xf, x_tf.to_numpy()), axis=1)
+        self.Xf = Xf
         forecast = self.model.predict(Xf)
         df = pd.DataFrame(forecast, columns=self.column_names, index=index)
         if just_point_forecast:
@@ -126,11 +160,19 @@ class GLS(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
-        return {}
+        return {
+            "changepoint_spacing": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.6, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
+            "changepoint_distance_end": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.6, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
+            "constant": random.choices([True, False], [0.5, 0.5])[0]
+        }
 
     def get_params(self):
         """Return dict of current parameters"""
-        return {}
+        return {
+            "changepoint_spacing": self.changepoint_spacing,
+            "changepoint_distance_end": self.changepoint_distance_end,
+            "constant": self.constant,
+        }
 
 
 def glm_forecast_by_column(current_series, X, Xf, args):
@@ -271,7 +313,10 @@ class GLM(ModelObject):
                 self.df_train.index, changepoint_spacing=self.changepoint_spacing,
                 changepoint_distance_end=self.changepoint_spacing,
             )
-            X = np.concatenate((X, x_t.to_numpy()), axis=1)
+            if X.ndim == 1:
+                X = np.concatenate((X.reshape(-1, 1), x_t.to_numpy()), axis=1)
+            else:
+                X = np.concatenate((X, x_t.to_numpy()), axis=1)
         if self.constant in [True, 'True', 'true']:
             from statsmodels.tools import add_constant
 
@@ -295,8 +340,11 @@ class GLM(ModelObject):
 
         if self.changepoint_spacing is not None:
             # this a funny little hack for making a dataframe from a row
-            x_tf = pd.DataFrame(index=test_index, columns=x_t.columns).fillna(x_t.iloc[-1])
-            Xf = np.concatenate((Xf, x_tf.to_numpy()), axis=1)
+            x_tf = changepoint_fcst_from_last_row(x_t.iloc[-1], int(forecast_length))
+            if Xf.ndim == 1:
+                Xf = np.concatenate((Xf.reshape(-1, 1), x_tf.to_numpy()), axis=1)
+            else:
+                Xf = np.concatenate((Xf, x_tf.to_numpy()), axis=1)
         if self.constant or self.constant == 'True':
             Xf = add_constant(Xf, has_constant='add')
         if self.regression_type == 'User':

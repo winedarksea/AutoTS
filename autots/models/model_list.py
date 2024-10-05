@@ -232,9 +232,10 @@ multivariate = [
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
-no_params = ['LastValueNaive', 'GLS']
+no_params = ['LastValueNaive']
 # USED IN AUTO_MODEL, ONLY MODELS WHICH CAN ACCEPT RANDOM MIXING OF PARAMS
 recombination_approved = [
+    'GLS',
     'SeasonalNaive',
     'MotifSimulation',
     "ETS",

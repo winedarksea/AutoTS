@@ -135,7 +135,7 @@ def ModelMonster(
         )
 
     elif model == 'GLS':
-        return GLS(frequency=frequency, prediction_interval=prediction_interval)
+        return GLS(frequency=frequency, prediction_interval=prediction_interval, **parameters)
 
     elif model == 'GLM':
         model = GLM(

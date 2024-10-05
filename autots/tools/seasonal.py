@@ -891,27 +891,47 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
 
 def create_changepoint_features(DTindex, changepoint_spacing=60, changepoint_distance_end=120):
     """
-    Creates a feature set for estimating trend changepoints using linear regression.
+    Creates a feature set for estimating trend changepoints using linear regression, 
+    ensuring the final changepoint is at `changepoint_distance_end` from the last row.
     
     Parameters:
     DTindex (pd.DatetimeIndex): a datetimeindex
     changepoint_spacing (int): Distance between consecutive changepoints.
-    changepoint_distance_end (int): Distance of the final changepoint from the last row of the DataFrame.
+    changepoint_distance_end (int): Number of rows that belong to the final changepoint.
     
     Returns:
     pd.DataFrame: DataFrame containing changepoint features for linear regression.
     """
     n = len(DTindex)
     
-    # Create an array of changepoint positions based on the spacing and distance from the end
-    changepoints = np.arange(0, n - changepoint_distance_end, changepoint_spacing)
+    # Calculate the number of data points available for changepoints
+    changepoint_range_end = n - changepoint_distance_end
+
+    # Calculate the number of changepoints based on changepoint_spacing
+    # Only place changepoints within the range [0, changepoint_range_end)
+    changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
     
-    # Initialize an empty DataFrame to store changepoint features
-    changepoint_features = pd.DataFrame(index=DTindex)
-    
-    # For each changepoint, create a feature column with 0's before the changepoint and increasing time after
+    # Ensure the last changepoint is exactly at changepoint_distance_end from the end
+    changepoints = np.append(changepoints, changepoint_range_end)
+
+    # Efficient concatenation approach to generate changepoint features
+    res = []
     for i, cp in enumerate(changepoints):
         feature_name = f'changepoint_{i+1}'
-        changepoint_features[feature_name] = np.maximum(0, np.arange(n) - cp)
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+    
+    # Concatenate the changepoint features and set the index
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
     
     return changepoint_features
+
+
+
+def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
+    last_values = x_t_last_row.values.reshape(1, -1) + 1  # Shape it as 1 row, multiple columns
+    
+    # Create a 2D array where each column starts from the corresponding value in last_values
+    forecast_steps = np.arange(n_forecast).reshape(-1, 1)  # Shape it as multiple rows, 1 column
+    extended_features = np.maximum(0, last_values + forecast_steps)
+    return pd.DataFrame(extended_features, columns=x_t_last_row.index)
