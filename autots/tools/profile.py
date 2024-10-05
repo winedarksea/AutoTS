@@ -100,7 +100,7 @@ def profile_time_series(df, adi_threshold=1.3, cvar_threshold=0.5, flat_threshol
     return intermittence_df
 
 # burst, stationary, seasonality
-
+"""
 from autots.tools.seasonal import date_part
 
 x_s = date_part(df.index, method="common_fourier")
@@ -191,5 +191,4 @@ stationarity_labels = np.where(np.abs(slopes) < slope_threshold, 'Stationary', '
 stationarity_df = pd.DataFrame(stationarity_labels, index=df.columns, columns=['Stationarity'])
 
 print(stationarity_df)
-
-
+"""

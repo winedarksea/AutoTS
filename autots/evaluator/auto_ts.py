@@ -502,7 +502,7 @@ class AutoTS(object):
                     ],
                     full_ensemble_test_list,
                 ],
-                [0.3, 0.1, 0.2, 0.2, 0.1],
+                [0.3, 0.1, 0.2, 0.2, 0.2],
             )[0]
         if ensemble_choice in [None, ['simple']]:
             horizontal_ensemble_validation = False
