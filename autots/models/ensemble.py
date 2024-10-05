@@ -9,7 +9,7 @@ from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 from autots.models.sklearn import retrieve_classifier
-from autots.tools.profile import profile_time_series
+from autots.tools.profile import profile_time_series, summarize_series
 
 
 horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
@@ -34,12 +34,6 @@ full_ensemble_test_list = [
     "mosaic-mae-profile-0-36",
     "mosaic-weighted-median",
 ]
-
-
-def summarize_series(df):
-    """Summarize time series data. For now just df.describe()."""
-    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
-    return df_sum
 
 
 def mosaic_or_horizontal(all_series: dict):
