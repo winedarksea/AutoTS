@@ -2124,6 +2124,61 @@ class CenterLastValue(EmptyTransformer):
         return self.transform(df)
 
 
+class ShiftFirstValue(EmptyTransformer):
+    """Shift all data relative to the first value(s) of the series.
+
+    Args:
+        rows (int): number of rows to average from beginning of data
+    """
+
+    def __init__(self, rows: int = 1, **kwargs):
+        super().__init__(name="ShiftFirstValue")
+        self.rows = rows
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        choice = random.choices([1, 2, 7, 28], [0.2, 0.2, 0.2, 0.2])[0]
+        return {
+            "rows": choice,
+        }   
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.center = df.bfill().head(self.rows).mean()
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = df - self.center
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = df + self.center
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
 class ScipyFilter(EmptyTransformer):
     """Irreversible filters from Scipy
 
@@ -5191,6 +5246,7 @@ have_params = {
     "SeasonalDifference": SeasonalDifference,
     "Discretize": Discretize,
     "CenterLastValue": CenterLastValue,
+    "ShiftFirstValue": ShiftFirstValue,
     "IntermittentOccurrence": IntermittentOccurrence,
     "ClipOutliers": ClipOutliers,
     "Round": Round,
@@ -5330,6 +5386,7 @@ class GeneralTransformer(object):
             "BKBandpassFilter": another version of the Baxter King bandpass filter
             "Constraint": apply constraints (caps) on values
             "FIRFilter": apply a FIR filter (firwin)
+            "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -5781,6 +5838,7 @@ transformer_dict = {
     "ClipOutliers": 0.03,
     "Discretize": 0.01,
     "CenterLastValue": 0.01,
+    "ShiftFirstValue": 0.01,
     "Round": 0.02,
     "Slice": 0.02,
     "ScipyFilter": 0.02,
@@ -5833,6 +5891,7 @@ superfast_transformer_dict = {
     "CenterSplit": 0.005,  # need to test more
     "Round": 0.01,
     "CenterLastValue": 0.01,
+    "ShiftFirstValue": 0.005,
     "Constraint": 0.005,  # not well tested yet on speed/ram
     # "BKBandpassFilter": 0.01,  # seems feasible, untested
     # "DiffSmoother": 0.005,  # seems feasible, untested

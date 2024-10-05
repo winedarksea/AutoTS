@@ -769,6 +769,8 @@ class ModelTest(unittest.TestCase):
             "HistoricValues",  # new in 0.6.7
             "BKBandpassFilter",  # new in 0.6.8
             # "Constraint",  # new in 0.6.15
+            # "FIRFilter",  # new in 0.6.16
+            # "ShiftFirstValue",  # new in 0.6.16
         ]
 
         timings = {}
