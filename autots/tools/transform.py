@@ -5034,6 +5034,7 @@ class Constraint(EmptyTransformer):
         self.forecast_length = forecast_length
         self.bounds_only = bounds_only
         self.fillna = fillna
+        self.adjustment = None
 
     def fit(self, df):
         """Learn behavior of data to change.
