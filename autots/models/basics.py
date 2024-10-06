@@ -3358,7 +3358,7 @@ class BasicLinearModel(ModelObject):
         datepart_method: str = "common_fourier",
         changepoint_spacing: int = None,
         changepoint_distance_end: int = None,
-        λ: float = 0.01,
+        lambda_: float = 0.01,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -3374,7 +3374,7 @@ class BasicLinearModel(ModelObject):
         self.datepart_method = datepart_method
         self.changepoint_spacing = changepoint_spacing
         self.changepoint_distance_end = changepoint_distance_end
-        self.λ = λ
+        self.lambda_ = lambda_
 
         self.regressor_columns = []
 
@@ -3419,7 +3419,7 @@ class BasicLinearModel(ModelObject):
         if str(self.regression_type).lower() == "user" and future_regressor is not None:
             temp = future_regressor.reindex(df.index).rename(columns=lambda x: "regr_" + str(x))
             self.regressor_columns = temp.columns
-            X = pd.concat(X, temp, axis=1)
+            X = pd.concat([X, temp], axis=1)
         X["constant"] = 1
 
         self.seasonal_columns = x_s.columns.tolist()
@@ -3451,10 +3451,10 @@ class BasicLinearModel(ModelObject):
         X_values = X.to_numpy().astype(float)
         Y_values = df.to_numpy().astype(float)
 
-        if self.λ is not None:
+        if self.lambda_ is not None:
             I = np.eye(X_values.shape[1])
             # Perform Ridge regression using the modified normal equation
-            self.beta = np.linalg.inv(X_values.T @ X_values + self.λ * I) @ X_values.T @ Y_values
+            self.beta = np.linalg.inv(X_values.T @ X_values + self.lambda_ * I) @ X_values.T @ Y_values
         else:
             # Perform linear regression using the normal equation: (X.T @ X)^(-1) @ X.T @ Y
             self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
@@ -3496,7 +3496,7 @@ class BasicLinearModel(ModelObject):
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X = pd.concat(X, future_regressor.reindex(test_index), axis=1)
+            X = pd.concat([X, future_regressor.reindex(test_index)], axis=1)
         X["constant"] = 1
         X_values = X.to_numpy().astype(float)
         self.X = X
@@ -3594,7 +3594,7 @@ class BasicLinearModel(ModelObject):
             "changepoint_spacing": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
             "changepoint_distance_end": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
             "regression_type": regression_choice,
-            "λ": random.choices([None, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000], [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], k=1)[0],
+            "lambda_": random.choices([None, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000], [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], k=1)[0],
         }
 
     def get_params(self):
@@ -3604,5 +3604,5 @@ class BasicLinearModel(ModelObject):
             "changepoint_spacing": self.changepoint_spacing,
             "changepoint_distance_end": self.changepoint_distance_end,
             "regression_type": self.regression_type,
-            "λ": self.λ,
+            "lambda_": self.lambda_,
         }

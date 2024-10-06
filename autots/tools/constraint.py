@@ -56,11 +56,11 @@ def constraint_new_params(method: str = "fast"):
     if method_choice == "quantile":
         if params["constraint_direction"] == "upper":
             params["constraint_value"] = random.choices(
-                [1.0, 0.5, 0.7, 0.9, 0.98], [0.5, 0.2, 0.1, 0.2, 0.1]
+                [1.0, 0.5, 0.7, 0.9, 0.98], [0.2, 0.2, 0.1, 0.2, 0.1]
             )[0]
         else:
             params["constraint_value"] = random.choices(
-                [0.01, 0.5, 0.1, 0.2, 0.02], [0.5, 0.2, 0.1, 0.2, 0.1]
+                [0.01, 0.5, 0.1, 0.2, 0.02], [0.2, 0.2, 0.1, 0.2, 0.1]
             )[0]
     elif method_choice == "slope":
         if params["constraint_direction"] == "upper":
@@ -97,7 +97,7 @@ def constraint_new_params(method: str = "fast"):
                         "threshold": 0.1,
                     },
                 ],
-                [0.5, 0.2, 0.1, 0.2, 0.1],
+                [0.2, 0.2, 0.1, 0.2, 0.1],
             )[0]
         else:
             params["constraint_value"] = random.choices(
@@ -160,7 +160,7 @@ def constraint_new_params(method: str = "fast"):
             )[0]
     elif method_choice in ["stdev", "stdev_min"]:
         params["constraint_value"] = random.choices(
-            [1.0, 0.5, 2.0, 3.0, 4.0], [0.5, 0.2, 0.1, 0.2, 0.1]
+            [1.0, 0.5, 2.0, 3.0, 4.0], [0.2, 0.2, 0.1, 0.2, 0.1]
         )[0]
     elif method_choice in ["dampening"]:
         params["constraint_value"] = random.choices(

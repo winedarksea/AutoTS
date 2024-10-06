@@ -33,6 +33,7 @@ full_ensemble_test_list = [
     "mosaic-spl-3-10",  # this one in particular hard-coded for testing
     "mosaic-mae-profile-0-36",
     "mosaic-weighted-median",
+    "mosaic-mae-median-0-30",
 ]
 
 

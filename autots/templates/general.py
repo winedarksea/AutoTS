@@ -509,6 +509,12 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "time", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.9, "first_value_only": false}}}',
         "Ensemble": 0,
     },
+    "82": {  # optimized on wiki example daily, 27 SMAPE 2024-10-05
+        'Model': 'BasicLinearModel',
+        'ModelParameters': '{"datepart_method": "simple_binarized", "changepoint_spacing": 360, "changepoint_distance_end": 360, "regression_type": null, "lambda_": 0.01}',
+        'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "Round", "1": "AlignLastValue", "2": "HistoricValues", "3": "ClipOutliers", "4": "bkfilter"}, "transformation_params": {"0": {"decimals": -1, "on_transform": true, "on_inverse": true}, "1": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": true, "threshold": null, "threshold_method": "mean"}, "2": {"window": 10}, "3": {"method": "clip", "std_threshold": 3, "fillna": null}, "4": {}}}',
+        "Ensemble": 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
