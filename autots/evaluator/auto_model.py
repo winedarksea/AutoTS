@@ -5,6 +5,7 @@ import gc
 import traceback as tb
 import random
 from math import ceil
+import copy
 import numpy as np
 import pandas as pd
 import datetime
@@ -1297,6 +1298,7 @@ def model_forecast(
     current_model_file: str = None,
     model_count: int = 0,
     force_gc: bool = False,
+    internal_validation: bool = False,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -1329,7 +1331,7 @@ def model_forecast(
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         force_gc (bool): if True, run gc.collect() after each model
-
+        internal_validation: niche flag to tell that it is running inside a template model search
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
@@ -1455,6 +1457,24 @@ def model_forecast(
             prematched_series=all_series,
         )
         ens_forecast.runtime_dict = forecasts_runtime
+        # POST PROCESSING ONLY
+        if model_transform_dict and not internal_validation:
+            transformer_object = GeneralTransformer(
+                **model_transform_dict,
+                n_jobs=n_jobs,
+                holiday_country=holiday_country,
+                verbose=verbose,
+                random_seed=random_seed,
+                forecast_length=forecast_length,
+            )
+            transformer_object.fit(df_train)
+            ens_forecast.forecast = transformer_object.inverse_transform(ens_forecast.forecast)
+            ens_forecast.lower_forecast = transformer_object.inverse_transform(
+                ens_forecast.lower_forecast, fillzero=True, bounds=True
+            )
+            ens_forecast.upper_forecast = transformer_object.inverse_transform(
+                ens_forecast.upper_forecast, fillzero=True, bounds=True
+            )
         return ens_forecast
     # if not an ensemble
     else:
@@ -1515,6 +1535,123 @@ def _ps_metric(per_series_metrics, metric, model_id):
     cur_mae.index = [model_id]
     return cur_mae
 
+
+def _eval_prediction_for_template(
+        df_forecast, template_result, verbose,
+        actuals, weights, df_trn_arr, ensemble,
+        scaler, cumsum_A, diff_A, last_of_array,
+        validation_round, model_str, best_smape,
+        ensemble_input, parameter_dict, transformation_dict,
+        row, post_memory_percent, mosaic_used,
+        template_start_time, current_generation, df_train,
+):
+
+    per_ts = True if 'distance' in ensemble else False
+    model_error = df_forecast.evaluate(
+        actuals,
+        series_weights=weights,
+        df_train=df_trn_arr,
+        per_timestamp_errors=per_ts,
+        scaler=scaler,
+        cumsum_A=cumsum_A,
+        diff_A=diff_A,
+        last_of_array=last_of_array,
+        column_names=df_train.columns,
+    )
+    if validation_round >= 1 and verbose > 0:
+        round_smape = model_error.avg_metrics['smape'].round(2)
+        validation_accuracy_print = "{} - {} with avg smape {}: ".format(
+            str(template_result.model_count),
+            model_str,
+            round_smape,
+        )
+        if round_smape < best_smape:
+            best_smape = round_smape
+            try:
+                print("\U0001F4C8 " + validation_accuracy_print)
+            except Exception:
+                print(validation_accuracy_print)
+        else:
+            print(validation_accuracy_print)
+    # for horizontal ensemble, use requested ID and params
+    if ensemble_input == 2:
+        model_id = create_model_id(
+            model_str, parameter_dict, transformation_dict
+        )
+        # it's already json
+        deposit_params = row['ModelParameters']
+    else:
+        # for non horizontal, recreate based on what model actually used (some change)
+        model_id = create_model_id(
+            df_forecast.model_name,
+            df_forecast.model_parameters,
+            df_forecast.transformation_parameters,
+        )
+        deposit_params = json.dumps(df_forecast.model_parameters)
+    result = pd.DataFrame(
+        {
+            'ID': model_id,
+            'Model': df_forecast.model_name,
+            'ModelParameters': deposit_params,
+            'TransformationParameters': json.dumps(
+                df_forecast.transformation_parameters
+            ),
+            'TransformationRuntime': df_forecast.transformation_runtime,
+            'FitRuntime': df_forecast.fit_runtime,
+            'PredictRuntime': df_forecast.predict_runtime,
+            'TotalRuntime': datetime.datetime.now() - template_start_time,
+            'Ensemble': ensemble_input,
+            'Exceptions': np.nan,
+            'Runs': 1,
+            'Generation': current_generation,
+            'ValidationRound': validation_round,
+            'ValidationStartDate': df_forecast.forecast.index[0],
+        },
+        index=[0],
+    )
+    if verbose > 1:
+        result['PostMemoryPercent'] = post_memory_percent
+    a = pd.DataFrame(
+        model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')
+    ).transpose()
+    result = pd.concat(
+        [result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis=1
+    )
+    template_result.model_results = pd.concat(
+        [template_result.model_results, result],
+        axis=0,
+        ignore_index=True,
+        sort=False,
+    ).reset_index(drop=True)
+
+    ps_metric = model_error.per_series_metrics
+    ps_metric.index.name = "autots_eval_metric"
+    ps_metric = ps_metric.reset_index(drop=False)
+    ps_metric.index = [model_id] * ps_metric.shape[0]
+    ps_metric.index.name = "ID"
+    template_result.per_series_metrics.append(ps_metric)
+    if 'distance' in ensemble:
+        cur_smape = model_error.per_timestamp.loc['weighted_smape']
+        cur_smape = pd.DataFrame(cur_smape).transpose()
+        cur_smape.index = [model_id]
+        template_result.per_timestamp_smape = pd.concat(
+            [template_result.per_timestamp_smape, cur_smape], axis=0
+        )
+    if mosaic_used:
+        template_result.full_mae_errors.extend([model_error.full_mae_errors])
+        template_result.squared_errors.extend([model_error.squared_errors])
+        template_result.full_pl_errors.extend(
+            [model_error.upper_pl + model_error.lower_pl]
+        )
+        template_result.full_mae_ids.extend([model_id])
+        template_result.full_mae_vals.extend([validation_round])
+    return template_result
+
+
+horizontal_post_processors = [
+    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}, "1": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": True, "threshold": 10, "threshold_method": "max"}}},
+	{"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
+]
 
 def TemplateWizard(
     template,
@@ -1626,6 +1763,12 @@ def TemplateWizard(
             parameter_dict = json.loads(row['ModelParameters'])
             transformation_dict = json.loads(row['TransformationParameters'])
             ensemble_input = row['Ensemble']
+            if ensemble_input == 2 and transformation_dict:
+                # SKIP BECAUSE TRANSFORMERS (PRE DEFINED) ARE DONE BELOW TO REDUCE FORECASTS RERUNS
+                # ON INTERNAL VALIDATION ONLY ON TEMPLATES
+                if verbose >= 1:
+                    print("skipping horizontal with transformation due to that being done on internal validation")
+                continue
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
@@ -1676,109 +1819,53 @@ def TemplateWizard(
                 current_model_file=current_model_file,
                 model_count=template_result.model_count,
                 force_gc=force_gc,
+                internal_validation=True,  # THIS MIGHT BE REDUNTANT, THE CONTINUE ABOVE MAYBE BE ENOUGH
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
-
-            per_ts = True if 'distance' in ensemble else False
-            model_error = df_forecast.evaluate(
-                actuals,
-                series_weights=weights,
-                df_train=df_trn_arr,
-                per_timestamp_errors=per_ts,
-                scaler=scaler,
-                cumsum_A=cumsum_A,
-                diff_A=diff_A,
-                last_of_array=last_of_array,
-                column_names=df_train.columns,
+            # wrapped up to enable postprocessing
+            template_result = _eval_prediction_for_template(
+                    df_forecast, template_result, verbose,
+                    actuals, weights, df_trn_arr, ensemble,
+                    scaler, cumsum_A, diff_A, last_of_array,
+                    validation_round, model_str, best_smape,
+                    ensemble_input, parameter_dict, transformation_dict,
+                    row, post_memory_percent, mosaic_used,
+                    template_start_time, current_generation, df_train,
             )
-            if validation_round >= 1 and verbose > 0:
-                round_smape = model_error.avg_metrics['smape'].round(2)
-                validation_accuracy_print = "{} - {} with avg smape {}: ".format(
-                    str(template_result.model_count),
-                    model_str,
-                    round_smape,
-                )
-                if round_smape < best_smape:
-                    best_smape = round_smape
-                    try:
-                        print("\U0001F4C8 " + validation_accuracy_print)
-                    except Exception:
-                        print(validation_accuracy_print)
-                else:
-                    print(validation_accuracy_print)
-            # for horizontal ensemble, use requested ID and params
             if ensemble_input == 2:
-                model_id = create_model_id(
-                    model_str, parameter_dict, transformation_dict
-                )
-                # it's already json
-                deposit_params = row['ModelParameters']
-            else:
-                # for non horizontal, recreate based on what model actually used (some change)
-                model_id = create_model_id(
-                    df_forecast.model_name,
-                    df_forecast.model_parameters,
-                    df_forecast.transformation_parameters,
-                )
-                deposit_params = json.dumps(df_forecast.model_parameters)
-            result = pd.DataFrame(
-                {
-                    'ID': model_id,
-                    'Model': df_forecast.model_name,
-                    'ModelParameters': deposit_params,
-                    'TransformationParameters': json.dumps(
-                        df_forecast.transformation_parameters
-                    ),
-                    'TransformationRuntime': df_forecast.transformation_runtime,
-                    'FitRuntime': df_forecast.fit_runtime,
-                    'PredictRuntime': df_forecast.predict_runtime,
-                    'TotalRuntime': datetime.datetime.now() - template_start_time,
-                    'Ensemble': ensemble_input,
-                    'Exceptions': np.nan,
-                    'Runs': 1,
-                    'Generation': current_generation,
-                    'ValidationRound': validation_round,
-                    'ValidationStartDate': df_forecast.forecast.index[0],
-                },
-                index=[0],
-            )
-            if verbose > 1:
-                result['PostMemoryPercent'] = post_memory_percent
-            a = pd.DataFrame(
-                model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')
-            ).transpose()
-            result = pd.concat(
-                [result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis=1
-            )
-            template_result.model_results = pd.concat(
-                [template_result.model_results, result],
-                axis=0,
-                ignore_index=True,
-                sort=False,
-            ).reset_index(drop=True)
-
-            ps_metric = model_error.per_series_metrics
-            ps_metric.index.name = "autots_eval_metric"
-            ps_metric = ps_metric.reset_index(drop=False)
-            ps_metric.index = [model_id] * ps_metric.shape[0]
-            ps_metric.index.name = "ID"
-            template_result.per_series_metrics.append(ps_metric)
-            if 'distance' in ensemble:
-                cur_smape = model_error.per_timestamp.loc['weighted_smape']
-                cur_smape = pd.DataFrame(cur_smape).transpose()
-                cur_smape.index = [model_id]
-                template_result.per_timestamp_smape = pd.concat(
-                    [template_result.per_timestamp_smape, cur_smape], axis=0
-                )
-            if mosaic_used:
-                template_result.full_mae_errors.extend([model_error.full_mae_errors])
-                template_result.squared_errors.extend([model_error.squared_errors])
-                template_result.full_pl_errors.extend(
-                    [model_error.upper_pl + model_error.lower_pl]
-                )
-                template_result.full_mae_ids.extend([model_id])
-                template_result.full_mae_vals.extend([validation_round])
+                # INTERNAL VALIDATION ONLY, POST PROCESSING ONLY
+                # more efficent than rerunning the forecasts just to change transformers
+                for x in horizontal_post_processors:
+                    df_forecast2 = copy.copy(df_forecast)
+                    transformer_object = GeneralTransformer(
+                        **x,
+                        n_jobs=n_jobs,
+                        holiday_country=holiday_country,
+                        verbose=verbose,
+                        random_seed=random_seed,
+                        forecast_length=forecast_length,
+                    )
+                    transformer_object.fit(df_train)
+                    df_forecast2.forecast = transformer_object.inverse_transform(df_forecast2.forecast)
+                    df_forecast2.lower_forecast = transformer_object.inverse_transform(
+                        df_forecast2.lower_forecast, fillzero=True, bounds=True
+                    )
+                    df_forecast2.upper_forecast = transformer_object.inverse_transform(
+                        df_forecast2.upper_forecast, fillzero=True, bounds=True
+                    )
+                    df_forecast2.transformation_parameters = x
+                    template_result.model_count += 1
+                    template_result = _eval_prediction_for_template(
+                            df_forecast2, template_result, verbose,
+                            actuals, weights, df_trn_arr, ensemble,
+                            scaler, cumsum_A, diff_A, last_of_array,
+                            validation_round, model_str, best_smape,
+                            ensemble_input, parameter_dict,
+                            x,
+                            row, post_memory_percent, mosaic_used,
+                            template_start_time, current_generation, df_train,
+                    )
 
         except KeyboardInterrupt:
             if model_interrupt:
