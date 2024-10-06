@@ -1172,7 +1172,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random", holiday_countries_used=None):
-        datepart_choice = random_datepart()
+        datepart_choice = random_datepart(method=method)
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
         else:
@@ -2492,10 +2492,14 @@ class PCA(EmptyTransformer):
         self.transformer = PCA(**self.kwargs)
         return_df = self.transformer.fit_transform(df)
         if isinstance(return_df, pd.DataFrame):
-            return_df.columns = self.columns
+            if return_df.shape[1] == len(self.columns):
+                return_df.columns = self.columns
             return return_df
         else:
-            return pd.DataFrame(return_df, index=self.index, columns=self.columns)
+            if return_df.shape[1] == len(self.columns):
+                return pd.DataFrame(return_df, index=self.index, columns=self.columns)
+            else:
+                return pd.DataFrame(return_df, index=self.index).rename(columns=lambda x: "pca_" + str(x))
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -2514,10 +2518,14 @@ class PCA(EmptyTransformer):
         """
         return_df = self.transformer.transform(df)
         if isinstance(return_df, pd.DataFrame):
-            return_df.columns = self.columns
+            if return_df.shape[1] == len(self.columns):
+                return_df.columns = self.columns
             return return_df
         else:
-            return pd.DataFrame(return_df, index=df.index, columns=self.columns)
+            if return_df.shape[1] == len(self.columns):
+                return pd.DataFrame(return_df, index=self.index, columns=self.columns)
+            else:
+                return pd.DataFrame(return_df, index=df.index).rename(columns=lambda x: "pca_" + str(x))
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -2544,7 +2552,7 @@ class PCA(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
-            "n_components": random.choices([None, 4, 10, 100], [0.8, 0.05, 0.1, 0.1])[
+            "n_components": random.choices([None, 4, 10, 24, 100, 0.3], [0.8, 0.05, 0.1, 0.05, 0.1, 0.05])[
                 0
             ],
         }
