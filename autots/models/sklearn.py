@@ -1789,6 +1789,25 @@ class RollingRegression(ModelObject):
         return parameter_dict
 
 
+class RandomFourierEncoding(object):
+    def __init__(self, n_components=100, sigma=1.0, random_state=None):
+        self.n_components = n_components
+        self.sigma = sigma
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        # np.random.seed(self.random_state)
+        n_features = X.shape[1]
+        self.W = np.random.normal(loc=0, scale=1/self.sigma, size=(n_features, self.n_components))
+        self.b = np.random.uniform(0, 2*np.pi, size=self.n_components)
+        return self
+
+    def transform(self, X):
+        projection = np.dot(X, self.W) + self.b
+        X_new = np.sqrt(2/self.n_components) * np.concatenate([np.sin(projection), np.cos(projection)], axis=1)
+        return X_new
+
+
 class WindowRegression(ModelObject):
     """Regression use the last n values as the basis of training data.
 
@@ -1818,6 +1837,9 @@ class WindowRegression(ModelObject):
         shuffle: bool = False,
         forecast_length: int = 1,
         max_windows: int = 5000,
+        fourier_encoding_components: float = None,
+        scale: bool = False,
+        datepart_method: str = None,
         regression_type: str = None,
         n_jobs: int = -1,
         **kwargs,
@@ -1841,6 +1863,9 @@ class WindowRegression(ModelObject):
         self.shuffle = shuffle
         self.forecast_length = forecast_length
         self.max_windows = max_windows
+        self.fourier_encoding_components = fourier_encoding_components
+        self.scale = scale
+        self.datepart_method = datepart_method
         self.static_regressor = None
 
     def fit(self, df, future_regressor=None, static_regressor=None):
@@ -1856,15 +1881,35 @@ class WindowRegression(ModelObject):
                 "Scale exceeds recommendation for input_dim == `multivariate`"
             )
         df = self.basic_profile(df)
+        regression_type = self.regression_type
         if self.regression_type in ["User", "user"]:
             if future_regressor is None:
                 raise ValueError(
                     "regression_type='User' but no future_regressor passed"
                 )
+            if isinstance(future_regressor, pd.Series):
+                future_regressor = future_regressor.to_frame()
             self.static_regressor = static_regressor
+            if self.datepart_method is not None:
+                future_regressor = pd.concat([
+                        future_regressor,
+                        date_part(
+                            df.index,
+                            method=self.datepart_method,
+                            holiday_country=self.holiday_country,
+                        )
+                    ],
+                    axis=1,
+                )
+        elif self.datepart_method is not None:
+            regression_type = "User"  # to convince the window maker to use it
+            future_regressor = date_part(
+                df.index,
+                method=self.datepart_method,
+                holiday_country=self.holiday_country,
+            )
         self.df_train = df
-        if isinstance(future_regressor, pd.Series):
-            future_regressor = future_regressor.to_frame()
+
         self.X, self.Y = window_maker(
             df,
             window_size=self.window_size,
@@ -1874,7 +1919,7 @@ class WindowRegression(ModelObject):
             output_dim=self.output_dim,
             forecast_length=self.forecast_length,
             max_windows=self.max_windows,
-            regression_type=self.regression_type,
+            regression_type=regression_type,
             future_regressor=future_regressor,
             random_seed=self.random_seed,
         )
@@ -1883,6 +1928,19 @@ class WindowRegression(ModelObject):
             multioutput = False
         elif self.Y.shape[1] < 2:
             multioutput = False
+        if self.scale:
+            from sklearn.preprocessing import StandardScaler
+
+            self.scaler = StandardScaler()
+            if isinstance(self.X, pd.DataFrame):
+                self.X.columns = self.X.columns.astype(str) 
+            self.X = self.scaler.fit_transform(self.X)
+        if self.fourier_encoding_components is not None:
+            self.fourier_encoder = RandomFourierEncoding(
+                n_components=int(self.X.shape[1] * self.fourier_encoding_components),
+                sigma=1.0,
+            ).fit(self.X)
+            self.X = self.fourier_encoder.transform(self.X.copy())
         if isinstance(self.X, pd.DataFrame):
             self.X = self.X.to_numpy()
         self.model = retrieve_regressor(
@@ -1931,6 +1989,24 @@ class WindowRegression(ModelObject):
         index = self.create_forecast_index(forecast_length=forecast_length)
         if isinstance(future_regressor, pd.Series):
             future_regressor = future_regressor.to_frame()
+        if self.regression_type in ["User", "user"]:
+            if self.datepart_method is not None:
+                future_regressor = pd.concat([
+                        future_regressor,
+                        date_part(
+                            index,
+                            method=self.datepart_method,
+                            holiday_country=self.holiday_country,
+                        )
+                    ],
+                    axis=1,
+                )
+        elif self.datepart_method is not None:
+            future_regressor = date_part(
+                index,
+                method=self.datepart_method,
+                holiday_country=self.holiday_country,
+            )
 
         if self.output_dim == '1step':
             # combined_index = (self.df_train.index.append(index))
@@ -1943,13 +2019,19 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
-                if self.regression_type in ["User", "user"]:
+                if self.regression_type in ["User", "user"] or self.datepart_method is not None:
                     blasted_thing = (
                         future_regressor.reindex(index).iloc[x].to_frame().transpose()
                     )
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
+                if self.scale:
+                    if isinstance(pred, pd.DataFrame):
+                        pred.columns = pred.columns.astype(str) 
+                    pred = self.scaler.transform(pred)
+                if self.fourier_encoding_components is not None:
+                    pred = self.fourier_encoder.transform(pred)
                 if isinstance(pred, pd.DataFrame):
                     pred = pred.to_numpy()
                 rfPred = pd.DataFrame(self.model.predict(pred))
@@ -1969,12 +2051,18 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
-            if self.regression_type in ["User", "user"]:
+            if self.regression_type in ["User", "user"] or self.datepart_method is not None:
                 tmerg = future_regressor.tail(1).loc[
                     future_regressor.tail(1).index.repeat(pred.shape[0])
                 ]
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
+            if self.scale:
+                if isinstance(pred, pd.DataFrame):
+                    pred.columns = pred.columns.astype(str) 
+                pred = self.scaler.transform(pred)
+            if self.fourier_encoding_components is not None:
+                pred = self.fourier_encoder.transform(pred)
             if isinstance(pred, pd.DataFrame):
                 pred = pred.to_numpy(dtype=np.float32)
             cY = pd.DataFrame(self.model.predict(pred.astype(float)))
@@ -2058,12 +2146,18 @@ class WindowRegression(ModelObject):
             max_windows_choice = random.choices(
                 [5000, 50000, 5000000], [0.2, 0.2, 0.9]
             )[0]
+        datepart_method = random.choices([None, "something"], [0.9, 0.1])[0]
+        if datepart_method == "something":
+            datepart_method = random_datepart()
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
             'max_windows': max_windows_choice,
+            'fourier_encoding_components': random.choices([None, 2, 5, 10], [0.8, 0.1, 0.1, 0.01])[0],
+            'scale': random.choices([True, False], [0.7, 0.3])[0],
+            'datepart_method': datepart_method,
             'regression_type': regression_type_choice,
             'regression_model': model_choice,
         }
@@ -2076,6 +2170,9 @@ class WindowRegression(ModelObject):
             'output_dim': self.output_dim,
             'normalize_window': self.normalize_window,
             'max_windows': self.max_windows,
+            'fourier_encoding_components': self.fourier_encoding_components,
+            'scale': self.scale,
+            'datepart_method': self.datepart_method,
             'regression_type': self.regression_type,
             'regression_model': self.regression_model,
         }

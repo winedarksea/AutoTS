@@ -32,6 +32,7 @@
 * changepoint style trend as an option to GLM and GLS
 * added ShiftFirstValue which is only a minor nuance on PositiveShift transformer
 * added BasicLinearModel model
+* datepart_method, scale, and fourier encodig to WindowRegression
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
