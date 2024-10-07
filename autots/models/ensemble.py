@@ -1742,27 +1742,35 @@ def process_mosaic_arrays(
         weight_dict = {idx: scores.reindex(val).to_numpy() for idx, val in enumerate(validation_test_indexes)}
         full_mae_errors_use = [
             x * weight_dict[y]
-            for y, x in sorted(
-                zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
-            )
+            for y, x in zip(full_mae_vals, full_mae_errors)
         ]
     else:
         full_mae_errors_use = full_mae_errors
-    errors_array = np.array(
-        [
-            x
-            for y, x in sorted(
-                zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
-            )
-            if y in models_to_use
-        ]
-    )
 
     # remove models that are above median overall
     if filtered:
         threshold = np.nanmedian(full_mae_errors_use) * 1.0  # could change this level
-        performance_summary = np.nanmedian(errors_array, axis=(1, 2))
-        errors_array = errors_array[performance_summary <= threshold]
+        tuple_list =[
+            (x, y)
+            for y, x in sorted(
+                zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
+            )
+            if y in models_to_use and np.nanmedian(x) <= threshold
+        ]
+        errors_array, id_array = zip(*tuple_list)
+        errors_array = np.array(errors_array)
+        id_array = np.array(id_array)
+    else:
+        errors_array = np.array(
+            [
+                x
+                for y, x in sorted(
+                    zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
+                )
+                if y in models_to_use
+            ]
+        )
+
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
 

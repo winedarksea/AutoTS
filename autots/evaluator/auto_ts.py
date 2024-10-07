@@ -1738,6 +1738,29 @@ class AutoTS(object):
         self.best_model, self.best_model_non_horizontal = self._return_best_model(
             metric_weighting=metric_weighting, allow_horizontal=allow_horizontal, n=n
         )
+        # create best model from MAE adjusted for unpredictability
+        try:
+            if self.initial_results.full_mae_errors:
+                scores = create_unpredictability_score(
+                        self.initial_results.full_mae_errors, self.initial_results.full_mae_vals,
+                        total_vals=self.num_validations + 1, df_wide=self.df_wide_numeric[self.initial_results.per_series_mae.columns],
+                        validation_test_indexes=self.validation_test_indexes,
+                        scale=True,
+                )
+                weight_dict = {idx: scores.reindex(val).to_numpy() for idx, val in enumerate(self.validation_test_indexes)}
+                tuple_list = [
+                    (x * weight_dict[y], z)
+                    for y, x, z in sorted(
+                        zip(self.initial_results.full_mae_vals, self.initial_results.full_mae_errors, self.initial_results.full_mae_ids), key=lambda pair: pair[0]
+                    )
+                ]
+                errors_array, id_array = zip(*tuple_list)
+                np.nanmean(np.array(errors_array), axis=(1, 2)).idxmin()
+                self.best_model_unpredictability_adjusted = True
+            else:
+                self.best_model_unpredictability_adjusted = None
+        except Exception as e:
+            print(repr(e))
         # give a more convenient dict option
         self.parse_best_model()
         return self
@@ -2344,12 +2367,12 @@ class AutoTS(object):
                 if min_metrics is not None:
                     for metric in min_metrics:
                         extra_mods.append(
-                            export_template.nsmallest(1, columns=metric).copy()
+                            export_template[metric].astype(float).nsmallest(1).copy()
                         )
                         # and no ensemble version
                         extra_mods.append(
-                            export_template[export_template['Ensemble'] == 0]
-                            .nsmallest(1, columns=metric)
+                            export_template[export_template['Ensemble'] == 0][metric].astype(float)
+                            .nsmallest(1)
                             .copy()
                         )
                 if max_metrics is not None:
@@ -2373,7 +2396,7 @@ class AutoTS(object):
                         if min_metrics is not None:
                             for metric in min_metrics:
                                 extra_mods.append(
-                                    one_model.nsmallest(1, columns=metric).copy()
+                                    one_model[metric].astype(float).nsmallest(1).copy()
                                 )
                         if max_metrics is not None:
                             for metric in max_metrics:
@@ -2542,6 +2565,9 @@ class AutoTS(object):
             addon_flag = False
 
         import_template = self.load_template(filename)
+
+        # because somehow NaN models can be exported with a bug...
+        import_template = import_template[~import_template["Model"].isnull()]
 
         import_template = unpack_ensemble_models(
             import_template, self.template_cols, keep_ensemble=True, recursive=True
@@ -2743,6 +2769,11 @@ class AutoTS(object):
                     ]
                 else:
                     full_mae_err = errs
+                # need as info for some
+                if df_subset is None:
+                    df_wide = self.df_wide_numeric
+                else:
+                    df_wide = df_subset
                 # refine to n_models if necessary
                 if isinstance(mosaic_config.get("n_models"), (int, float)):
                     # find a way of parsing it down to n models to use
@@ -2759,7 +2790,7 @@ class AutoTS(object):
                         unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
                         validation_test_indexes=self.validation_test_indexes,
                         full_mae_vals=initial_results.full_mae_vals,
-                        df_wide=df_subset,
+                        df_wide=df_wide,
                     )
                     # so it's summarized by progressively longer chunks
                     chunks = parse_forecast_length(self.forecast_length)
@@ -2780,11 +2811,7 @@ class AutoTS(object):
                     modz = None
                 id_to_group_mapping = None
                 if mosaic_config.get("profiled", False):
-                    if df_subset is None:
-                        df = self.df_wide_numeric
-                    else:
-                        df = df_subset
-                    id_to_group_mapping = profile_time_series(df).set_index("SERIES").to_dict()["PROFILE"]
+                    id_to_group_mapping = profile_time_series(df_wide).set_index("SERIES").to_dict()["PROFILE"]
                 # and actually generate the template
                 ens_templates = generate_mosaic_template(
                     initial_results=initial_results.model_results,
@@ -2800,7 +2827,7 @@ class AutoTS(object):
                     unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
                     validation_test_indexes=self.validation_test_indexes,
                     full_mae_vals=initial_results.full_mae_vals,
-                    df_wide=df_subset,
+                    df_wide=df_wide,
                 )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
