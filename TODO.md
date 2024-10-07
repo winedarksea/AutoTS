@@ -27,7 +27,7 @@
 * NaN robustness to matse
 * 'round' option to Constraint
 * minor change to mosaic min style ensembles to remove edge case errors
-* 'mosaic-profile' and 'median' styles mosaic added
+* 'mosaic-profile', 'filtered', and 'median' styles mosaic added
 * updated profiler, and improved feature generation for horizontal generalization
 * changepoint style trend as an option to GLM and GLS
 * added ShiftFirstValue which is only a minor nuance on PositiveShift transformer

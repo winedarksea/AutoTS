@@ -49,6 +49,7 @@ from autots.models.ensemble import (
     is_mosaic,
     parse_mosaic,
     full_ensemble_test_list,
+    create_unpredictability_score,
 )
 from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools.cpu_count import set_n_jobs
@@ -2754,6 +2755,11 @@ class AutoTS(object):
                         total_vals=total_vals,
                         models_to_use=models_to_use,
                         smoothing_window=None,
+                        filtered=False,
+                        unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
+                        validation_test_indexes=self.validation_test_indexes,
+                        full_mae_vals=initial_results.full_mae_vals,
+                        df_wide=df_subset,
                     )
                     # so it's summarized by progressively longer chunks
                     chunks = parse_forecast_length(self.forecast_length)
@@ -2790,6 +2796,11 @@ class AutoTS(object):
                     metric_name=str(mos),
                     models_to_use=modz,
                     id_to_group_mapping=id_to_group_mapping,
+                    filtered=mosaic_config.get("filtered", False),
+                    unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
+                    validation_test_indexes=self.validation_test_indexes,
+                    full_mae_vals=initial_results.full_mae_vals,
+                    df_wide=df_subset,
                 )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
@@ -3993,46 +4004,29 @@ class AutoTS(object):
             raise ValueError("model id not found in results")
         return temp[temp['ID'] == model_id].iloc[0][self.template_cols_id].to_dict()
 
-    def create_unpredictability_score(self, df_wide=None):
+    def create_unpredictability_score(self, df_wide=None, scale=False):
+        """Create a dataframe per validation index of relative unpredictability. Most representative on longer model searches."""
         total_vals = self.num_validations + 1
 
         if df_wide is None:
             df_wide = self.df_wide_numeric
+        # handle the fact that results are only available for subset fraction if subset used
+        if self.subset_flag:
+            cols = self.initial_results.per_series_mae.columns
+        else:
+            cols = df_wide.columns
 
         # full_mae_ids = self.initial_results.full_mae_ids
         full_mae_errors = self.initial_results.full_mae_errors
         full_mae_vals = self.initial_results.full_mae_vals
         
         if full_mae_errors:
-            results = []
-            threshold = np.nanmedian(full_mae_errors) * 1.0
-            for val in range(total_vals):
-                errors_array = np.array(
-                    [
-                        x
-                        for y, x in sorted(
-                            zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
-                        )
-                        if y == val
-                    ]
-                )
-
-                performance_summary = np.nanmedian(errors_array, axis=(1, 2))
-                filtered_models = errors_array[performance_summary <= threshold].copy()
-                if filtered_models.shape[0] == 0:
-                    inner_threshold = np.median(performance_summary) * 1.2
-                    filtered_models = errors_array[performance_summary <= inner_threshold].copy()
-                # median_error = np.nanmedian(filtered_models, axis=0)
-                min_error = np.nanquantile(filtered_models, q=0.01, axis=0)
-                # score = (median_error * 0.01 + min_error)  # where min was actual min
-                score = min_error
-                # score = score / np.min(score)
-                score = pd.DataFrame(score, index=self.validation_test_indexes[val], columns=df_wide.columns)
-                # scale
-                score = score / pd.DataFrame(index=self.validation_test_indexes[val], columns=df_wide.columns).fillna(df_wide.mean())
-                results.append(score)
-    
-            return pd.concat(results).sort_index()
+            return create_unpredictability_score(
+                    full_mae_errors=full_mae_errors, full_mae_vals=full_mae_vals,
+                    total_vals=total_vals, df_wide=df_wide[cols],
+                    validation_test_indexes=self.validation_test_indexes,
+                    scale=scale,
+            )
         else:
             return []
 
@@ -4043,7 +4037,10 @@ class AutoTS(object):
             df_wide = self.df_wide_numeric
 
         if series is None:
-            col = df_wide.columns[-1]
+            if self.subset_flag:
+                col = self.initial_results.per_series_mae.columns[-1]
+            else:
+                col = df_wide.columns[-1]
         else:
             col = str(series)
 

@@ -34,6 +34,9 @@ full_ensemble_test_list = [
     "mosaic-mae-profile-0-36",
     "mosaic-weighted-median",
     "mosaic-mae-median-0-30",
+    "mosaic-mae-filtered-0-30",
+    "mosaic-mae-unpredictability_adjusted-0-30",
+    "mosaic-weighted-profile-median-filtered-unpredictability_adjusted-crosshair_lite-3-30",  # maxxed out config
 ]
 
 
@@ -87,6 +90,8 @@ def parse_mosaic(ensemble):
             'crosshair': False,
             'n_models': None,
             'profiled': False,
+            'filtered': False,
+            'unpredictability_adjusted': False,
         }
     elif ensemble in ["mosaic_crosshair", 'mosaic-crosshair']:
         return {
@@ -95,6 +100,8 @@ def parse_mosaic(ensemble):
             'crosshair': True,
             'n_models': None,
             'profiled': False,
+            'filtered': False,
+            'unpredictability_adjusted': False,
         }
     elif ensemble in ["mosaic_window", "mosaic-window"]:
         return {
@@ -103,6 +110,8 @@ def parse_mosaic(ensemble):
             'crosshair': False,
             'n_models': None,
             'profiled': False,
+            'filtered': False,
+            'unpredictability_adjusted': False,
         }
     else:
         # mosaic-metric-crosshair-window-n_models
@@ -150,6 +159,8 @@ def parse_mosaic(ensemble):
             'crosshair': crosshair,
             'n_models': n_models,
             "profiled": "profile" in ensemble,
+            "filtered": "filtered" in ensemble,
+            "unpredictability_adjusted": "unpredictability_adjusted" in ensemble,
         }
 
 
@@ -1634,13 +1645,69 @@ def generate_crosshair_score_list(error_list):
     return list(full_arr + sum_error)  # + outer_sum
 
 
+def _custom_min_max_scaler(df, min_value=0.1):
+    # Calculate min and max for each column
+    col_min = df.min()
+    col_max = df.max()
+    
+    # Apply the inverted min-max scaling formula
+    scaled_df = min_value + (1 - min_value) * ((col_max - df) / (col_max - col_min))
+    
+    return scaled_df
+
+
+def create_unpredictability_score(
+        full_mae_errors, full_mae_vals,
+        total_vals, df_wide,
+        validation_test_indexes,
+        scale=False,
+):
+    results = []
+    threshold = np.nanmedian(full_mae_errors) * 1.1
+    for val in range(total_vals):
+        errors_array = np.array(
+            [
+                x
+                for y, x in sorted(
+                    zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
+                )
+                if y == val
+            ]
+        )
+        # filters by models performance across ALL series, which may sometimes be a limitation
+        performance_summary = np.nanmedian(errors_array, axis=(1, 2))
+        filtered_models = errors_array[performance_summary <= threshold].copy()
+        if filtered_models.shape[0] <= 1:
+            inner_threshold = np.median(performance_summary) * 1.2
+            filtered_models = errors_array[performance_summary <= inner_threshold].copy()
+        # median_error = np.nanmedian(filtered_models, axis=0)
+        min_error = np.nanquantile(filtered_models, q=0.01, axis=0)
+        # score = (median_error * 0.01 + min_error)  # where min was actual min
+        score = min_error
+        # score = score / np.min(score)
+        score = pd.DataFrame(score, index=validation_test_indexes[val], columns=df_wide.columns)
+        # scale
+        score = score / pd.DataFrame(index=validation_test_indexes[val], columns=df_wide.columns).fillna(df_wide.mean())
+        results.append(score)
+
+    if scale:
+        return _custom_min_max_scaler(pd.concat(results).sort_index(), min_value=0.1)
+    else:
+        return pd.concat(results).sort_index()
+
+
 def process_mosaic_arrays(
     local_results,
     full_mae_ids,
     full_mae_errors,
-    total_vals,
+    total_vals=None,
     models_to_use=None,
     smoothing_window=None,
+    filtered=False,
+    unpredictability_adjusted=False,
+    validation_test_indexes=None,
+    full_mae_vals=None,
+    df_wide=None,
 ):
     # sort by runtime then drop duplicates on metric results to remove functionally equivalent model duplication
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
@@ -1665,16 +1732,37 @@ def process_mosaic_arrays(
             models_to_use = filtered_use
     # begin figuring out which are the min models for each point
     id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
+    if unpredictability_adjusted:
+        scores = create_unpredictability_score(
+                full_mae_errors, full_mae_vals,
+                total_vals, df_wide,
+                validation_test_indexes,
+                scale=False,
+        )
+        weight_dict = {idx: scores.reindex(val).to_numpy() for idx, val in enumerate(validation_test_indexes)}
+        full_mae_errors_use = [
+            x * weight_dict[y]
+            for y, x in sorted(
+                zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
+            )
+        ]
+    else:
+        full_mae_errors_use = full_mae_errors
     errors_array = np.array(
         [
             x
             for y, x in sorted(
-                zip(full_mae_ids, full_mae_errors), key=lambda pair: pair[0]
+                zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
             )
             if y in models_to_use
         ]
     )
 
+    # remove models that are above median overall
+    if filtered:
+        threshold = np.nanmedian(full_mae_errors_use) * 1.0  # could change this level
+        performance_summary = np.nanmedian(errors_array, axis=(1, 2))
+        errors_array = errors_array[performance_summary <= threshold]
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
 
@@ -1712,7 +1800,12 @@ def generate_mosaic_template(
     smoothing_window=None,
     metric_name="MAE",
     models_to_use=None,
-    id_to_group_mapping=None,
+    id_to_group_mapping: dict = None,
+    filtered: bool = False,
+    unpredictability_adjusted: bool = False,
+    validation_test_indexes=None,
+    full_mae_vals=None,
+    df_wide=None,
     **kwargs,
 ):
     """Generate an ensemble template from results."""
@@ -1725,6 +1818,11 @@ def generate_mosaic_template(
         total_vals=total_vals,
         models_to_use=models_to_use,
         smoothing_window=smoothing_window,
+        filtered=filtered,
+        unpredictability_adjusted=unpredictability_adjusted,
+        validation_test_indexes=validation_test_indexes,
+        full_mae_vals=full_mae_vals,
+        df_wide=df_wide,
     )
     checksum = pd.Series(id_array).value_counts()
     # should be the same because all should have the same num validations
