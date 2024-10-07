@@ -924,6 +924,7 @@ def generate_regressor_params(
                     "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
                     "fit_intercept": random.choices([True, False], [0.9, 0.1])[0],
                     "selection": random.choices(["cyclic", "random"], [0.8, 0.1])[0],
+                    "max_iter": random.choices([1000, 2000, 5000], [0.8, 0.2, 0.01])[0],
                 },
             }
         elif model == 'xgboost':
@@ -3697,7 +3698,7 @@ class VectorizedMultiOutputGPR:
         kernel (str): linear, polynomial, rbf, periodic, locally_periodic, exponential
         noise_var (float): noise variance, effectively regularization. Close to zero little regularization, larger values create more model flexiblity and noise tolerance.
         gamma: For the RBF, Exponential, and Locally Periodic kernels, γ is essentially an inverse length scale. [0.1,1,10,100].
-        lambda_: For the Periodic and Locally Periodic kernels, \lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
+        lambda_: For the Periodic and Locally Periodic kernels, lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
         lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as lambda_.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
