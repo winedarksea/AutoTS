@@ -1721,10 +1721,12 @@ def process_mosaic_arrays(
     # select only models run through all validations
     # previous version was failing to remove models that failed on validation
     run_count = local_results[local_results["Exceptions"].isnull()][['Model', 'ID']].groupby("ID").count()
-    print(f"Total vals is {total_vals}")
-    fully_validated = run_count[run_count['Model'] == total_vals].index.tolist()
-    print(run_count[run_count.index.isin(fully_validated)].max())
-    print(run_count[run_count.index.isin(fully_validated)].min())
+    if filtered:
+        # this one has dedupe currently and can handle greater
+        # but I'm not 100% on this dedupe overall being correct, hence not using for all
+        fully_validated = run_count[run_count['Model'] >= total_vals].index.tolist()
+    else:
+       fully_validated = run_count[run_count['Model'] == total_vals].index.tolist() 
     if models_to_use is None:
         models_to_use = fully_validated
     else:
@@ -1752,27 +1754,38 @@ def process_mosaic_arrays(
 
     # remove models that are above median overall
     if filtered:
-        threshold = np.nanmedian(full_mae_errors_use) * 1.0  # could change this level
-        tuple_list =[
-            (x, y)
-            for y, x in sorted(
-                zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
-            )
-            if y in models_to_use and np.nanmedian(x) <= threshold
-        ]
-        errors_array, id_array = zip(*tuple_list)
-        errors_array = np.array(errors_array)
-        id_array = np.array(id_array)
+        threshold = np.nanmedian(full_mae_errors_use) * 1.2  # could change this level
+        seen = set()
+        errors_array = []
+        id_array = []
+        rubbish = []
+        for idz, errz, valz in sorted(zip(full_mae_ids, full_mae_errors_use, full_mae_vals), key=lambda pair: pair[0]):
+            if idz in models_to_use:
+                if np.nanmedian(errz) <= threshold:
+                    rubbish.append(idz)
+                if (idz, str(valz)) not in seen:
+                    # dedupe if dupes exist, which they shouldn't but they do sometimes...
+                    seen.add((idz, str(valz)))
+                    errors_array.append(errz)
+                    id_array.append(idz)
+        errors_array2 = []
+        id_array2 = []
+        for errz, idz in zip(errors_array, id_array):
+            if idz not in rubbish:
+                errors_array2.append(errz)
+                id_array2.append(idz)
+        errors_array = np.array(errors_array2)
+        id_array = np.array(id_array2)
     else:
-        errors_array = np.array(
-            [
-                x
-                for y, x in sorted(
-                    zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
-                )
-                if y in models_to_use
-            ]
-        )
+        # errors_array = np.array(
+        #     [
+        #         x
+        #         for y, x in sorted(
+        #             zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
+        #         )
+        #         if y in models_to_use
+        #     ]
+        # )
         #####
         tuple_list =[
             (x, y)
@@ -1782,12 +1795,8 @@ def process_mosaic_arrays(
             if y in models_to_use
         ]
         errors_array, id_array = zip(*tuple_list)
-        print("and...")
-        print(set(id_array) == set(models_to_use))
         errors_array = np.array(errors_array)
         id_array = np.array(id_array)
-        print(pd.Series(id_array).value_counts().head())
-        print(pd.Series(id_array).value_counts().tail())
 
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
@@ -1850,10 +1859,7 @@ def generate_mosaic_template(
         full_mae_vals=full_mae_vals,
         df_wide=df_wide,
     )
-    print(models_to_use)
     checksum = pd.Series(id_array).value_counts()
-    print(pd.Series(id_array).value_counts().head())
-    print(pd.Series(id_array).value_counts().tail())
     # should be the same because all should have the same num validations
     assert checksum.min() == checksum.max(), f"id array wrong in mosaic generation, {checksum.min()}, {checksum.max()}, {len(errors_array)}"
     # window across multiple time steps to smooth the result

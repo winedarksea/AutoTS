@@ -2745,6 +2745,7 @@ class AutoTS(object):
 
         mosaic_ensembles = [x for x in ensemble if "mosaic" in x]
         ensemble_templates = pd.DataFrame()
+        self.mosaic_template_generation_success = True
         for mos in mosaic_ensembles:
             try:
                 mosaic_config = parse_mosaic(mos)
@@ -2834,6 +2835,7 @@ class AutoTS(object):
                     [ensemble_templates, ens_templates], axis=0
                 )
             except Exception as e:
+                self.mosaic_template_generation_success = False
                 print(
                     f"Error in mosaic template {mosaic_config} in generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                 )

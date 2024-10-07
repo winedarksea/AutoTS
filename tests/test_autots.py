@@ -170,6 +170,8 @@ class AutoTSTest(unittest.TestCase):
         # check all mosaic and horizontal styles were created
         count_horz = len([x for x in ensemble if "horizontal" in x or "mosaic" in x])
         self.assertEqual(len(initial_results[initial_results["Ensemble"] == 2]["ModelParameters"].unique()), count_horz)
+        # check the mosaic details were equal
+        self.assertTrue(len(model.initial_results.full_mae_errors) == len(model.initial_results.full_mae_ids) == len(model.initial_results.full_mae_vals))
         # check at least 1 'simple' ensemble worked
         self.assertGreater(initial_results[initial_results["Ensemble"] == 1]['Exceptions'].isnull().sum(), 0)
         # test that actually the best model (or nearly) was chosen
