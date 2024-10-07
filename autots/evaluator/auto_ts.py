@@ -1753,10 +1753,11 @@ class AutoTS(object):
                     for y, x, z in sorted(
                         zip(self.initial_results.full_mae_vals, self.initial_results.full_mae_errors, self.initial_results.full_mae_ids), key=lambda pair: pair[0]
                     )
+                    if z not in self.initial_results.model_results[self.initial_results.model_results["Ensemble"] == 2]["ID"].tolist()
                 ]
                 errors_array, id_array = zip(*tuple_list)
-                np.nanmean(np.array(errors_array), axis=(1, 2)).idxmin()
-                self.best_model_unpredictability_adjusted = True
+                id_best = np.nanmean(np.array(errors_array), axis=(1, 2)).argmin()
+                self.best_model_unpredictability_adjusted = id_array[id_best]
             else:
                 self.best_model_unpredictability_adjusted = None
         except Exception as e:

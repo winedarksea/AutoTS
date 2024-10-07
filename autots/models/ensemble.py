@@ -1721,7 +1721,10 @@ def process_mosaic_arrays(
     # select only models run through all validations
     # previous version was failing to remove models that failed on validation
     run_count = local_results[local_results["Exceptions"].isnull()][['Model', 'ID']].groupby("ID").count()
+    print(f"Total vals is {total_vals}")
     fully_validated = run_count[run_count['Model'] == total_vals].index.tolist()
+    print(run_count[run_count.index.isin(fully_validated)].max())
+    print(run_count[run_count.index.isin(fully_validated)].min())
     if models_to_use is None:
         models_to_use = fully_validated
     else:
@@ -1770,6 +1773,21 @@ def process_mosaic_arrays(
                 if y in models_to_use
             ]
         )
+        #####
+        tuple_list =[
+            (x, y)
+            for y, x in sorted(
+                zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
+            )
+            if y in models_to_use
+        ]
+        errors_array, id_array = zip(*tuple_list)
+        print("and...")
+        print(set(id_array) == set(models_to_use))
+        errors_array = np.array(errors_array)
+        id_array = np.array(id_array)
+        print(pd.Series(id_array).value_counts().head())
+        print(pd.Series(id_array).value_counts().tail())
 
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
@@ -1832,9 +1850,12 @@ def generate_mosaic_template(
         full_mae_vals=full_mae_vals,
         df_wide=df_wide,
     )
+    print(models_to_use)
     checksum = pd.Series(id_array).value_counts()
+    print(pd.Series(id_array).value_counts().head())
+    print(pd.Series(id_array).value_counts().tail())
     # should be the same because all should have the same num validations
-    assert checksum.min() == checksum.max(), "id array wrong in mosaic generation"
+    assert checksum.min() == checksum.max(), f"id array wrong in mosaic generation, {checksum.min()}, {checksum.max()}, {len(errors_array)}"
     # window across multiple time steps to smooth the result
     name = "Mosaic"
     # since it is sorted by id and filtered to only those run through all vals, this is the slice step after each val

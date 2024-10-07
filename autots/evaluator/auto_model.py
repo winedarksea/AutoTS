@@ -1559,7 +1559,7 @@ def _eval_prediction_for_template(
         column_names=df_train.columns,
     )
     if validation_round >= 1 and verbose > 0:
-        round_smape = model_error.avg_metrics['smape'].round(2)
+        round_smape = round(model_error.avg_metrics['smape'], 2)  # should work on both DF and single value
         validation_accuracy_print = "{} - {} with avg smape {}: ".format(
             str(template_result.model_count),
             model_str,
@@ -1650,7 +1650,7 @@ def _eval_prediction_for_template(
 
 horizontal_post_processors = [
     {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}, "1": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": True, "threshold": 10, "threshold_method": "max"}}},
-	{"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
+	# {"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
 ]
 
 def TemplateWizard(
