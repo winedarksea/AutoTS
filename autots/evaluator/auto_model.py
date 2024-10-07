@@ -1823,6 +1823,8 @@ def TemplateWizard(
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
+            else:
+                post_memory_percent = 0.0
             # wrapped up to enable postprocessing
             template_result = _eval_prediction_for_template(
                     df_forecast, template_result, verbose,
