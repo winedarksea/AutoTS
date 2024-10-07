@@ -2706,13 +2706,19 @@ class AutoTS(object):
         if ensemble is None:
             ensemble = self.ensemble
 
+        mae_weighting = self.metric_weighting.get('mae_weighting', 0.0)
+        spl_weighting = self.metric_weighting.get('spl_weighting', 0.0)
+        rmse_weighting = self.metric_weighting.get('rmse_weighting', 0.0)
+        if (mae_weighting + spl_weighting + rmse_weighting) == 0:
+            mae_weighting = 1
+            spl_weighting = 0.05
         weight_per_value = (
             np.asarray(initial_results.full_mae_errors)
-            * self.metric_weighting.get('mae_weighting', 0.0)
+            * mae_weighting
             + np.asarray(initial_results.full_pl_errors)
-            * self.metric_weighting.get('spl_weighting', 0.0)
+            * spl_weighting
             + np.asarray(initial_results.squared_errors)
-            * self.metric_weighting.get('rmse_weighting', 0.0)
+            * rmse_weighting
         )
         runtime_weighting = self.metric_weighting.get("runtime_weighting", 0)
         if runtime_weighting != 0:
@@ -2788,7 +2794,7 @@ class AutoTS(object):
                         total_vals=total_vals,
                         models_to_use=models_to_use,
                         smoothing_window=None,
-                        filtered=False,
+                        filtered=mosaic_config.get("filtered", False),
                         unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
                         validation_test_indexes=self.validation_test_indexes,
                         full_mae_vals=initial_results.full_mae_vals,

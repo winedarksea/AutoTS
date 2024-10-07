@@ -1653,7 +1653,7 @@ def _custom_min_max_scaler(df, min_value=0.1):
     # Apply the inverted min-max scaling formula
     scaled_df = min_value + (1 - min_value) * ((col_max - df) / (col_max - col_min))
     
-    return scaled_df
+    return scaled_df.round(3)
 
 
 def create_unpredictability_score(
@@ -1777,24 +1777,14 @@ def process_mosaic_arrays(
         errors_array = np.array(errors_array2)
         id_array = np.array(id_array2)
     else:
-        # errors_array = np.array(
-        #     [
-        #         x
-        #         for y, x in sorted(
-        #             zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
-        #         )
-        #         if y in models_to_use
-        #     ]
-        # )
-        #####
-        tuple_list =[
-            (x, y)
-            for y, x in sorted(
-                zip(full_mae_ids, full_mae_errors_use), key=lambda pair: pair[0]
-            )
-            if y in models_to_use
-        ]
-        errors_array, id_array = zip(*tuple_list)
+        seen = set()
+        errors_array = []
+        id_array = []
+        for idz, errz, valz in sorted(zip(full_mae_ids, full_mae_errors_use, full_mae_vals), key=lambda pair: pair[0]):
+            if idz in models_to_use and (idz, str(valz)) not in seen:
+                seen.add((idz, str(valz)))
+                errors_array.append(errz)
+                id_array.append(idz)
         errors_array = np.array(errors_array)
         id_array = np.array(id_array)
 
