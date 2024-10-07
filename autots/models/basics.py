@@ -2891,6 +2891,10 @@ class SeasonalityMotif(ModelObject):
             q1 = nan_quantile(results, q=0.25, axis=0)
             q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
+        elif point_method == "trimmed_mean_20":
+            forecast = trimmed_mean(results, percent=0.2, axis=0)
+        elif point_method == "trimmed_mean_40":
+            forecast = trimmed_mean(results, percent=0.4, axis=0)
         elif point_method == "closest":
             forecast = results[0]
         else:
@@ -2951,24 +2955,12 @@ class SeasonalityMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", 'closest'],
-                [0.2, 0.2, 0.2, 0.2, 0.1],
+                ["weighted_mean", "mean", "median", "midhinge", 'closest', 'trimmed_mean_20', 'trimmed_mean_40'],
+                [0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
-            "datepart_method": random.choices(
-                [
-                    "recurring",
-                    "simple",
-                    "expanded",
-                    "simple_2",
-                    "simple_binarized",
-                    "expanded_binarized",
-                    'common_fourier',
-                    'common_fourier_rw',
-                ],
-                [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
-            )[0],
+            "datepart_method": random_datepart(method=method),
             "independent": bool(random.getrandbits(1)),
         }
 

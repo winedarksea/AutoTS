@@ -4005,7 +4005,7 @@ class AutoTS(object):
         
         if full_mae_errors:
             results = []
-            threshold = np.nanmedian(full_mae_errors) * 0.8
+            threshold = np.nanmedian(full_mae_errors) * 1.0
             for val in range(total_vals):
                 errors_array = np.array(
                     [
@@ -4016,17 +4016,20 @@ class AutoTS(object):
                         if y == val
                     ]
                 )
-                
+
                 performance_summary = np.nanmedian(errors_array, axis=(1, 2))
                 filtered_models = errors_array[performance_summary <= threshold].copy()
                 if filtered_models.shape[0] == 0:
                     inner_threshold = np.median(performance_summary) * 1.2
                     filtered_models = errors_array[performance_summary <= inner_threshold].copy()
-                median_error = np.median(filtered_models, axis=0)
-                min_error = np.min(filtered_models, axis=0)
-                score = (median_error * 0.01 + min_error)
-                score = score / np.min(score)
+                # median_error = np.nanmedian(filtered_models, axis=0)
+                min_error = np.nanquantile(filtered_models, q=0.01, axis=0)
+                # score = (median_error * 0.01 + min_error)  # where min was actual min
+                score = min_error
+                # score = score / np.min(score)
                 score = pd.DataFrame(score, index=self.validation_test_indexes[val], columns=df_wide.columns)
+                # scale
+                score = score / pd.DataFrame(index=self.validation_test_indexes[val], columns=df_wide.columns).fillna(df_wide.mean())
                 results.append(score)
     
             return pd.concat(results).sort_index()

@@ -33,6 +33,7 @@
 * added ShiftFirstValue which is only a minor nuance on PositiveShift transformer
 * added BasicLinearModel model
 * datepart_method, scale, and fourier encodig to WindowRegression
+* trimmed_mean and more date part options to SeasonalityMotif
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
