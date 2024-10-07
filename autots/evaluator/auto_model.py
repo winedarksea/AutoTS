@@ -1645,7 +1645,7 @@ def _eval_prediction_for_template(
         )
         template_result.full_mae_ids.extend([model_id])
         template_result.full_mae_vals.extend([validation_round])
-    return template_result
+    return template_result, best_smape
 
 
 horizontal_post_processors = [
@@ -1826,7 +1826,7 @@ def TemplateWizard(
             else:
                 post_memory_percent = 0.0
             # wrapped up to enable postprocessing
-            template_result = _eval_prediction_for_template(
+            template_result, best_smape = _eval_prediction_for_template(
                     df_forecast, template_result, verbose,
                     actuals, weights, df_trn_arr, ensemble,
                     scaler, cumsum_A, diff_A, last_of_array,
@@ -1858,7 +1858,7 @@ def TemplateWizard(
                     )
                     df_forecast2.transformation_parameters = x
                     template_result.model_count += 1
-                    template_result = _eval_prediction_for_template(
+                    template_result, best_smape = _eval_prediction_for_template(
                             df_forecast2, template_result, verbose,
                             actuals, weights, df_trn_arr, ensemble,
                             scaler, cumsum_A, diff_A, last_of_array,
