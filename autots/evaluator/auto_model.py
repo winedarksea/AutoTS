@@ -2557,6 +2557,9 @@ def validation_aggregation(
     }
     col_names = validation_results.model_results.columns
     col_aggs = {x: y for x, y in col_aggs.items() if x in col_names}
+    cols = [x for x in validation_results.model_results.columns if x in col_aggs.keys()]
+    # force numeric dytpes. This really shouldn't be necessary but apparently is sometimes (underlying minor bug somewhere)
+    validation_results.model_results[cols] = validation_results.model_results[cols].apply(pd.to_numeric, errors='coerce')
     validation_results.model_results['TotalRuntimeSeconds'] = (
         validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )

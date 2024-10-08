@@ -1142,6 +1142,20 @@ def dates_to_holidays(
                                 how="left",
                             )
                         )
+                    elif "hindu" in sample:
+                        idates = gregorian_to_hindu(dates)
+                        populated_holidays = (
+                            idates.drop(
+                                columns=idates.columns.difference(on + ['date']),
+                                errors='ignore',
+                            )
+                            .reset_index(drop=False)
+                            .merge(
+                                holiday_df.drop(columns=drop_colz, errors='ignore'),
+                                on=on,
+                                how="left",
+                            )
+                        )
                     else:
                         populated_holidays = dates_df.drop(
                             columns=dates_df.columns.difference(on + ['date'])
