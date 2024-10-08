@@ -2459,6 +2459,11 @@ class AutoTS(object):
                     self.template_cols_id + ['Runs', 'smape'] + remaining_columns
                 )
                 export_template = export_template.reindex(columns=new_order)
+        # clean up any bad data (hopefully there is none anyway...)
+        export_template = export_template[
+            (~export_template['ModelParameters'].isnull())
+            & (~export_template['Model'].isnull())
+        ]
         return self.save_template(filename, export_template)
 
     def save_template(self, filename, export_template, **kwargs):
