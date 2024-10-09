@@ -2115,6 +2115,8 @@ class AutoTS(object):
             if future_regressor_train is None
             else future_regressor_train
         )
+        if future_regressor is None and use_regr_train is not None:
+            print("future_regressor not provided to _predict but was provided for training")
         if verbose == "self":
             verbose = self.verbose
         if forecast_length == "self":

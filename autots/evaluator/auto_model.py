@@ -1649,8 +1649,10 @@ def _eval_prediction_for_template(
 
 
 horizontal_post_processors = [
-    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}, "1": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": True, "threshold": 10, "threshold_method": "max"}}},
+    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}, "1": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": True, "threshold": 10, "threshold_method": "max"}}},  # best competition on vn1
+    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 4, "lag": 28, "method": "additive", "strength": 0.2, "first_value_only": False, "threshold": 1, "threshold_method": "max"}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": False, "threshold": 1, "threshold_method": "mean"}}},  # best wasserstein on daily
 	# {"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
+    {"fillna": "rolling_mean_24", "transformations": {"0": "bkfilter", "1": "FIRFilter", "2": "AlignLastDiff"}, "transformation_params": {"0": {}, "1": {"numtaps": 128, "cutoff_hz": 0.01, "window": "blackman", "sampling_frequency": 60, "on_transform": False, "on_inverse": True}, "2": {"rows": 90, "displacement_rows": 1, "quantile": 1.0, "decay_span": 90}}},  # best smape on daily
 ]
 
 def TemplateWizard(
