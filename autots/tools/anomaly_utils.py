@@ -37,7 +37,7 @@ try:
     from sklearn.covariance import EllipticEnvelope
     from sklearn.svm import OneClassSVM
     from sklearn.mixture import GaussianMixture
-    from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy
+    from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy, beta
 except Exception:
     pass
 
@@ -146,6 +146,9 @@ def zscore_survival_function(
     elif method == "med_diff":
         median_diff = df.diff().median()
         residual_score = (df.diff().fillna(0) / median_diff).abs()
+    elif method == "max_diff":
+        max_diff = df.diff().max()
+        residual_score = (df.diff().fillna(0) / max_diff).abs()
     else:
         raise ValueError("zscore method not recognized")
 
@@ -167,6 +170,10 @@ def zscore_survival_function(
     elif distribution == "gamma":
         return pd.DataFrame(
             gamma.sf(residual_score, dof), index=df.index, columns=columns
+        )
+    elif distribution == "beta":
+        return pd.DataFrame(
+            beta.sf(residual_score, 0.5, 2, scale=dof), index=df.index, columns=columns
         )
     elif distribution == "chi2":
         return pd.DataFrame(
@@ -247,7 +254,7 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
                 columns=cols,
             )
         return res, scores
-    elif threshold_method in ["zscore", "rolling_zscore", "mad", "med_diff"]:
+    elif threshold_method in ["zscore", "rolling_zscore", "mad", "med_diff", "max_diff"]:
         alpha = method_params.get("alpha", 0.05)
         distribution = method_params.get("distribution", "norm")
         rolling_periods = method_params.get("rolling_periods", 200)
@@ -407,7 +414,7 @@ def detect_anomalies(
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
             res, scores = loop_sk_outliers(df_anomaly, method, method_params, n_jobs)
-    elif method in ["zscore", "rolling_zscore", "mad", "minmax", "med_diff"]:
+    elif method in ["zscore", "rolling_zscore", "mad", "minmax", "med_diff", "max_diff"]:
         res, scores = values_to_anomalies(df_anomaly, output, method, method_params)
     elif method == "GaussianMixtureBase":
         res, scores = gaussian_mixture(df, **method_params)
@@ -458,6 +465,7 @@ available_methods = [
     "IQR",
     "nonparametric",
     "med_diff",
+    "max_diff",
     # "GaussianMixtureBase",
 ]
 fast_methods = [
@@ -468,6 +476,7 @@ fast_methods = [
     "IQR",
     "nonparametric",
     "med_diff",
+    "max_diff",
 ]
 
 
@@ -475,11 +484,11 @@ def anomaly_new_params(method='random'):
     if method == "deep":
         method_choice = random.choices(
             available_methods,
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1, 0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
     elif method == "fast":
         method_choice = random.choices(
-            fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1]
+            fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1, 0.1]
         )[0]
     elif method in available_methods:
         method_choice = method
@@ -567,11 +576,11 @@ def anomaly_new_params(method='random'):
             'rolling_periods': random.choice([28, 90, 200, 300]),
             'center': random.choice([True, False]),
         }
-    elif method_choice == "med_diff":
+    elif method_choice in ["med_diff", "max_diff"]:
         method_params = {
             'distribution': random.choices(
-                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"],
-                [0.4, 0.2, 0.2, 0.2, 0.1, 0.1],
+                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy", "beta"],
+                [0.4, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1],
             )[0],
             'alpha': random.choices(
                 [0.01, 0.03, 0.05, 0.1, 0.2, 0.6], [0.1, 0.1, 0.8, 0.1, 0.1, 0.05]

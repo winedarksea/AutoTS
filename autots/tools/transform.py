@@ -2966,6 +2966,7 @@ class AnomalyRemoval(EmptyTransformer):
         method_params={},
         fillna=None,
         isolated_only=False,
+        on_inverse=False,
         n_jobs=1,
     ):
         """Detect anomalies on a historic dataset. No inverse_transform available.
@@ -2988,6 +2989,7 @@ class AnomalyRemoval(EmptyTransformer):
         self.fillna = fillna
         self.isolated_only = isolated_only
         self.anomaly_classifier = None
+        self.on_inverse = False
 
     def fit(self, df):
         """All will return -1 for anomalies.
@@ -3073,6 +3075,12 @@ class AnomalyRemoval(EmptyTransformer):
         ).pivot_table(index='date', columns='series', values="value")
         return res[scores.columns]
 
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        if self.on_inverse:
+            return self.fit_transform(df)
+        else:
+            return df
+
     @staticmethod
     def get_new_params(method="random"):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
@@ -3090,6 +3098,7 @@ class AnomalyRemoval(EmptyTransformer):
             )[0],
             "transform_dict": transform_dict,
             "isolated_only": random.choices([True, False], [0.2, 0.8])[0],
+            "on_inverse": random.choices([True, False], [0.05, 0.95])[0],
         }
 
 
