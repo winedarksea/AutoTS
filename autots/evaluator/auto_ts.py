@@ -2093,7 +2093,13 @@ class AutoTS(object):
         future_regressor_train=None,
         refit=False,  # refit model
         bypass_save=False,  # don't even try saving model
+        model_id=None,
     ):
+        if model_id is not None:
+            use_mod = self.initial_results.model_results[self.initial_results.model_results["ID"] == model_id].iloc[0]
+            use_model = use_mod["Model"]
+            use_params = use_mod["ModelParameters"]
+            use_trans = use_mod["TransformationParameters"]
         use_model = self.best_model_name if model_name is None else model_name
         use_params = (
             self.best_model_params.copy() if model_params is None else model_params
@@ -2364,15 +2370,20 @@ class AutoTS(object):
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
                 ]
+                # clean up any bad data (hopefully there is none anyway...)
+                export_template = export_template[
+                    (~export_template['ModelParameters'].isnull())
+                    & (~export_template['Model'].isnull())
+                ]
                 extra_mods = []
                 if min_metrics is not None:
                     for metric in min_metrics:
                         extra_mods.append(
-                            export_template[metric].astype(float).nsmallest(1).copy()
+                            pd.to_numeric(export_template[metric], errors="coerce").nsmallest(1).copy()
                         )
                         # and no ensemble version
                         extra_mods.append(
-                            export_template[export_template['Ensemble'] == 0][metric].astype(float)
+                            pd.to_numeric(export_template[export_template['Ensemble'] == 0][metric], errors="coerce")
                             .nsmallest(1)
                             .copy()
                         )
@@ -2397,7 +2408,7 @@ class AutoTS(object):
                         if min_metrics is not None:
                             for metric in min_metrics:
                                 extra_mods.append(
-                                    one_model[metric].astype(float).nsmallest(1).copy()
+                                    pd.to_numeric(one_model[metric], errors="coerce").nsmallest(1).copy()
                                 )
                         if max_metrics is not None:
                             for metric in max_metrics:
