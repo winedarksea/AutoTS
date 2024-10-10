@@ -2100,15 +2100,16 @@ class AutoTS(object):
             use_model = use_mod["Model"]
             use_params = use_mod["ModelParameters"]
             use_trans = use_mod["TransformationParameters"]
-        use_model = self.best_model_name if model_name is None else model_name
-        use_params = (
-            self.best_model_params.copy() if model_params is None else model_params
-        )
-        use_trans = (
-            self.best_model_transformation_params
-            if model_transformation_params is None
-            else model_transformation_params
-        )
+        else:
+            use_model = self.best_model_name if model_name is None else model_name
+            use_params = (
+                self.best_model_params.copy() if model_params is None else model_params
+            )
+            use_trans = (
+                self.best_model_transformation_params
+                if model_transformation_params is None
+                else model_transformation_params
+            )
         use_data = self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric
         use_regr_train = (
             self.future_regressor_train

@@ -1444,6 +1444,7 @@ def HorizontalTemplateGenerator(
             [ensemble_templates, best5_params], axis=0, ignore_index=True
         )
     # the idea behind running both is for redundancy in the -max case
+    # and this one is better in some testing
     if 'horizontal' in ensemble or (
         'horizontal-max' in ensemble and not only_specified
     ):
