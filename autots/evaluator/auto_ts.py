@@ -2394,7 +2394,7 @@ class AutoTS(object):
                         # and no ensemble version
                         extra_mods.append(
                             export_template[export_template['Ensemble'] == 0]
-                            .nsmallest(1)
+                            .nsmallest(1, columns=metric)
                             .copy()
                         )
                 if max_metrics is not None:
