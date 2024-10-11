@@ -2387,7 +2387,7 @@ class AutoTS(object):
                 extra_mods = []
                 if min_metrics is not None:
                     for metric in min_metrics:
-                        extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                        export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                         extra_mods.append(
                             export_template.nsmallest(1, columns=metric).copy()
                         )
@@ -2399,7 +2399,7 @@ class AutoTS(object):
                         )
                 if max_metrics is not None:
                     for metric in max_metrics:
-                        extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                        export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                         extra_mods.append(
                             export_template.nlargest(1, columns=metric).copy()
                         )
@@ -2417,13 +2417,13 @@ class AutoTS(object):
                             one_model.nsmallest(1, columns=['Score']).copy()
                         ))
                         if min_metrics is not None:
-                            extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                            export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                             for metric in min_metrics:
                                 extra_mods.append(
                                     one_model.nsmallest(1, columns=metric).copy()
                                 )
                         if max_metrics is not None:
-                            extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                            export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                             for metric in max_metrics:
                                 extra_mods.append(
                                     one_model.nlargest(1, columns=metric).copy()
