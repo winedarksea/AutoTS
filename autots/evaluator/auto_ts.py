@@ -442,6 +442,7 @@ class AutoTS(object):
         self.preclean_transformer = None
         self.score_per_series = None
         self.best_model_non_horizontal = None
+        self.best_model_unpredictability_adjusted = None
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
         self.validation_results = None
@@ -502,8 +503,13 @@ class AutoTS(object):
                         "horizontal-min-20",
                     ],
                     full_ensemble_test_list,
+                    [
+                        "horizontal",
+                        "mosaic-mae-0-horizontal",
+                        "mosaic-mae-median-0-30",
+                    ],
                 ],
-                [0.3, 0.1, 0.2, 0.2, 0.2],
+                [0.3, 0.1, 0.2, 0.2, 0.2, 0.1],
             )[0]
         if ensemble_choice in [None, ['simple']]:
             horizontal_ensemble_validation = False
@@ -2367,7 +2373,7 @@ class AutoTS(object):
             if n == 1 and not include_results:
                 export_template = self.best_model
             else:
-                export_template = self.validation_results.model_results
+                export_template = self.validation_results.model_results.copy()
                 # all validated models + horizontal ensembles
                 export_template = export_template[
                     (export_template['Runs'] >= (self.num_validations + 1))
@@ -2431,7 +2437,7 @@ class AutoTS(object):
                     export_template = pd.concat(
                         [export_template, extra_mods]
                     ).drop_duplicates()
-                if self.best_model_id not in export_template['ID']:
+                if self.best_model_id not in export_template['ID'].unique().tolist():
                     export_template = pd.concat(
                         [
                             self.validation_results.model_results[
