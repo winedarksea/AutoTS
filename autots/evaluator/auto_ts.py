@@ -2387,17 +2387,19 @@ class AutoTS(object):
                 extra_mods = []
                 if min_metrics is not None:
                     for metric in min_metrics:
+                        extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                         extra_mods.append(
-                            pd.to_numeric(export_template[metric], errors="coerce").nsmallest(1).copy()
+                            export_template.nsmallest(1, columns=metric).copy()
                         )
                         # and no ensemble version
                         extra_mods.append(
-                            pd.to_numeric(export_template[export_template['Ensemble'] == 0][metric], errors="coerce")
+                            export_template[export_template['Ensemble'] == 0]
                             .nsmallest(1)
                             .copy()
                         )
                 if max_metrics is not None:
                     for metric in max_metrics:
+                        extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                         extra_mods.append(
                             export_template.nlargest(1, columns=metric).copy()
                         )
@@ -2415,11 +2417,13 @@ class AutoTS(object):
                             one_model.nsmallest(1, columns=['Score']).copy()
                         ))
                         if min_metrics is not None:
+                            extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                             for metric in min_metrics:
                                 extra_mods.append(
-                                    pd.to_numeric(one_model[metric], errors="coerce").nsmallest(1).copy()
+                                    one_model.nsmallest(1, columns=metric).copy()
                                 )
                         if max_metrics is not None:
+                            extra_mods[metric] = pd.to_numeric(export_template[metric], errors="coerce")
                             for metric in max_metrics:
                                 extra_mods.append(
                                     one_model.nlargest(1, columns=metric).copy()
@@ -2459,6 +2463,11 @@ class AutoTS(object):
         else:
             raise ValueError("`models` must be 'all' or 'best' or 'slowest'")
 
+        # clean up any bad data (hopefully there is none anyway...)
+        export_template = export_template[
+            (~export_template['ModelParameters'].isnull())
+            & (~export_template['Model'].isnull())
+        ]
         if unpack_ensembles:
             export_template = unpack_ensemble_models(
                 export_template, self.template_cols, keep_ensemble=False, recursive=True
@@ -2479,11 +2488,6 @@ class AutoTS(object):
                     self.template_cols_id + ['Runs', 'smape'] + remaining_columns
                 )
                 export_template = export_template.reindex(columns=new_order)
-        # clean up any bad data (hopefully there is none anyway...)
-        export_template = export_template[
-            (~export_template['ModelParameters'].isnull())
-            & (~export_template['Model'].isnull())
-        ]
         return self.save_template(filename, export_template)
 
     def save_template(self, filename, export_template, **kwargs):
