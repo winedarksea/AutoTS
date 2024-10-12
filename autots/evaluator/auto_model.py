@@ -1475,6 +1475,14 @@ def model_forecast(
             ens_forecast.upper_forecast = transformer_object.inverse_transform(
                 ens_forecast.upper_forecast, fillzero=True, bounds=True
             )
+        # so ensembles bypass the usual checks, so needed again here
+        if fail_on_forecast_nan:
+            if not np.isfinite(np.max(ens_forecast.forecast.to_numpy())):
+                raise ValueError(
+                    "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
+                        model_name
+                    )
+                )
         return ens_forecast
     # if not an ensemble
     else:

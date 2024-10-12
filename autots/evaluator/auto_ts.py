@@ -427,6 +427,7 @@ class AutoTS(object):
                 )
 
         self.regressor_used = False
+        self.subset_flag = False
         self.grouping_ids = None
         self.validation_results = self.initial_results = TemplateEvalObject()
         self.best_model = pd.DataFrame()
@@ -1253,8 +1254,6 @@ class AutoTS(object):
                 self.subset_flag = False
             else:
                 self.subset_flag = True
-        else:
-            self.subset_flag = False
 
         #
         # take a subset of the data if working with a large number of series
@@ -2962,18 +2961,21 @@ class AutoTS(object):
         )
         return result
 
-    def expand_horizontal(self):
+    def expand_horizontal(self, force=False):
         """Enables expanding horizontal models trained on a subset to full data.
-        Reruns template models and generates new template.
+        Reruns template models and generates new template. Requires a horizontal model set as best model.
 
         see best_model_original and best_model_original_id for reference back to original best model after this runs
+        
+        Args:
+            force (bool): if True, runs expansions whether subset or not. Necessary on imported template without .fit() as subset flag is set in fit
         """
         # if not horizontal, skip with message if verbose
         if self.best_model_ensemble != 2:
             if self.verbose > 0:
                 print("not using horizontal ensemble, expansion unnecessary")
             return self
-        elif not self.subset_flag:
+        elif not self.subset_flag and not force:
             if self.verbose > 0:
                 print("not using subset, expansion unnecessary")
             return self
