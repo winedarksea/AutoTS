@@ -1646,8 +1646,11 @@ def generate_crosshair_score_list(error_list):
     return list(full_arr + sum_error)  # + outer_sum
 
 
-def _custom_min_max_scaler(df, min_value=0.1):
+def _custom_min_max_scaler(df, min_value=0.1, power=0.5):
     # Calculate min and max for each column
+    if power is not None:
+        # this reduces the skew of the strongest outliers when power = 0.5
+        df = np.power(df.astype(float).copy(), power)
     col_min = df.min()
     col_max = df.max()
     
