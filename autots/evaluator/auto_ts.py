@@ -446,6 +446,7 @@ class AutoTS(object):
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
         self.validation_results = None
+        self.validation_indexes = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1

@@ -2851,7 +2851,7 @@ class SeasonalityMotif(ModelObject):
             self.independent = True
             if self.verbose > 0:
                 print(
-                    "prediction too long for indepedent=False, falling back on indepdent=True"
+                    "prediction too long for indepedent=False, falling back on indepedent=True"
                 )
         if self.independent:
             # each timestep is considered individually and not as a series
