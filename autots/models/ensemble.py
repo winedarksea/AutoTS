@@ -496,7 +496,9 @@ def mosaic_xy(df_train, known):
         .transpose()
         .merge(upload, left_index=True, right_on="series_id")
     )
-    X = X.set_index("series_id").replace([np.inf, -np.inf], 0)  # .drop(columns=['series_id'], inplace=True)
+    X = X.set_index("series_id").replace(
+        [np.inf, -np.inf], 0
+    )  # .drop(columns=['series_id'], inplace=True)
     to_predict = fill_median(X[X['model_id'].isna()].drop(columns=['model_id']))
     X = X[~X['model_id'].isna()]
     Y = X['model_id']
@@ -1653,18 +1655,20 @@ def _custom_min_max_scaler(df, min_value=0.1, power=0.5):
         df = np.power(df.astype(float).copy(), power)
     col_min = df.min()
     col_max = df.max()
-    
+
     # Apply the inverted min-max scaling formula
     scaled_df = min_value + (1 - min_value) * ((col_max - df) / (col_max - col_min))
-    
+
     return scaled_df.round(3)
 
 
 def create_unpredictability_score(
-        full_mae_errors, full_mae_vals,
-        total_vals, df_wide,
-        validation_test_indexes,
-        scale=False,
+    full_mae_errors,
+    full_mae_vals,
+    total_vals,
+    df_wide,
+    validation_test_indexes,
+    scale=False,
 ):
     results = []
     threshold = np.nanmedian(full_mae_errors) * 1.1
@@ -1683,15 +1687,21 @@ def create_unpredictability_score(
         filtered_models = errors_array[performance_summary <= threshold].copy()
         if filtered_models.shape[0] <= 1:
             inner_threshold = np.median(performance_summary) * 1.2
-            filtered_models = errors_array[performance_summary <= inner_threshold].copy()
+            filtered_models = errors_array[
+                performance_summary <= inner_threshold
+            ].copy()
         # median_error = np.nanmedian(filtered_models, axis=0)
         min_error = np.nanquantile(filtered_models, q=0.01, axis=0)
         # score = (median_error * 0.01 + min_error)  # where min was actual min
         score = min_error
         # score = score / np.min(score)
-        score = pd.DataFrame(score, index=validation_test_indexes[val], columns=df_wide.columns)
+        score = pd.DataFrame(
+            score, index=validation_test_indexes[val], columns=df_wide.columns
+        )
         # scale
-        score = score / pd.DataFrame(index=validation_test_indexes[val], columns=df_wide.columns).fillna(df_wide.mean())
+        score = score / pd.DataFrame(
+            index=validation_test_indexes[val], columns=df_wide.columns
+        ).fillna(df_wide.mean())
         results.append(score)
 
     if scale:
@@ -1716,7 +1726,8 @@ def process_mosaic_arrays(
     # sort by runtime then drop duplicates on metric results to remove functionally equivalent model duplication
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
     temp = local_results.drop_duplicates(
-        subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first",
+        subset=['ValidationRound', 'smape', 'mae', 'spl'],
+        keep="first",
     )
     # there is still a possible edge case where a model matches different, but equal models on each validation round but is better overall
     # but as models being identical on point and probabilistic and this occurring seems unlikely
@@ -1724,13 +1735,17 @@ def process_mosaic_arrays(
     # remove slow models... tbd
     # select only models run through all validations
     # previous version was failing to remove models that failed on validation
-    run_count = local_results[local_results["Exceptions"].isnull()][['Model', 'ID']].groupby("ID").count()
+    run_count = (
+        local_results[local_results["Exceptions"].isnull()][['Model', 'ID']]
+        .groupby("ID")
+        .count()
+    )
     if filtered:
         # this one has dedupe currently and can handle greater
         # but I'm not 100% on this dedupe overall being correct, hence not using for all
         fully_validated = run_count[run_count['Model'] >= total_vals].index.tolist()
     else:
-       fully_validated = run_count[run_count['Model'] == total_vals].index.tolist() 
+        fully_validated = run_count[run_count['Model'] == total_vals].index.tolist()
     if models_to_use is None:
         models_to_use = fully_validated
     else:
@@ -1743,15 +1758,19 @@ def process_mosaic_arrays(
     id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
     if unpredictability_adjusted:
         scores = create_unpredictability_score(
-                full_mae_errors, full_mae_vals,
-                total_vals, df_wide,
-                validation_test_indexes,
-                scale=False,
+            full_mae_errors,
+            full_mae_vals,
+            total_vals,
+            df_wide,
+            validation_test_indexes,
+            scale=False,
         )
-        weight_dict = {idx: scores.reindex(val).to_numpy() for idx, val in enumerate(validation_test_indexes)}
+        weight_dict = {
+            idx: scores.reindex(val).to_numpy()
+            for idx, val in enumerate(validation_test_indexes)
+        }
         full_mae_errors_use = [
-            x * weight_dict[y]
-            for y, x in zip(full_mae_vals, full_mae_errors)
+            x * weight_dict[y] for y, x in zip(full_mae_vals, full_mae_errors)
         ]
     else:
         full_mae_errors_use = full_mae_errors
@@ -1763,7 +1782,10 @@ def process_mosaic_arrays(
         errors_array = []
         id_array = []
         rubbish = []
-        for idz, errz, valz in sorted(zip(full_mae_ids, full_mae_errors_use, full_mae_vals), key=lambda pair: pair[0]):
+        for idz, errz, valz in sorted(
+            zip(full_mae_ids, full_mae_errors_use, full_mae_vals),
+            key=lambda pair: pair[0],
+        ):
             if idz in models_to_use:
                 if np.nanmedian(errz) <= threshold:
                     rubbish.append(idz)
@@ -1784,7 +1806,10 @@ def process_mosaic_arrays(
         seen = set()
         errors_array = []
         id_array = []
-        for idz, errz, valz in sorted(zip(full_mae_ids, full_mae_errors_use, full_mae_vals), key=lambda pair: pair[0]):
+        for idz, errz, valz in sorted(
+            zip(full_mae_ids, full_mae_errors_use, full_mae_vals),
+            key=lambda pair: pair[0],
+        ):
             if idz in models_to_use and (idz, str(valz)) not in seen:
                 seen.add((idz, str(valz)))
                 errors_array.append(errz)
@@ -1855,7 +1880,9 @@ def generate_mosaic_template(
     )
     checksum = pd.Series(id_array).value_counts()
     # should be the same because all should have the same num validations
-    assert checksum.min() == checksum.max(), f"id array wrong in mosaic generation, {checksum.min()}, {checksum.max()}, {len(errors_array)}"
+    assert (
+        checksum.min() == checksum.max()
+    ), f"id array wrong in mosaic generation, {checksum.min()}, {checksum.max()}, {len(errors_array)}"
     # window across multiple time steps to smooth the result
     name = "Mosaic"
     # since it is sorted by id and filtered to only those run through all vals, this is the slice step after each val
@@ -1863,20 +1890,32 @@ def generate_mosaic_template(
     id_sliced = id_array[slice_points]
     if id_to_group_mapping is None:
         best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
-        model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
+        model_id_array = pd.DataFrame(
+            np.take(id_sliced, best_points), columns=col_names
+        )
     else:
         # group by profile
         res = []
         for group in set(list(id_to_group_mapping.values())):
-            idz = [col_names.get_loc(key) for key, value in id_to_group_mapping.items() if value == group and key in col_names]
+            idz = [
+                col_names.get_loc(key)
+                for key, value in id_to_group_mapping.items()
+                if value == group and key in col_names
+            ]
             if len(idz) < 1:
                 pass
             else:
                 subsetz = errors_array[:, :, idz].mean(axis=2)
-                best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(axis=0)
-                res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=[group]))
+                best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(
+                    axis=0
+                )
+                res.append(
+                    pd.DataFrame(np.take(id_sliced, best_points), columns=[group])
+                )
         # add on the overall for any missing groups
-        best_points = np.add.reduceat(errors_array.mean(axis=2), slice_points, axis=0).argmin(axis=0)
+        best_points = np.add.reduceat(
+            errors_array.mean(axis=2), slice_points, axis=0
+        ).argmin(axis=0)
         res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=["overall"]))
         # combines
         model_id_array = pd.concat(res, axis=1)
@@ -1957,12 +1996,19 @@ def MosaicEnsemble(
     profiled = "profile" in ensemble_params.get("model_metric")
     medianed = "median" in ensemble_params.get("model_metric")
     if profiled:
-        profiled = profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
+        profiled = (
+            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
+        )
         known_matches = ensemble_params['series']
         valid_values = list(known_matches.keys())
-        profiled = {key: value if value in valid_values else "overall" for key, value in profiled.items()}
+        profiled = {
+            key: value if value in valid_values else "overall"
+            for key, value in profiled.items()
+        }
         # json.loads(ensemble_params["ModelParameters"])["series"][profiled[col]]
-        prematched_series = {col: known_matches[profiled[col]] for col in df_train.columns}
+        prematched_series = {
+            col: known_matches[profiled[col]] for col in df_train.columns
+        }
     elif prematched_series is None:
         prematched_series = ensemble_params['series']
     # this is meant to fill in any failures
@@ -1998,27 +2044,68 @@ def MosaicEnsemble(
         nx2 = nx2.where((nx1 != nx2) & (final != nx2), nx4)
 
     forecast_df, u_forecast_df, l_forecast_df = _buildup_mosaics(
-        final, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx
+        final,
+        sample_idx,
+        forecasts,
+        upper_forecasts,
+        lower_forecasts,
+        available_models,
+        org_idx,
     )
     if medianed:
         forecast_df2, u_forecast_df2, l_forecast_df2 = _buildup_mosaics(
-            nx1, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx
+            nx1,
+            sample_idx,
+            forecasts,
+            upper_forecasts,
+            lower_forecasts,
+            available_models,
+            org_idx,
         )
         forecast_df3, u_forecast_df3, l_forecast_df3 = _buildup_mosaics(
-            nx2, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx
+            nx2,
+            sample_idx,
+            forecasts,
+            upper_forecasts,
+            lower_forecasts,
+            available_models,
+            org_idx,
         )
         # Stack the three DataFrames into a 3D NumPy array
-        stacked = np.stack([forecast_df.to_numpy(), forecast_df2.to_numpy(), forecast_df3.to_numpy()], axis=2)
+        stacked = np.stack(
+            [forecast_df.to_numpy(), forecast_df2.to_numpy(), forecast_df3.to_numpy()],
+            axis=2,
+        )
         median_array = np.median(stacked, axis=2)
-        forecast_df = pd.DataFrame(median_array, index=forecast_df.index, columns=forecast_df.columns)
+        forecast_df = pd.DataFrame(
+            median_array, index=forecast_df.index, columns=forecast_df.columns
+        )
         # upper
-        stacked = np.stack([u_forecast_df.to_numpy(), u_forecast_df2.to_numpy(), u_forecast_df3.to_numpy()], axis=2)
+        stacked = np.stack(
+            [
+                u_forecast_df.to_numpy(),
+                u_forecast_df2.to_numpy(),
+                u_forecast_df3.to_numpy(),
+            ],
+            axis=2,
+        )
         median_array = np.median(stacked, axis=2)
-        u_forecast_df = pd.DataFrame(median_array, index=u_forecast_df.index, columns=u_forecast_df.columns)
+        u_forecast_df = pd.DataFrame(
+            median_array, index=u_forecast_df.index, columns=u_forecast_df.columns
+        )
         # lower
-        stacked = np.stack([l_forecast_df.to_numpy(), l_forecast_df2.to_numpy(), l_forecast_df3.to_numpy()], axis=2)
+        stacked = np.stack(
+            [
+                l_forecast_df.to_numpy(),
+                l_forecast_df2.to_numpy(),
+                l_forecast_df3.to_numpy(),
+            ],
+            axis=2,
+        )
         median_array = np.median(stacked, axis=2)
-        l_forecast_df = pd.DataFrame(median_array, index=l_forecast_df.index, columns=l_forecast_df.columns)
+        l_forecast_df = pd.DataFrame(
+            median_array, index=l_forecast_df.index, columns=l_forecast_df.columns
+        )
 
     # combine runtimes
     try:
@@ -2045,14 +2132,24 @@ def MosaicEnsemble(
     return ens_result
 
 
-def _buildup_mosaics(final, sample_idx, forecasts, upper_forecasts, lower_forecasts, available_models, org_idx):
+def _buildup_mosaics(
+    final,
+    sample_idx,
+    forecasts,
+    upper_forecasts,
+    lower_forecasts,
+    available_models,
+    org_idx,
+):
     melted = pd.melt(
         final,
         var_name="series_id",
         value_name="model_id",
         ignore_index=False,
     ).reset_index(drop=False)
-    melted["forecast_period"] = pd.to_numeric(melted["forecast_period"], downcast="integer")
+    melted["forecast_period"] = pd.to_numeric(
+        melted["forecast_period"], downcast="integer"
+    )
     max_forecast_period = melted["forecast_period"].max()
     # handle forecast length being longer than template
     len_sample_index = len(sample_idx)
@@ -2089,15 +2186,15 @@ def _buildup_mosaics(final, sample_idx, forecasts, upper_forecasts, lower_foreca
             f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
             + mi
         ) from e
-    melted['forecast'] = (
-        fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
-    melted['upper_forecast'] = (
-        u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
-    melted['lower_forecast'] = (
-        l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
+    melted[
+        'forecast'
+    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'upper_forecast'
+    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'lower_forecast'
+    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
 
     forecast_df = melted.pivot(
         values="forecast", columns="series_id", index="forecast_period"

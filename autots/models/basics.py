@@ -1882,7 +1882,9 @@ class SectionalMotif(ModelObject):
             full_regr = full_regr.tail(use_df.shape[0])
             full_regr.index = use_df.index
             array = pd.concat([use_df, full_regr], axis=1).to_numpy()
-        elif regression_type in base_seasonalities or isinstance(self.regression_type, list):
+        elif regression_type in base_seasonalities or isinstance(
+            self.regression_type, list
+        ):
             X = date_part(use_df.index, method=self.regression_type)
             array = pd.concat([use_df, X], axis=1).to_numpy()
         else:
@@ -1934,7 +1936,7 @@ class SectionalMotif(ModelObject):
                         [
                             wasserstein(
                                 array[:, a][window_idxs[i, :window_size]],
-                                array[(tlt_len - window_size):tlt_len, a]
+                                array[(tlt_len - window_size) : tlt_len, a],
                             )
                             for i in range(window_idxs.shape[0])
                         ]
@@ -1951,7 +1953,7 @@ class SectionalMotif(ModelObject):
                             [
                                 wasserstein(
                                     array_diff[:, a][window_idxs[i, :window_size]],
-                                    array_diff[(tlt_len - window_size):tlt_len, a]
+                                    array_diff[(tlt_len - window_size) : tlt_len, a],
                                 )
                                 for i in range(window_idxs.shape[0])
                             ]
@@ -2005,7 +2007,11 @@ class SectionalMotif(ModelObject):
         if results.ndim == 4:
             res_shape = results.shape
             results = results.reshape((res_shape[0], res_shape[2], res_shape[3]))
-        if regression_type == "user" or regression_type in base_seasonalities or isinstance(self.regression_type, list):
+        if (
+            regression_type == "user"
+            or regression_type in base_seasonalities
+            or isinstance(self.regression_type, list)
+        ):
             results = results[:, :, : use_df.shape[1]]
         # now aggregate results into point and bound forecasts
         if point_method == "weighted_mean":
@@ -2027,7 +2033,7 @@ class SectionalMotif(ModelObject):
         lower_forecast = nan_quantile(results, q=pred_int, axis=0)
 
         if self.excessive_size_flag:
-            local_index = test_index[0:self.combined_window_size - self.window]
+            local_index = test_index[0 : self.combined_window_size - self.window]
         else:
             local_index = test_index
         forecast = pd.DataFrame(forecast, index=local_index, columns=self.column_names)
@@ -2039,8 +2045,12 @@ class SectionalMotif(ModelObject):
         )
         if self.excessive_size_flag:
             forecast = FillNA(forecast.reindex(test_index), method=self.fillna)
-            lower_forecast = FillNA(lower_forecast.reindex(test_index), method=self.fillna)
-            upper_forecast = FillNA(upper_forecast.reindex(test_index), method=self.fillna)
+            lower_forecast = FillNA(
+                lower_forecast.reindex(test_index), method=self.fillna
+            )
+            upper_forecast = FillNA(
+                upper_forecast.reindex(test_index), method=self.fillna
+            )
         if self.combination_transformation is not None:
             forecast = self.combination_transformer.inverse_transform(forecast)
             lower_forecast = self.combination_transformer.inverse_transform(
@@ -2955,7 +2965,15 @@ class SeasonalityMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", 'closest', 'trimmed_mean_20', 'trimmed_mean_40'],
+                [
+                    "weighted_mean",
+                    "mean",
+                    "median",
+                    "midhinge",
+                    'closest',
+                    'trimmed_mean_20',
+                    'trimmed_mean_40',
+                ],
                 [0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1],
             )[0],
             "distance_metric": random.choice(metric_list),
@@ -3405,11 +3423,17 @@ class BasicLinearModel(ModelObject):
 
     def create_x(self, df, future_regressor=None):
         x_s = date_part(df.index, method=self.datepart_method)
-        x_t = create_changepoint_features(df.index, changepoint_spacing=self.changepoint_spacing, changepoint_distance_end=self.changepoint_distance_end)
+        x_t = create_changepoint_features(
+            df.index,
+            changepoint_spacing=self.changepoint_spacing,
+            changepoint_distance_end=self.changepoint_distance_end,
+        )
         self.last_row = x_t.iloc[-1]
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user" and future_regressor is not None:
-            temp = future_regressor.reindex(df.index).rename(columns=lambda x: "regr_" + str(x))
+            temp = future_regressor.reindex(df.index).rename(
+                columns=lambda x: "regr_" + str(x)
+            )
             self.regressor_columns = temp.columns
             X = pd.concat([X, temp], axis=1)
         X["constant"] = 1
@@ -3438,7 +3462,7 @@ class BasicLinearModel(ModelObject):
                     "regression_type=='User' but no future_regressor supplied"
                 )
         X = self.create_x(df, future_regressor)
-    
+
         # Convert X and df (Y) to NumPy arrays for linear regression
         X_values = X.to_numpy().astype(float)
         Y_values = df.to_numpy().astype(float)
@@ -3446,23 +3470,31 @@ class BasicLinearModel(ModelObject):
         if self.lambda_ is not None:
             I = np.eye(X_values.shape[1])
             # Perform Ridge regression using the modified normal equation
-            self.beta = np.linalg.inv(X_values.T @ X_values + self.lambda_ * I) @ X_values.T @ Y_values
+            self.beta = (
+                np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
+                @ X_values.T
+                @ Y_values
+            )
         else:
             # Perform linear regression using the normal equation: (X.T @ X)^(-1) @ X.T @ Y
             self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
 
         # Calculate predicted values for Y
         Y_pred = X_values @ self.beta
-        
+
         # Calculate residuals for each column of Y
         residuals = Y_values - Y_pred
 
         # Calculate the sum of squared errors (SSE) and standard error (sigma) for each column of Y
-        sse = np.sum(residuals ** 2, axis=0)  # Sum of squared errors for each column (shape (21,))
+        sse = np.sum(
+            residuals**2, axis=0
+        )  # Sum of squared errors for each column (shape (21,))
         n = Y_values.shape[0]
         p = X_values.shape[1]  # Number of predictors
-        self.sigma = np.sqrt(sse / (n - p))  # Standard deviation of residuals for each column (shape (21,))
-    
+        self.sigma = np.sqrt(
+            sse / (n - p)
+        )  # Standard deviation of residuals for each column (shape (21,))
+
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -3493,21 +3525,31 @@ class BasicLinearModel(ModelObject):
         X_values = X.to_numpy().astype(float)
         self.X = X
 
-        forecast = pd.DataFrame(X_values @ self.beta, columns=self.column_names, index=test_index)
+        forecast = pd.DataFrame(
+            X_values @ self.beta, columns=self.column_names, index=test_index
+        )
 
         if just_point_forecast:
             return forecast
         else:
-            z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)  # z-score for 95% confidence, e.g., 1.96
+            z_value = norm.ppf(
+                1 - (1 - self.prediction_interval) / 2
+            )  # z-score for 95% confidence, e.g., 1.96
             # Vectorized calculation of leverage for all points: diag(X @ (X^T X)^(-1) @ X^T)
-            hat_matrix_diag = np.einsum('ij,jk,ik->i', X_values, np.linalg.pinv(X_values.T @ X_values, rcond=5e-16), X_values)
+            hat_matrix_diag = np.einsum(
+                'ij,jk,ik->i',
+                X_values,
+                np.linalg.pinv(X_values.T @ X_values, rcond=5e-16),
+                X_values,
+            )
             # Broadcast the sigma values (shape (21,)) to match the number of rows (shape (2389,))
             # This will give us a matrix of shape (2389, 21)
             sigma_expanded = self.sigma[np.newaxis, :]
             # Calculate the margin of error for each prediction in each column
             margin_of_error = pd.DataFrame(
                 z_value * sigma_expanded * np.sqrt(1 + hat_matrix_diag[:, np.newaxis]),
-                columns=self.column_names, index=test_index,
+                columns=self.column_names,
+                index=test_index,
             )
             upper_forecast = forecast + margin_of_error
             lower_forecast = forecast - margin_of_error
@@ -3536,33 +3578,58 @@ class BasicLinearModel(ModelObject):
         # recompiles X which is suboptimal
         # could use better naming
         X = self.create_x(df)
-        contribution_seasonality = X[self.seasonal_columns].values @ self.beta[:len(self.seasonal_columns)]
-        contribution_changepoints = X[self.trend_columns].values @ self.beta[len(self.seasonal_columns):len(self.seasonal_columns) + len(self.trend_columns)]
+        contribution_seasonality = (
+            X[self.seasonal_columns].values @ self.beta[: len(self.seasonal_columns)]
+        )
+        contribution_changepoints = (
+            X[self.trend_columns].values
+            @ self.beta[
+                len(self.seasonal_columns) : len(self.seasonal_columns)
+                + len(self.trend_columns)
+            ]
+        )
         contribution_constant = X["constant"].values.reshape(-1, 1) @ self.beta[-1:]
-        return contribution_seasonality, contribution_changepoints, contribution_constant
+        return (
+            contribution_seasonality,
+            contribution_changepoints,
+            contribution_constant,
+        )
 
     def coefficient_summary(self, df):
         """Used in profiler."""
-        contribution_seasonality, contribution_changepoints, contribution_constant = self.return_components(df)
+        (
+            contribution_seasonality,
+            contribution_changepoints,
+            contribution_constant,
+        ) = self.return_components(df)
         # Total contribution (sum of absolute contributions for each time step)
-        total_contribution = np.abs(contribution_seasonality) + np.abs(contribution_changepoints) + np.abs(contribution_constant)
-    
+        total_contribution = (
+            np.abs(contribution_seasonality)
+            + np.abs(contribution_changepoints)
+            + np.abs(contribution_constant)
+        )
+
         # Normalize each contribution by the total contribution
         contrib_seasonality_pct = np.abs(contribution_seasonality) / total_contribution
-        contrib_changepoints_pct = np.abs(contribution_changepoints) / total_contribution
+        contrib_changepoints_pct = (
+            np.abs(contribution_changepoints) / total_contribution
+        )
         contrib_constant_pct = np.abs(contribution_constant) / total_contribution
-    
+
         # Calculate the average percentage contribution for each group
         avg_contrib_seasonality = np.mean(contrib_seasonality_pct, axis=0)
         avg_contrib_changepoints = np.mean(contrib_changepoints_pct, axis=0)
         avg_contrib_constant = np.mean(contrib_constant_pct, axis=0)
-    
+
         # Create a DataFrame to summarize the percentage contributions
-        feature_contributions = pd.DataFrame({
-            "seasonality_contribution": avg_contrib_seasonality,
-            "changepoint_contribution": avg_contrib_changepoints,
-            "constant_contribution": avg_contrib_constant
-        }, index=self.column_names)
+        feature_contributions = pd.DataFrame(
+            {
+                "seasonality_contribution": avg_contrib_seasonality,
+                "changepoint_contribution": avg_contrib_changepoints,
+                "constant_contribution": avg_contrib_constant,
+            },
+            index=self.column_names,
+        )
         """
         feature_contributions['largest_contributor'] = feature_contributions[[
             'seasonality_contribution', 
@@ -3570,7 +3637,12 @@ class BasicLinearModel(ModelObject):
             'constant_contribution'
         ]].idxmax(axis=1)
         """
-        feature_contributions["season_trend_percent"] = feature_contributions["seasonality_contribution"] / (feature_contributions["changepoint_contribution"] + feature_contributions["seasonality_contribution"])
+        feature_contributions["season_trend_percent"] = feature_contributions[
+            "seasonality_contribution"
+        ] / (
+            feature_contributions["changepoint_contribution"]
+            + feature_contributions["seasonality_contribution"]
+        )
         return feature_contributions
 
     def get_new_params(self, method: str = 'random'):
@@ -3578,15 +3650,23 @@ class BasicLinearModel(ModelObject):
         if "regressor" in method:
             regression_choice = "User"
         else:
-            regression_choice = random.choices(
-                [None, 'User'], [0.8, 0.2]
-            )[0]
+            regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
         return {
             "datepart_method": random_datepart(method=method),
-            "changepoint_spacing": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
-            "changepoint_distance_end": random.choices([None, 6, 28, 60, 90, 180, 360, 5040], [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2])[0],
+            "changepoint_spacing": random.choices(
+                [None, 6, 28, 60, 90, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2],
+            )[0],
+            "changepoint_distance_end": random.choices(
+                [None, 6, 28, 60, 90, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2],
+            )[0],
             "regression_type": regression_choice,
-            "lambda_": random.choices([None, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000], [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], k=1)[0],
+            "lambda_": random.choices(
+                [None, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
+                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                k=1,
+            )[0],
         }
 
     def get_params(self):

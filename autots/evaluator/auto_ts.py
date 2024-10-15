@@ -170,7 +170,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 20,
+        max_generations: int = 25,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = None,  # 'auto',
@@ -422,9 +422,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[index, 'TransformationParameters'] = (
-                    json.dumps(full_params)
-                )
+                self.initial_template.loc[
+                    index, 'TransformationParameters'
+                ] = json.dumps(full_params)
 
         self.regressor_used = False
         self.subset_flag = False
@@ -493,7 +493,9 @@ class AutoTS(object):
             )[0]
             max_generations = random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0]
         else:
-            max_generations = random.choices([15, 25, 50, 200], [0.2, 0.5, 0.2, 0.1])[0]
+            max_generations = random.choices(
+                [15, 20, 25, 35, 50, 200], [0.2, 0.05, 0.4, 0.05, 0.2, 0.1]
+            )[0]
             ensemble_choice = random.choices(
                 [
                     None,
@@ -1748,18 +1750,33 @@ class AutoTS(object):
         try:
             if self.initial_results.full_mae_errors:
                 scores = create_unpredictability_score(
-                        self.initial_results.full_mae_errors, self.initial_results.full_mae_vals,
-                        total_vals=self.num_validations + 1, df_wide=self.df_wide_numeric[self.initial_results.per_series_mae.columns],
-                        validation_test_indexes=self.validation_test_indexes,
-                        scale=True,
+                    self.initial_results.full_mae_errors,
+                    self.initial_results.full_mae_vals,
+                    total_vals=self.num_validations + 1,
+                    df_wide=self.df_wide_numeric[
+                        self.initial_results.per_series_mae.columns
+                    ],
+                    validation_test_indexes=self.validation_test_indexes,
+                    scale=True,
                 )
-                weight_dict = {idx: scores.reindex(val).to_numpy() for idx, val in enumerate(self.validation_test_indexes)}
+                weight_dict = {
+                    idx: scores.reindex(val).to_numpy()
+                    for idx, val in enumerate(self.validation_test_indexes)
+                }
                 tuple_list = [
                     (x * weight_dict[y], z)
                     for y, x, z in sorted(
-                        zip(self.initial_results.full_mae_vals, self.initial_results.full_mae_errors, self.initial_results.full_mae_ids), key=lambda pair: pair[0]
+                        zip(
+                            self.initial_results.full_mae_vals,
+                            self.initial_results.full_mae_errors,
+                            self.initial_results.full_mae_ids,
+                        ),
+                        key=lambda pair: pair[0],
                     )
-                    if z not in self.initial_results.model_results[self.initial_results.model_results["Ensemble"] == 2]["ID"].tolist()
+                    if z
+                    not in self.initial_results.model_results[
+                        self.initial_results.model_results["Ensemble"] == 2
+                    ]["ID"].tolist()
                 ]
                 errors_array, id_array = zip(*tuple_list)
                 id_best = np.nanmean(np.array(errors_array), axis=(1, 2)).argmin()
@@ -1945,10 +1962,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results['TotalRuntime'] = (
-                template_result.model_results['TotalRuntime'].fillna(
-                    pd.Timedelta(seconds=60)
-                )
+            template_result.model_results[
+                'TotalRuntime'
+            ] = template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60)
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -2059,9 +2076,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
-                    np.nan
-                )
+                val_df_train.iloc[
+                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
+                ] = np.nan
 
             # run validation template on current slice
             result = self._run_template(
@@ -2102,7 +2119,9 @@ class AutoTS(object):
         model_id=None,
     ):
         if model_id is not None:
-            use_mod = self.initial_results.model_results[self.initial_results.model_results["ID"] == model_id].iloc[0]
+            use_mod = self.initial_results.model_results[
+                self.initial_results.model_results["ID"] == model_id
+            ].iloc[0]
             use_model = use_mod["Model"]
             use_params = use_mod["ModelParameters"]
             use_trans = use_mod["TransformationParameters"]
@@ -2123,7 +2142,9 @@ class AutoTS(object):
             else future_regressor_train
         )
         if future_regressor is None and use_regr_train is not None:
-            print("future_regressor not provided to _predict but was provided for training")
+            print(
+                "future_regressor not provided to _predict but was provided for training"
+            )
         if verbose == "self":
             verbose = self.verbose
         if forecast_length == "self":
@@ -2387,7 +2408,9 @@ class AutoTS(object):
                 extra_mods = []
                 if min_metrics is not None:
                     for metric in min_metrics:
-                        export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                        export_template[metric] = pd.to_numeric(
+                            export_template[metric], errors="coerce"
+                        )
                         extra_mods.append(
                             export_template.nsmallest(1, columns=metric).copy()
                         )
@@ -2399,7 +2422,9 @@ class AutoTS(object):
                         )
                 if max_metrics is not None:
                     for metric in max_metrics:
-                        export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                        export_template[metric] = pd.to_numeric(
+                            export_template[metric], errors="coerce"
+                        )
                         extra_mods.append(
                             export_template.nlargest(1, columns=metric).copy()
                         )
@@ -2413,17 +2438,23 @@ class AutoTS(object):
                 if focus_models is not None:
                     for mod in focus_models:
                         one_model = export_template[export_template["Model"] == mod]
-                        extra_mods.append(extra_mods.append(
-                            one_model.nsmallest(1, columns=['Score']).copy()
-                        ))
+                        extra_mods.append(
+                            extra_mods.append(
+                                one_model.nsmallest(1, columns=['Score']).copy()
+                            )
+                        )
                         if min_metrics is not None:
-                            export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                            export_template[metric] = pd.to_numeric(
+                                export_template[metric], errors="coerce"
+                            )
                             for metric in min_metrics:
                                 extra_mods.append(
                                     one_model.nsmallest(1, columns=metric).copy()
                                 )
                         if max_metrics is not None:
-                            export_template[metric] = pd.to_numeric(export_template[metric], errors="coerce")
+                            export_template[metric] = pd.to_numeric(
+                                export_template[metric], errors="coerce"
+                            )
                             for metric in max_metrics:
                                 extra_mods.append(
                                     one_model.nlargest(1, columns=metric).copy()
@@ -2742,12 +2773,9 @@ class AutoTS(object):
             mae_weighting = 1
             spl_weighting = 0.05
         weight_per_value = (
-            np.asarray(initial_results.full_mae_errors)
-            * mae_weighting
-            + np.asarray(initial_results.full_pl_errors)
-            * spl_weighting
-            + np.asarray(initial_results.squared_errors)
-            * rmse_weighting
+            np.asarray(initial_results.full_mae_errors) * mae_weighting
+            + np.asarray(initial_results.full_pl_errors) * spl_weighting
+            + np.asarray(initial_results.squared_errors) * rmse_weighting
         )
         runtime_weighting = self.metric_weighting.get("runtime_weighting", 0)
         if runtime_weighting != 0:
@@ -2824,7 +2852,9 @@ class AutoTS(object):
                         models_to_use=models_to_use,
                         smoothing_window=None,
                         filtered=mosaic_config.get("filtered", False),
-                        unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
+                        unpredictability_adjusted=mosaic_config.get(
+                            "unpredictability_adjusted", False
+                        ),
                         validation_test_indexes=self.validation_test_indexes,
                         full_mae_vals=initial_results.full_mae_vals,
                         df_wide=df_wide,
@@ -2848,7 +2878,11 @@ class AutoTS(object):
                     modz = None
                 id_to_group_mapping = None
                 if mosaic_config.get("profiled", False):
-                    id_to_group_mapping = profile_time_series(df_wide).set_index("SERIES").to_dict()["PROFILE"]
+                    id_to_group_mapping = (
+                        profile_time_series(df_wide)
+                        .set_index("SERIES")
+                        .to_dict()["PROFILE"]
+                    )
                 # and actually generate the template
                 ens_templates = generate_mosaic_template(
                     initial_results=initial_results.model_results,
@@ -2861,7 +2895,9 @@ class AutoTS(object):
                     models_to_use=modz,
                     id_to_group_mapping=id_to_group_mapping,
                     filtered=mosaic_config.get("filtered", False),
-                    unpredictability_adjusted=mosaic_config.get("unpredictability_adjusted", False),
+                    unpredictability_adjusted=mosaic_config.get(
+                        "unpredictability_adjusted", False
+                    ),
                     validation_test_indexes=self.validation_test_indexes,
                     full_mae_vals=initial_results.full_mae_vals,
                     df_wide=df_wide,
@@ -2966,7 +3002,7 @@ class AutoTS(object):
         Reruns template models and generates new template. Requires a horizontal model set as best model.
 
         see best_model_original and best_model_original_id for reference back to original best model after this runs
-        
+
         Args:
             force (bool): if True, runs expansions whether subset or not. Necessary on imported template without .fit() as subset flag is set in fit
         """
@@ -3152,10 +3188,14 @@ class AutoTS(object):
         # series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")  # old
         if "profile" not in self.best_model_params["model_metric"]:
             series = series.merge(
-                self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
+                self.df_wide_numeric.std().to_frame(),
+                right_index=True,
+                left_on="Series",
             )
             series = series.merge(
-                self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
+                self.df_wide_numeric.mean().to_frame(),
+                right_index=True,
+                left_on="Series",
             )
         else:
             series["Mean"] = 1
@@ -3790,7 +3830,10 @@ class AutoTS(object):
                 series = self.horizontal_to_df()
                 temp = temp.merge(series, on='Series')
                 temp['Series'] = (
-                    temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+                    temp['Series'].str.slice(0, max_name_chars)
+                    + " ("
+                    + temp["Model"]
+                    + ")"
                 )
 
         if kind == "pie":
@@ -4087,13 +4130,15 @@ class AutoTS(object):
         # full_mae_ids = self.initial_results.full_mae_ids
         full_mae_errors = self.initial_results.full_mae_errors
         full_mae_vals = self.initial_results.full_mae_vals
-        
+
         if full_mae_errors:
             return create_unpredictability_score(
-                    full_mae_errors=full_mae_errors, full_mae_vals=full_mae_vals,
-                    total_vals=total_vals, df_wide=df_wide[cols],
-                    validation_test_indexes=self.validation_test_indexes,
-                    scale=scale,
+                full_mae_errors=full_mae_errors,
+                full_mae_vals=full_mae_vals,
+                total_vals=total_vals,
+                df_wide=df_wide[cols],
+                validation_test_indexes=self.validation_test_indexes,
+                scale=scale,
             )
         else:
             return []
@@ -4116,30 +4161,36 @@ class AutoTS(object):
         if isinstance(unpredictability_scores, pd.DataFrame):
             unpredictability_scores = unpredictability_scores.where(
                 unpredictability_scores > unpredictability_scores.median() * 1.4,
-                unpredictability_scores.min(), axis=1
+                unpredictability_scores.min(),
+                axis=1,
             )
             time_series = df_wide[col]
             time_series = time_series[time_series.index > "2022-01-01"]
             unpredictability_score = unpredictability_scores[col]
-    
+
             fig, ax1 = plt.subplots(figsize=(12, 6), **kwargs)
-    
+
             # Plot the original time series on the primary y-axis (left)
             ax1.plot(time_series, color='blue', label=str(col))
             ax1.set_xlabel('Time')
             ax1.set_ylabel('Original Time Series', color='blue')
             ax1.tick_params(axis='y', labelcolor='blue')
-    
+
             # Create a secondary y-axis (right) for the unpredictability score
             ax2 = ax1.twinx()
-            ax2.plot(unpredictability_score, color='red', label='Unpredictability Score', alpha=0.8)  # , linestyle='--'
+            ax2.plot(
+                unpredictability_score,
+                color='red',
+                label='Unpredictability Score',
+                alpha=0.8,
+            )  # , linestyle='--'
             ax2.set_ylabel('Unpredictability Score', color='red')
             ax2.tick_params(axis='y', labelcolor='red')
-    
+
             plt.title(f'{col} Unpredictability Score')
-    
+
             fig.legend(loc="upper right", bbox_to_anchor=(0.9, 0.9))
-    
+
             return fig
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
@@ -4180,9 +4231,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y['Model'] = (
-                        x  # might need to remove this and do analysis independently for each
-                    )
+                    y[
+                        'Model'
+                    ] = x  # might need to remove this and do analysis independently for each
                     res.append(
                         pd.DataFrame(
                             {

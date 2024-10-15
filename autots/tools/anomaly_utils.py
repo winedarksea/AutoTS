@@ -254,7 +254,13 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
                 columns=cols,
             )
         return res, scores
-    elif threshold_method in ["zscore", "rolling_zscore", "mad", "med_diff", "max_diff"]:
+    elif threshold_method in [
+        "zscore",
+        "rolling_zscore",
+        "mad",
+        "med_diff",
+        "max_diff",
+    ]:
         alpha = method_params.get("alpha", 0.05)
         distribution = method_params.get("distribution", "norm")
         rolling_periods = method_params.get("rolling_periods", 200)
@@ -414,7 +420,14 @@ def detect_anomalies(
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
             res, scores = loop_sk_outliers(df_anomaly, method, method_params, n_jobs)
-    elif method in ["zscore", "rolling_zscore", "mad", "minmax", "med_diff", "max_diff"]:
+    elif method in [
+        "zscore",
+        "rolling_zscore",
+        "mad",
+        "minmax",
+        "med_diff",
+        "max_diff",
+    ]:
         res, scores = values_to_anomalies(df_anomaly, output, method, method_params)
     elif method == "GaussianMixtureBase":
         res, scores = gaussian_mixture(df, **method_params)
@@ -528,11 +541,15 @@ def anomaly_new_params(method='random'):
         }
     elif method_choice == "OneClassSVM":
         method_params = {
-            'kernel': random.choices(['linear', "poly", "rbf", "sigmoid"], [0.1, 0.1, 0.4, 0.1])[0],
+            'kernel': random.choices(
+                ['linear', "poly", "rbf", "sigmoid"], [0.1, 0.1, 0.4, 0.1]
+            )[0],
             'degree': random.choices([3, 5, 10, 20], [0.3, 0.4, 0.3, 0.1])[0],
             'gamma': random.choices(['scale', 'auto'], [0.5, 0.5])[0],
             'shrinking': random.choices([True, False], [0.5, 0.5])[0],
-            'nu': random.choices([0.3, 0.5, 0.7, 0.9, 0.1], [0.3, 0.5, 0.3, 0.1, 0.1])[0],
+            'nu': random.choices([0.3, 0.5, 0.7, 0.9, 0.1], [0.3, 0.5, 0.3, 0.1, 0.1])[
+                0
+            ],
         }
     elif method_choice == "EE":
         method_params = {
@@ -545,7 +562,9 @@ def anomaly_new_params(method='random'):
     elif method_choice == "GaussianMixture":
         method_params = {
             'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
-            'covariance_type': random.choices(['full', 'tied', 'diag', 'spherical'], [0.4, 0.3, 0.2, 0.1])[0],
+            'covariance_type': random.choices(
+                ['full', 'tied', 'diag', 'spherical'], [0.4, 0.3, 0.2, 0.1]
+            )[0],
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'reg_covar': random.choices([1e-6, 1e-5, 1e-4], [0.3, 0.4, 0.3])[0],
             'max_iter': random.choices([100, 200, 300], [0.3, 0.4, 0.3])[0],
@@ -555,7 +574,9 @@ def anomaly_new_params(method='random'):
             'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'max_iter': random.choices([50, 100, 200], [0.3, 0.5, 0.2])[0],
-            "responsibility_threshold": random.choices([0.05, 0.01, 0.1], [0.3, 0.2, 0.2])[0],
+            "responsibility_threshold": random.choices(
+                [0.05, 0.01, 0.1], [0.3, 0.2, 0.2]
+            )[0],
         }
     elif method_choice == "zscore":
         method_params = {
@@ -600,9 +621,9 @@ def anomaly_new_params(method='random'):
     elif method_choice == "prediction_interval":
         method_params = {"prediction_interval": random.choice([0.9, 0.99])}
     elif method_choice == "IQR":
-        iqr_threshold = random.choices([1.5, 2.0, 2.5, 3.0, 'other'], [0.1, 0.2, 0.2, 0.2, 0.1])[
-            0
-        ]
+        iqr_threshold = random.choices(
+            [1.5, 2.0, 2.5, 3.0, 'other'], [0.1, 0.2, 0.2, 0.2, 0.1]
+        )[0]
         if iqr_threshold == "other":
             iqr_threshold = random.randint(2, 5) + (random.randint(0, 10) / 10)
         method_params = {
@@ -992,9 +1013,11 @@ def anomaly_df_to_holidays(
     if use_hindu_holidays:
         hindu_df = gregorian_to_hindu(dates)
         hindu_df.index.name = "date"
-        hindu_df = hindu_df.merge(stacked, left_index=True, right_index=True, how="outer")
+        hindu_df = hindu_df.merge(
+            stacked, left_index=True, right_index=True, how="outer"
+        )
         hindu_df['occurrence_rate'] = hindu_df['count']
-        
+
         # Group by Hindu calendar components to find significant dates
         hindu_holidays = (
             hindu_df.groupby(["series", "hindu_month_number", "lunar_day"])
@@ -1004,12 +1027,16 @@ def anomaly_df_to_holidays(
                 & (df["count"] >= min_occurrences),
             ]
         ).reset_index(drop=False)
-        
+
         hindu_holidays['holiday_name'] = (
             'hindu_'
-            + hindu_holidays['hindu_month_number'].astype(str).str.pad(2, side='left', fillchar="0")
+            + hindu_holidays['hindu_month_number']
+            .astype(str)
+            .str.pad(2, side='left', fillchar="0")
             + "_"
-            + hindu_holidays['lunar_day'].astype(str).str.pad(2, side='left', fillchar="0")
+            + hindu_holidays['lunar_day']
+            .astype(str)
+            .str.pad(2, side='left', fillchar="0")
         )
     else:
         hindu_holidays = None
@@ -1302,7 +1329,10 @@ def holiday_new_params(method='random'):
         'use_hindu_holidays': random.choices([True, False], [0.1, 0.9])[0],
     }
 
-def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_threshold=0.05):
+
+def gaussian_mixture(
+    df, n_components=2, tol=1e-3, max_iter=100, responsibility_threshold=0.05
+):
     from scipy.stats import multivariate_normal
 
     n, d = df.shape
@@ -1323,7 +1353,9 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
         responsibilities = np.zeros((n, n_components))
 
         for i in range(n_components):
-            responsibilities[:, i] = weights[i] * multivariate_normal.pdf(data, means[i], covariances[i])
+            responsibilities[:, i] = weights[i] * multivariate_normal.pdf(
+                data, means[i], covariances[i]
+            )
 
         sum_responsibilities = responsibilities.sum(axis=1)[:, np.newaxis]
         responsibilities /= sum_responsibilities
@@ -1332,14 +1364,20 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
         Nk = responsibilities.sum(axis=0)
 
         for i in range(n_components):
-            means[i] = (responsibilities[:, i][:, np.newaxis] * data).sum(axis=0) / Nk[i]
+            means[i] = (responsibilities[:, i][:, np.newaxis] * data).sum(axis=0) / Nk[
+                i
+            ]
             diff = data - means[i]
-            covariances[i] = (responsibilities[:, i][:, np.newaxis] * diff).T @ diff / Nk[i]
+            covariances[i] = (
+                (responsibilities[:, i][:, np.newaxis] * diff).T @ diff / Nk[i]
+            )
             covariances[i] += (tol * 10) * np.eye(d)  # Increased regularization
 
             # Check for invalid values in covariance matrix
             if np.any(np.isnan(covariances[i])) or np.any(np.isinf(covariances[i])):
-                raise ValueError(f"Covariance matrix for component {i} contains NaNs or infs")
+                raise ValueError(
+                    f"Covariance matrix for component {i} contains NaNs or infs"
+                )
 
         weights = Nk / n
 
@@ -1353,10 +1391,13 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
 
     # Calculate anomaly scores using responsibility threshold
     max_responsibilities = responsibilities.max(axis=1)
-    
+
     # Identify anomalies: low responsibility indicates a higher likelihood of being an anomaly
-    anomalies = pd.DataFrame(np.where(max_responsibilities < responsibility_threshold, -1, 1), 
-                             index=df.index, columns=['anomaly'])
+    anomalies = pd.DataFrame(
+        np.where(max_responsibilities < responsibility_threshold, -1, 1),
+        index=df.index,
+        columns=['anomaly'],
+    )
 
     # Score: can still calculate log-likelihood-based scores per data point if needed
     scores = np.zeros((n, d))
@@ -1366,5 +1407,5 @@ def gaussian_mixture(df, n_components=2, tol=1e-3, max_iter=100, responsibility_
         scores += responsibilities[:, i][:, np.newaxis] * comp_scores
 
     scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
-    
+
     return anomalies, scores

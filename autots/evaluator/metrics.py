@@ -708,7 +708,10 @@ def full_metric_evaluation(
         err = np.nansum((submission - objective))
         score = abs_err + abs(err)
         epsilon = 1
-        big_sum = np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum() + epsilon
+        big_sum = (
+            np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum()
+            + epsilon
+        )
         score /= big_sum
 
     # note a number of these are created from my own imagination (winedarksea)

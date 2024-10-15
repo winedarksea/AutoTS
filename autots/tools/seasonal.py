@@ -662,7 +662,11 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
     if isinstance(seasonality, tuple):
         return fourier_df(
-            DTindex, seasonality=seasonality[0], order=seasonality[1], t=t, history_days=history_days
+            DTindex,
+            seasonality=seasonality[0],
+            order=seasonality[1],
+            t=t,
+            history_days=history_days,
         )
     # dateparts
     elif seasonality in datepart_components:
@@ -889,28 +893,30 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
     )
 
 
-def create_changepoint_features(DTindex, changepoint_spacing=60, changepoint_distance_end=120):
+def create_changepoint_features(
+    DTindex, changepoint_spacing=60, changepoint_distance_end=120
+):
     """
-    Creates a feature set for estimating trend changepoints using linear regression, 
+    Creates a feature set for estimating trend changepoints using linear regression,
     ensuring the final changepoint is at `changepoint_distance_end` from the last row.
-    
+
     Parameters:
     DTindex (pd.DatetimeIndex): a datetimeindex
     changepoint_spacing (int): Distance between consecutive changepoints.
     changepoint_distance_end (int): Number of rows that belong to the final changepoint.
-    
+
     Returns:
     pd.DataFrame: DataFrame containing changepoint features for linear regression.
     """
     n = len(DTindex)
-    
+
     # Calculate the number of data points available for changepoints
     changepoint_range_end = n - changepoint_distance_end
 
     # Calculate the number of changepoints based on changepoint_spacing
     # Only place changepoints within the range [0, changepoint_range_end)
     changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
-    
+
     # Ensure the last changepoint is exactly at changepoint_distance_end from the end
     changepoints = np.append(changepoints, changepoint_range_end)
 
@@ -919,22 +925,26 @@ def create_changepoint_features(DTindex, changepoint_spacing=60, changepoint_dis
     for i, cp in enumerate(changepoints):
         feature_name = f'changepoint_{i+1}'
         res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
-    
+
     # Concatenate the changepoint features and set the index
     changepoint_features = pd.concat(res, axis=1)
     changepoint_features.index = DTindex
-    
+
     return changepoint_features
 
 
-
 def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
-    last_values = x_t_last_row.values.reshape(1, -1) + 1  # Shape it as 1 row, multiple columns
-    
+    last_values = (
+        x_t_last_row.values.reshape(1, -1) + 1
+    )  # Shape it as 1 row, multiple columns
+
     # Create a 2D array where each column starts from the corresponding value in last_values
-    forecast_steps = np.arange(n_forecast).reshape(-1, 1)  # Shape it as multiple rows, 1 column
+    forecast_steps = np.arange(n_forecast).reshape(
+        -1, 1
+    )  # Shape it as multiple rows, 1 column
     extended_features = np.maximum(0, last_values + forecast_steps)
     return pd.DataFrame(extended_features, columns=x_t_last_row.index)
+
 
 def half_yr_spacing(df):
     return int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))

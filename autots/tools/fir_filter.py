@@ -13,17 +13,20 @@ try:
 except Exception:
     pass
 
-def apply_fir_filter_to_timeseries(data, sampling_frequency, numtaps=512, cutoff_hz=20, window='hamming'):
+
+def apply_fir_filter_to_timeseries(
+    data, sampling_frequency, numtaps=512, cutoff_hz=20, window='hamming'
+):
     """
     Apply FIR filter to an array of time series data with shape (observations, series).
-    
+
     Parameters:
     - data: numpy array of shape (observations, series), where each column represents a time series
     - sampling_frequency: The sampling frequency of the time series data (e.g., 365 for daily data)
     - numtaps: Number of taps (filter length)
     - cutoff_hz: The cutoff frequency in Hz (for filtering purposes)
     - window: The windowing function to use for FIR filter design ('hamming', 'hann', etc.)
-    
+
     Returns:
     - filtered_data: The filtered version of the input data
     """
@@ -31,22 +34,26 @@ def apply_fir_filter_to_timeseries(data, sampling_frequency, numtaps=512, cutoff
     # Ensure the data has the correct shape: (observations, series)
     if data.shape[0] < data.shape[1]:
         data = data.T  # Transpose if necessary to match (observations, series)
-    
+
     # Normalize the cutoff frequency with respect to the Nyquist frequency
     nyquist_frequency = 0.5 * sampling_frequency
     cutoff_norm = cutoff_hz / nyquist_frequency
-    
+
     # Design the FIR filter using the given parameters
     fir_coefficients = firwin(numtaps=numtaps, cutoff=cutoff_norm, window=window)
-    
+
     # Apply the FIR filter to each time series (each column in the data)
     # Convolve each column with the FIR filter
-    filtered_data = np.apply_along_axis(lambda x: convolve(x, fir_coefficients, mode='same'), axis=0, arr=data)
-    
+    filtered_data = np.apply_along_axis(
+        lambda x: convolve(x, fir_coefficients, mode='same'), axis=0, arr=data
+    )
+
     return filtered_data
 
 
-def apply_fir_filter_time_domain(data, sampling_frequency, numtaps=512, cutoff_hz=20, window='hamming'):
+def apply_fir_filter_time_domain(
+    data, sampling_frequency, numtaps=512, cutoff_hz=20, window='hamming'
+):
     """
     Apply FIR filter using time-domain convolution (lfilter) for smaller memory usage.
     This function has padding issues currently.
@@ -64,28 +71,35 @@ def apply_fir_filter_time_domain(data, sampling_frequency, numtaps=512, cutoff_h
 
     # Apply time-domain filtering (lfilter)
     filtered_data = lfilter(fir_coefficients, 1.0, data, axis=0)
-    
+
     return filtered_data
 
 
-def fft_fir_filter_to_timeseries(data, sampling_frequency, numtaps=512, cutoff_hz=20, window='hamming', chunk_size=1000):
+def fft_fir_filter_to_timeseries(
+    data,
+    sampling_frequency,
+    numtaps=512,
+    cutoff_hz=20,
+    window='hamming',
+    chunk_size=1000,
+):
     """
     Apply FIR filter to an array of time series data with shape (observations, series).
-    
+
     Parameters:
     - data: numpy array of shape (observations, series), where each column represents a time series
     - sampling_frequency: The sampling frequency of the time series data (e.g., 365 for daily data)
     - numtaps: Number of taps (filter length)
     - cutoff_hz: The cutoff frequency in Hz (for filtering purposes)
     - window: The windowing function to use for FIR filter design ('hamming', 'hann', etc.)
-    
+
     Returns:
     - filtered_data: The filtered version of the input data
     """
     # Ensure the data has the correct shape: (observations, series)
     if data.shape[0] < data.shape[1]:
         data = data.T  # Transpose if necessary to match (observations, series)
-    
+
     # Normalize the cutoff frequency with respect to the Nyquist frequency
     nyquist_frequency = 0.5 * sampling_frequency
     cutoff_norm = cutoff_hz / nyquist_frequency
@@ -93,7 +107,7 @@ def fft_fir_filter_to_timeseries(data, sampling_frequency, numtaps=512, cutoff_h
     if window == 'kaiser':
         beta = 14
         window = ('kaiser', beta)
-    
+
     # Design the FIR filter using the given parameters
     fir_coefficients = firwin(numtaps=numtaps, cutoff=cutoff_norm, window=window)
 
@@ -102,8 +116,9 @@ def fft_fir_filter_to_timeseries(data, sampling_frequency, numtaps=512, cutoff_h
     # padded_data = np.pad(data, ((pad_width, 0), (0, 0)), mode='reflect')
     pad_width_start = numtaps - 1
     pad_width_end = numtaps - 1
-    padded_data = np.pad(data, ((pad_width_start, pad_width_end), (0, 0)), mode='reflect')
-
+    padded_data = np.pad(
+        data, ((pad_width_start, pad_width_end), (0, 0)), mode='reflect'
+    )
 
     num_series = data.shape[1]
     if chunk_size is not None and chunk_size < num_series:
@@ -113,15 +128,23 @@ def fft_fir_filter_to_timeseries(data, sampling_frequency, numtaps=512, cutoff_h
         for start in range(0, num_series, chunk_size):
             end = min(start + chunk_size, num_series)
             chunk = padded_data[:, start:end]
-            filtered_chunk = fftconvolve(chunk, fir_coefficients[:, np.newaxis], mode='same', axes=0)
-            filtered_data[:, start:end] = filtered_chunk[pad_width_start:-pad_width_end, :]  # [pad_width:, :]
+            filtered_chunk = fftconvolve(
+                chunk, fir_coefficients[:, np.newaxis], mode='same', axes=0
+            )
+            filtered_data[:, start:end] = filtered_chunk[
+                pad_width_start:-pad_width_end, :
+            ]  # [pad_width:, :]
     else:
         # Apply FFT convolution across all time series at once
-        filtered_padded_data = fftconvolve(padded_data, fir_coefficients[:, np.newaxis], mode='same', axes=0)
-    
+        filtered_padded_data = fftconvolve(
+            padded_data, fir_coefficients[:, np.newaxis], mode='same', axes=0
+        )
+
         # Remove the padding from the start (discard the first `pad_width` samples)
-        filtered_data = filtered_padded_data[pad_width_start:-pad_width_end, :]  # [pad_width:, :]
-        
+        filtered_data = filtered_padded_data[
+            pad_width_start:-pad_width_end, :
+        ]  # [pad_width:, :]
+
     return filtered_data
 
 
@@ -130,8 +153,7 @@ def generate_random_fir_params(method='random', data_type="time_series"):
 
     # Random number of taps (filter length)
     params["numtaps"] = random.choices(
-        [32, 64, 128, 256, 512, 1024],
-        [0.1, 0.2, 0.3, 0.2, 0.1, 0.1]
+        [32, 64, 128, 256, 512, 1024], [0.1, 0.2, 0.3, 0.2, 0.1, 0.1]
     )[0]
 
     if data_type == "audio":
@@ -152,6 +174,7 @@ def generate_random_fir_params(method='random', data_type="time_series"):
     )[0]
 
     return params
+
 
 """
 # Example Usage with Time Series Data

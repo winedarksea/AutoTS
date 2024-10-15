@@ -538,14 +538,15 @@ class Cassandra(ModelObject):
                 x_list.append(resid.rename(columns=lambda x: "rolling_trend_" + str(x)))
             elif self.trend_standin == "changepoints":
                 x_t = create_changepoint_features(
-                    self.df.index, changepoint_spacing=60,
+                    self.df.index,
+                    changepoint_spacing=60,
                     changepoint_distance_end=120,
                 )
-                x_list.append(
-                    x_t
-                )
+                x_list.append(x_t)
             else:
-                raise ValueError(f"trend_standin arg `{self.trend_standin}` not recognized")
+                raise ValueError(
+                    f"trend_standin arg `{self.trend_standin}` not recognized"
+                )
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(

@@ -255,7 +255,7 @@ def gregorian_to_hebrew(dates):
 def gregorian_to_hindu(datetime_index):
     """Convert a pandas DatetimeIndex to Hindu calendar date components.
     Hindu calendar has numerous regional variations.
-    
+
     Used an llm to put this one together.
     It gets the dates wrong, but it does appear to have correlated consistency so may still work for modeling.
     Suggestions for improvement welcomed.
@@ -300,10 +300,14 @@ def gregorian_to_hindu(datetime_index):
         12: 'Phalguna',
     }
     # Adjust lunar_month to fit within 12 months
-    expanded_dates['hindu_month_number'] = ((expanded_dates['lunar_month'] - 1) % 12) + 1
-    expanded_dates['hindu_month_name'] = expanded_dates['hindu_month_number'].map(hindu_month_names)
+    expanded_dates['hindu_month_number'] = (
+        (expanded_dates['lunar_month'] - 1) % 12
+    ) + 1
+    expanded_dates['hindu_month_name'] = expanded_dates['hindu_month_number'].map(
+        hindu_month_names
+    )
     # Return the data for the input dates
     return expanded_dates.loc[
         datetime_input,
-        ['lunar_year', 'hindu_month_number', 'hindu_month_name', 'lunar_day']
+        ['lunar_year', 'hindu_month_number', 'hindu_month_name', 'lunar_day'],
     ].rename_axis(index='date')

@@ -137,7 +137,9 @@ def ModelMonster(
         )
 
     elif model == 'GLS':
-        return GLS(frequency=frequency, prediction_interval=prediction_interval, **parameters)
+        return GLS(
+            frequency=frequency, prediction_interval=prediction_interval, **parameters
+        )
 
     elif model == 'GLM':
         model = GLM(
@@ -906,7 +908,9 @@ class ModelPrediction(ModelObject):
         transformationStartTime = datetime.datetime.now()
         # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
         # forecast inverse MUST come before upper and lower bounds inverse
-        df_forecast.forecast = self.transformer_object.inverse_transform(df_forecast.forecast)
+        df_forecast.forecast = self.transformer_object.inverse_transform(
+            df_forecast.forecast
+        )
         df_forecast.lower_forecast = self.transformer_object.inverse_transform(
             df_forecast.lower_forecast, fillzero=True, bounds=True
         )
@@ -1468,7 +1472,9 @@ def model_forecast(
                 forecast_length=forecast_length,
             )
             transformer_object.fit(df_train)
-            ens_forecast.forecast = transformer_object.inverse_transform(ens_forecast.forecast)
+            ens_forecast.forecast = transformer_object.inverse_transform(
+                ens_forecast.forecast
+            )
             ens_forecast.lower_forecast = transformer_object.inverse_transform(
                 ens_forecast.lower_forecast, fillzero=True, bounds=True
             )
@@ -1545,15 +1551,30 @@ def _ps_metric(per_series_metrics, metric, model_id):
 
 
 def _eval_prediction_for_template(
-        df_forecast, template_result, verbose,
-        actuals, weights, df_trn_arr, ensemble,
-        scaler, cumsum_A, diff_A, last_of_array,
-        validation_round, model_str, best_smape,
-        ensemble_input, parameter_dict, transformation_dict,
-        row, post_memory_percent, mosaic_used,
-        template_start_time, current_generation, df_train,
+    df_forecast,
+    template_result,
+    verbose,
+    actuals,
+    weights,
+    df_trn_arr,
+    ensemble,
+    scaler,
+    cumsum_A,
+    diff_A,
+    last_of_array,
+    validation_round,
+    model_str,
+    best_smape,
+    ensemble_input,
+    parameter_dict,
+    transformation_dict,
+    row,
+    post_memory_percent,
+    mosaic_used,
+    template_start_time,
+    current_generation,
+    df_train,
 ):
-
     per_ts = True if 'distance' in ensemble else False
     model_error = df_forecast.evaluate(
         actuals,
@@ -1567,7 +1588,9 @@ def _eval_prediction_for_template(
         column_names=df_train.columns,
     )
     if validation_round >= 1 and verbose > 0:
-        round_smape = round(model_error.avg_metrics['smape'], 2)  # should work on both DF and single value
+        round_smape = round(
+            model_error.avg_metrics['smape'], 2
+        )  # should work on both DF and single value
         validation_accuracy_print = "{} - {} with avg smape {}: ".format(
             str(template_result.model_count),
             model_str,
@@ -1583,9 +1606,7 @@ def _eval_prediction_for_template(
             print(validation_accuracy_print)
     # for horizontal ensemble, use requested ID and params
     if ensemble_input == 2:
-        model_id = create_model_id(
-            model_str, parameter_dict, transformation_dict
-        )
+        model_id = create_model_id(model_str, parameter_dict, transformation_dict)
         # it's already json
         deposit_params = row['ModelParameters']
     else:
@@ -1657,17 +1678,228 @@ def _eval_prediction_for_template(
 
 
 horizontal_post_processors = [
-    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}, "1": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": True, "threshold": 10, "threshold_method": "max"}}},  # best competition on vn1
-    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"}, "transformation_params": {"0": {"rows": 4, "lag": 28, "method": "additive", "strength": 0.2, "first_value_only": False, "threshold": 1, "threshold_method": "max"}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": False, "threshold": 1, "threshold_method": "mean"}}},  # best wasserstein on daily
-	# {"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
-    {"fillna": "rolling_mean_24", "transformations": {"0": "bkfilter", "1": "FIRFilter", "2": "AlignLastDiff"}, "transformation_params": {"0": {}, "1": {"numtaps": 128, "cutoff_hz": 0.01, "window": "blackman", "sampling_frequency": 60, "on_transform": False, "on_inverse": True}, "2": {"rows": 90, "displacement_rows": 1, "quantile": 1.0, "decay_span": 90}}},  # best smape on daily, observed most effective on eval loop too
-    {"fillna": "ffill", "transformations": {"0": "AlignLastValue", "1": "SeasonalDifference", "2": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": False, "threshold": 1, "threshold_method": "max"}, "1": {"lag_1": 7, "method": 20}, "2": {"rows": 1, "lag": 28, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}}},  # best mae on daily, a bit weird otherwise
-    {"fillna": "median", "transformations": {"0": "DiffSmoother", "1": "AlignLastValue", "2": "HistoricValues"}, "transformation_params": {"0": {"method": "med_diff", "method_params": {"distribution": "norm", "alpha": 0.05}, "transform_dict": None, "reverse_alignment": False, "isolated_only": False, "fillna": "linear"}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"}, "2": {"window": 10}}},  # best mae on daily
-    {"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "PositiveShift", "2": "HistoricValues"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": False, "threshold": 10, "threshold_method": "mean"}, "1": {}, "2": {"window": 28}}},  # best competition on VN1
-    {"fillna": "ffill", "transformations": {"0": "FFTFilter", "1": "HistoricValues"}, "transformation_params": {"0": {"cutoff": 0.01, "reverse": False, "on_transform": False, "on_inverse": True}, "1": {"window": None}}},  # best smape on daily
-    {"fillna": "linear", "transformations": {"0": "Constraint"}, "transformation_params": {"0": {"constraint_method": "quantile", "constraint_direction": "lower", "constraint_regularization": 0.7, "constraint_value": 0.5, "bounds_only": False, "fillna": "linear"}}},  # best on daily, weight of smape and wasserstein
-    {"fillna": "ffill", "transformations": {"0": "RegressionFilter", "1": "HistoricValues"}, "transformation_params": {"0": {"sigma": 1, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": False, "selection": "cyclic", "max_iter": 2000}}, "datepart_method": "simple", "polynomial_degree": None, "transform_dict": {"fillna": None, "transformations": {"0": "ScipyFilter"}, "transformation_params": {"0": {"method": "savgol_filter", "method_args": {"window_length": 31, "polyorder": 3, "deriv": 0, "mode": "interp"}}}}, "holiday_countries_used": False, "lags": None, "forward_lags": None}, "holiday_params": None, "trend_method": "rolling_mean"}, "1": {"window": 28}}},  # best on daily, competition, mae
+    {
+        "fillna": "fake_date",
+        "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"},
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": True,
+                "threshold": 10,
+                "threshold_method": "max",
+            },
+        },
+    },  # best competition on vn1
+    {
+        "fillna": "fake_date",
+        "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"},
+        "transformation_params": {
+            "0": {
+                "rows": 4,
+                "lag": 28,
+                "method": "additive",
+                "strength": 0.2,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "max",
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "mean",
+            },
+        },
+    },  # best wasserstein on daily
+    # {"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
+    {
+        "fillna": "rolling_mean_24",
+        "transformations": {"0": "bkfilter", "1": "FIRFilter", "2": "AlignLastDiff"},
+        "transformation_params": {
+            "0": {},
+            "1": {
+                "numtaps": 128,
+                "cutoff_hz": 0.01,
+                "window": "blackman",
+                "sampling_frequency": 60,
+                "on_transform": False,
+                "on_inverse": True,
+            },
+            "2": {
+                "rows": 90,
+                "displacement_rows": 1,
+                "quantile": 1.0,
+                "decay_span": 90,
+            },
+        },
+    },  # best smape on daily, observed most effective on eval loop too
+    {
+        "fillna": "ffill",
+        "transformations": {
+            "0": "AlignLastValue",
+            "1": "SeasonalDifference",
+            "2": "AlignLastValue",
+        },
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 0.7,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "max",
+            },
+            "1": {"lag_1": 7, "method": 20},
+            "2": {
+                "rows": 1,
+                "lag": 28,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+        },
+    },  # best mae on daily, a bit weird otherwise
+    {
+        "fillna": "median",
+        "transformations": {
+            "0": "DiffSmoother",
+            "1": "AlignLastValue",
+            "2": "HistoricValues",
+        },
+        "transformation_params": {
+            "0": {
+                "method": "med_diff",
+                "method_params": {"distribution": "norm", "alpha": 0.05},
+                "transform_dict": None,
+                "reverse_alignment": False,
+                "isolated_only": False,
+                "fillna": "linear",
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "2": {"window": 10},
+        },
+    },  # best mae on daily
+    {
+        "fillna": "fake_date",
+        "transformations": {
+            "0": "AlignLastValue",
+            "1": "PositiveShift",
+            "2": "HistoricValues",
+        },
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": 10,
+                "threshold_method": "mean",
+            },
+            "1": {},
+            "2": {"window": 28},
+        },
+    },  # best competition on VN1
+    {
+        "fillna": "ffill",
+        "transformations": {"0": "FFTFilter", "1": "HistoricValues"},
+        "transformation_params": {
+            "0": {
+                "cutoff": 0.01,
+                "reverse": False,
+                "on_transform": False,
+                "on_inverse": True,
+            },
+            "1": {"window": None},
+        },
+    },  # best smape on daily
+    {
+        "fillna": "linear",
+        "transformations": {"0": "Constraint"},
+        "transformation_params": {
+            "0": {
+                "constraint_method": "quantile",
+                "constraint_direction": "lower",
+                "constraint_regularization": 0.7,
+                "constraint_value": 0.5,
+                "bounds_only": False,
+                "fillna": "linear",
+            }
+        },
+    },  # best on daily, weight of smape and wasserstein
+    {
+        "fillna": "ffill",
+        "transformations": {"0": "RegressionFilter", "1": "HistoricValues"},
+        "transformation_params": {
+            "0": {
+                "sigma": 1,
+                "rolling_window": 90,
+                "run_order": "season_first",
+                "regression_params": {
+                    "regression_model": {
+                        "model": "ElasticNet",
+                        "model_params": {
+                            "l1_ratio": 0.5,
+                            "fit_intercept": False,
+                            "selection": "cyclic",
+                            "max_iter": 2000,
+                        },
+                    },
+                    "datepart_method": "simple",
+                    "polynomial_degree": None,
+                    "transform_dict": {
+                        "fillna": None,
+                        "transformations": {"0": "ScipyFilter"},
+                        "transformation_params": {
+                            "0": {
+                                "method": "savgol_filter",
+                                "method_args": {
+                                    "window_length": 31,
+                                    "polyorder": 3,
+                                    "deriv": 0,
+                                    "mode": "interp",
+                                },
+                            }
+                        },
+                    },
+                    "holiday_countries_used": False,
+                    "lags": None,
+                    "forward_lags": None,
+                },
+                "holiday_params": None,
+                "trend_method": "rolling_mean",
+            },
+            "1": {"window": 28},
+        },
+    },  # best on daily, competition, mae
 ]
+
 
 def TemplateWizard(
     template,
@@ -1783,7 +2015,9 @@ def TemplateWizard(
                 # SKIP BECAUSE TRANSFORMERS (PRE DEFINED) ARE DONE BELOW TO REDUCE FORECASTS RERUNS
                 # ON INTERNAL VALIDATION ONLY ON TEMPLATES
                 if verbose >= 1:
-                    print("skipping horizontal with transformation due to that being done on internal validation")
+                    print(
+                        "skipping horizontal with transformation due to that being done on internal validation"
+                    )
                 continue
             template_result.model_count += 1
             if verbose > 0:
@@ -1843,13 +2077,29 @@ def TemplateWizard(
                 post_memory_percent = 0.0
             # wrapped up to enable postprocessing
             template_result, best_smape = _eval_prediction_for_template(
-                    df_forecast, template_result, verbose,
-                    actuals, weights, df_trn_arr, ensemble,
-                    scaler, cumsum_A, diff_A, last_of_array,
-                    validation_round, model_str, best_smape,
-                    ensemble_input, parameter_dict, transformation_dict,
-                    row, post_memory_percent, mosaic_used,
-                    template_start_time, current_generation, df_train,
+                df_forecast,
+                template_result,
+                verbose,
+                actuals,
+                weights,
+                df_trn_arr,
+                ensemble,
+                scaler,
+                cumsum_A,
+                diff_A,
+                last_of_array,
+                validation_round,
+                model_str,
+                best_smape,
+                ensemble_input,
+                parameter_dict,
+                transformation_dict,
+                row,
+                post_memory_percent,
+                mosaic_used,
+                template_start_time,
+                current_generation,
+                df_train,
             )
             if ensemble_input == 2:
                 # INTERNAL VALIDATION ONLY, POST PROCESSING ONLY
@@ -1865,7 +2115,9 @@ def TemplateWizard(
                         forecast_length=forecast_length,
                     )
                     transformer_object.fit(df_train)
-                    df_forecast2.forecast = transformer_object.inverse_transform(df_forecast2.forecast)
+                    df_forecast2.forecast = transformer_object.inverse_transform(
+                        df_forecast2.forecast
+                    )
                     df_forecast2.lower_forecast = transformer_object.inverse_transform(
                         df_forecast2.lower_forecast, fillzero=True, bounds=True
                     )
@@ -1875,14 +2127,29 @@ def TemplateWizard(
                     df_forecast2.transformation_parameters = x
                     template_result.model_count += 1
                     template_result, best_smape = _eval_prediction_for_template(
-                            df_forecast2, template_result, verbose,
-                            actuals, weights, df_trn_arr, ensemble,
-                            scaler, cumsum_A, diff_A, last_of_array,
-                            validation_round, model_str, best_smape,
-                            ensemble_input, parameter_dict,
-                            x,
-                            row, post_memory_percent, mosaic_used,
-                            template_start_time, current_generation, df_train,
+                        df_forecast2,
+                        template_result,
+                        verbose,
+                        actuals,
+                        weights,
+                        df_trn_arr,
+                        ensemble,
+                        scaler,
+                        cumsum_A,
+                        diff_A,
+                        last_of_array,
+                        validation_round,
+                        model_str,
+                        best_smape,
+                        ensemble_input,
+                        parameter_dict,
+                        x,
+                        row,
+                        post_memory_percent,
+                        mosaic_used,
+                        template_start_time,
+                        current_generation,
+                        df_train,
                     )
 
         except KeyboardInterrupt:
@@ -2575,7 +2842,9 @@ def validation_aggregation(
     col_aggs = {x: y for x, y in col_aggs.items() if x in col_names}
     cols = [x for x in validation_results.model_results.columns if x in col_aggs.keys()]
     # force numeric dytpes. This really shouldn't be necessary but apparently is sometimes (underlying minor bug somewhere)
-    validation_results.model_results[cols] = validation_results.model_results[cols].apply(pd.to_numeric, errors='coerce')
+    validation_results.model_results[cols] = validation_results.model_results[
+        cols
+    ].apply(pd.to_numeric, errors='coerce')
     validation_results.model_results['TotalRuntimeSeconds'] = (
         validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )
@@ -2724,21 +2993,27 @@ def generate_score(
             competition_scaler = model_results['competition_weighted'][
                 model_results['competition_weighted'] != 0
             ].min()
-            competition_score = model_results['competition_weighted']  #  / competition_scaler
+            competition_score = model_results[
+                'competition_weighted'
+            ]  #  / competition_scaler
             score_dict['competition'] = competition_score * competition_weighting
             overall_score = overall_score + (competition_score * competition_weighting)
         if mle_weighting != 0:
             mle_scaler = model_results['mle_weighted'][
                 model_results['mle_weighted'] != 0
             ].min()
-            mle_score = model_results['mle_weighted'] / mle_scaler / 10  # / 10 due to imbalance often with this
+            mle_score = (
+                model_results['mle_weighted'] / mle_scaler / 10
+            )  # / 10 due to imbalance often with this
             score_dict['mle'] = mle_score * mle_weighting
             overall_score = overall_score + (mle_score * mle_weighting)
         if imle_weighting != 0:
             imle_scaler = model_results['imle_weighted'][
                 model_results['imle_weighted'] != 0
             ].min()
-            imle_score = model_results['imle_weighted'] / imle_scaler / 10  # / 10 due to imbalance often with this
+            imle_score = (
+                model_results['imle_weighted'] / imle_scaler / 10
+            )  # / 10 due to imbalance often with this
             score_dict['imle'] = imle_score * imle_weighting
             overall_score = overall_score + (imle_score * imle_weighting)
         if maxe_weighting != 0:
@@ -2845,7 +3120,9 @@ def generate_score(
             score_dict['contaiment'] = containment_score * containment_weighting
             overall_score = overall_score + (containment_score * containment_weighting)
         if overall_score.sum() == 0:
-            print("something is seriously wrong with one of the input metrics, score is NaN or all 0")
+            print(
+                "something is seriously wrong with one of the input metrics, score is NaN or all 0"
+            )
             overall_score = smape_score
 
     except Exception as e:
@@ -2920,7 +3197,9 @@ def generate_score_per_series(
             .min()
             .fillna(1)
         )
-        mle_score = results_object.per_series_mle / mle_scaler / 10  # / 10 due to imbalance often with this
+        mle_score = (
+            results_object.per_series_mle / mle_scaler / 10
+        )  # / 10 due to imbalance often with this
         overall_score = overall_score + (mle_score * mle_weighting)
     if imle_weighting != 0:
         imle_scaler = (
@@ -2928,7 +3207,9 @@ def generate_score_per_series(
             .min()
             .fillna(1)
         )
-        imle_score = results_object.per_series_imle / imle_scaler / 10  # / 10 due to imbalance often with this
+        imle_score = (
+            results_object.per_series_imle / imle_scaler / 10
+        )  # / 10 due to imbalance often with this
         overall_score = overall_score + (imle_score * imle_weighting)
     if maxe_weighting != 0:
         maxe_scaler = (

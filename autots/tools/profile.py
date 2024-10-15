@@ -4,8 +4,13 @@ Profiling
 
 import numpy as np
 import pandas as pd
-from autots.tools.seasonal import date_part, create_changepoint_features, half_yr_spacing
+from autots.tools.seasonal import (
+    date_part,
+    create_changepoint_features,
+    half_yr_spacing,
+)
 from autots.models.basics import BasicLinearModel
+
 
 def data_profile(df):
     """Legacy profiler.
@@ -39,17 +44,23 @@ def data_profile(df):
 
 def summarize_series(df):
     """Summarize time series data.
-    
+
     Args:
         df (pd.DataFrame): wide style data with datetimeindex
     """
     df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
     df_sum.loc["count_non_zero"] = (df != 0).sum()
-    df_sum.loc["cv_squared"] = (df_sum.loc["std"] / df_sum.loc["mean"].replace(0, 1)) ** 2
+    df_sum.loc["cv_squared"] = (
+        df_sum.loc["std"] / df_sum.loc["mean"].replace(0, 1)
+    ) ** 2
     df_sum.loc["adi"] = (df.shape[0] / df_sum.loc["count_non_zero"].replace(0, 1)) ** 2
     first_non_nan_index = df.replace(0, np.nan).reset_index(drop=True).notna().idxmax()
     try:
-        df_sum.loc["autocorr_1"] = np.diag(np.corrcoef(df.bfill().T, df.shift(1).bfill().T)[:df.shape[1], df.shape[1]:])
+        df_sum.loc["autocorr_1"] = np.diag(
+            np.corrcoef(df.bfill().T, df.shift(1).bfill().T)[
+                : df.shape[1], df.shape[1] :
+            ]
+        )
     except Exception as e:
         print(f"summarize_series autocorr_1 failed with {repr(e)}")
     df_sum.loc["null_percentage"] = (first_non_nan_index / df.shape[0]).fillna(1)
@@ -71,12 +82,15 @@ def summarize_series(df):
 
 
 def profile_time_series(
-        df, adi_threshold=1.3, cvar_threshold=0.5, flat_threshold=0.9,
-        new_product_threshold='auto',
-        seasonal_threshold=0.5
+    df,
+    adi_threshold=1.3,
+    cvar_threshold=0.5,
+    flat_threshold=0.9,
+    new_product_threshold='auto',
+    seasonal_threshold=0.5,
 ):
     """
-    Profiles time series data into categories: 
+    Profiles time series data into categories:
         smooth, intermittent, erratic, lumpy, flat, new_product
 
     Args:
@@ -100,16 +114,37 @@ def profile_time_series(
         if new_product_threshold > 0.99:
             new_product_threshold = 0.99
     # Apply conditions to classify the demand profiles
-    metrics_df.loc[(metrics_df['adi'] >= adi_threshold) & (metrics_df['cv_squared'] < cvar_threshold), 'PROFILE'] = 'intermittent'
-    metrics_df.loc[(metrics_df['adi'] < adi_threshold) & (metrics_df['cv_squared'] >= cvar_threshold), 'PROFILE'] = 'erratic'
-    metrics_df.loc[(metrics_df['adi'] >= adi_threshold) & (metrics_df['cv_squared'] >= cvar_threshold), 'PROFILE'] = 'lumpy'
-    metrics_df.loc[metrics_df['zero_diff_proportion'] >= flat_threshold, 'PROFILE'] = 'flat'
-    metrics_df.loc[metrics_df['null_percentage'] >= new_product_threshold, 'PROFILE'] = 'new_product'
-    metrics_df.loc[metrics_df['season_trend_percent'] > seasonal_threshold, 'PROFILE'] = "seasonal"
+    metrics_df.loc[
+        (metrics_df['adi'] >= adi_threshold)
+        & (metrics_df['cv_squared'] < cvar_threshold),
+        'PROFILE',
+    ] = 'intermittent'
+    metrics_df.loc[
+        (metrics_df['adi'] < adi_threshold)
+        & (metrics_df['cv_squared'] >= cvar_threshold),
+        'PROFILE',
+    ] = 'erratic'
+    metrics_df.loc[
+        (metrics_df['adi'] >= adi_threshold)
+        & (metrics_df['cv_squared'] >= cvar_threshold),
+        'PROFILE',
+    ] = 'lumpy'
+    metrics_df.loc[
+        metrics_df['zero_diff_proportion'] >= flat_threshold, 'PROFILE'
+    ] = 'flat'
+    metrics_df.loc[
+        metrics_df['null_percentage'] >= new_product_threshold, 'PROFILE'
+    ] = 'new_product'
+    metrics_df.loc[
+        metrics_df['season_trend_percent'] > seasonal_threshold, 'PROFILE'
+    ] = "seasonal"
 
     # Reset index to get 'SERIES' column
-    intermittence_df = metrics_df[['PROFILE']].reset_index().rename(columns={'index': 'SERIES'})
+    intermittence_df = (
+        metrics_df[['PROFILE']].reset_index().rename(columns={'index': 'SERIES'})
+    )
 
     return intermittence_df
+
 
 # burst, stationary, seasonality

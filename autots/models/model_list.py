@@ -94,7 +94,7 @@ superfast = [
     'SeasonalNaive',
     'SeasonalityMotif',
     'SectionalMotif',  # not entirely sure but so far this is pretty fast
-    'BasicLinearModel', # also on the riskier end
+    'BasicLinearModel',  # also on the riskier end
 ]
 # relatively fast
 fast = {

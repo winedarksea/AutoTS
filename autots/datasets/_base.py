@@ -778,17 +778,32 @@ def load_artificial(long=False, date_start=None, date_end=None):
     size = dates.size
     new_size = int(size / 10)
     rng = np.random.default_rng()
-    holiday = pd.Series(np.arange(size) * 0.025 + rng.normal(0, 0.2, size) + (np.sin((np.pi / 7) * np.arange(size)) * 0.5), index=dates, name='holiday')
+    holiday = pd.Series(
+        np.arange(size) * 0.025
+        + rng.normal(0, 0.2, size)
+        + (np.sin((np.pi / 7) * np.arange(size)) * 0.5),
+        index=dates,
+        name='holiday',
+    )
     # January 1st
     holiday[holiday.index.month == 1 & (holiday.index.day == 1)] += 10
     # December 25th
     holiday[(holiday.index.month == 12) & (holiday.index.day == 25)] += -4
     # Second Tuesday of April
     # Find all Tuesdays in April
-    second_tuesday_of_april = (holiday.index.month == 4) & (holiday.index.weekday == 1)& (holiday.index.day >= 8) & (holiday.index.day <= 14)
+    second_tuesday_of_april = (
+        (holiday.index.month == 4)
+        & (holiday.index.weekday == 1)
+        & (holiday.index.day >= 8)
+        & (holiday.index.day <= 14)
+    )
     holiday[second_tuesday_of_april] += 10
     # Last Monday of August
-    last_monday_of_august = (holiday.index.month == 8) & (holiday.index.weekday == 0) & ((holiday.index + pd.Timedelta(7, unit='D')).month == 9)
+    last_monday_of_august = (
+        (holiday.index.month == 8)
+        & (holiday.index.weekday == 0)
+        & ((holiday.index + pd.Timedelta(7, unit='D')).month == 9)
+    )
     holiday[last_monday_of_august] += 12
 
     df_wide = pd.DataFrame(
@@ -824,7 +839,12 @@ def load_artificial(long=False, date_start=None, date_end=None):
             ),
             "linear": np.arange(size) * 0.025,
             "flat": 1,
-            "new_product": np.concatenate([np.zeros(int(size - new_size)), np.random.choice(a=[-0.8, 0, 0.8], size=new_size).cumsum()]), 
+            "new_product": np.concatenate(
+                [
+                    np.zeros(int(size - new_size)),
+                    np.random.choice(a=[-0.8, 0, 0.8], size=new_size).cumsum(),
+                ]
+            ),
             "sine_wave": np.sin(np.arange(size)),
             "sine_seasonality_monthweek": (
                 (np.sin((np.pi / 7) * np.arange(size)) * 0.25 + 0.25)

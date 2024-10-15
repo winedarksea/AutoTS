@@ -31,7 +31,10 @@ from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
 from autots.tools.fft import FFT as fft_class
 from autots.tools.percentile import nan_quantile
-from autots.tools.fir_filter import generate_random_fir_params, fft_fir_filter_to_timeseries
+from autots.tools.fir_filter import (
+    generate_random_fir_params,
+    fft_fir_filter_to_timeseries,
+)
 
 try:
     from scipy.signal import butter, sosfiltfilt, savgol_filter
@@ -2140,7 +2143,7 @@ class ShiftFirstValue(EmptyTransformer):
         choice = random.choices([1, 2, 7, 28], [0.2, 0.2, 0.2, 0.2])[0]
         return {
             "rows": choice,
-        }   
+        }
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -2499,7 +2502,9 @@ class PCA(EmptyTransformer):
             if return_df.shape[1] == len(self.columns):
                 return pd.DataFrame(return_df, index=self.index, columns=self.columns)
             else:
-                return pd.DataFrame(return_df, index=self.index).rename(columns=lambda x: "pca_" + str(x))
+                return pd.DataFrame(return_df, index=self.index).rename(
+                    columns=lambda x: "pca_" + str(x)
+                )
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -2525,7 +2530,9 @@ class PCA(EmptyTransformer):
             if return_df.shape[1] == len(self.columns):
                 return pd.DataFrame(return_df, index=self.index, columns=self.columns)
             else:
-                return pd.DataFrame(return_df, index=df.index).rename(columns=lambda x: "pca_" + str(x))
+                return pd.DataFrame(return_df, index=df.index).rename(
+                    columns=lambda x: "pca_" + str(x)
+                )
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -2552,9 +2559,9 @@ class PCA(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
-            "n_components": random.choices([None, 4, 10, 24, 100, 0.3], [0.8, 0.05, 0.1, 0.05, 0.1, 0.05])[
-                0
-            ],
+            "n_components": random.choices(
+                [None, 4, 10, 24, 100, 0.3], [0.8, 0.05, 0.1, 0.05, 0.1, 0.05]
+            )[0],
         }
 
 
@@ -5059,16 +5066,19 @@ class Constraint(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.lower_constraint, self.upper_constraint, self.train_min, self.train_max = (
-            fit_constraint(
-                constraint_method=self.constraint_method,
-                constraint_value=self.constraint_value,
-                constraint_direction=self.constraint_direction,
-                constraint_regularization=self.constraint_regularization,
-                bounds=False,
-                df_train=df,
-                forecast_length=self.forecast_length,
-            )
+        (
+            self.lower_constraint,
+            self.upper_constraint,
+            self.train_min,
+            self.train_max,
+        ) = fit_constraint(
+            constraint_method=self.constraint_method,
+            constraint_value=self.constraint_value,
+            constraint_direction=self.constraint_direction,
+            constraint_regularization=self.constraint_regularization,
+            bounds=False,
+            df_train=df,
+            forecast_length=self.forecast_length,
         )
         return self
 
@@ -5125,13 +5135,14 @@ class Constraint(EmptyTransformer):
         """Generate new random parameters"""
         params = constraint_new_params(method=method)
         params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]
-        params['fillna'] = random.choices([None, "ffill", "linear"], [0.95, 0.05, 0.05])[0]
+        params['fillna'] = random.choices(
+            [None, "ffill", "linear"], [0.95, 0.05, 0.05]
+        )[0]
         return params
 
 
 class FIRFilter(EmptyTransformer):
-    """Scipy firwin
-    """
+    """Scipy firwin"""
 
     def __init__(
         self,
@@ -5177,7 +5188,9 @@ class FIRFilter(EmptyTransformer):
                 numtaps=self.numtaps,
                 cutoff_hz=self.cutoff_hz,
                 window=self.window,
-            ), index=df.index, columns=df.columns
+            ),
+            index=df.index,
+            columns=df.columns,
         )
 
     def transform(self, df):
@@ -5209,6 +5222,7 @@ class FIRFilter(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return self.transform(df)
+
     @staticmethod
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
@@ -5218,6 +5232,7 @@ class FIRFilter(EmptyTransformer):
         params["on_transform"] = selection
         params["on_inverse"] = not selection
         return params
+
 
 # lookup dict for all non-parameterized transformers
 trans_dict = {

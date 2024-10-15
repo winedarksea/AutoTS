@@ -264,7 +264,8 @@ def rolling_x_regressor_regressor(
         X = X.drop(columns=['series_id'])
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -1799,13 +1800,17 @@ class RandomFourierEncoding(object):
     def fit(self, X, y=None):
         # np.random.seed(self.random_state)
         n_features = X.shape[1]
-        self.W = np.random.normal(loc=0, scale=1/self.sigma, size=(n_features, self.n_components))
-        self.b = np.random.uniform(0, 2*np.pi, size=self.n_components)
+        self.W = np.random.normal(
+            loc=0, scale=1 / self.sigma, size=(n_features, self.n_components)
+        )
+        self.b = np.random.uniform(0, 2 * np.pi, size=self.n_components)
         return self
 
     def transform(self, X):
         projection = np.dot(X, self.W) + self.b
-        X_new = np.sqrt(2/self.n_components) * np.concatenate([np.sin(projection), np.cos(projection)], axis=1)
+        X_new = np.sqrt(2 / self.n_components) * np.concatenate(
+            [np.sin(projection), np.cos(projection)], axis=1
+        )
         return X_new
 
 
@@ -1892,13 +1897,14 @@ class WindowRegression(ModelObject):
                 future_regressor = future_regressor.to_frame()
             self.static_regressor = static_regressor
             if self.datepart_method is not None:
-                future_regressor = pd.concat([
+                future_regressor = pd.concat(
+                    [
                         future_regressor,
                         date_part(
                             df.index,
                             method=self.datepart_method,
                             holiday_country=self.holiday_country,
-                        )
+                        ),
                     ],
                     axis=1,
                 )
@@ -1934,7 +1940,7 @@ class WindowRegression(ModelObject):
 
             self.scaler = StandardScaler()
             if isinstance(self.X, pd.DataFrame):
-                self.X.columns = self.X.columns.astype(str) 
+                self.X.columns = self.X.columns.astype(str)
             self.X = self.scaler.fit_transform(self.X)
         if self.fourier_encoding_components is not None:
             self.fourier_encoder = RandomFourierEncoding(
@@ -1992,13 +1998,14 @@ class WindowRegression(ModelObject):
             future_regressor = future_regressor.to_frame()
         if self.regression_type in ["User", "user"]:
             if self.datepart_method is not None:
-                future_regressor = pd.concat([
+                future_regressor = pd.concat(
+                    [
                         future_regressor,
                         date_part(
                             index,
                             method=self.datepart_method,
                             holiday_country=self.holiday_country,
-                        )
+                        ),
                     ],
                     axis=1,
                 )
@@ -2020,7 +2027,10 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
-                if self.regression_type in ["User", "user"] or self.datepart_method is not None:
+                if (
+                    self.regression_type in ["User", "user"]
+                    or self.datepart_method is not None
+                ):
                     blasted_thing = (
                         future_regressor.reindex(index).iloc[x].to_frame().transpose()
                     )
@@ -2029,7 +2039,7 @@ class WindowRegression(ModelObject):
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
                 if self.scale:
                     if isinstance(pred, pd.DataFrame):
-                        pred.columns = pred.columns.astype(str) 
+                        pred.columns = pred.columns.astype(str)
                     pred = self.scaler.transform(pred)
                 if self.fourier_encoding_components is not None:
                     pred = self.fourier_encoder.transform(pred)
@@ -2052,7 +2062,10 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
-            if self.regression_type in ["User", "user"] or self.datepart_method is not None:
+            if (
+                self.regression_type in ["User", "user"]
+                or self.datepart_method is not None
+            ):
                 tmerg = future_regressor.tail(1).loc[
                     future_regressor.tail(1).index.repeat(pred.shape[0])
                 ]
@@ -2060,7 +2073,7 @@ class WindowRegression(ModelObject):
                 pred = pd.concat([pred, tmerg], axis=1)
             if self.scale:
                 if isinstance(pred, pd.DataFrame):
-                    pred.columns = pred.columns.astype(str) 
+                    pred.columns = pred.columns.astype(str)
                 pred = self.scaler.transform(pred)
             if self.fourier_encoding_components is not None:
                 pred = self.fourier_encoder.transform(pred)
@@ -2156,7 +2169,9 @@ class WindowRegression(ModelObject):
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
             'max_windows': max_windows_choice,
-            'fourier_encoding_components': random.choices([None, 2, 5, 10], [0.8, 0.1, 0.1, 0.01])[0],
+            'fourier_encoding_components': random.choices(
+                [None, 2, 5, 10], [0.8, 0.1, 0.1, 0.01]
+            )[0],
             'scale': random.choices([True, False], [0.7, 0.3])[0],
             'datepart_method': datepart_method,
             'regression_type': regression_type_choice,
@@ -3722,7 +3737,9 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

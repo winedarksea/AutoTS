@@ -365,7 +365,11 @@ def apply_fit_constraint(
     elif constraint_method == "round":
         decimals = int(constraint_value)
         if bounds:
-            return forecast.round(decimals=decimals), lower_forecast.round(decimals=decimals), upper_forecast.round(decimals=decimals)
+            return (
+                forecast.round(decimals=decimals),
+                lower_forecast.round(decimals=decimals),
+                upper_forecast.round(decimals=decimals),
+            )
         else:
             return forecast.round(decimals=decimals), lower_forecast, upper_forecast
     if constraint_regularization == 1 or constraint_regularization is None:
@@ -410,8 +414,7 @@ def apply_fit_constraint(
                     )
 
                     upper_forecast = upper_forecast.where(
-                        lower_forecast <= train_max,
-                        np.nan
+                        lower_forecast <= train_max, np.nan
                     )
             forecast = FillNA(forecast, method=str(fillna), window=10)
             if bounds:

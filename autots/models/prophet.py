@@ -180,17 +180,17 @@ class FBProphet(ModelObject):
             if self.yearly_seasonality_prior_scale not in [None, "None"]:
                 self.yearly_seasonality = False
             pargs = {
-                "interval_width":args['prediction_interval'],
-                "yearly_seasonality":self.yearly_seasonality,
-                "weekly_seasonality":self.weekly_seasonality,
-                "daily_seasonality":self.daily_seasonality,
-                "growth":self.growth,
-                "n_changepoints":self.n_changepoints,
-                "changepoint_prior_scale":self.changepoint_prior_scale,
-                "seasonality_mode":self.seasonality_mode,
-                "changepoint_range":self.changepoint_range,
-                "seasonality_prior_scale":self.seasonality_prior_scale,
-                "holidays_prior_scale":self.holidays_prior_scale,
+                "interval_width": args['prediction_interval'],
+                "yearly_seasonality": self.yearly_seasonality,
+                "weekly_seasonality": self.weekly_seasonality,
+                "daily_seasonality": self.daily_seasonality,
+                "growth": self.growth,
+                "n_changepoints": self.n_changepoints,
+                "changepoint_prior_scale": self.changepoint_prior_scale,
+                "seasonality_mode": self.seasonality_mode,
+                "changepoint_range": self.changepoint_range,
+                "seasonality_prior_scale": self.seasonality_prior_scale,
+                "holidays_prior_scale": self.holidays_prior_scale,
             }
             if self.changepoint_range > 1:
                 pargs['changepoints'] = get_changepoints(
@@ -201,18 +201,22 @@ class FBProphet(ModelObject):
                 )
                 pargs.pop("changepoint_range")
                 pargs.pop("n_changepoints")
-            m = Prophet(
-                **pargs
-            )
+            m = Prophet(**pargs)
             if self.weekly_seasonality_prior_scale not in [None, "None"]:
                 m.add_seasonality(
-                    name='weekly', period=7, fourier_order=4, prior_scale=self.weekly_seasonality_prior_scale
+                    name='weekly',
+                    period=7,
+                    fourier_order=4,
+                    prior_scale=self.weekly_seasonality_prior_scale,
                 )
             if self.yearly_seasonality_prior_scale not in [None, "None"]:
                 if self.yearly_seasonality_order in [None, "None"]:
                     self.yearly_seasonality_order = 12
                 m.add_seasonality(
-                    name='yearly', period=365.25, fourier_order=int(self.yearly_seasonality_order), prior_scale=self.yearly_seasonality_prior_scale
+                    name='yearly',
+                    period=365.25,
+                    fourier_order=int(self.yearly_seasonality_order),
+                    prior_scale=self.yearly_seasonality_prior_scale,
                 )
             if isinstance(args['holiday'], pd.DataFrame):
                 m.holidays = args['holiday'][args['holiday']['series'] == series]
@@ -395,7 +399,9 @@ class FBProphet(ModelObject):
             [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
         )[0]
         if yearly_seasonality_prior_scale is not None:
-            yearly_seasonality_order = random.choices([2, 6, 12, 30], [0.1, 0.2, 0.5, 0.1])[0]
+            yearly_seasonality_order = random.choices(
+                [2, 6, 12, 30], [0.1, 0.2, 0.5, 0.1]
+            )[0]
 
         return {
             'holiday': holiday_choice,
@@ -411,7 +417,19 @@ class FBProphet(ModelObject):
             'yearly_seasonality_prior_scale': yearly_seasonality_prior_scale,
             "yearly_seasonality_order": yearly_seasonality_order,
             'weekly_seasonality_prior_scale': random.choices(
-                [None, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
+                [
+                    None,
+                    0.0001,
+                    0.001,
+                    0.01,
+                    0.1,
+                    1.0,
+                    10.0,
+                    15,
+                    20,
+                    25,
+                    40,
+                ],  # default 10
                 [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
             )[0],
             'holidays_prior_scale': random.choices(
@@ -420,7 +438,8 @@ class FBProphet(ModelObject):
             )[0],
             'seasonality_mode': random.choice(['additive', 'multiplicative']),
             'changepoint_range': random.choices(
-                [0.8, 0.85, 0.9, 0.95, 0.98, 30, 60], [0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2]
+                [0.8, 0.85, 0.9, 0.95, 0.98, 30, 60],
+                [0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2],
             )[0],
             'growth': random.choices(["linear", "flat"], [0.9, 0.1])[0],
             'n_changepoints': random.choices(
@@ -497,6 +516,7 @@ def get_changepoints(
         (changepoints > training_start_ds) & (changepoints < training_end_ds)
     ]
     return changepoints
+
 
 class NeuralProphet(ModelObject):
     """Facebook's Prophet got caught in a net.
