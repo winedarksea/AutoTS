@@ -697,7 +697,7 @@ class MotifSimulation(ModelObject):
             df = df.fillna(abs(df[df != 0]).min()).fillna(0.1)
             last_row = df.tail(1)
             df = (
-                df.pct_change(periods=1, fill_method='ffill')
+                df.ffill().pct_change(periods=1)
                 .tail(df.shape[0] - 1)
                 .fillna(0)
             )
