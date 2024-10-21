@@ -512,8 +512,9 @@ class AutoTS(object):
                         "mosaic-mae-0-horizontal",
                         "mosaic-mae-median-0-30",
                     ],
+                    ["simple", "mosaic-mae-median-profile"],
                 ],
-                [0.3, 0.1, 0.2, 0.2, 0.2, 0.1],
+                [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0]
         if ensemble_choice in [None, ['simple']]:
             horizontal_ensemble_validation = False
