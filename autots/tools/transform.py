@@ -5045,7 +5045,7 @@ class Constraint(EmptyTransformer):
         constraint_value: int = 1.0,
         constraint_direction: str = "upper",
         constraint_regularization: int = 1.0,
-        forecast_length: int = 30,
+        forecast_length: int = None,
         bounds_only: bool = False,
         fillna: str = None,
         **kwargs,
