@@ -4194,6 +4194,72 @@ class AutoTS(object):
 
             return fig
 
+    def plot_chosen_transformer(self, df_wide=None, series=None, color1='grey', color2='darkorange'):
+        """visualizes the best model transformer, fit_transform (not inverse) effects.
+        Won't show much for ensembles, only shows overall transformer if present.
+
+        Args:
+            df_wide (pd.DataFrame): optional, useful if preclean used
+            series (str): name of time series to plot
+            color1 (str): color of original
+            color2 (str): color of transformed
+        """
+        if not self.best_model_transformation_params:
+            return "no transformer directly used"
+
+        import matplotlib.pyplot as plt
+
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
+
+        if series is None:
+            if self.subset_flag:
+                col = self.initial_results.per_series_mae.columns[-1]
+            else:
+                col = df_wide.columns[-1]
+        else:
+            col = str(series)
+
+        self.chosen_transformer = GeneralTransformer(
+            **self.best_model_transformation_params,
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
+            verbose=self.verbose,
+            random_seed=self.random_seed,
+            forecast_length=self.forecast_length,
+        )
+        df2 = self.chosen_transformer.fit_transform(df_wide)
+
+        # Set up the figure and first axis
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+
+        with plt.rc_context({'font.family': 'serif'}):
+            # Plot df1[column_name] with enhancements on the first y-axis
+            ax1.plot(df_wide.index, df_wide[col], color=color1, label='original')
+            ax1.set_ylabel(col, color=color1, fontsize=12)
+            ax1.tick_params(axis='y', labelcolor=color1)
+
+            # Customize gridlines for readability
+            ax1.grid(True, which='major', axis='x', linestyle='--', alpha=0.5)
+
+            # Create a second y-axis sharing the x-axis
+            ax2 = ax1.twinx()
+            ax2.plot(df2.index, df2[col], color=color2, linestyle='--', label='transformed')
+            ax2.set_ylabel('transformed', color=color2, fontsize=12)
+            ax2.tick_params(axis='y', labelcolor=color2)
+
+            # Set x-axis label and title with enhanced styles
+            ax1.set_xlabel('Time', family="serif")
+            plt.title(f'Comparison of Chosen Transformer on {col}', fontsize=14)
+
+            # Improve legend appearance by placing it inside the plot with a background
+            ax1.legend(loc='upper left', frameon=True, facecolor='white', edgecolor='gray')
+            ax2.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='gray')
+
+            # Show the plot
+            plt.show()
+            return fig
+
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 

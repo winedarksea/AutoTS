@@ -2900,7 +2900,7 @@ class AlignLastValue(EmptyTransformer):
                 if self.method == "multiplicative":
                     if self.adjustment is None:
                         self.adjustment = (
-                            1 + ((self.center / df.iloc[0]) - 1) * self.strength
+                            1 + ((self.center / df.iloc[0].replace(0, 1)) - 1) * self.strength
                         )
                     return pd.concat(
                         [
@@ -2923,15 +2923,15 @@ class AlignLastValue(EmptyTransformer):
                 if self.method == "multiplicative":
                     if self.adjustment is None:
                         self.adjustment = (
-                            1 + ((self.center / df.iloc[0]) - 1) * self.strength
+                            1 + ((self.center / df.iloc[0].replace(0, 1)) - 1) * self.strength
                         )
-                        if self.threshold is not None:
-                            return df.where(
-                                self.adjustment.abs() <= self.threshold,
-                                df * self.adjustment,
-                            )
-                        else:
-                            return df * self.adjustment
+                    if self.threshold is not None:
+                        return df.where(
+                            self.adjustment.abs() <= self.threshold,
+                            df * self.adjustment,
+                        )
+                    else:
+                        return df * self.adjustment
                 else:
                     if self.adjustment is None:
                         self.adjustment = self.strength * (self.center - df.iloc[0])
