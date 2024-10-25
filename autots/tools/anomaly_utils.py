@@ -581,9 +581,9 @@ def anomaly_new_params(method='random'):
     elif method_choice == "zscore":
         method_params = {
             'distribution': random.choices(
-                ['norm', 'gamma', 'chi2', 'uniform'], [0.4, 0.2, 0.2, 0.2]
+                ['norm', 'gamma', 'chi2', 'uniform', "laplace", "cauchy"], [0.4, 0.2, 0.3, 0.2, 0.05, 0.05],
             )[0],
-            'alpha': random.choices([0.03, 0.05, 0.1], [0.1, 0.8, 0.1])[0],
+            'alpha': random.choices([0.02, 0.03, 0.05, 0.08, 0.1, 0.12, 0.14], [0.005, 0.1, 0.6, 0.1, 0.2, 0.05, 0.05])[0],
         }
     elif method_choice == "rolling_zscore":
         method_params = {
