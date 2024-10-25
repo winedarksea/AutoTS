@@ -5952,6 +5952,13 @@ filters = {
     "FFTFilter": 0.01,
     "BKBandpassFilter": 0.005,
     "FIRFilter": 0.01,
+    "AnomalyRemoval": 0.01,
+    "RollingMeanTransformer": 0.005,
+    "cffilter": 0.005,
+    "HPFilter": 0.005,
+    "RollingMean100thN": 0.005,
+    "DiffSmoother": 0.005,
+    "convolution_filter": 0.005,
 }
 scalers = {
     "MinMaxScaler": 0.05,
@@ -5962,16 +5969,22 @@ scalers = {
     "Discretize": 0.01,
     "QuantileTransformer": 0.1,
     "PowerTransformer": 0.02,
+    "PctChangeTransformer": 0.005,
+    "CenterLastValue": 0.005,
 }
 # intended to clean up external regressors
 decompositions = {
     "STLFilter": 0.05,
     "Detrend": 0.05,
-    "DifferencedTransformer": 0.05,
+    "DifferencedTransformer": 0.05,  # not really a decomposition
     "DatepartRegression": 0.05,
-    "ClipOutliers": 0.05,
     "LocalLinearTrend": 0.03,
     "FFTDecomposition": 0.02,
+    "SeasonalDifference": 0.01,
+    "CenterSplit": 0.001,
+    "HolidayTransformer": 0.01,
+    "IntermittentOccurrence": 0.005,
+    "PCA": 0.005,
 }
 postprocessing = {
     "Round": 0.1,

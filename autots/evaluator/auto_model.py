@@ -2101,7 +2101,7 @@ def TemplateWizard(
                 current_generation,
                 df_train,
             )
-            if ensemble_input == 2:
+            if ensemble_input in [1, 2]:
                 # INTERNAL VALIDATION ONLY, POST PROCESSING ONLY
                 # more efficent than rerunning the forecasts just to change transformers
                 for x in horizontal_post_processors:
