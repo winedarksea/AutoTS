@@ -566,8 +566,13 @@ class PredictionObject(object):
 
                     df = df_wide if df_wide is not None else self.forecast
                     profile = profile_time_series(df)
+                    # I'm not sure why I made it sometimes coming as ID and sometimes SERIES...
+                    if "ID" in profile.columns:
+                        key_col = "ID"
+                    else:
+                        key_col = "SERIES"
                     h_params = self.model_parameters['series'][
-                        profile[profile["SERIES"] == series]["PROFILE"].iloc[0]
+                        profile[profile[key_col] == series]["PROFILE"].iloc[0]
                     ]
                 else:
                     h_params = self.model_parameters['series'][series]
