@@ -512,7 +512,11 @@ class AutoTS(object):
                         "mosaic-mae-0-horizontal",
                         "mosaic-mae-median-0-30",
                     ],
-                    ["simple", "mosaic-mae-median-profile"],
+                    [  # works well on demand forecasting
+                        "simple", "mosaic-mae-median-profile",
+                        "mosaic-mae-median-profile-horizontal",
+                        "horizontal",
+                    ],
                 ],
                 [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0]
