@@ -1898,6 +1898,11 @@ horizontal_post_processors = [
             "1": {"window": 28},
         },
     },  # best on daily, competition, mae
+    {
+     "fillna": "zero",
+     "transformations": {"0": "AnomalyRemoval", "1": "EWMAFilter", "2": "AlignLastValue"},
+     "transformation_params": {"0": {"method": "med_diff", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "rolling_mean_24", "transform_dict": {"fillna": None, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 7}}}, "isolated_only": False, "on_inverse": False}, "1": {"span": 7}, "2": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": 1, "threshold_method": "max"}}
+     },  # best on simple ensemble on daily
 ]
 
 
