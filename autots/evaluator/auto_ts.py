@@ -3738,7 +3738,7 @@ class AutoTS(object):
 
         temp = self.best_model_per_series_mape().reset_index().head(max_series)
 
-        if self.best_model_ensemble == 2:
+        if self.best_model_ensemble == 2 and "profile" not in self.best_model_params["model_metric"]:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
             temp['Series'] = (
