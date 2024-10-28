@@ -414,6 +414,39 @@ def retrieve_regressor(
                 learning_rate=regression_model["model_params"]['learning_rate'],
                 random_state=random_seed,
             )
+        elif regression_model["model_params"]['estimator'] == 'ElasticNet':
+            from sklearn.linear_model import LinearRegression
+
+            linreg = ElasticNet()
+            regr = AdaBoostRegressor(
+                estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
+            )
+        elif regression_model["model_params"]['estimator'] == 'ExtraTree':
+            from sklearn.tree import ExtraTreeRegressor
+
+            linreg = ExtraTreeRegressor(max_depth=regression_model["model_params"].get("max_depth", 3))
+            regr = AdaBoostRegressor(
+                estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
+            )
+        elif regression_model["model_params"].get("max_depth", None) is not None:
+            from sklearn.tree import DecisionTreeRegressor
+
+            linreg = DecisionTreeRegressor(max_depth=regression_model["model_params"].get("max_depth"))
+            regr = AdaBoostRegressor(
+                estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
+            )
         else:
             regr = AdaBoostRegressor(random_state=random_seed, **model_param_dict)
         if multioutput:
@@ -907,17 +940,21 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'Adaboost',
                 "model_params": {
-                    "n_estimators": random.choices([50, 100, 500], [0.7, 0.2, 0.1])[0],
+                    "n_estimators": random.choices([50, 100, 200, 500], [0.7, 0.2, 0.15, 0.1])[0],
                     "loss": random.choices(
                         ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
                     )[0],
                     "estimator": random.choices(
-                        [None, 'LinReg', 'SVR'],
-                        [0.8, 0.1, 0.0],  # SVR slow and crash prone
+                        [None, 'LinReg', 'SVR', 'ElasticNet', 'ExtraTree'],
+                        [0.8, 0.1, 0.0, 0.1, 0.1],  # SVR slow and crash prone
                     )[0],
-                    "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
+                    "learning_rate": random.choices([1, 0.5, 0.25, 0.8, 100], [0.9, 0.1, 0.1, 0.1, 0.025])[0],
                 },
             }
+            if param_dict["model_params"]["estimator"] in [None, "ExtraTree"]:
+                param_dict["model_params"]["max_depth"] = random.choices(
+                    [2, 3, 4, 5], [0.2, 0.8, 0.1, 0.01],
+                )[0]
         elif model == 'ElasticNet':
             param_dict = {
                 "model": 'ElasticNet',
