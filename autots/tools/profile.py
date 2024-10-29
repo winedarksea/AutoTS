@@ -85,7 +85,7 @@ def profile_time_series(
     df,
     adi_threshold=1.3,
     cvar_threshold=0.5,
-    flat_threshold=0.9,
+    flat_threshold=0.92,
     new_product_threshold='auto',
     seasonal_threshold=0.5,
 ):

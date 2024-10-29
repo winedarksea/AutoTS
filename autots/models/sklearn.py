@@ -76,12 +76,21 @@ def rolling_x_regressor(
     X = [local_df.rename(columns=lambda x: "lastvalue_" + x)]
     if str(mean_rolling_periods).isdigit():
         temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median()
-        # temp.columns = ['rollingmean' for col in temp.columns]
         X.append(temp)
         if str(macd_periods).isdigit():
+            # says mean, but median because it's been that way for ages
             temp = local_df.rolling(int(macd_periods), min_periods=1).median() - temp
             temp.columns = ['macd' for col in temp.columns]
             X.append(temp)
+    if isinstance(mean_rolling_periods, list):
+        for mrp in mean_rolling_periods:
+            temp = local_df.rolling(int(mrp), min_periods=1).mean()
+            temp.columns = ['rollingmean_' + str(col) for col in temp.columns]
+            X.append(temp)
+            if str(macd_periods).isdigit():
+                temp = local_df.rolling(int(macd_periods), min_periods=1).mean() - temp
+                temp.columns = ['macd' for col in temp.columns]
+                X.append(temp)
     if str(std_rolling_periods).isdigit():
         X.append(local_df.rolling(std_rolling_periods, min_periods=1).std())
     if str(max_rolling_periods).isdigit():
@@ -1318,8 +1327,8 @@ def generate_regressor_params(
                             [0.1, 0.6, 0.3, 0.2],
                         )[0],
                         "num_leaves": random.choices(
-                            [31, 127, 70, 1000, 15],
-                            [0.6, 0.1, 0.3, 0.1, 0.2],
+                            [31, 127, 70, 1000, 15, 2048],
+                            [0.6, 0.1, 0.3, 0.1, 0.2, 0.1],
                         )[0],
                         "max_depth": random.choices(
                             [-1, 5, 10],
@@ -3466,7 +3475,7 @@ class MultivariateRegression(ModelObject):
             forecast_length = self.forecast_length
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        forecast = pd.DataFrame()
+        forecast = []
         upper_forecast = pd.DataFrame()
         lower_forecast = pd.DataFrame()
         if self.regressor_train is not None:
@@ -3533,7 +3542,7 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
-            forecast = pd.concat([forecast, pred_clean])
+            forecast.append(pred_clean)
             # a lot slower
             if self.probabilistic:
                 if self.multioutputgpr:
@@ -3571,6 +3580,7 @@ class MultivariateRegression(ModelObject):
                 ]
             )
 
+        forecast = pd.concat(forecast)
         forecast = forecast[self.column_names]
         if not self.probabilistic:
             upper_forecast, lower_forecast = Point_to_Probability(
