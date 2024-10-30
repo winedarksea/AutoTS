@@ -74,6 +74,15 @@ def rolling_x_regressor(
     inferred_freq = infer_frequency(local_df.index)
     local_df.columns = [str(x) for x in range(len(df.columns))]
     X = [local_df.rename(columns=lambda x: "lastvalue_" + x)]
+    # unlike the others, this pulls the entire window, not just one lag
+    if str(window).isdigit():
+        # we already have lag 1 using this
+        for curr_shift in range(1, window):
+            X.append(
+                local_df.shift(curr_shift).rename(
+                    columns=lambda x: "window_" + str(curr_shift) + "_" + x
+                )
+            )  # backfill should fill last values safely
     if str(mean_rolling_periods).isdigit():
         temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median()
         X.append(temp)
@@ -84,8 +93,14 @@ def rolling_x_regressor(
             X.append(temp)
     if isinstance(mean_rolling_periods, list):
         for mrp in mean_rolling_periods:
-            temp = local_df.rolling(int(mrp), min_periods=1).mean()
-            temp.columns = ['rollingmean_' + str(col) for col in temp.columns]
+            if isinstance(mrp, tuple):
+                lag = mrp[0]
+                mean_roll = mrp[1]
+                temp = local_df.shift(lag).rolling(int(mean_roll), min_periods=1).mean().bfill()
+                temp.columns = [f'rollingmean_{lag}_{mean_roll}_' + str(col) for col in temp.columns]
+            else:
+                temp = local_df.rolling(int(mrp), min_periods=1).mean()
+                temp.columns = ['rollingmean_' + str(col) for col in temp.columns]
             X.append(temp)
             if str(macd_periods).isdigit():
                 temp = local_df.rolling(int(macd_periods), min_periods=1).mean() - temp
@@ -165,16 +180,6 @@ def rolling_x_regressor(
         )
         temp.columns = ['rollautocorr' for col in temp.columns]
         X.append(temp)
-    # unlike the others, this pulls the entire window, not just one lag
-    if str(window).isdigit():
-        # we already have lag 1 using this
-        for curr_shift in range(1, window):
-            X.append(
-                local_df.shift(curr_shift).rename(
-                    columns=lambda x: "window_" + str(curr_shift) + "_" + x
-                )
-            )  # backfill should fill last values safely
-
     if add_date_part not in [None, "None", "none"]:
         ahead_index = local_df.index.shift(1, freq=inferred_freq)
         date_part_df = date_part(ahead_index, method=add_date_part)
@@ -3216,6 +3221,7 @@ class MultivariateRegression(ModelObject):
         cointegration: str = None,
         cointegration_lag: int = 1,
         series_hash: bool = False,
+        frac_slice: float = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -3261,6 +3267,7 @@ class MultivariateRegression(ModelObject):
         self.cointegration = cointegration
         self.cointegration_lag = cointegration_lag
         self.series_hash = series_hash
+        self.frac_slice = frac_slice
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -3321,11 +3328,6 @@ class MultivariateRegression(ModelObject):
                     raise ValueError(
                         "regression_type='User' but not future_regressor supplied."
                     )
-                # broken by slice
-                # elif future_regressor.shape[0] != df.shape[0]:
-                #     raise ValueError(
-                #         "future_regressor shape does not match training data shape."
-                #     )
                 else:
                     self.regressor_train = future_regressor.reindex(df.index)
                 if regressor_per_series is not None:
@@ -3333,7 +3335,12 @@ class MultivariateRegression(ModelObject):
                 if static_regressor is not None:
                     self.static_regressor = static_regressor
             # define X and Y
-            self.Y = df[1:].to_numpy().ravel(order="F")
+            if self.frac_slice is not None:
+                slice_size = int(df.shape[0] * self.frac_slice)
+                slice_index = df.index[slice_size - 1: -1]
+                self.Y = df.iloc[slice_size:].to_numpy().ravel(order="F")
+            else:
+                self.Y = df[1:].to_numpy().ravel(order="F")
             # drop look ahead data
             base = df[:-1]
             if self.regression_type is not None:
@@ -3415,10 +3422,13 @@ class MultivariateRegression(ModelObject):
                 multioutput=multioutput,
             )
             self.multioutputgpr = self.regression_model['model'] == "MultioutputGPR"
+            if self.frac_slice is not None:
+                self.X = self.X[self.X.index.isin(slice_index)]
             if self.scale_full_X:
                 self.X = self.scale_data(self.X)
 
             # Remember the X datetime is for the previous day to the Y datetime here
+            assert self.X.index[-1] == df.index[-2]
             self.model.fit(self.X.to_numpy(), self.Y)
 
             if self.probabilistic and not self.multioutputgpr:
@@ -3628,7 +3638,8 @@ class MultivariateRegression(ModelObject):
             window_choice = random.choices([None, 3, 7, 10], [0.2, 0.3, 0.1, 0.05])[0]
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
-            [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
+            [0.3, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05]
         )[0]
         if mean_rolling_periods_choice is not None:
             macd_periods_choice = seasonal_int(small=True)
@@ -3676,8 +3687,9 @@ class MultivariateRegression(ModelObject):
                 "expanded_binarized",
                 "common_fourier_rw",
                 ["dayofweek", 365.25],
+                "simple_binarized2_poly",
             ],
-            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05],
+            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
@@ -3719,6 +3731,7 @@ class MultivariateRegression(ModelObject):
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
+            "frac_slice": random.choices([None, 0.8, 0.5, 0.2], [0.6, 0.1, 0.2, 0.1])[0],
         }
         return parameter_dict
 
@@ -3749,6 +3762,7 @@ class MultivariateRegression(ModelObject):
             "cointegration": self.cointegration,
             "cointegration_lag": self.cointegration_lag,
             "series_hash": self.series_hash,
+            "frac_slice": self.frac_slice,
         }
         return parameter_dict
 

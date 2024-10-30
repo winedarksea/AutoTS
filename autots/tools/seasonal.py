@@ -88,6 +88,8 @@ def date_part(
 ):
     """Create date part columns from pd.DatetimeIndex.
 
+    If you date_part isn't recognized, you will see a ['year', 'month' 'day', 'weekday'] output
+
     Args:
         DTindex (pd.DatetimeIndex): datetime index to provide dates
         method (str): expanded, recurring, or simple
@@ -178,6 +180,21 @@ def date_part(
         )
         if method == "lunar_phase":
             date_part_df['phase'] = moon_phase(DTindex)
+    elif "simple_binarized2" in method:
+        date_part_df = pd.DataFrame(
+            {
+                'isoweek': DTindex.isocalendar().week,
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
+                'day': DTindex.day,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'epoch': DTindex.to_julian_date(),
+            }
+        )
+        date_part_df = pd.get_dummies(
+            date_part_df, columns=['isoweek', 'weekday'], dtype=float
+        )
     elif "simple_binarized" in method:
         date_part_df = pd.DataFrame(
             {
@@ -479,6 +496,8 @@ datepart_components = [
     "quarterlydayofweek",
     "hourlydayofweek",
     "constant",
+    "week",
+    "year",
 ]
 
 
@@ -577,8 +596,10 @@ def create_datepart_components(DTindex, seasonality):
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
     elif seasonality == "days_from_epoch":
         return (DTindex - pd.Timestamp('2000-01-01')).days.astype('int32')
-    elif seasonality == "isoweek":
+    elif seasonality in ["isoweek", "week"]:
         return DTindex.isocalendar().week
+    elif seasonality in ["year"]:
+        return DTindex.year.rename("year")
     elif seasonality == "isoweek_binary":
         return pd.get_dummies(
             pd.Categorical(

@@ -1240,7 +1240,10 @@ def unpack_ensemble_models(
     # alternatively the below could read from 'Model' == 'Ensemble'
     models_to_iterate = template[template['Ensemble'] != 0]['ModelParameters'].copy()
     for index, value in models_to_iterate.items():
-        model_dict = json.loads(value)['models']
+        try:
+            model_dict = json.loads(value)['models']
+        except Exception as e:
+            raise ValueError(f"`{value}` is bad model template") from e
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
         # it might be wise to just drop the ID column, but keeping for now
         model_df = model_df.rename_axis('ID').reset_index(drop=False)
