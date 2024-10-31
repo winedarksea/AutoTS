@@ -34,6 +34,8 @@
 * added BasicLinearModel model
 * datepart_method, scale, and fourier encodig to WindowRegression
 * trimmed_mean and more date part options to SeasonalityMotif
+* some additional options to MultivariateRegression
+* added ThetaTransformer
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

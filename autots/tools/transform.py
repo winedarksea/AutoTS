@@ -5234,6 +5234,142 @@ class FIRFilter(EmptyTransformer):
         return params
 
 
+class ThetaTransformer:
+    def __init__(self, theta_values=[0, 2], regularization=1e-3, verbose=0):
+        """
+        Like the Theta model, but without the ETS.
+
+        Args:
+            theta_values (list): List of theta coefficients to use in transformation.
+        """
+        self.theta_values = theta_values
+        self.regularization = regularization
+        self.verbose = verbose
+        self.beta = None
+        self.columns = None
+        self.index = None
+        self.t0 = None
+        self.t_scale = None
+
+    def _compute_time_variables(self, index):
+        """
+        Compute the time variable t based on the index.
+
+        Parameters:
+        - index: pandas DatetimeIndex for which to compute t.
+
+        Returns:
+        - t: numpy array of time variables scaled between 0 and 1.
+        """
+        t = (index - self.t0).total_seconds().values.reshape(-1, 1)
+        # Handle the case where total_seconds is not available
+        if not hasattr(t, 'reshape'):
+            t = ((index.astype('int64') - self.t0.value) / 1e9).reshape(-1, 1)
+        # Scale t using the original scaling factor
+        t = t / self.t_scale
+        return t
+
+    def fit(self, df):
+        """Fit the transformer to the data.
+
+        Parameters:
+        - df: pandas DataFrame with DatetimeIndex and columns representing time series.
+        """
+        self.columns = df.columns
+        self.index = df.index
+        n = len(df)
+        self.t0 = df.index[0]
+        self.t_scale = (df.index[-1] - self.t0).total_seconds()
+        if self.t_scale == 0:
+            self.t_scale = 1  # Avoid division by zero for constant time index
+
+        # Compute time variable t
+        t = self._compute_time_variables(df.index)
+        X = np.hstack((np.ones((n, 1)), t))  # n x 2
+        self.X = X
+
+        # Compute beta coefficients for the LRL
+        y = df.values  # n x m
+        norm_fro = np.linalg.norm(X.T @ X, ord='fro')
+        if norm_fro > 1e8:
+            if self.verbose > 1:
+                print("Warning: High condition number detected, applying regularization.")
+            XtX = X.T @ X + self.regularization * np.eye(X.shape[1])
+        else:
+            XtX = X.T @ X
+        XtX_inv = np.linalg.inv(XtX)  # 2 x 2
+        XtX_inv_Xt = XtX_inv @ X.T  # 2 x n
+        self.beta = XtX_inv_Xt @ y  # (2 x n) @ (n x m) = 2 x m
+
+        return self
+
+    def transform(self, df):
+        """Transform the data into theta lines.
+
+        Parameters:
+        - df: pandas DataFrame with same index and columns as fitted.
+        """
+        y = df.values  # n x m
+        n = len(df)
+
+        # Compute time variable t for the given index
+        t = self._compute_time_variables(df.index)
+        X = np.hstack((np.ones((n, 1)), t))  # n x 2
+
+        # Compute LRL_t (linear regression line) for the given index
+        LRL_t = X @ self.beta  # (n x 2) @ (2 x m) = n x m
+
+        # Compute Theta lines for each theta in theta_values
+        theta_lines = []
+        transformed_columns = []
+
+        for theta in self.theta_values:
+            theta_line = theta * y + (1 - theta) * LRL_t  # n x m
+            theta_lines.append(theta_line)
+            # Create column names for this theta
+            columns_theta = [f"{col}_theta{theta}" for col in self.columns]
+            transformed_columns.extend(columns_theta)
+
+        # Stack all theta lines horizontally
+        transformed_data = np.hstack(theta_lines)  # n x (m * len(theta_values))
+
+        transformed_df = pd.DataFrame(transformed_data, index=df.index, columns=transformed_columns)
+        return transformed_df
+
+    def fit_transform(self, df):
+        self.fit(df)
+        return self.transform(df)
+
+    def inverse_transform(self, transformed_df):
+        """Reconstruct the original data from theta lines.
+
+        Parameters:
+        - transformed_df: pandas DataFrame with theta lines.
+        """
+        m = len(self.columns)
+        n_theta = len(self.theta_values)
+
+        # Extract theta lines from the transformed data
+        theta_lines = []
+        for i in range(n_theta):
+            start_col = i * m
+            end_col = (i + 1) * m
+            theta_line = transformed_df.iloc[:, start_col:end_col].values  # n x m
+            theta_lines.append(theta_line)
+
+        # Reconstruct the original data by averaging the theta lines
+        y_reconstructed = np.mean(theta_lines, axis=0)  # n x m
+
+        reconstructed_df = pd.DataFrame(y_reconstructed, index=transformed_df.index, columns=self.columns)
+        return reconstructed_df
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        return {
+            "theta_values": random.choice([[0, 2], [0.5, 1.5], [0.2, 1.8], [0.4, 1.6], [0.6, 1.4], [0.8, 1.2], [0, 1, 2], [0,0.5,1.5,2]]),
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -5319,6 +5455,7 @@ have_params = {
     "DifferencedTransformer": DifferencedTransformer,
     "Constraint": Constraint,
     "FIRFilter": FIRFilter,
+    "ThetaTransformer": ThetaTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5425,6 +5562,7 @@ class GeneralTransformer(object):
             "Constraint": apply constraints (caps) on values
             "FIRFilter": apply a FIR filter (firwin)
             "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
+            "ThetaTransformer": decomposes into theta lines, then recombines
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -5902,6 +6040,7 @@ transformer_dict = {
     "BKBandpassFilter": 0.01,
     "Constraint": 0.01,  # 52
     "FIRFilter": 0.01,
+    "ThetaTransformer": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -5985,6 +6124,7 @@ decompositions = {
     "HolidayTransformer": 0.01,
     "IntermittentOccurrence": 0.005,
     "PCA": 0.005,
+    "ThetaTransformer": 0.005,
 }
 postprocessing = {
     "Round": 0.1,
@@ -6048,6 +6188,7 @@ def transformer_list_to_dict(transformer_list):
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         del transformer_list["ReplaceConstant"]
+        del transformer_list["ThetaTransformer"]  # just haven't tested it enough yet
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
