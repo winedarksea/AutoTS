@@ -14,6 +14,8 @@ import pandas as pd
 try:
     from sklearn import config_context
     from sklearn.multioutput import MultiOutputRegressor, RegressorChain
+    from sklearn.linear_model import ElasticNet, MultiTaskElasticNet, LinearRegression, Ridge
+    from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, ExtraTreeRegressor
 except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
@@ -35,6 +37,19 @@ except Exception:
             return 1.95996398454
 
         # norm.ppf((1 + 0.95) / 2)
+
+# for numba engine more is required, optional
+try:
+    import numba  # noqa
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+
+# Check if the pandas version is 1.3 or greater and if numba is installed
+if pd.__version__ >= '1.3' and NUMBA_AVAILABLE:
+    engine = 'numba'
+else:
+    engine = None
 
 
 def rolling_x_regressor(
@@ -84,26 +99,26 @@ def rolling_x_regressor(
                 )
             )  # backfill should fill last values safely
     if str(mean_rolling_periods).isdigit():
-        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median()
+        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median(engine=engine)
         X.append(temp)
         if str(macd_periods).isdigit():
             # says mean, but median because it's been that way for ages
-            temp = local_df.rolling(int(macd_periods), min_periods=1).median() - temp
+            temp = local_df.rolling(int(macd_periods), min_periods=1).median(engine=engine) - temp
             temp.columns = ['macd' for col in temp.columns]
             X.append(temp)
     if isinstance(mean_rolling_periods, list):
         for mrp in mean_rolling_periods:
-            if isinstance(mrp, tuple):
+            if isinstance(mrp, (tuple, list)):
                 lag = mrp[0]
                 mean_roll = mrp[1]
-                temp = local_df.shift(lag).rolling(int(mean_roll), min_periods=1).mean().bfill()
+                temp = local_df.shift(lag).rolling(int(mean_roll), min_periods=1).mean(engine=engine).bfill()
                 temp.columns = [f'rollingmean_{lag}_{mean_roll}_' + str(col) for col in temp.columns]
             else:
-                temp = local_df.rolling(int(mrp), min_periods=1).mean()
+                temp = local_df.rolling(int(mrp), min_periods=1).mean(engine=engine)
                 temp.columns = ['rollingmean_' + str(col) for col in temp.columns]
             X.append(temp)
             if str(macd_periods).isdigit():
-                temp = local_df.rolling(int(macd_periods), min_periods=1).mean() - temp
+                temp = local_df.rolling(int(macd_periods), min_periods=1).mean(engine=engine) - temp
                 temp.columns = ['macd' for col in temp.columns]
                 X.append(temp)
     if str(std_rolling_periods).isdigit():
@@ -305,19 +320,13 @@ def retrieve_regressor(
     model_param_dict = regression_model.get("model_params", {})
     if model_class == 'ElasticNet':
         if multioutput:
-            from sklearn.linear_model import MultiTaskElasticNet
-
             regr = MultiTaskElasticNet(
                 alpha=1.0, random_state=random_seed, **model_param_dict
             )
         else:
-            from sklearn.linear_model import ElasticNet
-
             regr = ElasticNet(alpha=1.0, random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'DecisionTree':
-        from sklearn.tree import DecisionTreeRegressor
-
         regr = DecisionTreeRegressor(random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'MLP':
@@ -418,8 +427,6 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"]['estimator'] == 'LinReg':
-            from sklearn.linear_model import LinearRegression
-
             linreg = LinearRegression()
             regr = AdaBoostRegressor(
                 estimator=linreg,
@@ -429,8 +436,6 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"]['estimator'] == 'ElasticNet':
-            from sklearn.linear_model import LinearRegression
-
             linreg = ElasticNet()
             regr = AdaBoostRegressor(
                 estimator=linreg,
@@ -440,8 +445,6 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"]['estimator'] == 'ExtraTree':
-            from sklearn.tree import ExtraTreeRegressor
-
             linreg = ExtraTreeRegressor(max_depth=regression_model["model_params"].get("max_depth", 3))
             regr = AdaBoostRegressor(
                 estimator=linreg,
@@ -451,8 +454,6 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"].get("max_depth", None) is not None:
-            from sklearn.tree import DecisionTreeRegressor
-
             linreg = DecisionTreeRegressor(max_depth=regression_model["model_params"].get("max_depth"))
             regr = AdaBoostRegressor(
                 estimator=linreg,
@@ -494,12 +495,8 @@ def retrieve_regressor(
             regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
     elif model_class == 'Ridge':
-        from sklearn.linear_model import Ridge
-
         return Ridge(random_state=random_seed, **model_param_dict)
     elif model_class == "FastRidge":
-        from sklearn.linear_model import Ridge
-
         return Ridge(alpha=1e-9, solver="cholesky", fit_intercept=False, copy_X=False)
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
@@ -536,8 +533,6 @@ def retrieve_regressor(
 
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
     elif model_class == "LinearRegression":
-        from sklearn.linear_model import LinearRegression
-
         return LinearRegression(**model_param_dict)
     elif model_class == "GaussianProcessRegressor":
         from sklearn.gaussian_process import GaussianProcessRegressor
@@ -611,8 +606,6 @@ def retrieve_classifier(
             n_jobs=n_jobs, random_state=random_seed, **model_param_dict
         )
     elif model_class == 'DecisionTree':
-        from sklearn.tree import DecisionTreeClassifier
-
         return DecisionTreeClassifier(random_state=random_seed, **model_param_dict)
     elif model_class in ['xgboost', 'XGBClassifier']:
         import xgboost as xgb

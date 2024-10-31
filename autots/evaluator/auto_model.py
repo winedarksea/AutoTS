@@ -64,6 +64,7 @@ from autots.models.statsmodels import (
 )
 from autots.models.arch import ARCH
 from autots.models.matrix_var import RRVAR, MAR, TMF, LATC, DMD
+from autots.models.sklearn import RollingRegression, WindowRegression, MultivariateRegression, DatepartRegression, UnivariateRegression, ComponentAnalysis, PreprocessingRegression
 
 
 def create_model_id(
@@ -191,8 +192,6 @@ def ModelMonster(
         return model
 
     elif model == 'RollingRegression':
-        from autots.models.sklearn import RollingRegression
-
         model = RollingRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -204,8 +203,6 @@ def ModelMonster(
         )
         return model
     elif model == 'UnivariateRegression':
-        from autots.models.sklearn import UnivariateRegression
-
         model = UnivariateRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -219,8 +216,6 @@ def ModelMonster(
         return model
 
     elif model == 'MultivariateRegression':
-        from autots.models.sklearn import MultivariateRegression
-
         model = MultivariateRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -316,8 +311,6 @@ def ModelMonster(
         )
         return model
     elif model == 'WindowRegression':
-        from autots.models.sklearn import WindowRegression
-
         model = WindowRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -382,8 +375,6 @@ def ModelMonster(
             )
         return model
     elif model == 'ComponentAnalysis':
-        from autots.models.sklearn import ComponentAnalysis
-
         if parameters == {}:
             model = ComponentAnalysis(
                 frequency=frequency,
@@ -408,8 +399,6 @@ def ModelMonster(
             )
         return model
     elif model == 'DatepartRegression':
-        from autots.models.sklearn import DatepartRegression
-
         model = DatepartRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -624,8 +613,6 @@ def ModelMonster(
             **parameters,
         )
     elif model == "PreprocessingRegression":
-        from autots.models.sklearn import PreprocessingRegression
-
         return PreprocessingRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,

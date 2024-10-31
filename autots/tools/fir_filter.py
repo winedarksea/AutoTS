@@ -32,8 +32,8 @@ def apply_fir_filter_to_timeseries(
     """
 
     # Ensure the data has the correct shape: (observations, series)
-    if data.shape[0] < data.shape[1]:
-        data = data.T  # Transpose if necessary to match (observations, series)
+    # if data.shape[0] < data.shape[1]:
+    #     data = data.T  # Transpose if necessary to match (observations, series)
 
     # Normalize the cutoff frequency with respect to the Nyquist frequency
     nyquist_frequency = 0.5 * sampling_frequency
@@ -59,8 +59,8 @@ def apply_fir_filter_time_domain(
     This function has padding issues currently.
     """
     # Ensure the data has the correct shape: (observations, series)
-    if data.shape[0] < data.shape[1]:
-        data = data.T  # Transpose if necessary to match (observations, series)
+    # if data.shape[0] < data.shape[1]:
+    #     data = data.T  # Transpose if necessary to match (observations, series)
 
     # Normalize the cutoff frequency with respect to the Nyquist frequency
     nyquist_frequency = 0.5 * sampling_frequency
@@ -97,8 +97,8 @@ def fft_fir_filter_to_timeseries(
     - filtered_data: The filtered version of the input data
     """
     # Ensure the data has the correct shape: (observations, series)
-    if data.shape[0] < data.shape[1]:
-        data = data.T  # Transpose if necessary to match (observations, series)
+    # if data.shape[0] < data.shape[1]:
+    #     data = data.T  # Transpose if necessary to match (observations, series)
 
     # Normalize the cutoff frequency with respect to the Nyquist frequency
     nyquist_frequency = 0.5 * sampling_frequency
