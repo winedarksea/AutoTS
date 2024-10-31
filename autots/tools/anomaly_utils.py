@@ -517,11 +517,11 @@ def anomaly_new_params(method='random'):
                 "IQR",
                 "nonparametric",
                 "IsolationForest",
-                "OneClassSVM",
+                # "OneClassSVM",  # seems too slow at times
                 "GaussianMixture",
                 # "GaussianMixtureBase",
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.05, 0.05],
+            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.05],
         )[0]
 
     if method_choice == "IsolationForest":
