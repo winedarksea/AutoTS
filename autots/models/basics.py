@@ -3369,6 +3369,7 @@ class BasicLinearModel(ModelObject):
         changepoint_spacing: int = None,
         changepoint_distance_end: int = None,
         lambda_: float = 0.01,
+        trend_phi: float = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -3385,6 +3386,7 @@ class BasicLinearModel(ModelObject):
         self.changepoint_spacing = changepoint_spacing
         self.changepoint_distance_end = changepoint_distance_end
         self.lambda_ = lambda_
+        self.trend_phi = trend_phi
 
         self.regressor_columns = []
 
@@ -3422,7 +3424,7 @@ class BasicLinearModel(ModelObject):
                 )
 
     def create_x(self, df, future_regressor=None):
-        x_s = date_part(df.index, method=self.datepart_method)
+        x_s = date_part(df.index, method=self.datepart_method, set_index=True)
         x_t = create_changepoint_features(
             df.index,
             changepoint_spacing=self.changepoint_spacing,
@@ -3515,7 +3517,7 @@ class BasicLinearModel(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        x_s = date_part(test_index, method=self.datepart_method)
+        x_s = date_part(test_index, method=self.datepart_method, set_index=True)
         x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
@@ -3525,9 +3527,30 @@ class BasicLinearModel(ModelObject):
         X_values = X.to_numpy().astype(float)
         self.X = X
 
-        forecast = pd.DataFrame(
-            X_values @ self.beta, columns=self.column_names, index=test_index
-        )
+        if self.trend_phi is None or self.trend_phi == 1 or len(test_index) < 2:
+            forecast = pd.DataFrame(
+                X_values @ self.beta, columns=self.column_names, index=test_index
+            )
+        else:
+            components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
+            trend_x_start = x_s.shape[1]
+            trend_x_end = x_s.shape[1] + x_t.shape[1]
+            trend_components = components[:, trend_x_start:trend_x_end, :]
+
+
+            req_len = len(test_index) - 1
+            phi_series = pd.Series(
+                [self.trend_phi] * req_len,
+                index=test_index[1:],
+            ).pow(range(req_len))
+            
+            diff_array = np.diff(trend_components, axis=0)
+            diff_scaled_array = diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+            first_row = trend_components[0:1, :]
+            combined_array = np.vstack([first_row, diff_scaled_array])
+            components[:, trend_x_start:trend_x_end, :] = np.cumsum(combined_array, axis=0)
+            
+            forecast = pd.DataFrame(components.sum(axis=1), columns=self.column_names, index=test_index)
 
         if just_point_forecast:
             return forecast
@@ -3571,6 +3594,16 @@ class BasicLinearModel(ModelObject):
             )
 
             return prediction
+
+    def process_components(self):
+        res = []
+        components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
+        for x in range(components.shape[2]):
+            df = pd.DataFrame(components[:, :, x], index=self.X.index, columns=self.X.columns)
+            new_level = self.column_names[x]
+            df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
+            res.append(df)
+        return pd.concat(res, axis=1)
 
     def return_components(self, df):
         # Needs some work
@@ -3667,6 +3700,7 @@ class BasicLinearModel(ModelObject):
                 [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
+            "trend_phi": random.choices([None, 0.995, 0.98, 0.8], [0.9, 0.05, 0.1, 0.01])[0],
         }
 
     def get_params(self):
@@ -3677,4 +3711,5 @@ class BasicLinearModel(ModelObject):
             "changepoint_distance_end": self.changepoint_distance_end,
             "regression_type": self.regression_type,
             "lambda_": self.lambda_,
+            "trend_phi": self.trend_phi,
         }
