@@ -3959,11 +3959,6 @@ class LevelShiftMagic(EmptyTransformer):
         )
         group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
         max_mask = diff_abs == maxes
-        if self.old_way:
-            self.used_groups = group_ids[max_mask].mean()
-            curr_diff = diff_abs.where(((group_ids != self.used_groups) & diff_mask), np.nan)
-            curr_diff_sum = np.nansum(curr_diff.to_numpy())
-            count = 0
         if not self.old_way:
             # new way is from  gpt o1-preview which thought that the old way was leading to
             # errors when doing the mean of the group ids
@@ -3998,7 +3993,11 @@ class LevelShiftMagic(EmptyTransformer):
                 curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
                 curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
                 count += 1
-        if self.old_way:
+        else:
+            self.used_groups = group_ids[max_mask].mean()
+            curr_diff = diff_abs.where(((group_ids != self.used_groups) & diff_mask), np.nan)
+            curr_diff_sum = np.nansum(curr_diff.to_numpy())
+            count = 0
             while curr_diff_sum != 0 and count < self.max_level_shifts:
                 curr_maxes = curr_diff.max()
                 max_mask = max_mask | (curr_diff == curr_maxes)
@@ -5861,14 +5860,7 @@ class GeneralTransformer(object):
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
         # update index reference if sliced
-        if transformation in [
-            "Slice",
-            "FastICA",
-            "PCA",
-            "CenterSplit",
-            "RollingMeanTransformer",
-            "LocalLinearTrend",
-        ]:
+        if transformation in expanding_transformers:
             self.df_index = df.index
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -5908,14 +5900,7 @@ class GeneralTransformer(object):
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
         # update index reference if sliced
-        if transformation in [
-            "Slice",
-            "FastICA",
-            "PCA",
-            "CenterSplit",
-            "RollingMeanTransformer",
-            "LocalLinearTrend",
-        ]:
+        if transformation in expanding_transformers:
             self.df_index = df.index
             self.df_colnames = df.columns
         return df
@@ -5959,13 +5944,7 @@ class GeneralTransformer(object):
             df = self.transformers[i].inverse_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-        elif self.c_trans_n in [
-            "FastICA",
-            "PCA",
-            "CenterSplit",
-            "RollingMeanTransformer",
-            "LocalLinearTrend",
-        ]:
+        elif self.c_trans_n in expanding_transformers:
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)
         return df
@@ -6174,6 +6153,17 @@ postprocessing = {
     "Constraint": 0.1,
     "FIRFilter": 0.1,
 }
+# transformers that may change the number of columns/index
+expanding_transformers = [
+    "Slice",
+    "FastICA",
+    "PCA",
+    "CenterSplit",
+    "RollingMeanTransformer",
+    "LocalLinearTrend",
+    "ThetaTransformer",
+]  # note there is also prob_trans below for preventing reuse of these in one transformer
+
 transformer_class = {}
 
 # probability dictionary of FillNA methods
@@ -6345,7 +6335,7 @@ def RandomTransform(
 
     # remove duplication of some which scale memory exponentially
     # only allow one of these
-    prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend"}
+    prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend", "ThetaTransformer"}
     if any(x in prob_trans for x in trans):
         # for loop, only way I saw to do this right now
         seen = False
