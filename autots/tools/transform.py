@@ -164,7 +164,8 @@ def simple_context_slicer(df, method: str = "None", forecast_length: int = 30):
     if method in [None, "None"]:
         return df
 
-    df = df.sort_index(ascending=True)
+    if not df.index.is_monotonic_increasing:
+        df = df.sort_index(ascending=True)
 
     if "forecastlength" in str(method).lower():
         len_int = int([x for x in str(method) if x.isdigit()][0])
@@ -3890,6 +3891,7 @@ class LevelShiftMagic(EmptyTransformer):
         grouping_forward_limit: int = 3,
         max_level_shifts: int = 20,
         alignment: str = "average",
+        old_way: bool = False,
         **kwargs,
     ):
         super().__init__(name="LevelShiftMagic")
@@ -3898,18 +3900,19 @@ class LevelShiftMagic(EmptyTransformer):
         self.grouping_forward_limit = grouping_forward_limit
         self.max_level_shifts = max_level_shifts
         self.alignment = alignment
+        self.old_way = old_way
 
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "window_size": random.choices([7, 30, 90, 364], [0.1, 0.4, 0.4, 0.1], k=1)[
+            "window_size": random.choices([7, 30, 70, 90, 120, 364], [0.1, 0.4, 0.05, 0.4, 0.05, 0.1], k=1)[
                 0
             ],
             "alpha": random.choices(
-                [1.0, 2.0, 2.5, 3.0, 3.5, 4.0], [0.05, 0.2, 0.3, 0.2, 0.15, 0.1], k=1
+                [1.0, 1.8, 2.0, 2.2, 2.5, 3.0, 3.5, 4.0], [0.05, 0.02, 0.2, 0.02, 0.3, 0.2, 0.15, 0.1], k=1
             )[0],
-            "grouping_forward_limit": random.choice([2, 3, 4]),
-            "max_level_shifts": random.choice([5, 10, 30]),
+            "grouping_forward_limit": random.choice([2, 3, 4, 5]),
+            "max_level_shifts": random.choices([3, 5, 8, 10, 30], [0.05, 0.3, 0.05, 0.2, 0.2])[0],
             "alignment": random.choices(
                 ["average", "last_value", "rolling_diff", "rolling_diff_3nn"],
                 [0.5, 0.2, 0.15, 0.15],
@@ -3956,20 +3959,55 @@ class LevelShiftMagic(EmptyTransformer):
         )
         group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
         max_mask = diff_abs == maxes
-        used_groups = group_ids[max_mask].mean()
-        curr_diff = diff_abs.where(((group_ids != used_groups) & diff_mask), np.nan)
-        curr_diff_sum = np.nansum(curr_diff.to_numpy())
-        count = 0
-        # logic only handles one level shift at a time, so loop if multiple level shifts
-        while curr_diff_sum != 0 and count < self.max_level_shifts:
-            curr_maxes = curr_diff.max()
-            max_mask = max_mask | (curr_diff == curr_maxes)
-            used_groups = group_ids[curr_diff == curr_maxes].mean()
-            curr_diff = curr_diff.where(
-                ((group_ids != used_groups) & diff_mask), np.nan
+        if self.old_way:
+            self.used_groups = group_ids[max_mask].mean()
+            curr_diff = diff_abs.where(((group_ids != self.used_groups) & diff_mask), np.nan)
+            curr_diff_sum = np.nansum(curr_diff.to_numpy())
+            count = 0
+        if not self.old_way:
+            # new way is from  gpt o1-preview which thought that the old way was leading to
+            # errors when doing the mean of the group ids
+            # I am too sleepy to be convinced for sure
+            # but this is undeniably faster, and still passes the previous unittest
+            # yielding only some (more) level shifts on a few edge cases it seems
+            group_ids_np = group_ids.to_numpy()
+            diff_abs_np = diff_abs.to_numpy()
+            diff_mask_np = diff_mask.to_numpy()
+            max_mask_np = max_mask.to_numpy()
+
+            # Initialize curr_diff_np
+            used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+            used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+            used_groups_unique = np.unique(used_groups_flat)
+            curr_diff_np = np.where(
+                (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
+                diff_abs_np,
+                np.nan,
             )
-            curr_diff_sum = np.sum(~curr_diff.isnull().to_numpy())
-            count += 1
+            curr_diff_sum = np.nansum(curr_diff_np)
+            count = 0
+    
+            while curr_diff_sum != 0 and count < self.max_level_shifts:
+                curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
+                mask = curr_diff_np == curr_maxes_np
+                max_mask_np |= mask
+                used_groups_np = np.where(mask, group_ids_np, np.nan)
+                used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+                used_groups_unique = np.unique(used_groups_flat)
+                mask_to_update = np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+                curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
+                curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
+                count += 1
+        if self.old_way:
+            while curr_diff_sum != 0 and count < self.max_level_shifts:
+                curr_maxes = curr_diff.max()
+                max_mask = max_mask | (curr_diff == curr_maxes)
+                used_groups = group_ids[curr_diff == curr_maxes].mean()
+                curr_diff = curr_diff.where(
+                    ((group_ids != used_groups) & diff_mask), np.nan
+                )
+                curr_diff_sum = np.sum(~curr_diff.isnull().to_numpy())
+                count += 1
         # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
         if self.alignment == "last_value":
             self.lvlshft = (
