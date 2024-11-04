@@ -4264,6 +4264,60 @@ class AutoTS(object):
             plt.show()
             return fig
 
+    def plot_mosaic(self, max_series: int = 60):
+        """Show the mosaic in a mosaic ensemble, if used."""
+        if self.best_model_ensemble != 2 or "mosaic" not in self.best_model_params["model_metric"]:
+            return None
+
+        import matplotlib.pyplot as plt
+        # from matplotlib.colors import ListedColormap
+
+        df = self.mosaic_to_df().iloc[:, 0:max_series]
+        unique_values = pd.unique(df.to_numpy().ravel())
+
+        # Generate a larger custom qualitative palette using 'tab20c' and 'hsv' for better differentiation
+        colors = plt.cm.tab20c(np.linspace(0, 1, len(unique_values)))  # Generate colors from tab20c
+        if len(unique_values) > 20:  # If more than 20, extend using 'hsv' for variety
+            additional_colors = plt.cm.hsv(np.linspace(0, 1, len(unique_values) - 20))
+            colors = np.vstack((colors, additional_colors))
+
+        # Update value-to-color mapping with new colors
+        value_to_color = {value: colors[i] for i, value in enumerate(unique_values)}
+
+        # Plot the mosaic with the new color mapping
+        fig, ax = plt.subplots(figsize=(12, 12))
+        for i in range(df.shape[0]):
+            for j in range(df.shape[1]):
+                color = value_to_color[df.iloc[i, j]]
+                ax.add_patch(plt.Rectangle((j, df.shape[0] - i - 1), 1, 1, color=color))
+
+        # Formatting the plot
+        ax.set_xlim(0, df.shape[1])
+        ax.set_ylim(0, df.shape[0])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal')
+
+        plt.title("Mosaic Representation of Mosaic Ensemble")
+        
+        # Create a better multi-column legend plot with improved formatting
+        fig_legend, ax_legend = plt.subplots(figsize=(15, 15))
+        columns = 4  # Number of columns for the legend
+        rows = (len(value_to_color) + columns - 1) // columns  # Calculate number of rows needed
+        
+        for i, (value, color) in enumerate(value_to_color.items()):
+            col = i % columns
+            row = i // columns
+            ax_legend.add_patch(plt.Rectangle((col * 3, row), 1, 1, color=color))
+            ax_legend.text(col * 3 + 1.2, row + 0.5, value, va='center')
+        
+        ax_legend.set_xlim(0, columns * 3)
+        ax_legend.set_ylim(0, rows)
+        ax_legend.set_xticks([])
+        ax_legend.set_yticks([])
+        plt.title("Legend for Mosaic")
+        return ax, ax_legend
+
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 

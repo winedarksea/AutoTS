@@ -3596,6 +3596,7 @@ class BasicLinearModel(ModelObject):
             return prediction
 
     def process_components(self):
+        # mimic Cassandra style
         res = []
         components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
         for x in range(components.shape[2]):
