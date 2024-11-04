@@ -3272,7 +3272,7 @@ class AutoTS(object):
 
         Args:
             method (str): 'fillna' or 'transformers' - which to plot
-            color_list = list of colors to *sample* for bar colors. Can be names or hex.
+            color_list = list of colors to *sample* for bar colors. Can be names or hex. Or "roman".
             **kwargs passed to pandas.plot()
         """
         series = self.horizontal_to_df()
@@ -3286,6 +3286,14 @@ class AutoTS(object):
             title = "Most Frequently Chosen Preprocessing"
         if color_list is None:
             color_list = colors_list
+        if color_list == "roman":
+            color_list = ancient_roman
+            if len(color_list) < transformers.shape[0]:
+                import matplotlib.pyplot as plt
+
+                additional_colors = plt.cm.hsv(np.linspace(0, 1, transformers.shape[0] - len(color_list)))
+                color_list = np.vstack((color_list, additional_colors))
+
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
@@ -4264,7 +4272,7 @@ class AutoTS(object):
             plt.show()
             return fig
 
-    def plot_mosaic(self, max_series: int = 60):
+    def plot_mosaic(self, max_series: int = 60, colors=None):
         """Show the mosaic in a mosaic ensemble, if used."""
         if self.best_model_ensemble != 2 or "mosaic" not in self.best_model_params["model_metric"]:
             return None
@@ -4276,9 +4284,10 @@ class AutoTS(object):
         unique_values = pd.unique(df.to_numpy().ravel())
 
         # Generate a larger custom qualitative palette using 'tab20c' and 'hsv' for better differentiation
-        colors = plt.cm.tab20c(np.linspace(0, 1, len(unique_values)))  # Generate colors from tab20c
-        if len(unique_values) > 20:  # If more than 20, extend using 'hsv' for variety
-            additional_colors = plt.cm.hsv(np.linspace(0, 1, len(unique_values) - 20))
+        if colors is None:
+            colors = ancient_roman
+        if len(colors) < len(unique_values):
+            additional_colors = plt.cm.hsv(np.linspace(0, 1, len(unique_values) - len(colors)))
             colors = np.vstack((colors, additional_colors))
 
         # Update value-to-color mapping with new colors
@@ -4584,6 +4593,58 @@ colors_list = [
     '#FF1493', '#483D8B', '#2E8B57', '#D2691E', '#8FBC8F', '#FF8C00',
     '#FFB6C1', '#8A2BE2', '#D8BFD8'
 ]
+
+# colors you might see in a mosaic or fresco, llm based and only partially accurate but want to do more depth on this later
+ancient_roman = [
+    '#66023C',  # Tyrian Purple (Murex snail secretion - corrected to a more authentic red-purple)
+    '#D4AF37',  # Gold (Gold leaf or gold powder)
+    '#B55A30',  # Terracotta (Clay-based pigments)
+    '#5E503F',  # Taupe (Earthy brown pigments)
+    '#DC143C',  # Crimson (Kermes red, extracted from scale insects)
+    '#D8C3A5',  # Pale Sand (Limestone-based pigments)
+    '#BAA378',  # Olive Tan (Natural ochre)
+    '#3A5F3F',  # Dark Green Serpentine (stone)
+    '#2E4057',  # Deep Slate Blue (Copper)
+    '#6A7B76',  # Muted Teal (Malachite or copper-based pigments)
+    '#965D62',  # Burnt Rose (Red ochre or iron oxide)
+    '#7F9B9B',  # Grayish Blue (Indigo or woad mixed with white)
+    '#7C0A02',  # Cinnabar Red (Mercury sulfide, known as vermilion)
+    '#8A3324',  # Burnt Umber (Natural iron oxide)
+    '#4682B4',  # Steel Blue (Egyptian Blue - a silicate of copper and calcium)
+    '#CD5C5C',  # Indian Red (Red ochre)
+    '#B8860B',  # Dark Goldenrod (Orpiment, arsenic trisulfide)
+    '#6B8E23',  # Olive Drab (Plant-based green pigments like verdigris)
+    '#2E8B57',  # Sea Green (Verdigris or malachite)
+    '#9932CC',  # Dark Orchid (Could represent a more intense version of murex purple)
+    '#9400D3',  # Dark Violet (A possible representation of Tyrian purple)
+    '#4B0082',  # Indigo (Indigo plant dye)
+    '#6A5ACD',  # Slate Blue (Cobalt blue mixed with white)
+    '#483D8B',  # Dark Slate Blue (Natural mineral blue)
+    '#DA70D6',  # Orchid (Similar to a diluted murex purple)
+    '#1C1C1C',  # Obsidian Black (stone)
+    '#D8BFD8',  # Thistle (Light violet)
+    '#FF2400',  # Cinnabar Red (Mercury sulfide)
+    '#1F75FE',  # Egyptian Blue (Silicate of copper and calcium)
+    '#FFD700',  # Bright Gold (Orpiment or actual gold leaf)
+    '#32CD32',  # Bright Verdigris Green (Copper acetate-based)
+    '#FFA07A',  # Light Coral (Madder Lake - derived from madder plant)
+    '#FF4500',  # Bright Orange (Ochre or plant-based)
+    '#ADD8E6',  # Light Blue (Sky blue fresco made with calcium-based pigments)
+    '#FFFFE0',  # Light Yellow (Lead-tin yellow)
+    '#00FA9A',  # Medium Spring Green (Copper-based greens)
+    '#F4A460',  # Sandy Brown (Saffron)
+    '#FFFACD',  # Lemon Chiffon (Lighter ochre)
+    '#E9967A',  # Dark Salmon (in accents for walls)
+    '#8B0000',  # Dark Red (Alizarin, a plant dye)
+    '#2B2B2B',  # Basalt Gray (stone)
+    '#FF6347',  # Tomato (Bright red accent, also achievable with madder dye)
+    '#FF8C00',  # Dark Orange (Bright ochre)
+    '#40E0D0',  # Turquoise (Copper-based turquoise pigment)
+    '#FA8072',  # Salmon (Warm pinks used in fresco detailing)
+    '#D5C3AA',  # Travertine Beige (stone)
+    '#EAE6DA',  # Carrara White Marble (stone)
+]
+
 
 def fake_regressor(
     df,

@@ -515,6 +515,12 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "Round", "1": "AlignLastValue", "2": "HistoricValues", "3": "ClipOutliers", "4": "bkfilter"}, "transformation_params": {"0": {"decimals": -1, "on_transform": true, "on_inverse": true}, "1": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": true, "threshold": null, "threshold_method": "mean"}, "2": {"window": 10}, "3": {"method": "clip", "std_threshold": 3, "fillna": null}, "4": {}}}',
         "Ensemble": 0,
     },
+    "83": {  # optimized on wiki example daily 26.8 SMAPE 2024-10-05
+        'Model': 'BasicLinearModel',
+        'ModelParameters': '{"datepart_method": ["dayofweek", [365.25, 14]], "changepoint_spacing": 90, "changepoint_distance_end": 360, "regression_type": null, "lambda_": null, "trend_phi": 0.98}',
+        'TransformationParameters': '{"fillna": "piecewise_polynomial", "transformations": {"0": "AlignLastValue", "1": "IntermittentOccurrence", "2": "RobustScaler", "3": "Log"}, "transformation_params": {"0": {"rows": 1, "lag": 2, "method": "multiplicative", "strength": 0.9, "first_value_only": false, "threshold": 1, "threshold_method": "mean"}, "1": {"center": "mean"}, "2": {}, "3": {}}}',
+        "Ensemble": 0,
+    }
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
