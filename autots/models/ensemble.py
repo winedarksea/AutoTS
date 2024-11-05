@@ -928,6 +928,8 @@ def _generate_bestn_dict(
     point_method: str = None,
 ):
     ensemble_models = best.to_dict(orient='index')
+    if not ensemble_models:
+        print(f"BestN returned empty with {model_metric}")
     model_parms = {
         'model_name': model_name,
         'model_count': best.shape[0],

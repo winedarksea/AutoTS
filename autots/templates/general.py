@@ -520,7 +520,25 @@ general_template_dict = {
         'ModelParameters': '{"datepart_method": ["dayofweek", [365.25, 14]], "changepoint_spacing": 90, "changepoint_distance_end": 360, "regression_type": null, "lambda_": null, "trend_phi": 0.98}',
         'TransformationParameters': '{"fillna": "piecewise_polynomial", "transformations": {"0": "AlignLastValue", "1": "IntermittentOccurrence", "2": "RobustScaler", "3": "Log"}, "transformation_params": {"0": {"rows": 1, "lag": 2, "method": "multiplicative", "strength": 0.9, "first_value_only": false, "threshold": 1, "threshold_method": "mean"}, "1": {"center": "mean"}, "2": {}, "3": {}}}',
         "Ensemble": 0,
-    }
+    },
+    "84": {  # optimized on VN1, best theta, 50 smape 0.44 competition
+        'Model': 'Theta',
+        'ModelParameters': '{"deseasonalize": true, "difference": false, "use_test": true, "method": "auto", "period": null, "theta": 1.4, "use_mle": false}',
+        'TransformationParameters': '{"fillna": "quadratic", "transformations": {"0": "AlignLastValue", "1": "MinMaxScaler", "2": "HistoricValues", "3": "AlignLastValue"}, "transformation_params": {"0": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": false, "threshold": 10, "threshold_method": "max"}, "1": {}, "2": {"window": 10}, "3": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": null, "threshold_method": "max"}}}',
+        "Ensemble": 0,
+    },
+    "85": {  # optimized on VN1, best wasserstein 80.5 (sample of 600)
+        'Model': 'MultivariateRegression',
+        'ModelParameters': '"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 1.0, "max_depth": null, "criterion": "friedman_mse", "max_features": 1}}, "mean_rolling_periods": 12, "macd_periods": 2, "std_rolling_periods": null, "max_rolling_periods": 7, "min_rolling_periods": 364, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": 5, "ewm_alpha": 0.2, "ewm_var_alpha": 0.5, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": null, "datepart_method": "recurring", "polynomial_degree": null, "regression_type": "User", "window": null, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": false, "frac_slice": null}',
+        'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "AlignLastValue", "1": "PositiveShift", "2": "AlignLastValue"}, "transformation_params": {"0": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": false, "threshold": 10, "threshold_method": "max"}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": 10, "threshold_method": "max"}}}',
+        "Ensemble": 0,
+    },
+    "86": {  # optimized on VN1 best competition 0.43, good smape 0.49
+        'Model': 'SeasonalityMotif',
+        'ModelParameters': '{"window": 5, "point_method": "trimmed_mean_40", "distance_metric": "mae", "k": 5, "datepart_method": ["simple_binarized_poly"], "independent": true}',
+        'TransformationParameters': '{"fillna": "rolling_mean", "transformations": {"0": "Constraint", "1": "QuantileTransformer", "2": "AlignLastValue"}, "transformation_params": {"0": {"constraint_method": "historic_diff", "constraint_direction": "lower", "constraint_regularization": 1.0, "constraint_value": 0.2, "bounds_only": false, "fillna": null}, "1": {"output_distribution": "uniform", "n_quantiles": 43}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": null, "threshold_method": "max"}}}',
+        "Ensemble": 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

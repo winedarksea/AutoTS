@@ -4272,7 +4272,7 @@ class AutoTS(object):
             plt.show()
             return fig
 
-    def plot_mosaic(self, max_series: int = 60, colors=None):
+    def plot_mosaic(self, max_series: int = 60, max_rows: int = None, colors=None):
         """Show the mosaic in a mosaic ensemble, if used."""
         if self.best_model_ensemble != 2 or "mosaic" not in self.best_model_params["model_metric"]:
             return None
@@ -4280,7 +4280,11 @@ class AutoTS(object):
         import matplotlib.pyplot as plt
         # from matplotlib.colors import ListedColormap
 
-        df = self.mosaic_to_df().iloc[:, 0:max_series]
+        df = self.mosaic_to_df()
+        if max_series is not None:
+            df = df.iloc[:, 0:max_series]
+        if max_rows is not None:
+            df = df.iloc[0:max_rows, :]
         unique_values = pd.unique(df.to_numpy().ravel())
 
         # Generate a larger custom qualitative palette using 'tab20c' and 'hsv' for better differentiation
@@ -4308,6 +4312,8 @@ class AutoTS(object):
         ax.set_aspect('equal')
 
         plt.title("Mosaic Representation of Mosaic Ensemble")
+        plt.xlabel("time series")
+        plt.ylabel("forecast steps")
         
         # Create a better multi-column legend plot with improved formatting
         fig_legend, ax_legend = plt.subplots(figsize=(15, 15))

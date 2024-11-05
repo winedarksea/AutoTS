@@ -1226,38 +1226,41 @@ def unpack_ensemble_models(
     )
     # alternatively the below could read from 'Model' == 'Ensemble'
     models_to_iterate = template[template['Ensemble'] != 0]['ModelParameters'].copy()
-    for index, value in models_to_iterate.items():
-        try:
-            model_dict = json.loads(value)['models']
-        except Exception as e:
-            raise ValueError(f"`{value}` is bad model template") from e
-        model_df = pd.DataFrame.from_dict(model_dict, orient='index')
-        # it might be wise to just drop the ID column, but keeping for now
-        model_df = model_df.rename_axis('ID').reset_index(drop=False)
-        # this next line is necessary, albeit confusing
-        if 'Ensemble' not in model_df.columns:
-            model_df['Ensemble'] = 0
-        # unpack nested ensembles, if recursive specified
-        if recursive and 'Ensemble' in model_df['Model'].tolist():
-            model_df = pd.concat(
-                [
-                    unpack_ensemble_models(
-                        model_df,
-                        recursive=True,
-                        keep_ensemble=keep_ensemble,
-                        template_cols=template_cols,
-                    ),
-                    model_df,
-                ],
-                axis=0,
-                ignore_index=True,
-                sort=False,
-            ).reset_index(drop=True)
-        template = pd.concat(
-            [template, model_df], axis=0, ignore_index=True, sort=False
-        ).reset_index(drop=True)
-    if not keep_ensemble:
-        template = template[template['Ensemble'] == 0]
+    if not models_to_iterate.empty:
+        for index, value in models_to_iterate.items():
+            try:
+                model_dict = json.loads(value)['models']
+            except Exception as e:
+                raise ValueError(f"`{value}` is bad model template") from e
+            # empty model parameters can exist, but shouldn't...
+            if model_dict:
+                model_df = pd.DataFrame.from_dict(model_dict, orient='index')
+                # it might be wise to just drop the ID column, but keeping for now
+                model_df = model_df.rename_axis('ID').reset_index(drop=False)
+                # this next line is necessary, albeit confusing
+                if 'Ensemble' not in model_df.columns:
+                    model_df['Ensemble'] = 0
+                # unpack nested ensembles, if recursive specified
+                if recursive and 'Ensemble' in model_df['Model'].tolist():
+                    model_df = pd.concat(
+                        [
+                            unpack_ensemble_models(
+                                model_df,
+                                recursive=True,
+                                keep_ensemble=keep_ensemble,
+                                template_cols=template_cols,
+                            ),
+                            model_df,
+                        ],
+                        axis=0,
+                        ignore_index=True,
+                        sort=False,
+                    ).reset_index(drop=True)
+                template = pd.concat(
+                    [template, model_df], axis=0, ignore_index=True, sort=False
+                ).reset_index(drop=True)
+        if not keep_ensemble:
+            template = template[template['Ensemble'] == 0]
     template = template.drop_duplicates(subset=template_cols)
     return template
 
