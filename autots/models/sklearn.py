@@ -3180,7 +3180,7 @@ class MultivariateRegression(ModelObject):
         holiday_country: str = 'US',
         verbose: int = 0,
         random_seed: int = 2020,
-        forecast_length: int = 7,
+        forecast_length: int = 28,
         regression_model: dict = {
             "model": 'RandomForest',
             "model_params": {},

@@ -50,6 +50,24 @@ all_models = [
     "DMD",  # 45 models
     "BasicLinearModel",
 ]
+# used for graphing, not for model selection
+model_classes = {
+    'ARDL': 'stat', 'DatepartRegression': 'ML',
+    'ETS': 'stat', 'FBProphet': 'stat', 'GLM': 'stat', 'GLS': 'stat',
+    'MAR': 'stat', 'MultivariateMotif': 'motif', 'MultivariateRegression': 'ML',
+    'NVAR': 'stat', 'RRVAR': 'stat', 'SectionalMotif': 'motif', 'Theta': 'stat',
+    'UnivariateMotif': 'motif', 'UnivariateRegression': 'ML',
+    'VAR': 'stat', 'VECM': 'stat', 'WindowRegression': 'ML',
+    'BallTreeMultivariateMotif': 'motif', 'MetricMotif': 'motif', 'ARCH': 'stat',
+    'KalmanStateSpace': 'stat', 'ARIMA': 'stat', 'BasicLinearModel': "stat",
+    "Cassandra": "stat", "DMD": 'stat', "DynamicFactor": "stat", "DynamicFactorMQ": "stat",
+    "FFT": "stat", "GluonTS": "DL", "LATC": "stat", "MotifSimulation": "motif",
+    "NeuralForecast": "DL", "NeuralProphet": "DL", "PreprocessingRegression": "ML",
+    "PytorchForecasting": "DL", "RollingRegression": "ML", "SeasonalityMotif": "motif",
+    "TMF": "stat", "TiDE": "DL", "UnobservedComponents": "stat",
+    'AverageValueNaive': 'naive', 'ConstantNaive': 'naive', 'LastValueNaive': 'naive',
+    'SeasonalNaive': 'naive', 'ZeroesNaive': 'naive',
+}
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
 default = {

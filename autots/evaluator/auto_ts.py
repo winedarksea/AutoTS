@@ -51,7 +51,7 @@ from autots.models.ensemble import (
     full_ensemble_test_list,
     create_unpredictability_score,
 )
-from autots.models.model_list import model_lists, no_shared, update_fit
+from autots.models.model_list import model_lists, no_shared, update_fit, model_classes
 from autots.tools.cpu_count import set_n_jobs
 from autots.evaluator.validation import (
     validate_num_validations,
@@ -4332,6 +4332,241 @@ class AutoTS(object):
         ax_legend.set_yticks([])
         plt.title("Legend for Mosaic")
         return ax, ax_legend
+
+    def plot_transformer_by_class(self, template=None, colors: dict = None, top_n: int =  15):
+        """Using the best results (from exported template), plot usage of transformers by model class."""
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        # Read the CSV file
+        if template is None:
+            methods = self.export_template(n=50, unpack_ensembles=True).copy()
+        else:
+            methods = template
+
+        # Initialize a list to collect transformer data
+        transformer_data = []
+
+        # Variable to assign unique IDs to models
+        model_counter = 0
+
+        # Iterate over each method to extract model and transformer information
+        for index, row in methods.iterrows():
+            current_params = json.loads(row['ModelParameters'])
+            ModelParameters = current_params.copy()
+            if 'series' in ModelParameters.keys():
+                # Ensemble model
+                series = ModelParameters['series']
+                series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
+                if series.shape[1] > 2:
+                    # For mosaic style ensembles, choose the mode model id
+                    series.set_index(series.columns[0], inplace=True)
+                    series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
+                series.columns = ['Series', 'ID']
+                results = pd.Series(
+                    {
+                        x: current_params['models'][x]['Model']
+                        for x in current_params['models'].keys()
+                    }
+                )
+                results.name = "Model"
+                series = series.merge(results, left_on="ID", right_index=True)
+                series.columns = ["Series", "ID", 'Model']
+                # Get transformers for each model
+                lookup = {}
+                for k, v in ModelParameters['models'].items():
+                    try:
+                        trans_params = json.loads(v.get('TransformationParameters', '{}'))
+                        transformations = trans_params.get('transformations', {})
+                        transformers_str = ",".join(transformations.values())
+                        lookup[k] = transformers_str
+                    except Exception:
+                        lookup[k] = "None"
+                series['Transformers'] = series['ID'].replace(lookup).replace("", "None")
+                # Collect data
+                for idx, row_series in series.iterrows():
+                    model_name = row_series['Model']
+                    transformers_list = row_series['Transformers'].split(',')
+                    model_class = model_classes.get(model_name, 'other')
+                    # Assign a unique model ID
+                    model_id = f"model_{model_counter}"
+                    model_counter += 1
+                    for transformer in transformers_list:
+                        if transformer == '':
+                            transformer = 'None'
+                        transformer_data.append({
+                            'ModelID': model_id,
+                            'Model': model_name,
+                            'ModelClass': model_class,
+                            'Transformer': transformer
+                        })
+            else:
+                # Single model
+                model_name = row['Model']
+                model_class = model_classes.get(model_name, 'other')
+                # Assign a unique model ID
+                model_id = f"model_{model_counter}"
+                model_counter += 1
+                try:
+                    trans_params = json.loads(row['TransformationParameters'])
+                    transformations = trans_params.get('transformations', {})
+                    transformers_list = transformations.values()
+                    for transformer in transformers_list:
+                        if transformer == '':
+                            transformer = 'None'
+                        transformer_data.append({
+                            'ModelID': model_id,
+                            'Model': model_name,
+                            'ModelClass': model_class,
+                            'Transformer': transformer
+                        })
+                except Exception:
+                    # No transformers
+                    transformer_data.append({
+                        'ModelID': model_id,
+                        'Model': model_name,
+                        'ModelClass': model_class,
+                        'Transformer': 'None'
+                    })
+
+        # Create a DataFrame from the collected data
+        transformer_df = pd.DataFrame(transformer_data)
+
+        # Calculate total unique models per model class
+        unique_models = transformer_df[['ModelClass', 'ModelID']].drop_duplicates()
+        model_class_counts = unique_models.groupby('ModelClass').size().reset_index(name='TotalModels')
+
+        # Calculate total models overall
+        total_models_overall = model_class_counts['TotalModels'].sum()
+
+        # Calculate counts of transformers per model class
+        counts = transformer_df.groupby(['ModelClass', 'Transformer']).size().reset_index(name='Count')
+
+        # Calculate proportion of models in each class that used each transformer
+        counts = counts.merge(model_class_counts, on='ModelClass')
+        counts['ProportionInClass'] = counts['Count'] / counts['TotalModels']
+
+        # Calculate proportion of each model class in the total models
+        model_class_counts['ClassProportion'] = model_class_counts['TotalModels'] / total_models_overall
+
+        # Merge ClassProportion into counts
+        counts = counts.merge(model_class_counts[['ModelClass', 'ClassProportion']], on='ModelClass', suffixes=('', '_y'))
+
+        # Calculate adjusted proportion
+        counts['AdjustedProportion'] = counts['ProportionInClass'] * counts['ClassProportion']
+
+        # For each transformer, normalize the adjusted proportions so that they sum to 1
+        counts['NormalizedProportion'] = counts.groupby('Transformer')['AdjustedProportion'].transform(lambda x: x / x.sum())
+
+        # Select the top N transformers based on total usage
+        total_transformer_counts = transformer_df.groupby('Transformer')['ModelID'].nunique().reset_index(name='TotalCount')
+        top_transformers = total_transformer_counts.sort_values(by='TotalCount', ascending=False).head(top_n)['Transformer'].tolist()
+
+        # Filter counts to include only top transformers
+        counts_top = counts[counts['Transformer'].isin(top_transformers)]
+
+        # Ensure the transformers are in the desired order
+        counts_top.loc[:, 'Transformer'] = pd.Categorical(counts_top['Transformer'], categories=top_transformers, ordered=True)
+
+        # Define pastel colors for model classes
+        if colors is None:
+            sns_colors = sns.color_palette("pastel")
+            model_class_colors = {
+                'motif': sns_colors[0],
+                'ML': sns_colors[1],
+                'stat': sns_colors[2],
+                'naive': sns_colors[3],
+                'DL': sns_colors[4],
+                'other': sns_colors[5],
+            }
+        else:
+            model_class_colors = colors
+
+        # Update font sizes using rcParams for consistency
+        plt.rcParams.update({
+            'font.size': 16,          # Base font size
+            'axes.titlesize': 18,     # Title font size
+            'axes.labelsize': 16,     # Axes labels font size
+            'xtick.labelsize': 14,    # X-axis tick labels font size
+            'ytick.labelsize': 14,    # Y-axis tick labels font size
+            'legend.fontsize': 14,    # Legend font size
+            'legend.title_fontsize': 16,  # Legend title font size
+        })
+
+        # Set the style for publication quality
+        sns.set_theme(style='whitegrid', context='paper', font_scale=1.8)
+
+        # Pivot the data for plotting
+        plot_data = counts_top.pivot_table(
+            index='Transformer',
+            columns='ModelClass',
+            values='NormalizedProportion',
+            fill_value=0
+        ).reindex(index=top_transformers)
+
+        # Plot using custom bar plot to add percentage labels
+        fig, ax = plt.subplots(figsize=(12, 8))
+        bottoms = [0]*len(plot_data)
+        transformer_indices = range(len(plot_data))
+        for model_class in plot_data.columns:
+            proportions = plot_data[model_class].values
+            bars = ax.bar(
+                transformer_indices,
+                proportions,
+                bottom=bottoms,
+                color=model_class_colors.get(model_class, '#333333'),
+                edgecolor='black',
+                label=model_class
+            )
+            # Add percentage labels
+            for idx, bar in enumerate(bars):
+                height = bar.get_height()
+                if height > 0.025:  # Only label if the segment is larger than 1.5%
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bottoms[idx] + height / 2,
+                        f'{round(height*100)}%',
+                        ha='center',
+                        va='center',
+                        fontsize=12,
+                        color='black',
+                        alpha=0.5,
+                    )
+            bottoms = [sum(x) for x in zip(bottoms, proportions)]
+
+        # Customize plot appearance
+        ax.set_xticks(transformer_indices)
+        ax.set_xticklabels(plot_data.index, rotation=90)
+        ax.set_xlabel('Transformer')
+        ax.set_ylabel('Frequency Adjusted Proportion')
+        ax.set_title('Transformer Usage by Model Class', fontweight='bold')
+
+        # Remove y-axis grid lines
+        ax.yaxis.grid(False)
+        ax.xaxis.grid(False)
+
+        # Remove top and right spines for a cleaner look
+        sns.despine(trim=True, left=True)
+
+        # Adjust y-axis to show percentages rounded to whole numbers
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: '{:.0%}'.format(round(y*100)/100)))
+
+        # Adjust legend position to avoid blocking bars
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(
+            handles=handles,
+            labels=labels,
+            title='Model Class',
+            fontsize=14,
+            title_fontsize=16,
+            loc='center left',
+            bbox_to_anchor=(1, 0.5),
+            frameon=False
+        )
+
+        # Adjust layout to fit larger text and legend
+        plt.tight_layout(rect=[0, 0, 0.92, 1])  # Adjust right margin to make space for legend
+
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
