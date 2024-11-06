@@ -197,7 +197,7 @@ class AutoTS(object):
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = None,
-        model_list: str = 'default',
+        model_list: str = 'scalable',
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
@@ -4334,7 +4334,13 @@ class AutoTS(object):
         return ax, ax_legend
 
     def plot_transformer_by_class(self, template=None, colors: dict = None, top_n: int =  15):
-        """Using the best results (from exported template), plot usage of transformers by model class."""
+        """Using the best results (from exported template), plot usage of transformers by model class.
+        
+        Args:
+            template (pd.DataFrame): template object of models to use for assesement, uses best 50 otherwise
+            colors (dict): color mapping of model class to color
+            top_n (int): number of most frequently used transformers to plot
+        """
         import seaborn as sns
         import matplotlib.pyplot as plt
 

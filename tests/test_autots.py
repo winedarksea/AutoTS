@@ -342,7 +342,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
         # check general model setup
         self.assertGreaterEqual(validated_count, model.models_to_validate)
-        self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
+        lvl1 = initial_results[initial_results["Exceptions"].isnull()]
+        self.assertGreater(model.models_to_validate, (lvl1[lvl1["Ensemble"] == 0]['ValidationRound'] == 0).sum() * models_to_validate - 1)
         self.assertFalse(model.best_model.empty)
         # check the generated forecasts look right
         self.assertEqual(forecasts_df.shape[0], forecast_length)
