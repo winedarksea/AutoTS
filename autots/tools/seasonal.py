@@ -76,6 +76,27 @@ date_part_methods = [
 origin_ts = "2030-01-01"
 
 
+def _is_seasonality_order_list(data):
+    """[365.25, 14] would be true and [7, 365.25] would be false"""
+    # Check if the data is a list with exactly two items
+    if not isinstance(data, list) or len(data) != 2:
+        return False
+
+    # Check if the first item is either a float or integer
+    first_item = data[0]
+    if not isinstance(first_item, (int, float)):
+        return False
+
+    # Check if the second item is an integer
+    second_item = data[1]
+    if not isinstance(second_item, int):
+        return False
+    elif second_item > 120:
+        # unlikely there would be a request for more than 120 fourier orders
+        return False
+
+    return True
+
 def date_part(
     DTindex,
     method: str = 'simple',
@@ -111,7 +132,11 @@ def date_part(
         pd.Dataframe with DTindex
     """
     # recursive
-    if isinstance(method, list):
+    is_seasonality_list = _is_seasonality_order_list(method)
+    if is_seasonality_list:
+        # because JSON can't do tuples and it's list, but want to have a pair of (seasonality, order) for fouriers
+        date_part_df = fourier_df(DTindex, seasonality=method[0], order=method[1])
+    elif isinstance(method, list):
         all_seas = []
         for seas in method:
             all_seas.append(date_part(DTindex, method=seas, set_index=True))
@@ -122,6 +147,8 @@ def date_part(
 
     if isinstance(method, (int, float)):
         date_part_df = fourier_df(DTindex, seasonality=method, order=6)
+    elif is_seasonality_list:
+        pass
     elif isinstance(method, tuple):
         date_part_df = fourier_df(DTindex, seasonality=method[0], order=method[1])
     elif isinstance(method, list):
@@ -710,6 +737,7 @@ base_seasonalities = [  # this needs to be a list
     'common_fourier',
     'common_fourier_rw',
     "simple_poly",
+    # it is critical for this to work with the fourier order option that the FLOAT COME second if the list is length 2
     [7, 365.25],
     ["dayofweek", 365.25],
     ['weekdayofmonth', 'common_fourier'],

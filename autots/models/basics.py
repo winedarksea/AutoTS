@@ -3495,7 +3495,7 @@ class BasicLinearModel(ModelObject):
         p = X_values.shape[1]  # Number of predictors
         self.sigma = np.sqrt(
             sse / (n - p)
-        )  # Standard deviation of residuals for each column (shape (21,))
+        )
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -3557,7 +3557,7 @@ class BasicLinearModel(ModelObject):
         else:
             z_value = norm.ppf(
                 1 - (1 - self.prediction_interval) / 2
-            )  # z-score for 95% confidence, e.g., 1.96
+            )
             # Vectorized calculation of leverage for all points: diag(X @ (X^T X)^(-1) @ X^T)
             hat_matrix_diag = np.einsum(
                 'ij,jk,ik->i',
@@ -3565,8 +3565,6 @@ class BasicLinearModel(ModelObject):
                 np.linalg.pinv(X_values.T @ X_values, rcond=5e-16),
                 X_values,
             )
-            # Broadcast the sigma values (shape (21,)) to match the number of rows (shape (2389,))
-            # This will give us a matrix of shape (2389, 21)
             sigma_expanded = self.sigma[np.newaxis, :]
             # Calculate the margin of error for each prediction in each column
             margin_of_error = pd.DataFrame(
@@ -3688,20 +3686,20 @@ class BasicLinearModel(ModelObject):
         return {
             "datepart_method": random_datepart(method=method),
             "changepoint_spacing": random.choices(
-                [None, 6, 28, 60, 90, 180, 360, 5040],
-                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2],
+                [None, 6, 28, 60, 90, 120, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.2],
             )[0],
             "changepoint_distance_end": random.choices(
-                [None, 6, 28, 60, 90, 180, 360, 5040],
-                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.2],
+                [None, 6, 28, 60, 90, 180, 360, 520, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
             )[0],
             "regression_type": regression_choice,
             "lambda_": random.choices(
-                [None, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
-                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                [None, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
+                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
-            "trend_phi": random.choices([None, 0.995, 0.98, 0.8], [0.9, 0.05, 0.1, 0.01])[0],
+            "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
         }
 
     def get_params(self):
