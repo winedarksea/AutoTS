@@ -5416,13 +5416,15 @@ class StandardScaler:
     def fit(self, df: pd.DataFrame):
         """Compute the mean and standard deviation for each feature."""
         self.means = df.mean()
-        self.stds = df.std(ddof=0)  # Use population standard deviation (ddof=0)
+        self.stds = df.std(ddof=0).replace(0, 1)  # Use population standard deviation (ddof=0)
         # Identify columns to skip (constant or zero std)
         self.skip_columns = self.stds == 0
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Scale the dataset using the stored mean and standard deviation."""
         X_copy = df.copy()  # Create a safe copy of the DataFrame
+        # print(self.means.index.difference(df.columns))
+        # print(df.columns.difference(self.stds.index))
         X_scaled = (X_copy - self.means) / self.stds
         # Restore original values for columns that should not be scaled
         X_scaled.loc[:, self.skip_columns] = X_copy.loc[:, self.skip_columns]

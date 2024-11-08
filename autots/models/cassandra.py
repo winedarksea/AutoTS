@@ -596,6 +596,8 @@ class Cassandra(ModelObject):
 
         # FINAL FEATURE PROCESSING
         x_array = pd.concat(x_list, axis=1)
+        # drop duplicates (holiday flag can create these for multiple countries)
+        x_array = x_array.loc[:, ~x_array.columns.duplicated()]
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
@@ -611,10 +613,12 @@ class Cassandra(ModelObject):
         # remove zero variance (corr is nan)
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
+        self.drop_colz = []
         if len(nearz) > 0:
             if self.verbose > 2:
                 print(f"Dropping zero variance feature columns {nearz}")
-            x_array = x_array.drop(columns=nearz)
+            self.drop_colz.extend(nearz.tolist())
+            # x_array = x_array.drop(columns=nearz)
         # remove colinear features
         # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
         corr = np.corrcoef(x_array, rowvar=0)  # second one
@@ -627,13 +631,16 @@ class Cassandra(ModelObject):
             if len(corel) > 0:
                 if self.verbose > 2:
                     print(f"Dropping colinear feature columns {corel}")
-                x_array = x_array.drop(columns=corel)
+                # x_array = x_array.drop(columns=corel)
+                self.drop_colz.extend(corel.tolist())
         if self.max_multicolinearity is not None:
             colin = x_array.columns[w < self.max_multicolinearity]
             if len(colin) > 0:
                 if self.verbose > 2:
                     print(f"Dropping multi-colinear feature columns {colin}")
-                x_array = x_array.drop(columns=colin)
+                # x_array = x_array.drop(columns=colin)
+                self.drop_colz.extend(colin.tolist())
+        x_array = x_array.drop(columns=self.drop_colz)
 
         # things we want modeled but want to discard from evaluation (standins)
         remove_patterns = [
@@ -729,12 +736,12 @@ class Cassandra(ModelObject):
                 self.col_groupings[col] = (
                     self.keep_cols[col].str.partition("_").get_level_values(0)
                 )
-                c_x['intercept'] = 1
                 if self.x_scaler:
                     self.x_scaler_obj[col] = StandardScaler()
                     c_x = self.x_scaler_obj[col].fit_transform(c_x)
                 else:
                     self.x_scaler_obj[col] = EmptyTransformer()
+                c_x['intercept'] = 1
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 self.params[col] = fit_linear_model(
@@ -759,13 +766,13 @@ class Cassandra(ModelObject):
             ]
             self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
             self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
-            x_array['intercept'] = 1
             if self.x_scaler:
                 self.x_scaler_obj = StandardScaler()
                 x = self.x_scaler_obj.fit_transform(x_array)
             else:
                 self.x_scaler_obj = EmptyTransformer()
                 x = x_array
+            x_array['intercept'] = 1
             # run model
             self.params = fit_linear_model(x, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(
@@ -1047,6 +1054,9 @@ class Cassandra(ModelObject):
 
         # FINAL FEATURE PROCESSING
         x_array = pd.concat(x_list, axis=1)
+        # drop duplicates (holiday flag can create these for multiple countries)
+        x_array = x_array.loc[:, ~x_array.columns.duplicated()]
+        x_array = x_array.drop(columns=self.drop_colz)
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
@@ -1177,9 +1187,10 @@ class Cassandra(ModelObject):
         else:
             # run model
             if self.x_scaler:
-                x = self.x_scaler_obj.transform(self.x_array)[self.keep_cols]
+                x = self.x_scaler_obj.transform(x_array)
+                x = x[self.keep_cols]
             else:
-                x = self.x_array[self.keep_cols]
+                x = x_array[self.keep_cols]
             res = np.dot(x, self.params[self.keep_cols_idx])
             if return_components:
                 arr = x.to_numpy()
@@ -2226,6 +2237,7 @@ class Cassandra(ModelObject):
             "trend_transformation": trend_transformation,
             "trend_model": trend_model,
             "trend_phi": random.choices([None, 0.995, 0.98], [0.9, 0.05, 0.1])[0],
+            "x_scaler": random.choices([True, False], [0.2, 0.8])[0],
         }
 
     def get_params(self):
@@ -2263,6 +2275,7 @@ class Cassandra(ModelObject):
             "trend_transformation": self.trend_transformation,
             "trend_model": self.trend_model,
             "trend_phi": self.trend_phi,
+            "x_scaler": self.x_scaler,
             # "constraint": self.constraint,
         }
 

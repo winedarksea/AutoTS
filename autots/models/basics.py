@@ -3977,6 +3977,30 @@ class TVVAR_OLD(BasicLinearModel):
 
 
 class TVVAR(BasicLinearModel):
+    """
+    
+    
+    TODO:
+        # lambda is None
+        # modify to allow no scaler
+        # plot of feature impacts
+        
+        # highly correlated, shared hidden factors
+        # time varying
+        # groups / geos
+
+        # impulse response
+        # rolling mean instead of a single lag
+        # allow other regression models
+        # Preprocessing before VAR: ClipOutliers, bkfilter, AnomalyRemoval
+        # Add a max to the number of samples for time varying to try
+        # trend_phi, var_dampening
+        # could run regression twice, setting to zero any X which had low coefficients for the second run
+
+        # feature summarization (dynamic factor is PCA)
+        # fixed effects (seasonality)
+        # hierchial by GEO
+    """
     def __init__(
         self,
         name: str = "TVVAR",
@@ -3993,7 +4017,9 @@ class TVVAR(BasicLinearModel):
         apply_pca: bool = False,
         pca_explained_variance: float = 0.95,
         threshold_method: str = 'std',  # 'std' or 'percentile'
-        threshold_value: float = 0.01,   # Multiple of std or percentile value
+        threshold_value: float = None,   # Multiple of std or percentile value
+        base_scaled: bool = True,
+        x_scaled: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -4014,11 +4040,18 @@ class TVVAR(BasicLinearModel):
         self.pca_explained_variance = pca_explained_variance
         self.threshold_method = threshold_method
         self.threshold_value = threshold_value
+        self.base_scaled = base_scaled
+        self.x_scaled = x_scaled
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
         self.scaler_std = np.std(df, axis=0).replace(0, 1)
         return (df - self.scaler_mean) / self.scaler_std
+
+    def empty_scaler(self, df):
+        self.scaler_std = pd.Series(1.0, index=df.columns)
+        self.scaler_mean = 0.0
+        return df
 
     def create_VAR_features(self, df):
         lagged_data = pd.DataFrame(index=df.index)
@@ -4034,6 +4067,8 @@ class TVVAR(BasicLinearModel):
         return lagged_data
 
     def apply_beta_threshold(self):
+        if self.threshold_value is None:
+            return None
         # Compute absolute values of coefficients
         beta_abs = np.abs(self.beta)
         # Determine threshold dynamically
@@ -4053,7 +4088,10 @@ class TVVAR(BasicLinearModel):
         df = self.basic_profile(df)
         self.df = df
         # Scaling df
-        df_scaled = self.base_scaler(df)
+        if self.base_scaled:
+            df_scaled = self.base_scaler(df)
+        else:
+            df_scaled = self.empty_scaler(df)
         self.df_scaled = df_scaled
         if self.changepoint_spacing is None or self.changepoint_distance_end is None:
             half_yr_space = half_yr_spacing(df)
@@ -4168,6 +4206,15 @@ class TVVAR(BasicLinearModel):
         # Prepare initial data for VAR features
         extended_df = pd.concat([self.df_scaled, predictions], axis=0)
         # For each date in forecast horizon
+        if self.x_scaled:
+            self.x_scaler = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_countries,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                forecast_length=self.forecast_length,
+                **self.multivariate_transformation,
+            )
         x_pred = []
         for t, date in enumerate(test_index):
             # Create VAR features for date
@@ -4337,6 +4384,8 @@ class TVVAR(BasicLinearModel):
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
+            "base_scaled": random.choices([True, False], [0.5, 0.5])[0],
+            "x_scaled": random.choices([True, False], [0.5, 0.5])[0],
         }
 
     def get_params(self):
@@ -4349,4 +4398,6 @@ class TVVAR(BasicLinearModel):
             "lambda_": self.lambda_,
             "trend_phi": self.trend_phi,
             "apply_pca": self.apply_pca,
+            "base_scaled": self.base_scaled,
+            "x_scaled": self.x_scaled,
         }
