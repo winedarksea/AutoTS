@@ -29,6 +29,7 @@ from autots.tools.transform import (
     HolidayTransformer,
     AnomalyRemoval,
     EmptyTransformer,
+    StandardScaler,
 )
 from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
@@ -140,6 +141,7 @@ class Cassandra(ModelObject):
         },  # have one or two in built, then redirect to any AutoTS model for other choices
         trend_phi: float = None,
         constraint: dict = None,
+        x_scaler: bool = False,
         max_colinearity: float = 0.998,
         max_multicolinearity: float = 0.001,
         # not modeling related:
@@ -183,6 +185,7 @@ class Cassandra(ModelObject):
         self.trend_model = trend_model
         self.trend_phi = trend_phi
         self.constraint = constraint
+        self.x_scaler = x_scaler
         self.max_colinearity = max_colinearity
         self.max_multicolinearity = max_multicolinearity
         # other parameters
@@ -643,6 +646,7 @@ class Cassandra(ModelObject):
         # add x features that don't apply to all, and need to be looped
         if self.loop_required:
             self.params = {}
+            self.x_scaler_obj = {}
             self.keep_cols = {}
             self.x_array = {}
             self.keep_cols_idx = {}
@@ -726,6 +730,11 @@ class Cassandra(ModelObject):
                     self.keep_cols[col].str.partition("_").get_level_values(0)
                 )
                 c_x['intercept'] = 1
+                if self.x_scaler:
+                    self.x_scaler_obj[col] = StandardScaler()
+                    c_x = self.x_scaler_obj[col].fit_transform(c_x)
+                else:
+                    self.x_scaler_obj[col] = EmptyTransformer()
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 self.params[col] = fit_linear_model(
@@ -751,12 +760,18 @@ class Cassandra(ModelObject):
             self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
             self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
             x_array['intercept'] = 1
+            if self.x_scaler:
+                self.x_scaler_obj = StandardScaler()
+                x = self.x_scaler_obj.fit_transform(x_array)
+            else:
+                self.x_scaler_obj = EmptyTransformer()
+                x = x_array
             # run model
-            self.params = fit_linear_model(x_array, self.df, params=self.linear_model)
+            self.params = fit_linear_model(x, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(
-                x_array[self.keep_cols], self.params[self.keep_cols_idx]
+                x[self.keep_cols], self.params[self.keep_cols_idx]
             )
-            self.x_array = x_array
+            self.x_array = x
 
         # option to run trend model on full residuals or on rolling trend
         if (
@@ -1129,7 +1144,7 @@ class Cassandra(ModelObject):
                 predicts.append(
                     pd.Series(
                         np.dot(
-                            c_x[self.keep_cols[col]],
+                            self.x_scaler_obj[col].transform(c_x)[self.keep_cols[col]],
                             self.params[col][self.keep_cols_idx[col]],
                         ).flatten(),
                         name=col,
@@ -1146,7 +1161,7 @@ class Cassandra(ModelObject):
                     ][:-1]
                     new_indx = [0] + [x + 1 for x in indices]
                     temp = (
-                        c_x[self.keep_cols[col]]
+                        self.x_scaler_obj[col].transform(c_x)[self.keep_cols[col]]
                         * self.params[col][self.keep_cols_idx[col]].flatten()
                     )
                     self.components.append(
@@ -1161,9 +1176,13 @@ class Cassandra(ModelObject):
             return pd.concat(predicts, axis=1)
         else:
             # run model
-            res = np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+            if self.x_scaler:
+                x = self.x_scaler_obj.transform(self.x_array)[self.keep_cols]
+            else:
+                x = self.x_array[self.keep_cols]
+            res = np.dot(x, self.params[self.keep_cols_idx])
             if return_components:
-                arr = x_array[self.keep_cols].to_numpy()
+                arr = x.to_numpy()
                 temp = (
                     np.moveaxis(
                         np.broadcast_to(

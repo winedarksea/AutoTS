@@ -5407,6 +5407,41 @@ class ThetaTransformer:
         }
 
 
+class StandardScaler:
+    def __init__(self):
+        self.means = None
+        self.stds = None
+        self.skip_columns = None
+
+    def fit(self, df: pd.DataFrame):
+        """Compute the mean and standard deviation for each feature."""
+        self.means = df.mean()
+        self.stds = df.std(ddof=0)  # Use population standard deviation (ddof=0)
+        # Identify columns to skip (constant or zero std)
+        self.skip_columns = self.stds == 0
+
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Scale the dataset using the stored mean and standard deviation."""
+        X_copy = df.copy()  # Create a safe copy of the DataFrame
+        X_scaled = (X_copy - self.means) / self.stds
+        # Restore original values for columns that should not be scaled
+        X_scaled.loc[:, self.skip_columns] = X_copy.loc[:, self.skip_columns]
+        return X_scaled
+
+    def inverse_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Revert the scaled data back to the original scale."""
+        X_copy = df.copy()  # Create a safe copy of the DataFrame
+        X_original = (X_copy * self.stds) + self.means
+        # Restore original values for columns that were not scaled
+        X_original.loc[:, self.skip_columns] = X_copy.loc[:, self.skip_columns]
+        return X_original
+
+    def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Fit the scaler and transform the dataset."""
+        self.fit(df)
+        return self.transform(df)
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -5761,9 +5796,13 @@ class GeneralTransformer(object):
             return QuantileTransformer(copy=True, **param)
 
         elif transformation == "StandardScaler":
-            from sklearn.preprocessing import StandardScaler
+            try:
+                from sklearn.preprocessing import StandardScaler as SS
 
-            return StandardScaler(copy=True)
+                return SS(copy=True)
+            except Exception as e:
+                print(f"sklearn standardscaler import failed with {repr(e)}")
+                return StandardScaler()
 
         elif transformation == "MaxAbsScaler":
             from sklearn.preprocessing import MaxAbsScaler

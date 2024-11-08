@@ -3988,9 +3988,12 @@ class TVVAR(BasicLinearModel):
         changepoint_distance_end: int = None,
         lambda_: float = 0.01,
         phi: float = None,  # Adding phi as a parameter
-        lags_and_rolling: list = None,
+        lags: list = None,
+        rolling_means: list = None,
         apply_pca: bool = False,
         pca_explained_variance: float = 0.95,
+        threshold_method: str = 'std',  # 'std' or 'percentile'
+        threshold_value: float = 0.01,   # Multiple of std or percentile value
         **kwargs,
     ):
         super().__init__(
@@ -4005,18 +4008,12 @@ class TVVAR(BasicLinearModel):
             **kwargs,
         )
         self.phi = phi
-        if lags_and_rolling is not None:
-            if len(lags_and_rolling) == 2:
-                self.lags_list = lags_and_rolling[0]
-                self.rolling_avg_list = lags_and_rolling[1]
-            else:
-                self.lags_list = lags_and_rolling
-                self.rolling_avg_list = None
-        else:
-            self.lags_list = [1]
-            self.rolling_avg_list = None
+        self.lags_list = lags
+        self.rolling_avg_list = rolling_means
         self.apply_pca = apply_pca
         self.pca_explained_variance = pca_explained_variance
+        self.threshold_method = threshold_method
+        self.threshold_value = threshold_value
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -4035,6 +4032,22 @@ class TVVAR(BasicLinearModel):
                 rolling_avg = df.shift(1).rolling(window=window).mean().add_suffix(f"___ravg{window}")
                 lagged_data = pd.concat([lagged_data, rolling_avg], axis=1)
         return lagged_data
+
+    def apply_beta_threshold(self):
+        # Compute absolute values of coefficients
+        beta_abs = np.abs(self.beta)
+        # Determine threshold dynamically
+        if self.threshold_method == 'std':
+            # Use multiple of standard deviation
+            beta_std = np.std(self.beta, axis=0, keepdims=True)
+            threshold = self.threshold_value * beta_std
+        elif self.threshold_method == 'percentile':
+            # Use percentile
+            threshold = np.percentile(beta_abs, self.threshold_value * 100, axis=0, keepdims=True)
+        else:
+            raise ValueError("threshold_method must be 'std' or 'percentile'")
+        # Set coefficients below threshold to zero
+        self.beta = np.where(beta_abs >= threshold, self.beta, 0)
 
     def fit(self, df, future_regressor=None):
         df = self.basic_profile(df)
@@ -4089,6 +4102,8 @@ class TVVAR(BasicLinearModel):
                 )
             else:
                 self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+            # Post-process coefficients to set small values to zero
+            self.apply_beta_threshold()
             # Calculate residuals
             Y_pred = X_values @ self.beta
             residuals = Y_values - Y_pred
@@ -4119,6 +4134,8 @@ class TVVAR(BasicLinearModel):
                 # Compute theta_t
                 theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
             self.beta = theta_t  # Use the last theta_t as beta
+            # Post-process coefficients to set small values to zero
+            self.apply_beta_threshold()
             # Calculate residuals
             Y_pred = X_np @ self.beta
             residuals = Y_np - Y_pred
@@ -4149,9 +4166,9 @@ class TVVAR(BasicLinearModel):
         # Initialize predictions DataFrame
         predictions = pd.DataFrame(index=test_index, columns=self.df.columns, dtype=float)
         # Prepare initial data for VAR features
-        last_train_index = self.df_scaled.index[-1]
         extended_df = pd.concat([self.df_scaled, predictions], axis=0)
         # For each date in forecast horizon
+        x_pred = []
         for t, date in enumerate(test_index):
             # Create VAR features for date
             VAR_features_t = self.create_VAR_features(extended_df).loc[date:date]
@@ -4171,6 +4188,7 @@ class TVVAR(BasicLinearModel):
                 VAR_data_t = X_t[self.VAR_feature_columns]
                 VAR_pca_t = self.pca.transform(VAR_data_t)
                 VAR_pca_df_t = pd.DataFrame(VAR_pca_t, index=VAR_data_t.index)
+                self.pca_columns = VAR_pca_df_t.columns
                 # Exclude VAR_feature_columns from X_t and add VAR_pca_df_t
                 X_t = pd.concat([X_t.drop(columns=self.VAR_feature_columns), VAR_pca_df_t], axis=1)
             X_t = X_t.astype(float)
@@ -4178,6 +4196,7 @@ class TVVAR(BasicLinearModel):
             X_values_t = X_t.to_numpy().astype(float)
             # Make prediction
             Y_pred_t = X_values_t @ self.beta
+            x_pred.append(X_t)
             # Store prediction
             predictions.loc[date] = Y_pred_t.flatten()
             # Update extended_df with the new prediction
@@ -4185,7 +4204,7 @@ class TVVAR(BasicLinearModel):
         # Save X_pred for process_components
         # Recreate VAR features for the entire forecast horizon
         extended_df = pd.concat([self.df_scaled, predictions], axis=0)
-        self.X_pred = pd.concat([X_ext, self.create_VAR_features(extended_df).loc[test_index]], axis=1)
+        self.X_pred = pd.concat(x_pred, axis=0)
         self.X_pred = self.X_pred.astype(float)
         # Convert forecast back to original scale
         forecast = predictions * self.scaler_std + self.scaler_mean
@@ -4232,12 +4251,13 @@ class TVVAR(BasicLinearModel):
         # If PCA was applied, transform back to original VAR features
         if self.apply_pca:
             # Get PCA components in the DataFrame
-            pca_columns = self.pca_columns
-            for col in pca_columns:
-                # Get the component contributions
-                component_contributions = components_df.xs(col, level=1, axis=1)
+            res = []
+            for col in self.df.columns:
+                # Get the component contribution
+                # component_contributions = components_df.xs(col, level=1, axis=1)
+                component_contributions = components_df[col][self.pca_columns]
                 # Transform back to original VAR features
-                original_contributions = component_contributions @ self.pca.components_
+                original_contributions = component_contributions.to_numpy() @ self.pca.components_
                 # Create DataFrame with original VAR feature names
                 original_contributions_df = pd.DataFrame(
                     original_contributions,
@@ -4245,10 +4265,20 @@ class TVVAR(BasicLinearModel):
                     columns=self.VAR_feature_columns,
                 )
                 # Remove PCA component from components_df
-                components_df.drop((slice(None), col), axis=1, inplace=True)
                 # Add original VAR features contributions
-                for var_col in original_contributions_df.columns:
-                    components_df[(var_col.split('___')[0], var_col)] = original_contributions_df[var_col]
+                original_contributions_df.columns = [x.split('___')[0] for x in original_contributions_df.columns]
+                new_cols = original_contributions_df.T.groupby(level=0).sum().T
+                new_cols.columns = pd.MultiIndex.from_product([[col], new_cols.columns])
+                res.append(new_cols)
+                # for var_col in original_contributions_df.columns:
+                #     idx = (col, var_col.split('___')[0])
+                #     if idx not in components_df.columns:
+                #         components_df[idx] = original_contributions_df[var_col]
+                #     else:
+                #         components_df[idx] = components_df[idx] + original_contributions_df[var_col]
+            # drop all at once
+            components_df = pd.concat([components_df, pd.concat(res, axis=1)], axis=1).reindex(self.df.columns, level=0, axis=1)
+            components_df = components_df.drop(columns=self.pca_columns, level=1)
         # Combine multiple lags into a single impact for each series
         # Sum over lags for each series
         final_components = {}
@@ -4276,7 +4306,7 @@ class TVVAR(BasicLinearModel):
         for target_col in final_components:
             df = final_components[target_col]
             # Scale back to original feature space
-            df = df * self.scaler_std[target_col] + self.scaler_mean[target_col]
+            df = df * self.scaler_std[target_col] # + self.scaler_mean[target_col]
             df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
             result[target_col] = df
         components_df_final = pd.concat(result.values(), axis=1)
@@ -4306,6 +4336,7 @@ class TVVAR(BasicLinearModel):
                 k=1,
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
+            "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
         }
 
     def get_params(self):
@@ -4317,4 +4348,5 @@ class TVVAR(BasicLinearModel):
             "regression_type": self.regression_type,
             "lambda_": self.lambda_,
             "trend_phi": self.trend_phi,
+            "apply_pca": self.apply_pca,
         }
