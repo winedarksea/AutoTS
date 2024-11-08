@@ -1199,8 +1199,6 @@ def dates_to_holidays(
                         )
                     elif "hindu" in sample:
                         idates = gregorian_to_hindu(dates)
-                        print(dates)
-                        print(holiday_df)
                         populated_holidays = (
                             idates.drop(
                                 columns=idates.columns.difference(on + ['date']),
