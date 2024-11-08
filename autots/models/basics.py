@@ -3712,3 +3712,609 @@ class BasicLinearModel(ModelObject):
             "lambda_": self.lambda_,
             "trend_phi": self.trend_phi,
         }
+
+
+class TVVAR_OLD(BasicLinearModel):
+    def __init__(
+        self,
+        name: str = "TVVAR",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        regression_type: str = None,
+        datepart_method: str = "common_fourier",
+        changepoint_spacing: int = None,
+        changepoint_distance_end: int = None,
+        lambda_: float = 0.01,
+        lags_and_rolling: list = None,
+        apply_pca: bool = False,
+        pca_explained_variance: float = 0.95,
+        **kwargs,
+    ):
+        super().__init__(
+            name=name,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            regression_type=regression_type,
+            datepart_method=datepart_method,
+            changepoint_spacing=changepoint_spacing,
+            changepoint_distance_end=changepoint_distance_end,
+            lambda_=lambda_,
+            **kwargs,
+        )
+        if lags_and_rolling is not None:
+            if len(lags_and_rolling) == 2:
+                self.lags_list = lags_and_rolling[0]
+                self.rolling_avg_list = lags_and_rolling[1]
+            else:
+                self.lags_list = lags_and_rolling
+                self.rolling_avg_list = None
+        else:
+            self.lags_list = [1]
+            self.rolling_avg_list = None
+        self.apply_pca = apply_pca
+        self.pca_explained_variance = pca_explained_variance
+
+    def create_VAR_features(self, df):
+        lagged_data = pd.DataFrame(index=df.index)
+        # Create lagged variables
+        if self.lags_list is not None:
+            for lag in self.lags_list:
+                lagged = df.shift(lag).add_suffix(f"__lag{lag}")
+                lagged_data = pd.concat([lagged_data, lagged], axis=1)
+        # Create rolling averages starting at first lag
+        if self.rolling_avg_list is not None:
+            for window in self.rolling_avg_list:
+                rolling_avg = df.shift(1).rolling(window=window).mean().add_suffix(f"__ravg{window}")
+                lagged_data = pd.concat([lagged_data, rolling_avg], axis=1)
+        return lagged_data
+
+    def fit(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.df = df
+        if self.changepoint_spacing is None or self.changepoint_distance_end is None:
+            half_yr_space = half_yr_spacing(df)
+            if self.changepoint_spacing is None:
+                self.changepoint_spacing = int(half_yr_space)
+            if self.changepoint_distance_end is None:
+                self.changepoint_distance_end = int(half_yr_space / 2)
+        if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
+        # Create VAR features
+        VAR_features = self.create_VAR_features(df)
+        VAR_feature_columns = VAR_features.columns.tolist()
+        # Create external features
+        X_ext = self.create_x(df, future_regressor)
+        # Combine features
+        X = pd.concat([X_ext, VAR_features], axis=1)
+        # Remove rows with NaNs due to lagging
+        X = X.dropna()
+        df_aligned = df.loc[X.index]
+        # Optionally apply PCA
+        if self.apply_pca:
+            from sklearn.decomposition import PCA
+
+            self.pca = PCA(n_components=self.pca_explained_variance)
+            VAR_data = X[VAR_feature_columns]
+            VAR_pca = self.pca.fit_transform(VAR_data)
+            VAR_pca_df = pd.DataFrame(VAR_pca, index=VAR_data.index)
+            # Exclude VAR_feature_columns from X and add VAR_pca_df
+            X = pd.concat([X.drop(columns=VAR_feature_columns), VAR_pca_df], axis=1)
+            self.pca_columns = VAR_pca_df.columns.tolist()
+        else:
+            self.pca_columns = None
+        # Fit the model
+        X_values = X.to_numpy().astype(float)
+        Y_values = df_aligned.to_numpy().astype(float)
+        # Regularization
+        if self.lambda_ is not None:
+            I = np.eye(X_values.shape[1])
+            self.beta = (
+                np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
+                @ X_values.T
+                @ Y_values
+            )
+        else:
+            self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+        # Calculate residuals
+        Y_pred = X_values @ self.beta
+        residuals = Y_values - Y_pred
+        sse = np.sum(residuals ** 2, axis=0)
+        n = Y_values.shape[0]
+        p = X_values.shape[1]
+        self.sigma = np.sqrt(sse / (n - p))
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        # Save variables for later
+        self.X = X
+        self.Y = df_aligned
+        self.X_values = X_values
+        self.Y_values = Y_values
+        self.VAR_feature_columns = VAR_feature_columns
+        return self
+
+    def predict(self, forecast_length: int, future_regressor=None, just_point_forecast=False):
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        # Create external features for the forecast period
+        x_s = date_part(test_index, method=self.datepart_method, set_index=True)
+        x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
+        x_t.index = test_index
+        X_ext = pd.concat([x_s, x_t], axis=1)
+        if str(self.regression_type).lower() == "user":
+            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index)], axis=1)
+        X_ext["constant"] = 1
+        # Initialize predictions DataFrame
+        predictions = pd.DataFrame(index=test_index, columns=self.df.columns)
+        # Initialize lists to store X_t and VAR_features_t
+        X_list = []
+        VAR_features_list = []
+        # For each date in forecast horizon
+        for t, date in enumerate(test_index):
+            # Create extended_df including history and predictions up to date
+            extended_df = pd.concat([self.df, predictions.loc[:date]])
+            # Create VAR features for date
+            VAR_features_t = self.create_VAR_features(extended_df).loc[date:date]
+            if VAR_features_t.isnull().values.any():
+                continue
+            # Store VAR_features_t
+            VAR_features_list.append(VAR_features_t)
+            # Generate external features for date
+            X_ext_t = X_ext.loc[date:date]
+            # Combine features
+            X_t = pd.concat([X_ext_t, VAR_features_t], axis=1)
+            if X_t.isnull().values.any():
+                continue
+            # If PCA was applied, transform VAR_features
+            if self.apply_pca:
+                VAR_data_t = X_t[self.VAR_feature_columns]
+                VAR_pca_t = self.pca.transform(VAR_data_t)
+                VAR_pca_df_t = pd.DataFrame(VAR_pca_t, index=VAR_data_t.index)
+                # Exclude VAR_feature_columns from X_t and add VAR_pca_df_t
+                X_t = pd.concat([X_t.drop(columns=self.VAR_feature_columns), VAR_pca_df_t], axis=1)
+            # Store X_t
+            X_list.append(X_t)
+            # Convert X_t to numpy array
+            X_values_t = X_t.to_numpy().astype(float)
+            # Make prediction
+            Y_pred_t = X_values_t @ self.beta
+            # Store prediction
+            predictions.loc[date] = Y_pred_t.flatten()
+        # Combine X_list into X_pred
+        self.X_pred = pd.concat(X_list)
+        self.VAR_features_pred = pd.concat(VAR_features_list)
+        forecast = predictions
+        if just_point_forecast:
+            return forecast
+        else:
+            z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
+            sigma_expanded = self.sigma[np.newaxis, :]
+            margin_of_error = pd.DataFrame(
+                z_value * sigma_expanded,
+                columns=self.df.columns,
+                index=forecast.index,
+            )
+            upper_forecast = forecast + margin_of_error
+            lower_forecast = forecast - margin_of_error
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    def process_components(self):
+        # Process components for the forecast period
+        res = []
+        # Use self.X_pred and self.beta
+        components = np.einsum('ij,jk->ijk', self.X_pred.to_numpy(), self.beta)
+        for x in range(components.shape[2]):
+            df = pd.DataFrame(components[:, :, x], index=self.X_pred.index, columns=self.X_pred.columns)
+            new_level = self.column_names[x]
+            df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
+            res.append(df)
+        components_df = pd.concat(res, axis=1)
+        # If PCA was applied, transform back to original VAR features
+        if self.apply_pca:
+            # Get PCA components in the DataFrame
+            pca_columns = self.pca_columns
+            for col in pca_columns:
+                # Get the component contributions
+                component_contributions = components_df.xs(col, level=1, axis=1)
+                # Transform back to original VAR features
+                original_contributions = component_contributions @ self.pca.components_
+                # Create DataFrame with original VAR feature names
+                original_contributions_df = pd.DataFrame(
+                    original_contributions,
+                    index=component_contributions.index,
+                    columns=self.VAR_feature_columns,
+                )
+                # Remove PCA component from components_df
+                components_df.drop((slice(None), col), axis=1, inplace=True)
+                # Add original VAR features contributions
+                for var_col in original_contributions_df.columns:
+                    components_df[(var_col.split('__lag')[0], var_col)] = original_contributions_df[var_col]
+        # Combine multiple lags into a single impact for each series
+        # Sum over lags for each series
+        final_components = {}
+        for target_col in self.df.columns:
+            target_components = components_df[target_col]
+            series_impacts = {}
+            for col in target_components.columns:
+                series_name = col.split('__')[0]
+                series_impacts.setdefault(series_name, 0)
+                series_impacts[series_name] += target_components[col]
+            final_components[target_col] = pd.DataFrame(series_impacts)
+        # Combine external features
+        external_features = ['constant'] + self.seasonal_columns + self.trend_columns
+        if str(self.regression_type).lower() == "user":
+            external_features += list(self.regressor_columns)
+        for target_col in self.df.columns:
+            target_components = components_df[target_col]
+            for feature in external_features:
+                if feature in target_components.columns:
+                    if target_col not in final_components:
+                        final_components[target_col] = pd.DataFrame()
+                    final_components[target_col][feature] = target_components[feature]
+        # Combine all components into a single DataFrame
+        result = {}
+        for target_col in final_components:
+            df = final_components[target_col]
+            df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
+            result[target_col] = df
+        components_df_final = pd.concat(result.values(), axis=1)
+        return components_df_final
+
+
+class TVVAR(BasicLinearModel):
+    def __init__(
+        self,
+        name: str = "TVVAR",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        regression_type: str = None,
+        datepart_method: str = "common_fourier",
+        changepoint_spacing: int = None,
+        changepoint_distance_end: int = None,
+        lambda_: float = 0.01,
+        phi: float = None,  # Adding phi as a parameter
+        lags_and_rolling: list = None,
+        apply_pca: bool = False,
+        pca_explained_variance: float = 0.95,
+        **kwargs,
+    ):
+        super().__init__(
+            name=name,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            regression_type=regression_type,
+            datepart_method=datepart_method,
+            changepoint_spacing=changepoint_spacing,
+            changepoint_distance_end=changepoint_distance_end,
+            lambda_=lambda_,
+            **kwargs,
+        )
+        self.phi = phi
+        if lags_and_rolling is not None:
+            if len(lags_and_rolling) == 2:
+                self.lags_list = lags_and_rolling[0]
+                self.rolling_avg_list = lags_and_rolling[1]
+            else:
+                self.lags_list = lags_and_rolling
+                self.rolling_avg_list = None
+        else:
+            self.lags_list = [1]
+            self.rolling_avg_list = None
+        self.apply_pca = apply_pca
+        self.pca_explained_variance = pca_explained_variance
+
+    def base_scaler(self, df):
+        self.scaler_mean = np.mean(df, axis=0)
+        self.scaler_std = np.std(df, axis=0).replace(0, 1)
+        return (df - self.scaler_mean) / self.scaler_std
+
+    def create_VAR_features(self, df):
+        lagged_data = pd.DataFrame(index=df.index)
+        # Use triple underscores as separators to avoid conflicts
+        if self.lags_list is not None:
+            for lag in self.lags_list:
+                lagged = df.shift(lag).add_suffix(f"___lag{lag}")
+                lagged_data = pd.concat([lagged_data, lagged], axis=1)
+        if self.rolling_avg_list is not None:
+            for window in self.rolling_avg_list:
+                rolling_avg = df.shift(1).rolling(window=window).mean().add_suffix(f"___ravg{window}")
+                lagged_data = pd.concat([lagged_data, rolling_avg], axis=1)
+        return lagged_data
+
+    def fit(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.df = df
+        # Scaling df
+        df_scaled = self.base_scaler(df)
+        self.df_scaled = df_scaled
+        if self.changepoint_spacing is None or self.changepoint_distance_end is None:
+            half_yr_space = half_yr_spacing(df)
+            if self.changepoint_spacing is None:
+                self.changepoint_spacing = int(half_yr_space)
+            if self.changepoint_distance_end is None:
+                self.changepoint_distance_end = int(half_yr_space / 2)
+        if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
+        # Create VAR features
+        VAR_features = self.create_VAR_features(df_scaled)
+        VAR_feature_columns = VAR_features.columns.tolist()
+        # Create external features
+        X_ext = self.create_x(df, future_regressor)
+        # Combine features
+        X = pd.concat([X_ext, VAR_features], axis=1)
+        # Remove rows with NaNs due to lagging
+        X = X.dropna()
+        df_scaled_aligned = df_scaled.loc[X.index]
+        # Optionally apply PCA
+        if self.apply_pca:
+            from sklearn.decomposition import PCA
+
+            self.pca = PCA(n_components=self.pca_explained_variance)
+            VAR_data = X[VAR_feature_columns]
+            VAR_pca = self.pca.fit_transform(VAR_data)
+            VAR_pca_df = pd.DataFrame(VAR_pca, index=VAR_data.index)
+            # Exclude VAR_feature_columns from X and add VAR_pca_df
+            X = pd.concat([X.drop(columns=VAR_feature_columns), VAR_pca_df], axis=1)
+            self.pca_columns = VAR_pca_df.columns.tolist()
+        else:
+            self.pca_columns = None
+        # Fit the model
+        X_values = X.to_numpy().astype(float)
+        Y_values = df_scaled_aligned.to_numpy().astype(float)
+        if self.phi is None:
+            if self.lambda_ is not None:
+                I = np.eye(X_values.shape[1])
+                self.beta = (
+                    np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
+                    @ X_values.T
+                    @ Y_values
+                )
+            else:
+                self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+            # Calculate residuals
+            Y_pred = X_values @ self.beta
+            residuals = Y_values - Y_pred
+            sse = np.sum(residuals ** 2, axis=0)
+            n = Y_values.shape[0]
+            p = X_values.shape[1]
+            self.sigma = np.sqrt(sse / (n - p))
+        else:
+            # Time-varying estimation with forgetting factor phi
+            n_samples, n_features = X_values.shape
+            n_targets = Y_values.shape[1]
+            X_np = X_values
+            Y_np = Y_values
+            S = np.zeros((n_features, n_features))
+            r = np.zeros((n_features, n_targets))
+            alpha = self.lambda_
+            for t in range(n_samples):
+                X_t = X_np[t:t+1].T  # Shape (n_features, 1)
+                Y_t = Y_np[t:t+1].T  # Shape (n_targets, 1)
+                if t == 0:
+                    S = X_t @ X_t.T
+                    r = X_t @ Y_t.T
+                else:
+                    S = self.phi * S + X_t @ X_t.T
+                    r = self.phi * r + X_t @ Y_t.T
+                # Regularization term
+                S_reg = S + alpha * np.eye(n_features)
+                # Compute theta_t
+                theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
+            self.beta = theta_t  # Use the last theta_t as beta
+            # Calculate residuals
+            Y_pred = X_np @ self.beta
+            residuals = Y_np - Y_pred
+            sse = np.sum(residuals ** 2, axis=0)
+            n = Y_values.shape[0]
+            p = X_values.shape[1]
+            self.sigma = np.sqrt(sse / (n - p))
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        # Save variables for later
+        self.X = X
+        self.Y = df_scaled_aligned
+        self.X_values = X_values
+        self.Y_values = Y_values
+        self.VAR_feature_columns = VAR_feature_columns
+        return self
+
+    def predict(self, forecast_length: int, future_regressor=None, just_point_forecast=False):
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        # Create external features for the forecast period
+        x_s = date_part(test_index, method=self.datepart_method, set_index=True)
+        x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
+        x_t.index = test_index
+        X_ext = pd.concat([x_s, x_t], axis=1)
+        if str(self.regression_type).lower() == "user":
+            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index)], axis=1)
+        X_ext["constant"] = 1
+        # Initialize predictions DataFrame
+        predictions = pd.DataFrame(index=test_index, columns=self.df.columns, dtype=float)
+        # Prepare initial data for VAR features
+        last_train_index = self.df_scaled.index[-1]
+        extended_df = pd.concat([self.df_scaled, predictions], axis=0)
+        # For each date in forecast horizon
+        for t, date in enumerate(test_index):
+            # Create VAR features for date
+            VAR_features_t = self.create_VAR_features(extended_df).loc[date:date]
+            if VAR_features_t.isnull().values.any():
+                # Attempt to fill NaN values from last available data
+                VAR_features_t = VAR_features_t.fillna(method='ffill').fillna(method='bfill')
+            VAR_features_t = VAR_features_t.astype(float)
+            # Generate external features for date
+            X_ext_t = X_ext.loc[date:date]
+            # Combine features
+            X_t = pd.concat([X_ext_t, VAR_features_t], axis=1)
+            if X_t.isnull().values.any():
+                # Skip if still NaN values
+                continue
+            # If PCA was applied, transform VAR_features
+            if self.apply_pca:
+                VAR_data_t = X_t[self.VAR_feature_columns]
+                VAR_pca_t = self.pca.transform(VAR_data_t)
+                VAR_pca_df_t = pd.DataFrame(VAR_pca_t, index=VAR_data_t.index)
+                # Exclude VAR_feature_columns from X_t and add VAR_pca_df_t
+                X_t = pd.concat([X_t.drop(columns=self.VAR_feature_columns), VAR_pca_df_t], axis=1)
+            X_t = X_t.astype(float)
+            # Convert X_t to numpy array
+            X_values_t = X_t.to_numpy().astype(float)
+            # Make prediction
+            Y_pred_t = X_values_t @ self.beta
+            # Store prediction
+            predictions.loc[date] = Y_pred_t.flatten()
+            # Update extended_df with the new prediction
+            extended_df.loc[date] = predictions.loc[date]
+        # Save X_pred for process_components
+        # Recreate VAR features for the entire forecast horizon
+        extended_df = pd.concat([self.df_scaled, predictions], axis=0)
+        self.X_pred = pd.concat([X_ext, self.create_VAR_features(extended_df).loc[test_index]], axis=1)
+        self.X_pred = self.X_pred.astype(float)
+        # Convert forecast back to original scale
+        forecast = predictions * self.scaler_std + self.scaler_mean
+        if just_point_forecast:
+            return forecast
+        else:
+            z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
+            sigma_expanded = np.tile(self.sigma, (forecast_length, 1))
+            margin_of_error = pd.DataFrame(
+                z_value * sigma_expanded * self.scaler_std.values,
+                columns=self.df.columns,
+                index=forecast.index,
+            )
+            upper_forecast = forecast + margin_of_error
+            lower_forecast = forecast - margin_of_error
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    def process_components(self):
+        # Process components for the forecast period
+        res = []
+        # Ensure X_pred is of type float
+        X_pred_values = self.X_pred.to_numpy().astype(float)
+        components = np.einsum('ij,jk->ijk', X_pred_values, self.beta)
+        for x in range(components.shape[2]):
+            df = pd.DataFrame(components[:, :, x], index=self.X_pred.index, columns=self.X_pred.columns)
+            new_level = self.column_names[x]
+            df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
+            res.append(df)
+        components_df = pd.concat(res, axis=1)
+        # If PCA was applied, transform back to original VAR features
+        if self.apply_pca:
+            # Get PCA components in the DataFrame
+            pca_columns = self.pca_columns
+            for col in pca_columns:
+                # Get the component contributions
+                component_contributions = components_df.xs(col, level=1, axis=1)
+                # Transform back to original VAR features
+                original_contributions = component_contributions @ self.pca.components_
+                # Create DataFrame with original VAR feature names
+                original_contributions_df = pd.DataFrame(
+                    original_contributions,
+                    index=component_contributions.index,
+                    columns=self.VAR_feature_columns,
+                )
+                # Remove PCA component from components_df
+                components_df.drop((slice(None), col), axis=1, inplace=True)
+                # Add original VAR features contributions
+                for var_col in original_contributions_df.columns:
+                    components_df[(var_col.split('___')[0], var_col)] = original_contributions_df[var_col]
+        # Combine multiple lags into a single impact for each series
+        # Sum over lags for each series
+        final_components = {}
+        for target_col in self.df.columns:
+            target_components = components_df[target_col]
+            series_impacts = {}
+            for col in target_components.columns:
+                series_name = col.split('___')[0]
+                series_impacts.setdefault(series_name, 0)
+                series_impacts[series_name] += target_components[col]
+            final_components[target_col] = pd.DataFrame(series_impacts)
+        # Combine external features
+        external_features = ['constant'] + self.seasonal_columns + self.trend_columns
+        if str(self.regression_type).lower() == "user":
+            external_features += list(self.regressor_columns)
+        for target_col in self.df.columns:
+            target_components = components_df[target_col]
+            for feature in external_features:
+                if feature in target_components.columns:
+                    if target_col not in final_components:
+                        final_components[target_col] = pd.DataFrame()
+                    final_components[target_col][feature] = target_components[feature]
+        # Combine all components into a single DataFrame
+        result = {}
+        for target_col in final_components:
+            df = final_components[target_col]
+            # Scale back to original feature space
+            df = df * self.scaler_std[target_col] + self.scaler_mean[target_col]
+            df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
+            result[target_col] = df
+        components_df_final = pd.concat(result.values(), axis=1)
+        return components_df_final
+
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
+        return {
+            "datepart_method": random_datepart(method=method),
+            "changepoint_spacing": random.choices(
+                [None, 6, 28, 60, 90, 120, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.2],
+            )[0],
+            "changepoint_distance_end": random.choices(
+                [None, 6, 28, 60, 90, 180, 360, 520, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
+            )[0],
+            "regression_type": regression_choice,
+            "lambda_": random.choices(
+                [None, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
+                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                k=1,
+            )[0],
+            "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "datepart_method": self.datepart_method,
+            "changepoint_spacing": self.changepoint_spacing,
+            "changepoint_distance_end": self.changepoint_distance_end,
+            "regression_type": self.regression_type,
+            "lambda_": self.lambda_,
+            "trend_phi": self.trend_phi,
+        }
