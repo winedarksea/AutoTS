@@ -1143,6 +1143,25 @@ def dates_to_holidays(
                             how="left",
                         )
                     )
+                elif "hindu_month_number" in holiday_df.columns:
+                    lunar_dates = gregorian_to_hindu(dates)
+                    if "weekofmonth" in holiday_df.columns:
+                        on = ["hindu_month_number", "lunar_day", 'weekofmonth']
+                        lunar_dates["weekofmonth"] = (
+                            lunar_dates["lunar_day"] - 1
+                        ) // 7 + 1
+                        lunar_dates['dayofweek'] = lunar_dates.index.dayofweek
+                    else:
+                        on = ["hindu_month_number", "lunar_day"]
+                    populated_holidays = (
+                        lunar_dates.reset_index(drop=False)
+                        .drop(columns=lunar_dates.columns.difference(on + ['date']))
+                        .merge(
+                            holiday_df.drop(columns=drop_colz, errors='ignore'),
+                            on=on,
+                            how="left",
+                        )
+                    )
                 else:
                     on = ['month', 'day']
                     if "weekofmonth" in holiday_df.columns:
@@ -1180,6 +1199,8 @@ def dates_to_holidays(
                         )
                     elif "hindu" in sample:
                         idates = gregorian_to_hindu(dates)
+                        print(dates)
+                        print(holiday_df)
                         populated_holidays = (
                             idates.drop(
                                 columns=idates.columns.difference(on + ['date']),
