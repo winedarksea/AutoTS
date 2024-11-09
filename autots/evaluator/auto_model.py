@@ -47,6 +47,7 @@ from autots.models.basics import (
     FFT,
     BallTreeMultivariateMotif,
     BasicLinearModel,
+    TVVAR,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -703,6 +704,17 @@ def ModelMonster(
         )
     elif model == 'BasicLinearModel':
         return BasicLinearModel(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'TVVAR':
+        return TVVAR(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,

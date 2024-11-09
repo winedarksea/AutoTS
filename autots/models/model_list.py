@@ -49,6 +49,7 @@ all_models = [
     "NeuralForecast",
     "DMD",  # 45 models
     "BasicLinearModel",
+    "TVVAR",
 ]
 # used for graphing, not for model selection
 model_classes = {
@@ -66,7 +67,7 @@ model_classes = {
     "PytorchForecasting": "DL", "RollingRegression": "ML", "SeasonalityMotif": "motif",
     "TMF": "stat", "TiDE": "DL", "UnobservedComponents": "stat",
     'AverageValueNaive': 'naive', 'ConstantNaive': 'naive', 'LastValueNaive': 'naive',
-    'SeasonalNaive': 'naive', 'ZeroesNaive': 'naive',
+    'SeasonalNaive': 'naive', 'ZeroesNaive': 'naive', "TVVAR": "stat",
 }
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -102,6 +103,7 @@ default = {
     'FFT': 0.8,
     'Cassandra': 0.8,
     'BasicLinearModel': 0.8,
+    'TVVAR': 0.4,
 }
 # fastest models at any scale
 superfast = [
@@ -225,6 +227,8 @@ probabilistic = [
     'Cassandra',
     'SeasonalityMotif',
     "NeuralForecast",  # mostly
+    "BasicLinearModel",
+    "TVVAR",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -250,6 +254,7 @@ multivariate = [
     "TiDE",
     "NeuralForecast",
     "DMD",
+    "TVVAR",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -299,6 +304,7 @@ recombination_approved = [
     "TiDE",
     "DMD",
     "BasicLinearModel",
+    "TVVAR",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -349,6 +355,7 @@ regressor = [
     'PreprocessingRegression',
     "NeuralForecast",
     "BasicLinearModel",
+    "TVVAR",
 ]
 motifs = [
     'UnivariateMotif',

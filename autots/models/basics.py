@@ -3715,12 +3715,13 @@ class BasicLinearModel(ModelObject):
 
 
 class TVVAR(BasicLinearModel):
-    """
+    """Time Varying VAR
     
-    
+    Notes:
+        var_preprocessing will fail with many options, anything that scales/shifts the space
+        x_scaled=True seems to fail often when base_scaled=False and VAR components used
     TODO:
         # lambda is None
-        # modify to allow no scaler
         # plot of feature impacts
         
         # highly correlated, shared hidden factors
@@ -3728,15 +3729,11 @@ class TVVAR(BasicLinearModel):
         # groups / geos
 
         # impulse response
-        # rolling mean instead of a single lag
         # allow other regression models
-        # Preprocessing before VAR: ClipOutliers, bkfilter, AnomalyRemoval
         # Add a max to the number of samples for time varying to try
-        # trend_phi, var_dampening
         # could run regression twice, setting to zero any X which had low coefficients for the second run
 
         # feature summarization (dynamic factor is PCA)
-        # fixed effects (seasonality)
         # hierchial by GEO
     """
     def __init__(
@@ -3793,11 +3790,6 @@ class TVVAR(BasicLinearModel):
         self.trend_phi = trend_phi
         self.var_dampening = var_dampening
 
-    def base_scaler(self, df):
-        self.scaler_mean = np.mean(df, axis=0)
-        self.scaler_std = np.std(df, axis=0).replace(0, 1)
-        return (df - self.scaler_mean) / self.scaler_std
-
     def empty_scaler(self, df):
         self.scaler_std = pd.Series(1.0, index=df.columns)
         self.scaler_mean = 0.0
@@ -3838,9 +3830,9 @@ class TVVAR(BasicLinearModel):
         df = self.basic_profile(df)
         # Scaling df
         if self.base_scaled:
-            self.df_scaled = self.base_scaler(df)
+            df_scaled = self.base_scaler(df)
         else:
-            self.df_scaled = self.empty_scaler(df)
+            df_scaled = self.empty_scaler(df)
         if self.changepoint_spacing is None or self.changepoint_distance_end is None:
             half_yr_space = half_yr_spacing(df)
             if self.changepoint_spacing is None:
@@ -3863,9 +3855,13 @@ class TVVAR(BasicLinearModel):
                 # forecast_length=self.forecast_length,
                 **self.var_preprocessing,
             )
-            self.df_scaled = self.var_preprocessor.fit_transform(self.df_scaled)
+            self.var_history = self.var_preprocessor.fit_transform(df).ffill().bfill()
+            if self.base_scaled:
+                self.var_history = (self.var_history - self.scaler_mean) / self.scaler_std
+        else:
+            self.var_history = df_scaled
         # Create VAR features
-        VAR_features = self.create_VAR_features(self.df_scaled)
+        VAR_features = self.create_VAR_features(self.var_history)
         VAR_feature_columns = VAR_features.columns.tolist()
         # Create external features
         X_ext = self.create_x(df, future_regressor)
@@ -3874,9 +3870,9 @@ class TVVAR(BasicLinearModel):
         # Remove rows with NaNs due to lagging
         X = X.dropna()
         # note the DF here not df_scaled so potentially index could be different which is not accounted for
-        Y_values = df.loc[X.index].to_numpy().astype(float)
+        Y_values = df_scaled.loc[X.index].to_numpy().astype(float)
         # Optionally apply PCA
-        if self.apply_pca:
+        if self.apply_pca and (self.lags is not None or self.rolling_means is not None):
             from sklearn.decomposition import PCA
 
             self.pca = PCA(n_components=self.pca_explained_variance)
@@ -3887,6 +3883,7 @@ class TVVAR(BasicLinearModel):
             X = pd.concat([X.drop(columns=VAR_feature_columns), VAR_pca_df], axis=1)
             self.pca_columns = VAR_pca_df.columns.tolist()
         else:
+            self.apply_pca = False
             self.pca_columns = None
         # Fit the model
         if self.x_scaled:
@@ -3894,7 +3891,7 @@ class TVVAR(BasicLinearModel):
             X_values = self.x_scaler.fit_transform(X).to_numpy().astype(float)
         else:
             self.x_scaler = EmptyTransformer()
-            X_values = X
+            X_values = X.to_numpy().astype(float)
 
         if self.phi is None:
             if self.lambda_ is not None:
@@ -3924,6 +3921,8 @@ class TVVAR(BasicLinearModel):
             S = np.zeros((n_features, n_features))
             r = np.zeros((n_features, n_targets))
             alpha = self.lambda_
+            if alpha is None:
+                alpha = 0.0001
             for t in range(n_samples):
                 X_t = X_np[t:t+1].T  # Shape (n_features, 1)
                 Y_t = Y_np[t:t+1].T  # Shape (n_targets, 1)
@@ -3965,7 +3964,7 @@ class TVVAR(BasicLinearModel):
         X_ext["constant"] = 1
 
         predictions = pd.DataFrame(index=test_index, columns=self.column_names, dtype=float)
-        extended_df = pd.concat([self.df_scaled, predictions], axis=0)
+        extended_df = pd.concat([self.var_history, predictions], axis=0)
         # For each date in forecast horizon
         x_pred = []
         for t, date in enumerate(test_index):
@@ -3979,6 +3978,7 @@ class TVVAR(BasicLinearModel):
             X_ext_t = X_ext.loc[date:date]
             X_t = pd.concat([X_ext_t, VAR_features_t], axis=1)
             # If PCA was applied, transform VAR_features
+            self.X_t = X_t
             if self.apply_pca:
                 VAR_data_t = X_t[self.VAR_feature_columns]
                 VAR_pca_t = self.pca.transform(VAR_data_t)
@@ -3996,7 +3996,6 @@ class TVVAR(BasicLinearModel):
         
         # Save X_pred for process_components
         # Recreate VAR features for the entire forecast horizon
-        # extended_df = pd.concat([self.df_scaled, predictions], axis=0)
         self.X_pred = pd.concat(x_pred, axis=0)
         self.X_pred = self.X_pred.astype(float)
         if len(test_index) < 2 or ((self.trend_phi is None or self.trend_phi == 1) and (self.var_dampening is None or self.var_dampening == 1)):
@@ -4169,7 +4168,7 @@ class TVVAR(BasicLinearModel):
             "rolling_means": random.choices([None, [4], [7], [4, 7], [28]], [0.4, 0.3, 0.2, 0.2, 0.05])[0],
             "lambda_": random.choices(
                 [None, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
-                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                [0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
@@ -4177,13 +4176,14 @@ class TVVAR(BasicLinearModel):
             "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.001])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
             "base_scaled": random.choices([True, False], [0.5, 0.5])[0],
-            "x_scaled": random.choices([True, False], [0.5, 0.5])[0],
+            "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
             "var_preprocessing": RandomTransform(
-                transformer_list=["ClipOutliers", "SeasonalDifference", "bkfilter", "AnomalyRemoval"],
+                transformer_list=["ClipOutliers", "bkfilter", "AnomalyRemoval", "FFTFilter"],
                 transformer_max_depth=1,
                 allow_none=True,
                 fast_params=True,
             ),
+            "threshold_value": random.choices([None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025])[0],
         }
 
     def get_params(self):
@@ -4203,4 +4203,5 @@ class TVVAR(BasicLinearModel):
             "base_scaled": self.base_scaled,
             "x_scaled": self.x_scaled,
             "var_preprocessing": self.var_preprocessing,
+            "threshold_value": self.threshold_value
         }

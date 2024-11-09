@@ -5418,7 +5418,7 @@ class StandardScaler:
         self.means = df.mean()
         self.stds = df.std(ddof=0).replace(0, 1)  # Use population standard deviation (ddof=0)
         # Identify columns to skip (constant or zero std)
-        self.skip_columns = self.stds == 0
+        self.skip_columns = self.stds == 1  # 0 replace with 1, exact 1 unlikely in real data
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Scale the dataset using the stored mean and standard deviation."""
