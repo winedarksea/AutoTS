@@ -3750,6 +3750,7 @@ class TVVAR(BasicLinearModel):
         changepoint_distance_end: int = None,
         lambda_: float = 0.01,
         phi: float = None,
+        max_cycles: int = 2000,
         trend_phi: float = None,
         var_dampening: float = None,
         lags: list = None,
@@ -3789,6 +3790,7 @@ class TVVAR(BasicLinearModel):
         self.var_preprocessing = var_preprocessing
         self.trend_phi = trend_phi
         self.var_dampening = var_dampening
+        self.max_cycles = max_cycles
 
     def empty_scaler(self, df):
         self.scaler_std = pd.Series(1.0, index=df.columns)
@@ -3808,15 +3810,17 @@ class TVVAR(BasicLinearModel):
                 lagged_data = pd.concat([lagged_data, rolling_avg], axis=1)
         return lagged_data
 
-    def apply_beta_threshold(self):
+    def apply_beta_threshold(self, beta=None):
+        if beta is None:
+            beta = self.beta
         if self.threshold_value is None:
-            return None
+            return beta
         # Compute absolute values of coefficients
-        beta_abs = np.abs(self.beta)
+        beta_abs = np.abs(beta)
         # Determine threshold dynamically
         if self.threshold_method == 'std':
             # Use multiple of standard deviation
-            beta_std = np.std(self.beta, axis=0, keepdims=True)
+            beta_std = np.std(beta, axis=0, keepdims=True)
             threshold = self.threshold_value * beta_std
         elif self.threshold_method == 'percentile':
             # Use percentile
@@ -3824,7 +3828,8 @@ class TVVAR(BasicLinearModel):
         else:
             raise ValueError("threshold_method must be 'std' or 'percentile'")
         # Set coefficients below threshold to zero
-        self.beta = np.where(beta_abs >= threshold, self.beta, 0)
+        beta = np.where(beta_abs >= threshold, beta, 0)
+        return beta
 
     def fit(self, df, future_regressor=None):
         df = self.basic_profile(df)
@@ -3904,7 +3909,7 @@ class TVVAR(BasicLinearModel):
             else:
                 self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
             # Post-process coefficients to set small values to zero
-            self.apply_beta_threshold()
+            self.beta = self.apply_beta_threshold()
             # Calculate residuals
             Y_pred = X_values @ self.beta
             residuals = Y_values - Y_pred
@@ -3915,6 +3920,11 @@ class TVVAR(BasicLinearModel):
         else:
             # Time-varying estimation with forgetting factor phi
             n_samples, n_features = X_values.shape
+            if self.max_cycles is not None:
+                start_point = n_samples - int(self.max_cycles)
+                start_point = start_point if start_point > 0 else 0
+            else:
+                start_point = 0
             n_targets = Y_values.shape[1]
             X_np = X_values
             Y_np = Y_values
@@ -3923,7 +3933,7 @@ class TVVAR(BasicLinearModel):
             alpha = self.lambda_
             if alpha is None:
                 alpha = 0.0001
-            for t in range(n_samples):
+            for t in range(start_point, n_samples):
                 X_t = X_np[t:t+1].T  # Shape (n_features, 1)
                 Y_t = Y_np[t:t+1].T  # Shape (n_targets, 1)
                 if t == 0:
@@ -3937,7 +3947,7 @@ class TVVAR(BasicLinearModel):
                 theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
             self.beta = theta_t  # Use the last theta_t as beta
             # Post-process coefficients to set small values to zero
-            self.apply_beta_threshold()
+            self.beta = self.apply_beta_threshold()
             # Calculate residuals
             Y_pred = X_np @ self.beta
             residuals = Y_np - Y_pred
@@ -4174,6 +4184,7 @@ class TVVAR(BasicLinearModel):
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
             "var_dampening": random.choices([None, 0.999, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
             "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.001])[0],
+            "max_cycles": random.choices([2000, 200, 10000], [0.8, 0.2, 0.01])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
             "base_scaled": random.choices([True, False], [0.5, 0.5])[0],
             "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
@@ -4199,6 +4210,7 @@ class TVVAR(BasicLinearModel):
             "trend_phi": self.trend_phi,
             "var_dampening": self.var_dampening,
             "phi": self.phi,
+            "max_cycles": self.max_cycles,
             "apply_pca": self.apply_pca,
             "base_scaled": self.base_scaled,
             "x_scaled": self.x_scaled,
