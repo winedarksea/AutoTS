@@ -541,10 +541,16 @@ general_template_dict = {
     },
     "87": {  # optimized on wiki daily, 25.6 smape, 991k mqae, initial fit
         'Model': 'TVVAR',
-        'ModelParameters': '{"datepart_method": "expanded", "changepoint_spacing": 6, "changepoint_distance_end": 520, "regression_type": null, "lags": [7], "rolling_means": [4], "lambda_": 0.001, "trend_phi": 0.99, "var_dampening": 0.98, "phi": null, "max_cycles": 2000, "apply_pca": true, "base_scaled": false, "x_scaled": false, "var_preprocessing": {"fillna": "rolling_mean", "transformations": {"0": "FFTFilter"}, "transformation_params": {"0": {"cutoff": 0.4, "reverse": false, "on_transform": true, "on_inverse": false}}}, "threshold_value": null}',
+        'ModelParameters': '{"datepart_method": "expanded", "changepoint_spacing": 90, "changepoint_distance_end": 520, "regression_type": null, "lags": [7], "rolling_means": [4], "lambda_": 0.001, "trend_phi": 0.99, "var_dampening": 0.98, "phi": null, "max_cycles": 2000, "apply_pca": true, "base_scaled": false, "x_scaled": false, "var_preprocessing": {"fillna": "rolling_mean", "transformations": {"0": "FFTFilter"}, "transformation_params": {"0": {"cutoff": 0.4, "reverse": false, "on_transform": true, "on_inverse": false}}}, "threshold_value": null}',
         'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler", "2": "PositiveShift", "3": "MinMaxScaler", "4": "AlignLastValue", "5": "ClipOutliers"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 100}, "1": {}, "2": {}, "3": {}, "4": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.5, "first_value_only": false, "threshold": 1, "threshold_method": "max"}, "5": {"method": "clip", "std_threshold": 4, "fillna": null}}}',
         "Ensemble": 0,
     },
+    "88": {
+        'Model': 'TVVAR',
+        'ModelParameters': '{"datepart_method": "expanded", "changepoint_spacing": 6, "changepoint_distance_end": 520, "regression_type": null, "lags": [7], "rolling_means": [4], "lambda_": 0.001, "trend_phi": 0.99, "var_dampening": 0.98, "phi": null, "max_cycles": 2000, "apply_pca": true, "base_scaled": false, "x_scaled": false, "var_preprocessing": {"fillna": "rolling_mean", "transformations": {"0": "FFTFilter"}, "transformation_params": {"0": {"cutoff": 0.4, "reverse": false, "on_transform": true, "on_inverse": false}}}, "threshold_value": null}',
+        'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler", "2": "AlignLastValue", "3": "MinMaxScaler", "4": "MinMaxScaler"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 100}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": 1, "threshold_method": "max"}, "3": {}, "4": {}}}',
+        'Ensemble': 0,
+    }
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
