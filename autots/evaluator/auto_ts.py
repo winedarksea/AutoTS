@@ -4206,18 +4206,23 @@ class AutoTS(object):
 
             return fig
 
-    def plot_chosen_transformer(self, df_wide=None, series=None, color1='grey', color2='darkorange'):
+    def plot_chosen_transformer(self, df_wide=None, series=None, chosen_params=None, color1='grey', color2='darkorange'):
         """visualizes the best model transformer, fit_transform (not inverse) effects.
         Won't show much for ensembles, only shows overall transformer if present.
 
         Args:
             df_wide (pd.DataFrame): optional, useful if preclean used
             series (str): name of time series to plot
+            chosen_params (dict): the parameters of the transformer to use, defaults to best of model search
             color1 (str): color of original
             color2 (str): color of transformed
         """
         if not self.best_model_transformation_params:
             return "no transformer directly used"
+        if chosen_params is None:
+            chosen_params = self.best_model_transformation_params
+        if isinstance(chosen_params, str):
+            chosen_params = json.loads(chosen_params)
 
         import matplotlib.pyplot as plt
 
@@ -4233,7 +4238,7 @@ class AutoTS(object):
             col = str(series)
 
         self.chosen_transformer = GeneralTransformer(
-            **self.best_model_transformation_params,
+            **chosen_params,
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
             verbose=self.verbose,

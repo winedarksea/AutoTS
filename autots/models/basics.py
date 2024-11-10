@@ -4163,6 +4163,16 @@ class TVVAR(BasicLinearModel):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
+        use_preprocess = random.choices([True, False], [0.7, 0.3])[0]
+        if use_preprocess:
+            var_preprocessing = RandomTransform(
+                transformer_list=["ClipOutliers", "bkfilter", "AnomalyRemoval", "FFTFilter"],
+                transformer_max_depth=1,
+                allow_none=False,
+                fast_params=True,
+            )
+        else:
+            var_preprocessing = False
         return {
             "datepart_method": random_datepart(method=method),
             "changepoint_spacing": random.choices(
@@ -4174,26 +4184,21 @@ class TVVAR(BasicLinearModel):
                 [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
             )[0],
             "regression_type": regression_choice,
-            "lags": random.choices([None, [1], [7], [1, 2]], [0.4, 0.3, 0.2, 0.1])[0],
-            "rolling_means": random.choices([None, [4], [7], [4, 7], [28]], [0.4, 0.3, 0.2, 0.2, 0.05])[0],
+            "lags": random.choices([None, [1], [7], [1, 2], [24]], [0.4, 0.2, 0.3, 0.1, 0.05])[0],
+            "rolling_means": random.choices([None, [3], [4], [7], [4, 7], [28], [168]], [0.4, 0.05, 0.3, 0.2, 0.1, 0.05, 0.02])[0],
             "lambda_": random.choices(
-                [None, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
-                [0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                [None, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
+                [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
             "var_dampening": random.choices([None, 0.999, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
-            "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.001])[0],
+            "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8], [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01])[0],
             "max_cycles": random.choices([2000, 200, 10000], [0.8, 0.2, 0.01])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
-            "base_scaled": random.choices([True, False], [0.5, 0.5])[0],
+            "base_scaled": random.choices([True, False], [0.4, 0.6])[0],
             "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
-            "var_preprocessing": RandomTransform(
-                transformer_list=["ClipOutliers", "bkfilter", "AnomalyRemoval", "FFTFilter"],
-                transformer_max_depth=1,
-                allow_none=True,
-                fast_params=True,
-            ),
+            "var_preprocessing": var_preprocessing,
             "threshold_value": random.choices([None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025])[0],
         }
 
