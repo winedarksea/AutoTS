@@ -4338,7 +4338,7 @@ class AutoTS(object):
         plt.title("Legend for Mosaic")
         return ax, ax_legend
 
-    def plot_transformer_by_class(self, template=None, colors: dict = None, top_n: int =  15):
+    def plot_transformer_by_class(self, template=None, colors: dict = None, top_n: int =  15, plot_group: str = "ModelClass"):
         """Using the best results (from exported template), plot usage of transformers by model class.
         
         Args:
@@ -4442,26 +4442,27 @@ class AutoTS(object):
 
         # Create a DataFrame from the collected data
         transformer_df = pd.DataFrame(transformer_data)
+        self.transformer_by_class = transformer_df
 
         # Calculate total unique models per model class
-        unique_models = transformer_df[['ModelClass', 'ModelID']].drop_duplicates()
-        model_class_counts = unique_models.groupby('ModelClass').size().reset_index(name='TotalModels')
+        unique_models = transformer_df[[plot_group, 'ModelID']].drop_duplicates()
+        model_class_counts = unique_models.groupby(plot_group).size().reset_index(name='TotalModels')
 
         # Calculate total models overall
         total_models_overall = model_class_counts['TotalModels'].sum()
 
         # Calculate counts of transformers per model class
-        counts = transformer_df.groupby(['ModelClass', 'Transformer']).size().reset_index(name='Count')
+        counts = transformer_df.groupby([plot_group, 'Transformer']).size().reset_index(name='Count')
 
         # Calculate proportion of models in each class that used each transformer
-        counts = counts.merge(model_class_counts, on='ModelClass')
+        counts = counts.merge(model_class_counts, on=plot_group)
         counts['ProportionInClass'] = counts['Count'] / counts['TotalModels']
 
         # Calculate proportion of each model class in the total models
         model_class_counts['ClassProportion'] = model_class_counts['TotalModels'] / total_models_overall
 
         # Merge ClassProportion into counts
-        counts = counts.merge(model_class_counts[['ModelClass', 'ClassProportion']], on='ModelClass', suffixes=('', '_y'))
+        counts = counts.merge(model_class_counts[[plot_group, 'ClassProportion']], on=plot_group, suffixes=('', '_y'))
 
         # Calculate adjusted proportion
         counts['AdjustedProportion'] = counts['ProportionInClass'] * counts['ClassProportion']
@@ -4481,15 +4482,18 @@ class AutoTS(object):
 
         # Define pastel colors for model classes
         if colors is None:
-            sns_colors = sns.color_palette("pastel")
-            model_class_colors = {
-                'motif': sns_colors[0],
-                'ML': sns_colors[1],
-                'stat': sns_colors[2],
-                'naive': sns_colors[3],
-                'DL': sns_colors[4],
-                'other': sns_colors[5],
-            }
+            if plot_group == "ModelClass":
+                sns_colors = sns.color_palette("pastel")
+                model_class_colors = {
+                    'motif': sns_colors[0],
+                    'ML': sns_colors[1],
+                    'stat': sns_colors[2],
+                    'naive': sns_colors[3],
+                    'DL': sns_colors[4],
+                    'other': sns_colors[5],
+                }
+            else:
+                model_class_colors = dict(zip(transformer_df["Model"].unique().tolist(), colors_list))
         else:
             model_class_colors = colors
 
@@ -4510,7 +4514,7 @@ class AutoTS(object):
         # Pivot the data for plotting
         plot_data = counts_top.pivot_table(
             index='Transformer',
-            columns='ModelClass',
+            columns=plot_group,
             values='NormalizedProportion',
             fill_value=0
         ).reindex(index=top_transformers)
