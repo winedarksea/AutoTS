@@ -1056,7 +1056,7 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         # drop duplicates (holiday flag can create these for multiple countries)
         x_array = x_array.loc[:, ~x_array.columns.duplicated()]
-        x_array = x_array.drop(columns=self.drop_colz)
+        x_array = x_array.drop(columns=self.drop_colz, errors="ignore")
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
