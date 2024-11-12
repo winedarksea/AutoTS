@@ -622,7 +622,7 @@ class Cassandra(ModelObject):
         # remove colinear features
         # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
         corr = np.corrcoef(x_array, rowvar=0)  # second one
-        w, vec = np.linalg.eig(corr)
+        w, vec = np.linalg.eig(np.nan_to_num(corr))
         np.fill_diagonal(corr, 0)
         if self.max_colinearity is not None:
             corel = x_array.columns[
