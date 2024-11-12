@@ -3662,7 +3662,7 @@ class MultivariateRegression(ModelObject):
         )[0]
         abs_energy_choice = False
         rolling_autocorr_periods_choice = random.choices(
-            [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
+            [None, 2, 7, 12, 30], [0.99, 0.01, 0.01, 0.01, 0.01]
         )[0]
         nonzero_last_n = random.choices(
             [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]

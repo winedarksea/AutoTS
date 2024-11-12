@@ -4193,7 +4193,7 @@ class TVVAR(BasicLinearModel):
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
             "var_dampening": random.choices([None, 0.999, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
-            "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8], [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01])[0],
+            "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8, 0.5, 0.2, 0.1], [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01, 0.02, 0.01, 0.02])[0],
             "max_cycles": random.choices([2000, 200, 10000], [0.8, 0.2, 0.01])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
             "base_scaled": random.choices([True, False], [0.4, 0.6])[0],
