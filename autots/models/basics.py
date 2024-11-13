@@ -3756,7 +3756,7 @@ class TVVAR(BasicLinearModel):
         lags: list = None,
         rolling_means: list = None,
         apply_pca: bool = False,
-        pca_explained_variance: float = 0.95,
+        pca_n_components: float = 0.95,
         threshold_method: str = 'std',  # 'std' or 'percentile'
         threshold_value: float = None,   # Multiple of std or percentile value
         base_scaled: bool = True,
@@ -3782,7 +3782,7 @@ class TVVAR(BasicLinearModel):
         self.lags_list = self.lags = lags
         self.rolling_avg_list = self.rolling_means = rolling_means
         self.apply_pca = apply_pca
-        self.pca_explained_variance = pca_explained_variance
+        self.pca_n_components = pca_n_components
         self.threshold_method = threshold_method
         self.threshold_value = threshold_value
         self.base_scaled = base_scaled
@@ -3880,7 +3880,7 @@ class TVVAR(BasicLinearModel):
         if self.apply_pca and (self.lags is not None or self.rolling_means is not None):
             from sklearn.decomposition import PCA
 
-            self.pca = PCA(n_components=self.pca_explained_variance)
+            self.pca = PCA(n_components=self.pca_n_components)
             VAR_data = X[VAR_feature_columns]
             VAR_pca = self.pca.fit_transform(VAR_data)
             VAR_pca_df = pd.DataFrame(VAR_pca, index=VAR_data.index)
@@ -4187,8 +4187,8 @@ class TVVAR(BasicLinearModel):
             "lags": random.choices([None, [1], [7], [1, 2], [24]], [0.4, 0.2, 0.3, 0.1, 0.05])[0],
             "rolling_means": random.choices([None, [3], [4], [7], [4, 7], [28], [168]], [0.4, 0.05, 0.3, 0.2, 0.1, 0.05, 0.02])[0],
             "lambda_": random.choices(
-                [None, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
-                [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                [None, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000, 50000, 100000],
+                [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.01],
                 k=1,
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
@@ -4196,6 +4196,7 @@ class TVVAR(BasicLinearModel):
             "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8, 0.5, 0.2, 0.1], [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01, 0.02, 0.01, 0.02])[0],
             "max_cycles": random.choices([2000, 200, 10000], [0.8, 0.2, 0.01])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
+            "pca_n_components": random.choices([None, 0.95, 0.9, 0.8, 10, "mle"], [0.2, 0.4, 0.2, 0.1, 0.1, 0.001])[0],
             "base_scaled": random.choices([True, False], [0.4, 0.6])[0],
             "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
             "var_preprocessing": var_preprocessing,
@@ -4217,6 +4218,7 @@ class TVVAR(BasicLinearModel):
             "phi": self.phi,
             "max_cycles": self.max_cycles,
             "apply_pca": self.apply_pca,
+            "pca_n_components": self.pca_n_components,
             "base_scaled": self.base_scaled,
             "x_scaled": self.x_scaled,
             "var_preprocessing": self.var_preprocessing,
