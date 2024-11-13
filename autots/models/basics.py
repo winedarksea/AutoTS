@@ -4184,7 +4184,7 @@ class TVVAR(BasicLinearModel):
                 [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
             )[0],
             "regression_type": regression_choice,
-            "lags": random.choices([None, [1], [7], [1, 2], [24]], [0.4, 0.2, 0.3, 0.1, 0.05])[0],
+            "lags": random.choices([None, [1], [7], [1, 2], [24], [1, 2, 3, 4, 5]], [0.4, 0.2, 0.3, 0.1, 0.05, 0.01])[0],
             "rolling_means": random.choices([None, [3], [4], [7], [4, 7], [28], [168]], [0.4, 0.05, 0.3, 0.2, 0.1, 0.05, 0.02])[0],
             "lambda_": random.choices(
                 [None, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000, 50000, 100000],
