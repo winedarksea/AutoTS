@@ -51,6 +51,12 @@ if pd.__version__ >= '1.3' and NUMBA_AVAILABLE:
 else:
     engine = None
 
+try:
+    from joblib import Parallel, delayed
+
+    joblib_present = True
+except Exception:
+    joblib_present = False
 
 def rolling_x_regressor(
     df,
@@ -255,6 +261,7 @@ def rolling_x_regressor_regressor(
     cointegration: str = None,
     cointegration_lag: int = 1,
     series_id=None,
+    slice_index=None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -297,7 +304,10 @@ def rolling_x_regressor_regressor(
             % 10**16
         )
         X['series_id'] = hashed
-    return X
+    if slice_index is not None:
+        return X[X.index.isin(slice_index)]
+    else:
+        return X
 
 
 def retrieve_regressor(
@@ -3283,8 +3293,7 @@ class MultivariateRegression(ModelObject):
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
-        self.scaler_std = np.std(df, axis=0)
-        self.scaler_std[self.scaler_std == 0] = 1
+        self.scaler_std = np.std(df, axis=0).replace(0.0, 1.0)
         return (df - self.scaler_mean) / self.scaler_std
 
     def scale_data(self, df):
@@ -3330,9 +3339,10 @@ class MultivariateRegression(ModelObject):
             # define X and Y
             if self.frac_slice is not None:
                 slice_size = int(df.shape[0] * self.frac_slice)
-                slice_index = df.index[slice_size - 1: -1]
+                self.slice_index = df.index[slice_size - 1: -1]
                 self.Y = df.iloc[slice_size:].to_numpy().ravel(order="F")
             else:
+                self.slice_index = None
                 self.Y = df[1:].to_numpy().ravel(order="F")
             # drop look ahead data
             base = df[:-1]
@@ -3341,10 +3351,17 @@ class MultivariateRegression(ModelObject):
                 cut_regr.index = base.index
             else:
                 cut_regr = None
-            # open to suggestions on making this faster
-            self.X = pd.concat(
-                [
-                    rolling_x_regressor_regressor(
+            # Create X, parallel and non-parallel versions
+            parallel = True
+            if self.n_jobs in [0, 1] or df.shape[1] < 8:
+                parallel = False
+            elif not joblib_present:
+                parallel = False
+            # joblib multiprocessing to loop through series
+            # this might be causing issues, TBD Key Error from Resource Tracker
+            if parallel:
+                self.X = Parallel(n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600)(
+                    delayed(rolling_x_regressor_regressor)(
                         base[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
@@ -3379,10 +3396,55 @@ class MultivariateRegression(ModelObject):
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
+                        slice_index=self.slice_index,
                     )
                     for x_col in base.columns
-                ]
-            )
+                )
+                self.X = pd.concat(self.X)
+            else:
+                self.X = pd.concat(
+                    [
+                        rolling_x_regressor_regressor(
+                            base[x_col].to_frame(),
+                            mean_rolling_periods=self.mean_rolling_periods,
+                            macd_periods=self.macd_periods,
+                            std_rolling_periods=self.std_rolling_periods,
+                            max_rolling_periods=self.max_rolling_periods,
+                            min_rolling_periods=self.min_rolling_periods,
+                            ewm_var_alpha=self.ewm_var_alpha,
+                            quantile90_rolling_periods=self.quantile90_rolling_periods,
+                            quantile10_rolling_periods=self.quantile10_rolling_periods,
+                            additional_lag_periods=self.additional_lag_periods,
+                            ewm_alpha=self.ewm_alpha,
+                            abs_energy=self.abs_energy,
+                            rolling_autocorr_periods=self.rolling_autocorr_periods,
+                            nonzero_last_n=self.nonzero_last_n,
+                            add_date_part=self.datepart_method,
+                            holiday=self.holiday,
+                            holiday_country=self.holiday_country,
+                            polynomial_degree=self.polynomial_degree,
+                            window=self.window,
+                            future_regressor=cut_regr,
+                            # these rely the if part not being run if None
+                            regressor_per_series=(
+                                self.regressor_per_series_train[x_col]
+                                if self.regressor_per_series_train is not None
+                                else None
+                            ),
+                            static_regressor=(
+                                static_regressor.loc[x_col].to_frame().T
+                                if self.static_regressor is not None
+                                else None
+                            ),
+                            cointegration=self.cointegration,
+                            cointegration_lag=self.cointegration_lag,
+                            series_id=x_col if self.series_hash else None,
+                            slice_index=self.slice_index,
+                        )
+                        for x_col in base.columns
+                    ]
+                )
+
             del base
             if self.probabilistic:
                 from sklearn.ensemble import GradientBoostingRegressor
@@ -3415,8 +3477,6 @@ class MultivariateRegression(ModelObject):
                 multioutput=multioutput,
             )
             self.multioutputgpr = self.regression_model['model'] == "MultioutputGPR"
-            if self.frac_slice is not None:
-                self.X = self.X[self.X.index.isin(slice_index)]
             if self.scale_full_X:
                 self.X = self.scale_data(self.X)
 
@@ -3628,7 +3688,7 @@ class MultivariateRegression(ModelObject):
             model_choice = generate_regressor_params(
                 model_dict=multivariate_model_dict, method=method
             )
-            window_choice = random.choices([None, 3, 7, 10], [0.2, 0.3, 0.1, 0.05])[0]
+            window_choice = random.choices([None, 3, 7, 10], [0.3, 0.3, 0.1, 0.05])[0]
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
@@ -3724,7 +3784,7 @@ class MultivariateRegression(ModelObject):
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
-            "frac_slice": random.choices([None, 0.8, 0.5, 0.2], [0.6, 0.1, 0.2, 0.1])[0],
+            "frac_slice": random.choices([None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
         }
         return parameter_dict
 

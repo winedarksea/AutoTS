@@ -502,8 +502,10 @@ class AutoTS(object):
                     ["simple"],
                     ["simple", "horizontal-max"],
                     [
-                        "mosaic-weighted-0-40",
+                        # "mosaic-weighted-0-40",
                         "mosaic-weighted-0-20",
+                        "mosaic-mae-profile-0-10",
+                        "mosaic-spl-unpredictability_adjusted-0-30",
                         "horizontal-min-20",
                     ],
                     full_ensemble_test_list,
@@ -514,8 +516,8 @@ class AutoTS(object):
                     ],
                     [  # works well on demand forecasting
                         "simple", "mosaic-mae-median-profile",
-                        "mosaic-mae-median-profile-horizontal",
-                        "horizontal",
+                        # "mosaic-mae-median-profile-horizontal",
+                        # "horizontal",
                     ],
                 ],
                 [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
