@@ -5274,10 +5274,12 @@ class FIRFilter(EmptyTransformer):
 class ThetaTransformer:
     def __init__(self, theta_values=[0, 2], regularization=1e-3, verbose=0):
         """
-        Like the Theta model, but without the ETS.
+        ThetaTransformer decomposes a time series into theta lines based on the Theta method.
 
         Args:
             theta_values (list): List of theta coefficients to use in transformation.
+            regularization (float): Regularization term for numerical stability.
+            verbose (int): Verbosity level for logging.
         """
         self.theta_values = theta_values
         self.regularization = regularization
@@ -5293,10 +5295,10 @@ class ThetaTransformer:
         Compute the time variable t based on the index.
 
         Parameters:
-        - index: pandas DatetimeIndex for which to compute t.
+            index (pd.DatetimeIndex): Index for which to compute t.
 
         Returns:
-        - t: numpy array of time variables scaled between 0 and 1.
+            np.ndarray: Time variables scaled between 0 and 1.
         """
         t = (index - self.t0).total_seconds().values.reshape(-1, 1)
         # Handle the case where total_seconds is not available
@@ -5307,10 +5309,14 @@ class ThetaTransformer:
         return t
 
     def fit(self, df):
-        """Fit the transformer to the data.
+        """
+        Fit the transformer to the data.
 
         Parameters:
-        - df: pandas DataFrame with DatetimeIndex and columns representing time series.
+            df (pd.DataFrame): DataFrame with DatetimeIndex and columns representing time series.
+
+        Returns:
+            self
         """
         self.columns = df.columns
         self.index = df.index
@@ -5325,26 +5331,21 @@ class ThetaTransformer:
         X = np.hstack((np.ones((n, 1)), t))  # n x 2
         self.X = X
 
-        # Compute beta coefficients for the LRL
+        # Compute beta coefficients for the LRL using least squares
         y = df.values  # n x m
-        norm_fro = np.linalg.norm(X.T @ X, ord='fro')
-        if norm_fro > 1e8:
-            if self.verbose > 1:
-                print("Warning: High condition number detected, applying regularization.")
-            XtX = X.T @ X + self.regularization * np.eye(X.shape[1])
-        else:
-            XtX = X.T @ X
-        XtX_inv = np.linalg.inv(XtX)  # 2 x 2
-        XtX_inv_Xt = XtX_inv @ X.T  # 2 x n
-        self.beta = XtX_inv_Xt @ y  # (2 x n) @ (n x m) = 2 x m
+        self.beta = np.linalg.lstsq(X, y, rcond=None)[0]  # 2 x m
 
         return self
 
     def transform(self, df):
-        """Transform the data into theta lines.
+        """
+        Transform the data into theta lines.
 
         Parameters:
-        - df: pandas DataFrame with same index and columns as fitted.
+            df (pd.DataFrame): DataFrame with same index and columns as fitted.
+
+        Returns:
+            pd.DataFrame: Transformed DataFrame containing theta lines.
         """
         y = df.values  # n x m
         n = len(df)
@@ -5361,7 +5362,8 @@ class ThetaTransformer:
         transformed_columns = []
 
         for theta in self.theta_values:
-            theta_line = theta * y + (1 - theta) * LRL_t  # n x m
+            # Corrected theta line formula
+            theta_line = LRL_t + theta * (y - LRL_t)  # n x m
             theta_lines.append(theta_line)
             # Create column names for this theta
             columns_theta = [f"{col}_theta{theta}" for col in self.columns]
@@ -5374,36 +5376,54 @@ class ThetaTransformer:
         return transformed_df
 
     def fit_transform(self, df):
+        """
+        Fit the transformer to the data and then transform it.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame to fit and transform.
+
+        Returns:
+            pd.DataFrame: Transformed DataFrame containing theta lines.
+        """
         self.fit(df)
         return self.transform(df)
 
-    def inverse_transform(self, transformed_df):
-        """Reconstruct the original data from theta lines.
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """
+        Reconstruct the original data from theta lines.
 
         Parameters:
-        - transformed_df: pandas DataFrame with theta lines.
+            df (pd.DataFrame): DataFrame with theta lines.
+
+        Returns:
+            pd.DataFrame: Reconstructed DataFrame in the original feature space.
         """
         m = len(self.columns)
-        n_theta = len(self.theta_values)
+        # n_theta = len(self.theta_values)
 
         # Extract theta lines from the transformed data
         theta_lines = []
-        for i in range(n_theta):
+        for i, theta in enumerate(self.theta_values):
             start_col = i * m
             end_col = (i + 1) * m
-            theta_line = transformed_df.iloc[:, start_col:end_col].values  # n x m
+            theta_line = df.iloc[:, start_col:end_col].values  # n x m
             theta_lines.append(theta_line)
 
-        # Reconstruct the original data by averaging the theta lines
         y_reconstructed = np.mean(theta_lines, axis=0)  # n x m
+        # Use weights to reconstruct the original data
+        # weights = np.ones(n_theta) / n_theta
+        # y_reconstructed = np.tensordot(weights, theta_lines, axes=([0], [0]))  # n x m
 
-        reconstructed_df = pd.DataFrame(y_reconstructed, index=transformed_df.index, columns=self.columns)
+        reconstructed_df = pd.DataFrame(y_reconstructed, index=df.index, columns=self.columns)
         return reconstructed_df
 
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "theta_values": random.choice([[0, 2], [0.5, 1.5], [0.2, 1.8], [0.4, 1.6], [0.6, 1.4], [0.8, 1.2], [0, 1, 2], [0,0.5,1.5,2]]),
+            "theta_values": random.choice([
+                [0, 2], [0.5, 1.5], [0.2, 1.8], [0.4, 1.6],
+                [0.6, 1.4], [0.8, 1.2], [0, 1, 2], [0, 0.5, 1.5, 2]
+            ]),
         }
 
 
