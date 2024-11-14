@@ -3721,16 +3721,13 @@ class TVVAR(BasicLinearModel):
         var_preprocessing will fail with many options, anything that scales/shifts the space
         x_scaled=True seems to fail often when base_scaled=False and VAR components used
     TODO:
-        # lambda is None
         # plot of feature impacts
         
         # highly correlated, shared hidden factors
-        # time varying
         # groups / geos
 
         # impulse response
         # allow other regression models
-        # Add a max to the number of samples for time varying to try
         # could run regression twice, setting to zero any X which had low coefficients for the second run
 
         # feature summarization (dynamic factor is PCA)

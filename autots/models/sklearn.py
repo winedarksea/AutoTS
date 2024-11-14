@@ -3353,7 +3353,7 @@ class MultivariateRegression(ModelObject):
                 cut_regr = None
             # Create X, parallel and non-parallel versions
             parallel = True
-            if self.n_jobs in [0, 1] or df.shape[1] < 8:
+            if self.n_jobs in [0, 1] or df.shape[1] < 20:
                 parallel = False
             elif not joblib_present:
                 parallel = False

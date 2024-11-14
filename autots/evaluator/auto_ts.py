@@ -297,7 +297,7 @@ class AutoTS(object):
             elif any([x for x in model_list if x in ['PytorchForecasting', 'GluonTS']]):
                 ensemble = None
             else:
-                ensemble = ['simple', "distance", "horizontal-max"]
+                ensemble = ['simple', "horizontal-max"]
         if isinstance(ensemble, str):
             self.ensemble = ensemble.split(",")
         elif isinstance(ensemble, list):
@@ -501,7 +501,7 @@ class AutoTS(object):
                     None,
                     ["simple"],
                     ["simple", "horizontal-max"],
-                    [
+                    [  # daily, post eval loop
                         # "mosaic-weighted-0-40",
                         "mosaic-weighted-0-20",
                         "mosaic-mae-profile-0-10",
@@ -509,15 +509,14 @@ class AutoTS(object):
                         "horizontal-min-20",
                     ],
                     full_ensemble_test_list,
-                    [
+                    [  # daily, direct
                         "horizontal",
                         "mosaic-mae-0-horizontal",
-                        "mosaic-mae-median-0-30",
+                        "mosaic-mae-median-profile-horizontal",
+                        "mosaic-weighted-median-0-30",
                     ],
                     [  # works well on demand forecasting
                         "simple", "mosaic-mae-median-profile",
-                        # "mosaic-mae-median-profile-horizontal",
-                        # "horizontal",
                     ],
                 ],
                 [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
@@ -4584,6 +4583,25 @@ class AutoTS(object):
         # Adjust layout to fit larger text and legend
         plt.tight_layout(rect=[0, 0, 0.92, 1])  # Adjust right margin to make space for legend
 
+    def plot_failure_rate(self, target="transformers"):
+        initial_results = self.results()
+        failures = []
+        successes = []
+        for idx, row in initial_results.iterrows():
+            failed = not pd.isnull(row['Exceptions'])
+            if target == "transformers":
+                transforms = list(json.loads(row['TransformationParameters']).get('transformations', {}).values())
+            elif target == "models":
+                transforms = [row["Model"]]
+            else:
+                raise ValueError(f"target {target} not recognized")
+            if failed:
+                failures = failures + transforms
+            else:
+                successes = successes + transforms
+        total = pd.concat([pd.Series(failures).value_counts().rename("failures").to_frame(),pd.Series(successes).value_counts().rename("successes")], axis=1).fillna(0)
+        total['failure_rate'] = total['failures'] / (total['successes'] + total['failures'])
+        return total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.

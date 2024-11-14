@@ -875,6 +875,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  BasicLinearModel       |              |                         |    True       |                 |       |              |              | True          |
 |  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |              |               |
 |  NeuralForecast         | NeuralForecast |                       |    True       |                 | yes   | True         |              | True          |
+|  TVVAR                  |              |                         |    True       |                 |       | True         |              | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

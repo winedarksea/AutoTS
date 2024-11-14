@@ -59,10 +59,10 @@ df = load_daily(long=long)
 
 model = AutoTS(
     forecast_length=21,
-    frequency='infer',
+    frequency="infer",
     prediction_interval=0.9,
-    ensemble='auto',
-    model_list="fast",  # "superfast", "default", "fast_parallel"
+    ensemble=None,
+    model_list="superfast",  # "fast", "default", "fast_parallel"
     transformer_list="fast",  # "superfast",
     drop_most_recent=1,
     max_generations=4,
