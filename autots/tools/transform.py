@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
-from autots.tools.seasonal import date_part, seasonal_int, random_datepart
+from autots.tools.seasonal import date_part, seasonal_int, random_datepart, half_yr_spacing
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.constraint import (
     fit_constraint,
@@ -219,11 +219,8 @@ class Detrend(EmptyTransformer):
                     "Poisson",
                     "Tweedie",
                     "Gamma",
-                    "TheilSen",
-                    "RANSAC",
-                    "ARD",
                 ],
-                [0.3, 0.2, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0],
+                [0.3, 0.4, 0.1, 0.1, 0.1],
                 k=1,
             )[0]
             phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.1, 0.05, 0.05])[0]
@@ -234,7 +231,7 @@ class Detrend(EmptyTransformer):
             "transform_dict": random_cleaners(),
         }
 
-    def _retrieve_detrend(self, detrend: str = "Linear"):
+    def _retrieve_detrend(self, detrend: str = "Linear", multioutput=True):
         if detrend == "Linear":
             from sklearn.linear_model import LinearRegression
 
@@ -272,6 +269,22 @@ class Detrend(EmptyTransformer):
             from sklearn.multioutput import MultiOutputRegressor
 
             return MultiOutputRegressor(ARDRegression())
+        elif detrend == 'ElasticNet':
+            if multioutput:
+                from sklearn.linear_model import MultiTaskElasticNet
+
+                regr = MultiTaskElasticNet(
+                    alpha=1.0
+                )
+            else:
+                from sklearn.linear_model import ElasticNet
+
+                regr = ElasticNet(alpha=1.0)
+            return regr
+        elif detrend == 'Ridge':
+            from sklearn.linear_model import Ridge
+
+            return Ridge()
         else:
             from sklearn.linear_model import LinearRegression
 
@@ -305,7 +318,7 @@ class Detrend(EmptyTransformer):
         else:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                self.trained_model = self._retrieve_detrend(detrend=self.model)
+                self.trained_model = self._retrieve_detrend(detrend=self.model, multioutput=df.shape[1] > 1)
                 if self.model in self.need_positive:
                     self.trnd_trans = PositiveShift(
                         log=False, center_one=True, squared=False
@@ -2394,7 +2407,7 @@ class EWMAFilter(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         if method == "fast":
-            choice = random.choice([3, 7, 10, 12])
+            choice = random.choice([3, 7, 10, 12, 28])
         else:
             choice = seasonal_int(include_one=False)
         return {"span": choice}
@@ -5427,6 +5440,173 @@ class ThetaTransformer:
         }
 
 
+class ChangepointDetrend(Detrend):
+    """Remove trend using changepoint features linked to a specific datetime origin."""
+
+    def __init__(
+        self,
+        model: str = "Linear",
+        changepoint_spacing: int = 60,
+        changepoint_distance_end: int = 120,
+        datepart_method: str = None,
+        **kwargs,
+    ):
+        super().__init__(name="ChangepointDetrend")
+        self.model = model
+        self.changepoint_spacing = changepoint_spacing
+        self.changepoint_distance_end = changepoint_distance_end
+        self.datepart_method = datepart_method
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        if method == "fast":
+            choice = random.choices(["Linear", "Ridge", "ElasticNet"], [0.5, 0.2, 0.2], k=1)[0]
+            # phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.05, 0.01, 0.01])[0]
+        else:
+            choice = random.choices(
+                [
+                    "Linear",
+                    "Poisson",
+                    "Tweedie",
+                    "Gamma",
+                    "Ridge",
+                    "ElasticNet",
+                ],
+                [0.4, 0.1, 0.1, 0.1, 0.1, 0.1],
+                k=1,
+            )[0]
+            # phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.1, 0.05, 0.05])[0]
+        datepart_method = random.choices([None, "something"], [0.5, 0.5])[0]
+        if datepart_method is not None:
+            datepart_method = random_datepart(method=method)
+        return {
+            "model": choice,
+            # "phi": phi,
+            "changepoint_spacing": random.choices(
+                [None, 6, 28, 60, 90, 120, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.2],
+            )[0],
+            "changepoint_distance_end": random.choices(
+                [None, 6, 28, 60, 90, 180, 360, 520, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
+            )[0],
+            "datepart_method": datepart_method
+        }
+
+    def _create_X(self, DTindex, datepart_method=None):
+        """
+        Create changepoint features for given datetime index and stored changepoint dates.
+
+        Parameters:
+        DTindex (pd.DatetimeIndex): datetime index of the data
+
+        Returns:
+        pd.DataFrame: DataFrame containing changepoint features for linear regression.
+        """
+        # Compute time differences between DTindex and each changepoint date
+        DTindex_values = DTindex.values.astype('datetime64[ns]')
+        cp_dates_values = self.changepoint_dates.values.astype('datetime64[ns]')
+        # Compute time differences in days
+        time_diffs = (DTindex_values[:, None] - cp_dates_values[None, :]).astype('timedelta64[s]') / np.timedelta64(1, 'D')
+        # Apply np.maximum(0, time_diff)
+        features = np.maximum(0, time_diffs)
+        # Create DataFrame
+        feature_names = [f'changepoint_{i+1}' for i in range(len(self.changepoint_dates))]
+        changepoint_features = pd.DataFrame(features, index=DTindex, columns=feature_names)
+        if datepart_method is not None:
+            x_s = date_part(DTindex, method=datepart_method, set_index=True)
+            return pd.concat([changepoint_features, x_s], axis=1)
+        return changepoint_features
+
+    def fit(self, df):
+        """Fits trend for later detrending using changepoint features.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except Exception:
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+        Y = df.copy()
+        DTindex = df.index
+        n = len(DTindex)
+        self.origin_datetime = DTindex[0]
+        if self.changepoint_spacing is None or self.changepoint_distance_end is None:
+            half_yr_space = half_yr_spacing(df)
+            if self.changepoint_spacing is None:
+                self.changepoint_spacing = int(half_yr_space)
+            if self.changepoint_distance_end is None:
+                self.changepoint_distance_end = int(half_yr_space / 2)
+        # Compute changepoint positions as indices
+        changepoint_range_end = n - self.changepoint_distance_end
+        # Adjust for cases where changepoint_distance_end >= n
+        if changepoint_range_end <= 0:
+            # Set changepoint_positions to include only the start position
+            self.changepoint_positions = np.array([0])
+        else:
+            self.changepoint_positions = np.arange(
+                0, changepoint_range_end, self.changepoint_spacing
+            )
+            self.changepoint_positions = np.append(
+                self.changepoint_positions, changepoint_range_end
+            )
+        # Get the datetime values at the changepoint positions
+        self.changepoint_dates = DTindex[self.changepoint_positions]
+        # Generate changepoint features
+        x_t = self._create_X(DTindex, datepart_method=self.datepart_method)
+        # Fit the regression model
+        self.trained_model = self._retrieve_detrend(detrend=self.model, multioutput=df.shape[1] > 1)
+        self.trained_model.fit(x_t, Y)
+        self.shape = df.shape
+        return self
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except Exception:
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+        DTindex = df.index
+        x_t = self._create_X(DTindex, datepart_method=self.datepart_method)
+        # Predict trend
+        trend = pd.DataFrame(
+            self.trained_model.predict(x_t), index=DTindex, columns=df.columns
+        )
+        # Detrend data
+        df_detrended = df - trend
+        return df_detrended
+
+    def inverse_transform(self, df):
+        """Return data to original form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        DTindex = df.index
+        x_t = self._create_X(DTindex, datepart_method=self.datepart_method)
+        # Predict trend
+        trend = pd.DataFrame(
+            self.trained_model.predict(x_t), index=DTindex, columns=df.columns
+        )
+        # Add trend back to data
+        df_original = df + trend
+        return df_original
+
+    def fit_transform(self, df):
+        """Fit and return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
 class StandardScaler:
     def __init__(self):
         self.means = None
@@ -5550,6 +5730,7 @@ have_params = {
     "Constraint": Constraint,
     "FIRFilter": FIRFilter,
     "ThetaTransformer": ThetaTransformer,
+    "ChangepointDetrend": ChangepointDetrend,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5657,6 +5838,7 @@ class GeneralTransformer(object):
             "FIRFilter": apply a FIR filter (firwin)
             "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
             "ThetaTransformer": decomposes into theta lines, then recombines
+            "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -6119,6 +6301,7 @@ transformer_dict = {
     "Constraint": 0.01,  # 52
     "FIRFilter": 0.01,
     "ThetaTransformer": 0.01,
+    "ChangepointDetrend": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -6203,6 +6386,7 @@ decompositions = {
     "IntermittentOccurrence": 0.005,
     "PCA": 0.005,
     "ThetaTransformer": 0.005,
+    "ChangepointDetrend": 0.01,
 }
 postprocessing = {
     "Round": 0.1,

@@ -37,6 +37,7 @@
 * some additional options to MultivariateRegression
 * added ThetaTransformer
 * added TVVAR model (time varying VAR)
+* added ChangepointDetrend transformer
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

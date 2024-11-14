@@ -638,6 +638,7 @@ class ModelTest(unittest.TestCase):
             'ARDL', 'UnivariateMotif', 'VAR', 'MAR', 'TMF', 'RRVAR', 'VECM',
             'BallTreeMultivariateMotif', 'FFT',
             # "DMD",  # 0.6.12
+            # "BasicLinearModel", "TVVAR",  # 0.6.16
         ]
         # models that for whatever reason arne't consistent across test sessions
         run_only_no_score = ['FBProphet', 'RRVAR', "TMF"]
@@ -772,8 +773,11 @@ class ModelTest(unittest.TestCase):
             "HistoricValues",  # new in 0.6.7
             "BKBandpassFilter",  # new in 0.6.8
             # "Constraint",  # new in 0.6.15
+            # "DiffSmoother",  # new in 0.6.15
             # "FIRFilter",  # new in 0.6.16
             # "ShiftFirstValue",  # new in 0.6.16
+            # "ThetaTransformer",  # new in 0.6.16
+            # "ChangepointDetrend",  # new in 0.6.16
         ]
 
         timings = {}

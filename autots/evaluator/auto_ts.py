@@ -503,9 +503,10 @@ class AutoTS(object):
                     ["simple", "horizontal-max"],
                     [  # daily, post eval loop
                         # "mosaic-weighted-0-40",
-                        "mosaic-weighted-0-20",
+                        "mosaic-weighted-0-30",
                         "mosaic-mae-profile-0-10",
                         "mosaic-spl-unpredictability_adjusted-0-30",
+                        "mosaic-mae-median-crosshair_lite-0-30",
                         "horizontal-min-20",
                     ],
                     full_ensemble_test_list,

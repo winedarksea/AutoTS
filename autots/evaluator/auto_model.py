@@ -1809,7 +1809,7 @@ horizontal_post_processors = [
             },
             "2": {"window": 10},
         },
-    },  # best mae on daily
+    },  # best mae on daily, 2x observed again as best
     {
         "fillna": "fake_date",
         "transformations": {
@@ -1843,7 +1843,7 @@ horizontal_post_processors = [
             },
             "1": {"window": None},
         },
-    },  # best smape on daily
+    },  # best smape on daily, best on VN1
     {
         "fillna": "linear",
         "transformations": {"0": "Constraint"},
