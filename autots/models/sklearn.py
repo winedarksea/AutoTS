@@ -522,7 +522,7 @@ def retrieve_regressor(
         return ExtraTreesRegressor(
             n_jobs=n_jobs, random_state=random_seed, **model_param_dict
         )
-    elif model_class == "RadiusNeighbors":
+    elif model_class in ["RadiusNeighbors", "RadiusNeighbors", "RadiusRegressor", "RadiusNeighborsRegressor"]:
         from sklearn.neighbors import RadiusNeighborsRegressor
 
         regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)

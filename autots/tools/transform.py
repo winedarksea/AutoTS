@@ -1315,7 +1315,10 @@ class DatepartRegressionTransformer(EmptyTransformer):
             multioutput=multioutput,
             n_jobs=self.n_jobs,
         )
-        self.model = self.model.fit(np.nan_to_num(X), np.nan_to_num(y))
+        self.model = self.model.fit(
+            X.fillna(0) if isinstance(X, pd.DataFrame) else np.nan_to_num(X),
+            y.fillna(0) if isinstance(y, pd.DataFrame) else np.nan_to_num(y)
+        )
         self.shape = df_local.shape
         return self
 
