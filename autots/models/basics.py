@@ -3759,6 +3759,7 @@ class TVVAR(BasicLinearModel):
         base_scaled: bool = True,
         x_scaled: bool = False,
         var_preprocessing: dict = False,
+        var_postprocessing: dict = False,
         **kwargs,
     ):
         super().__init__(
@@ -3785,6 +3786,7 @@ class TVVAR(BasicLinearModel):
         self.base_scaled = base_scaled
         self.x_scaled = x_scaled
         self.var_preprocessing = var_preprocessing
+        self.var_postprocessing = var_postprocessing
         self.trend_phi = trend_phi
         self.var_dampening = var_dampening
         self.max_cycles = max_cycles
@@ -3941,7 +3943,11 @@ class TVVAR(BasicLinearModel):
                     r = self.phi * r + X_t @ Y_t.T
                 # Regularization term
                 S_reg = S + alpha * np.eye(n_features)
-                theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
+                # try block has some cost if it fails routinely
+                try:
+                    theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
+                except np.linalg.LinAlgError:
+                    theta_t = np.linalg.pinv(S_reg) @ r
             self.beta = theta_t  # Use the last theta_t as beta
             # Post-process coefficients to set small values to zero
             self.beta = self.apply_beta_threshold()
@@ -3972,6 +3978,16 @@ class TVVAR(BasicLinearModel):
 
         predictions = pd.DataFrame(index=test_index, columns=self.column_names, dtype=float)
         extended_df = pd.concat([self.var_history, predictions], axis=0)
+        # post processing (these do cleanup, keep it a bit from going off the rails, which sometimes happens)
+        if self.var_postprocessing:
+            self.var_postprocessor = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_country,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                # forecast_length=self.forecast_length,
+                **self.var_postprocessing,
+            )
         # For each date in forecast horizon
         x_pred = []
         for t, date in enumerate(test_index):
@@ -3996,8 +4012,14 @@ class TVVAR(BasicLinearModel):
             # Make prediction
             Y_pred_t = self.x_scaler.transform(X_t).to_numpy().astype(float) @ self.beta
             x_pred.append(X_t)
-            # Store prediction
-            predictions.loc[date] = Y_pred_t.flatten()
+            # post processing
+            if self.var_postprocessing:
+                df = pd.DataFrame(Y_pred_t, index=[date], columns=self.column_names)
+                self.var_postprocessor.fit(extended_df).inverse_transform(df)
+                predictions.loc[date] = df.to_numpy()
+            else:
+                # Store prediction
+                predictions.loc[date] = Y_pred_t.flatten()
             # Update extended_df with the new prediction
             extended_df.loc[date] = predictions.loc[date]
         
@@ -4160,7 +4182,7 @@ class TVVAR(BasicLinearModel):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
-        use_preprocess = random.choices([True, False], [0.7, 0.3])[0]
+        use_preprocess = random.choices([True, False], [0.5, 0.5])[0]
         if use_preprocess:
             var_preprocessing = RandomTransform(
                 transformer_list=["ClipOutliers", "bkfilter", "AnomalyRemoval", "FFTFilter"],
@@ -4170,6 +4192,16 @@ class TVVAR(BasicLinearModel):
             )
         else:
             var_preprocessing = False
+        use_postprocess = random.choices([True, False], [0.2, 0.8])[0]
+        if use_postprocess:
+            var_postprocessing = RandomTransform(
+                transformer_list=["HistoricValues", "Constraint", "AlignLastDiff", "AlignLastValue", "FIRFilter", "Round"],
+                transformer_max_depth=1,
+                allow_none=False,
+                fast_params=True,
+            )
+        else:
+            var_postprocessing = False
         return {
             "datepart_method": random_datepart(method=method),
             "changepoint_spacing": random.choices(
@@ -4197,6 +4229,7 @@ class TVVAR(BasicLinearModel):
             "base_scaled": random.choices([True, False], [0.4, 0.6])[0],
             "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
             "var_preprocessing": var_preprocessing,
+            "var_postprocessing": var_postprocessing,
             "threshold_value": random.choices([None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025])[0],
         }
 
@@ -4219,5 +4252,6 @@ class TVVAR(BasicLinearModel):
             "base_scaled": self.base_scaled,
             "x_scaled": self.x_scaled,
             "var_preprocessing": self.var_preprocessing,
+            "var_postprocessing": self.var_postprocessing,
             "threshold_value": self.threshold_value
         }
