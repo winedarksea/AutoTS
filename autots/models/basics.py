@@ -4182,11 +4182,15 @@ class TVVAR(BasicLinearModel):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
+        if method == "deep":
+            transformer_max_depth = 2
+        else:
+            transformer_max_depth = 1
         use_preprocess = random.choices([True, False], [0.5, 0.5])[0]
         if use_preprocess:
             var_preprocessing = RandomTransform(
                 transformer_list=["ClipOutliers", "bkfilter", "AnomalyRemoval", "FFTFilter"],
-                transformer_max_depth=1,
+                transformer_max_depth=transformer_max_depth,
                 allow_none=False,
                 fast_params=True,
             )
@@ -4196,7 +4200,7 @@ class TVVAR(BasicLinearModel):
         if use_postprocess:
             var_postprocessing = RandomTransform(
                 transformer_list=["HistoricValues", "Constraint", "AlignLastDiff", "AlignLastValue", "FIRFilter", "Round"],
-                transformer_max_depth=1,
+                transformer_max_depth=transformer_max_depth,
                 allow_none=False,
                 fast_params=True,
             )

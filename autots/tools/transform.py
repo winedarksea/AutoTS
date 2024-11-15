@@ -1315,7 +1315,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             multioutput=multioutput,
             n_jobs=self.n_jobs,
         )
-        self.model = self.model.fit(X.fillna(0), y.fillna(0))
+        self.model = self.model.fit(np.nan_to_num(X), np.nan_to_num(y))
         self.shape = df_local.shape
         return self
 
@@ -3918,17 +3918,17 @@ class LevelShiftMagic(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "window_size": random.choices([7, 30, 70, 90, 120, 364], [0.1, 0.4, 0.05, 0.4, 0.05, 0.1], k=1)[
+            "window_size": random.choices([4, 7, 14, 30, 70, 90, 120, 364], [0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1], k=1)[
                 0
             ],
             "alpha": random.choices(
                 [1.0, 1.8, 2.0, 2.2, 2.5, 3.0, 3.5, 4.0], [0.05, 0.02, 0.2, 0.02, 0.3, 0.2, 0.15, 0.1], k=1
             )[0],
-            "grouping_forward_limit": random.choice([2, 3, 4, 5]),
-            "max_level_shifts": random.choices([3, 5, 8, 10, 30], [0.05, 0.3, 0.05, 0.2, 0.2])[0],
+            "grouping_forward_limit": random.choice([2, 3, 4, 5, 6]),
+            "max_level_shifts": random.choices([3, 5, 8, 10, 30, 40], [0.05, 0.3, 0.05, 0.2, 0.2, 0.05])[0],
             "alignment": random.choices(
-                ["average", "last_value", "rolling_diff", "rolling_diff_3nn"],
-                [0.5, 0.2, 0.15, 0.15],
+                ["average", "last_value", "rolling_diff", "rolling_diff_3nn", "rolling_diff_5nn"],
+                [0.5, 0.2, 0.15, 0.25, 0.05],
             )[0],
         }
 
@@ -4047,6 +4047,22 @@ class LevelShiftMagic(EmptyTransformer):
                         + diff[max_mask.shift(-1)].shift(1).fillna(0)
                     )
                     / 3
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        elif self.alignment == "rolling_diff_5nn":
+            self.lvlshft = (
+                (
+                    (
+                        diff[max_mask.shift(2)].shift(-2).fillna(0)
+                        + diff[max_mask.shift(1)].shift(-1).fillna(0)
+                        + diff[max_mask]
+                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
+                        + diff[max_mask.shift(-2)].shift(2).fillna(0)
+                    )
+                    / 5
                 )
                 .fillna(0)
                 .loc[::-1]
