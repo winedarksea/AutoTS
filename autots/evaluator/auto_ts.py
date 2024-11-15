@@ -1547,31 +1547,33 @@ class AutoTS(object):
                         f"Mosaic Ensemble Generation Error: {repr(e)}:  {''.join(tb.format_exception(None, e, e.__traceback__))}"
                     )
             try:
-                # test on initial test split to make sure they work
-                self._run_template(
-                    ensemble_templates,
-                    df_train,
-                    df_test,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_test=future_regressor_test,
-                    current_weights=current_weights,
-                    validation_round=0,
-                    max_generations="Horizontal Ensembles",
-                    model_count=0,
-                    current_generation=0,
-                    result_file=result_file,
-                )
                 if self.horizontal_ensemble_validation:
                     self._run_validations(
                         df_wide_numeric=self.df_wide_numeric,
-                        num_validations=self.num_validations,
+                        num_validations=self.num_validations + 1,
                         validation_template=ensemble_templates,
                         future_regressor=self.future_regressor_train,
                         first_validation=False,
-                        skip_first_index=True,
+                        skip_first_index=False,
                         return_template=False,
                         subset_override=False,
                         additional_msg="horizontal ensemble validations",
+                        shifted_starts=True,  # this is to try and reduce choice based on overfitting
+                    )
+                else:
+                    # test on initial test split to make sure they work
+                    self._run_template(
+                        ensemble_templates,
+                        df_train,
+                        df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0,
+                        max_generations="Horizontal Ensembles",
+                        model_count=0,
+                        current_generation=0,
+                        result_file=result_file,
                     )
             except Exception as e:
                 if self.verbose >= 0:
@@ -2008,6 +2010,7 @@ class AutoTS(object):
         return_template=False,  # if True, return template instead of storing in self
         subset_override=False,  # if True, force not to subset
         additional_msg="",
+        shifted_starts=False,
     ):
         """Loop through a template for n validation segments."""
         if df_wide_numeric is None:
@@ -2026,6 +2029,11 @@ class AutoTS(object):
                 print("Validation Round: {}".format(str(cslc)))
             # slice the validation data into current validation slice
             current_slice = df_wide_numeric.reindex(self.validation_indexes[cslc])
+            # do a slift shift, this is intended to make mosaic ensemble validation more robust, reduce overfitting
+            if shifted_starts:
+                shift = num_validations - cslc
+                if shift > 0:
+                    current_slice = current_slice.iloc[:-shift]
 
             # subset series (if used) and take a new train/test split
             if self.subset_flag and not subset_override:
