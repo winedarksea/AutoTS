@@ -3760,6 +3760,7 @@ class TVVAR(BasicLinearModel):
         x_scaled: bool = False,
         var_preprocessing: dict = False,
         var_postprocessing: dict = False,
+        mode: str = 'additive',
         **kwargs,
     ):
         super().__init__(
@@ -3790,6 +3791,7 @@ class TVVAR(BasicLinearModel):
         self.trend_phi = trend_phi
         self.var_dampening = var_dampening
         self.max_cycles = max_cycles
+        self.mode = str(mode).lower()
 
     def empty_scaler(self, df):
         self.scaler_std = pd.Series(1.0, index=df.columns)
@@ -3832,11 +3834,16 @@ class TVVAR(BasicLinearModel):
 
     def fit(self, df, future_regressor=None):
         df = self.basic_profile(df)
+        if self.mode == 'multiplicative':
+            # could add a PositiveShift here to make this more reliable on all data
+            df_scaled = np.log(df.replace(0, np.nan)).replace(-np.inf, np.nan).bfill().ffill()
+        else:
+            df_scaled = df
         # Scaling df
         if self.base_scaled:
-            df_scaled = self.base_scaler(df)
+            df_scaled = self.base_scaler(df_scaled)
         else:
-            df_scaled = self.empty_scaler(df)
+            df_scaled = self.empty_scaler(df_scaled)
         if self.changepoint_spacing is None or self.changepoint_distance_end is None:
             half_yr_space = half_yr_spacing(df)
             if self.changepoint_spacing is None:
@@ -3859,6 +3866,7 @@ class TVVAR(BasicLinearModel):
                 # forecast_length=self.forecast_length,
                 **self.var_preprocessing,
             )
+            # note uses UNSCALED df
             self.var_history = self.var_preprocessor.fit_transform(df).ffill().bfill()
             if self.base_scaled:
                 self.var_history = (self.var_history - self.scaler_mean) / self.scaler_std
@@ -4070,6 +4078,8 @@ class TVVAR(BasicLinearModel):
 
         # Convert forecast back to original scale
         forecast = predictions * self.scaler_std + self.scaler_mean
+        if self.mode == 'multiplicative':
+            forecast = np.exp(forecast)
         if just_point_forecast:
             return forecast
         else:
@@ -4080,6 +4090,8 @@ class TVVAR(BasicLinearModel):
                 columns=self.column_names,
                 index=forecast.index,
             )
+            if self.mode == 'multiplicative':
+                margin_of_error = np.exp(margin_of_error)
             upper_forecast = forecast + margin_of_error
             lower_forecast = forecast - margin_of_error
             predict_runtime = datetime.datetime.now() - predictStartTime
@@ -4170,6 +4182,8 @@ class TVVAR(BasicLinearModel):
             df = final_components[target_col]
             # Scale back to original feature space
             df = df * self.scaler_std[target_col] # + self.scaler_mean[target_col]
+            if self.mode == 'multiplicative':
+                df = np.exp(df)
             df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
             result[target_col] = df
         components_df_final = pd.concat(result.values(), axis=1)
@@ -4235,6 +4249,7 @@ class TVVAR(BasicLinearModel):
             "var_preprocessing": var_preprocessing,
             "var_postprocessing": var_postprocessing,
             "threshold_value": random.choices([None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025])[0],
+            "mode": random.choices(["additive", "multiplicative"], [0.95, 0.05])[0],
         }
 
     def get_params(self):
@@ -4257,5 +4272,6 @@ class TVVAR(BasicLinearModel):
             "x_scaled": self.x_scaled,
             "var_preprocessing": self.var_preprocessing,
             "var_postprocessing": self.var_postprocessing,
-            "threshold_value": self.threshold_value
+            "threshold_value": self.threshold_value,
+            "mode": self.mode,
         }
