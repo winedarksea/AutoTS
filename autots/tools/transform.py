@@ -1315,7 +1315,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             multioutput=multioutput,
             n_jobs=self.n_jobs,
         )
-        self.model = self.model.fit(X, y)
+        self.model = self.model.fit(X.fillna(0), y.fillna(0))
         self.shape = df_local.shape
         return self
 
@@ -4587,7 +4587,7 @@ class AlignLastDiff(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "rows": random.choices(
-                [1, 2, 4, 7, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1]
+                [1, 2, 4, 7, 28, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.05, 0.1, 0.05, 0.1]
             )[0],
             "displacement_rows": random.choices(
                 [1, 2, 4, 7, 21], [0.8, 0.05, 0.05, 0.05, 0.05]
@@ -4596,7 +4596,7 @@ class AlignLastDiff(EmptyTransformer):
                 [1.0, 0.9, 0.7, 0.5, 0.2, 0], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05]
             )[0],
             "decay_span": random.choices(
-                [None, 2, 3, 90, 365], [0.6, 0.1, 0.1, 0.1, 0.1]
+                [None, 2, 3, 4, 90, 365], [0.6, 0.1, 0.1, 0.05, 0.1, 0.1]
             )[0],
         }
 
