@@ -48,11 +48,10 @@ def load_daily(long: bool = True):
         tickers=None, london_air_stations=None,
         weather_event_types=None, earthquake_min_magnitude=None,
     )
-    module_path = dirname(__file__)
-    data_file_name = join(module_path, 'data', 'holidays.zip')
+    data_file_name = join("autots", "datasets", 'data', 'holidays.zip')
     df2.to_csv(
         data_file_name,
-        index=False,
+        index=True,
         compression={
             'method': 'zip',
             'archive_name': 'holidays.csv',

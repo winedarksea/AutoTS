@@ -39,6 +39,7 @@
 * added TVVAR model (time varying VAR)
 * added ChangepointDetrend transformer
 * added MeanPercentSplitter transformer
+* updated load_daily with more recent history
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
