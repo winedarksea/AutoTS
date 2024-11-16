@@ -5001,7 +5001,7 @@ class BKBandpassFilter(EmptyTransformer):
         on_inverse: bool = False,
         **kwargs,
     ):
-        super().__init__(name="HistoricValues")
+        super().__init__(name="BKBandpassFilter")
         self.low = low
         self.high = high
         self.K = K
@@ -5627,7 +5627,7 @@ class ChangepointDetrend(Detrend):
 
 
 class MeanPercentSplitter(EmptyTransformer):
-    """Splits data into rolling means and percentages.
+    """Splits data into rolling means and percentages. Designed to help with intermittent demand forecasting.
 
     Args:
         window (int or str): Rolling window size. If 'forecast_length', uses forecast_length as window.
@@ -6109,7 +6109,7 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
-        elif transformation in ["Constraint"]:
+        elif transformation in ["Constraint", "MeanPercentSplitter"]:
             return Constraint(forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":
