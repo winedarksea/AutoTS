@@ -1781,7 +1781,7 @@ horizontal_post_processors = [
                 "threshold_method": "mean",
             },
         },
-    },  # best mae on daily, a bit weird otherwise
+    },  # best mae on daily, a bit weird otherwise, 1x best mage daily
     {
         "fillna": "median",
         "transformations": {
@@ -1857,7 +1857,7 @@ horizontal_post_processors = [
                 "fillna": "linear",
             }
         },
-    },  # best on daily, weight of smape and wasserstein
+    },  # best on daily, weight of smape and wasserstein, 1x very stable!
     {
         "fillna": "ffill",
         "transformations": {"0": "RegressionFilter", "1": "HistoricValues"},
@@ -1909,13 +1909,20 @@ horizontal_post_processors = [
      "transformation_params": {"0": {"method": "med_diff", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "rolling_mean_24", "transform_dict": {"fillna": None, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 7}}}, "isolated_only": False, "on_inverse": False}, "1": {"span": 7}, "2": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": 1, "threshold_method": "max"}}
      },  # best on simple ensemble on daily
     {  # best on VN1 competition and MAE
-         "fillna": "cubic",
-         "transformations": {"0": "ScipyFilter", "1": "DatepartRegression"},
-         "transformation_params": {
-             "0": {"method": "butter", "method_args": {"N": 1, "btype": "highpass", "analog": False, "output": "sos", "Wn": 0.024390243902439025}},
-             "1": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": True, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": ["weekdayofmonth", "common_fourier"], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False, "lags": None, "forward_lags": None}
-         }
+        "fillna": "cubic",
+        "transformations": {"0": "ScipyFilter", "1": "DatepartRegression"},
+        "transformation_params": {
+            "0": {"method": "butter", "method_args": {"N": 1, "btype": "highpass", "analog": False, "output": "sos", "Wn": 0.024390243902439025}},
+            "1": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": True, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": ["weekdayofmonth", "common_fourier"], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False, "lags": None, "forward_lags": None}
+        }
      },
+    {  # balanced on wiki daily
+        "fillna": "cubic",
+        "transformations": {"0": "AlignLastValue", "1": "DatepartRegression"},
+        "transformation_params": {
+            "0": {"rows": 1, "lag": 7, "method": "multiplicative", "strength": 0.9, "first_value_only": False, "threshold": 3, "threshold_method": "max"},
+            "1": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": True, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": "common_fourier", "polynomial_degree": None, "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 4}}}, "holiday_countries_used": False, "lags": None, "forward_lags": None}}
+    }
 ]
 
 

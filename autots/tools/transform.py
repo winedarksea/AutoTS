@@ -5626,6 +5626,123 @@ class ChangepointDetrend(Detrend):
         return self.transform(df)
 
 
+class MeanPercentSplitter(EmptyTransformer):
+    """Splits data into rolling means and percentages.
+
+    Args:
+        window (int or str): Rolling window size. If 'forecast_length', uses forecast_length as window.
+        forecast_length (int): The forecast length to use if window == 'forecast_length'.
+    """
+
+    def __init__(self, window=10, forecast_length=None, **kwargs):
+        super().__init__(name="MeanPercentSplitter")
+        self.window = window
+        self.forecast_length = forecast_length
+
+    def fit(self, df):
+        """Fit the transformer to the data.
+
+        Args:
+            df (pandas.DataFrame): Input DataFrame with pd.DatetimeIndex.
+        """
+        self.columns = df.columns
+
+        # Determine the rolling window size
+        if self.window == "forecast_length":
+            if self.forecast_length is None:
+                raise ValueError(
+                    "forecast_length must be provided when window == 'forecast_length'"
+                )
+            self.window_size = self.forecast_length
+        else:
+            self.window_size = int(self.window)
+
+        # Store the index for comparison in inverse_transform
+        self.fit_index_max = df.index.max()
+
+        return self
+
+    def transform(self, df):
+        """Transform the data by splitting into rolling means and percentages.
+
+        Args:
+            df (pandas.DataFrame): Input DataFrame with pd.DatetimeIndex.
+        """
+        if self.window == "forecast_length":
+            window_size = self.forecast_length
+        else:
+            window_size = int(self.window)
+
+        rolling_means = df.rolling(window=window_size, min_periods=1).mean()
+        percentages = df / rolling_means.replace(0, 1)
+
+        # Rename columns to distinguish between means and percentages
+        # the X in there is to try to assure uniqueness from input column names
+        mean_cols = [f"{col}_Xmean" for col in df.columns]
+        percentage_cols = [f"{col}_Xpercentage" for col in df.columns]
+
+        rolling_means.columns = mean_cols
+        percentages.columns = percentage_cols
+
+        return pd.concat([rolling_means, percentages], axis=1)
+
+    def inverse_transform(self, df):
+        """Inverse transform the data back to original space.
+
+        Args:
+            df (pandas.DataFrame): Transformed DataFrame with rolling means and percentages.
+        """
+        mean_cols = [f"{col}_Xmean" for col in self.columns]
+        percentage_cols = [f"{col}_Xpercentage" for col in self.columns]
+
+        rolling_means = df[mean_cols]
+        percentages = df[percentage_cols]
+
+        original_values = rolling_means.to_numpy() * percentages.to_numpy()
+
+        original_df = pd.DataFrame(
+            original_values, index=df.index, columns=self.columns
+        )
+
+        # Normalize by the final value if that is the mean of full forecast
+        if self.window == "forecast_length":
+            # Determine if inverse_transform is on future data
+            if original_df.index.min() > self.fit_index_max:
+                # Additional normalization step
+                # Use the final value of the rolling mean components (from fit) to normalize the final value,
+                # so that the mean of the inverse transformed components for each time series is equal to that final rolling mean value.
+
+                # Compute mean of the inverse transformed components for each time series
+                mean_values = original_df.mean()
+
+                # Compute normalization factor
+                finale = rolling_means.iloc[-1, :]
+                finale.index = self.columns
+                normalization_factor = finale / mean_values.replace(0, 1)
+
+                # Multiply original_df by normalization_factor
+                original_df = original_df.multiply(normalization_factor, axis=1)
+
+        return original_df
+
+    def fit_transform(self, df):
+        """Fit to data, then transform it.
+
+        Args:
+            df (pandas.DataFrame): Input DataFrame with pd.DatetimeIndex.
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        params = {
+            "window": random.choice([3, 7, 10, 24, "forecast_length"]),
+        }
+        return params
+
+
 class StandardScaler:
     def __init__(self):
         self.means = None
@@ -5750,6 +5867,7 @@ have_params = {
     "FIRFilter": FIRFilter,
     "ThetaTransformer": ThetaTransformer,
     "ChangepointDetrend": ChangepointDetrend,
+    "MeanPercentSplitter": MeanPercentSplitter,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -5858,6 +5976,7 @@ class GeneralTransformer(object):
             "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
             "ThetaTransformer": decomposes into theta lines, then recombines
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
+            "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -6321,6 +6440,7 @@ transformer_dict = {
     "FIRFilter": 0.01,
     "ThetaTransformer": 0.01,
     "ChangepointDetrend": 0.01,
+    "MeanPercentSplitter": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -6406,6 +6526,7 @@ decompositions = {
     "PCA": 0.005,
     "ThetaTransformer": 0.005,
     "ChangepointDetrend": 0.01,
+    "MeanPercentSplitter": 0.01,
 }
 postprocessing = {
     "Round": 0.1,
@@ -6426,6 +6547,7 @@ expanding_transformers = [
     "RollingMeanTransformer",
     "LocalLinearTrend",
     "ThetaTransformer",
+    "MeanPercentSplitter",
 ]  # note there is also prob_trans below for preventing reuse of these in one transformer
 
 transformer_class = {}
@@ -6599,7 +6721,7 @@ def RandomTransform(
 
     # remove duplication of some which scale memory exponentially
     # only allow one of these
-    prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend", "ThetaTransformer"}
+    prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend", "ThetaTransformer", "MeanPercentSplitter"}
     if any(x in prob_trans for x in trans):
         # for loop, only way I saw to do this right now
         seen = False

@@ -38,6 +38,7 @@
 * added ThetaTransformer
 * added TVVAR model (time varying VAR)
 * added ChangepointDetrend transformer
+* added MeanPercentSplitter transformer
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
