@@ -3370,6 +3370,7 @@ class BasicLinearModel(ModelObject):
         changepoint_distance_end: int = None,
         lambda_: float = 0.01,
         trend_phi: float = None,
+        holiday_countries_used: bool = True,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -3387,6 +3388,7 @@ class BasicLinearModel(ModelObject):
         self.changepoint_distance_end = changepoint_distance_end
         self.lambda_ = lambda_
         self.trend_phi = trend_phi
+        self.holiday_countries_used = holiday_countries_used
 
         self.regressor_columns = []
 
@@ -3423,8 +3425,8 @@ class BasicLinearModel(ModelObject):
                     bounds=bounds,
                 )
 
-    def create_x(self, df, future_regressor=None):
-        x_s = date_part(df.index, method=self.datepart_method, set_index=True)
+    def create_x(self, df, future_regressor=None, holiday_country="US", holiday_countries_used=True):
+        x_s = date_part(df.index, method=self.datepart_method, set_index=True, holiday_country=holiday_country, holiday_countries_used=holiday_countries_used)
         x_t = create_changepoint_features(
             df.index,
             changepoint_spacing=self.changepoint_spacing,
@@ -3463,7 +3465,7 @@ class BasicLinearModel(ModelObject):
                 raise ValueError(
                     "regression_type=='User' but no future_regressor supplied"
                 )
-        X = self.create_x(df, future_regressor)
+        X = self.create_x(df, future_regressor, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
 
         # Convert X and df (Y) to NumPy arrays for linear regression
         X_values = X.to_numpy().astype(float)
@@ -3517,7 +3519,7 @@ class BasicLinearModel(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        x_s = date_part(test_index, method=self.datepart_method, set_index=True)
+        x_s = date_part(test_index, method=self.datepart_method, set_index=True, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
         x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
@@ -3609,7 +3611,7 @@ class BasicLinearModel(ModelObject):
         # doens't handle regressor features
         # recompiles X which is suboptimal
         # could use better naming
-        X = self.create_x(df)
+        X = self.create_x(df, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
         contribution_seasonality = (
             X[self.seasonal_columns].values @ self.beta[: len(self.seasonal_columns)]
         )
@@ -3700,6 +3702,7 @@ class BasicLinearModel(ModelObject):
                 k=1,
             )[0],
             "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
+            "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
         }
 
     def get_params(self):
@@ -3711,6 +3714,7 @@ class BasicLinearModel(ModelObject):
             "regression_type": self.regression_type,
             "lambda_": self.lambda_,
             "trend_phi": self.trend_phi,
+            "holiday_countries_used": self.holiday_countries_used,
         }
 
 
@@ -3761,6 +3765,7 @@ class TVVAR(BasicLinearModel):
         var_preprocessing: dict = False,
         var_postprocessing: dict = False,
         mode: str = 'additive',
+        holiday_countries_used: bool = True,
         **kwargs,
     ):
         super().__init__(
@@ -3792,6 +3797,7 @@ class TVVAR(BasicLinearModel):
         self.var_dampening = var_dampening
         self.max_cycles = max_cycles
         self.mode = str(mode).lower()
+        self.holiday_countries_used = holiday_countries_used
 
     def empty_scaler(self, df):
         self.scaler_std = pd.Series(1.0, index=df.columns)
@@ -3876,7 +3882,7 @@ class TVVAR(BasicLinearModel):
         VAR_features = self.create_VAR_features(self.var_history)
         VAR_feature_columns = VAR_features.columns.tolist()
         # Create external features
-        X_ext = self.create_x(df, future_regressor)
+        X_ext = self.create_x(df, future_regressor, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
         # Combine features
         X = pd.concat([X_ext, VAR_features], axis=1)
         # Remove rows with NaNs due to lagging
@@ -3976,7 +3982,7 @@ class TVVAR(BasicLinearModel):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         # Create external features for the forecast period
-        x_s = date_part(test_index, method=self.datepart_method, set_index=True)
+        x_s = date_part(test_index, method=self.datepart_method, set_index=True, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
         x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
         x_t.index = test_index
         X_ext = pd.concat([x_s, x_t], axis=1)
@@ -4250,6 +4256,7 @@ class TVVAR(BasicLinearModel):
             "var_postprocessing": var_postprocessing,
             "threshold_value": random.choices([None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025])[0],
             "mode": random.choices(["additive", "multiplicative"], [0.95, 0.05])[0],
+            "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
         }
 
     def get_params(self):
@@ -4274,4 +4281,5 @@ class TVVAR(BasicLinearModel):
             "var_postprocessing": self.var_postprocessing,
             "threshold_value": self.threshold_value,
             "mode": self.mode,
+            "holiday_countries_used": self.holiday_countries_used,
         }

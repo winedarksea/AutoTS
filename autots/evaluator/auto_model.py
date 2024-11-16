@@ -1809,7 +1809,7 @@ horizontal_post_processors = [
             },
             "2": {"window": 10},
         },
-    },  # best mae on daily, 2x observed again as best
+    },  # best mae on daily, 2x observed again as best, 3x
     {
         "fillna": "fake_date",
         "transformations": {
@@ -1908,6 +1908,14 @@ horizontal_post_processors = [
      "transformations": {"0": "AnomalyRemoval", "1": "EWMAFilter", "2": "AlignLastValue"},
      "transformation_params": {"0": {"method": "med_diff", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "rolling_mean_24", "transform_dict": {"fillna": None, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 7}}}, "isolated_only": False, "on_inverse": False}, "1": {"span": 7}, "2": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": 1, "threshold_method": "max"}}
      },  # best on simple ensemble on daily
+    {  # best on VN1 competition and MAE
+         "fillna": "cubic",
+         "transformations": {"0": "ScipyFilter", "1": "DatepartRegression"},
+         "transformation_params": {
+             "0": {"method": "butter", "method_args": {"N": 1, "btype": "highpass", "analog": False, "output": "sos", "Wn": 0.024390243902439025}},
+             "1": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": True, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": ["weekdayofmonth", "common_fourier"], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False, "lags": None, "forward_lags": None}
+         }
+     },
 ]
 
 
@@ -2898,6 +2906,7 @@ def generate_score(
     metric_weighting: dict = {},
     prediction_interval: float = 0.9,
     return_score_dict: bool = False,
+    num_validations=None,
 ):
     """Generate score based on relative accuracies.
 
@@ -2950,41 +2959,49 @@ def generate_score(
         model_results['TotalRuntimeSeconds'] = (
             model_results['TotalRuntime'].dt.total_seconds().round(4)
         )
+    model_results = model_results.replace([np.inf, -np.inf], np.nan)
+    # not sure why there are negative SMAPE values, but make sure they get dealt with
+    if model_results['smape'].min() < 0:
+        model_results['smape'] = model_results['smape'].where(
+            model_results['smape'] >= 0, model_results['smape'].max()
+        )
+    # only use results that meet final validation count, if present
+    divisor_results = model_results
+    if num_validations is not None:
+        if "Runs" in model_results.columns:
+            divisor_results = model_results[model_results["Runs"] >= (num_validations + 1)]
+            print(divisor_results["rmse"])
+            if divisor_results.empty:
+                divisor_results = model_results
     # generate minimizing scores, where smaller = better accuracy
     try:
-        model_results = model_results.replace([np.inf, -np.inf], np.nan)
-        # not sure why there are negative SMAPE values, but make sure they get dealt with
-        if model_results['smape'].min() < 0:
-            model_results['smape'] = model_results['smape'].where(
-                model_results['smape'] >= 0, model_results['smape'].max()
-            )
         # handle NaN in scores...
         # model_results = model_results.fillna(value=model_results.max(axis=0))
 
         # where smaller is better, are always >=0, beware divide by zero
-        smape_scaler = model_results['smape_weighted'][
-            model_results['smape_weighted'] != 0
+        smape_scaler = divisor_results['smape_weighted'][
+            divisor_results['smape_weighted'] != 0
         ].min()
         smape_score = model_results['smape_weighted'] / smape_scaler
         overall_score = smape_score * smape_weighting
         score_dict['smape'] = smape_score * smape_weighting
         if mae_weighting != 0:
-            mae_scaler = model_results['mae_weighted'][
-                model_results['mae_weighted'] != 0
+            mae_scaler = divisor_results['mae_weighted'][
+                divisor_results['mae_weighted'] != 0
             ].min()
             mae_score = model_results['mae_weighted'] / mae_scaler
             score_dict['mae'] = mae_score * mae_weighting
             overall_score = overall_score + (mae_score * mae_weighting)
         if rmse_weighting != 0:
-            rmse_scaler = model_results['rmse_weighted'][
-                model_results['rmse_weighted'] != 0
+            rmse_scaler = divisor_results['rmse_weighted'][
+                divisor_results['rmse_weighted'] != 0
             ].min()
             rmse_score = model_results['rmse_weighted'] / rmse_scaler
             score_dict['rmse'] = rmse_score * rmse_weighting
             overall_score = overall_score + (rmse_score * rmse_weighting)
         if made_weighting != 0:
-            made_scaler = model_results['made_weighted'][
-                model_results['made_weighted'] != 0
+            made_scaler = divisor_results['made_weighted'][
+                divisor_results['made_weighted'] != 0
             ].min()
             made_score = model_results['made_weighted'] / made_scaler
             score_dict['made'] = made_score * made_weighting
@@ -2993,15 +3010,15 @@ def generate_score(
                 made_score = made_score.fillna(100)
             overall_score = overall_score + (made_score * made_weighting)
         if mage_weighting != 0:
-            mage_scaler = model_results['mage_weighted'][
-                model_results['mage_weighted'] != 0
+            mage_scaler = divisor_results['mage_weighted'][
+                divisor_results['mage_weighted'] != 0
             ].min()
             mage_score = model_results['mage_weighted'] / mage_scaler
             score_dict['mage'] = mage_score * mage_weighting
             overall_score = overall_score + (mage_score * mage_weighting)
         if competition_weighting != 0:
-            competition_scaler = model_results['competition_weighted'][
-                model_results['competition_weighted'] != 0
+            competition_scaler = divisor_results['competition_weighted'][
+                divisor_results['competition_weighted'] != 0
             ].min()
             competition_score = model_results[
                 'competition_weighted'
@@ -3009,8 +3026,8 @@ def generate_score(
             score_dict['competition'] = competition_score * competition_weighting
             overall_score = overall_score + (competition_score * competition_weighting)
         if mle_weighting != 0:
-            mle_scaler = model_results['mle_weighted'][
-                model_results['mle_weighted'] != 0
+            mle_scaler = divisor_results['mle_weighted'][
+                divisor_results['mle_weighted'] != 0
             ].min()
             mle_score = (
                 model_results['mle_weighted'] / mle_scaler / 10
@@ -3018,8 +3035,8 @@ def generate_score(
             score_dict['mle'] = mle_score * mle_weighting
             overall_score = overall_score + (mle_score * mle_weighting)
         if imle_weighting != 0:
-            imle_scaler = model_results['imle_weighted'][
-                model_results['imle_weighted'] != 0
+            imle_scaler = divisor_results['imle_weighted'][
+                divisor_results['imle_weighted'] != 0
             ].min()
             imle_score = (
                 model_results['imle_weighted'] / imle_scaler / 10
@@ -3027,50 +3044,50 @@ def generate_score(
             score_dict['imle'] = imle_score * imle_weighting
             overall_score = overall_score + (imle_score * imle_weighting)
         if maxe_weighting != 0:
-            maxe_scaler = model_results['maxe_weighted'][
-                model_results['maxe_weighted'] != 0
+            maxe_scaler = divisor_results['maxe_weighted'][
+                divisor_results['maxe_weighted'] != 0
             ].min()
             maxe_score = model_results['maxe_weighted'] / maxe_scaler
             score_dict['maxe'] = maxe_score * maxe_weighting
             overall_score = overall_score + (maxe_score * maxe_weighting)
         if mqae_weighting != 0:
-            mqae_scaler = model_results['mqae_weighted'][
-                model_results['mqae_weighted'] != 0
+            mqae_scaler = divisor_results['mqae_weighted'][
+                divisor_results['mqae_weighted'] != 0
             ].min()
             mqae_score = model_results['mqae_weighted'] / mqae_scaler
             score_dict['mqae'] = mqae_score * mqae_weighting
             overall_score = overall_score + (mqae_score * mqae_weighting)
         if dwae_weighting != 0:
-            dwae_scaler = model_results['dwae_weighted'][
-                model_results['dwae_weighted'] != 0
+            dwae_scaler = divisor_results['dwae_weighted'][
+                divisor_results['dwae_weighted'] != 0
             ].min()
             dwae_score = model_results['dwae_weighted'] / dwae_scaler
             score_dict['dwae'] = dwae_score * dwae_weighting
             overall_score = overall_score + (dwae_score * dwae_weighting)
         if ewmae_weighting != 0:
-            ewmae_scaler = model_results['ewmae_weighted'][
-                model_results['ewmae_weighted'] != 0
+            ewmae_scaler = divisor_results['ewmae_weighted'][
+                divisor_results['ewmae_weighted'] != 0
             ].min()
             ewmae_score = model_results['ewmae_weighted'] / ewmae_scaler
             score_dict['ewmae'] = ewmae_score * ewmae_weighting
             overall_score = overall_score + (ewmae_score * ewmae_weighting)
         if uwmse_weighting != 0:
-            uwmse_scaler = model_results['uwmse_weighted'][
-                model_results['uwmse_weighted'] != 0
+            uwmse_scaler = divisor_results['uwmse_weighted'][
+                divisor_results['uwmse_weighted'] != 0
             ].min()
             uwmse_score = model_results['uwmse_weighted'] / uwmse_scaler
             score_dict['uwmse'] = uwmse_score * uwmse_weighting
             overall_score = overall_score + (uwmse_score * uwmse_weighting)
         if mate_weighting != 0:
-            mate_scaler = model_results['mate_weighted'][
-                model_results['mate_weighted'] != 0
+            mate_scaler = divisor_results['mate_weighted'][
+                divisor_results['mate_weighted'] != 0
             ].min()
             mate_score = model_results['mate_weighted'] / mate_scaler
             score_dict['mate'] = mate_score * mate_weighting
             overall_score = overall_score + (mate_score * mate_weighting)
         if wasserstein_weighting != 0:
-            wasserstein_scaler = model_results['wasserstein_weighted'][
-                model_results['wasserstein_weighted'] != 0
+            wasserstein_scaler = divisor_results['wasserstein_weighted'][
+                divisor_results['wasserstein_weighted'] != 0
             ].min()
             wasserstein_score = (
                 model_results['wasserstein_weighted'] / wasserstein_scaler
@@ -3078,29 +3095,29 @@ def generate_score(
             score_dict['wasserstein'] = wasserstein_score * wasserstein_weighting
             overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
         if dwd_weighting != 0:
-            dwd_scaler = model_results['dwd_weighted'][
-                model_results['dwd_weighted'] != 0
+            dwd_scaler = divisor_results['dwd_weighted'][
+                divisor_results['dwd_weighted'] != 0
             ].min()
             dwd_score = model_results['dwd_weighted'] / dwd_scaler
             score_dict['dwd'] = dwd_score * dwd_weighting
             overall_score = overall_score + (dwd_score * dwd_weighting)
         if matse_weighting != 0:
-            matse_scaler = model_results['matse_weighted'][
-                model_results['matse_weighted'] != 0
+            matse_scaler = divisor_results['matse_weighted'][
+                divisor_results['matse_weighted'] != 0
             ].min()
             matse_score = model_results['matse_weighted'] / matse_scaler
             score_dict['matse'] = matse_score * matse_weighting
             overall_score = overall_score + (matse_score * matse_weighting)
         if smoothness_weighting != 0:
-            smoothness_scaler = model_results['smoothness_weighted'][
-                model_results['smoothness_weighted'] != 0
+            smoothness_scaler = divisor_results['smoothness_weighted'][
+                divisor_results['smoothness_weighted'] != 0
             ].mean()
             smoothness_score = model_results['smoothness_weighted'] / smoothness_scaler
             score_dict['smoothness'] = smoothness_score * smoothness_weighting
             overall_score = overall_score + (smoothness_score * smoothness_weighting)
         if spl_weighting != 0:
-            spl_scaler = model_results['spl_weighted'][
-                model_results['spl_weighted'] != 0
+            spl_scaler = divisor_results['spl_weighted'][
+                divisor_results['spl_weighted'] != 0
             ].min()
             spl_score = model_results['spl_weighted'] / spl_scaler
             score_dict['spl'] = spl_score * spl_weighting
