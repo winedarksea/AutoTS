@@ -784,6 +784,7 @@ class PredictionObject(object):
         diff_A=None,
         last_of_array=None,
         column_names=None,
+        custom_metric=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -797,6 +798,7 @@ class PredictionObject(object):
                 necessary for MADE and Contour if forecast_length == 1
                 if None, actuals are used instead (suboptimal).
             per_timestamp (bool): whether to calculate and return per timestamp direction errors
+            custom metric (callable): a function to generate a custom metric. Expects func(A, F, df_train, prediction_interval) where the first three are np arrays of wide style 2d.
 
         Returns:
             per_series_metrics (pandas.DataFrame): contains a column for each series containing accuracy metrics
@@ -835,6 +837,7 @@ class PredictionObject(object):
                 cumsum_A=cumsum_A,
                 diff_A=diff_A,
                 last_of_array=last_of_array,
+                custom_metric=custom_metric
             )
 
         if per_timestamp_errors:
@@ -860,7 +863,8 @@ class PredictionObject(object):
             axis=1, skipna=True
         ) / sum(series_weights.values())
         self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
-        if True:
+        if False:
+            # vn1 temporary
             submission = self.forecast
             objective = actual
             abs_err = np.nansum(np.abs(submission - objective))
@@ -872,8 +876,8 @@ class PredictionObject(object):
                 + epsilon
             )
             score /= big_sum
-            self.avg_metrics["competition"] = score
-            self.avg_metrics_weighted["competition"] = score
+            self.avg_metrics["custom"] = score
+            self.avg_metrics_weighted["custom"] = score
         return self
 
     def apply_constraints(

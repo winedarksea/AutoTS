@@ -40,6 +40,7 @@
 * added ChangepointDetrend transformer
 * added MeanPercentSplitter transformer
 * updated load_daily with more recent history
+* added support for passing a custom metric
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

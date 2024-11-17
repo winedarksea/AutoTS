@@ -25,6 +25,7 @@ A combination of metrics and cross-validation options, the ability to apply subs
 * [Installation](https://github.com/winedarksea/AutoTS#installation)
 * [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
 * [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* [Flowchart](https://github.com/winedarksea/AutoTS#autots-process)
 * Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
 * [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 

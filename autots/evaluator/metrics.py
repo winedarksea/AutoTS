@@ -604,6 +604,7 @@ def full_metric_evaluation(
     cumsum_A=None,
     diff_A=None,
     last_of_array=None,
+    custom_metric=None,
     **kwargs,
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
@@ -613,6 +614,7 @@ def full_metric_evaluation(
         A (np.array): array or df of actuals
         F (np.array): array or df of forecasts
         return_components (bool): if True, return tuple of detailed errors
+        custom metric (callable): a function to generate a custom metric. Expects func(A, F, df_train, prediction_interval) where the first three are np arrays of wide style 2d.
     """
     # THIS IS USED IN AMFM so try to modify without changing inputs and outputs
     # arrays are faster for math than pandas dataframes
@@ -701,18 +703,10 @@ def full_metric_evaluation(
     # over/under estimate mask
     ovm = full_errors > 0
 
-    if True:
-        submission = F
-        objective = A
-        abs_err = np.nansum(np.abs(submission - objective))
-        err = np.nansum((submission - objective))
-        score = abs_err + abs(err)
-        epsilon = 1
-        big_sum = (
-            np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum()
-            + epsilon
-        )
-        score /= big_sum
+    if custom_metric is not None:
+        score = custom_metric(A, F, df_train, prediction_interval)
+    else:
+        score = np.zeros_like(mate)
 
     # note a number of these are created from my own imagination (winedarksea)
     # those are also subject to change as they are tested and refined
@@ -781,7 +775,7 @@ def full_metric_evaluation(
             'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler,
             "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A))
             / scaler,  # differential wasserstein distance, pronounced "DUDE"
-            "competition": score,
+            "custom": score,
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),

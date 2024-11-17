@@ -1,5 +1,6 @@
 """Higher-level functions of automated time series modeling."""
 
+from collections.abc import Callable
 import random
 import copy
 import json
@@ -143,6 +144,7 @@ class AutoTS(object):
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
         horizontal_ensemble_validation (bool): True is slower but more reliable model selection on unstable data, if horz. ensembles are used
+        custom metric (callable): a function to generate a custom metric. Expects func(A, F, df_train, prediction_interval) where the first three are np arrays of wide style 2d.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -214,7 +216,8 @@ class AutoTS(object):
         generation_timeout: int = None,
         current_model_file: str = None,
         force_gc: bool = False,
-        horizontal_ensemble_validation: bool = False,
+        horizontal_ensemble_validation: bool = True,
+        custom_metric: Callable[[np.ndarray, np.ndarray, np.ndarray, float], np.ndarray] = None,
         verbose: int = 1,
         n_jobs: int = 0.5,
     ):
@@ -254,6 +257,7 @@ class AutoTS(object):
         self.current_model_file = current_model_file
         self.force_gc = force_gc
         self.horizontal_ensemble_validation = horizontal_ensemble_validation
+        self.custom_metric = custom_metric
         self.validate_import = None
         self.best_model_original = None
         self.best_model_original_id = None
@@ -522,12 +526,7 @@ class AutoTS(object):
                 ],
                 [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0]
-        if ensemble_choice in [None, ['simple']]:
-            horizontal_ensemble_validation = False
-        else:
-            horizontal_ensemble_validation = random.choices([True, False], [0.5, 0.5])[
-                0
-            ]
+        horizontal_ensemble_validation = random.choices([True, False], [0.8, 0.2])[0]
         if method in ["full", "fast", "superfast"]:
             metric_weighting = {
                 "smape_weighting": random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
@@ -1964,6 +1963,7 @@ class AutoTS(object):
             mosaic_used=self.mosaic_used,
             force_gc=self.force_gc,
             additional_msg=additional_msg,
+            custom_metric=self.custom_metric
         )
         if model_count == 0:
             self.model_count += template_result.model_count
@@ -3000,6 +3000,7 @@ class AutoTS(object):
                     traceback=self.traceback,
                     current_model_file=self.current_model_file,
                     force_gc=self.force_gc,
+                    custom_metric=self.custom_metric,
                 )
             )
         # this handles missing runtime information, which really shouldn't be missing
@@ -3410,7 +3411,7 @@ class AutoTS(object):
             if self.best_model_non_horizontal is not None and compare_horizontal:
                 validation_template = pd.concat(
                     [self.best_model, self.best_model_non_horizontal], axis=0
-                )
+                ).drop_duplicates()
             else:
                 validation_template = self.best_model
         elif isinstance(models, str):
@@ -3579,6 +3580,8 @@ class AutoTS(object):
                 'chosen_lower': '#A7AFB2',
                 'chosen_upper': '#A7AFB2',
             }
+        # the validation_forecasts should contain all models from all plots
+        # but template will contain only the current request
         needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []
         for x in self.validation_forecasts.keys():
@@ -3656,11 +3659,11 @@ class AutoTS(object):
             else:
                 title = f"Validation Forecasts for {series}"
         # actual plotting section
+        colb = [
+            x for x in plot_df.columns if "_lower" not in x and "_upper" not in x
+        ]
         if colors is not None:
-            # this will need to change is users are allowed to input colors
-            colb = [
-                x for x in plot_df.columns if "_lower" not in x and "_upper" not in x
-            ]
+            # this will need to change if users are allowed to input colors
             new_colors = {x: random.choice(colors_list) for x in colb}
             colors = {**new_colors, **colors}
             ax = plot_df[colb].plot(title=title, color=colors, **kwargs)
@@ -3673,7 +3676,12 @@ class AutoTS(object):
                     color="#A5ADAF",
                 )
         else:
-            ax = plot_df.plot(title=title, **kwargs)
+            # path currently active in the compare_horizontal case
+            if not include_bounds:
+                renaming = {x: x[:8] for x in colb}
+                ax = plot_df[colb].rename(columns=renaming).plot(title=title, **kwargs)
+            else:
+                ax = plot_df.plot(title=title, **kwargs)
         if end_color is not None:
             ax.vlines(
                 x=self.validation_forecast_cuts_ends,

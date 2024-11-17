@@ -1579,6 +1579,7 @@ def _eval_prediction_for_template(
     template_start_time,
     current_generation,
     df_train,
+    custom_metric=None,
 ):
     per_ts = True if 'distance' in ensemble else False
     model_error = df_forecast.evaluate(
@@ -1591,6 +1592,7 @@ def _eval_prediction_for_template(
         diff_A=diff_A,
         last_of_array=last_of_array,
         column_names=df_train.columns,
+        custom_metric=custom_metric,
     )
     if validation_round >= 1 and verbose > 0:
         round_smape = round(
@@ -1961,6 +1963,7 @@ def TemplateWizard(
     mosaic_used=None,
     force_gc: bool = False,
     additional_msg: str = "",
+    custom_metric=None,
 ):
     """
     Take Template, returns Results.
@@ -2125,6 +2128,7 @@ def TemplateWizard(
                 template_start_time,
                 current_generation,
                 df_train,
+                custom_metric,
             )
             if ensemble_input in [1, 2]:
                 # INTERNAL VALIDATION ONLY, POST PROCESSING ONLY
@@ -2175,6 +2179,7 @@ def TemplateWizard(
                         template_start_time,
                         current_generation,
                         df_train,
+                        custom_metric,
                     )
 
         except KeyboardInterrupt:
@@ -2818,7 +2823,7 @@ def validation_aggregation(
         'medae': 'mean',
         'made': 'mean',
         'mage': 'mean',
-        'competition': 'mean',
+        'custom': 'mean',
         'underestimate': 'sum',
         'mle': 'mean',
         'overestimate': 'sum',
@@ -2843,7 +2848,7 @@ def validation_aggregation(
         'medae_weighted': 'mean',
         'made_weighted': 'mean',
         'mage_weighted': 'mean',
-        'competition_weighted': 'mean',
+        'custom_weighted': 'mean',
         'mle_weighted': 'mean',
         'imle_weighted': 'mean',
         'spl_weighted': 'mean',
@@ -2939,7 +2944,7 @@ def generate_score(
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     made_weighting = metric_weighting.get('made_weighting', 0)
     mage_weighting = metric_weighting.get('mage_weighting', 0)
-    competition_weighting = metric_weighting.get('competition_weighting', 0)
+    custom_weighting = metric_weighting.get('custom_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
     maxe_weighting = metric_weighting.get('maxe_weighting', 0)
@@ -3023,15 +3028,15 @@ def generate_score(
             mage_score = model_results['mage_weighted'] / mage_scaler
             score_dict['mage'] = mage_score * mage_weighting
             overall_score = overall_score + (mage_score * mage_weighting)
-        if competition_weighting != 0:
-            competition_scaler = divisor_results['competition_weighted'][
-                divisor_results['competition_weighted'] != 0
+        if custom_weighting != 0:
+            custom_scaler = divisor_results['custom_weighted'][
+                divisor_results['custom_weighted'] != 0
             ].min()
-            competition_score = model_results[
-                'competition_weighted'
-            ]  #  / competition_scaler
-            score_dict['competition'] = competition_score * competition_weighting
-            overall_score = overall_score + (competition_score * competition_weighting)
+            custom_score = model_results[
+                'custom_weighted'
+            ] / custom_scaler
+            score_dict['custom'] = custom_score * custom_weighting
+            overall_score = overall_score + (custom_score * custom_weighting)
         if mle_weighting != 0:
             mle_scaler = divisor_results['mle_weighted'][
                 divisor_results['mle_weighted'] != 0
