@@ -3032,9 +3032,11 @@ def generate_score(
             custom_scaler = divisor_results['custom_weighted'][
                 divisor_results['custom_weighted'] != 0
             ].min()
-            custom_score = model_results[
-                'custom_weighted'
-            ] / custom_scaler
+            # potential edge case where weighting is > 0 but not custom metric is provided and is all zeroes
+            if not pd.isnull(custom_scaler):
+                custom_score = model_results['custom_weighted'] / custom_scaler
+            else:
+                custom_score = model_results['custom_weighted']
             score_dict['custom'] = custom_score * custom_weighting
             overall_score = overall_score + (custom_score * custom_weighting)
         if mle_weighting != 0:
