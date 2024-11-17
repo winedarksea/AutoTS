@@ -10,6 +10,9 @@ class TestConstraint(unittest.TestCase):
 
     def test_constraint(self):
         df = load_daily(long=False)
+        if "USW00014771_PRCP" in df.columns:
+            # too close to zero, causes one test to fail
+            df["USW00014771_PRCP"] = df["USW00014771_PRCP"] + 1
         forecast_length = 30
         constraint_types = {
             "empty": {

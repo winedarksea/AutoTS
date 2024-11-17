@@ -133,4 +133,37 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * And, of course, contributing to the codebase directly on GitHub.
 
 
+## AutoTS Process
+```mermaid
+flowchart TD
+    A[Initiate AutoTS Model] --> B[Import Template]
+    B --> C[Load Data]
+    C --> D[Split Data Into Initial Train/Test Holdout]
+    D --> E[Run Initial Template Models]
+    E --> F[Evaluate Accuracy Metrics on Results]
+    F --> G[Generate Score from Accuracy Metrics]
+    G --> H{Max Generations Reached or Timeout?}
+
+    H -->|No| I[Evaluate All Previous Templates]
+    I --> J[Genetic Algorithm Combines Best Results and New Random Parameters into New Template]
+    J --> K[Run New Template Models and Evaluate]
+    K --> G
+
+    H -->|Yes| L[Select Best Models by Score for Validation Template]
+    L --> M[Run Validation Template on Additional Holdouts]
+    M --> N[Evaluate and Score Validation Results]
+    N --> O{Create Ensembles?}
+    
+    O -->|Yes| P[Generate Ensembles from Validation Results]
+    P --> Q[Run Ensembles Through Validation]
+    Q --> N
+
+    O -->|No| R[Export Best Models Template]
+    R --> S[Select Single Best Model]
+    S --> T[Generate Future Time Forecast]
+    T --> U[Visualize Results]
+
+    R --> B[Import Best Models Template]
+```
+
 *Also known as Project CATS (Catlin's Automated Time Series) hence the logo.*
