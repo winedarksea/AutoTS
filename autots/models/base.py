@@ -723,12 +723,15 @@ class PredictionObject(object):
         figsize=(24, 18),
         title="AutoTS Forecasts",
         cols=None,
+        series=None,  # alias for above
         colors=None,
         include_bounds=True,
     ):
         """Plots multiple series in a grid, if present. Mostly identical args to the single plot function."""
         import matplotlib.pyplot as plt
 
+        if series is not None and cols is None:
+            cols = series
         if cols is None:
             cols = self.forecast.columns.tolist()
         num_cols = len(cols)

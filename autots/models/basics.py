@@ -1892,9 +1892,11 @@ class SectionalMotif(ModelObject):
         tlt_len = array.shape[0]
         self.combined_window_size = window_size + forecast_length
         self.excessive_size_flag = False
+        self.available_indexes = True
         if self.combined_window_size > (array.shape[0]):
             self.combined_window_size = int(array.shape[0] / 2)
             self.excessive_size_flag = True
+            self.available_indexes = self.combined_window_size - self.window
         max_steps = array.shape[0] - self.combined_window_size
         window_idxs = window_id_maker(
             window_size=self.combined_window_size,
@@ -1994,6 +1996,19 @@ class SectionalMotif(ModelObject):
         num_top = self.k
         res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
         self.windows = window_idxs[res_idx, window_size:]
+        # handle window being too big for data, too close to end
+        if self.windows.size == 0:
+            count = 1
+            while self.windows.size == 0:
+                count += 1
+                res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top * count]
+                self.windows = window_idxs[res_idx, window_size:]
+                # prevent overflow
+                if count > 5:
+                    if self.verbose >= 1:
+                        print("SectionalMotif using fallout")
+                    self.windows = window_idxs[res_idx, -forecast_length:]
+                    self.available_indexes = False
 
         if self.combination_transformation is not None:
             self.combination_transformer = GeneralTransformer(
@@ -2032,10 +2047,14 @@ class SectionalMotif(ModelObject):
         upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
         lower_forecast = nan_quantile(results, q=pred_int, axis=0)
 
+        # more handling short data stuff
+        if not self.available_indexes:
+            self.available_indexes = forecast.shape[0]
         if self.excessive_size_flag:
-            local_index = test_index[0 : self.combined_window_size - self.window]
+            local_index = test_index[0 : self.available_indexes]
         else:
             local_index = test_index
+        # convert to df from np
         forecast = pd.DataFrame(forecast, index=local_index, columns=self.column_names)
         lower_forecast = pd.DataFrame(
             lower_forecast, index=local_index, columns=self.column_names

@@ -761,12 +761,12 @@ no_shared_model_dict = {
 datepart_model_dict: dict = {
     'ElasticNet': 0.1,
     'MLP': 0.05,
-    'DecisionTree': 0.02,
+    'DecisionTree': 0.03,
     'Adaboost': 0.05,
-    'SVM': 0.001,
+    'SVM': 0.0001,
     'KerasRNN': 0.01,
     # 'Transformer': 0.02,  # slow, kernel failed
-    'RadiusNeighbors': 0.1,
+    'RadiusNeighbors': 0.03,  # vulnerable on short data to returning NaN but effective sometimes
     "ElasticNetwork": 0.05,
 }
 datepart_model_dict_deep = {
@@ -952,6 +952,7 @@ def generate_regressor_params(
         'SVM',
         "ElasticNetwork",
         "ElasticNet",
+        "RadiusNeighbors",
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -1429,6 +1430,33 @@ def generate_regressor_params(
                     "max_iter": random.choice([500, 1000]),
                 },
             }
+        elif model == 'RadiusNeighbors':
+            radius_choice = random.choices(
+                [0.5, 1.0, 2.0, 5.0, 10.0], [0.1, 0.4, 0.4, 0.15, 0.05]
+            )[0]
+            weights_choice = random.choices(
+                ["uniform", "distance"], [0.6, 0.4]
+            )[0]
+            algorithm_choice = random.choices(
+                ["auto", "ball_tree", "kd_tree"], [0.7, 0.1, 0.1]
+            )[0]
+            leaf_size_choice = random.choices(
+                [10, 20, 30, 50], [0.5, 0.3, 0.15, 0.05]
+            )[0]
+            param_dict = {
+                "model": 'RadiusNeighbors',
+                "model_params": {
+                    "radius": radius_choice,
+                    "weights": weights_choice,
+                    "algorithm": algorithm_choice,
+                    "leaf_size": leaf_size_choice,
+                    "p": random.choices([1, 1.5, 2], [0.5, 0.1, 0.5])[0],  # Manhattan (p=1) or Euclidean (p=2)
+                    "metric": random.choices(
+                        ["minkowski", "manhattan", "euclidean"], [0.7, 0.2, 0.1]
+                    )[0],
+                },
+            }
+            return param_dict
         else:
             min_samples = np.random.choice(
                 [1, 2, 0.05], p=[0.5, 0.3, 0.2], size=1
@@ -2148,6 +2176,9 @@ class WindowRegression(ModelObject):
 
         df.columns = self.column_names
         df.index = index
+        if self.regression_model.get("model", "None") == "RadiusNeighbors":
+            print('interpolating')
+            df = df.interpolate("pchip").bfill()
         if just_point_forecast:
             return df
         else:
@@ -2655,6 +2686,10 @@ class DatepartRegression(ModelObject):
             raise ValueError(
                 f"Datepart prediction with params {self.get_params()} failed. This is often due to an improperly indexed future_regressor (with drop_most_recent especially)"
             ) from e
+        # RadiusNeighbors works decently well but starts throwing out NaN when it can't find neighbors
+        if self.regression_model.get("model", "None") == "RadiusNeighbors":
+            print('interpolating')
+            forecast = forecast.interpolate("pchip").bfill()
 
         if just_point_forecast:
             return forecast

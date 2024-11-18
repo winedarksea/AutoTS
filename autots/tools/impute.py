@@ -477,8 +477,13 @@ class SimpleSeasonalityMotifImputer(object):
         while count < self.max_iter:
             current_fill = arr[test[:, count]]
             arr = np.where(np.isnan(arr), current_fill, arr)
+            if not np.isnan(np.min(arr)):
+                break
             # df.update(df.where(df.notna(), current_fill), overwrite=False)
             count += 1
+        else:
+            # if iters run out, do a basic nan fill
+            arr = np.nan_to_num(arr)
 
         return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
