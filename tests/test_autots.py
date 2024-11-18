@@ -884,7 +884,7 @@ class ModelTest(unittest.TestCase):
         from autots import create_regressor
         from autots.models.sklearn import MultivariateRegression, DatepartRegression, WindowRegression
 
-        df = load_daily(long=False)
+        df = load_daily(long=False).bfill().ffill()
         forecast_length = 8
         df_train = df.iloc[:-forecast_length]
         df_test = df.iloc[-forecast_length:]
@@ -968,7 +968,7 @@ class ModelTest(unittest.TestCase):
             n_jobs=n_jobs,
             **params
         )
-        model.fit(df_train.ffill())
+        model.fit(df_train)
         first_forecast = model.predict(future_regressor=future_regressor_forecast)
         # first_forecast.plot_grid(df)
         self.assertListEqual(first_forecast.forecast.index.tolist(), df_test.index.tolist())
