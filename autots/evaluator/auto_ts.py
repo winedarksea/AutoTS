@@ -1556,7 +1556,7 @@ class AutoTS(object):
                         skip_first_index=False,
                         return_template=False,
                         subset_override=False,
-                        additional_msg="horizontal ensemble validations",
+                        additional_msg=" horizontal ensemble validations",
                         shifted_starts=True,  # this is to try and reduce choice based on overfitting
                     )
                 else:

@@ -446,7 +446,7 @@ def detect_anomalies(
             upper_limit=limit_1,
             lower_limit=limit_0,
         )
-    elif method in "nonparametric":
+    elif method in ["nonparametric"]:
         res, scores = values_to_anomalies(
             df_anomaly,
             output,
