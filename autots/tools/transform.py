@@ -4724,7 +4724,7 @@ class DiffSmoother(EmptyTransformer):
         method=None,
         transform_dict=None,
         method_params=None,
-        fillna=None,
+        fillna=2.0,
         n_jobs=1,
         adjustment: int = 2,
         reverse_alignment=True,
