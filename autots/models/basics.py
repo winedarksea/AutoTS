@@ -698,11 +698,7 @@ class MotifSimulation(ModelObject):
             df = df.replace([0], np.nan)
             df = df.fillna(abs(df[df != 0]).min()).fillna(0.1)
             last_row = df.tail(1)
-            df = (
-                df.ffill().pct_change(periods=1)
-                .tail(df.shape[0] - 1)
-                .fillna(0)
-            )
+            df = df.ffill().pct_change(periods=1).tail(df.shape[0] - 1).fillna(0)
             df = df.replace([np.inf, -np.inf], 0)
         # else:
         # self.comparison = 'magnitude'
@@ -2001,7 +1997,7 @@ class SectionalMotif(ModelObject):
             count = 1
             while self.windows.size == 0:
                 count += 1
-                res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top * count]
+                res_idx = np.argpartition(res_sum, num_top, axis=0)[0 : num_top * count]
                 self.windows = window_idxs[res_idx, window_size:]
                 # prevent overflow
                 if count > 5:
@@ -3444,8 +3440,20 @@ class BasicLinearModel(ModelObject):
                     bounds=bounds,
                 )
 
-    def create_x(self, df, future_regressor=None, holiday_country="US", holiday_countries_used=True):
-        x_s = date_part(df.index, method=self.datepart_method, set_index=True, holiday_country=holiday_country, holiday_countries_used=holiday_countries_used)
+    def create_x(
+        self,
+        df,
+        future_regressor=None,
+        holiday_country="US",
+        holiday_countries_used=True,
+    ):
+        x_s = date_part(
+            df.index,
+            method=self.datepart_method,
+            set_index=True,
+            holiday_country=holiday_country,
+            holiday_countries_used=holiday_countries_used,
+        )
         x_t = create_changepoint_features(
             df.index,
             changepoint_spacing=self.changepoint_spacing,
@@ -3484,7 +3492,12 @@ class BasicLinearModel(ModelObject):
                 raise ValueError(
                     "regression_type=='User' but no future_regressor supplied"
                 )
-        X = self.create_x(df, future_regressor, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
+        X = self.create_x(
+            df,
+            future_regressor,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
 
         # Convert X and df (Y) to NumPy arrays for linear regression
         X_values = X.to_numpy().astype(float)
@@ -3514,9 +3527,7 @@ class BasicLinearModel(ModelObject):
         )  # Sum of squared errors for each column (shape (21,))
         n = Y_values.shape[0]
         p = X_values.shape[1]  # Number of predictors
-        self.sigma = np.sqrt(
-            sse / (n - p)
-        )
+        self.sigma = np.sqrt(sse / (n - p))
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -3538,7 +3549,13 @@ class BasicLinearModel(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        x_s = date_part(test_index, method=self.datepart_method, set_index=True, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
+        x_s = date_part(
+            test_index,
+            method=self.datepart_method,
+            set_index=True,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
         x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
@@ -3558,27 +3575,30 @@ class BasicLinearModel(ModelObject):
             trend_x_end = x_s.shape[1] + x_t.shape[1]
             trend_components = components[:, trend_x_start:trend_x_end, :]
 
-
             req_len = len(test_index) - 1
             phi_series = pd.Series(
                 [self.trend_phi] * req_len,
                 index=test_index[1:],
             ).pow(range(req_len))
-            
+
             diff_array = np.diff(trend_components, axis=0)
-            diff_scaled_array = diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+            diff_scaled_array = (
+                diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+            )
             first_row = trend_components[0:1, :]
             combined_array = np.vstack([first_row, diff_scaled_array])
-            components[:, trend_x_start:trend_x_end, :] = np.cumsum(combined_array, axis=0)
-            
-            forecast = pd.DataFrame(components.sum(axis=1), columns=self.column_names, index=test_index)
+            components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                combined_array, axis=0
+            )
+
+            forecast = pd.DataFrame(
+                components.sum(axis=1), columns=self.column_names, index=test_index
+            )
 
         if just_point_forecast:
             return forecast
         else:
-            z_value = norm.ppf(
-                1 - (1 - self.prediction_interval) / 2
-            )
+            z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
             # Vectorized calculation of leverage for all points: diag(X @ (X^T X)^(-1) @ X^T)
             hat_matrix_diag = np.einsum(
                 'ij,jk,ik->i',
@@ -3619,7 +3639,9 @@ class BasicLinearModel(ModelObject):
         res = []
         components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
         for x in range(components.shape[2]):
-            df = pd.DataFrame(components[:, :, x], index=self.X.index, columns=self.X.columns)
+            df = pd.DataFrame(
+                components[:, :, x], index=self.X.index, columns=self.X.columns
+            )
             new_level = self.column_names[x]
             df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
             res.append(df)
@@ -3630,7 +3652,11 @@ class BasicLinearModel(ModelObject):
         # doens't handle regressor features
         # recompiles X which is suboptimal
         # could use better naming
-        X = self.create_x(df, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
+        X = self.create_x(
+            df,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
         contribution_seasonality = (
             X[self.seasonal_columns].values @ self.beta[: len(self.seasonal_columns)]
         )
@@ -3720,7 +3746,9 @@ class BasicLinearModel(ModelObject):
                 [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
-            "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
+            "trend_phi": random.choices(
+                [None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01]
+            )[0],
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
         }
 
@@ -3739,13 +3767,13 @@ class BasicLinearModel(ModelObject):
 
 class TVVAR(BasicLinearModel):
     """Time Varying VAR
-    
+
     Notes:
         var_preprocessing will fail with many options, anything that scales/shifts the space
         x_scaled=True seems to fail often when base_scaled=False and VAR components used
     TODO:
         # plot of feature impacts
-        
+
         # highly correlated, shared hidden factors
         # groups / geos
 
@@ -3756,6 +3784,7 @@ class TVVAR(BasicLinearModel):
         # feature summarization (dynamic factor is PCA)
         # hierchial by GEO
     """
+
     def __init__(
         self,
         name: str = "TVVAR",
@@ -3778,7 +3807,7 @@ class TVVAR(BasicLinearModel):
         apply_pca: bool = False,
         pca_n_components: float = 0.95,
         threshold_method: str = 'std',  # 'std' or 'percentile'
-        threshold_value: float = None,   # Multiple of std or percentile value
+        threshold_value: float = None,  # Multiple of std or percentile value
         base_scaled: bool = True,
         x_scaled: bool = False,
         var_preprocessing: dict = False,
@@ -3832,7 +3861,12 @@ class TVVAR(BasicLinearModel):
                 lagged_data = pd.concat([lagged_data, lagged], axis=1)
         if self.rolling_avg_list is not None:
             for window in self.rolling_avg_list:
-                rolling_avg = df.shift(1).rolling(window=window).mean().add_suffix(f"___ravg{window}")
+                rolling_avg = (
+                    df.shift(1)
+                    .rolling(window=window)
+                    .mean()
+                    .add_suffix(f"___ravg{window}")
+                )
                 lagged_data = pd.concat([lagged_data, rolling_avg], axis=1)
         return lagged_data
 
@@ -3850,7 +3884,9 @@ class TVVAR(BasicLinearModel):
             threshold = self.threshold_value * beta_std
         elif self.threshold_method == 'percentile':
             # Use percentile
-            threshold = np.percentile(beta_abs, self.threshold_value * 100, axis=0, keepdims=True)
+            threshold = np.percentile(
+                beta_abs, self.threshold_value * 100, axis=0, keepdims=True
+            )
         else:
             raise ValueError("threshold_method must be 'std' or 'percentile'")
         # Set coefficients below threshold to zero
@@ -3861,7 +3897,9 @@ class TVVAR(BasicLinearModel):
         df = self.basic_profile(df)
         if self.mode == 'multiplicative':
             # could add a PositiveShift here to make this more reliable on all data
-            df_scaled = np.log(df.replace(0, np.nan)).replace(-np.inf, np.nan).bfill().ffill()
+            df_scaled = (
+                np.log(df.replace(0, np.nan)).replace(-np.inf, np.nan).bfill().ffill()
+            )
         else:
             df_scaled = df
         # Scaling df
@@ -3894,14 +3932,21 @@ class TVVAR(BasicLinearModel):
             # note uses UNSCALED df
             self.var_history = self.var_preprocessor.fit_transform(df).ffill().bfill()
             if self.base_scaled:
-                self.var_history = (self.var_history - self.scaler_mean) / self.scaler_std
+                self.var_history = (
+                    self.var_history - self.scaler_mean
+                ) / self.scaler_std
         else:
             self.var_history = df_scaled
         # Create VAR features
         VAR_features = self.create_VAR_features(self.var_history)
         VAR_feature_columns = VAR_features.columns.tolist()
         # Create external features
-        X_ext = self.create_x(df, future_regressor, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
+        X_ext = self.create_x(
+            df,
+            future_regressor,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
         # Combine features
         X = pd.concat([X_ext, VAR_features], axis=1)
         # Remove rows with NaNs due to lagging
@@ -3939,13 +3984,15 @@ class TVVAR(BasicLinearModel):
                     @ Y_values
                 )
             else:
-                self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+                self.beta = (
+                    np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+                )
             # Post-process coefficients to set small values to zero
             self.beta = self.apply_beta_threshold()
             # Calculate residuals
             Y_pred = X_values @ self.beta
             residuals = Y_values - Y_pred
-            sse = np.sum(residuals ** 2, axis=0)
+            sse = np.sum(residuals**2, axis=0)
             n = Y_values.shape[0]
             p = X_values.shape[1]
             self.sigma = np.sqrt(sse / (n - p))
@@ -3966,8 +4013,8 @@ class TVVAR(BasicLinearModel):
             if alpha is None:
                 alpha = 0.0001
             for t in range(start_point, n_samples):
-                X_t = X_np[t:t+1].T  # Shape (n_features, 1)
-                Y_t = Y_np[t:t+1].T  # Shape (n_targets, 1)
+                X_t = X_np[t : t + 1].T  # Shape (n_features, 1)
+                Y_t = Y_np[t : t + 1].T  # Shape (n_targets, 1)
                 if t == 0:
                     S = X_t @ X_t.T
                     r = X_t @ Y_t.T
@@ -3987,7 +4034,7 @@ class TVVAR(BasicLinearModel):
             # Calculate residuals
             Y_pred = X_np @ self.beta
             residuals = Y_np - Y_pred
-            sse = np.sum(residuals ** 2, axis=0)
+            sse = np.sum(residuals**2, axis=0)
             n = Y_values.shape[0]
             p = X_values.shape[1]
             self.sigma = np.sqrt(sse / (n - p))
@@ -3997,11 +4044,19 @@ class TVVAR(BasicLinearModel):
         self.VAR_feature_columns = VAR_feature_columns
         return self
 
-    def predict(self, forecast_length: int, future_regressor=None, just_point_forecast=False):
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         # Create external features for the forecast period
-        x_s = date_part(test_index, method=self.datepart_method, set_index=True, holiday_country=self.holiday_country, holiday_countries_used=self.holiday_countries_used)
+        x_s = date_part(
+            test_index,
+            method=self.datepart_method,
+            set_index=True,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
         x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
         x_t.index = test_index
         X_ext = pd.concat([x_s, x_t], axis=1)
@@ -4009,7 +4064,9 @@ class TVVAR(BasicLinearModel):
             X_ext = pd.concat([X_ext, future_regressor.reindex(test_index)], axis=1)
         X_ext["constant"] = 1
 
-        predictions = pd.DataFrame(index=test_index, columns=self.column_names, dtype=float)
+        predictions = pd.DataFrame(
+            index=test_index, columns=self.column_names, dtype=float
+        )
         extended_df = pd.concat([self.var_history, predictions], axis=0)
         # post processing (these do cleanup, keep it a bit from going off the rails, which sometimes happens)
         if self.var_postprocessing:
@@ -4041,7 +4098,9 @@ class TVVAR(BasicLinearModel):
                 VAR_pca_df_t = pd.DataFrame(VAR_pca_t, index=VAR_data_t.index)
                 self.pca_columns = VAR_pca_df_t.columns
                 # Exclude VAR_feature_columns from X_t and add VAR_pca_df_t
-                X_t = pd.concat([X_t.drop(columns=self.VAR_feature_columns), VAR_pca_df_t], axis=1)
+                X_t = pd.concat(
+                    [X_t.drop(columns=self.VAR_feature_columns), VAR_pca_df_t], axis=1
+                )
             # Make prediction
             Y_pred_t = self.x_scaler.transform(X_t).to_numpy().astype(float) @ self.beta
             x_pred.append(X_t)
@@ -4055,15 +4114,20 @@ class TVVAR(BasicLinearModel):
                 predictions.loc[date] = Y_pred_t.flatten()
             # Update extended_df with the new prediction
             extended_df.loc[date] = predictions.loc[date]
-        
+
         # Save X_pred for process_components
         # Recreate VAR features for the entire forecast horizon
         self.X_pred = pd.concat(x_pred, axis=0)
         self.X_pred = self.X_pred.astype(float)
-        if len(test_index) < 2 or ((self.trend_phi is None or self.trend_phi == 1) and (self.var_dampening is None or self.var_dampening == 1)):
+        if len(test_index) < 2 or (
+            (self.trend_phi is None or self.trend_phi == 1)
+            and (self.var_dampening is None or self.var_dampening == 1)
+        ):
             pass
         else:
-            components = np.einsum('ij,jk->ijk', self.x_scaler.transform(self.X_pred).to_numpy(), self.beta)
+            components = np.einsum(
+                'ij,jk->ijk', self.x_scaler.transform(self.X_pred).to_numpy(), self.beta
+            )
             if self.trend_phi is not None and self.trend_phi != 1:
                 req_len = len(test_index) - 1
                 phi_series = pd.Series(
@@ -4073,13 +4137,17 @@ class TVVAR(BasicLinearModel):
                 trend_x_start = x_s.shape[1]
                 trend_x_end = x_s.shape[1] + x_t.shape[1]
                 trend_components = components[:, trend_x_start:trend_x_end, :]
-                
+
                 diff_array = np.diff(trend_components, axis=0)
-                diff_scaled_array = diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+                diff_scaled_array = (
+                    diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+                )
                 first_row = trend_components[0:1, :]
                 combined_array = np.vstack([first_row, diff_scaled_array])
-                components[:, trend_x_start:trend_x_end, :] = np.cumsum(combined_array, axis=0)
-                
+                components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                    combined_array, axis=0
+                )
+
             if self.var_dampening is not None and self.var_dampening != 1:
                 req_len = len(test_index) - 1
                 phi_series = pd.Series(
@@ -4092,14 +4160,20 @@ class TVVAR(BasicLinearModel):
                     trend_x_start = -len(self.VAR_feature_columns)
                 trend_x_end = -1
                 var_components = components[:, trend_x_start:trend_x_end, :]
-                
+
                 diff_array = np.diff(var_components, axis=0)
-                diff_scaled_array = diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+                diff_scaled_array = (
+                    diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+                )
                 first_row = var_components[0:1, :]
                 combined_array = np.vstack([first_row, diff_scaled_array])
-                components[:, trend_x_start:trend_x_end, :] = np.cumsum(combined_array, axis=0)
-            
-            predictions = pd.DataFrame(components.sum(axis=1), index=test_index, columns=self.column_names)
+                components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                    combined_array, axis=0
+                )
+
+            predictions = pd.DataFrame(
+                components.sum(axis=1), index=test_index, columns=self.column_names
+            )
 
         # Convert forecast back to original scale
         forecast = predictions * self.scaler_std + self.scaler_mean
@@ -4143,7 +4217,11 @@ class TVVAR(BasicLinearModel):
         X_pred_values = self.x_scaler.transform(self.X_pred).to_numpy().astype(float)
         components = np.einsum('ij,jk->ijk', X_pred_values, self.beta)
         for x in range(components.shape[2]):
-            df = pd.DataFrame(components[:, :, x], index=self.X_pred.index, columns=self.X_pred.columns)
+            df = pd.DataFrame(
+                components[:, :, x],
+                index=self.X_pred.index,
+                columns=self.X_pred.columns,
+            )
             new_level = self.column_names[x]
             df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
             res.append(df)
@@ -4157,7 +4235,9 @@ class TVVAR(BasicLinearModel):
                 # component_contributions = components_df.xs(col, level=1, axis=1)
                 component_contributions = components_df[col][self.pca_columns]
                 # Transform back to original VAR features
-                original_contributions = component_contributions.to_numpy() @ self.pca.components_
+                original_contributions = (
+                    component_contributions.to_numpy() @ self.pca.components_
+                )
                 # Create DataFrame with original VAR feature names
                 original_contributions_df = pd.DataFrame(
                     original_contributions,
@@ -4166,7 +4246,9 @@ class TVVAR(BasicLinearModel):
                 )
                 # Remove PCA component from components_df
                 # Add original VAR features contributions
-                original_contributions_df.columns = [x.split('___')[0] for x in original_contributions_df.columns]
+                original_contributions_df.columns = [
+                    x.split('___')[0] for x in original_contributions_df.columns
+                ]
                 new_cols = original_contributions_df.T.groupby(level=0).sum().T
                 new_cols.columns = pd.MultiIndex.from_product([[col], new_cols.columns])
                 res.append(new_cols)
@@ -4177,7 +4259,9 @@ class TVVAR(BasicLinearModel):
                 #     else:
                 #         components_df[idx] = components_df[idx] + original_contributions_df[var_col]
             # drop all at once
-            components_df = pd.concat([components_df, pd.concat(res, axis=1)], axis=1).reindex(self.column_names, level=0, axis=1)
+            components_df = pd.concat(
+                [components_df, pd.concat(res, axis=1)], axis=1
+            ).reindex(self.column_names, level=0, axis=1)
             components_df = components_df.drop(columns=self.pca_columns, level=1)
         # Combine multiple lags into a single impact for each series
         # Sum over lags for each series
@@ -4206,14 +4290,13 @@ class TVVAR(BasicLinearModel):
         for target_col in final_components:
             df = final_components[target_col]
             # Scale back to original feature space
-            df = df * self.scaler_std[target_col] # + self.scaler_mean[target_col]
+            df = df * self.scaler_std[target_col]  # + self.scaler_mean[target_col]
             if self.mode == 'multiplicative':
                 df = np.exp(df)
             df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
             result[target_col] = df
         components_df_final = pd.concat(result.values(), axis=1)
         return components_df_final
-
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
@@ -4228,7 +4311,12 @@ class TVVAR(BasicLinearModel):
         use_preprocess = random.choices([True, False], [0.5, 0.5])[0]
         if use_preprocess:
             var_preprocessing = RandomTransform(
-                transformer_list=["ClipOutliers", "bkfilter", "AnomalyRemoval", "FFTFilter"],
+                transformer_list=[
+                    "ClipOutliers",
+                    "bkfilter",
+                    "AnomalyRemoval",
+                    "FFTFilter",
+                ],
                 transformer_max_depth=transformer_max_depth,
                 allow_none=False,
                 fast_params=True,
@@ -4238,7 +4326,14 @@ class TVVAR(BasicLinearModel):
         use_postprocess = random.choices([True, False], [0.2, 0.8])[0]
         if use_postprocess:
             var_postprocessing = RandomTransform(
-                transformer_list=["HistoricValues", "Constraint", "AlignLastDiff", "AlignLastValue", "FIRFilter", "Round"],
+                transformer_list=[
+                    "HistoricValues",
+                    "Constraint",
+                    "AlignLastDiff",
+                    "AlignLastValue",
+                    "FIRFilter",
+                    "Round",
+                ],
                 transformer_max_depth=transformer_max_depth,
                 allow_none=False,
                 fast_params=True,
@@ -4256,24 +4351,72 @@ class TVVAR(BasicLinearModel):
                 [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
             )[0],
             "regression_type": regression_choice,
-            "lags": random.choices([None, [1], [7], [1, 2], [24], [1, 2, 3, 4, 5]], [0.4, 0.2, 0.3, 0.1, 0.05, 0.01])[0],
-            "rolling_means": random.choices([None, [3], [4], [7], [4, 7], [28], [168]], [0.4, 0.05, 0.3, 0.2, 0.1, 0.05, 0.02])[0],
+            "lags": random.choices(
+                [None, [1], [7], [1, 2], [24], [1, 2, 3, 4, 5]],
+                [0.4, 0.2, 0.3, 0.1, 0.05, 0.01],
+            )[0],
+            "rolling_means": random.choices(
+                [None, [3], [4], [7], [4, 7], [28], [168]],
+                [0.4, 0.05, 0.3, 0.2, 0.1, 0.05, 0.02],
+            )[0],
             "lambda_": random.choices(
-                [None, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000, 50000, 100000],
-                [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.01],
+                [
+                    None,
+                    0.00001,
+                    0.0001,
+                    0.001,
+                    0.01,
+                    0.1,
+                    1,
+                    2,
+                    10,
+                    100,
+                    1000,
+                    10000,
+                    50000,
+                    100000,
+                ],
+                [
+                    0.2,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.05,
+                    0.01,
+                ],
                 k=1,
             )[0],
-            "trend_phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
-            "var_dampening": random.choices([None, 0.999, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.05, 0.1, 0.02, 0.01])[0],
-            "phi": random.choices([None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8, 0.5, 0.2, 0.1], [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01, 0.02, 0.01, 0.02])[0],
+            "trend_phi": random.choices(
+                [None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01]
+            )[0],
+            "var_dampening": random.choices(
+                [None, 0.999, 0.995, 0.99, 0.98, 0.97, 0.8],
+                [0.9, 0.05, 0.05, 0.05, 0.1, 0.02, 0.01],
+            )[0],
+            "phi": random.choices(
+                [None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8, 0.5, 0.2, 0.1],
+                [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01, 0.02, 0.01, 0.02],
+            )[0],
             "max_cycles": random.choices([2000, 200, 10000], [0.8, 0.2, 0.01])[0],
             "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
-            "pca_n_components": random.choices([None, 0.95, 0.9, 0.8, 10, "mle"], [0.2, 0.4, 0.2, 0.1, 0.1, 0.001])[0],
+            "pca_n_components": random.choices(
+                [None, 0.95, 0.9, 0.8, 10, "mle"], [0.2, 0.4, 0.2, 0.1, 0.1, 0.001]
+            )[0],
             "base_scaled": random.choices([True, False], [0.4, 0.6])[0],
             "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
             "var_preprocessing": var_preprocessing,
             "var_postprocessing": var_postprocessing,
-            "threshold_value": random.choices([None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025])[0],
+            "threshold_value": random.choices(
+                [None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025]
+            )[0],
             "mode": random.choices(["additive", "multiplicative"], [0.95, 0.05])[0],
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
         }

@@ -65,7 +65,15 @@ from autots.models.statsmodels import (
 )
 from autots.models.arch import ARCH
 from autots.models.matrix_var import RRVAR, MAR, TMF, LATC, DMD
-from autots.models.sklearn import RollingRegression, WindowRegression, MultivariateRegression, DatepartRegression, UnivariateRegression, ComponentAnalysis, PreprocessingRegression
+from autots.models.sklearn import (
+    RollingRegression,
+    WindowRegression,
+    MultivariateRegression,
+    DatepartRegression,
+    UnivariateRegression,
+    ComponentAnalysis,
+    PreprocessingRegression,
+)
 
 
 def create_model_id(
@@ -1906,25 +1914,108 @@ horizontal_post_processors = [
         },
     },  # best on daily, competition, mae
     {
-     "fillna": "zero",
-     "transformations": {"0": "AnomalyRemoval", "1": "EWMAFilter", "2": "AlignLastValue"},
-     "transformation_params": {"0": {"method": "med_diff", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "rolling_mean_24", "transform_dict": {"fillna": None, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 7}}}, "isolated_only": False, "on_inverse": False}, "1": {"span": 7}, "2": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": 1, "threshold_method": "max"}}
-     },  # best on simple ensemble on daily
+        "fillna": "zero",
+        "transformations": {
+            "0": "AnomalyRemoval",
+            "1": "EWMAFilter",
+            "2": "AlignLastValue",
+        },
+        "transformation_params": {
+            "0": {
+                "method": "med_diff",
+                "method_params": {"distribution": "norm", "alpha": 0.05},
+                "fillna": "rolling_mean_24",
+                "transform_dict": {
+                    "fillna": None,
+                    "transformations": {"0": "EWMAFilter"},
+                    "transformation_params": {"0": {"span": 7}},
+                },
+                "isolated_only": False,
+                "on_inverse": False,
+            },
+            "1": {"span": 7},
+            "2": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "max",
+            },
+        },
+    },  # best on simple ensemble on daily
     {  # best on VN1 competition and MAE
         "fillna": "cubic",
         "transformations": {"0": "ScipyFilter", "1": "DatepartRegression"},
         "transformation_params": {
-            "0": {"method": "butter", "method_args": {"N": 1, "btype": "highpass", "analog": False, "output": "sos", "Wn": 0.024390243902439025}},
-            "1": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": True, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": ["weekdayofmonth", "common_fourier"], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False, "lags": None, "forward_lags": None}
-        }
-     },
+            "0": {
+                "method": "butter",
+                "method_args": {
+                    "N": 1,
+                    "btype": "highpass",
+                    "analog": False,
+                    "output": "sos",
+                    "Wn": 0.024390243902439025,
+                },
+            },
+            "1": {
+                "regression_model": {
+                    "model": "ElasticNet",
+                    "model_params": {
+                        "l1_ratio": 0.5,
+                        "fit_intercept": True,
+                        "selection": "cyclic",
+                        "max_iter": 1000,
+                    },
+                },
+                "datepart_method": ["weekdayofmonth", "common_fourier"],
+                "polynomial_degree": None,
+                "transform_dict": None,
+                "holiday_countries_used": False,
+                "lags": None,
+                "forward_lags": None,
+            },
+        },
+    },
     {  # balanced on wiki daily
         "fillna": "cubic",
         "transformations": {"0": "AlignLastValue", "1": "DatepartRegression"},
         "transformation_params": {
-            "0": {"rows": 1, "lag": 7, "method": "multiplicative", "strength": 0.9, "first_value_only": False, "threshold": 3, "threshold_method": "max"},
-            "1": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.5, "fit_intercept": True, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": "common_fourier", "polynomial_degree": None, "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 4}}}, "holiday_countries_used": False, "lags": None, "forward_lags": None}}
-    }
+            "0": {
+                "rows": 1,
+                "lag": 7,
+                "method": "multiplicative",
+                "strength": 0.9,
+                "first_value_only": False,
+                "threshold": 3,
+                "threshold_method": "max",
+            },
+            "1": {
+                "regression_model": {
+                    "model": "ElasticNet",
+                    "model_params": {
+                        "l1_ratio": 0.5,
+                        "fit_intercept": True,
+                        "selection": "cyclic",
+                        "max_iter": 1000,
+                    },
+                },
+                "datepart_method": "common_fourier",
+                "polynomial_degree": None,
+                "transform_dict": {
+                    "fillna": None,
+                    "transformations": {"0": "ClipOutliers"},
+                    "transformation_params": {
+                        "0": {"method": "clip", "std_threshold": 4}
+                    },
+                },
+                "holiday_countries_used": False,
+                "lags": None,
+                "forward_lags": None,
+            },
+        },
+    },
 ]
 
 
@@ -2981,7 +3072,9 @@ def generate_score(
     divisor_results = model_results
     if num_validations is not None:
         if "Runs" in model_results.columns:
-            divisor_results = model_results[model_results["Runs"] >= (num_validations + 1)]
+            divisor_results = model_results[
+                model_results["Runs"] >= (num_validations + 1)
+            ]
             print(divisor_results["rmse"])
             if divisor_results.empty:
                 divisor_results = model_results

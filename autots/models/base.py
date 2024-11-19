@@ -840,7 +840,7 @@ class PredictionObject(object):
                 cumsum_A=cumsum_A,
                 diff_A=diff_A,
                 last_of_array=last_of_array,
-                custom_metric=custom_metric
+                custom_metric=custom_metric,
             )
 
         if per_timestamp_errors:

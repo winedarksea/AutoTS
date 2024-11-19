@@ -97,6 +97,7 @@ def _is_seasonality_order_list(data):
 
     return True
 
+
 def date_part(
     DTindex,
     method: str = 'simple',

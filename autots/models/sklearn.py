@@ -14,8 +14,17 @@ import pandas as pd
 try:
     from sklearn import config_context
     from sklearn.multioutput import MultiOutputRegressor, RegressorChain
-    from sklearn.linear_model import ElasticNet, MultiTaskElasticNet, LinearRegression, Ridge
-    from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, ExtraTreeRegressor
+    from sklearn.linear_model import (
+        ElasticNet,
+        MultiTaskElasticNet,
+        LinearRegression,
+        Ridge,
+    )
+    from sklearn.tree import (
+        DecisionTreeRegressor,
+        DecisionTreeClassifier,
+        ExtraTreeRegressor,
+    )
 except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
@@ -38,9 +47,11 @@ except Exception:
 
         # norm.ppf((1 + 0.95) / 2)
 
+
 # for numba engine more is required, optional
 try:
     import numba  # noqa
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -57,6 +68,7 @@ try:
     joblib_present = True
 except Exception:
     joblib_present = False
+
 
 def rolling_x_regressor(
     df,
@@ -105,11 +117,16 @@ def rolling_x_regressor(
                 )
             )  # backfill should fill last values safely
     if str(mean_rolling_periods).isdigit():
-        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median(engine=engine)
+        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median(
+            engine=engine
+        )
         X.append(temp)
         if str(macd_periods).isdigit():
             # says mean, but median because it's been that way for ages
-            temp = local_df.rolling(int(macd_periods), min_periods=1).median(engine=engine) - temp
+            temp = (
+                local_df.rolling(int(macd_periods), min_periods=1).median(engine=engine)
+                - temp
+            )
             temp.columns = ['macd' for col in temp.columns]
             X.append(temp)
     if isinstance(mean_rolling_periods, list):
@@ -117,14 +134,26 @@ def rolling_x_regressor(
             if isinstance(mrp, (tuple, list)):
                 lag = mrp[0]
                 mean_roll = mrp[1]
-                temp = local_df.shift(lag).rolling(int(mean_roll), min_periods=1).mean(engine=engine).bfill()
-                temp.columns = [f'rollingmean_{lag}_{mean_roll}_' + str(col) for col in temp.columns]
+                temp = (
+                    local_df.shift(lag)
+                    .rolling(int(mean_roll), min_periods=1)
+                    .mean(engine=engine)
+                    .bfill()
+                )
+                temp.columns = [
+                    f'rollingmean_{lag}_{mean_roll}_' + str(col) for col in temp.columns
+                ]
             else:
                 temp = local_df.rolling(int(mrp), min_periods=1).mean(engine=engine)
                 temp.columns = ['rollingmean_' + str(col) for col in temp.columns]
             X.append(temp)
             if str(macd_periods).isdigit():
-                temp = local_df.rolling(int(macd_periods), min_periods=1).mean(engine=engine) - temp
+                temp = (
+                    local_df.rolling(int(macd_periods), min_periods=1).mean(
+                        engine=engine
+                    )
+                    - temp
+                )
                 temp.columns = ['macd' for col in temp.columns]
                 X.append(temp)
     if str(std_rolling_periods).isdigit():
@@ -455,7 +484,9 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"]['estimator'] == 'ExtraTree':
-            linreg = ExtraTreeRegressor(max_depth=regression_model["model_params"].get("max_depth", 3))
+            linreg = ExtraTreeRegressor(
+                max_depth=regression_model["model_params"].get("max_depth", 3)
+            )
             regr = AdaBoostRegressor(
                 estimator=linreg,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -464,7 +495,9 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"].get("max_depth", None) is not None:
-            linreg = DecisionTreeRegressor(max_depth=regression_model["model_params"].get("max_depth"))
+            linreg = DecisionTreeRegressor(
+                max_depth=regression_model["model_params"].get("max_depth")
+            )
             regr = AdaBoostRegressor(
                 estimator=linreg,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -522,7 +555,12 @@ def retrieve_regressor(
         return ExtraTreesRegressor(
             n_jobs=n_jobs, random_state=random_seed, **model_param_dict
         )
-    elif model_class in ["RadiusNeighbors", "RadiusNeighbors", "RadiusRegressor", "RadiusNeighborsRegressor"]:
+    elif model_class in [
+        "RadiusNeighbors",
+        "RadiusNeighbors",
+        "RadiusRegressor",
+        "RadiusNeighborsRegressor",
+    ]:
         from sklearn.neighbors import RadiusNeighborsRegressor
 
         regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
@@ -958,7 +996,9 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'Adaboost',
                 "model_params": {
-                    "n_estimators": random.choices([50, 100, 200, 500], [0.7, 0.2, 0.15, 0.1])[0],
+                    "n_estimators": random.choices(
+                        [50, 100, 200, 500], [0.7, 0.2, 0.15, 0.1]
+                    )[0],
                     "loss": random.choices(
                         ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
                     )[0],
@@ -966,12 +1006,15 @@ def generate_regressor_params(
                         [None, 'LinReg', 'SVR', 'ElasticNet', 'ExtraTree'],
                         [0.8, 0.1, 0.0, 0.1, 0.1],  # SVR slow and crash prone
                     )[0],
-                    "learning_rate": random.choices([1, 0.5, 0.25, 0.8, 100], [0.9, 0.1, 0.1, 0.1, 0.025])[0],
+                    "learning_rate": random.choices(
+                        [1, 0.5, 0.25, 0.8, 100], [0.9, 0.1, 0.1, 0.1, 0.025]
+                    )[0],
                 },
             }
             if param_dict["model_params"]["estimator"] in [None, "ExtraTree"]:
                 param_dict["model_params"]["max_depth"] = random.choices(
-                    [2, 3, 4, 5], [0.2, 0.8, 0.1, 0.01],
+                    [2, 3, 4, 5],
+                    [0.2, 0.8, 0.1, 0.01],
                 )[0]
         elif model == 'ElasticNet':
             param_dict = {
@@ -1434,15 +1477,13 @@ def generate_regressor_params(
             radius_choice = random.choices(
                 [0.5, 1.0, 2.0, 5.0, 10.0], [0.1, 0.4, 0.4, 0.15, 0.05]
             )[0]
-            weights_choice = random.choices(
-                ["uniform", "distance"], [0.6, 0.4]
-            )[0]
+            weights_choice = random.choices(["uniform", "distance"], [0.6, 0.4])[0]
             algorithm_choice = random.choices(
                 ["auto", "ball_tree", "kd_tree"], [0.7, 0.1, 0.1]
             )[0]
-            leaf_size_choice = random.choices(
-                [10, 20, 30, 50], [0.5, 0.3, 0.15, 0.05]
-            )[0]
+            leaf_size_choice = random.choices([10, 20, 30, 50], [0.5, 0.3, 0.15, 0.05])[
+                0
+            ]
             param_dict = {
                 "model": 'RadiusNeighbors',
                 "model_params": {
@@ -1450,7 +1491,9 @@ def generate_regressor_params(
                     "weights": weights_choice,
                     "algorithm": algorithm_choice,
                     "leaf_size": leaf_size_choice,
-                    "p": random.choices([1, 1.5, 2], [0.5, 0.1, 0.5])[0],  # Manhattan (p=1) or Euclidean (p=2)
+                    "p": random.choices([1, 1.5, 2], [0.5, 0.1, 0.5])[
+                        0
+                    ],  # Manhattan (p=1) or Euclidean (p=2)
                     "metric": random.choices(
                         ["minkowski", "manhattan", "euclidean"], [0.7, 0.2, 0.1]
                     )[0],
@@ -3374,7 +3417,7 @@ class MultivariateRegression(ModelObject):
             # define X and Y
             if self.frac_slice is not None:
                 slice_size = int(df.shape[0] * self.frac_slice)
-                self.slice_index = df.index[slice_size - 1: -1]
+                self.slice_index = df.index[slice_size - 1 : -1]
                 self.Y = df.iloc[slice_size:].to_numpy().ravel(order="F")
             else:
                 self.slice_index = None
@@ -3395,7 +3438,9 @@ class MultivariateRegression(ModelObject):
             # joblib multiprocessing to loop through series
             # this might be causing issues, TBD Key Error from Resource Tracker
             if parallel:
-                self.X = Parallel(n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600)(
+                self.X = Parallel(
+                    n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600
+                )(
                     delayed(rolling_x_regressor_regressor)(
                         base[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
@@ -3727,7 +3772,7 @@ class MultivariateRegression(ModelObject):
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
-            [0.3, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05]
+            [0.3, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
         )[0]
         if mean_rolling_periods_choice is not None:
             macd_periods_choice = seasonal_int(small=True)
@@ -3819,7 +3864,9 @@ class MultivariateRegression(ModelObject):
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
-            "frac_slice": random.choices([None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
+            "frac_slice": random.choices(
+                [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
+            )[0],
         }
         return parameter_dict
 

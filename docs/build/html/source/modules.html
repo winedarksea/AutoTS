@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots &#8212; AutoTS 0.6.15 documentation</title>
+    <title>autots &#8212; AutoTS 0.6.16 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=9ea1f4c8"></script>
+    <script src="../_static/documentation_options.js?v=a9597ea2"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -102,6 +102,7 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.cpu_count">autots.tools.cpu_count module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.fast_kalman">autots.tools.fast_kalman module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.fft">autots.tools.fft module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.fir_filter">autots.tools.fir_filter module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.hierarchial">autots.tools.hierarchial module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.holiday">autots.tools.holiday module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
@@ -143,6 +144,7 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.back_forecast"><code class="docutils literal notranslate"><span class="pre">AutoTS.back_forecast()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.best_model_per_series_mape"><code class="docutils literal notranslate"><span class="pre">AutoTS.best_model_per_series_mape()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.best_model_per_series_score"><code class="docutils literal notranslate"><span class="pre">AutoTS.best_model_per_series_score()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.create_unpredictability_score"><code class="docutils literal notranslate"><span class="pre">AutoTS.create_unpredictability_score()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.diagnose_params"><code class="docutils literal notranslate"><span class="pre">AutoTS.diagnose_params()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.expand_horizontal"><code class="docutils literal notranslate"><span class="pre">AutoTS.expand_horizontal()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.export_best_model"><code class="docutils literal notranslate"><span class="pre">AutoTS.export_best_model()</span></code></a></li>
@@ -165,6 +167,8 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.parse_best_model"><code class="docutils literal notranslate"><span class="pre">AutoTS.parse_best_model()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_back_forecast"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_back_forecast()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_backforecast"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_backforecast()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_chosen_transformer"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_chosen_transformer()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_failure_rate"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_failure_rate()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_generation_loss"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_generation_loss()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_horizontal"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_horizontal()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_horizontal_model_count"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_horizontal_model_count()</span></code></a></li>
@@ -172,11 +176,14 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_horizontal_transformers"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_horizontal_transformers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_metric_corr"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_metric_corr()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_model_failure_rate"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_model_failure_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_mosaic"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_mosaic()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_per_series_error"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_per_series_error()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_per_series_mape"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_per_series_mape()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_per_series_smape"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_per_series_smape()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_series_corr"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_series_corr()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_transformer_by_class"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_transformer_by_class()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_transformer_failure_rate"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_transformer_failure_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_unpredictability"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_unpredictability()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.plot_validations"><code class="docutils literal notranslate"><span class="pre">AutoTS.plot_validations()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.predict"><code class="docutils literal notranslate"><span class="pre">AutoTS.predict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.results"><code class="docutils literal notranslate"><span class="pre">AutoTS.results()</span></code></a></li>

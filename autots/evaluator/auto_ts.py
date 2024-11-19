@@ -217,7 +217,9 @@ class AutoTS(object):
         current_model_file: str = None,
         force_gc: bool = False,
         horizontal_ensemble_validation: bool = True,
-        custom_metric: Callable[[np.ndarray, np.ndarray, np.ndarray, float], np.ndarray] = None,
+        custom_metric: Callable[
+            [np.ndarray, np.ndarray, np.ndarray, float], np.ndarray
+        ] = None,
         verbose: int = 1,
         n_jobs: int = 0.5,
     ):
@@ -521,7 +523,8 @@ class AutoTS(object):
                         "mosaic-weighted-median-0-30",
                     ],
                     [  # works well on demand forecasting
-                        "simple", "mosaic-mae-median-profile",
+                        "simple",
+                        "mosaic-mae-median-profile",
                     ],
                 ],
                 [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
@@ -1963,7 +1966,7 @@ class AutoTS(object):
             mosaic_used=self.mosaic_used,
             force_gc=self.force_gc,
             additional_msg=additional_msg,
-            custom_metric=self.custom_metric
+            custom_metric=self.custom_metric,
         )
         if model_count == 0:
             self.model_count += template_result.model_count
@@ -3302,7 +3305,9 @@ class AutoTS(object):
             if len(color_list) < transformers.shape[0]:
                 import matplotlib.pyplot as plt
 
-                additional_colors = plt.cm.hsv(np.linspace(0, 1, transformers.shape[0] - len(color_list)))
+                additional_colors = plt.cm.hsv(
+                    np.linspace(0, 1, transformers.shape[0] - len(color_list))
+                )
                 color_list = np.vstack((color_list, additional_colors))
 
         colors = random.sample(color_list, transformers.shape[0])
@@ -3659,9 +3664,7 @@ class AutoTS(object):
             else:
                 title = f"Validation Forecasts for {series}"
         # actual plotting section
-        colb = [
-            x for x in plot_df.columns if "_lower" not in x and "_upper" not in x
-        ]
+        colb = [x for x in plot_df.columns if "_lower" not in x and "_upper" not in x]
         if colors is not None:
             # this will need to change if users are allowed to input colors
             new_colors = {x: random.choice(colors_list) for x in colb}
@@ -3764,7 +3767,10 @@ class AutoTS(object):
 
         temp = self.best_model_per_series_mape().reset_index().head(max_series)
 
-        if self.best_model_ensemble == 2 and "profile" not in self.best_model_params["model_metric"]:
+        if (
+            self.best_model_ensemble == 2
+            and "profile" not in self.best_model_params["model_metric"]
+        ):
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
             temp['Series'] = (
@@ -4224,7 +4230,14 @@ class AutoTS(object):
 
             return fig
 
-    def plot_chosen_transformer(self, df_wide=None, series=None, chosen_params=None, color1='grey', color2='darkorange'):
+    def plot_chosen_transformer(
+        self,
+        df_wide=None,
+        series=None,
+        chosen_params=None,
+        color1='grey',
+        color2='darkorange',
+    ):
         """visualizes the best model transformer, fit_transform (not inverse) effects.
         Won't show much for ensembles, only shows overall transformer if present.
 
@@ -4279,7 +4292,9 @@ class AutoTS(object):
 
             # Create a second y-axis sharing the x-axis
             ax2 = ax1.twinx()
-            ax2.plot(df2.index, df2[col], color=color2, linestyle='--', label='transformed')
+            ax2.plot(
+                df2.index, df2[col], color=color2, linestyle='--', label='transformed'
+            )
             ax2.set_ylabel('transformed', color=color2, fontsize=12)
             ax2.tick_params(axis='y', labelcolor=color2)
 
@@ -4288,8 +4303,12 @@ class AutoTS(object):
             plt.title(f'Comparison of Chosen Transformer on {col}', fontsize=14)
 
             # Improve legend appearance by placing it inside the plot with a background
-            ax1.legend(loc='upper left', frameon=True, facecolor='white', edgecolor='gray')
-            ax2.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='gray')
+            ax1.legend(
+                loc='upper left', frameon=True, facecolor='white', edgecolor='gray'
+            )
+            ax2.legend(
+                loc='upper right', frameon=True, facecolor='white', edgecolor='gray'
+            )
 
             # Show the plot
             plt.show()
@@ -4297,10 +4316,14 @@ class AutoTS(object):
 
     def plot_mosaic(self, max_series: int = 60, max_rows: int = None, colors=None):
         """Show the mosaic in a mosaic ensemble, if used."""
-        if self.best_model_ensemble != 2 or "mosaic" not in self.best_model_params["model_metric"]:
+        if (
+            self.best_model_ensemble != 2
+            or "mosaic" not in self.best_model_params["model_metric"]
+        ):
             return None
 
         import matplotlib.pyplot as plt
+
         # from matplotlib.colors import ListedColormap
 
         df = self.mosaic_to_df()
@@ -4314,7 +4337,9 @@ class AutoTS(object):
         if colors is None:
             colors = ancient_roman
         if len(colors) < len(unique_values):
-            additional_colors = plt.cm.hsv(np.linspace(0, 1, len(unique_values) - len(colors)))
+            additional_colors = plt.cm.hsv(
+                np.linspace(0, 1, len(unique_values) - len(colors))
+            )
             colors = np.vstack((colors, additional_colors))
 
         # Update value-to-color mapping with new colors
@@ -4337,18 +4362,20 @@ class AutoTS(object):
         plt.title("Mosaic Representation of Mosaic Ensemble")
         plt.xlabel("time series")
         plt.ylabel("forecast steps")
-        
+
         # Create a better multi-column legend plot with improved formatting
         fig_legend, ax_legend = plt.subplots(figsize=(15, 15))
         columns = 4  # Number of columns for the legend
-        rows = (len(value_to_color) + columns - 1) // columns  # Calculate number of rows needed
-        
+        rows = (
+            len(value_to_color) + columns - 1
+        ) // columns  # Calculate number of rows needed
+
         for i, (value, color) in enumerate(value_to_color.items()):
             col = i % columns
             row = i // columns
             ax_legend.add_patch(plt.Rectangle((col * 3, row), 1, 1, color=color))
             ax_legend.text(col * 3 + 1.2, row + 0.5, value, va='center')
-        
+
         ax_legend.set_xlim(0, columns * 3)
         ax_legend.set_ylim(0, rows)
         ax_legend.set_xticks([])
@@ -4356,9 +4383,15 @@ class AutoTS(object):
         plt.title("Legend for Mosaic")
         return ax, ax_legend
 
-    def plot_transformer_by_class(self, template=None, colors: dict = None, top_n: int =  15, plot_group: str = "ModelClass"):
+    def plot_transformer_by_class(
+        self,
+        template=None,
+        colors: dict = None,
+        top_n: int = 15,
+        plot_group: str = "ModelClass",
+    ):
         """Using the best results (from exported template), plot usage of transformers by model class.
-        
+
         Args:
             template (pd.DataFrame): template object of models to use for assesement, uses best 50 otherwise
             colors (dict): color mapping of model class to color
@@ -4386,7 +4419,9 @@ class AutoTS(object):
             if 'series' in ModelParameters.keys():
                 # Ensemble model
                 series = ModelParameters['series']
-                series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
+                series = pd.DataFrame.from_dict(series, orient="index").reset_index(
+                    drop=False
+                )
                 if series.shape[1] > 2:
                     # For mosaic style ensembles, choose the mode model id
                     series.set_index(series.columns[0], inplace=True)
@@ -4405,13 +4440,17 @@ class AutoTS(object):
                 lookup = {}
                 for k, v in ModelParameters['models'].items():
                     try:
-                        trans_params = json.loads(v.get('TransformationParameters', '{}'))
+                        trans_params = json.loads(
+                            v.get('TransformationParameters', '{}')
+                        )
                         transformations = trans_params.get('transformations', {})
                         transformers_str = ",".join(transformations.values())
                         lookup[k] = transformers_str
                     except Exception:
                         lookup[k] = "None"
-                series['Transformers'] = series['ID'].replace(lookup).replace("", "None")
+                series['Transformers'] = (
+                    series['ID'].replace(lookup).replace("", "None")
+                )
                 # Collect data
                 for idx, row_series in series.iterrows():
                     model_name = row_series['Model']
@@ -4423,12 +4462,14 @@ class AutoTS(object):
                     for transformer in transformers_list:
                         if transformer == '':
                             transformer = 'None'
-                        transformer_data.append({
-                            'ModelID': model_id,
-                            'Model': model_name,
-                            'ModelClass': model_class,
-                            'Transformer': transformer
-                        })
+                        transformer_data.append(
+                            {
+                                'ModelID': model_id,
+                                'Model': model_name,
+                                'ModelClass': model_class,
+                                'Transformer': transformer,
+                            }
+                        )
             else:
                 # Single model
                 model_name = row['Model']
@@ -4443,20 +4484,24 @@ class AutoTS(object):
                     for transformer in transformers_list:
                         if transformer == '':
                             transformer = 'None'
-                        transformer_data.append({
+                        transformer_data.append(
+                            {
+                                'ModelID': model_id,
+                                'Model': model_name,
+                                'ModelClass': model_class,
+                                'Transformer': transformer,
+                            }
+                        )
+                except Exception:
+                    # No transformers
+                    transformer_data.append(
+                        {
                             'ModelID': model_id,
                             'Model': model_name,
                             'ModelClass': model_class,
-                            'Transformer': transformer
-                        })
-                except Exception:
-                    # No transformers
-                    transformer_data.append({
-                        'ModelID': model_id,
-                        'Model': model_name,
-                        'ModelClass': model_class,
-                        'Transformer': 'None'
-                    })
+                            'Transformer': 'None',
+                        }
+                    )
 
         # Create a DataFrame from the collected data
         transformer_df = pd.DataFrame(transformer_data)
@@ -4464,39 +4509,65 @@ class AutoTS(object):
 
         # Calculate total unique models per model class
         unique_models = transformer_df[[plot_group, 'ModelID']].drop_duplicates()
-        model_class_counts = unique_models.groupby(plot_group).size().reset_index(name='TotalModels')
+        model_class_counts = (
+            unique_models.groupby(plot_group).size().reset_index(name='TotalModels')
+        )
 
         # Calculate total models overall
         total_models_overall = model_class_counts['TotalModels'].sum()
 
         # Calculate counts of transformers per model class
-        counts = transformer_df.groupby([plot_group, 'Transformer']).size().reset_index(name='Count')
+        counts = (
+            transformer_df.groupby([plot_group, 'Transformer'])
+            .size()
+            .reset_index(name='Count')
+        )
 
         # Calculate proportion of models in each class that used each transformer
         counts = counts.merge(model_class_counts, on=plot_group)
         counts['ProportionInClass'] = counts['Count'] / counts['TotalModels']
 
         # Calculate proportion of each model class in the total models
-        model_class_counts['ClassProportion'] = model_class_counts['TotalModels'] / total_models_overall
+        model_class_counts['ClassProportion'] = (
+            model_class_counts['TotalModels'] / total_models_overall
+        )
 
         # Merge ClassProportion into counts
-        counts = counts.merge(model_class_counts[[plot_group, 'ClassProportion']], on=plot_group, suffixes=('', '_y'))
+        counts = counts.merge(
+            model_class_counts[[plot_group, 'ClassProportion']],
+            on=plot_group,
+            suffixes=('', '_y'),
+        )
 
         # Calculate adjusted proportion
-        counts['AdjustedProportion'] = counts['ProportionInClass'] * counts['ClassProportion']
+        counts['AdjustedProportion'] = (
+            counts['ProportionInClass'] * counts['ClassProportion']
+        )
 
         # For each transformer, normalize the adjusted proportions so that they sum to 1
-        counts['NormalizedProportion'] = counts.groupby('Transformer')['AdjustedProportion'].transform(lambda x: x / x.sum())
+        counts['NormalizedProportion'] = counts.groupby('Transformer')[
+            'AdjustedProportion'
+        ].transform(lambda x: x / x.sum())
 
         # Select the top N transformers based on total usage
-        total_transformer_counts = transformer_df.groupby('Transformer')['ModelID'].nunique().reset_index(name='TotalCount')
-        top_transformers = total_transformer_counts.sort_values(by='TotalCount', ascending=False).head(top_n)['Transformer'].tolist()
+        total_transformer_counts = (
+            transformer_df.groupby('Transformer')['ModelID']
+            .nunique()
+            .reset_index(name='TotalCount')
+        )
+        top_transformers = (
+            total_transformer_counts.sort_values(by='TotalCount', ascending=False)
+            .head(top_n)['Transformer']
+            .tolist()
+        )
 
         # Filter counts to include only top transformers
         counts_top = counts[counts['Transformer'].isin(top_transformers)]
 
         # Ensure the transformers are in the desired order
-        counts_top.loc[:, 'Transformer'] = pd.Categorical(counts_top['Transformer'], categories=top_transformers, ordered=True)
+        counts_top.loc[:, 'Transformer'] = pd.Categorical(
+            counts_top['Transformer'], categories=top_transformers, ordered=True
+        )
 
         # Define pastel colors for model classes
         if colors is None:
@@ -4511,20 +4582,24 @@ class AutoTS(object):
                     'other': sns_colors[5],
                 }
             else:
-                model_class_colors = dict(zip(transformer_df["Model"].unique().tolist(), colors_list))
+                model_class_colors = dict(
+                    zip(transformer_df["Model"].unique().tolist(), colors_list)
+                )
         else:
             model_class_colors = colors
 
         # Update font sizes using rcParams for consistency
-        plt.rcParams.update({
-            'font.size': 16,          # Base font size
-            'axes.titlesize': 18,     # Title font size
-            'axes.labelsize': 16,     # Axes labels font size
-            'xtick.labelsize': 14,    # X-axis tick labels font size
-            'ytick.labelsize': 14,    # Y-axis tick labels font size
-            'legend.fontsize': 14,    # Legend font size
-            'legend.title_fontsize': 16,  # Legend title font size
-        })
+        plt.rcParams.update(
+            {
+                'font.size': 16,  # Base font size
+                'axes.titlesize': 18,  # Title font size
+                'axes.labelsize': 16,  # Axes labels font size
+                'xtick.labelsize': 14,  # X-axis tick labels font size
+                'ytick.labelsize': 14,  # Y-axis tick labels font size
+                'legend.fontsize': 14,  # Legend font size
+                'legend.title_fontsize': 16,  # Legend title font size
+            }
+        )
 
         # Set the style for publication quality
         sns.set_theme(style='whitegrid', context='paper', font_scale=1.8)
@@ -4534,12 +4609,12 @@ class AutoTS(object):
             index='Transformer',
             columns=plot_group,
             values='NormalizedProportion',
-            fill_value=0
+            fill_value=0,
         ).reindex(index=top_transformers)
 
         # Plot using custom bar plot to add percentage labels
         fig, ax = plt.subplots(figsize=(12, 8))
-        bottoms = [0]*len(plot_data)
+        bottoms = [0] * len(plot_data)
         transformer_indices = range(len(plot_data))
         for model_class in plot_data.columns:
             proportions = plot_data[model_class].values
@@ -4549,7 +4624,7 @@ class AutoTS(object):
                 bottom=bottoms,
                 color=model_class_colors.get(model_class, '#333333'),
                 edgecolor='black',
-                label=model_class
+                label=model_class,
             )
             # Add percentage labels
             for idx, bar in enumerate(bars):
@@ -4582,7 +4657,9 @@ class AutoTS(object):
         sns.despine(trim=True, left=True)
 
         # Adjust y-axis to show percentages rounded to whole numbers
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: '{:.0%}'.format(round(y*100)/100)))
+        ax.yaxis.set_major_formatter(
+            plt.FuncFormatter(lambda y, _: '{:.0%}'.format(round(y * 100) / 100))
+        )
 
         # Adjust legend position to avoid blocking bars
         handles, labels = ax.get_legend_handles_labels()
@@ -4594,11 +4671,13 @@ class AutoTS(object):
             title_fontsize=16,
             loc='center left',
             bbox_to_anchor=(1, 0.5),
-            frameon=False
+            frameon=False,
         )
 
         # Adjust layout to fit larger text and legend
-        plt.tight_layout(rect=[0, 0, 0.92, 1])  # Adjust right margin to make space for legend
+        plt.tight_layout(
+            rect=[0, 0, 0.92, 1]
+        )  # Adjust right margin to make space for legend
 
     def plot_failure_rate(self, target="transformers"):
         initial_results = self.results()
@@ -4607,7 +4686,11 @@ class AutoTS(object):
         for idx, row in initial_results.iterrows():
             failed = not pd.isnull(row['Exceptions'])
             if target == "transformers":
-                transforms = list(json.loads(row['TransformationParameters']).get('transformations', {}).values())
+                transforms = list(
+                    json.loads(row['TransformationParameters'])
+                    .get('transformations', {})
+                    .values()
+                )
             elif target == "models":
                 transforms = [row["Model"]]
             else:
@@ -4616,9 +4699,21 @@ class AutoTS(object):
                 failures = failures + transforms
             else:
                 successes = successes + transforms
-        total = pd.concat([pd.Series(failures).value_counts().rename("failures").to_frame(),pd.Series(successes).value_counts().rename("successes")], axis=1).fillna(0)
-        total['failure_rate'] = total['failures'] / (total['successes'] + total['failures'])
-        return total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+        total = pd.concat(
+            [
+                pd.Series(failures).value_counts().rename("failures").to_frame(),
+                pd.Series(successes).value_counts().rename("successes"),
+            ],
+            axis=1,
+        ).fillna(0)
+        total['failure_rate'] = total['failures'] / (
+            total['successes'] + total['failures']
+        )
+        return (
+            total.sort_values("failure_rate", ascending=False)['failure_rate']
+            .iloc[0:20]
+            .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+        )
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
@@ -4874,17 +4969,69 @@ class AutoTS(object):
 
 
 colors_list = [
-    '#FF00FF', '#7FFFD4', '#00FFFF', '#F5DEB3', '#FF6347', '#8B008B',
-    '#696969', '#FFC0CB', '#C71585', '#008080', '#663399', '#32CD32',
-    '#66CDAA', '#A9A9A9', '#2F4F4F', '#FFDEAD', '#800000', '#FFDAB9',
-    '#D3D3D3', '#98FB98', '#87CEEB', '#A52A2A', '#FFA07A', '#7FFF00',
-    '#E9967A', '#1E90FF', '#FF69B4', '#ADD8E6', '#008B8B', '#FF7F50',
-    '#00FA9A', '#9370DB', '#4682B4', '#006400', '#AFEEEE', '#CD853F',
-    '#9400D3', '#EE82EE', '#00008B', '#4B0082', '#0403A7', '#000000',
-    '#B0C4DE', '#5F9EA0', '#708090', '#556B2F', '#FF4500', '#FA8072',
-    '#FFD700', '#DA70D6', '#DC143C', '#B22222', '#00CED1', '#40E0D0',
-    '#FF1493', '#483D8B', '#2E8B57', '#D2691E', '#8FBC8F', '#FF8C00',
-    '#FFB6C1', '#8A2BE2', '#D8BFD8'
+    '#FF00FF',
+    '#7FFFD4',
+    '#00FFFF',
+    '#F5DEB3',
+    '#FF6347',
+    '#8B008B',
+    '#696969',
+    '#FFC0CB',
+    '#C71585',
+    '#008080',
+    '#663399',
+    '#32CD32',
+    '#66CDAA',
+    '#A9A9A9',
+    '#2F4F4F',
+    '#FFDEAD',
+    '#800000',
+    '#FFDAB9',
+    '#D3D3D3',
+    '#98FB98',
+    '#87CEEB',
+    '#A52A2A',
+    '#FFA07A',
+    '#7FFF00',
+    '#E9967A',
+    '#1E90FF',
+    '#FF69B4',
+    '#ADD8E6',
+    '#008B8B',
+    '#FF7F50',
+    '#00FA9A',
+    '#9370DB',
+    '#4682B4',
+    '#006400',
+    '#AFEEEE',
+    '#CD853F',
+    '#9400D3',
+    '#EE82EE',
+    '#00008B',
+    '#4B0082',
+    '#0403A7',
+    '#000000',
+    '#B0C4DE',
+    '#5F9EA0',
+    '#708090',
+    '#556B2F',
+    '#FF4500',
+    '#FA8072',
+    '#FFD700',
+    '#DA70D6',
+    '#DC143C',
+    '#B22222',
+    '#00CED1',
+    '#40E0D0',
+    '#FF1493',
+    '#483D8B',
+    '#2E8B57',
+    '#D2691E',
+    '#8FBC8F',
+    '#FF8C00',
+    '#FFB6C1',
+    '#8A2BE2',
+    '#D8BFD8',
 ]
 
 # colors you might see in a mosaic or fresco, llm based and only partially accurate but want to do more depth on this later

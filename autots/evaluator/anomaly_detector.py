@@ -164,7 +164,12 @@ class AnomalyDetector(object):
         if len(i_anom) > 0:
             if marker_size is None:
                 marker_size = max(20, fig.dpi * 0.45)
-            ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="red", s=marker_size)
+            ax.scatter(
+                i_anom.tolist(),
+                self.df.loc[i_anom, :][series_name],
+                c="red",
+                s=marker_size,
+            )
 
     def fit(self, df):
         return self.detect(df)
@@ -375,13 +380,21 @@ class HolidayDetector(object):
                 i_anom = series_anom[series_anom == -1].index
             if len(i_anom) > 0:
                 ax.scatter(
-                    i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="red", s=marker_size
+                    i_anom.tolist(),
+                    self.df.loc[i_anom, :][series_name],
+                    c="red",
+                    s=marker_size,
                 )
         # now the actual holidays
         i_anom = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
         i_anom = i_anom.index[i_anom == 1]
         if len(i_anom) > 0:
-            ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="green", s=marker_size)
+            ax.scatter(
+                i_anom.tolist(),
+                self.df.loc[i_anom, :][series_name],
+                c="green",
+                s=marker_size,
+            )
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
         """Populate date information for a given pd.DatetimeIndex.

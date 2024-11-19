@@ -179,9 +179,7 @@ def constraint_new_params(method: str = "fast"):
         params["constraint_value"] = random.choices([0, 0.1, 1], [0.8, 0.1, 0.1])[0]
     elif method_choice in ["historic_growth"]:
         params["constraint_value"] = {
-            "threshold": random.choices(
-                [1.0, 0.5, 2.0, 0.2], [0.6, 0.2, 0.2, 0.04]
-            )[0]
+            "threshold": random.choices([1.0, 0.5, 2.0, 0.2], [0.6, 0.2, 0.2, 0.04])[0]
         }
         window_choice = random.choices(
             [None, 10, 100, 360, 4], [0.8, 0.2, 0.2, 0.2, 0.04]
@@ -195,7 +193,8 @@ def constraint_new_params(method: str = "fast"):
             params["constraint_value"]["quantile"] = quantile_choice
     elif method_choice in ["historic_diff"]:
         params["constraint_value"] = random.choices(
-            [1.0, 0.5, 2.0, 0.2, 1.2], [0.6, 0.2, 0.2, 0.04, 0.04],
+            [1.0, 0.5, 2.0, 0.2, 1.2],
+            [0.6, 0.2, 0.2, 0.04, 0.04],
         )[0]
     return params
 
@@ -325,13 +324,11 @@ def fit_constraint(
         t2 = np.log1p(t) + 1
         train_max = (
             df_train.iloc[-1].to_numpy()
-            + (((slopes_max * forecast_length)) * t2 / t2.max())[1:]
-            * threshold
+            + (((slopes_max * forecast_length)) * t2 / t2.max())[1:] * threshold
         )
         train_min = (
             df_train.iloc[-1].to_numpy()
-            + (((slopes_min * forecast_length)) * t2 / t2.max())[1:]
-            * threshold
+            + (((slopes_min * forecast_length)) * t2 / t2.max())[1:] * threshold
         )
     elif constraint_method == "historic_diff":
         if isinstance(constraint_value, dict):

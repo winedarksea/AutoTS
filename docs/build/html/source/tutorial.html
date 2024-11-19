@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Tutorial &#8212; AutoTS 0.6.15 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.6.16 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=9ea1f4c8"></script>
+    <script src="../_static/documentation_options.js?v=a9597ea2"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -113,7 +113,7 @@ Dropping series which are mostly missing, or using <code class="docutils literal
 <h3>What to Worry About<a class="headerlink" href="#what-to-worry-about" title="Link to this heading">¶</a></h3>
 <p>There are some basic things to beware of that can commonly lead to poor results:</p>
 <ol class="arabic simple">
-<li><p>Bad data (sudden drops or missing values) in the <em>most recent</em> data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
+<li><p>Bad data (sudden drops or missing values) in the <em>most recent</em> data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. Also remove all time series that are entirely NaN or entirely zero.</p></li>
 <li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible.</p></li>
 <li><p>Anomalies that won’t be repeated. Manual anomaly removal can be more effective than any automatic methods. Along with this, beware of a changing pattern of NaN occurrences, as learned FillNA may not longer apply.</p></li>
 <li><p>Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events.</p></li>
@@ -307,6 +307,8 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 <p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is <em>(Scaled) Mean Absolute Differential Error</em>. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to ‘MAE’ when forecast_length=1. It is better for optimization than contour.</p>
 <p>The contour and MADE metrics are useful as they encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.</p>
 <p>If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.</p>
+<p>It may be worth viewing something like: <code class="docutils literal notranslate"><span class="pre">model.score_breakdown[model.score_breakdown.index</span> <span class="pre">==</span> <span class="pre">model.best_model_id].iloc[0]</span></code> to see if any one score is skewing selection.
+Generally you would want the numbers here to follow the balance requested in the <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
@@ -1235,6 +1237,26 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
+<tr class="row-odd"><td><p>DMD</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>BasicLinearModel</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
 <tr class="row-odd"><td><p>TiDE</p></td>
 <td><p>tensorflow</p></td>
 <td></td>
@@ -1255,7 +1277,17 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>MotifSimulation</p></td>
+<tr class="row-odd"><td><p>TVVAR</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1265,7 +1297,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>Greykite</p></td>
+<tr class="row-odd"><td><p>Greykite</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1275,7 +1307,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TensorflowSTS</p></td>
+<tr class="row-even"><td><p>TensorflowSTS</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1285,7 +1317,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TFPRegression</p></td>
+<tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1295,7 +1327,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
+<tr class="row-even"><td><p>ComponentAnalysis</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td></td>

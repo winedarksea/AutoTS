@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Intro &#8212; AutoTS 0.6.15 documentation</title>
+    <title>Intro &#8212; AutoTS 0.6.16 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=9ea1f4c8"></script>
+    <script src="../_static/documentation_options.js?v=a9597ea2"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -64,6 +64,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#installation">Installation</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#basic-use">Basic Use</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data">Tips for Speed and Large Data</a></p></li>
+<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#autots-process">Flowchart</a></p></li>
 <li><p>Extended Tutorial <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md">GitHub</a> or <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">Docs</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">Production Example</a></p></li>
 </ul>
@@ -100,10 +101,10 @@ Many models also support passing in user-defined exogenous regressors.</p>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
     <span class="n">forecast_length</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span>
-    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s2">&quot;infer&quot;</span><span class="p">,</span>
     <span class="n">prediction_interval</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
-    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span>
-    <span class="n">model_list</span><span class="o">=</span><span class="s2">&quot;fast&quot;</span><span class="p">,</span>  <span class="c1"># &quot;superfast&quot;, &quot;default&quot;, &quot;fast_parallel&quot;</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">model_list</span><span class="o">=</span><span class="s2">&quot;superfast&quot;</span><span class="p">,</span>  <span class="c1"># &quot;fast&quot;, &quot;default&quot;, &quot;fast_parallel&quot;</span>
     <span class="n">transformer_list</span><span class="o">=</span><span class="s2">&quot;fast&quot;</span><span class="p">,</span>  <span class="c1"># &quot;superfast&quot;,</span>
     <span class="n">drop_most_recent</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
     <span class="n">max_generations</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
@@ -194,6 +195,40 @@ Many models also support passing in user-defined exogenous regressors.</p>
 </li>
 <li><p>And, of course, contributing to the codebase directly on GitHub.</p></li>
 </ul>
+</section>
+<section id="autots-process">
+<h2>AutoTS Process<a class="headerlink" href="#autots-process" title="Link to this heading">¶</a></h2>
+<div class="highlight-mermaid notranslate"><div class="highlight"><pre><span></span>flowchart TD
+    A[Initiate AutoTS Model] --&gt; B[Import Template]
+    B --&gt; C[Load Data]
+    C --&gt; D[Split Data Into Initial Train/Test Holdout]
+    D --&gt; E[Run Initial Template Models]
+    E --&gt; F[Evaluate Accuracy Metrics on Results]
+    F --&gt; G[Generate Score from Accuracy Metrics]
+    G --&gt; H{Max Generations Reached or Timeout?}
+
+    H --&gt;|No| I[Evaluate All Previous Templates]
+    I --&gt; J[Genetic Algorithm Combines Best Results and New Random Parameters into New Template]
+    J --&gt; K[Run New Template Models and Evaluate]
+    K --&gt; G
+
+    H --&gt;|Yes| L[Select Best Models by Score for Validation Template]
+    L --&gt; M[Run Validation Template on Additional Holdouts]
+    M --&gt; N[Evaluate and Score Validation Results]
+    N --&gt; O{Create Ensembles?}
+
+    O --&gt;|Yes| P[Generate Ensembles from Validation Results]
+    P --&gt; Q[Run Ensembles Through Validation]
+    Q --&gt; N
+
+    O --&gt;|No| R[Export Best Models Template]
+    R --&gt; S[Select Single Best Model]
+    S --&gt; T[Generate Future Time Forecast]
+    T --&gt; U[Visualize Results]
+
+    R --&gt; B[Import Best Models Template]
+</pre></div>
+</div>
 <p><em>Also known as Project CATS (Catlin’s Automated Time Series) hence the logo.</em></p>
 </section>
 </section>
@@ -237,6 +272,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li class="toctree-l2"><a class="reference internal" href="#id2">Basic Use</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#id3">Tips for Speed and Large Data:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#autots-process">AutoTS Process</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>

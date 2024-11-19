@@ -5,7 +5,12 @@ import warnings
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
-from autots.tools.seasonal import date_part, seasonal_int, random_datepart, half_yr_spacing
+from autots.tools.seasonal import (
+    date_part,
+    seasonal_int,
+    random_datepart,
+    half_yr_spacing,
+)
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.constraint import (
     fit_constraint,
@@ -273,9 +278,7 @@ class Detrend(EmptyTransformer):
             if multioutput:
                 from sklearn.linear_model import MultiTaskElasticNet
 
-                regr = MultiTaskElasticNet(
-                    alpha=1.0
-                )
+                regr = MultiTaskElasticNet(alpha=1.0)
             else:
                 from sklearn.linear_model import ElasticNet
 
@@ -318,7 +321,9 @@ class Detrend(EmptyTransformer):
         else:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                self.trained_model = self._retrieve_detrend(detrend=self.model, multioutput=df.shape[1] > 1)
+                self.trained_model = self._retrieve_detrend(
+                    detrend=self.model, multioutput=df.shape[1] > 1
+                )
                 if self.model in self.need_positive:
                     self.trnd_trans = PositiveShift(
                         log=False, center_one=True, squared=False
@@ -1317,7 +1322,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         )
         self.model = self.model.fit(
             X.fillna(0) if isinstance(X, pd.DataFrame) else np.nan_to_num(X),
-            y.fillna(0) if isinstance(y, pd.DataFrame) else np.nan_to_num(y)
+            y.fillna(0) if isinstance(y, pd.DataFrame) else np.nan_to_num(y),
         )
         self.shape = df_local.shape
         return self
@@ -2917,7 +2922,9 @@ class AlignLastValue(EmptyTransformer):
                 if self.method == "multiplicative":
                     if self.adjustment is None:
                         self.adjustment = (
-                            1 + ((self.center / df.iloc[0].replace(0, 1)) - 1) * self.strength
+                            1
+                            + ((self.center / df.iloc[0].replace(0, 1)) - 1)
+                            * self.strength
                         )
                     return pd.concat(
                         [
@@ -2940,7 +2947,9 @@ class AlignLastValue(EmptyTransformer):
                 if self.method == "multiplicative":
                     if self.adjustment is None:
                         self.adjustment = (
-                            1 + ((self.center / df.iloc[0].replace(0, 1)) - 1) * self.strength
+                            1
+                            + ((self.center / df.iloc[0].replace(0, 1)) - 1)
+                            * self.strength
                         )
                     if self.threshold is not None:
                         return df.where(
@@ -3921,16 +3930,28 @@ class LevelShiftMagic(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "window_size": random.choices([4, 7, 14, 30, 70, 90, 120, 364], [0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1], k=1)[
-                0
-            ],
+            "window_size": random.choices(
+                [4, 7, 14, 30, 70, 90, 120, 364],
+                [0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1],
+                k=1,
+            )[0],
             "alpha": random.choices(
-                [1.0, 1.8, 2.0, 2.2, 2.5, 3.0, 3.5, 4.0], [0.05, 0.02, 0.2, 0.02, 0.3, 0.2, 0.15, 0.1], k=1
+                [1.0, 1.8, 2.0, 2.2, 2.5, 3.0, 3.5, 4.0],
+                [0.05, 0.02, 0.2, 0.02, 0.3, 0.2, 0.15, 0.1],
+                k=1,
             )[0],
             "grouping_forward_limit": random.choice([2, 3, 4, 5, 6]),
-            "max_level_shifts": random.choices([3, 5, 8, 10, 30, 40], [0.05, 0.3, 0.05, 0.2, 0.2, 0.05])[0],
+            "max_level_shifts": random.choices(
+                [3, 5, 8, 10, 30, 40], [0.05, 0.3, 0.05, 0.2, 0.2, 0.05]
+            )[0],
             "alignment": random.choices(
-                ["average", "last_value", "rolling_diff", "rolling_diff_3nn", "rolling_diff_5nn"],
+                [
+                    "average",
+                    "last_value",
+                    "rolling_diff",
+                    "rolling_diff_3nn",
+                    "rolling_diff_5nn",
+                ],
                 [0.5, 0.2, 0.15, 0.25, 0.05],
             )[0],
         }
@@ -3997,7 +4018,7 @@ class LevelShiftMagic(EmptyTransformer):
             )
             curr_diff_sum = np.nansum(curr_diff_np)
             count = 0
-    
+
             while curr_diff_sum != 0 and count < self.max_level_shifts:
                 curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
                 mask = curr_diff_np == curr_maxes_np
@@ -4005,13 +4026,17 @@ class LevelShiftMagic(EmptyTransformer):
                 used_groups_np = np.where(mask, group_ids_np, np.nan)
                 used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
                 used_groups_unique = np.unique(used_groups_flat)
-                mask_to_update = np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+                mask_to_update = (
+                    np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+                )
                 curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
                 curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
                 count += 1
         else:
             self.used_groups = group_ids[max_mask].mean()
-            curr_diff = diff_abs.where(((group_ids != self.used_groups) & diff_mask), np.nan)
+            curr_diff = diff_abs.where(
+                ((group_ids != self.used_groups) & diff_mask), np.nan
+            )
             curr_diff_sum = np.nansum(curr_diff.to_numpy())
             count = 0
             while curr_diff_sum != 0 and count < self.max_level_shifts:
@@ -4606,7 +4631,8 @@ class AlignLastDiff(EmptyTransformer):
     def get_new_params(method: str = "random"):
         return {
             "rows": random.choices(
-                [1, 2, 4, 7, 28, 90, 364, None], [0.2, 0.05, 0.05, 0.1, 0.05, 0.1, 0.05, 0.1]
+                [1, 2, 4, 7, 28, 90, 364, None],
+                [0.2, 0.05, 0.05, 0.1, 0.05, 0.1, 0.05, 0.1],
             )[0],
             "displacement_rows": random.choices(
                 [1, 2, 4, 7, 21], [0.8, 0.05, 0.05, 0.05, 0.05]
@@ -5404,7 +5430,9 @@ class ThetaTransformer:
         # Stack all theta lines horizontally
         transformed_data = np.hstack(theta_lines)  # n x (m * len(theta_values))
 
-        transformed_df = pd.DataFrame(transformed_data, index=df.index, columns=transformed_columns)
+        transformed_df = pd.DataFrame(
+            transformed_data, index=df.index, columns=transformed_columns
+        )
         return transformed_df
 
     def fit_transform(self, df):
@@ -5446,16 +5474,26 @@ class ThetaTransformer:
         # weights = np.ones(n_theta) / n_theta
         # y_reconstructed = np.tensordot(weights, theta_lines, axes=([0], [0]))  # n x m
 
-        reconstructed_df = pd.DataFrame(y_reconstructed, index=df.index, columns=self.columns)
+        reconstructed_df = pd.DataFrame(
+            y_reconstructed, index=df.index, columns=self.columns
+        )
         return reconstructed_df
 
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "theta_values": random.choice([
-                [0, 2], [0.5, 1.5], [0.2, 1.8], [0.4, 1.6],
-                [0.6, 1.4], [0.8, 1.2], [0, 1, 2], [0, 0.5, 1.5, 2]
-            ]),
+            "theta_values": random.choice(
+                [
+                    [0, 2],
+                    [0.5, 1.5],
+                    [0.2, 1.8],
+                    [0.4, 1.6],
+                    [0.6, 1.4],
+                    [0.8, 1.2],
+                    [0, 1, 2],
+                    [0, 0.5, 1.5, 2],
+                ]
+            ),
         }
 
 
@@ -5479,7 +5517,9 @@ class ChangepointDetrend(Detrend):
     @staticmethod
     def get_new_params(method: str = "random"):
         if method == "fast":
-            choice = random.choices(["Linear", "Ridge", "ElasticNet"], [0.5, 0.2, 0.2], k=1)[0]
+            choice = random.choices(
+                ["Linear", "Ridge", "ElasticNet"], [0.5, 0.2, 0.2], k=1
+            )[0]
             # phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.05, 0.01, 0.01])[0]
         else:
             choice = random.choices(
@@ -5509,7 +5549,7 @@ class ChangepointDetrend(Detrend):
                 [None, 6, 28, 60, 90, 180, 360, 520, 5040],
                 [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
             )[0],
-            "datepart_method": datepart_method
+            "datepart_method": datepart_method,
         }
 
     def _create_X(self, DTindex, datepart_method=None):
@@ -5526,12 +5566,18 @@ class ChangepointDetrend(Detrend):
         DTindex_values = DTindex.values.astype('datetime64[ns]')
         cp_dates_values = self.changepoint_dates.values.astype('datetime64[ns]')
         # Compute time differences in days
-        time_diffs = (DTindex_values[:, None] - cp_dates_values[None, :]).astype('timedelta64[s]') / np.timedelta64(1, 'D')
+        time_diffs = (DTindex_values[:, None] - cp_dates_values[None, :]).astype(
+            'timedelta64[s]'
+        ) / np.timedelta64(1, 'D')
         # Apply np.maximum(0, time_diff)
         features = np.maximum(0, time_diffs)
         # Create DataFrame
-        feature_names = [f'changepoint_{i+1}' for i in range(len(self.changepoint_dates))]
-        changepoint_features = pd.DataFrame(features, index=DTindex, columns=feature_names)
+        feature_names = [
+            f'changepoint_{i+1}' for i in range(len(self.changepoint_dates))
+        ]
+        changepoint_features = pd.DataFrame(
+            features, index=DTindex, columns=feature_names
+        )
         if datepart_method is not None:
             x_s = date_part(DTindex, method=datepart_method, set_index=True)
             return pd.concat([changepoint_features, x_s], axis=1)
@@ -5575,7 +5621,9 @@ class ChangepointDetrend(Detrend):
         # Generate changepoint features
         x_t = self._create_X(DTindex, datepart_method=self.datepart_method)
         # Fit the regression model
-        self.trained_model = self._retrieve_detrend(detrend=self.model, multioutput=df.shape[1] > 1)
+        self.trained_model = self._retrieve_detrend(
+            detrend=self.model, multioutput=df.shape[1] > 1
+        )
         self.trained_model.fit(x_t, Y)
         self.shape = df.shape
         return self
@@ -5752,9 +5800,13 @@ class StandardScaler:
     def fit(self, df: pd.DataFrame):
         """Compute the mean and standard deviation for each feature."""
         self.means = df.mean()
-        self.stds = df.std(ddof=0).replace(0, 1)  # Use population standard deviation (ddof=0)
+        self.stds = df.std(ddof=0).replace(
+            0, 1
+        )  # Use population standard deviation (ddof=0)
         # Identify columns to skip (constant or zero std)
-        self.skip_columns = self.stds == 1  # 0 replace with 1, exact 1 unlikely in real data
+        self.skip_columns = (
+            self.stds == 1
+        )  # 0 replace with 1, exact 1 unlikely in real data
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Scale the dataset using the stored mean and standard deviation."""
@@ -6721,7 +6773,13 @@ def RandomTransform(
 
     # remove duplication of some which scale memory exponentially
     # only allow one of these
-    prob_trans = {"CenterSplit", "RollingMeanTransformer", "LocalLinearTrend", "ThetaTransformer", "MeanPercentSplitter"}
+    prob_trans = {
+        "CenterSplit",
+        "RollingMeanTransformer",
+        "LocalLinearTrend",
+        "ThetaTransformer",
+        "MeanPercentSplitter",
+    }
     if any(x in prob_trans for x in trans):
         # for loop, only way I saw to do this right now
         seen = False
