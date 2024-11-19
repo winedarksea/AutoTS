@@ -11,6 +11,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from autots.tools.seasonal import date_part, base_seasonalities, datepart_components, random_datepart, fourier_df
+from autots.tools.holiday import holiday_flag
 from autots.tools.wavelet import create_narrowing_wavelets, offset_wavelet
 
 
@@ -100,3 +101,15 @@ class TestSeasonal(unittest.TestCase):
 
         # Check if the last 100 days of the full series match the subset
         self.assertTrue(np.allclose(wavelets[-100:], wavelet_short))
+
+    def test_holiday_flag(self):
+        # hourly being trickier
+        train_index = pd.date_range("2020-01-01", "2023-01-01", freq="h")
+        pred_index = pd.date_range("2023-01-02", "2024-01-01", freq="h")
+        
+        train_holiday = holiday_flag(train_index, country=["US", "CA"], encode_holiday_type=True)
+        pred_holiday = holiday_flag(pred_index, country=["US", "CA"], encode_holiday_type=True)
+
+        self.assertCountEqual(train_holiday.columns.tolist(), pred_holiday.columns.tolist())
+        self.assertGreaterEqual(train_holiday.sum().sum(), 24)
+        self.assertGreaterEqual(pred_holiday.sum().sum(), 24)

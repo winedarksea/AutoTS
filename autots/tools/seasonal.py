@@ -76,6 +76,28 @@ date_part_methods = [
 origin_ts = "2030-01-01"
 
 
+def _is_seasonality_order_list(data):
+    """[365.25, 14] would be true and [7, 365.25] would be false"""
+    # Check if the data is a list with exactly two items
+    if not isinstance(data, list) or len(data) != 2:
+        return False
+
+    # Check if the first item is either a float or integer
+    first_item = data[0]
+    if not isinstance(first_item, (int, float)):
+        return False
+
+    # Check if the second item is an integer
+    second_item = data[1]
+    if not isinstance(second_item, int):
+        return False
+    elif second_item > 120:
+        # unlikely there would be a request for more than 120 fourier orders
+        return False
+
+    return True
+
+
 def date_part(
     DTindex,
     method: str = 'simple',
@@ -87,6 +109,8 @@ def date_part(
     forward_lags: int = None,
 ):
     """Create date part columns from pd.DatetimeIndex.
+
+    If you date_part isn't recognized, you will see a ['year', 'month' 'day', 'weekday'] output
 
     Args:
         DTindex (pd.DatetimeIndex): datetime index to provide dates
@@ -109,7 +133,11 @@ def date_part(
         pd.Dataframe with DTindex
     """
     # recursive
-    if isinstance(method, list):
+    is_seasonality_list = _is_seasonality_order_list(method)
+    if is_seasonality_list:
+        # because JSON can't do tuples and it's list, but want to have a pair of (seasonality, order) for fouriers
+        date_part_df = fourier_df(DTindex, seasonality=method[0], order=method[1])
+    elif isinstance(method, list):
         all_seas = []
         for seas in method:
             all_seas.append(date_part(DTindex, method=seas, set_index=True))
@@ -120,6 +148,10 @@ def date_part(
 
     if isinstance(method, (int, float)):
         date_part_df = fourier_df(DTindex, seasonality=method, order=6)
+    elif is_seasonality_list:
+        pass
+    elif isinstance(method, tuple):
+        date_part_df = fourier_df(DTindex, seasonality=method[0], order=method[1])
     elif isinstance(method, list):
         # this handles it already having been run recursively
         # remove duplicate columns if present
@@ -176,6 +208,21 @@ def date_part(
         )
         if method == "lunar_phase":
             date_part_df['phase'] = moon_phase(DTindex)
+    elif "simple_binarized2" in method:
+        date_part_df = pd.DataFrame(
+            {
+                'isoweek': DTindex.isocalendar().week,
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
+                'day': DTindex.day,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'epoch': DTindex.to_julian_date(),
+            }
+        )
+        date_part_df = pd.get_dummies(
+            date_part_df, columns=['isoweek', 'weekday'], dtype=float
+        )
     elif "simple_binarized" in method:
         date_part_df = pd.DataFrame(
             {
@@ -477,6 +524,8 @@ datepart_components = [
     "quarterlydayofweek",
     "hourlydayofweek",
     "constant",
+    "week",
+    "year",
 ]
 
 
@@ -575,8 +624,10 @@ def create_datepart_components(DTindex, seasonality):
         return pd.DataFrame({'is_quarter_end': DTindex.is_quarter_end})
     elif seasonality == "days_from_epoch":
         return (DTindex - pd.Timestamp('2000-01-01')).days.astype('int32')
-    elif seasonality == "isoweek":
+    elif seasonality in ["isoweek", "week"]:
         return DTindex.isocalendar().week
+    elif seasonality in ["year"]:
+        return DTindex.year.rename("year")
     elif seasonality == "isoweek_binary":
         return pd.get_dummies(
             pd.Categorical(
@@ -658,6 +709,14 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         return fourier_df(
             DTindex, seasonality=seasonality, t=t, history_days=history_days
         )
+    if isinstance(seasonality, tuple):
+        return fourier_df(
+            DTindex,
+            seasonality=seasonality[0],
+            order=seasonality[1],
+            t=t,
+            history_days=history_days,
+        )
     # dateparts
     elif seasonality in datepart_components:
         return create_datepart_components(DTindex, seasonality)
@@ -679,6 +738,7 @@ base_seasonalities = [  # this needs to be a list
     'common_fourier',
     'common_fourier_rw',
     "simple_poly",
+    # it is critical for this to work with the fourier order option that the FLOAT COME second if the list is length 2
     [7, 365.25],
     ["dayofweek", 365.25],
     ['weekdayofmonth', 'common_fourier'],
@@ -688,6 +748,9 @@ base_seasonalities = [  # this needs to be a list
     ["db2_365.25_12_0.5", "morlet_7_7_1"],
     ["weekdaymonthofyear", "quarter", "dayofweek"],
     "lunar_phase",
+    ["dayofweek", (365.25, 4)],
+    ["dayofweek", (365.25, 14)],
+    ["dayofweek", (365.25, 24)],
     "other",
 ]
 
@@ -715,6 +778,9 @@ def random_datepart(method='random'):
             0.1,
             0.05,
             0.05,
+            0.05,
+            0.05,
+            0.02,
             0.3,
         ],
     )[0]
@@ -877,3 +943,60 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
     return pd.DataFrame(wavelets, index=DTindex).rename(
         columns=lambda x: f"wavelet_{p}_" + str(x)
     )
+
+
+def create_changepoint_features(
+    DTindex, changepoint_spacing=60, changepoint_distance_end=120
+):
+    """
+    Creates a feature set for estimating trend changepoints using linear regression,
+    ensuring the final changepoint is at `changepoint_distance_end` from the last row.
+
+    Parameters:
+    DTindex (pd.DatetimeIndex): a datetimeindex
+    changepoint_spacing (int): Distance between consecutive changepoints.
+    changepoint_distance_end (int): Number of rows that belong to the final changepoint.
+
+    Returns:
+    pd.DataFrame: DataFrame containing changepoint features for linear regression.
+    """
+    n = len(DTindex)
+
+    # Calculate the number of data points available for changepoints
+    changepoint_range_end = n - changepoint_distance_end
+
+    # Calculate the number of changepoints based on changepoint_spacing
+    # Only place changepoints within the range [0, changepoint_range_end)
+    changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
+
+    # Ensure the last changepoint is exactly at changepoint_distance_end from the end
+    changepoints = np.append(changepoints, changepoint_range_end)
+
+    # Efficient concatenation approach to generate changepoint features
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    # Concatenate the changepoint features and set the index
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+
+    return changepoint_features
+
+
+def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
+    last_values = (
+        x_t_last_row.values.reshape(1, -1) + 1
+    )  # Shape it as 1 row, multiple columns
+
+    # Create a 2D array where each column starts from the corresponding value in last_values
+    forecast_steps = np.arange(n_forecast).reshape(
+        -1, 1
+    )  # Shape it as multiple rows, 1 column
+    extended_features = np.maximum(0, last_values + forecast_steps)
+    return pd.DataFrame(extended_features, columns=x_t_last_row.index)
+
+
+def half_yr_spacing(df):
+    return int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))

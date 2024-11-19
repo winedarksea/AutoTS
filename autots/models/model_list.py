@@ -48,7 +48,59 @@ all_models = [
     "TiDE",
     "NeuralForecast",
     "DMD",  # 45 models
+    "BasicLinearModel",
+    "TVVAR",
 ]
+# used for graphing, not for model selection
+model_classes = {
+    'ARDL': 'stat',
+    'DatepartRegression': 'ML',
+    'ETS': 'stat',
+    'FBProphet': 'stat',
+    'GLM': 'stat',
+    'GLS': 'stat',
+    'MAR': 'stat',
+    'MultivariateMotif': 'motif',
+    'MultivariateRegression': 'ML',
+    'NVAR': 'stat',
+    'RRVAR': 'stat',
+    'SectionalMotif': 'motif',
+    'Theta': 'stat',
+    'UnivariateMotif': 'motif',
+    'UnivariateRegression': 'ML',
+    'VAR': 'stat',
+    'VECM': 'stat',
+    'WindowRegression': 'ML',
+    'BallTreeMultivariateMotif': 'motif',
+    'MetricMotif': 'motif',
+    'ARCH': 'stat',
+    'KalmanStateSpace': 'stat',
+    'ARIMA': 'stat',
+    'BasicLinearModel': "stat",
+    "Cassandra": "stat",
+    "DMD": 'stat',
+    "DynamicFactor": "stat",
+    "DynamicFactorMQ": "stat",
+    "FFT": "stat",
+    "GluonTS": "DL",
+    "LATC": "stat",
+    "MotifSimulation": "motif",
+    "NeuralForecast": "DL",
+    "NeuralProphet": "DL",
+    "PreprocessingRegression": "ML",
+    "PytorchForecasting": "DL",
+    "RollingRegression": "ML",
+    "SeasonalityMotif": "motif",
+    "TMF": "stat",
+    "TiDE": "DL",
+    "UnobservedComponents": "stat",
+    'AverageValueNaive': 'naive',
+    'ConstantNaive': 'naive',
+    'LastValueNaive': 'naive',
+    'SeasonalNaive': 'naive',
+    'ZeroesNaive': 'naive',
+    "TVVAR": "stat",
+}
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
 default = {
@@ -82,6 +134,8 @@ default = {
     'RRVAR': 0.8,
     'FFT': 0.8,
     'Cassandra': 0.8,
+    'BasicLinearModel': 0.8,
+    'TVVAR': 0.4,
 }
 # fastest models at any scale
 superfast = [
@@ -90,9 +144,9 @@ superfast = [
     'AverageValueNaive',
     'GLS',
     'SeasonalNaive',
-    # 'MetricMotif',
     'SeasonalityMotif',
     'SectionalMotif',  # not entirely sure but so far this is pretty fast
+    'BasicLinearModel',  # also on the riskier end
 ]
 # relatively fast
 fast = {
@@ -118,7 +172,8 @@ fast = {
     'Cassandra': 0.6,
     'SeasonalityMotif': 1.5,
     'FFT': 0.8,
-    "BallTreeMultivariateMotif": 0.4,  # keep an eye on RAM, not the fastest at scale but works...
+    "BallTreeMultivariateMotif": 0.5,  # keep an eye on RAM, not the fastest at scale but works...
+    "BasicLinearModel": 0.6,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -204,6 +259,8 @@ probabilistic = [
     'Cassandra',
     'SeasonalityMotif',
     "NeuralForecast",  # mostly
+    "BasicLinearModel",
+    "TVVAR",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -229,12 +286,14 @@ multivariate = [
     "TiDE",
     "NeuralForecast",
     "DMD",
+    "TVVAR",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
-no_params = ['LastValueNaive', 'GLS']
+no_params = ['LastValueNaive']
 # USED IN AUTO_MODEL, ONLY MODELS WHICH CAN ACCEPT RANDOM MIXING OF PARAMS
 recombination_approved = [
+    'GLS',
     'SeasonalNaive',
     'MotifSimulation',
     "ETS",
@@ -276,6 +335,8 @@ recombination_approved = [
     'BallTreeMultivariateMotif',
     "TiDE",
     "DMD",
+    "BasicLinearModel",
+    "TVVAR",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -301,6 +362,7 @@ no_shared = [
     'MetricMotif',
     'SeasonalityMotif',
     'FFT',
+    "BasicLinearModel",
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -324,6 +386,8 @@ regressor = [
     'Cassandra',
     'PreprocessingRegression',
     "NeuralForecast",
+    "BasicLinearModel",
+    "TVVAR",
 ]
 motifs = [
     'UnivariateMotif',

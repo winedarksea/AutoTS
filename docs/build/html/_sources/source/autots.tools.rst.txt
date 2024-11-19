@@ -60,6 +60,14 @@ autots.tools.fft module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.fir\_filter module
+-------------------------------
+
+.. automodule:: autots.tools.fir_filter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.hierarchial module
 -------------------------------
 

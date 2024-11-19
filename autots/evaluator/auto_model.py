@@ -5,6 +5,7 @@ import gc
 import traceback as tb
 import random
 from math import ceil
+import copy
 import numpy as np
 import pandas as pd
 import datetime
@@ -45,6 +46,8 @@ from autots.models.basics import (
     SeasonalityMotif,
     FFT,
     BallTreeMultivariateMotif,
+    BasicLinearModel,
+    TVVAR,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -62,6 +65,15 @@ from autots.models.statsmodels import (
 )
 from autots.models.arch import ARCH
 from autots.models.matrix_var import RRVAR, MAR, TMF, LATC, DMD
+from autots.models.sklearn import (
+    RollingRegression,
+    WindowRegression,
+    MultivariateRegression,
+    DatepartRegression,
+    UnivariateRegression,
+    ComponentAnalysis,
+    PreprocessingRegression,
+)
 
 
 def create_model_id(
@@ -135,7 +147,9 @@ def ModelMonster(
         )
 
     elif model == 'GLS':
-        return GLS(frequency=frequency, prediction_interval=prediction_interval)
+        return GLS(
+            frequency=frequency, prediction_interval=prediction_interval, **parameters
+        )
 
     elif model == 'GLM':
         model = GLM(
@@ -187,8 +201,6 @@ def ModelMonster(
         return model
 
     elif model == 'RollingRegression':
-        from autots.models.sklearn import RollingRegression
-
         model = RollingRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -200,8 +212,6 @@ def ModelMonster(
         )
         return model
     elif model == 'UnivariateRegression':
-        from autots.models.sklearn import UnivariateRegression
-
         model = UnivariateRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -215,8 +225,6 @@ def ModelMonster(
         return model
 
     elif model == 'MultivariateRegression':
-        from autots.models.sklearn import MultivariateRegression
-
         model = MultivariateRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -312,8 +320,6 @@ def ModelMonster(
         )
         return model
     elif model == 'WindowRegression':
-        from autots.models.sklearn import WindowRegression
-
         model = WindowRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -378,8 +384,6 @@ def ModelMonster(
             )
         return model
     elif model == 'ComponentAnalysis':
-        from autots.models.sklearn import ComponentAnalysis
-
         if parameters == {}:
             model = ComponentAnalysis(
                 frequency=frequency,
@@ -404,8 +408,6 @@ def ModelMonster(
             )
         return model
     elif model == 'DatepartRegression':
-        from autots.models.sklearn import DatepartRegression
-
         model = DatepartRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -620,8 +622,6 @@ def ModelMonster(
             **parameters,
         )
     elif model == "PreprocessingRegression":
-        from autots.models.sklearn import PreprocessingRegression
-
         return PreprocessingRegression(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -701,6 +701,28 @@ def ModelMonster(
         )
     elif model == 'DMD':
         return DMD(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'BasicLinearModel':
+        return BasicLinearModel(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'TVVAR':
+        return TVVAR(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
@@ -893,19 +915,16 @@ class ModelPrediction(ModelObject):
         transformationStartTime = datetime.datetime.now()
         # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
         # forecast inverse MUST come before upper and lower bounds inverse
-        df_forecast.forecast = pd.DataFrame(
-            self.transformer_object.inverse_transform(df_forecast.forecast)
+        df_forecast.forecast = self.transformer_object.inverse_transform(
+            df_forecast.forecast
         )
-        df_forecast.lower_forecast = pd.DataFrame(
-            self.transformer_object.inverse_transform(
-                df_forecast.lower_forecast, fillzero=True, bounds=True
-            )
+        df_forecast.lower_forecast = self.transformer_object.inverse_transform(
+            df_forecast.lower_forecast, fillzero=True, bounds=True
         )
-        df_forecast.upper_forecast = pd.DataFrame(
-            self.transformer_object.inverse_transform(
-                df_forecast.upper_forecast, fillzero=True, bounds=True
-            )
+        df_forecast.upper_forecast = self.transformer_object.inverse_transform(
+            df_forecast.upper_forecast, fillzero=True, bounds=True
         )
+
         # CHECK Forecasts are proper length!
         if df_forecast.forecast.shape[0] != self.forecast_length:
             raise ValueError(
@@ -1071,6 +1090,7 @@ class TemplateEvalObject(object):
         self.per_series_wasserstein = per_series_wasserstein
         self.per_series_dwd = per_series_dwd
         self.full_mae_ids = []
+        self.full_mae_vals = []
         self.full_mae_errors = []
         self.full_pl_errors = []
         self.squared_errors = []
@@ -1163,6 +1183,7 @@ class TemplateEvalObject(object):
         self.full_pl_errors.extend(another_eval.full_pl_errors)
         self.squared_errors.extend(another_eval.squared_errors)
         self.full_mae_ids.extend(another_eval.full_mae_ids)
+        self.full_mae_vals.extend(another_eval.full_mae_vals)
         self.model_count = self.model_count + another_eval.model_count
         return self
 
@@ -1225,35 +1246,41 @@ def unpack_ensemble_models(
     )
     # alternatively the below could read from 'Model' == 'Ensemble'
     models_to_iterate = template[template['Ensemble'] != 0]['ModelParameters'].copy()
-    for index, value in models_to_iterate.items():
-        model_dict = json.loads(value)['models']
-        model_df = pd.DataFrame.from_dict(model_dict, orient='index')
-        # it might be wise to just drop the ID column, but keeping for now
-        model_df = model_df.rename_axis('ID').reset_index(drop=False)
-        # this next line is necessary, albeit confusing
-        if 'Ensemble' not in model_df.columns:
-            model_df['Ensemble'] = 0
-        # unpack nested ensembles, if recursive specified
-        if recursive and 'Ensemble' in model_df['Model'].tolist():
-            model_df = pd.concat(
-                [
-                    unpack_ensemble_models(
-                        model_df,
-                        recursive=True,
-                        keep_ensemble=keep_ensemble,
-                        template_cols=template_cols,
-                    ),
-                    model_df,
-                ],
-                axis=0,
-                ignore_index=True,
-                sort=False,
-            ).reset_index(drop=True)
-        template = pd.concat(
-            [template, model_df], axis=0, ignore_index=True, sort=False
-        ).reset_index(drop=True)
-    if not keep_ensemble:
-        template = template[template['Ensemble'] == 0]
+    if not models_to_iterate.empty:
+        for index, value in models_to_iterate.items():
+            try:
+                model_dict = json.loads(value)['models']
+            except Exception as e:
+                raise ValueError(f"`{value}` is bad model template") from e
+            # empty model parameters can exist, but shouldn't...
+            if model_dict:
+                model_df = pd.DataFrame.from_dict(model_dict, orient='index')
+                # it might be wise to just drop the ID column, but keeping for now
+                model_df = model_df.rename_axis('ID').reset_index(drop=False)
+                # this next line is necessary, albeit confusing
+                if 'Ensemble' not in model_df.columns:
+                    model_df['Ensemble'] = 0
+                # unpack nested ensembles, if recursive specified
+                if recursive and 'Ensemble' in model_df['Model'].tolist():
+                    model_df = pd.concat(
+                        [
+                            unpack_ensemble_models(
+                                model_df,
+                                recursive=True,
+                                keep_ensemble=keep_ensemble,
+                                template_cols=template_cols,
+                            ),
+                            model_df,
+                        ],
+                        axis=0,
+                        ignore_index=True,
+                        sort=False,
+                    ).reset_index(drop=True)
+                template = pd.concat(
+                    [template, model_df], axis=0, ignore_index=True, sort=False
+                ).reset_index(drop=True)
+        if not keep_ensemble:
+            template = template[template['Ensemble'] == 0]
     template = template.drop_duplicates(subset=template_cols)
     return template
 
@@ -1288,6 +1315,7 @@ def model_forecast(
     current_model_file: str = None,
     model_count: int = 0,
     force_gc: bool = False,
+    internal_validation: bool = False,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -1320,7 +1348,7 @@ def model_forecast(
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         force_gc (bool): if True, run gc.collect() after each model
-
+        internal_validation: niche flag to tell that it is running inside a template model search
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
@@ -1365,11 +1393,15 @@ def model_forecast(
         )
         # horizontal generalization
         if horizontal_flag == 2:
-            available_models = list(model_param_dict['models'].keys())
-            known_matches = model_param_dict['series']
-            all_series = generalize_horizontal(
-                df_train, known_matches, available_models
-            )
+            profiled = "profile" in model_param_dict.get("model_metric")
+            if profiled:
+                all_series = None
+            else:
+                available_models = list(model_param_dict['models'].keys())
+                known_matches = model_param_dict['series']
+                all_series = generalize_horizontal(
+                    df_train, known_matches, available_models
+                )
         else:
             all_series = None
         total_ens = ens_template.shape[0]
@@ -1442,6 +1474,34 @@ def model_forecast(
             prematched_series=all_series,
         )
         ens_forecast.runtime_dict = forecasts_runtime
+        # POST PROCESSING ONLY
+        if model_transform_dict and not internal_validation:
+            transformer_object = GeneralTransformer(
+                **model_transform_dict,
+                n_jobs=n_jobs,
+                holiday_country=holiday_country,
+                verbose=verbose,
+                random_seed=random_seed,
+                forecast_length=forecast_length,
+            )
+            transformer_object.fit(df_train)
+            ens_forecast.forecast = transformer_object.inverse_transform(
+                ens_forecast.forecast
+            )
+            ens_forecast.lower_forecast = transformer_object.inverse_transform(
+                ens_forecast.lower_forecast, fillzero=True, bounds=True
+            )
+            ens_forecast.upper_forecast = transformer_object.inverse_transform(
+                ens_forecast.upper_forecast, fillzero=True, bounds=True
+            )
+        # so ensembles bypass the usual checks, so needed again here
+        if fail_on_forecast_nan:
+            if not np.isfinite(np.max(ens_forecast.forecast.to_numpy())):
+                raise ValueError(
+                    "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
+                        model_name
+                    )
+                )
         return ens_forecast
     # if not an ensemble
     else:
@@ -1503,6 +1563,462 @@ def _ps_metric(per_series_metrics, metric, model_id):
     return cur_mae
 
 
+def _eval_prediction_for_template(
+    df_forecast,
+    template_result,
+    verbose,
+    actuals,
+    weights,
+    df_trn_arr,
+    ensemble,
+    scaler,
+    cumsum_A,
+    diff_A,
+    last_of_array,
+    validation_round,
+    model_str,
+    best_smape,
+    ensemble_input,
+    parameter_dict,
+    transformation_dict,
+    row,
+    post_memory_percent,
+    mosaic_used,
+    template_start_time,
+    current_generation,
+    df_train,
+    custom_metric=None,
+):
+    per_ts = True if 'distance' in ensemble else False
+    model_error = df_forecast.evaluate(
+        actuals,
+        series_weights=weights,
+        df_train=df_trn_arr,
+        per_timestamp_errors=per_ts,
+        scaler=scaler,
+        cumsum_A=cumsum_A,
+        diff_A=diff_A,
+        last_of_array=last_of_array,
+        column_names=df_train.columns,
+        custom_metric=custom_metric,
+    )
+    if validation_round >= 1 and verbose > 0:
+        round_smape = round(
+            model_error.avg_metrics['smape'], 2
+        )  # should work on both DF and single value
+        validation_accuracy_print = "{} - {} with avg smape {}: ".format(
+            str(template_result.model_count),
+            model_str,
+            round_smape,
+        )
+        if round_smape < best_smape:
+            best_smape = round_smape
+            try:
+                print("\U0001F4C8 " + validation_accuracy_print)
+            except Exception:
+                print(validation_accuracy_print)
+        else:
+            print(validation_accuracy_print)
+    # for horizontal ensemble, use requested ID and params
+    if ensemble_input == 2:
+        model_id = create_model_id(model_str, parameter_dict, transformation_dict)
+        # it's already json
+        deposit_params = row['ModelParameters']
+    else:
+        # for non horizontal, recreate based on what model actually used (some change)
+        model_id = create_model_id(
+            df_forecast.model_name,
+            df_forecast.model_parameters,
+            df_forecast.transformation_parameters,
+        )
+        deposit_params = json.dumps(df_forecast.model_parameters)
+    result = pd.DataFrame(
+        {
+            'ID': model_id,
+            'Model': df_forecast.model_name,
+            'ModelParameters': deposit_params,
+            'TransformationParameters': json.dumps(
+                df_forecast.transformation_parameters
+            ),
+            'TransformationRuntime': df_forecast.transformation_runtime,
+            'FitRuntime': df_forecast.fit_runtime,
+            'PredictRuntime': df_forecast.predict_runtime,
+            'TotalRuntime': datetime.datetime.now() - template_start_time,
+            'Ensemble': ensemble_input,
+            'Exceptions': np.nan,
+            'Runs': 1,
+            'Generation': current_generation,
+            'ValidationRound': validation_round,
+            'ValidationStartDate': df_forecast.forecast.index[0],
+        },
+        index=[0],
+    )
+    if verbose > 1:
+        result['PostMemoryPercent'] = post_memory_percent
+    a = pd.DataFrame(
+        model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')
+    ).transpose()
+    result = pd.concat(
+        [result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis=1
+    )
+    template_result.model_results = pd.concat(
+        [template_result.model_results, result],
+        axis=0,
+        ignore_index=True,
+        sort=False,
+    ).reset_index(drop=True)
+
+    ps_metric = model_error.per_series_metrics
+    ps_metric.index.name = "autots_eval_metric"
+    ps_metric = ps_metric.reset_index(drop=False)
+    ps_metric.index = [model_id] * ps_metric.shape[0]
+    ps_metric.index.name = "ID"
+    template_result.per_series_metrics.append(ps_metric)
+    if 'distance' in ensemble:
+        cur_smape = model_error.per_timestamp.loc['weighted_smape']
+        cur_smape = pd.DataFrame(cur_smape).transpose()
+        cur_smape.index = [model_id]
+        template_result.per_timestamp_smape = pd.concat(
+            [template_result.per_timestamp_smape, cur_smape], axis=0
+        )
+    if mosaic_used:
+        template_result.full_mae_errors.extend([model_error.full_mae_errors])
+        template_result.squared_errors.extend([model_error.squared_errors])
+        template_result.full_pl_errors.extend(
+            [model_error.upper_pl + model_error.lower_pl]
+        )
+        template_result.full_mae_ids.extend([model_id])
+        template_result.full_mae_vals.extend([validation_round])
+    return template_result, best_smape
+
+
+horizontal_post_processors = [
+    {
+        "fillna": "fake_date",
+        "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"},
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": True,
+                "threshold": 10,
+                "threshold_method": "max",
+            },
+        },
+    },  # best competition on vn1
+    {
+        "fillna": "fake_date",
+        "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"},
+        "transformation_params": {
+            "0": {
+                "rows": 4,
+                "lag": 28,
+                "method": "additive",
+                "strength": 0.2,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "max",
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "mean",
+            },
+        },
+    },  # best wasserstein on daily
+    # {"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
+    {
+        "fillna": "rolling_mean_24",
+        "transformations": {"0": "bkfilter", "1": "FIRFilter", "2": "AlignLastDiff"},
+        "transformation_params": {
+            "0": {},
+            "1": {
+                "numtaps": 128,
+                "cutoff_hz": 0.01,
+                "window": "blackman",
+                "sampling_frequency": 60,
+                "on_transform": False,
+                "on_inverse": True,
+            },
+            "2": {
+                "rows": 90,
+                "displacement_rows": 1,
+                "quantile": 1.0,
+                "decay_span": 90,
+            },
+        },
+    },  # best smape on daily, observed most effective on eval loop too
+    {
+        "fillna": "ffill",
+        "transformations": {
+            "0": "AlignLastValue",
+            "1": "SeasonalDifference",
+            "2": "AlignLastValue",
+        },
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 0.7,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "max",
+            },
+            "1": {"lag_1": 7, "method": 20},
+            "2": {
+                "rows": 1,
+                "lag": 28,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+        },
+    },  # best mae on daily, a bit weird otherwise, 1x best mage daily
+    {
+        "fillna": "median",
+        "transformations": {
+            "0": "DiffSmoother",
+            "1": "AlignLastValue",
+            "2": "HistoricValues",
+        },
+        "transformation_params": {
+            "0": {
+                "method": "med_diff",
+                "method_params": {"distribution": "norm", "alpha": 0.05},
+                "transform_dict": None,
+                "reverse_alignment": False,
+                "isolated_only": False,
+                "fillna": "linear",
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "2": {"window": 10},
+        },
+    },  # best mae on daily, 2x observed again as best, 3x
+    {
+        "fillna": "fake_date",
+        "transformations": {
+            "0": "AlignLastValue",
+            "1": "PositiveShift",
+            "2": "HistoricValues",
+        },
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "additive",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": 10,
+                "threshold_method": "mean",
+            },
+            "1": {},
+            "2": {"window": 28},
+        },
+    },  # best competition on VN1
+    {
+        "fillna": "ffill",
+        "transformations": {"0": "FFTFilter", "1": "HistoricValues"},
+        "transformation_params": {
+            "0": {
+                "cutoff": 0.01,
+                "reverse": False,
+                "on_transform": False,
+                "on_inverse": True,
+            },
+            "1": {"window": None},
+        },
+    },  # best smape on daily, best on VN1
+    {
+        "fillna": "linear",
+        "transformations": {"0": "Constraint"},
+        "transformation_params": {
+            "0": {
+                "constraint_method": "quantile",
+                "constraint_direction": "lower",
+                "constraint_regularization": 0.7,
+                "constraint_value": 0.5,
+                "bounds_only": False,
+                "fillna": "linear",
+            }
+        },
+    },  # best on daily, weight of smape and wasserstein, 1x very stable!
+    {
+        "fillna": "ffill",
+        "transformations": {"0": "RegressionFilter", "1": "HistoricValues"},
+        "transformation_params": {
+            "0": {
+                "sigma": 1,
+                "rolling_window": 90,
+                "run_order": "season_first",
+                "regression_params": {
+                    "regression_model": {
+                        "model": "ElasticNet",
+                        "model_params": {
+                            "l1_ratio": 0.5,
+                            "fit_intercept": False,
+                            "selection": "cyclic",
+                            "max_iter": 2000,
+                        },
+                    },
+                    "datepart_method": "simple",
+                    "polynomial_degree": None,
+                    "transform_dict": {
+                        "fillna": None,
+                        "transformations": {"0": "ScipyFilter"},
+                        "transformation_params": {
+                            "0": {
+                                "method": "savgol_filter",
+                                "method_args": {
+                                    "window_length": 31,
+                                    "polyorder": 3,
+                                    "deriv": 0,
+                                    "mode": "interp",
+                                },
+                            }
+                        },
+                    },
+                    "holiday_countries_used": False,
+                    "lags": None,
+                    "forward_lags": None,
+                },
+                "holiday_params": None,
+                "trend_method": "rolling_mean",
+            },
+            "1": {"window": 28},
+        },
+    },  # best on daily, competition, mae
+    {
+        "fillna": "zero",
+        "transformations": {
+            "0": "AnomalyRemoval",
+            "1": "EWMAFilter",
+            "2": "AlignLastValue",
+        },
+        "transformation_params": {
+            "0": {
+                "method": "med_diff",
+                "method_params": {"distribution": "norm", "alpha": 0.05},
+                "fillna": "rolling_mean_24",
+                "transform_dict": {
+                    "fillna": None,
+                    "transformations": {"0": "EWMAFilter"},
+                    "transformation_params": {"0": {"span": 7}},
+                },
+                "isolated_only": False,
+                "on_inverse": False,
+            },
+            "1": {"span": 7},
+            "2": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": 1,
+                "threshold_method": "max",
+            },
+        },
+    },  # best on simple ensemble on daily
+    {  # best on VN1 competition and MAE
+        "fillna": "cubic",
+        "transformations": {"0": "ScipyFilter", "1": "DatepartRegression"},
+        "transformation_params": {
+            "0": {
+                "method": "butter",
+                "method_args": {
+                    "N": 1,
+                    "btype": "highpass",
+                    "analog": False,
+                    "output": "sos",
+                    "Wn": 0.024390243902439025,
+                },
+            },
+            "1": {
+                "regression_model": {
+                    "model": "ElasticNet",
+                    "model_params": {
+                        "l1_ratio": 0.5,
+                        "fit_intercept": True,
+                        "selection": "cyclic",
+                        "max_iter": 1000,
+                    },
+                },
+                "datepart_method": ["weekdayofmonth", "common_fourier"],
+                "polynomial_degree": None,
+                "transform_dict": None,
+                "holiday_countries_used": False,
+                "lags": None,
+                "forward_lags": None,
+            },
+        },
+    },
+    {  # balanced on wiki daily
+        "fillna": "cubic",
+        "transformations": {"0": "AlignLastValue", "1": "DatepartRegression"},
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 7,
+                "method": "multiplicative",
+                "strength": 0.9,
+                "first_value_only": False,
+                "threshold": 3,
+                "threshold_method": "max",
+            },
+            "1": {
+                "regression_model": {
+                    "model": "ElasticNet",
+                    "model_params": {
+                        "l1_ratio": 0.5,
+                        "fit_intercept": True,
+                        "selection": "cyclic",
+                        "max_iter": 1000,
+                    },
+                },
+                "datepart_method": "common_fourier",
+                "polynomial_degree": None,
+                "transform_dict": {
+                    "fillna": None,
+                    "transformations": {"0": "ClipOutliers"},
+                    "transformation_params": {
+                        "0": {"method": "clip", "std_threshold": 4}
+                    },
+                },
+                "holiday_countries_used": False,
+                "lags": None,
+                "forward_lags": None,
+            },
+        },
+    },
+]
+
+
 def TemplateWizard(
     template,
     df_train,
@@ -1538,6 +2054,7 @@ def TemplateWizard(
     mosaic_used=None,
     force_gc: bool = False,
     additional_msg: str = "",
+    custom_metric=None,
 ):
     """
     Take Template, returns Results.
@@ -1613,6 +2130,14 @@ def TemplateWizard(
             parameter_dict = json.loads(row['ModelParameters'])
             transformation_dict = json.loads(row['TransformationParameters'])
             ensemble_input = row['Ensemble']
+            if ensemble_input == 2 and transformation_dict:
+                # SKIP BECAUSE TRANSFORMERS (PRE DEFINED) ARE DONE BELOW TO REDUCE FORECASTS RERUNS
+                # ON INTERNAL VALIDATION ONLY ON TEMPLATES
+                if verbose >= 1:
+                    print(
+                        "skipping horizontal with transformation due to that being done on internal validation"
+                    )
+                continue
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
@@ -1663,108 +2188,90 @@ def TemplateWizard(
                 current_model_file=current_model_file,
                 model_count=template_result.model_count,
                 force_gc=force_gc,
+                internal_validation=True,  # THIS MIGHT BE REDUNTANT, THE CONTINUE ABOVE MAYBE BE ENOUGH
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
-
-            per_ts = True if 'distance' in ensemble else False
-            model_error = df_forecast.evaluate(
-                actuals,
-                series_weights=weights,
-                df_train=df_trn_arr,
-                per_timestamp_errors=per_ts,
-                scaler=scaler,
-                cumsum_A=cumsum_A,
-                diff_A=diff_A,
-                last_of_array=last_of_array,
-                column_names=df_train.columns,
-            )
-            if validation_round >= 1 and verbose > 0:
-                round_smape = model_error.avg_metrics['smape'].round(2)
-                validation_accuracy_print = "{} - {} with avg smape {}: ".format(
-                    str(template_result.model_count),
-                    model_str,
-                    round_smape,
-                )
-                if round_smape < best_smape:
-                    best_smape = round_smape
-                    try:
-                        print("\U0001F4C8 " + validation_accuracy_print)
-                    except Exception:
-                        print(validation_accuracy_print)
-                else:
-                    print(validation_accuracy_print)
-            # for horizontal ensemble, use requested ID and params
-            if ensemble_input == 2:
-                model_id = create_model_id(
-                    model_str, parameter_dict, transformation_dict
-                )
-                # it's already json
-                deposit_params = row['ModelParameters']
             else:
-                # for non horizontal, recreate based on what model actually used (some change)
-                model_id = create_model_id(
-                    df_forecast.model_name,
-                    df_forecast.model_parameters,
-                    df_forecast.transformation_parameters,
-                )
-                deposit_params = json.dumps(df_forecast.model_parameters)
-            result = pd.DataFrame(
-                {
-                    'ID': model_id,
-                    'Model': df_forecast.model_name,
-                    'ModelParameters': deposit_params,
-                    'TransformationParameters': json.dumps(
-                        df_forecast.transformation_parameters
-                    ),
-                    'TransformationRuntime': df_forecast.transformation_runtime,
-                    'FitRuntime': df_forecast.fit_runtime,
-                    'PredictRuntime': df_forecast.predict_runtime,
-                    'TotalRuntime': datetime.datetime.now() - template_start_time,
-                    'Ensemble': ensemble_input,
-                    'Exceptions': np.nan,
-                    'Runs': 1,
-                    'Generation': current_generation,
-                    'ValidationRound': validation_round,
-                    'ValidationStartDate': df_forecast.forecast.index[0],
-                },
-                index=[0],
+                post_memory_percent = 0.0
+            # wrapped up to enable postprocessing
+            template_result, best_smape = _eval_prediction_for_template(
+                df_forecast,
+                template_result,
+                verbose,
+                actuals,
+                weights,
+                df_trn_arr,
+                ensemble,
+                scaler,
+                cumsum_A,
+                diff_A,
+                last_of_array,
+                validation_round,
+                model_str,
+                best_smape,
+                ensemble_input,
+                parameter_dict,
+                transformation_dict,
+                row,
+                post_memory_percent,
+                mosaic_used,
+                template_start_time,
+                current_generation,
+                df_train,
+                custom_metric,
             )
-            if verbose > 1:
-                result['PostMemoryPercent'] = post_memory_percent
-            a = pd.DataFrame(
-                model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')
-            ).transpose()
-            result = pd.concat(
-                [result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis=1
-            )
-            template_result.model_results = pd.concat(
-                [template_result.model_results, result],
-                axis=0,
-                ignore_index=True,
-                sort=False,
-            ).reset_index(drop=True)
-
-            ps_metric = model_error.per_series_metrics
-            ps_metric.index.name = "autots_eval_metric"
-            ps_metric = ps_metric.reset_index(drop=False)
-            ps_metric.index = [model_id] * ps_metric.shape[0]
-            ps_metric.index.name = "ID"
-            template_result.per_series_metrics.append(ps_metric)
-            if 'distance' in ensemble:
-                cur_smape = model_error.per_timestamp.loc['weighted_smape']
-                cur_smape = pd.DataFrame(cur_smape).transpose()
-                cur_smape.index = [model_id]
-                template_result.per_timestamp_smape = pd.concat(
-                    [template_result.per_timestamp_smape, cur_smape], axis=0
-                )
-            if mosaic_used:
-                template_result.full_mae_errors.extend([model_error.full_mae_errors])
-                template_result.squared_errors.extend([model_error.squared_errors])
-                template_result.full_pl_errors.extend(
-                    [model_error.upper_pl + model_error.lower_pl]
-                )
-                template_result.full_mae_ids.extend([model_id])
+            if ensemble_input in [1, 2]:
+                # INTERNAL VALIDATION ONLY, POST PROCESSING ONLY
+                # more efficent than rerunning the forecasts just to change transformers
+                for x in horizontal_post_processors:
+                    df_forecast2 = copy.copy(df_forecast)
+                    transformer_object = GeneralTransformer(
+                        **x,
+                        n_jobs=n_jobs,
+                        holiday_country=holiday_country,
+                        verbose=verbose,
+                        random_seed=random_seed,
+                        forecast_length=forecast_length,
+                    )
+                    transformer_object.fit(df_train)
+                    df_forecast2.forecast = transformer_object.inverse_transform(
+                        df_forecast2.forecast
+                    )
+                    df_forecast2.lower_forecast = transformer_object.inverse_transform(
+                        df_forecast2.lower_forecast, fillzero=True, bounds=True
+                    )
+                    df_forecast2.upper_forecast = transformer_object.inverse_transform(
+                        df_forecast2.upper_forecast, fillzero=True, bounds=True
+                    )
+                    df_forecast2.transformation_parameters = x
+                    template_result.model_count += 1
+                    template_result, best_smape = _eval_prediction_for_template(
+                        df_forecast2,
+                        template_result,
+                        verbose,
+                        actuals,
+                        weights,
+                        df_trn_arr,
+                        ensemble,
+                        scaler,
+                        cumsum_A,
+                        diff_A,
+                        last_of_array,
+                        validation_round,
+                        model_str,
+                        best_smape,
+                        ensemble_input,
+                        parameter_dict,
+                        x,
+                        row,
+                        post_memory_percent,
+                        mosaic_used,
+                        template_start_time,
+                        current_generation,
+                        df_train,
+                        custom_metric,
+                    )
 
         except KeyboardInterrupt:
             if model_interrupt:
@@ -2407,6 +2914,7 @@ def validation_aggregation(
         'medae': 'mean',
         'made': 'mean',
         'mage': 'mean',
+        'custom': 'mean',
         'underestimate': 'sum',
         'mle': 'mean',
         'overestimate': 'sum',
@@ -2431,6 +2939,7 @@ def validation_aggregation(
         'medae_weighted': 'mean',
         'made_weighted': 'mean',
         'mage_weighted': 'mean',
+        'custom_weighted': 'mean',
         'mle_weighted': 'mean',
         'imle_weighted': 'mean',
         'spl_weighted': 'mean',
@@ -2452,6 +2961,11 @@ def validation_aggregation(
     }
     col_names = validation_results.model_results.columns
     col_aggs = {x: y for x, y in col_aggs.items() if x in col_names}
+    cols = [x for x in validation_results.model_results.columns if x in col_aggs.keys()]
+    # force numeric dytpes. This really shouldn't be necessary but apparently is sometimes (underlying minor bug somewhere)
+    validation_results.model_results[cols] = validation_results.model_results[
+        cols
+    ].apply(pd.to_numeric, errors='coerce')
     validation_results.model_results['TotalRuntimeSeconds'] = (
         validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )
@@ -2495,6 +3009,7 @@ def generate_score(
     metric_weighting: dict = {},
     prediction_interval: float = 0.9,
     return_score_dict: bool = False,
+    num_validations=None,
 ):
     """Generate score based on relative accuracies.
 
@@ -2520,6 +3035,7 @@ def generate_score(
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     made_weighting = metric_weighting.get('made_weighting', 0)
     mage_weighting = metric_weighting.get('mage_weighting', 0)
+    custom_weighting = metric_weighting.get('custom_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
     maxe_weighting = metric_weighting.get('maxe_weighting', 0)
@@ -2546,114 +3062,139 @@ def generate_score(
         model_results['TotalRuntimeSeconds'] = (
             model_results['TotalRuntime'].dt.total_seconds().round(4)
         )
+    model_results = model_results.replace([np.inf, -np.inf], np.nan)
+    # not sure why there are negative SMAPE values, but make sure they get dealt with
+    if model_results['smape'].min() < 0:
+        model_results['smape'] = model_results['smape'].where(
+            model_results['smape'] >= 0, model_results['smape'].max()
+        )
+    # only use results that meet final validation count, if present
+    divisor_results = model_results
+    if num_validations is not None:
+        if "Runs" in model_results.columns:
+            divisor_results = model_results[
+                model_results["Runs"] >= (num_validations + 1)
+            ]
+            print(divisor_results["rmse"])
+            if divisor_results.empty:
+                divisor_results = model_results
     # generate minimizing scores, where smaller = better accuracy
     try:
-        model_results = model_results.replace([np.inf, -np.inf], np.nan)
-        # not sure why there are negative SMAPE values, but make sure they get dealt with
-        if model_results['smape'].min() < 0:
-            model_results['smape'] = model_results['smape'].where(
-                model_results['smape'] >= 0, model_results['smape'].max()
-            )
         # handle NaN in scores...
         # model_results = model_results.fillna(value=model_results.max(axis=0))
 
         # where smaller is better, are always >=0, beware divide by zero
-        smape_scaler = model_results['smape_weighted'][
-            model_results['smape_weighted'] != 0
+        smape_scaler = divisor_results['smape_weighted'][
+            divisor_results['smape_weighted'] != 0
         ].min()
         smape_score = model_results['smape_weighted'] / smape_scaler
         overall_score = smape_score * smape_weighting
         score_dict['smape'] = smape_score * smape_weighting
         if mae_weighting != 0:
-            mae_scaler = model_results['mae_weighted'][
-                model_results['mae_weighted'] != 0
+            mae_scaler = divisor_results['mae_weighted'][
+                divisor_results['mae_weighted'] != 0
             ].min()
             mae_score = model_results['mae_weighted'] / mae_scaler
             score_dict['mae'] = mae_score * mae_weighting
             overall_score = overall_score + (mae_score * mae_weighting)
         if rmse_weighting != 0:
-            rmse_scaler = model_results['rmse_weighted'][
-                model_results['rmse_weighted'] != 0
+            rmse_scaler = divisor_results['rmse_weighted'][
+                divisor_results['rmse_weighted'] != 0
             ].min()
             rmse_score = model_results['rmse_weighted'] / rmse_scaler
             score_dict['rmse'] = rmse_score * rmse_weighting
             overall_score = overall_score + (rmse_score * rmse_weighting)
         if made_weighting != 0:
-            made_scaler = model_results['made_weighted'][
-                model_results['made_weighted'] != 0
+            made_scaler = divisor_results['made_weighted'][
+                divisor_results['made_weighted'] != 0
             ].min()
             made_score = model_results['made_weighted'] / made_scaler
             score_dict['made'] = made_score * made_weighting
             # fillna, but only if all are nan (forecast_length = 1)
-            # if pd.isnull(made_score.max()):
-            #     made_score.fillna(0, inplace=True)
+            if pd.isnull(made_score.max()):
+                made_score = made_score.fillna(100)
             overall_score = overall_score + (made_score * made_weighting)
         if mage_weighting != 0:
-            mage_scaler = model_results['mage_weighted'][
-                model_results['mage_weighted'] != 0
+            mage_scaler = divisor_results['mage_weighted'][
+                divisor_results['mage_weighted'] != 0
             ].min()
             mage_score = model_results['mage_weighted'] / mage_scaler
             score_dict['mage'] = mage_score * mage_weighting
             overall_score = overall_score + (mage_score * mage_weighting)
-        if mle_weighting != 0:
-            mle_scaler = model_results['mle_weighted'][
-                model_results['mle_weighted'] != 0
+        if custom_weighting != 0:
+            custom_scaler = divisor_results['custom_weighted'][
+                divisor_results['custom_weighted'] != 0
             ].min()
-            mle_score = model_results['mle_weighted'] / mle_scaler
+            # potential edge case where weighting is > 0 but not custom metric is provided and is all zeroes
+            if not pd.isnull(custom_scaler):
+                custom_score = model_results['custom_weighted'] / custom_scaler
+            else:
+                custom_score = model_results['custom_weighted']
+            score_dict['custom'] = custom_score * custom_weighting
+            overall_score = overall_score + (custom_score * custom_weighting)
+        if mle_weighting != 0:
+            mle_scaler = divisor_results['mle_weighted'][
+                divisor_results['mle_weighted'] != 0
+            ].min()
+            mle_score = (
+                model_results['mle_weighted'] / mle_scaler / 10
+            )  # / 10 due to imbalance often with this
             score_dict['mle'] = mle_score * mle_weighting
             overall_score = overall_score + (mle_score * mle_weighting)
         if imle_weighting != 0:
-            imle_scaler = model_results['imle_weighted'][
-                model_results['imle_weighted'] != 0
+            imle_scaler = divisor_results['imle_weighted'][
+                divisor_results['imle_weighted'] != 0
             ].min()
-            imle_score = model_results['imle_weighted'] / imle_scaler
+            imle_score = (
+                model_results['imle_weighted'] / imle_scaler / 10
+            )  # / 10 due to imbalance often with this
             score_dict['imle'] = imle_score * imle_weighting
             overall_score = overall_score + (imle_score * imle_weighting)
         if maxe_weighting != 0:
-            maxe_scaler = model_results['maxe_weighted'][
-                model_results['maxe_weighted'] != 0
+            maxe_scaler = divisor_results['maxe_weighted'][
+                divisor_results['maxe_weighted'] != 0
             ].min()
             maxe_score = model_results['maxe_weighted'] / maxe_scaler
             score_dict['maxe'] = maxe_score * maxe_weighting
             overall_score = overall_score + (maxe_score * maxe_weighting)
         if mqae_weighting != 0:
-            mqae_scaler = model_results['mqae_weighted'][
-                model_results['mqae_weighted'] != 0
+            mqae_scaler = divisor_results['mqae_weighted'][
+                divisor_results['mqae_weighted'] != 0
             ].min()
             mqae_score = model_results['mqae_weighted'] / mqae_scaler
             score_dict['mqae'] = mqae_score * mqae_weighting
             overall_score = overall_score + (mqae_score * mqae_weighting)
         if dwae_weighting != 0:
-            dwae_scaler = model_results['dwae_weighted'][
-                model_results['dwae_weighted'] != 0
+            dwae_scaler = divisor_results['dwae_weighted'][
+                divisor_results['dwae_weighted'] != 0
             ].min()
             dwae_score = model_results['dwae_weighted'] / dwae_scaler
             score_dict['dwae'] = dwae_score * dwae_weighting
             overall_score = overall_score + (dwae_score * dwae_weighting)
         if ewmae_weighting != 0:
-            ewmae_scaler = model_results['ewmae_weighted'][
-                model_results['ewmae_weighted'] != 0
+            ewmae_scaler = divisor_results['ewmae_weighted'][
+                divisor_results['ewmae_weighted'] != 0
             ].min()
             ewmae_score = model_results['ewmae_weighted'] / ewmae_scaler
             score_dict['ewmae'] = ewmae_score * ewmae_weighting
             overall_score = overall_score + (ewmae_score * ewmae_weighting)
         if uwmse_weighting != 0:
-            uwmse_scaler = model_results['uwmse_weighted'][
-                model_results['uwmse_weighted'] != 0
+            uwmse_scaler = divisor_results['uwmse_weighted'][
+                divisor_results['uwmse_weighted'] != 0
             ].min()
             uwmse_score = model_results['uwmse_weighted'] / uwmse_scaler
             score_dict['uwmse'] = uwmse_score * uwmse_weighting
             overall_score = overall_score + (uwmse_score * uwmse_weighting)
         if mate_weighting != 0:
-            mate_scaler = model_results['mate_weighted'][
-                model_results['mate_weighted'] != 0
+            mate_scaler = divisor_results['mate_weighted'][
+                divisor_results['mate_weighted'] != 0
             ].min()
             mate_score = model_results['mate_weighted'] / mate_scaler
             score_dict['mate'] = mate_score * mate_weighting
             overall_score = overall_score + (mate_score * mate_weighting)
         if wasserstein_weighting != 0:
-            wasserstein_scaler = model_results['wasserstein_weighted'][
-                model_results['wasserstein_weighted'] != 0
+            wasserstein_scaler = divisor_results['wasserstein_weighted'][
+                divisor_results['wasserstein_weighted'] != 0
             ].min()
             wasserstein_score = (
                 model_results['wasserstein_weighted'] / wasserstein_scaler
@@ -2661,29 +3202,29 @@ def generate_score(
             score_dict['wasserstein'] = wasserstein_score * wasserstein_weighting
             overall_score = overall_score + (wasserstein_score * wasserstein_weighting)
         if dwd_weighting != 0:
-            dwd_scaler = model_results['dwd_weighted'][
-                model_results['dwd_weighted'] != 0
+            dwd_scaler = divisor_results['dwd_weighted'][
+                divisor_results['dwd_weighted'] != 0
             ].min()
             dwd_score = model_results['dwd_weighted'] / dwd_scaler
             score_dict['dwd'] = dwd_score * dwd_weighting
             overall_score = overall_score + (dwd_score * dwd_weighting)
         if matse_weighting != 0:
-            matse_scaler = model_results['matse_weighted'][
-                model_results['matse_weighted'] != 0
+            matse_scaler = divisor_results['matse_weighted'][
+                divisor_results['matse_weighted'] != 0
             ].min()
             matse_score = model_results['matse_weighted'] / matse_scaler
             score_dict['matse'] = matse_score * matse_weighting
             overall_score = overall_score + (matse_score * matse_weighting)
         if smoothness_weighting != 0:
-            smoothness_scaler = model_results['smoothness_weighted'][
-                model_results['smoothness_weighted'] != 0
+            smoothness_scaler = divisor_results['smoothness_weighted'][
+                divisor_results['smoothness_weighted'] != 0
             ].mean()
             smoothness_score = model_results['smoothness_weighted'] / smoothness_scaler
             score_dict['smoothness'] = smoothness_score * smoothness_weighting
             overall_score = overall_score + (smoothness_score * smoothness_weighting)
         if spl_weighting != 0:
-            spl_scaler = model_results['spl_weighted'][
-                model_results['spl_weighted'] != 0
+            spl_scaler = divisor_results['spl_weighted'][
+                divisor_results['spl_weighted'] != 0
             ].min()
             spl_score = model_results['spl_weighted'] / spl_scaler
             score_dict['spl'] = spl_score * spl_weighting
@@ -2712,6 +3253,11 @@ def generate_score(
             ) * smape_median
             score_dict['contaiment'] = containment_score * containment_weighting
             overall_score = overall_score + (containment_score * containment_weighting)
+        if overall_score.sum() == 0:
+            print(
+                "something is seriously wrong with one of the input metrics, score is NaN or all 0"
+            )
+            overall_score = smape_score
 
     except Exception as e:
         raise KeyError(
@@ -2785,7 +3331,9 @@ def generate_score_per_series(
             .min()
             .fillna(1)
         )
-        mle_score = results_object.per_series_mle / mle_scaler
+        mle_score = (
+            results_object.per_series_mle / mle_scaler / 10
+        )  # / 10 due to imbalance often with this
         overall_score = overall_score + (mle_score * mle_weighting)
     if imle_weighting != 0:
         imle_scaler = (
@@ -2793,7 +3341,9 @@ def generate_score_per_series(
             .min()
             .fillna(1)
         )
-        imle_score = results_object.per_series_imle / imle_scaler
+        imle_score = (
+            results_object.per_series_imle / imle_scaler / 10
+        )  # / 10 due to imbalance often with this
         overall_score = overall_score + (imle_score * imle_weighting)
     if maxe_weighting != 0:
         maxe_scaler = (

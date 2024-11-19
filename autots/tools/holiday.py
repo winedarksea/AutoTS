@@ -99,9 +99,11 @@ def query_holidays(
     """
     import holidays
 
-    years = list(range(DTindex[0].year, DTindex[-1].year + 1))
+    # need the extra years to make sure it captures less common holidays
+    # mostly it is the (Observed) holiday flags showing up that cause issues
+    years = list(range(DTindex[0].year - 2, DTindex[-1].year + 4))
     try:
-        country_holidays_base = holidays.CountryHoliday(
+        country_holidays_base = holidays.country_holidays(
             country, years=years, subdiv=holidays_subdiv
         )
     except Exception:

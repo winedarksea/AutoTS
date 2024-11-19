@@ -12,15 +12,53 @@ import pandas as pd
 def load_daily(long: bool = True):
     """Daily sample data.
 
+    ```
+    # most of the wiki data was chosen to show holidays or holiday-like patterns
     wiki = [
-            "Germany", "Thanksgiving", 'all', 'Microsoft',
-            "Procter_%26_Gamble", "YouTube", "United_States", "Elizabeth_II",
-            "William_Shakespeare", "Cleopatra", "George_Washington",
-            "Chinese_New_Year", "Standard_deviation", "Christmas",
-            "List_of_highest-grossing_films",
-            "List_of_countries_that_have_gained_independence_from_the_United_Kingdom",
-            "Periodic_table"
+        'United_States',
+        'Germany',
+        'List_of_highest-grossing_films',
+        'Jesus',
+        'Michael_Jackson',
+        'List_of_United_States_cities_by_population',
+        'Microsoft_Office',
+        'Google_Chrome',
+        'Periodic_table',
+        'Standard_deviation',
+        'Easter',
+        'Christmas',
+        'Chinese_New_Year',
+        'Thanksgiving',
+        'List_of_countries_that_have_gained_independence_from_the_United_Kingdom',
+        'History_of_the_hamburger',
+        'Elizabeth_II',
+        'William_Shakespeare',
+        'George_Washington',
+        'Cleopatra',
+        'all'
     ]
+
+    df2 = load_live_daily(
+        observation_start="2017-01-01", weather_years=7, trends_list=None,
+        gov_domain_list=None, wikipedia_pages=wiki,
+        fred_series=['DGS10', 'T5YIE', 'SP500','DEXUSEU'], sleep_seconds=10,
+        fred_key = "93873d40f10c20fe6f6e75b1ad0aed4d",
+        weather_data_types = ["WSF2", "PRCP"],
+        weather_stations = ["USW00014771"],  # looking for intermittent
+        tickers=None, london_air_stations=None,
+        weather_event_types=None, earthquake_min_magnitude=None,
+    )
+    data_file_name = join("autots", "datasets", 'data', 'holidays.zip')
+    df2.to_csv(
+        data_file_name,
+        index=True,
+        compression={
+            'method': 'zip',
+            'archive_name': 'holidays.csv',
+            'compresslevel': 9  # Maximum compression level (0-9)
+        }
+    )
+    ```
 
     Sources: Wikimedia Foundation
 
@@ -224,8 +262,8 @@ def load_live_daily(
     tickers: list = ["MSFT"],
     trends_list: list = ["forecasting", "cycling", "microsoft"],
     trends_geo: str = "US",
-    weather_data_types: list = ["AWND", "WSF2", "TAVG"],
-    weather_stations: list = ["USW00094846", "USW00014925"],
+    weather_data_types: list = ["AWND", "WSF2", "TAVG", "PRCP"],
+    weather_stations: list = ["USW00094846", "USW00014925", "USW00014771"],
     weather_years: int = 5,
     london_air_stations: list = ['CT3', 'SK8'],
     london_air_species: str = "PM25",
@@ -769,14 +807,42 @@ def load_artificial(long=False, date_start=None, date_end=None):
         date_end = date_end.date()
     if date_start is None:
         if isinstance(date_end, datetime.date):
-            date_start = date_end - datetime.timedelta(days=720)
+            date_start = date_end - datetime.timedelta(days=740)
         else:
-            date_start = datetime.datetime.now().date() - datetime.timedelta(days=720)
+            date_start = datetime.datetime.now().date() - datetime.timedelta(days=740)
     if isinstance(date_start, datetime.datetime):
         date_start = date_start.date()
     dates = pd.date_range(date_start, date_end)
     size = dates.size
+    new_size = int(size / 10)
     rng = np.random.default_rng()
+    holiday = pd.Series(
+        np.arange(size) * 0.025
+        + rng.normal(0, 0.2, size)
+        + (np.sin((np.pi / 7) * np.arange(size)) * 0.5),
+        index=dates,
+        name='holiday',
+    )
+    # January 1st
+    holiday[holiday.index.month == 1 & (holiday.index.day == 1)] += 10
+    # December 25th
+    holiday[(holiday.index.month == 12) & (holiday.index.day == 25)] += -4
+    # Second Tuesday of April
+    # Find all Tuesdays in April
+    second_tuesday_of_april = (
+        (holiday.index.month == 4)
+        & (holiday.index.weekday == 1)
+        & (holiday.index.day >= 8)
+        & (holiday.index.day <= 14)
+    )
+    holiday[second_tuesday_of_april] += 10
+    # Last Monday of August
+    last_monday_of_august = (
+        (holiday.index.month == 8)
+        & (holiday.index.weekday == 0)
+        & ((holiday.index + pd.Timedelta(7, unit='D')).month == 9)
+    )
+    holiday[last_monday_of_august] += 12
 
     df_wide = pd.DataFrame(
         {
@@ -810,6 +876,13 @@ def load_artificial(long=False, date_start=None, date_end=None):
                 / 2,
             ),
             "linear": np.arange(size) * 0.025,
+            "flat": 1,
+            "new_product": np.concatenate(
+                [
+                    np.zeros(int(size - new_size)),
+                    np.random.choice(a=[-0.8, 0, 0.8], size=new_size).cumsum(),
+                ]
+            ),
             "sine_wave": np.sin(np.arange(size)),
             "sine_seasonality_monthweek": (
                 (np.sin((np.pi / 7) * np.arange(size)) * 0.25 + 0.25)
@@ -902,6 +975,7 @@ def load_artificial(long=False, date_start=None, date_end=None):
         },
         index=dates,
     )
+    df_wide = df_wide.merge(holiday, left_index=True, right_index=True)
 
     if not long:
         return df_wide

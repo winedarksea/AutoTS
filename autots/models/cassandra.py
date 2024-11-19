@@ -18,6 +18,7 @@ from autots.tools.seasonal import (
     seasonal_int,
     datepart_components,
     date_part_methods,
+    create_changepoint_features,
 )
 from autots.tools.fft import FFT
 from autots.tools.transform import (
@@ -28,6 +29,7 @@ from autots.tools.transform import (
     HolidayTransformer,
     AnomalyRemoval,
     EmptyTransformer,
+    StandardScaler,
 )
 from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
@@ -139,6 +141,7 @@ class Cassandra(ModelObject):
         },  # have one or two in built, then redirect to any AutoTS model for other choices
         trend_phi: float = None,
         constraint: dict = None,
+        x_scaler: bool = False,
         max_colinearity: float = 0.998,
         max_multicolinearity: float = 0.001,
         # not modeling related:
@@ -155,7 +158,10 @@ class Cassandra(ModelObject):
         self.preprocessing_transformation = preprocessing_transformation
         self.scaling = scaling
         self.past_impacts_intervention = past_impacts_intervention
-        self.seasonalities = seasonalities
+        if not seasonalities:
+            self.seasonalities = None
+        else:
+            self.seasonalities = seasonalities
         self.ar_lags = ar_lags
         self.ar_interaction_seasonality = ar_interaction_seasonality
         self.anomaly_detector_params = anomaly_detector_params
@@ -179,6 +185,7 @@ class Cassandra(ModelObject):
         self.trend_model = trend_model
         self.trend_phi = trend_phi
         self.constraint = constraint
+        self.x_scaler = x_scaler
         self.max_colinearity = max_colinearity
         self.max_multicolinearity = max_multicolinearity
         # other parameters
@@ -532,6 +539,17 @@ class Cassandra(ModelObject):
                     columns=df.columns,
                 )
                 x_list.append(resid.rename(columns=lambda x: "rolling_trend_" + str(x)))
+            elif self.trend_standin == "changepoints":
+                x_t = create_changepoint_features(
+                    self.df.index,
+                    changepoint_spacing=60,
+                    changepoint_distance_end=120,
+                )
+                x_list.append(x_t)
+            else:
+                raise ValueError(
+                    f"trend_standin arg `{self.trend_standin}` not recognized"
+                )
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(
@@ -578,6 +596,8 @@ class Cassandra(ModelObject):
 
         # FINAL FEATURE PROCESSING
         x_array = pd.concat(x_list, axis=1)
+        # drop duplicates (holiday flag can create these for multiple countries)
+        x_array = x_array.loc[:, ~x_array.columns.duplicated()]
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
@@ -593,14 +613,16 @@ class Cassandra(ModelObject):
         # remove zero variance (corr is nan)
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
+        self.drop_colz = []
         if len(nearz) > 0:
             if self.verbose > 2:
                 print(f"Dropping zero variance feature columns {nearz}")
-            x_array = x_array.drop(columns=nearz)
+            self.drop_colz.extend(nearz.tolist())
+            # x_array = x_array.drop(columns=nearz)
         # remove colinear features
         # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
         corr = np.corrcoef(x_array, rowvar=0)  # second one
-        w, vec = np.linalg.eig(corr)
+        w, vec = np.linalg.eig(np.nan_to_num(corr))
         np.fill_diagonal(corr, 0)
         if self.max_colinearity is not None:
             corel = x_array.columns[
@@ -609,13 +631,16 @@ class Cassandra(ModelObject):
             if len(corel) > 0:
                 if self.verbose > 2:
                     print(f"Dropping colinear feature columns {corel}")
-                x_array = x_array.drop(columns=corel)
+                # x_array = x_array.drop(columns=corel)
+                self.drop_colz.extend(corel.tolist())
         if self.max_multicolinearity is not None:
             colin = x_array.columns[w < self.max_multicolinearity]
             if len(colin) > 0:
                 if self.verbose > 2:
                     print(f"Dropping multi-colinear feature columns {colin}")
-                x_array = x_array.drop(columns=colin)
+                # x_array = x_array.drop(columns=colin)
+                self.drop_colz.extend(colin.tolist())
+        x_array = x_array.drop(columns=self.drop_colz)
 
         # things we want modeled but want to discard from evaluation (standins)
         remove_patterns = [
@@ -628,6 +653,7 @@ class Cassandra(ModelObject):
         # add x features that don't apply to all, and need to be looped
         if self.loop_required:
             self.params = {}
+            self.x_scaler_obj = {}
             self.keep_cols = {}
             self.x_array = {}
             self.keep_cols_idx = {}
@@ -710,6 +736,11 @@ class Cassandra(ModelObject):
                 self.col_groupings[col] = (
                     self.keep_cols[col].str.partition("_").get_level_values(0)
                 )
+                if self.x_scaler:
+                    self.x_scaler_obj[col] = StandardScaler()
+                    c_x = self.x_scaler_obj[col].fit_transform(c_x)
+                else:
+                    self.x_scaler_obj[col] = EmptyTransformer()
                 c_x['intercept'] = 1
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
@@ -735,13 +766,19 @@ class Cassandra(ModelObject):
             ]
             self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
             self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
+            if self.x_scaler:
+                self.x_scaler_obj = StandardScaler()
+                x = self.x_scaler_obj.fit_transform(x_array)
+            else:
+                self.x_scaler_obj = EmptyTransformer()
+                x = x_array
             x_array['intercept'] = 1
             # run model
-            self.params = fit_linear_model(x_array, self.df, params=self.linear_model)
+            self.params = fit_linear_model(x, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(
-                x_array[self.keep_cols], self.params[self.keep_cols_idx]
+                x[self.keep_cols], self.params[self.keep_cols_idx]
             )
-            self.x_array = x_array
+            self.x_array = x
 
         # option to run trend model on full residuals or on rolling trend
         if (
@@ -1017,6 +1054,9 @@ class Cassandra(ModelObject):
 
         # FINAL FEATURE PROCESSING
         x_array = pd.concat(x_list, axis=1)
+        # drop duplicates (holiday flag can create these for multiple countries)
+        x_array = x_array.loc[:, ~x_array.columns.duplicated()]
+        x_array = x_array.drop(columns=self.drop_colz, errors="ignore")
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
@@ -1114,7 +1154,7 @@ class Cassandra(ModelObject):
                 predicts.append(
                     pd.Series(
                         np.dot(
-                            c_x[self.keep_cols[col]],
+                            self.x_scaler_obj[col].transform(c_x)[self.keep_cols[col]],
                             self.params[col][self.keep_cols_idx[col]],
                         ).flatten(),
                         name=col,
@@ -1131,7 +1171,7 @@ class Cassandra(ModelObject):
                     ][:-1]
                     new_indx = [0] + [x + 1 for x in indices]
                     temp = (
-                        c_x[self.keep_cols[col]]
+                        self.x_scaler_obj[col].transform(c_x)[self.keep_cols[col]]
                         * self.params[col][self.keep_cols_idx[col]].flatten()
                     )
                     self.components.append(
@@ -1146,9 +1186,14 @@ class Cassandra(ModelObject):
             return pd.concat(predicts, axis=1)
         else:
             # run model
-            res = np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+            if self.x_scaler:
+                x = self.x_scaler_obj.transform(x_array)
+                x = x[self.keep_cols]
+            else:
+                x = x_array[self.keep_cols]
+            res = np.dot(x, self.params[self.keep_cols_idx])
             if return_components:
-                arr = x_array[self.keep_cols].to_numpy()
+                arr = x.to_numpy()
                 temp = (
                     np.moveaxis(
                         np.broadcast_to(
@@ -1918,16 +1963,16 @@ class Cassandra(ModelObject):
         if method in ['deep', 'all']:
             trend_base = 'deep'
             trend_standin = random.choices(
-                [None, 'random_normal', 'rolling_trend'],
-                [0.7, 0.3, 0.1],
+                [None, 'random_normal', 'rolling_trend', "changepoints"],
+                [0.7, 0.3, 0.1, 0.2],
             )[0]
         else:
             trend_base = random.choices(
                 ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
             )[0]
             trend_standin = random.choices(
-                [None, 'random_normal'],
-                [0.7, 0.3],
+                [None, 'random_normal', 'changepoints'],
+                [0.7, 0.2, 0.2],
             )[0]
         if trend_base == "random":
             model_str = random.choices(
@@ -2138,9 +2183,10 @@ class Cassandra(ModelObject):
                 ["simple_binarized"],
                 ['hourlydayofweek', 8766.0],  # for hourly data
                 [12],  # monthly data
+                None,
                 "other",
             ],
-            [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.1],
+            [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.01, 0.1],
         )[0]
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
@@ -2191,6 +2237,7 @@ class Cassandra(ModelObject):
             "trend_transformation": trend_transformation,
             "trend_model": trend_model,
             "trend_phi": random.choices([None, 0.995, 0.98], [0.9, 0.05, 0.1])[0],
+            "x_scaler": random.choices([True, False], [0.2, 0.8])[0],
         }
 
     def get_params(self):
@@ -2228,6 +2275,7 @@ class Cassandra(ModelObject):
             "trend_transformation": self.trend_transformation,
             "trend_model": self.trend_model,
             "trend_phi": self.trend_phi,
+            "x_scaler": self.x_scaler,
             # "constraint": self.constraint,
         }
 
@@ -2644,7 +2692,7 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
         max_bound = 14
         bounds = [(0, max_bound) for x in x0]
         cost_func = cost_function_l1
-        x0[x0 <= 0] = 0.000001
+        x0[x0 <= 0] = 0.01
         x0[x0 > max_bound] = max_bound - 0.0001
     else:
         cost_func = cost_function_l1
@@ -3072,7 +3120,7 @@ if False:
     series = 'wiki_all'
     mod.regressors_used
     mod.holiday_countries_used
-    with plt.style.context("seaborn-white"):
+    with plt.style.context("ggplot"):
         start_date = "auto"
         mod.plot_forecast(
             pred,

@@ -509,6 +509,48 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "time", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.9, "first_value_only": false}}}',
         "Ensemble": 0,
     },
+    "82": {  # optimized on wiki example daily, 27 SMAPE 2024-10-05
+        'Model': 'BasicLinearModel',
+        'ModelParameters': '{"datepart_method": "simple_binarized", "changepoint_spacing": 360, "changepoint_distance_end": 360, "regression_type": null, "lambda_": 0.01}',
+        'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "Round", "1": "AlignLastValue", "2": "HistoricValues", "3": "ClipOutliers", "4": "bkfilter"}, "transformation_params": {"0": {"decimals": -1, "on_transform": true, "on_inverse": true}, "1": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": true, "threshold": null, "threshold_method": "mean"}, "2": {"window": 10}, "3": {"method": "clip", "std_threshold": 3, "fillna": null}, "4": {}}}',
+        "Ensemble": 0,
+    },
+    "83": {  # optimized on wiki example daily 26.8 SMAPE 2024-10-05
+        'Model': 'BasicLinearModel',
+        'ModelParameters': '{"datepart_method": ["dayofweek", [365.25, 14]], "changepoint_spacing": 90, "changepoint_distance_end": 360, "regression_type": null, "lambda_": null, "trend_phi": 0.98}',
+        'TransformationParameters': '{"fillna": "piecewise_polynomial", "transformations": {"0": "AlignLastValue", "1": "IntermittentOccurrence", "2": "RobustScaler", "3": "Log"}, "transformation_params": {"0": {"rows": 1, "lag": 2, "method": "multiplicative", "strength": 0.9, "first_value_only": false, "threshold": 1, "threshold_method": "mean"}, "1": {"center": "mean"}, "2": {}, "3": {}}}',
+        "Ensemble": 0,
+    },
+    "84": {  # optimized on VN1, best theta, 50 smape 0.44 competition
+        'Model': 'Theta',
+        'ModelParameters': '{"deseasonalize": true, "difference": false, "use_test": true, "method": "auto", "period": null, "theta": 1.4, "use_mle": false}',
+        'TransformationParameters': '{"fillna": "quadratic", "transformations": {"0": "AlignLastValue", "1": "MinMaxScaler", "2": "HistoricValues", "3": "AlignLastValue"}, "transformation_params": {"0": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": false, "threshold": 10, "threshold_method": "max"}, "1": {}, "2": {"window": 10}, "3": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": null, "threshold_method": "max"}}}',
+        "Ensemble": 0,
+    },
+    "85": {  # optimized on VN1, best wasserstein 80.5 (sample of 600)
+        'Model': 'MultivariateRegression',
+        'ModelParameters': '{"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 1.0, "max_depth": null, "criterion": "friedman_mse", "max_features": 1}}, "mean_rolling_periods": 12, "macd_periods": 2, "std_rolling_periods": null, "max_rolling_periods": 7, "min_rolling_periods": 364, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": 5, "ewm_alpha": 0.2, "ewm_var_alpha": 0.5, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": null, "datepart_method": "recurring", "polynomial_degree": null, "regression_type": "User", "window": null, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": false, "frac_slice": null}',
+        'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "AlignLastValue", "1": "PositiveShift", "2": "AlignLastValue"}, "transformation_params": {"0": {"rows": 7, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": false, "threshold": 10, "threshold_method": "max"}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": 10, "threshold_method": "max"}}}',
+        "Ensemble": 0,
+    },
+    "86": {  # optimized on VN1 best competition 0.43, good smape 0.49
+        'Model': 'SeasonalityMotif',
+        'ModelParameters': '{"window": 5, "point_method": "trimmed_mean_40", "distance_metric": "mae", "k": 5, "datepart_method": ["simple_binarized_poly"], "independent": true}',
+        'TransformationParameters': '{"fillna": "rolling_mean", "transformations": {"0": "Constraint", "1": "QuantileTransformer", "2": "AlignLastValue"}, "transformation_params": {"0": {"constraint_method": "historic_diff", "constraint_direction": "lower", "constraint_regularization": 1.0, "constraint_value": 0.2, "bounds_only": false, "fillna": null}, "1": {"output_distribution": "uniform", "n_quantiles": 43}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": null, "threshold_method": "max"}}}',
+        "Ensemble": 0,
+    },
+    "87": {  # optimized on wiki daily, 25.6 smape, 991k mqae, initial fit
+        'Model': 'TVVAR',
+        'ModelParameters': '{"datepart_method": "expanded", "changepoint_spacing": 90, "changepoint_distance_end": 520, "regression_type": null, "lags": [7], "rolling_means": [4], "lambda_": 0.001, "trend_phi": 0.99, "var_dampening": 0.98, "phi": null, "max_cycles": 2000, "apply_pca": true, "base_scaled": false, "x_scaled": false, "var_preprocessing": {"fillna": "rolling_mean", "transformations": {"0": "FFTFilter"}, "transformation_params": {"0": {"cutoff": 0.4, "reverse": false, "on_transform": true, "on_inverse": false}}}, "threshold_value": null}',
+        'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler", "2": "PositiveShift", "3": "MinMaxScaler", "4": "AlignLastValue", "5": "ClipOutliers"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 100}, "1": {}, "2": {}, "3": {}, "4": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.5, "first_value_only": false, "threshold": 1, "threshold_method": "max"}, "5": {"method": "clip", "std_threshold": 4, "fillna": null}}}',
+        "Ensemble": 0,
+    },
+    "88": {
+        'Model': 'TVVAR',
+        'ModelParameters': '{"datepart_method": "expanded", "changepoint_spacing": 6, "changepoint_distance_end": 520, "regression_type": null, "lags": [7], "rolling_means": [4], "lambda_": 0.001, "trend_phi": 0.99, "var_dampening": 0.98, "phi": null, "max_cycles": 2000, "apply_pca": true, "base_scaled": false, "x_scaled": false, "var_preprocessing": {"fillna": "rolling_mean", "transformations": {"0": "FFTFilter"}, "transformation_params": {"0": {"cutoff": 0.4, "reverse": false, "on_transform": true, "on_inverse": false}}}, "threshold_value": null}',
+        'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler", "2": "AlignLastValue", "3": "MinMaxScaler", "4": "MinMaxScaler"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 100}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": 1, "threshold_method": "max"}, "3": {}, "4": {}}}',
+        'Ensemble': 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

@@ -25,6 +25,7 @@ A combination of metrics and cross-validation options, the ability to apply subs
 * [Installation](https://github.com/winedarksea/AutoTS#installation)
 * [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
 * [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* [Flowchart](https://github.com/winedarksea/AutoTS#autots-process)
 * Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
 * [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
@@ -59,10 +60,10 @@ df = load_daily(long=long)
 
 model = AutoTS(
     forecast_length=21,
-    frequency='infer',
+    frequency="infer",
     prediction_interval=0.9,
-    ensemble='auto',
-    model_list="fast",  # "superfast", "default", "fast_parallel"
+    ensemble=None,
+    model_list="superfast",  # "fast", "default", "fast_parallel"
     transformer_list="fast",  # "superfast",
     drop_most_recent=1,
     max_generations=4,
@@ -132,5 +133,38 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 	* Feel free to recommend different search grid parameters for your favorite models
 * And, of course, contributing to the codebase directly on GitHub.
 
+
+## AutoTS Process
+```mermaid
+flowchart TD
+    A[Initiate AutoTS Model] --> B[Import Template]
+    B --> C[Load Data]
+    C --> D[Split Data Into Initial Train/Test Holdout]
+    D --> E[Run Initial Template Models]
+    E --> F[Evaluate Accuracy Metrics on Results]
+    F --> G[Generate Score from Accuracy Metrics]
+    G --> H{Max Generations Reached or Timeout?}
+
+    H -->|No| I[Evaluate All Previous Templates]
+    I --> J[Genetic Algorithm Combines Best Results and New Random Parameters into New Template]
+    J --> K[Run New Template Models and Evaluate]
+    K --> G
+
+    H -->|Yes| L[Select Best Models by Score for Validation Template]
+    L --> M[Run Validation Template on Additional Holdouts]
+    M --> N[Evaluate and Score Validation Results]
+    N --> O{Create Ensembles?}
+    
+    O -->|Yes| P[Generate Ensembles from Validation Results]
+    P --> Q[Run Ensembles Through Validation]
+    Q --> N
+
+    O -->|No| R[Export Best Models Template]
+    R --> S[Select Single Best Model]
+    S --> T[Generate Future Time Forecast]
+    T --> U[Visualize Results]
+
+    R --> B[Import Best Models Template]
+```
 
 *Also known as Project CATS (Catlin's Automated Time Series) hence the logo.*

@@ -147,7 +147,7 @@ class AnomalyDetector(object):
             self.anomalies[mask_replace] = 1
         return self.anomalies, self.scores
 
-    def plot(self, series_name=None, title=None, plot_kwargs={}):
+    def plot(self, series_name=None, title=None, marker_size=None, plot_kwargs={}):
         import matplotlib.pyplot as plt
 
         if series_name is None:
@@ -162,7 +162,14 @@ class AnomalyDetector(object):
             series_anom = self.anomalies[series_name]
             i_anom = series_anom[series_anom == -1].index
         if len(i_anom) > 0:
-            ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="red")
+            if marker_size is None:
+                marker_size = max(20, fig.dpi * 0.45)
+            ax.scatter(
+                i_anom.tolist(),
+                self.df.loc[i_anom, :][series_name],
+                c="red",
+                s=marker_size,
+            )
 
     def fit(self, df):
         return self.detect(df)
@@ -230,8 +237,8 @@ class AnomalyDetector(object):
 
         if preforecast or method_choice == "prediction_interval":
             forecast_params = random_model(
-                model_list=['LastValueNaive', 'GLS', 'RRVAR'],
-                model_prob=[0.8, 0.1, 0.1],
+                model_list=['LastValueNaive', 'GLS', 'RRVAR', "SeasonalityMotif"],
+                model_prob=[0.8, 0.1, 0.05, 0.05],
                 transformer_max_depth=5,
                 transformer_list="superfast",
                 keyword_format=True,
@@ -256,8 +263,9 @@ class HolidayDetector(object):
         use_wkdeom_holidays=True,
         use_lunar_holidays=True,
         use_lunar_weekday=False,
-        use_islamic_holidays=True,
-        use_hebrew_holidays=True,
+        use_islamic_holidays=False,
+        use_hebrew_holidays=False,
+        use_hindu_holidays=False,
         output: str = "multivariate",
         n_jobs: int = 1,
     ):
@@ -292,6 +300,7 @@ class HolidayDetector(object):
         self.use_lunar_weekday = use_lunar_weekday
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
+        self.use_hindu_holidays = use_hindu_holidays
         self.n_jobs = n_jobs
         self.output = output
         self.anomaly_model = AnomalyDetector(
@@ -313,6 +322,7 @@ class HolidayDetector(object):
             self.lunar_weekday,
             self.islamic_holidays,
             self.hebrew_holidays,
+            self.hindu_holidays,
         ) = anomaly_df_to_holidays(
             self.anomaly_model.anomalies,
             splash_threshold=self.splash_threshold,
@@ -328,6 +338,7 @@ class HolidayDetector(object):
             use_lunar_weekday=self.use_lunar_weekday,
             use_islamic_holidays=self.use_islamic_holidays,
             use_hebrew_holidays=self.use_hebrew_holidays,
+            use_hindu_holidays=self.use_hindu_holidays,
         )
 
     def plot_anomaly(self, kwargs={}):
@@ -338,6 +349,7 @@ class HolidayDetector(object):
         series_name=None,
         include_anomalies=True,
         title=None,
+        marker_size=None,
         plot_kwargs={},
         series=None,
     ):
@@ -355,6 +367,8 @@ class HolidayDetector(object):
             )
         fig, ax = plt.subplots()
         self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        if marker_size is None:
+            marker_size = max(20, fig.dpi * 0.45)
         if include_anomalies:
             # directly copied from above
             if self.anomaly_model.output == "univariate":
@@ -366,13 +380,21 @@ class HolidayDetector(object):
                 i_anom = series_anom[series_anom == -1].index
             if len(i_anom) > 0:
                 ax.scatter(
-                    i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="red"
+                    i_anom.tolist(),
+                    self.df.loc[i_anom, :][series_name],
+                    c="red",
+                    s=marker_size,
                 )
         # now the actual holidays
         i_anom = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
         i_anom = i_anom.index[i_anom == 1]
         if len(i_anom) > 0:
-            ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="green")
+            ax.scatter(
+                i_anom.tolist(),
+                self.df.loc[i_anom, :][series_name],
+                c="green",
+                s=marker_size,
+            )
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
         """Populate date information for a given pd.DatetimeIndex.
@@ -400,6 +422,7 @@ class HolidayDetector(object):
             lunar_weekday=self.lunar_weekday,
             islamic_holidays=self.islamic_holidays,
             hebrew_holidays=self.hebrew_holidays,
+            hindu_holidays=self.hindu_holidays,
         )
 
     def fit(self, df):

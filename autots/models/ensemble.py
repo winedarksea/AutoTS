@@ -9,6 +9,7 @@ from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 from autots.models.sklearn import retrieve_classifier
+from autots.tools.profile import profile_time_series, summarize_series
 
 
 horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
@@ -21,6 +22,7 @@ full_ensemble_test_list = [
     "mosaic",
     'mosaic-window',
     'mosaic-crosshair',
+    'horizontal-min-3',
     "subsample",
     "mlensemble",
     "mosaic-weighted-crosshair-0-10",
@@ -28,14 +30,14 @@ full_ensemble_test_list = [
     "mosaic-weighted-0-horizontal",
     "mosaic-mae-0-40",
     "mosaic-weighted-0-40",
-    "mosaic-spl-3-10",
+    "mosaic-spl-3-10",  # this one in particular hard-coded for testing
+    "mosaic-mae-profile-0-36",
+    "mosaic-weighted-median",
+    "mosaic-mae-median-0-30",
+    "mosaic-mae-filtered-0-30",
+    "mosaic-mae-unpredictability_adjusted-0-30",
+    "mosaic-weighted-profile-median-filtered-unpredictability_adjusted-crosshair_lite-3-30",  # maxxed out config
 ]
-
-
-def summarize_series(df):
-    """Summarize time series data. For now just df.describe()."""
-    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
-    return df_sum
 
 
 def mosaic_or_horizontal(all_series: dict):
@@ -87,6 +89,9 @@ def parse_mosaic(ensemble):
             'smoothing_window': None,
             'crosshair': False,
             'n_models': None,
+            'profiled': False,
+            'filtered': False,
+            'unpredictability_adjusted': False,
         }
     elif ensemble in ["mosaic_crosshair", 'mosaic-crosshair']:
         return {
@@ -94,6 +99,9 @@ def parse_mosaic(ensemble):
             'smoothing_window': None,
             'crosshair': True,
             'n_models': None,
+            'profiled': False,
+            'filtered': False,
+            'unpredictability_adjusted': False,
         }
     elif ensemble in ["mosaic_window", "mosaic-window"]:
         return {
@@ -101,6 +109,9 @@ def parse_mosaic(ensemble):
             'smoothing_window': 7,
             'crosshair': False,
             'n_models': None,
+            'profiled': False,
+            'filtered': False,
+            'unpredictability_adjusted': False,
         }
     else:
         # mosaic-metric-crosshair-window-n_models
@@ -147,6 +158,9 @@ def parse_mosaic(ensemble):
             'smoothing_window': swindow,
             'crosshair': crosshair,
             'n_models': n_models,
+            "profiled": "profile" in ensemble,
+            "filtered": "filtered" in ensemble,
+            "unpredictability_adjusted": "unpredictability_adjusted" in ensemble,
         }
 
 
@@ -482,8 +496,10 @@ def mosaic_xy(df_train, known):
         .transpose()
         .merge(upload, left_index=True, right_on="series_id")
     )
-    X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
-    to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
+    X = X.set_index("series_id").replace(
+        [np.inf, -np.inf], 0
+    )  # .drop(columns=['series_id'], inplace=True)
+    to_predict = fill_median(X[X['model_id'].isna()].drop(columns=['model_id']))
     X = X[~X['model_id'].isna()]
     Y = X['model_id']
     Xf = X.drop(columns=['model_id'])
@@ -912,6 +928,8 @@ def _generate_bestn_dict(
     point_method: str = None,
 ):
     ensemble_models = best.to_dict(orient='index')
+    if not ensemble_models:
+        print(f"BestN returned empty with {model_metric}")
     model_parms = {
         'model_name': model_name,
         'model_count': best.shape[0],
@@ -1300,10 +1318,10 @@ def find_pattern(strings, x, sep="-"):
     results = []
 
     for string in strings:
-        match = re.search(pattern, string)
-        if match:
+        matched = re.search(pattern, string)
+        if matched:
             # Extracting the components
-            fixed_string, number = match.groups()
+            fixed_string, number = matched.groups()
             results.append((fixed_string, int(number)))
 
     return results
@@ -1430,6 +1448,7 @@ def HorizontalTemplateGenerator(
             [ensemble_templates, best5_params], axis=0, ignore_index=True
         )
     # the idea behind running both is for redundancy in the -max case
+    # and this one is better in some testing
     if 'horizontal' in ensemble or (
         'horizontal-max' in ensemble and not only_specified
     ):
@@ -1631,35 +1650,174 @@ def generate_crosshair_score_list(error_list):
     return list(full_arr + sum_error)  # + outer_sum
 
 
+def _custom_min_max_scaler(df, min_value=0.1, power=0.5):
+    # Calculate min and max for each column
+    if power is not None:
+        # this reduces the skew of the strongest outliers when power = 0.5
+        df = np.power(df.astype(float).copy(), power)
+    col_min = df.min()
+    col_max = df.max()
+
+    # Apply the inverted min-max scaling formula
+    scaled_df = min_value + (1 - min_value) * ((col_max - df) / (col_max - col_min))
+
+    return scaled_df.round(3)
+
+
+def create_unpredictability_score(
+    full_mae_errors,
+    full_mae_vals,
+    total_vals,
+    df_wide,
+    validation_test_indexes,
+    scale=False,
+):
+    results = []
+    threshold = np.nanmedian(full_mae_errors) * 1.1
+    for val in range(total_vals):
+        errors_array = np.array(
+            [
+                x
+                for y, x in sorted(
+                    zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
+                )
+                if y == val
+            ]
+        )
+        # filters by models performance across ALL series, which may sometimes be a limitation
+        performance_summary = np.nanmedian(errors_array, axis=(1, 2))
+        filtered_models = errors_array[performance_summary <= threshold].copy()
+        if filtered_models.shape[0] <= 1:
+            inner_threshold = np.median(performance_summary) * 1.2
+            filtered_models = errors_array[
+                performance_summary <= inner_threshold
+            ].copy()
+        # median_error = np.nanmedian(filtered_models, axis=0)
+        min_error = np.nanquantile(filtered_models, q=0.01, axis=0)
+        # score = (median_error * 0.01 + min_error)  # where min was actual min
+        score = min_error
+        # score = score / np.min(score)
+        score = pd.DataFrame(
+            score, index=validation_test_indexes[val], columns=df_wide.columns
+        )
+        # scale
+        score = score / pd.DataFrame(
+            index=validation_test_indexes[val], columns=df_wide.columns
+        ).fillna(df_wide.mean())
+        results.append(score)
+
+    if scale:
+        return _custom_min_max_scaler(pd.concat(results).sort_index(), min_value=0.1)
+    else:
+        return pd.concat(results).sort_index()
+
+
 def process_mosaic_arrays(
     local_results,
     full_mae_ids,
     full_mae_errors,
-    total_vals,
+    total_vals=None,
     models_to_use=None,
     smoothing_window=None,
+    filtered=False,
+    unpredictability_adjusted=False,
+    validation_test_indexes=None,
+    full_mae_vals=None,
+    df_wide=None,
 ):
-    # sort by runtime then drop duplicates on metric results
+    # sort by runtime then drop duplicates on metric results to remove functionally equivalent model duplication
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
-    local_results.drop_duplicates(
-        subset=['ValidationRound', 'smape', 'mae', 'spl'], inplace=True
+    temp = local_results.drop_duplicates(
+        subset=['ValidationRound', 'smape', 'mae', 'spl'],
+        keep="first",
     )
+    # there is still a possible edge case where a model matches different, but equal models on each validation round but is better overall
+    # but as models being identical on point and probabilistic and this occurring seems unlikely
+    local_results = local_results[local_results["ID"].isin(temp["ID"].unique())]
     # remove slow models... tbd
     # select only models run through all validations
-    run_count = local_results[['Model', 'ID']].groupby("ID").count()
+    # previous version was failing to remove models that failed on validation
+    run_count = (
+        local_results[local_results["Exceptions"].isnull()][['Model', 'ID']]
+        .groupby("ID")
+        .count()
+    )
+    if filtered:
+        # this one has dedupe currently and can handle greater
+        # but I'm not 100% on this dedupe overall being correct, hence not using for all
+        fully_validated = run_count[run_count['Model'] >= total_vals].index.tolist()
+    else:
+        fully_validated = run_count[run_count['Model'] == total_vals].index.tolist()
     if models_to_use is None:
-        models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
+        models_to_use = fully_validated
+    else:
+        # so the logic makes it that it must be EXACTLY the right number of vals
+        # which can create problems, some models get duplicated and will be excluded
+        filtered_use = list(set(models_to_use).intersection(set(fully_validated)))
+        if len(filtered_use) > 1:
+            models_to_use = filtered_use
     # begin figuring out which are the min models for each point
     id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
-    errors_array = np.array(
-        [
-            x
-            for y, x in sorted(
-                zip(full_mae_ids, full_mae_errors), key=lambda pair: pair[0]
-            )
-            if y in models_to_use
+    if unpredictability_adjusted:
+        scores = create_unpredictability_score(
+            full_mae_errors,
+            full_mae_vals,
+            total_vals,
+            df_wide,
+            validation_test_indexes,
+            scale=False,
+        )
+        weight_dict = {
+            idx: scores.reindex(val).to_numpy()
+            for idx, val in enumerate(validation_test_indexes)
+        }
+        full_mae_errors_use = [
+            x * weight_dict[y] for y, x in zip(full_mae_vals, full_mae_errors)
         ]
-    )
+    else:
+        full_mae_errors_use = full_mae_errors
+
+    # remove models that are above median overall
+    if filtered:
+        threshold = np.nanmedian(full_mae_errors_use) * 1.2  # could change this level
+        seen = set()
+        errors_array = []
+        id_array = []
+        rubbish = []
+        for idz, errz, valz in sorted(
+            zip(full_mae_ids, full_mae_errors_use, full_mae_vals),
+            key=lambda pair: pair[0],
+        ):
+            if idz in models_to_use:
+                if np.nanmedian(errz) <= threshold:
+                    rubbish.append(idz)
+                if (idz, str(valz)) not in seen:
+                    # dedupe if dupes exist, which they shouldn't but they do sometimes...
+                    seen.add((idz, str(valz)))
+                    errors_array.append(errz)
+                    id_array.append(idz)
+        errors_array2 = []
+        id_array2 = []
+        for errz, idz in zip(errors_array, id_array):
+            if idz not in rubbish:
+                errors_array2.append(errz)
+                id_array2.append(idz)
+        errors_array = np.array(errors_array2)
+        id_array = np.array(id_array2)
+    else:
+        seen = set()
+        errors_array = []
+        id_array = []
+        for idz, errz, valz in sorted(
+            zip(full_mae_ids, full_mae_errors_use, full_mae_vals),
+            key=lambda pair: pair[0],
+        ):
+            if idz in models_to_use and (idz, str(valz)) not in seen:
+                seen.add((idz, str(valz)))
+                errors_array.append(errz)
+                id_array.append(idz)
+        errors_array = np.array(errors_array)
+        id_array = np.array(id_array)
 
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
@@ -1698,6 +1856,12 @@ def generate_mosaic_template(
     smoothing_window=None,
     metric_name="MAE",
     models_to_use=None,
+    id_to_group_mapping: dict = None,
+    filtered: bool = False,
+    unpredictability_adjusted: bool = False,
+    validation_test_indexes=None,
+    full_mae_vals=None,
+    df_wide=None,
     **kwargs,
 ):
     """Generate an ensemble template from results."""
@@ -1710,13 +1874,54 @@ def generate_mosaic_template(
         total_vals=total_vals,
         models_to_use=models_to_use,
         smoothing_window=smoothing_window,
+        filtered=filtered,
+        unpredictability_adjusted=unpredictability_adjusted,
+        validation_test_indexes=validation_test_indexes,
+        full_mae_vals=full_mae_vals,
+        df_wide=df_wide,
     )
+    checksum = pd.Series(id_array).value_counts()
+    # should be the same because all should have the same num validations
+    assert (
+        checksum.min() == checksum.max()
+    ), f"id array wrong in mosaic generation, {checksum.min()}, {checksum.max()}, {len(errors_array)}"
     # window across multiple time steps to smooth the result
     name = "Mosaic"
+    # since it is sorted by id and filtered to only those run through all vals, this is the slice step after each val
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
-    best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
-    model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
+    if id_to_group_mapping is None:
+        best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
+        model_id_array = pd.DataFrame(
+            np.take(id_sliced, best_points), columns=col_names
+        )
+    else:
+        # group by profile
+        res = []
+        for group in set(list(id_to_group_mapping.values())):
+            idz = [
+                col_names.get_loc(key)
+                for key, value in id_to_group_mapping.items()
+                if value == group and key in col_names
+            ]
+            if len(idz) < 1:
+                pass
+            else:
+                subsetz = errors_array[:, :, idz].mean(axis=2)
+                best_points = np.add.reduceat(subsetz, slice_points, axis=0).argmin(
+                    axis=0
+                )
+                res.append(
+                    pd.DataFrame(np.take(id_sliced, best_points), columns=[group])
+                )
+        # add on the overall for any missing groups
+        best_points = np.add.reduceat(
+            errors_array.mean(axis=2), slice_points, axis=0
+        ).argmin(axis=0)
+        res.append(pd.DataFrame(np.take(id_sliced, best_points), columns=["overall"]))
+        # combines
+        model_id_array = pd.concat(res, axis=1)
+
     used_models = pd.unique(model_id_array.values.flatten())
     used_models_results = local_results[
         ["ID", "Model", "ModelParameters", "TransformationParameters"]
@@ -1789,6 +1994,25 @@ def MosaicEnsemble(
     """
     # work with forecast_lengths longer or shorter than provided by template
 
+    # handle profiled mosaic
+    profiled = "profile" in ensemble_params.get("model_metric")
+    medianed = "median" in ensemble_params.get("model_metric")
+    if profiled:
+        profiled = (
+            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
+        )
+        known_matches = ensemble_params['series']
+        valid_values = list(known_matches.keys())
+        profiled = {
+            key: value if value in valid_values else "overall"
+            for key, value in profiled.items()
+        }
+        # json.loads(ensemble_params["ModelParameters"])["series"][profiled[col]]
+        prematched_series = {
+            col: known_matches[profiled[col]] for col in df_train.columns
+        }
+    elif prematched_series is None:
+        prematched_series = ensemble_params['series']
     # this is meant to fill in any failures
     startTime = datetime.datetime.now()
     sample_idx = next(iter(forecasts.values())).index
@@ -1800,8 +2024,6 @@ def MosaicEnsemble(
     if not full_models:
         print("No full models available for mosaic generalization.")
         full_models = available_models  # hope it doesn't need to fill
-    if prematched_series is None:
-        prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(
         df_train,
         prematched_series,
@@ -1813,13 +2035,123 @@ def MosaicEnsemble(
 
     final = pd.DataFrame.from_dict(all_series)
     final.index.name = "forecast_period"
+    if medianed:
+        # this doesn't assure all three models are unique, but mostly should
+        nx1 = final.shift(1).bfill()
+        nx2 = final.shift(-1).ffill()
+        nx3 = final.shift(2).bfill()
+        nx4 = final.shift(-2).ffill()
+        nx1 = nx1.where(final != nx1, nx2)
+        nx2 = nx2.where((nx1 != nx2) & (final != nx2), nx3)
+        nx2 = nx2.where((nx1 != nx2) & (final != nx2), nx4)
+
+    forecast_df, u_forecast_df, l_forecast_df = _buildup_mosaics(
+        final,
+        sample_idx,
+        forecasts,
+        upper_forecasts,
+        lower_forecasts,
+        available_models,
+        org_idx,
+    )
+    if medianed:
+        forecast_df2, u_forecast_df2, l_forecast_df2 = _buildup_mosaics(
+            nx1,
+            sample_idx,
+            forecasts,
+            upper_forecasts,
+            lower_forecasts,
+            available_models,
+            org_idx,
+        )
+        forecast_df3, u_forecast_df3, l_forecast_df3 = _buildup_mosaics(
+            nx2,
+            sample_idx,
+            forecasts,
+            upper_forecasts,
+            lower_forecasts,
+            available_models,
+            org_idx,
+        )
+        # Stack the three DataFrames into a 3D NumPy array
+        stacked = np.stack(
+            [forecast_df.to_numpy(), forecast_df2.to_numpy(), forecast_df3.to_numpy()],
+            axis=2,
+        )
+        median_array = np.median(stacked, axis=2)
+        forecast_df = pd.DataFrame(
+            median_array, index=forecast_df.index, columns=forecast_df.columns
+        )
+        # upper
+        stacked = np.stack(
+            [
+                u_forecast_df.to_numpy(),
+                u_forecast_df2.to_numpy(),
+                u_forecast_df3.to_numpy(),
+            ],
+            axis=2,
+        )
+        median_array = np.median(stacked, axis=2)
+        u_forecast_df = pd.DataFrame(
+            median_array, index=u_forecast_df.index, columns=u_forecast_df.columns
+        )
+        # lower
+        stacked = np.stack(
+            [
+                l_forecast_df.to_numpy(),
+                l_forecast_df2.to_numpy(),
+                l_forecast_df3.to_numpy(),
+            ],
+            axis=2,
+        )
+        median_array = np.median(stacked, axis=2)
+        l_forecast_df = pd.DataFrame(
+            median_array, index=l_forecast_df.index, columns=l_forecast_df.columns
+        )
+
+    # combine runtimes
+    try:
+        ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
+    except Exception:
+        ens_runtime = datetime.timedelta(0)
+
+    # don't overwrite with mapping if profile type mosaic is used
+    if not profiled:
+        ensemble_params['series'] = all_series
+    ens_result = PredictionObject(
+        model_name="Ensemble",
+        forecast_length=len(sample_idx),
+        forecast_index=sample_idx,
+        forecast_columns=org_idx,
+        lower_forecast=l_forecast_df,
+        forecast=forecast_df,
+        upper_forecast=u_forecast_df,
+        prediction_interval=prediction_interval,
+        predict_runtime=datetime.datetime.now() - startTime,
+        fit_runtime=ens_runtime,
+        model_parameters=ensemble_params,
+    )
+    return ens_result
+
+
+def _buildup_mosaics(
+    final,
+    sample_idx,
+    forecasts,
+    upper_forecasts,
+    lower_forecasts,
+    available_models,
+    org_idx,
+):
     melted = pd.melt(
         final,
         var_name="series_id",
         value_name="model_id",
         ignore_index=False,
     ).reset_index(drop=False)
-    melted["forecast_period"] = melted["forecast_period"].astype(int)
+    melted["forecast_period"] = pd.to_numeric(
+        melted["forecast_period"], downcast="integer"
+    )
     max_forecast_period = melted["forecast_period"].max()
     # handle forecast length being longer than template
     len_sample_index = len(sample_idx)
@@ -1856,15 +2188,15 @@ def MosaicEnsemble(
             f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
             + mi
         ) from e
-    melted['forecast'] = (
-        fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
-    melted['upper_forecast'] = (
-        u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
-    melted['lower_forecast'] = (
-        l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
+    melted[
+        'forecast'
+    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'upper_forecast'
+    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'lower_forecast'
+    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
 
     forecast_df = melted.pivot(
         values="forecast", columns="series_id", index="forecast_period"
@@ -1882,24 +2214,4 @@ def MosaicEnsemble(
     forecast_df = forecast_df.reindex(columns=org_idx)
     u_forecast_df = u_forecast_df.reindex(columns=org_idx)
     l_forecast_df = l_forecast_df.reindex(columns=org_idx)
-    # combine runtimes
-    try:
-        ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
-    except Exception:
-        ens_runtime = datetime.timedelta(0)
-
-    ensemble_params['series'] = all_series
-    ens_result = PredictionObject(
-        model_name="Ensemble",
-        forecast_length=len(sample_idx),
-        forecast_index=sample_idx,
-        forecast_columns=org_idx,
-        lower_forecast=l_forecast_df,
-        forecast=forecast_df,
-        upper_forecast=u_forecast_df,
-        prediction_interval=prediction_interval,
-        predict_runtime=datetime.datetime.now() - startTime,
-        fit_runtime=ens_runtime,
-        model_parameters=ensemble_params,
-    )
-    return ens_result
+    return forecast_df, u_forecast_df, l_forecast_df

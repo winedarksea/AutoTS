@@ -490,18 +490,18 @@ class PredictionObject(object):
             value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
-        upload_upper[interval_name] = (
-            f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
-        )
+        upload_upper[
+            interval_name
+        ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
         upload_lower = pd.melt(
             self.lower_forecast.rename_axis(index='datetime').reset_index(),
             var_name=id_name,
             value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
-        upload_lower[interval_name] = (
-            f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
-        )
+        upload_lower[
+            interval_name
+        ] = f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
 
         upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
         if datetime_column is not None:
@@ -561,7 +561,21 @@ class PredictionObject(object):
         model_name = self.model_name
         if model_name == "Ensemble":
             if 'series' in self.model_parameters.keys():
-                h_params = self.model_parameters['series'][series]
+                if "profile" in self.model_parameters["model_metric"]:
+                    from autots.tools.profile import profile_time_series
+
+                    df = df_wide if df_wide is not None else self.forecast
+                    profile = profile_time_series(df)
+                    # I'm not sure why I made it sometimes coming as ID and sometimes SERIES...
+                    if "ID" in profile.columns:
+                        key_col = "ID"
+                    else:
+                        key_col = "SERIES"
+                    h_params = self.model_parameters['series'][
+                        profile[profile[key_col] == series]["PROFILE"].iloc[0]
+                    ]
+                else:
+                    h_params = self.model_parameters['series'][series]
                 if isinstance(h_params, str):
                     model_name = self.model_parameters['models'][h_params]['Model']
 
@@ -709,14 +723,17 @@ class PredictionObject(object):
         figsize=(24, 18),
         title="AutoTS Forecasts",
         cols=None,
+        series=None,  # alias for above
         colors=None,
         include_bounds=True,
     ):
         """Plots multiple series in a grid, if present. Mostly identical args to the single plot function."""
         import matplotlib.pyplot as plt
 
+        if series is not None and cols is None:
+            cols = series
         if cols is None:
-            cols = self.forecast_columns
+            cols = self.forecast.columns.tolist()
         num_cols = len(cols)
         if num_cols > 4:
             nrow = 2
@@ -770,6 +787,7 @@ class PredictionObject(object):
         diff_A=None,
         last_of_array=None,
         column_names=None,
+        custom_metric=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -783,6 +801,7 @@ class PredictionObject(object):
                 necessary for MADE and Contour if forecast_length == 1
                 if None, actuals are used instead (suboptimal).
             per_timestamp (bool): whether to calculate and return per timestamp direction errors
+            custom metric (callable): a function to generate a custom metric. Expects func(A, F, df_train, prediction_interval) where the first three are np arrays of wide style 2d.
 
         Returns:
             per_series_metrics (pandas.DataFrame): contains a column for each series containing accuracy metrics
@@ -821,6 +840,7 @@ class PredictionObject(object):
                 cumsum_A=cumsum_A,
                 diff_A=diff_A,
                 last_of_array=last_of_array,
+                custom_metric=custom_metric,
             )
 
         if per_timestamp_errors:
@@ -846,6 +866,21 @@ class PredictionObject(object):
             axis=1, skipna=True
         ) / sum(series_weights.values())
         self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
+        if False:
+            # vn1 temporary
+            submission = self.forecast
+            objective = actual
+            abs_err = np.nansum(np.abs(submission - objective))
+            err = np.nansum((submission - objective))
+            score = abs_err + abs(err)
+            epsilon = 1
+            big_sum = (
+                np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum()
+                + epsilon
+            )
+            score /= big_sum
+            self.avg_metrics["custom"] = score
+            self.avg_metrics_weighted["custom"] = score
         return self
 
     def apply_constraints(
@@ -917,6 +952,14 @@ class PredictionObject(object):
                         "constraint_direction": "upper",
                         "constraint_regularization": 0.5,
                         "bounds": True,
+                    },
+                    {  # round decimals to 2 places
+                        "constraint_method": "round",
+                        "constraint_value": 2,
+                    },
+                    {  # apply dampening (gradually flatten out forecast)
+                        "constraint_method": "dampening",
+                        "constraint_value": 0.98,
                     },
                 ]
             )

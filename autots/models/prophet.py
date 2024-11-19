@@ -55,10 +55,14 @@ class FBProphet(ModelObject):
         changepoint_prior_scale: float = 0.05,
         seasonality_mode: str = "additive",
         changepoint_range: float = 0.8,
+        changepoint_spacing: int = 60,
         seasonality_prior_scale: float = 10.0,
+        weekly_seasonality_prior_scale: float = None,
+        yearly_seasonality_prior_scale: float = None,
+        yearly_seasonality_order: int = None,
         holidays_prior_scale: float = 10.0,
         trend_phi: float = 1,
-        random_seed: int = 2020,
+        random_seed: int = 2024,
         verbose: int = 0,
         n_jobs: int = None,
     ):
@@ -83,7 +87,11 @@ class FBProphet(ModelObject):
         self.changepoint_prior_scale = changepoint_prior_scale
         self.seasonality_mode = seasonality_mode
         self.changepoint_range = changepoint_range
+        self.changepoint_spacing = changepoint_spacing
         self.seasonality_prior_scale = seasonality_prior_scale
+        self.weekly_seasonality_prior_scale = weekly_seasonality_prior_scale
+        self.yearly_seasonality_prior_scale = yearly_seasonality_prior_scale
+        self.yearly_seasonality_order = yearly_seasonality_order
         self.holidays_prior_scale = holidays_prior_scale
         self.trend_phi = trend_phi
 
@@ -167,19 +175,49 @@ class FBProphet(ModelObject):
             logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
             logging.getLogger('prophet').setLevel(logging.WARNING)
             logging.getLogger('cmdstanpy').setLevel(logging.ERROR)
-            m = Prophet(
-                interval_width=args['prediction_interval'],
-                yearly_seasonality=self.yearly_seasonality,
-                weekly_seasonality=self.weekly_seasonality,
-                daily_seasonality=self.daily_seasonality,
-                growth=self.growth,
-                n_changepoints=self.n_changepoints,
-                changepoint_prior_scale=self.changepoint_prior_scale,
-                seasonality_mode=self.seasonality_mode,
-                changepoint_range=self.changepoint_range,
-                seasonality_prior_scale=self.seasonality_prior_scale,
-                holidays_prior_scale=self.holidays_prior_scale,
-            )
+            if self.weekly_seasonality_prior_scale not in [None, "None"]:
+                self.weekly_seasonality = False
+            if self.yearly_seasonality_prior_scale not in [None, "None"]:
+                self.yearly_seasonality = False
+            pargs = {
+                "interval_width": args['prediction_interval'],
+                "yearly_seasonality": self.yearly_seasonality,
+                "weekly_seasonality": self.weekly_seasonality,
+                "daily_seasonality": self.daily_seasonality,
+                "growth": self.growth,
+                "n_changepoints": self.n_changepoints,
+                "changepoint_prior_scale": self.changepoint_prior_scale,
+                "seasonality_mode": self.seasonality_mode,
+                "changepoint_range": self.changepoint_range,
+                "seasonality_prior_scale": self.seasonality_prior_scale,
+                "holidays_prior_scale": self.holidays_prior_scale,
+            }
+            if self.changepoint_range > 1:
+                pargs['changepoints'] = get_changepoints(
+                    current_series.index[0],
+                    current_series.index[-1],
+                    self.changepoint_spacing,
+                    int(self.changepoint_range),
+                )
+                pargs.pop("changepoint_range")
+                pargs.pop("n_changepoints")
+            m = Prophet(**pargs)
+            if self.weekly_seasonality_prior_scale not in [None, "None"]:
+                m.add_seasonality(
+                    name='weekly',
+                    period=7,
+                    fourier_order=4,
+                    prior_scale=self.weekly_seasonality_prior_scale,
+                )
+            if self.yearly_seasonality_prior_scale not in [None, "None"]:
+                if self.yearly_seasonality_order in [None, "None"]:
+                    self.yearly_seasonality_order = 12
+                m.add_seasonality(
+                    name='yearly',
+                    period=365.25,
+                    fourier_order=int(self.yearly_seasonality_order),
+                    prior_scale=self.yearly_seasonality_prior_scale,
+                )
             if isinstance(args['holiday'], pd.DataFrame):
                 m.holidays = args['holiday'][args['holiday']['series'] == series]
             elif isinstance(args['holiday'], bool):
@@ -355,17 +393,44 @@ class FBProphet(ModelObject):
             regression_choice = random.choices(regression_list, regression_probability)[
                 0
             ]
+        yearly_seasonality_order = None
+        yearly_seasonality_prior_scale = random.choices(
+            [None, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
+            [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
+        )[0]
+        if yearly_seasonality_prior_scale is not None:
+            yearly_seasonality_order = random.choices(
+                [2, 6, 12, 30], [0.1, 0.2, 0.5, 0.1]
+            )[0]
 
         return {
             'holiday': holiday_choice,
             'regression_type': regression_choice,
             'changepoint_prior_scale': random.choices(
-                [0.001, 0.01, 0.1, 0.05, 0.5, 1, 10, 30, 50],  # 0.05 default
-                [0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1, 0.05],
+                [0.0001, 0.001, 0.01, 0.1, 0.05, 0.5, 1, 10, 30, 50],  # 0.05 default
+                [0.01, 0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1, 0.05],
             )[0],
             'seasonality_prior_scale': random.choices(
                 [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
                 [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05],
+            )[0],
+            'yearly_seasonality_prior_scale': yearly_seasonality_prior_scale,
+            "yearly_seasonality_order": yearly_seasonality_order,
+            'weekly_seasonality_prior_scale': random.choices(
+                [
+                    None,
+                    0.0001,
+                    0.001,
+                    0.01,
+                    0.1,
+                    1.0,
+                    10.0,
+                    15,
+                    20,
+                    25,
+                    40,
+                ],  # default 10
+                [0.8, 0.2, 0.05, 0.05, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05],
             )[0],
             'holidays_prior_scale': random.choices(
                 [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
@@ -373,11 +438,15 @@ class FBProphet(ModelObject):
             )[0],
             'seasonality_mode': random.choice(['additive', 'multiplicative']),
             'changepoint_range': random.choices(
-                [0.8, 0.85, 0.9, 0.98], [0.9, 0.1, 0.1, 0.1]
+                [0.8, 0.85, 0.9, 0.95, 0.98, 30, 60],
+                [0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2],
             )[0],
             'growth': random.choices(["linear", "flat"], [0.9, 0.1])[0],
             'n_changepoints': random.choices(
                 [5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05]
+            )[0],
+            'changepoint_spacing': random.choices(
+                [10, 20, 25, 30, 40, 50, 60], [0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.9]
             )[0],
             "trend_phi": random.choices(
                 [None, 0.98, 0.999, 0.95, 0.8], [0.8, 0.1, 0.2, 0.1, 0.1]
@@ -398,6 +467,55 @@ class FBProphet(ModelObject):
             "holidays_prior_scale": self.holidays_prior_scale,
             "trend_phi": self.trend_phi,
         }
+
+
+def get_changepoints(
+    training_start_ds,
+    training_end_ds,
+    changepoint_spacing,
+    changepoint_distance_end,
+    custom_changepoints="",
+):
+    """Create the distinct uniform pattern used in Ecosystem Analytics
+    This is likely to be replaced in the future. It was likely designed the way
+    is was to have exact control over where the last potential changepoint
+    could be, which is around the 93% mark of the data, and then setting a
+    relatively course, uniform grid going way back in time.
+    (sourced from the work of Benn O)
+    Args:
+        training_start_ds: Pandas datetime or string date of earliest
+            historical training date
+        training_end_ds: Pandas datetime or string date of last training
+            date (used in model fitting)
+        changepoint_spacing (int): Number of days between potential
+            changepoints
+        changepoint_distance_end (int): Number of days from the present into
+            the past for which to start the uniform changepoint grid. This will
+            also be the interval between potential changepoints
+        custom_changepoints (string): comma separated dates in form YYYY-MM-DD. No
+            additional quotations are necessary (e.g., "2020-10-12,2020-11-15")
+    Returns:
+        a pandas Series (dtype: datetime64[ns]) of potential changepoints for Prophet
+    """
+    last_changepoint = pd.to_datetime(training_end_ds) - datetime.timedelta(
+        changepoint_distance_end
+    )
+    cp_freq = f"-{changepoint_spacing}D"
+    df = pd.DataFrame(
+        index=pd.date_range(
+            start=last_changepoint, end=pd.to_datetime(training_start_ds), freq=cp_freq
+        )
+    )
+    changepoints = df.reset_index().sort_values(["index"])["index"]
+    cp_csv = custom_changepoints.replace(" ", "")
+    if len(cp_csv) > 0:
+        timestamps = [pd.Timestamp(cp_str) for cp_str in cp_csv.split(",")]
+        changepoints = changepoints.append(pd.Series(timestamps))
+    changepoints = changepoints.drop_duplicates().sort_values()
+    changepoints = changepoints.loc[
+        (changepoints > training_start_ds) & (changepoints < training_end_ds)
+    ]
+    return changepoints
 
 
 class NeuralProphet(ModelObject):

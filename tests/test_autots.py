@@ -160,6 +160,20 @@ class AutoTSTest(unittest.TestCase):
         if tested_horizontal:
             self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
+        # check that the create number of models were available that were requested
+        one_mos = initial_results[initial_results["ModelParameters"].str.contains("mosaic-spl-3-10")]
+        res = []
+        for x in json.loads(one_mos["ModelParameters"].iloc[0])["series"].values():
+            for y in x.values():
+                res.append(y)
+        self.assertLessEqual(len(set(res)), 10)
+        # check all mosaic and horizontal styles were created
+        count_horz = len([x for x in ensemble if "horizontal" in x or "mosaic" in x])
+        self.assertEqual(len(initial_results[initial_results["Ensemble"] == 2]["ModelParameters"].unique()), count_horz)
+        # check the mosaic details were equal
+        self.assertTrue(len(model.initial_results.full_mae_errors) == len(model.initial_results.full_mae_ids) == len(model.initial_results.full_mae_vals))
+        # check at least 1 'simple' ensemble worked
+        self.assertGreater(initial_results[initial_results["Ensemble"] == 1]['Exceptions'].isnull().sum(), 0)
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
         # test back_forecast
@@ -328,7 +342,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
         # check general model setup
         self.assertGreaterEqual(validated_count, model.models_to_validate)
-        self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
+        lvl1 = initial_results[initial_results["Exceptions"].isnull()]
+        self.assertGreater(model.models_to_validate, (lvl1[lvl1["Ensemble"] == 0]['ValidationRound'] == 0).sum() * models_to_validate - 1)
         self.assertFalse(model.best_model.empty)
         # check the generated forecasts look right
         self.assertEqual(forecasts_df.shape[0], forecast_length)
@@ -480,10 +495,10 @@ class AutoTSTest(unittest.TestCase):
             id_col="series_id" if long else None,
         )
         model.expand_horizontal()
-        self.assertEqual(
-            sorted(json.loads(model.best_model_original.iloc[0]['ModelParameters'])['models'].keys()),
-            sorted(json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys()),
-            msg="model expansion failed to use the same models (in the same order)"
+        self.assertCountEqual(
+            json.loads(model.best_model_original.iloc[0]['ModelParameters'])['models'].keys(),
+            json.loads(model.best_model.iloc[0]['ModelParameters'])['models'].keys(),
+            msg="model expansion failed to use the same models"
         )
         num_series = len(df['series_id'].unique().tolist()) if long else df.shape[1]
         self.assertEqual(
@@ -580,6 +595,7 @@ class AutoTSTest(unittest.TestCase):
             df,
             validation_indexes=custom_idx
         )
+        self.assertEqual(model.ensemble_check, 0)
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
@@ -621,7 +637,8 @@ class ModelTest(unittest.TestCase):
             'Cassandra', 'MetricMotif', 'SeasonalityMotif', 'KalmanStateSpace',
             'ARDL', 'UnivariateMotif', 'VAR', 'MAR', 'TMF', 'RRVAR', 'VECM',
             'BallTreeMultivariateMotif', 'FFT',
-            # "DMD",  # 0.6.12
+            "DMD",  # 0.6.12
+            "BasicLinearModel", "TVVAR",  # 0.6.16
         ]
         # models that for whatever reason arne't consistent across test sessions
         run_only_no_score = ['FBProphet', 'RRVAR', "TMF"]
@@ -755,7 +772,13 @@ class ModelTest(unittest.TestCase):
             "FFTDecomposition",  # new in 0.6.2
             "HistoricValues",  # new in 0.6.7
             "BKBandpassFilter",  # new in 0.6.8
-            # "Constraint",  # new in 0.6.15
+            "Constraint",  # new in 0.6.15
+            "DiffSmoother",  # new in 0.6.15
+            "FIRFilter",  # new in 0.6.16
+            "ShiftFirstValue",  # new in 0.6.16
+            "ThetaTransformer",  # new in 0.6.16
+            "ChangepointDetrend",  # new in 0.6.16
+            "MeanPercentSplitter",  # new in 0.6.16
         ]
 
         timings = {}
@@ -861,7 +884,7 @@ class ModelTest(unittest.TestCase):
         from autots import create_regressor
         from autots.models.sklearn import MultivariateRegression, DatepartRegression, WindowRegression
 
-        df = load_daily(long=False)
+        df = load_daily(long=False).bfill().ffill()
         forecast_length = 8
         df_train = df.iloc[:-forecast_length]
         df_test = df.iloc[-forecast_length:]
@@ -945,7 +968,7 @@ class ModelTest(unittest.TestCase):
             n_jobs=n_jobs,
             **params
         )
-        model.fit(df_train.ffill())
+        model.fit(df_train)
         first_forecast = model.predict(future_regressor=future_regressor_forecast)
         # first_forecast.plot_grid(df)
         self.assertListEqual(first_forecast.forecast.index.tolist(), df_test.index.tolist())

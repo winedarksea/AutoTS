@@ -6,6 +6,8 @@ import random
 import numpy as np
 import pandas as pd
 
+from autots.tools.impute import FillNA
+
 
 def constant_growth_rate(periods, final_growth):
     """Take a final target growth rate (ie 2 % over a year) and convert to a daily (etc) value."""
@@ -35,7 +37,9 @@ constraint_method_dict = {
     "absolute": 0.1,
     "fixed": 0,
     "historic_growth": 0.1,
+    "historic_diff": 0.05,
     "dampening": 0.1,
+    "round": 0.05,
 }
 
 
@@ -53,11 +57,11 @@ def constraint_new_params(method: str = "fast"):
     if method_choice == "quantile":
         if params["constraint_direction"] == "upper":
             params["constraint_value"] = random.choices(
-                [1.0, 0.5, 0.7, 0.9, 0.98], [0.5, 0.2, 0.1, 0.2, 0.1]
+                [1.0, 0.5, 0.7, 0.9, 0.98], [0.2, 0.2, 0.1, 0.2, 0.1]
             )[0]
         else:
             params["constraint_value"] = random.choices(
-                [0.01, 0.5, 0.1, 0.2, 0.02], [0.5, 0.2, 0.1, 0.2, 0.1]
+                [0.01, 0.5, 0.1, 0.2, 0.02], [0.2, 0.2, 0.1, 0.2, 0.1]
             )[0]
     elif method_choice == "slope":
         if params["constraint_direction"] == "upper":
@@ -94,7 +98,7 @@ def constraint_new_params(method: str = "fast"):
                         "threshold": 0.1,
                     },
                 ],
-                [0.5, 0.2, 0.1, 0.2, 0.1],
+                [0.2, 0.2, 0.1, 0.2, 0.1],
             )[0]
         else:
             params["constraint_value"] = random.choices(
@@ -157,7 +161,7 @@ def constraint_new_params(method: str = "fast"):
             )[0]
     elif method_choice in ["stdev", "stdev_min"]:
         params["constraint_value"] = random.choices(
-            [1.0, 0.5, 2.0, 3.0, 4.0], [0.5, 0.2, 0.1, 0.2, 0.1]
+            [1.0, 0.5, 2.0, 3.0, 4.0], [0.2, 0.2, 0.1, 0.2, 0.1]
         )[0]
     elif method_choice in ["dampening"]:
         params["constraint_value"] = random.choices(
@@ -166,11 +170,31 @@ def constraint_new_params(method: str = "fast"):
         )[0]
         params['constraint_direction'] = "upper"
         params["constraint_regularization"] = 1.0
+    elif method_choice in ["round"]:
+        params["constraint_value"] = random.choices([0, 2], [0.4, 0.6])[0]
+        # not used, just setting to fixed
+        params['constraint_direction'] = "upper"
+        params["constraint_regularization"] = 1.0
     elif method_choice in ["absolute", "fixed"]:
         params["constraint_value"] = random.choices([0, 0.1, 1], [0.8, 0.1, 0.1])[0]
     elif method_choice in ["historic_growth"]:
+        params["constraint_value"] = {
+            "threshold": random.choices([1.0, 0.5, 2.0, 0.2], [0.6, 0.2, 0.2, 0.04])[0]
+        }
+        window_choice = random.choices(
+            [None, 10, 100, 360, 4], [0.8, 0.2, 0.2, 0.2, 0.04]
+        )[0]
+        if window_choice is not None:
+            params["constraint_value"]["window"] = window_choice
+        quantile_choice = random.choices(
+            [None, 0.99, 0.9, 0.98, 0.75], [0.6, 0.2, 0.2, 0.2, 0.04]
+        )[0]
+        if quantile_choice is not None:
+            params["constraint_value"]["quantile"] = quantile_choice
+    elif method_choice in ["historic_diff"]:
         params["constraint_value"] = random.choices(
-            [1.0, 0.5, 2.0, 0.2], [0.6, 0.2, 0.2, 0.04]
+            [1.0, 0.5, 2.0, 0.2, 1.2],
+            [0.6, 0.2, 0.2, 0.04, 0.04],
         )[0]
     return params
 
@@ -278,28 +302,46 @@ def fit_constraint(
         if isinstance(constraint_value, dict):
             window = constraint_value.get("window", forecast_length)
             threshold = constraint_value.get("threshold", 1.0)
+            quantile = constraint_value.get("quantile", None)
         else:
             window = forecast_length
             threshold = constraint_value
+            quantile = None
+        if window is None:
+            window = forecast_length
         rolling_diff = df_train.diff(periods=window)
         # calculate the growth rates (slopes) by dividing the differences by the window size
         slopes = rolling_diff / window
+        if quantile is not None:
+            slopes_max = slopes.quantile(quantile).to_numpy()
+            slopes_min = slopes.quantile(1 - quantile).to_numpy()
+        else:
+            slopes_max = slopes.max().to_numpy()
+            slopes_min = slopes.min().to_numpy()
         # find the maximum growth rate and maximum decline rate for each series
         # and apply a log growth rate to that (to better allow for peaks like holidays)
         t = np.arange(forecast_length + 1).reshape(-1, 1)
         t2 = np.log1p(t) + 1
         train_max = (
             df_train.iloc[-1].to_numpy()
-            + (((slopes.max().to_numpy() * forecast_length)) * t2 / t2.max())[1:]
-            * threshold
+            + (((slopes_max * forecast_length)) * t2 / t2.max())[1:] * threshold
         )
         train_min = (
             df_train.iloc[-1].to_numpy()
-            + (((slopes.min().to_numpy() * forecast_length)) * t2 / t2.max())[1:]
-            * threshold
+            + (((slopes_min * forecast_length)) * t2 / t2.max())[1:] * threshold
         )
+    elif constraint_method == "historic_diff":
+        if isinstance(constraint_value, dict):
+            threshold = constraint_value.get("threshold", 1.0)
+        else:
+            threshold = constraint_value
+        rolling_diff = df_train.diff(periods=forecast_length)
 
+        train_max = df_train.iloc[-1] + rolling_diff.max() * threshold
+        train_min = df_train.iloc[-1] + rolling_diff.min() * threshold
     elif constraint_method == "dampening":
+        pass
+    elif constraint_method == "round":
         pass
     else:
         raise ValueError(
@@ -321,6 +363,7 @@ def apply_fit_constraint(
     upper_constraint=None,
     train_min=None,
     train_max=None,
+    fillna=None,  # only used with regularization of 1 / None
 ):
     if constraint_method == "dampening":
         # the idea is to make the forecast plateau by gradually forcing the step to step change closer to zero
@@ -351,18 +394,64 @@ def apply_fit_constraint(
                     ]
                 ).cumsum()
         return forecast, lower_forecast, upper_forecast
-    if constraint_regularization == 1 or constraint_regularization is None:
-        if lower_constraint is not None:
-            forecast = forecast.clip(lower=train_min, axis=1)
-        if upper_constraint is not None:
-            forecast = forecast.clip(upper=train_max, axis=1)
+    elif constraint_method == "round":
+        decimals = int(constraint_value)
         if bounds:
+            return (
+                forecast.round(decimals=decimals),
+                lower_forecast.round(decimals=decimals),
+                upper_forecast.round(decimals=decimals),
+            )
+        else:
+            return forecast.round(decimals=decimals), lower_forecast, upper_forecast
+    if constraint_regularization == 1 or constraint_regularization is None:
+        if fillna in [None, "None", "none", ""]:
             if lower_constraint is not None:
-                lower_forecast = lower_forecast.clip(lower=train_min, axis=1)
-                upper_forecast = upper_forecast.clip(lower=train_min, axis=1)
+                forecast = forecast.clip(lower=train_min, axis=1)
             if upper_constraint is not None:
-                lower_forecast = lower_forecast.clip(upper=train_max, axis=1)
-                upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
+                forecast = forecast.clip(upper=train_max, axis=1)
+            if bounds:
+                if lower_constraint is not None:
+                    lower_forecast = lower_forecast.clip(lower=train_min, axis=1)
+                    upper_forecast = upper_forecast.clip(lower=train_min, axis=1)
+                if upper_constraint is not None:
+                    lower_forecast = lower_forecast.clip(upper=train_max, axis=1)
+                    upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
+        else:
+            # if FILLNA present, don't clip but replace with NaN then fill NaN
+            if lower_constraint is not None:
+                forecast = forecast.where(
+                    forecast >= train_min,
+                    np.nan,
+                )
+            if upper_constraint is not None:
+                forecast = forecast.where(
+                    forecast <= train_max,
+                    np.nan,
+                )
+            if bounds:
+                if lower_constraint is not None:
+                    lower_forecast = lower_forecast.where(
+                        lower_forecast >= train_min,
+                        np.nan,
+                    )
+                    upper_forecast = upper_forecast.where(
+                        upper_forecast >= train_min,
+                        np.nan,
+                    )
+                if upper_constraint is not None:
+                    lower_forecast = lower_forecast.where(
+                        lower_forecast <= train_max,
+                        np.nan,
+                    )
+
+                    upper_forecast = upper_forecast.where(
+                        lower_forecast <= train_max, np.nan
+                    )
+            forecast = FillNA(forecast, method=str(fillna), window=10)
+            if bounds:
+                lower_forecast = FillNA(lower_forecast, method=str(fillna), window=10)
+                upper_forecast = FillNA(upper_forecast, method=str(fillna), window=10)
     else:
         if lower_constraint is not None:
             forecast = forecast.where(

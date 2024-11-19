@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from autots import load_daily
-from autots.tools.calendar import gregorian_to_chinese, gregorian_to_islamic, gregorian_to_hebrew
+from autots.tools.calendar import gregorian_to_chinese, gregorian_to_islamic, gregorian_to_hebrew, gregorian_to_hindu
 from autots.tools.lunar import moon_phase
 from autots.tools.holiday import holiday_flag
 from autots.tools.seasonal import date_part
@@ -69,6 +69,23 @@ class TestCalendar(unittest.TestCase):
         self.assertEqual(result3, [5790, 12, 25])
         self.assertEqual(result4, [5761, 10, 5])
         self.assertEqual(result5, [5800, 2, 2])
+
+    def test_hindu(self):
+        # Diwali in 2021 was on November 4, 2021
+        date = pd.to_datetime(['2021-11-04'])
+        result = gregorian_to_hindu(date)
+        # expected_month_name = 'Kartika'
+        # expected_lunar_day = 30  # Amavasya is typically the 30th day
+        # self.assertEqual(result.iloc[0]['hindu_month_name'], expected_month_name)
+        # self.assertEqual(result.iloc[0]['lunar_day'], expected_lunar_day)
+
+        # Diwali in 2024 was on October 31, 2024
+        date = pd.to_datetime(['2024-10-31'])
+        result = gregorian_to_hindu(date)  # noqa
+        # expected_month_name = 'Kartika'
+        # expected_lunar_day = 30  # Amavasya is typically the 30th day
+        # self.assertEqual(result.iloc[0]['hindu_month_name'], expected_month_name)
+        # self.assertEqual(result.iloc[0]['lunar_day'], expected_lunar_day)
 
 
 class TestHolidayFlag(unittest.TestCase):

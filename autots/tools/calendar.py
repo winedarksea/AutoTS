@@ -250,3 +250,64 @@ def gregorian_to_hebrew(dates):
                 )
                 break
     return pd.concat(date_list, axis=0).rename_axis(index='date')
+
+
+def gregorian_to_hindu(datetime_index):
+    """Convert a pandas DatetimeIndex to Hindu calendar date components.
+    Hindu calendar has numerous regional variations.
+
+    Used an llm to put this one together.
+    It gets the dates wrong, but it does appear to have correlated consistency so may still work for modeling.
+    Suggestions for improvement welcomed.
+    """
+    if isinstance(datetime_index, (str, list)):
+        datetime_input = pd.to_datetime(datetime_index).sort_values()
+    else:
+        datetime_input = datetime_index.sort_values()
+    # Expand date range to cover previous year for new moons
+    expanded_dates = pd.date_range(
+        datetime_input[0] - pd.Timedelta(days=365), datetime_input[-1], freq='D'
+    )
+    min_year = np.min(expanded_dates.year)
+    # Get moon phases
+    moon_df = moon_phase_df(expanded_dates, epoch=2444238.5)
+    # Use new moon dates to define lunar months (Amanta system)
+    lunar_months = lunar_from_lunar(moon_df['new_moon'])
+    # Merge with expanded dates
+    expanded_dates = pd.concat(
+        [pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1
+    )
+    expanded_dates['syear'] = expanded_dates['syear'].ffill()
+    expanded_dates['lunar_month'] = expanded_dates['lunar_month'].ffill()
+    # Calculate lunar day (tithi)
+    expanded_dates['lunar_day'] = (
+        expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
+    )
+    expanded_dates['lunar_year'] = expanded_dates['syear'] + min_year
+    # Assign approximate Hindu month names
+    hindu_month_names = {
+        1: 'Chaitra',
+        2: 'Vaishakha',
+        3: 'Jyeshtha',
+        4: 'Ashadha',
+        5: 'Shravana',
+        6: 'Bhadrapada',
+        7: 'Ashwin',
+        8: 'Kartika',
+        9: 'Margashirsha',
+        10: 'Pausha',
+        11: 'Magha',
+        12: 'Phalguna',
+    }
+    # Adjust lunar_month to fit within 12 months
+    expanded_dates['hindu_month_number'] = (
+        (expanded_dates['lunar_month'] - 1) % 12
+    ) + 1
+    expanded_dates['hindu_month_name'] = expanded_dates['hindu_month_number'].map(
+        hindu_month_names
+    )
+    # Return the data for the input dates
+    return expanded_dates.loc[
+        datetime_input,
+        ['lunar_year', 'hindu_month_number', 'hindu_month_name', 'lunar_day'],
+    ].rename_axis(index='date')

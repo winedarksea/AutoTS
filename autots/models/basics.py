@@ -13,6 +13,12 @@ from autots.tools.seasonal import (
     seasonal_int,
     seasonal_window_match,
     seasonal_independent_match,
+    date_part,
+    base_seasonalities,
+    create_changepoint_features,
+    changepoint_fcst_from_last_row,
+    random_datepart,
+    half_yr_spacing,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import (
@@ -26,8 +32,12 @@ from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
     superfast_transformer_dict,
+    StandardScaler,
+    EmptyTransformer,
 )
 from autots.tools.fft import fourier_extrapolation
+from autots.tools.impute import FillNA
+from autots.evaluator.metrics import wasserstein
 
 
 # these are all optional packages
@@ -688,11 +698,7 @@ class MotifSimulation(ModelObject):
             df = df.replace([0], np.nan)
             df = df.fillna(abs(df[df != 0]).min()).fillna(0.1)
             last_row = df.tail(1)
-            df = (
-                df.pct_change(periods=1, fill_method='ffill')
-                .tail(df.shape[0] - 1)
-                .fillna(0)
-            )
+            df = df.ffill().pct_change(periods=1).tail(df.shape[0] - 1).fillna(0)
             df = df.replace([np.inf, -np.inf], 0)
         # else:
         # self.comparison = 'magnitude'
@@ -947,9 +953,7 @@ class MotifSimulation(ModelObject):
             empty_frame = pd.DataFrame(
                 index=np.arange(extra_len), columns=forecasts.columns
             )
-            forecasts = pd.concat([forecasts, empty_frame], axis=0, sort=False).fillna(
-                method='ffill'
-            )
+            forecasts = pd.concat([forecasts, empty_frame], axis=0, sort=False).ffill()
         forecasts.columns = self.column_names
         forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
 
@@ -1795,6 +1799,9 @@ class SectionalMotif(ModelObject):
         include_differenced: bool = False,
         k: int = 10,
         stride_size: int = 1,
+        fillna: str = "SimpleSeasonalityMotifImputer",  # excessive forecast length only
+        comparison_transformation: dict = None,
+        combination_transformation: dict = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -1813,6 +1820,9 @@ class SectionalMotif(ModelObject):
         self.include_differenced = include_differenced
         self.k = k
         self.stride_size = stride_size
+        self.fillna = fillna
+        self.comparison_transformation = comparison_transformation
+        self.combination_transformation = combination_transformation
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1853,20 +1863,39 @@ class SectionalMotif(ModelObject):
         distance_metric = self.distance_metric
         regression_type = str(self.regression_type).lower()
 
+        if self.comparison_transformation is not None:
+            self.comparison_transformer = GeneralTransformer(
+                **self.comparison_transformation
+            )
+            use_df = self.comparison_transformer.fit_transform(self.df)
+        else:
+            use_df = self.df
+
         # the regressor can be tacked on to provide (minor) influence to the distance metric
         if regression_type == "user":
             # here unlagging the regressor to match with history only
             full_regr = pd.concat([self.future_regressor, future_regressor], axis=0)
-            full_regr = full_regr.tail(self.df.shape[0])
-            full_regr.index = self.df.index
-            array = pd.concat([self.df, full_regr], axis=1).to_numpy()
+            full_regr = full_regr.tail(use_df.shape[0])
+            full_regr.index = use_df.index
+            array = pd.concat([use_df, full_regr], axis=1).to_numpy()
+        elif regression_type in base_seasonalities or isinstance(
+            self.regression_type, list
+        ):
+            X = date_part(use_df.index, method=self.regression_type)
+            array = pd.concat([use_df, X], axis=1).to_numpy()
         else:
-            array = self.df.to_numpy()
+            array = use_df.to_numpy()
         tlt_len = array.shape[0]
-        combined_window_size = window_size + forecast_length
-        max_steps = array.shape[0] - combined_window_size
+        self.combined_window_size = window_size + forecast_length
+        self.excessive_size_flag = False
+        self.available_indexes = True
+        if self.combined_window_size > (array.shape[0]):
+            self.combined_window_size = int(array.shape[0] / 2)
+            self.excessive_size_flag = True
+            self.available_indexes = self.combined_window_size - self.window
+        max_steps = array.shape[0] - self.combined_window_size
         window_idxs = window_id_maker(
-            window_size=combined_window_size,
+            window_size=self.combined_window_size,
             start_index=0,
             max_steps=max_steps,
             stride_size=self.stride_size,
@@ -1893,6 +1922,39 @@ class SectionalMotif(ModelObject):
                             array_diff[(tlt_len - window_size) : tlt_len, a].reshape(
                                 1, -1
                             ),
+                        )
+                        for a in range(array_diff.shape[1])
+                    ]
+                )
+                res = np.mean([res, res_diff], axis=0)
+        elif distance_metric == "wasserstein":
+            res = np.array(
+                [
+                    np.array(
+                        [
+                            wasserstein(
+                                array[:, a][window_idxs[i, :window_size]],
+                                array[(tlt_len - window_size) : tlt_len, a],
+                            )
+                            for i in range(window_idxs.shape[0])
+                        ]
+                    )
+                    for a in range(array.shape[1])
+                ]
+            )
+            if self.include_differenced:
+                array_diff = np.diff(array, n=1, axis=0)
+                array_diff = np.concatenate([array_diff[0:1], array_diff])
+                res_diff = np.array(
+                    [
+                        np.array(
+                            [
+                                wasserstein(
+                                    array_diff[:, a][window_idxs[i, :window_size]],
+                                    array_diff[(tlt_len - window_size) : tlt_len, a],
+                                )
+                                for i in range(window_idxs.shape[0])
+                            ]
                         )
                         for a in range(array_diff.shape[1])
                     ]
@@ -1930,13 +1992,38 @@ class SectionalMotif(ModelObject):
         num_top = self.k
         res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
         self.windows = window_idxs[res_idx, window_size:]
+        # handle window being too big for data, too close to end
+        if self.windows.size == 0:
+            count = 1
+            while self.windows.size == 0:
+                count += 1
+                res_idx = np.argpartition(res_sum, num_top, axis=0)[0 : num_top * count]
+                self.windows = window_idxs[res_idx, window_size:]
+                # prevent overflow
+                if count > 5:
+                    if self.verbose >= 1:
+                        print("SectionalMotif using fallout")
+                    self.windows = window_idxs[res_idx, -forecast_length:]
+                    self.available_indexes = False
+
+        if self.combination_transformation is not None:
+            self.combination_transformer = GeneralTransformer(
+                **self.combination_transformation
+            )
+            array = self.combination_transformer.fit_transform(self.df).to_numpy()
+        else:
+            array = self.df.to_numpy()
         results = array[self.windows]
         # reshape results to (num_windows, forecast_length, num_series)
         if results.ndim == 4:
             res_shape = results.shape
             results = results.reshape((res_shape[0], res_shape[2], res_shape[3]))
-        if regression_type == "user":
-            results = results[:, :, : self.df.shape[1]]
+        if (
+            regression_type == "user"
+            or regression_type in base_seasonalities
+            or isinstance(self.regression_type, list)
+        ):
+            results = results[:, :, : use_df.shape[1]]
         # now aggregate results into point and bound forecasts
         if point_method == "weighted_mean":
             weights = res_sum[res_idx].flatten()
@@ -1956,13 +2043,37 @@ class SectionalMotif(ModelObject):
         upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
         lower_forecast = nan_quantile(results, q=pred_int, axis=0)
 
-        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        # more handling short data stuff
+        if not self.available_indexes:
+            self.available_indexes = forecast.shape[0]
+        if self.excessive_size_flag:
+            local_index = test_index[0 : self.available_indexes]
+        else:
+            local_index = test_index
+        # convert to df from np
+        forecast = pd.DataFrame(forecast, index=local_index, columns=self.column_names)
         lower_forecast = pd.DataFrame(
-            lower_forecast, index=test_index, columns=self.column_names
+            lower_forecast, index=local_index, columns=self.column_names
         )
         upper_forecast = pd.DataFrame(
-            upper_forecast, index=test_index, columns=self.column_names
+            upper_forecast, index=local_index, columns=self.column_names
         )
+        if self.excessive_size_flag:
+            forecast = FillNA(forecast.reindex(test_index), method=self.fillna)
+            lower_forecast = FillNA(
+                lower_forecast.reindex(test_index), method=self.fillna
+            )
+            upper_forecast = FillNA(
+                upper_forecast.reindex(test_index), method=self.fillna
+            )
+        if self.combination_transformation is not None:
+            forecast = self.combination_transformer.inverse_transform(forecast)
+            lower_forecast = self.combination_transformer.inverse_transform(
+                lower_forecast
+            )
+            upper_forecast = self.combination_transformer.inverse_transform(
+                upper_forecast
+            )
         self.result_windows = results
         if just_point_forecast:
             return forecast
@@ -1993,7 +2104,7 @@ class SectionalMotif(ModelObject):
             'cityblock',
             'correlation',
             'cosine',
-            'dice',
+            # 'dice',
             'euclidean',
             'hamming',
             'jaccard',
@@ -2010,7 +2121,27 @@ class SectionalMotif(ModelObject):
             'sqeuclidean',
             'yule',
             "nan_euclidean",
+            "wasserstein",
         ]
+        # note this custom override
+        trans_dict = superfast_transformer_dict.copy()
+        trans_dict["FFTFilter"] = 0.1
+        trans_dict["FFTDecomposition"] = 0.1
+        comparison_transformation = random.choices([None, True], [0.6, 0.4])[0]
+        if comparison_transformation is not None:
+            comparison_transformation = RandomTransform(
+                transformer_list=trans_dict,
+                transformer_max_depth=2,
+                allow_none=True,
+            )
+        combination_transformation = random.choices([None, True], [0.6, 0.4])[0]
+        if combination_transformation is not None:
+            combination_transformation = RandomTransform(
+                transformer_list=trans_dict,
+                transformer_max_depth=2,
+                allow_none=True,
+            )
+
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -2022,7 +2153,11 @@ class SectionalMotif(ModelObject):
         if "regressor" in method:
             regression_choice = "User"
         else:
-            regression_choice = random.choices([None, "User"], [0.9, 0.1])[0]
+            regression_choice = random.choices(
+                [None, 'datepart', 'User'], [0.9, 0.1, 0.2]
+            )[0]
+            if regression_choice == "datepart":
+                regression_choice = random.choice(base_seasonalities)
         return {
             "window": random.choices(
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
@@ -2035,6 +2170,8 @@ class SectionalMotif(ModelObject):
             "k": k_choice,
             "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
             'regression_type': regression_choice,
+            "comparison_transformation": comparison_transformation,
+            "combination_transformation": combination_transformation,
         }
 
     def get_params(self):
@@ -2047,6 +2184,8 @@ class SectionalMotif(ModelObject):
             "k": self.k,
             "stride_size": self.stride_size,
             'regression_type': self.regression_type,
+            'comparison_transformation': self.comparison_transformation,
+            'combination_transformation': self.combination_transformation,
         }
 
 
@@ -2737,7 +2876,7 @@ class SeasonalityMotif(ModelObject):
             self.independent = True
             if self.verbose > 0:
                 print(
-                    "prediction too long for indepedent=False, falling back on indepdent=True"
+                    "prediction too long for indepedent=False, falling back on indepedent=True"
                 )
         if self.independent:
             # each timestep is considered individually and not as a series
@@ -2777,6 +2916,10 @@ class SeasonalityMotif(ModelObject):
             q1 = nan_quantile(results, q=0.25, axis=0)
             q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
+        elif point_method == "trimmed_mean_20":
+            forecast = trimmed_mean(results, percent=0.2, axis=0)
+        elif point_method == "trimmed_mean_40":
+            forecast = trimmed_mean(results, percent=0.4, axis=0)
         elif point_method == "closest":
             forecast = results[0]
         else:
@@ -2837,24 +2980,20 @@ class SeasonalityMotif(ModelObject):
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", 'closest'],
-                [0.2, 0.2, 0.2, 0.2, 0.1],
+                [
+                    "weighted_mean",
+                    "mean",
+                    "median",
+                    "midhinge",
+                    'closest',
+                    'trimmed_mean_20',
+                    'trimmed_mean_40',
+                ],
+                [0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1],
             )[0],
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
-            "datepart_method": random.choices(
-                [
-                    "recurring",
-                    "simple",
-                    "expanded",
-                    "simple_2",
-                    "simple_binarized",
-                    "expanded_binarized",
-                    'common_fourier',
-                    'common_fourier_rw',
-                ],
-                [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
-            )[0],
+            "datepart_method": random_datepart(method=method),
             "independent": bool(random.getrandbits(1)),
         }
 
@@ -3210,4 +3349,1099 @@ class BallTreeMultivariateMotif(ModelObject):
             "point_method": self.point_method,
             "distance_metric": self.distance_metric,
             "k": self.k,
+            "sample_fraction": self.sample_fraction,
+        }
+
+
+class BasicLinearModel(ModelObject):
+    """Ridge regression of seasonal + trend changepoint + constant + regressor.
+    Like a minimal version of Prophet or Cassandra.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        regression_type (str): "User" or None. If used, will be as covariate. The ratio of num_series:num_regressor_series will largely determine the impact
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): all valid values for scipy cdist + "nan_euclidean" from sklearn
+        include_differenced (bool): True to have the distance metric result be an average of the distance on absolute values as well as differenced values
+        k (int): number of closest neighbors to consider
+        stride_size (int): how many obs to skip between each new window. Higher numbers will reduce the number of matching windows and make the model faster.
+    """
+
+    def __init__(
+        self,
+        name: str = "BasicLinearModel",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2024,
+        verbose: int = 0,
+        regression_type: str = None,
+        datepart_method: str = "common_fourier",
+        changepoint_spacing: int = None,
+        changepoint_distance_end: int = None,
+        lambda_: float = 0.01,
+        trend_phi: float = None,
+        holiday_countries_used: bool = True,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            regression_type=regression_type,
+        )
+        self.datepart_method = datepart_method
+        self.changepoint_spacing = changepoint_spacing
+        self.changepoint_distance_end = changepoint_distance_end
+        self.lambda_ = lambda_
+        self.trend_phi = trend_phi
+        self.holiday_countries_used = holiday_countries_used
+
+        self.regressor_columns = []
+
+    def base_scaler(self, df):
+        self.scaler_mean = np.mean(df, axis=0)
+        self.scaler_std = np.std(df, axis=0).replace(0, 1)
+        return (df - self.scaler_mean) / self.scaler_std
+
+    def scale_data(self, df):
+        if self.scaling is not None:
+            if self.scaling == "BaseScaler":
+                df = self.base_scaler(df)
+            else:
+                df = self.scaler.transform(df)
+        if not isinstance(df, pd.DataFrame):
+            return pd.DataFrame(df, columns=df.columns, index=df.index)
+        else:
+            return df
+
+    def to_origin_space(
+        self, df, trans_method='forecast', components=False, bounds=False
+    ):
+        """Take transformed outputs back to original feature space."""
+        if self.scaling == "BaseScaler":
+            # return self.preprocesser.inverse_transform(df, trans_method=trans_method) * self.scaler_std + self.scaler_mean
+            if components:
+                return self.preprocesser.inverse_transform(
+                    df * self.scaler_std, trans_method=trans_method, bounds=bounds
+                )
+            else:
+                return self.preprocesser.inverse_transform(
+                    df * self.scaler_std + self.scaler_mean,
+                    trans_method=trans_method,
+                    bounds=bounds,
+                )
+
+    def create_x(
+        self,
+        df,
+        future_regressor=None,
+        holiday_country="US",
+        holiday_countries_used=True,
+    ):
+        x_s = date_part(
+            df.index,
+            method=self.datepart_method,
+            set_index=True,
+            holiday_country=holiday_country,
+            holiday_countries_used=holiday_countries_used,
+        )
+        x_t = create_changepoint_features(
+            df.index,
+            changepoint_spacing=self.changepoint_spacing,
+            changepoint_distance_end=self.changepoint_distance_end,
+        )
+        self.last_row = x_t.iloc[-1]
+        X = pd.concat([x_s, x_t], axis=1)
+        if str(self.regression_type).lower() == "user" and future_regressor is not None:
+            temp = future_regressor.reindex(df.index).rename(
+                columns=lambda x: "regr_" + str(x)
+            )
+            self.regressor_columns = temp.columns
+            X = pd.concat([X, temp], axis=1)
+        X["constant"] = 1
+
+        self.seasonal_columns = x_s.columns.tolist()
+        self.trend_columns = x_t.columns.tolist()
+        return X
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        if self.changepoint_spacing is None or self.changepoint_distance_end is None:
+            half_yr_space = half_yr_spacing(df)
+            if self.changepoint_spacing is None:
+                self.changepoint_spacing = int(half_yr_space)
+            if self.changepoint_distance_end is None:
+                self.changepoint_distance_end = int(half_yr_space / 2)
+        if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
+        X = self.create_x(
+            df,
+            future_regressor,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+
+        # Convert X and df (Y) to NumPy arrays for linear regression
+        X_values = X.to_numpy().astype(float)
+        Y_values = df.to_numpy().astype(float)
+
+        if self.lambda_ is not None:
+            I = np.eye(X_values.shape[1])
+            # Perform Ridge regression using the modified normal equation
+            self.beta = (
+                np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
+                @ X_values.T
+                @ Y_values
+            )
+        else:
+            # Perform linear regression using the normal equation: (X.T @ X)^(-1) @ X.T @ Y
+            self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+
+        # Calculate predicted values for Y
+        Y_pred = X_values @ self.beta
+
+        # Calculate residuals for each column of Y
+        residuals = Y_values - Y_pred
+
+        # Calculate the sum of squared errors (SSE) and standard error (sigma) for each column of Y
+        sse = np.sum(
+            residuals**2, axis=0
+        )  # Sum of squared errors for each column (shape (21,))
+        n = Y_values.shape[0]
+        p = X_values.shape[1]  # Number of predictors
+        self.sigma = np.sqrt(sse / (n - p))
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        x_s = date_part(
+            test_index,
+            method=self.datepart_method,
+            set_index=True,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+        x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
+        x_t.index = test_index
+        X = pd.concat([x_s, x_t], axis=1)
+        if str(self.regression_type).lower() == "user":
+            X = pd.concat([X, future_regressor.reindex(test_index)], axis=1)
+        X["constant"] = 1
+        X_values = X.to_numpy().astype(float)
+        self.X = X
+
+        if self.trend_phi is None or self.trend_phi == 1 or len(test_index) < 2:
+            forecast = pd.DataFrame(
+                X_values @ self.beta, columns=self.column_names, index=test_index
+            )
+        else:
+            components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
+            trend_x_start = x_s.shape[1]
+            trend_x_end = x_s.shape[1] + x_t.shape[1]
+            trend_components = components[:, trend_x_start:trend_x_end, :]
+
+            req_len = len(test_index) - 1
+            phi_series = pd.Series(
+                [self.trend_phi] * req_len,
+                index=test_index[1:],
+            ).pow(range(req_len))
+
+            diff_array = np.diff(trend_components, axis=0)
+            diff_scaled_array = (
+                diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+            )
+            first_row = trend_components[0:1, :]
+            combined_array = np.vstack([first_row, diff_scaled_array])
+            components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                combined_array, axis=0
+            )
+
+            forecast = pd.DataFrame(
+                components.sum(axis=1), columns=self.column_names, index=test_index
+            )
+
+        if just_point_forecast:
+            return forecast
+        else:
+            z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
+            # Vectorized calculation of leverage for all points: diag(X @ (X^T X)^(-1) @ X^T)
+            hat_matrix_diag = np.einsum(
+                'ij,jk,ik->i',
+                X_values,
+                np.linalg.pinv(X_values.T @ X_values, rcond=5e-16),
+                X_values,
+            )
+            sigma_expanded = self.sigma[np.newaxis, :]
+            # Calculate the margin of error for each prediction in each column
+            margin_of_error = pd.DataFrame(
+                z_value * sigma_expanded * np.sqrt(1 + hat_matrix_diag[:, np.newaxis]),
+                columns=self.column_names,
+                index=test_index,
+            )
+            upper_forecast = forecast + margin_of_error
+            lower_forecast = forecast - margin_of_error
+
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                # so it's producing float32 but pandas is better with float64
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def process_components(self):
+        # mimic Cassandra style
+        res = []
+        components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
+        for x in range(components.shape[2]):
+            df = pd.DataFrame(
+                components[:, :, x], index=self.X.index, columns=self.X.columns
+            )
+            new_level = self.column_names[x]
+            df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
+            res.append(df)
+        return pd.concat(res, axis=1)
+
+    def return_components(self, df):
+        # Needs some work
+        # doens't handle regressor features
+        # recompiles X which is suboptimal
+        # could use better naming
+        X = self.create_x(
+            df,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+        contribution_seasonality = (
+            X[self.seasonal_columns].values @ self.beta[: len(self.seasonal_columns)]
+        )
+        contribution_changepoints = (
+            X[self.trend_columns].values
+            @ self.beta[
+                len(self.seasonal_columns) : len(self.seasonal_columns)
+                + len(self.trend_columns)
+            ]
+        )
+        contribution_constant = X["constant"].values.reshape(-1, 1) @ self.beta[-1:]
+        return (
+            contribution_seasonality,
+            contribution_changepoints,
+            contribution_constant,
+        )
+
+    def coefficient_summary(self, df):
+        """Used in profiler."""
+        (
+            contribution_seasonality,
+            contribution_changepoints,
+            contribution_constant,
+        ) = self.return_components(df)
+        # Total contribution (sum of absolute contributions for each time step)
+        total_contribution = (
+            np.abs(contribution_seasonality)
+            + np.abs(contribution_changepoints)
+            + np.abs(contribution_constant)
+        )
+
+        # Normalize each contribution by the total contribution
+        contrib_seasonality_pct = np.abs(contribution_seasonality) / total_contribution
+        contrib_changepoints_pct = (
+            np.abs(contribution_changepoints) / total_contribution
+        )
+        contrib_constant_pct = np.abs(contribution_constant) / total_contribution
+
+        # Calculate the average percentage contribution for each group
+        avg_contrib_seasonality = np.mean(contrib_seasonality_pct, axis=0)
+        avg_contrib_changepoints = np.mean(contrib_changepoints_pct, axis=0)
+        avg_contrib_constant = np.mean(contrib_constant_pct, axis=0)
+
+        # Create a DataFrame to summarize the percentage contributions
+        feature_contributions = pd.DataFrame(
+            {
+                "seasonality_contribution": avg_contrib_seasonality,
+                "changepoint_contribution": avg_contrib_changepoints,
+                "constant_contribution": avg_contrib_constant,
+            },
+            index=self.column_names,
+        )
+        """
+        feature_contributions['largest_contributor'] = feature_contributions[[
+            'seasonality_contribution', 
+            'changepoint_contribution',
+            'constant_contribution'
+        ]].idxmax(axis=1)
+        """
+        feature_contributions["season_trend_percent"] = feature_contributions[
+            "seasonality_contribution"
+        ] / (
+            feature_contributions["changepoint_contribution"]
+            + feature_contributions["seasonality_contribution"]
+        )
+        return feature_contributions
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
+        return {
+            "datepart_method": random_datepart(method=method),
+            "changepoint_spacing": random.choices(
+                [None, 6, 28, 60, 90, 120, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.2],
+            )[0],
+            "changepoint_distance_end": random.choices(
+                [None, 6, 28, 60, 90, 180, 360, 520, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
+            )[0],
+            "regression_type": regression_choice,
+            "lambda_": random.choices(
+                [None, 0.001, 0.01, 0.1, 1, 2, 10, 100, 1000, 10000],
+                [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                k=1,
+            )[0],
+            "trend_phi": random.choices(
+                [None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01]
+            )[0],
+            "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "datepart_method": self.datepart_method,
+            "changepoint_spacing": self.changepoint_spacing,
+            "changepoint_distance_end": self.changepoint_distance_end,
+            "regression_type": self.regression_type,
+            "lambda_": self.lambda_,
+            "trend_phi": self.trend_phi,
+            "holiday_countries_used": self.holiday_countries_used,
+        }
+
+
+class TVVAR(BasicLinearModel):
+    """Time Varying VAR
+
+    Notes:
+        var_preprocessing will fail with many options, anything that scales/shifts the space
+        x_scaled=True seems to fail often when base_scaled=False and VAR components used
+    TODO:
+        # plot of feature impacts
+
+        # highly correlated, shared hidden factors
+        # groups / geos
+
+        # impulse response
+        # allow other regression models
+        # could run regression twice, setting to zero any X which had low coefficients for the second run
+
+        # feature summarization (dynamic factor is PCA)
+        # hierchial by GEO
+    """
+
+    def __init__(
+        self,
+        name: str = "TVVAR",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        regression_type: str = None,
+        datepart_method: str = "common_fourier",
+        changepoint_spacing: int = None,
+        changepoint_distance_end: int = None,
+        lambda_: float = 0.01,
+        phi: float = None,
+        max_cycles: int = 2000,
+        trend_phi: float = None,
+        var_dampening: float = None,
+        lags: list = None,
+        rolling_means: list = None,
+        apply_pca: bool = False,
+        pca_n_components: float = 0.95,
+        threshold_method: str = 'std',  # 'std' or 'percentile'
+        threshold_value: float = None,  # Multiple of std or percentile value
+        base_scaled: bool = True,
+        x_scaled: bool = False,
+        var_preprocessing: dict = False,
+        var_postprocessing: dict = False,
+        mode: str = 'additive',
+        holiday_countries_used: bool = True,
+        **kwargs,
+    ):
+        super().__init__(
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            regression_type=regression_type,
+            datepart_method=datepart_method,
+            changepoint_spacing=changepoint_spacing,
+            changepoint_distance_end=changepoint_distance_end,
+            lambda_=lambda_,
+            **kwargs,
+        )
+        self.phi = phi
+        self.lags_list = self.lags = lags
+        self.rolling_avg_list = self.rolling_means = rolling_means
+        self.apply_pca = apply_pca
+        self.pca_n_components = pca_n_components
+        self.threshold_method = threshold_method
+        self.threshold_value = threshold_value
+        self.base_scaled = base_scaled
+        self.x_scaled = x_scaled
+        self.var_preprocessing = var_preprocessing
+        self.var_postprocessing = var_postprocessing
+        self.trend_phi = trend_phi
+        self.var_dampening = var_dampening
+        self.max_cycles = max_cycles
+        self.mode = str(mode).lower()
+        self.holiday_countries_used = holiday_countries_used
+
+    def empty_scaler(self, df):
+        self.scaler_std = pd.Series(1.0, index=df.columns)
+        self.scaler_mean = 0.0
+        return df
+
+    def create_VAR_features(self, df):
+        lagged_data = pd.DataFrame(index=df.index)
+        # Use triple underscores as separators to avoid conflicts
+        if self.lags_list is not None:
+            for lag in self.lags_list:
+                lagged = df.shift(lag).add_suffix(f"___lag{lag}")
+                lagged_data = pd.concat([lagged_data, lagged], axis=1)
+        if self.rolling_avg_list is not None:
+            for window in self.rolling_avg_list:
+                rolling_avg = (
+                    df.shift(1)
+                    .rolling(window=window)
+                    .mean()
+                    .add_suffix(f"___ravg{window}")
+                )
+                lagged_data = pd.concat([lagged_data, rolling_avg], axis=1)
+        return lagged_data
+
+    def apply_beta_threshold(self, beta=None):
+        if beta is None:
+            beta = self.beta
+        if self.threshold_value is None:
+            return beta
+        # Compute absolute values of coefficients
+        beta_abs = np.abs(beta)
+        # Determine threshold dynamically
+        if self.threshold_method == 'std':
+            # Use multiple of standard deviation
+            beta_std = np.std(beta, axis=0, keepdims=True)
+            threshold = self.threshold_value * beta_std
+        elif self.threshold_method == 'percentile':
+            # Use percentile
+            threshold = np.percentile(
+                beta_abs, self.threshold_value * 100, axis=0, keepdims=True
+            )
+        else:
+            raise ValueError("threshold_method must be 'std' or 'percentile'")
+        # Set coefficients below threshold to zero
+        beta = np.where(beta_abs >= threshold, beta, 0)
+        return beta
+
+    def fit(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        if self.mode == 'multiplicative':
+            # could add a PositiveShift here to make this more reliable on all data
+            df_scaled = (
+                np.log(df.replace(0, np.nan)).replace(-np.inf, np.nan).bfill().ffill()
+            )
+        else:
+            df_scaled = df
+        # Scaling df
+        if self.base_scaled:
+            df_scaled = self.base_scaler(df_scaled)
+        else:
+            df_scaled = self.empty_scaler(df_scaled)
+        if self.changepoint_spacing is None or self.changepoint_distance_end is None:
+            half_yr_space = half_yr_spacing(df)
+            if self.changepoint_spacing is None:
+                self.changepoint_spacing = int(half_yr_space)
+            if self.changepoint_distance_end is None:
+                self.changepoint_distance_end = int(half_yr_space / 2)
+        if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
+        if self.var_preprocessing:
+            # the idea here is to filter the data more than the Y values may be
+            # for some transfomers, this would also need to be implemented in the predict loop (not implemented)
+            self.var_preprocessor = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_country,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                # forecast_length=self.forecast_length,
+                **self.var_preprocessing,
+            )
+            # note uses UNSCALED df
+            self.var_history = self.var_preprocessor.fit_transform(df).ffill().bfill()
+            if self.base_scaled:
+                self.var_history = (
+                    self.var_history - self.scaler_mean
+                ) / self.scaler_std
+        else:
+            self.var_history = df_scaled
+        # Create VAR features
+        VAR_features = self.create_VAR_features(self.var_history)
+        VAR_feature_columns = VAR_features.columns.tolist()
+        # Create external features
+        X_ext = self.create_x(
+            df,
+            future_regressor,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+        # Combine features
+        X = pd.concat([X_ext, VAR_features], axis=1)
+        # Remove rows with NaNs due to lagging
+        X = X.dropna()
+        # note the DF here not df_scaled so potentially index could be different which is not accounted for
+        Y_values = df_scaled.loc[X.index].to_numpy().astype(float)
+        # Optionally apply PCA
+        if self.apply_pca and (self.lags is not None or self.rolling_means is not None):
+            from sklearn.decomposition import PCA
+
+            self.pca = PCA(n_components=self.pca_n_components)
+            VAR_data = X[VAR_feature_columns]
+            VAR_pca = self.pca.fit_transform(VAR_data)
+            VAR_pca_df = pd.DataFrame(VAR_pca, index=VAR_data.index)
+            # Exclude VAR_feature_columns from X and add VAR_pca_df
+            X = pd.concat([X.drop(columns=VAR_feature_columns), VAR_pca_df], axis=1)
+            self.pca_columns = VAR_pca_df.columns.tolist()
+        else:
+            self.apply_pca = False
+            self.pca_columns = None
+        # Fit the model
+        if self.x_scaled:
+            self.x_scaler = StandardScaler()
+            X_values = self.x_scaler.fit_transform(X).to_numpy().astype(float)
+        else:
+            self.x_scaler = EmptyTransformer()
+            X_values = X.to_numpy().astype(float)
+
+        if self.phi is None:
+            if self.lambda_ is not None:
+                I = np.eye(X_values.shape[1])
+                self.beta = (
+                    np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
+                    @ X_values.T
+                    @ Y_values
+                )
+            else:
+                self.beta = (
+                    np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
+                )
+            # Post-process coefficients to set small values to zero
+            self.beta = self.apply_beta_threshold()
+            # Calculate residuals
+            Y_pred = X_values @ self.beta
+            residuals = Y_values - Y_pred
+            sse = np.sum(residuals**2, axis=0)
+            n = Y_values.shape[0]
+            p = X_values.shape[1]
+            self.sigma = np.sqrt(sse / (n - p))
+        else:
+            # Time-varying estimation with forgetting factor phi
+            n_samples, n_features = X_values.shape
+            if self.max_cycles is not None:
+                start_point = n_samples - int(self.max_cycles)
+                start_point = start_point if start_point > 0 else 0
+            else:
+                start_point = 0
+            n_targets = Y_values.shape[1]
+            X_np = X_values
+            Y_np = Y_values
+            S = np.zeros((n_features, n_features))
+            r = np.zeros((n_features, n_targets))
+            alpha = self.lambda_
+            if alpha is None:
+                alpha = 0.0001
+            for t in range(start_point, n_samples):
+                X_t = X_np[t : t + 1].T  # Shape (n_features, 1)
+                Y_t = Y_np[t : t + 1].T  # Shape (n_targets, 1)
+                if t == 0:
+                    S = X_t @ X_t.T
+                    r = X_t @ Y_t.T
+                else:
+                    S = self.phi * S + X_t @ X_t.T
+                    r = self.phi * r + X_t @ Y_t.T
+                # Regularization term
+                S_reg = S + alpha * np.eye(n_features)
+                # try block has some cost if it fails routinely
+                try:
+                    theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
+                except np.linalg.LinAlgError:
+                    theta_t = np.linalg.pinv(S_reg) @ r
+            self.beta = theta_t  # Use the last theta_t as beta
+            # Post-process coefficients to set small values to zero
+            self.beta = self.apply_beta_threshold()
+            # Calculate residuals
+            Y_pred = X_np @ self.beta
+            residuals = Y_np - Y_pred
+            sse = np.sum(residuals**2, axis=0)
+            n = Y_values.shape[0]
+            p = X_values.shape[1]
+            self.sigma = np.sqrt(sse / (n - p))
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        # Save variables for later
+        self.X = X
+        self.VAR_feature_columns = VAR_feature_columns
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        # Create external features for the forecast period
+        x_s = date_part(
+            test_index,
+            method=self.datepart_method,
+            set_index=True,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+        x_t = changepoint_fcst_from_last_row(self.last_row, int(forecast_length))
+        x_t.index = test_index
+        X_ext = pd.concat([x_s, x_t], axis=1)
+        if str(self.regression_type).lower() == "user":
+            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index)], axis=1)
+        X_ext["constant"] = 1
+
+        predictions = pd.DataFrame(
+            index=test_index, columns=self.column_names, dtype=float
+        )
+        extended_df = pd.concat([self.var_history, predictions], axis=0)
+        # post processing (these do cleanup, keep it a bit from going off the rails, which sometimes happens)
+        if self.var_postprocessing:
+            self.var_postprocessor = GeneralTransformer(
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_country,
+                verbose=self.verbose,
+                random_seed=self.random_seed,
+                # forecast_length=self.forecast_length,
+                **self.var_postprocessing,
+            )
+        # For each date in forecast horizon
+        x_pred = []
+        for t, date in enumerate(test_index):
+            # Create VAR features for date
+            VAR_features_t = self.create_VAR_features(extended_df).loc[date:date]
+            if VAR_features_t.isnull().values.any():
+                # Attempt to fill NaN values from last available data
+                VAR_features_t = VAR_features_t.ffill().bfill()
+            VAR_features_t = VAR_features_t.astype(float)
+            # Generate external features for date
+            X_ext_t = X_ext.loc[date:date]
+            X_t = pd.concat([X_ext_t, VAR_features_t], axis=1)
+            # If PCA was applied, transform VAR_features
+            self.X_t = X_t
+            if self.apply_pca:
+                VAR_data_t = X_t[self.VAR_feature_columns]
+                VAR_pca_t = self.pca.transform(VAR_data_t)
+                VAR_pca_df_t = pd.DataFrame(VAR_pca_t, index=VAR_data_t.index)
+                self.pca_columns = VAR_pca_df_t.columns
+                # Exclude VAR_feature_columns from X_t and add VAR_pca_df_t
+                X_t = pd.concat(
+                    [X_t.drop(columns=self.VAR_feature_columns), VAR_pca_df_t], axis=1
+                )
+            # Make prediction
+            Y_pred_t = self.x_scaler.transform(X_t).to_numpy().astype(float) @ self.beta
+            x_pred.append(X_t)
+            # post processing
+            if self.var_postprocessing:
+                df = pd.DataFrame(Y_pred_t, index=[date], columns=self.column_names)
+                self.var_postprocessor.fit(extended_df).inverse_transform(df)
+                predictions.loc[date] = df.to_numpy()
+            else:
+                # Store prediction
+                predictions.loc[date] = Y_pred_t.flatten()
+            # Update extended_df with the new prediction
+            extended_df.loc[date] = predictions.loc[date]
+
+        # Save X_pred for process_components
+        # Recreate VAR features for the entire forecast horizon
+        self.X_pred = pd.concat(x_pred, axis=0)
+        self.X_pred = self.X_pred.astype(float)
+        if len(test_index) < 2 or (
+            (self.trend_phi is None or self.trend_phi == 1)
+            and (self.var_dampening is None or self.var_dampening == 1)
+        ):
+            pass
+        else:
+            components = np.einsum(
+                'ij,jk->ijk', self.x_scaler.transform(self.X_pred).to_numpy(), self.beta
+            )
+            if self.trend_phi is not None and self.trend_phi != 1:
+                req_len = len(test_index) - 1
+                phi_series = pd.Series(
+                    [self.trend_phi] * req_len,
+                    index=test_index[1:],
+                ).pow(range(req_len))
+                trend_x_start = x_s.shape[1]
+                trend_x_end = x_s.shape[1] + x_t.shape[1]
+                trend_components = components[:, trend_x_start:trend_x_end, :]
+
+                diff_array = np.diff(trend_components, axis=0)
+                diff_scaled_array = (
+                    diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+                )
+                first_row = trend_components[0:1, :]
+                combined_array = np.vstack([first_row, diff_scaled_array])
+                components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                    combined_array, axis=0
+                )
+
+            if self.var_dampening is not None and self.var_dampening != 1:
+                req_len = len(test_index) - 1
+                phi_series = pd.Series(
+                    [self.var_dampening] * req_len,
+                    index=test_index[1:],
+                ).pow(range(req_len))
+                if self.apply_pca:
+                    trend_x_start = -len(self.pca_columns)
+                else:
+                    trend_x_start = -len(self.VAR_feature_columns)
+                trend_x_end = -1
+                var_components = components[:, trend_x_start:trend_x_end, :]
+
+                diff_array = np.diff(var_components, axis=0)
+                diff_scaled_array = (
+                    diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+                )
+                first_row = var_components[0:1, :]
+                combined_array = np.vstack([first_row, diff_scaled_array])
+                components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                    combined_array, axis=0
+                )
+
+            predictions = pd.DataFrame(
+                components.sum(axis=1), index=test_index, columns=self.column_names
+            )
+
+        # Convert forecast back to original scale
+        forecast = predictions * self.scaler_std + self.scaler_mean
+        if self.mode == 'multiplicative':
+            forecast = np.exp(forecast)
+        if just_point_forecast:
+            return forecast
+        else:
+            z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
+            sigma_expanded = np.tile(self.sigma, (forecast_length, 1))
+            margin_of_error = pd.DataFrame(
+                z_value * sigma_expanded * self.scaler_std.values,
+                columns=self.column_names,
+                index=forecast.index,
+            )
+            if self.mode == 'multiplicative':
+                margin_of_error = np.exp(margin_of_error)
+            upper_forecast = forecast + margin_of_error
+            lower_forecast = forecast - margin_of_error
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    def process_components(self):
+        """Return components. Does not account for dampening."""
+        # Process components for the forecast period
+        res = []
+        # Ensure X_pred is of type float
+        X_pred_values = self.x_scaler.transform(self.X_pred).to_numpy().astype(float)
+        components = np.einsum('ij,jk->ijk', X_pred_values, self.beta)
+        for x in range(components.shape[2]):
+            df = pd.DataFrame(
+                components[:, :, x],
+                index=self.X_pred.index,
+                columns=self.X_pred.columns,
+            )
+            new_level = self.column_names[x]
+            df.columns = pd.MultiIndex.from_product([[new_level], df.columns])
+            res.append(df)
+        components_df = pd.concat(res, axis=1)
+        # If PCA was applied, transform back to original VAR features
+        if self.apply_pca:
+            # Get PCA components in the DataFrame
+            res = []
+            for col in self.column_names:
+                # Get the component contribution
+                # component_contributions = components_df.xs(col, level=1, axis=1)
+                component_contributions = components_df[col][self.pca_columns]
+                # Transform back to original VAR features
+                original_contributions = (
+                    component_contributions.to_numpy() @ self.pca.components_
+                )
+                # Create DataFrame with original VAR feature names
+                original_contributions_df = pd.DataFrame(
+                    original_contributions,
+                    index=component_contributions.index,
+                    columns=self.VAR_feature_columns,
+                )
+                # Remove PCA component from components_df
+                # Add original VAR features contributions
+                original_contributions_df.columns = [
+                    x.split('___')[0] for x in original_contributions_df.columns
+                ]
+                new_cols = original_contributions_df.T.groupby(level=0).sum().T
+                new_cols.columns = pd.MultiIndex.from_product([[col], new_cols.columns])
+                res.append(new_cols)
+                # for var_col in original_contributions_df.columns:
+                #     idx = (col, var_col.split('___')[0])
+                #     if idx not in components_df.columns:
+                #         components_df[idx] = original_contributions_df[var_col]
+                #     else:
+                #         components_df[idx] = components_df[idx] + original_contributions_df[var_col]
+            # drop all at once
+            components_df = pd.concat(
+                [components_df, pd.concat(res, axis=1)], axis=1
+            ).reindex(self.column_names, level=0, axis=1)
+            components_df = components_df.drop(columns=self.pca_columns, level=1)
+        # Combine multiple lags into a single impact for each series
+        # Sum over lags for each series
+        final_components = {}
+        for target_col in self.column_names:
+            target_components = components_df[target_col]
+            series_impacts = {}
+            for col in target_components.columns:
+                series_name = col.split('___')[0]
+                series_impacts.setdefault(series_name, 0)
+                series_impacts[series_name] += target_components[col]
+            final_components[target_col] = pd.DataFrame(series_impacts)
+        # Combine external features
+        external_features = ['constant'] + self.seasonal_columns + self.trend_columns
+        if str(self.regression_type).lower() == "user":
+            external_features += list(self.regressor_columns)
+        for target_col in self.column_names:
+            target_components = components_df[target_col]
+            for feature in external_features:
+                if feature in target_components.columns:
+                    if target_col not in final_components:
+                        final_components[target_col] = pd.DataFrame()
+                    final_components[target_col][feature] = target_components[feature]
+        # Combine all components into a single DataFrame
+        result = {}
+        for target_col in final_components:
+            df = final_components[target_col]
+            # Scale back to original feature space
+            df = df * self.scaler_std[target_col]  # + self.scaler_mean[target_col]
+            if self.mode == 'multiplicative':
+                df = np.exp(df)
+            df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
+            result[target_col] = df
+        components_df_final = pd.concat(result.values(), axis=1)
+        return components_df_final
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.8, 0.2])[0]
+        if method == "deep":
+            transformer_max_depth = 2
+        else:
+            transformer_max_depth = 1
+        use_preprocess = random.choices([True, False], [0.5, 0.5])[0]
+        if use_preprocess:
+            var_preprocessing = RandomTransform(
+                transformer_list=[
+                    "ClipOutliers",
+                    "bkfilter",
+                    "AnomalyRemoval",
+                    "FFTFilter",
+                ],
+                transformer_max_depth=transformer_max_depth,
+                allow_none=False,
+                fast_params=True,
+            )
+        else:
+            var_preprocessing = False
+        use_postprocess = random.choices([True, False], [0.2, 0.8])[0]
+        if use_postprocess:
+            var_postprocessing = RandomTransform(
+                transformer_list=[
+                    "HistoricValues",
+                    "Constraint",
+                    "AlignLastDiff",
+                    "AlignLastValue",
+                    "FIRFilter",
+                    "Round",
+                ],
+                transformer_max_depth=transformer_max_depth,
+                allow_none=False,
+                fast_params=True,
+            )
+        else:
+            var_postprocessing = False
+        return {
+            "datepart_method": random_datepart(method=method),
+            "changepoint_spacing": random.choices(
+                [None, 6, 28, 60, 90, 120, 180, 360, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.2],
+            )[0],
+            "changepoint_distance_end": random.choices(
+                [None, 6, 28, 60, 90, 180, 360, 520, 5040],
+                [0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.2],
+            )[0],
+            "regression_type": regression_choice,
+            "lags": random.choices(
+                [None, [1], [7], [1, 2], [24], [1, 2, 3, 4, 5]],
+                [0.4, 0.2, 0.3, 0.1, 0.05, 0.01],
+            )[0],
+            "rolling_means": random.choices(
+                [None, [3], [4], [7], [4, 7], [28], [168]],
+                [0.4, 0.05, 0.3, 0.2, 0.1, 0.05, 0.02],
+            )[0],
+            "lambda_": random.choices(
+                [
+                    None,
+                    0.00001,
+                    0.0001,
+                    0.001,
+                    0.01,
+                    0.1,
+                    1,
+                    2,
+                    10,
+                    100,
+                    1000,
+                    10000,
+                    50000,
+                    100000,
+                ],
+                [
+                    0.2,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.05,
+                    0.01,
+                ],
+                k=1,
+            )[0],
+            "trend_phi": random.choices(
+                [None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01]
+            )[0],
+            "var_dampening": random.choices(
+                [None, 0.999, 0.995, 0.99, 0.98, 0.97, 0.8],
+                [0.9, 0.05, 0.05, 0.05, 0.1, 0.02, 0.01],
+            )[0],
+            "phi": random.choices(
+                [None, 0.995, 0.99, 0.98, 0.97, 0.9, 0.8, 0.5, 0.2, 0.1],
+                [0.75, 0.1, 0.05, 0.05, 0.02, 0.02, 0.01, 0.02, 0.01, 0.02],
+            )[0],
+            "max_cycles": random.choices([2000, 200, 10000], [0.8, 0.2, 0.01])[0],
+            "apply_pca": random.choices([True, False], [0.5, 0.5])[0],
+            "pca_n_components": random.choices(
+                [None, 0.95, 0.9, 0.8, 10, "mle"], [0.2, 0.4, 0.2, 0.1, 0.1, 0.001]
+            )[0],
+            "base_scaled": random.choices([True, False], [0.4, 0.6])[0],
+            "x_scaled": random.choices([True, False], [0.2, 0.8])[0],
+            "var_preprocessing": var_preprocessing,
+            "var_postprocessing": var_postprocessing,
+            "threshold_value": random.choices(
+                [None, 0.1, 0.01, 0.05, 0.001], [0.9, 0.025, 0.025, 0.025, 0.025]
+            )[0],
+            "mode": random.choices(["additive", "multiplicative"], [0.95, 0.05])[0],
+            "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "datepart_method": self.datepart_method,
+            "changepoint_spacing": self.changepoint_spacing,
+            "changepoint_distance_end": self.changepoint_distance_end,
+            "regression_type": self.regression_type,
+            "lags": self.lags,
+            "rolling_means": self.rolling_means,
+            "lambda_": self.lambda_,
+            "trend_phi": self.trend_phi,
+            "var_dampening": self.var_dampening,
+            "phi": self.phi,
+            "max_cycles": self.max_cycles,
+            "apply_pca": self.apply_pca,
+            "pca_n_components": self.pca_n_components,
+            "base_scaled": self.base_scaled,
+            "x_scaled": self.x_scaled,
+            "var_preprocessing": self.var_preprocessing,
+            "var_postprocessing": self.var_postprocessing,
+            "threshold_value": self.threshold_value,
+            "mode": self.mode,
+            "holiday_countries_used": self.holiday_countries_used,
         }

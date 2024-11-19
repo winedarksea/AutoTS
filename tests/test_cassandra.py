@@ -33,6 +33,9 @@ class CassandraTest(unittest.TestCase):
             "wiki_Germany": "de",
         }
         df_daily = load_daily(long=False)
+        # so it expects these first in the column order for the tests
+        cols = ['wiki_United_States', 'wiki_Germany'] + [col for col in df_daily.columns if col not in ['wiki_United_States', 'wiki_Germany']]
+        df_daily = df_daily[cols]
         forecast_length = 180
         include_history = True
         df_train = df_daily[:-forecast_length].iloc[:, 1:]

@@ -14,6 +14,17 @@ import pandas as pd
 try:
     from sklearn import config_context
     from sklearn.multioutput import MultiOutputRegressor, RegressorChain
+    from sklearn.linear_model import (
+        ElasticNet,
+        MultiTaskElasticNet,
+        LinearRegression,
+        Ridge,
+    )
+    from sklearn.tree import (
+        DecisionTreeRegressor,
+        DecisionTreeClassifier,
+        ExtraTreeRegressor,
+    )
 except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
@@ -35,6 +46,28 @@ except Exception:
             return 1.95996398454
 
         # norm.ppf((1 + 0.95) / 2)
+
+
+# for numba engine more is required, optional
+try:
+    import numba  # noqa
+
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+
+# Check if the pandas version is 1.3 or greater and if numba is installed
+if pd.__version__ >= '1.3' and NUMBA_AVAILABLE:
+    engine = 'numba'
+else:
+    engine = None
+
+try:
+    from joblib import Parallel, delayed
+
+    joblib_present = True
+except Exception:
+    joblib_present = False
 
 
 def rolling_x_regressor(
@@ -74,14 +107,55 @@ def rolling_x_regressor(
     inferred_freq = infer_frequency(local_df.index)
     local_df.columns = [str(x) for x in range(len(df.columns))]
     X = [local_df.rename(columns=lambda x: "lastvalue_" + x)]
+    # unlike the others, this pulls the entire window, not just one lag
+    if str(window).isdigit():
+        # we already have lag 1 using this
+        for curr_shift in range(1, window):
+            X.append(
+                local_df.shift(curr_shift).rename(
+                    columns=lambda x: "window_" + str(curr_shift) + "_" + x
+                )
+            )  # backfill should fill last values safely
     if str(mean_rolling_periods).isdigit():
-        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median()
-        # temp.columns = ['rollingmean' for col in temp.columns]
+        temp = local_df.rolling(int(mean_rolling_periods), min_periods=1).median(
+            engine=engine
+        )
         X.append(temp)
         if str(macd_periods).isdigit():
-            temp = local_df.rolling(int(macd_periods), min_periods=1).median() - temp
+            # says mean, but median because it's been that way for ages
+            temp = (
+                local_df.rolling(int(macd_periods), min_periods=1).median(engine=engine)
+                - temp
+            )
             temp.columns = ['macd' for col in temp.columns]
             X.append(temp)
+    if isinstance(mean_rolling_periods, list):
+        for mrp in mean_rolling_periods:
+            if isinstance(mrp, (tuple, list)):
+                lag = mrp[0]
+                mean_roll = mrp[1]
+                temp = (
+                    local_df.shift(lag)
+                    .rolling(int(mean_roll), min_periods=1)
+                    .mean(engine=engine)
+                    .bfill()
+                )
+                temp.columns = [
+                    f'rollingmean_{lag}_{mean_roll}_' + str(col) for col in temp.columns
+                ]
+            else:
+                temp = local_df.rolling(int(mrp), min_periods=1).mean(engine=engine)
+                temp.columns = ['rollingmean_' + str(col) for col in temp.columns]
+            X.append(temp)
+            if str(macd_periods).isdigit():
+                temp = (
+                    local_df.rolling(int(macd_periods), min_periods=1).mean(
+                        engine=engine
+                    )
+                    - temp
+                )
+                temp.columns = ['macd' for col in temp.columns]
+                X.append(temp)
     if str(std_rolling_periods).isdigit():
         X.append(local_df.rolling(std_rolling_periods, min_periods=1).std())
     if str(max_rolling_periods).isdigit():
@@ -156,16 +230,6 @@ def rolling_x_regressor(
         )
         temp.columns = ['rollautocorr' for col in temp.columns]
         X.append(temp)
-    # unlike the others, this pulls the entire window, not just one lag
-    if str(window).isdigit():
-        # we already have lag 1 using this
-        for curr_shift in range(1, window):
-            X.append(
-                local_df.shift(curr_shift).rename(
-                    columns=lambda x: "window_" + str(curr_shift) + "_" + x
-                )
-            )  # backfill should fill last values safely
-
     if add_date_part not in [None, "None", "none"]:
         ahead_index = local_df.index.shift(1, freq=inferred_freq)
         date_part_df = date_part(ahead_index, method=add_date_part)
@@ -226,6 +290,7 @@ def rolling_x_regressor_regressor(
     cointegration: str = None,
     cointegration_lag: int = 1,
     series_id=None,
+    slice_index=None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -264,10 +329,14 @@ def rolling_x_regressor_regressor(
         X = X.drop(columns=['series_id'])
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
         )
         X['series_id'] = hashed
-    return X
+    if slice_index is not None:
+        return X[X.index.isin(slice_index)]
+    else:
+        return X
 
 
 def retrieve_regressor(
@@ -290,19 +359,13 @@ def retrieve_regressor(
     model_param_dict = regression_model.get("model_params", {})
     if model_class == 'ElasticNet':
         if multioutput:
-            from sklearn.linear_model import MultiTaskElasticNet
-
             regr = MultiTaskElasticNet(
                 alpha=1.0, random_state=random_seed, **model_param_dict
             )
         else:
-            from sklearn.linear_model import ElasticNet
-
             regr = ElasticNet(alpha=1.0, random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'DecisionTree':
-        from sklearn.tree import DecisionTreeRegressor
-
         regr = DecisionTreeRegressor(random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'MLP':
@@ -403,9 +466,38 @@ def retrieve_regressor(
                 random_state=random_seed,
             )
         elif regression_model["model_params"]['estimator'] == 'LinReg':
-            from sklearn.linear_model import LinearRegression
-
             linreg = LinearRegression()
+            regr = AdaBoostRegressor(
+                estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
+            )
+        elif regression_model["model_params"]['estimator'] == 'ElasticNet':
+            linreg = ElasticNet()
+            regr = AdaBoostRegressor(
+                estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
+            )
+        elif regression_model["model_params"]['estimator'] == 'ExtraTree':
+            linreg = ExtraTreeRegressor(
+                max_depth=regression_model["model_params"].get("max_depth", 3)
+            )
+            regr = AdaBoostRegressor(
+                estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
+            )
+        elif regression_model["model_params"].get("max_depth", None) is not None:
+            linreg = DecisionTreeRegressor(
+                max_depth=regression_model["model_params"].get("max_depth")
+            )
             regr = AdaBoostRegressor(
                 estimator=linreg,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -446,12 +538,8 @@ def retrieve_regressor(
             regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
     elif model_class == 'Ridge':
-        from sklearn.linear_model import Ridge
-
         return Ridge(random_state=random_seed, **model_param_dict)
     elif model_class == "FastRidge":
-        from sklearn.linear_model import Ridge
-
         return Ridge(alpha=1e-9, solver="cholesky", fit_intercept=False, copy_X=False)
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
@@ -467,7 +555,12 @@ def retrieve_regressor(
         return ExtraTreesRegressor(
             n_jobs=n_jobs, random_state=random_seed, **model_param_dict
         )
-    elif model_class == "RadiusNeighbors":
+    elif model_class in [
+        "RadiusNeighbors",
+        "RadiusNeighbors",
+        "RadiusRegressor",
+        "RadiusNeighborsRegressor",
+    ]:
         from sklearn.neighbors import RadiusNeighborsRegressor
 
         regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
@@ -488,8 +581,6 @@ def retrieve_regressor(
 
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
     elif model_class == "LinearRegression":
-        from sklearn.linear_model import LinearRegression
-
         return LinearRegression(**model_param_dict)
     elif model_class == "GaussianProcessRegressor":
         from sklearn.gaussian_process import GaussianProcessRegressor
@@ -563,8 +654,6 @@ def retrieve_classifier(
             n_jobs=n_jobs, random_state=random_seed, **model_param_dict
         )
     elif model_class == 'DecisionTree':
-        from sklearn.tree import DecisionTreeClassifier
-
         return DecisionTreeClassifier(random_state=random_seed, **model_param_dict)
     elif model_class in ['xgboost', 'XGBClassifier']:
         import xgboost as xgb
@@ -710,12 +799,12 @@ no_shared_model_dict = {
 datepart_model_dict: dict = {
     'ElasticNet': 0.1,
     'MLP': 0.05,
-    'DecisionTree': 0.02,
+    'DecisionTree': 0.03,
     'Adaboost': 0.05,
-    'SVM': 0.001,
+    'SVM': 0.0001,
     'KerasRNN': 0.01,
     # 'Transformer': 0.02,  # slow, kernel failed
-    'RadiusNeighbors': 0.1,
+    'RadiusNeighbors': 0.03,  # vulnerable on short data to returning NaN but effective sometimes
     "ElasticNetwork": 0.05,
 }
 datepart_model_dict_deep = {
@@ -901,22 +990,32 @@ def generate_regressor_params(
         'SVM',
         "ElasticNetwork",
         "ElasticNet",
+        "RadiusNeighbors",
     ]:
         if model == 'Adaboost':
             param_dict = {
                 "model": 'Adaboost',
                 "model_params": {
-                    "n_estimators": random.choices([50, 100, 500], [0.7, 0.2, 0.1])[0],
+                    "n_estimators": random.choices(
+                        [50, 100, 200, 500], [0.7, 0.2, 0.15, 0.1]
+                    )[0],
                     "loss": random.choices(
                         ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
                     )[0],
                     "estimator": random.choices(
-                        [None, 'LinReg', 'SVR'],
-                        [0.8, 0.1, 0.0],  # SVR slow and crash prone
+                        [None, 'LinReg', 'SVR', 'ElasticNet', 'ExtraTree'],
+                        [0.8, 0.1, 0.0, 0.1, 0.1],  # SVR slow and crash prone
                     )[0],
-                    "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
+                    "learning_rate": random.choices(
+                        [1, 0.5, 0.25, 0.8, 100], [0.9, 0.1, 0.1, 0.1, 0.025]
+                    )[0],
                 },
             }
+            if param_dict["model_params"]["estimator"] in [None, "ExtraTree"]:
+                param_dict["model_params"]["max_depth"] = random.choices(
+                    [2, 3, 4, 5],
+                    [0.2, 0.8, 0.1, 0.01],
+                )[0]
         elif model == 'ElasticNet':
             param_dict = {
                 "model": 'ElasticNet',
@@ -924,6 +1023,7 @@ def generate_regressor_params(
                     "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
                     "fit_intercept": random.choices([True, False], [0.9, 0.1])[0],
                     "selection": random.choices(["cyclic", "random"], [0.8, 0.1])[0],
+                    "max_iter": random.choices([1000, 2000, 5000], [0.8, 0.2, 0.01])[0],
                 },
             }
         elif model == 'xgboost':
@@ -1279,8 +1379,8 @@ def generate_regressor_params(
                             [0.1, 0.6, 0.3, 0.2],
                         )[0],
                         "num_leaves": random.choices(
-                            [31, 127, 70, 1000, 15],
-                            [0.6, 0.1, 0.3, 0.1, 0.2],
+                            [31, 127, 70, 1000, 15, 2048],
+                            [0.6, 0.1, 0.3, 0.1, 0.2, 0.1],
                         )[0],
                         "max_depth": random.choices(
                             [-1, 5, 10],
@@ -1373,6 +1473,33 @@ def generate_regressor_params(
                     "max_iter": random.choice([500, 1000]),
                 },
             }
+        elif model == 'RadiusNeighbors':
+            radius_choice = random.choices(
+                [0.5, 1.0, 2.0, 5.0, 10.0], [0.1, 0.4, 0.4, 0.15, 0.05]
+            )[0]
+            weights_choice = random.choices(["uniform", "distance"], [0.6, 0.4])[0]
+            algorithm_choice = random.choices(
+                ["auto", "ball_tree", "kd_tree"], [0.7, 0.1, 0.1]
+            )[0]
+            leaf_size_choice = random.choices([10, 20, 30, 50], [0.5, 0.3, 0.15, 0.05])[
+                0
+            ]
+            param_dict = {
+                "model": 'RadiusNeighbors',
+                "model_params": {
+                    "radius": radius_choice,
+                    "weights": weights_choice,
+                    "algorithm": algorithm_choice,
+                    "leaf_size": leaf_size_choice,
+                    "p": random.choices([1, 1.5, 2], [0.5, 0.1, 0.5])[
+                        0
+                    ],  # Manhattan (p=1) or Euclidean (p=2)
+                    "metric": random.choices(
+                        ["minkowski", "manhattan", "euclidean"], [0.7, 0.2, 0.1]
+                    )[0],
+                },
+            }
+            return param_dict
         else:
             min_samples = np.random.choice(
                 [1, 2, 0.05], p=[0.5, 0.3, 0.2], size=1
@@ -1789,6 +1916,29 @@ class RollingRegression(ModelObject):
         return parameter_dict
 
 
+class RandomFourierEncoding(object):
+    def __init__(self, n_components=100, sigma=1.0, random_state=None):
+        self.n_components = n_components
+        self.sigma = sigma
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        # np.random.seed(self.random_state)
+        n_features = X.shape[1]
+        self.W = np.random.normal(
+            loc=0, scale=1 / self.sigma, size=(n_features, self.n_components)
+        )
+        self.b = np.random.uniform(0, 2 * np.pi, size=self.n_components)
+        return self
+
+    def transform(self, X):
+        projection = np.dot(X, self.W) + self.b
+        X_new = np.sqrt(2 / self.n_components) * np.concatenate(
+            [np.sin(projection), np.cos(projection)], axis=1
+        )
+        return X_new
+
+
 class WindowRegression(ModelObject):
     """Regression use the last n values as the basis of training data.
 
@@ -1818,6 +1968,9 @@ class WindowRegression(ModelObject):
         shuffle: bool = False,
         forecast_length: int = 1,
         max_windows: int = 5000,
+        fourier_encoding_components: float = None,
+        scale: bool = False,
+        datepart_method: str = None,
         regression_type: str = None,
         n_jobs: int = -1,
         **kwargs,
@@ -1841,6 +1994,9 @@ class WindowRegression(ModelObject):
         self.shuffle = shuffle
         self.forecast_length = forecast_length
         self.max_windows = max_windows
+        self.fourier_encoding_components = fourier_encoding_components
+        self.scale = scale
+        self.datepart_method = datepart_method
         self.static_regressor = None
 
     def fit(self, df, future_regressor=None, static_regressor=None):
@@ -1856,15 +2012,36 @@ class WindowRegression(ModelObject):
                 "Scale exceeds recommendation for input_dim == `multivariate`"
             )
         df = self.basic_profile(df)
+        regression_type = self.regression_type
         if self.regression_type in ["User", "user"]:
             if future_regressor is None:
                 raise ValueError(
                     "regression_type='User' but no future_regressor passed"
                 )
+            if isinstance(future_regressor, pd.Series):
+                future_regressor = future_regressor.to_frame()
             self.static_regressor = static_regressor
+            if self.datepart_method is not None:
+                future_regressor = pd.concat(
+                    [
+                        future_regressor,
+                        date_part(
+                            df.index,
+                            method=self.datepart_method,
+                            holiday_country=self.holiday_country,
+                        ),
+                    ],
+                    axis=1,
+                )
+        elif self.datepart_method is not None:
+            regression_type = "User"  # to convince the window maker to use it
+            future_regressor = date_part(
+                df.index,
+                method=self.datepart_method,
+                holiday_country=self.holiday_country,
+            )
         self.df_train = df
-        if isinstance(future_regressor, pd.Series):
-            future_regressor = future_regressor.to_frame()
+
         self.X, self.Y = window_maker(
             df,
             window_size=self.window_size,
@@ -1874,7 +2051,7 @@ class WindowRegression(ModelObject):
             output_dim=self.output_dim,
             forecast_length=self.forecast_length,
             max_windows=self.max_windows,
-            regression_type=self.regression_type,
+            regression_type=regression_type,
             future_regressor=future_regressor,
             random_seed=self.random_seed,
         )
@@ -1883,6 +2060,19 @@ class WindowRegression(ModelObject):
             multioutput = False
         elif self.Y.shape[1] < 2:
             multioutput = False
+        if self.scale:
+            from sklearn.preprocessing import StandardScaler
+
+            self.scaler = StandardScaler()
+            if isinstance(self.X, pd.DataFrame):
+                self.X.columns = self.X.columns.astype(str)
+            self.X = self.scaler.fit_transform(self.X)
+        if self.fourier_encoding_components is not None:
+            self.fourier_encoder = RandomFourierEncoding(
+                n_components=int(self.X.shape[1] * self.fourier_encoding_components),
+                sigma=1.0,
+            ).fit(self.X)
+            self.X = self.fourier_encoder.transform(self.X.copy())
         if isinstance(self.X, pd.DataFrame):
             self.X = self.X.to_numpy()
         self.model = retrieve_regressor(
@@ -1931,6 +2121,25 @@ class WindowRegression(ModelObject):
         index = self.create_forecast_index(forecast_length=forecast_length)
         if isinstance(future_regressor, pd.Series):
             future_regressor = future_regressor.to_frame()
+        if self.regression_type in ["User", "user"]:
+            if self.datepart_method is not None:
+                future_regressor = pd.concat(
+                    [
+                        future_regressor,
+                        date_part(
+                            index,
+                            method=self.datepart_method,
+                            holiday_country=self.holiday_country,
+                        ),
+                    ],
+                    axis=1,
+                )
+        elif self.datepart_method is not None:
+            future_regressor = date_part(
+                index,
+                method=self.datepart_method,
+                holiday_country=self.holiday_country,
+            )
 
         if self.output_dim == '1step':
             # combined_index = (self.df_train.index.append(index))
@@ -1943,13 +2152,22 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
-                if self.regression_type in ["User", "user"]:
+                if (
+                    self.regression_type in ["User", "user"]
+                    or self.datepart_method is not None
+                ):
                     blasted_thing = (
                         future_regressor.reindex(index).iloc[x].to_frame().transpose()
                     )
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
+                if self.scale:
+                    if isinstance(pred, pd.DataFrame):
+                        pred.columns = pred.columns.astype(str)
+                    pred = self.scaler.transform(pred)
+                if self.fourier_encoding_components is not None:
+                    pred = self.fourier_encoder.transform(pred)
                 if isinstance(pred, pd.DataFrame):
                     pred = pred.to_numpy()
                 rfPred = pd.DataFrame(self.model.predict(pred))
@@ -1969,12 +2187,21 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
-            if self.regression_type in ["User", "user"]:
+            if (
+                self.regression_type in ["User", "user"]
+                or self.datepart_method is not None
+            ):
                 tmerg = future_regressor.tail(1).loc[
                     future_regressor.tail(1).index.repeat(pred.shape[0])
                 ]
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
+            if self.scale:
+                if isinstance(pred, pd.DataFrame):
+                    pred.columns = pred.columns.astype(str)
+                pred = self.scaler.transform(pred)
+            if self.fourier_encoding_components is not None:
+                pred = self.fourier_encoder.transform(pred)
             if isinstance(pred, pd.DataFrame):
                 pred = pred.to_numpy(dtype=np.float32)
             cY = pd.DataFrame(self.model.predict(pred.astype(float)))
@@ -1992,6 +2219,9 @@ class WindowRegression(ModelObject):
 
         df.columns = self.column_names
         df.index = index
+        if self.regression_model.get("model", "None") == "RadiusNeighbors":
+            print('interpolating')
+            df = df.interpolate("pchip").bfill()
         if just_point_forecast:
             return df
         else:
@@ -2058,12 +2288,20 @@ class WindowRegression(ModelObject):
             max_windows_choice = random.choices(
                 [5000, 50000, 5000000], [0.2, 0.2, 0.9]
             )[0]
+        datepart_method = random.choices([None, "something"], [0.9, 0.1])[0]
+        if datepart_method == "something":
+            datepart_method = random_datepart()
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
             'max_windows': max_windows_choice,
+            'fourier_encoding_components': random.choices(
+                [None, 2, 5, 10], [0.8, 0.1, 0.1, 0.01]
+            )[0],
+            'scale': random.choices([True, False], [0.7, 0.3])[0],
+            'datepart_method': datepart_method,
             'regression_type': regression_type_choice,
             'regression_model': model_choice,
         }
@@ -2076,6 +2314,9 @@ class WindowRegression(ModelObject):
             'output_dim': self.output_dim,
             'normalize_window': self.normalize_window,
             'max_windows': self.max_windows,
+            'fourier_encoding_components': self.fourier_encoding_components,
+            'scale': self.scale,
+            'datepart_method': self.datepart_method,
             'regression_type': self.regression_type,
             'regression_model': self.regression_model,
         }
@@ -2488,6 +2729,10 @@ class DatepartRegression(ModelObject):
             raise ValueError(
                 f"Datepart prediction with params {self.get_params()} failed. This is often due to an improperly indexed future_regressor (with drop_most_recent especially)"
             ) from e
+        # RadiusNeighbors works decently well but starts throwing out NaN when it can't find neighbors
+        if self.regression_model.get("model", "None") == "RadiusNeighbors":
+            print('interpolating')
+            forecast = forecast.interpolate("pchip").bfill()
 
         if just_point_forecast:
             return forecast
@@ -3023,7 +3268,7 @@ class MultivariateRegression(ModelObject):
         holiday_country: str = 'US',
         verbose: int = 0,
         random_seed: int = 2020,
-        forecast_length: int = 7,
+        forecast_length: int = 28,
         regression_model: dict = {
             "model": 'RandomForest',
             "model_params": {},
@@ -3057,6 +3302,7 @@ class MultivariateRegression(ModelObject):
         cointegration: str = None,
         cointegration_lag: int = 1,
         series_hash: bool = False,
+        frac_slice: float = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -3102,6 +3348,7 @@ class MultivariateRegression(ModelObject):
         self.cointegration = cointegration
         self.cointegration_lag = cointegration_lag
         self.series_hash = series_hash
+        self.frac_slice = frac_slice
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -3124,8 +3371,7 @@ class MultivariateRegression(ModelObject):
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
-        self.scaler_std = np.std(df, axis=0)
-        self.scaler_std[self.scaler_std == 0] = 1
+        self.scaler_std = np.std(df, axis=0).replace(0.0, 1.0)
         return (df - self.scaler_mean) / self.scaler_std
 
     def scale_data(self, df):
@@ -3162,11 +3408,6 @@ class MultivariateRegression(ModelObject):
                     raise ValueError(
                         "regression_type='User' but not future_regressor supplied."
                     )
-                # broken by slice
-                # elif future_regressor.shape[0] != df.shape[0]:
-                #     raise ValueError(
-                #         "future_regressor shape does not match training data shape."
-                #     )
                 else:
                     self.regressor_train = future_regressor.reindex(df.index)
                 if regressor_per_series is not None:
@@ -3174,7 +3415,13 @@ class MultivariateRegression(ModelObject):
                 if static_regressor is not None:
                     self.static_regressor = static_regressor
             # define X and Y
-            self.Y = df[1:].to_numpy().ravel(order="F")
+            if self.frac_slice is not None:
+                slice_size = int(df.shape[0] * self.frac_slice)
+                self.slice_index = df.index[slice_size - 1 : -1]
+                self.Y = df.iloc[slice_size:].to_numpy().ravel(order="F")
+            else:
+                self.slice_index = None
+                self.Y = df[1:].to_numpy().ravel(order="F")
             # drop look ahead data
             base = df[:-1]
             if self.regression_type is not None:
@@ -3182,10 +3429,19 @@ class MultivariateRegression(ModelObject):
                 cut_regr.index = base.index
             else:
                 cut_regr = None
-            # open to suggestions on making this faster
-            self.X = pd.concat(
-                [
-                    rolling_x_regressor_regressor(
+            # Create X, parallel and non-parallel versions
+            parallel = True
+            if self.n_jobs in [0, 1] or df.shape[1] < 20:
+                parallel = False
+            elif not joblib_present:
+                parallel = False
+            # joblib multiprocessing to loop through series
+            # this might be causing issues, TBD Key Error from Resource Tracker
+            if parallel:
+                self.X = Parallel(
+                    n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600
+                )(
+                    delayed(rolling_x_regressor_regressor)(
                         base[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
@@ -3220,10 +3476,55 @@ class MultivariateRegression(ModelObject):
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
+                        slice_index=self.slice_index,
                     )
                     for x_col in base.columns
-                ]
-            )
+                )
+                self.X = pd.concat(self.X)
+            else:
+                self.X = pd.concat(
+                    [
+                        rolling_x_regressor_regressor(
+                            base[x_col].to_frame(),
+                            mean_rolling_periods=self.mean_rolling_periods,
+                            macd_periods=self.macd_periods,
+                            std_rolling_periods=self.std_rolling_periods,
+                            max_rolling_periods=self.max_rolling_periods,
+                            min_rolling_periods=self.min_rolling_periods,
+                            ewm_var_alpha=self.ewm_var_alpha,
+                            quantile90_rolling_periods=self.quantile90_rolling_periods,
+                            quantile10_rolling_periods=self.quantile10_rolling_periods,
+                            additional_lag_periods=self.additional_lag_periods,
+                            ewm_alpha=self.ewm_alpha,
+                            abs_energy=self.abs_energy,
+                            rolling_autocorr_periods=self.rolling_autocorr_periods,
+                            nonzero_last_n=self.nonzero_last_n,
+                            add_date_part=self.datepart_method,
+                            holiday=self.holiday,
+                            holiday_country=self.holiday_country,
+                            polynomial_degree=self.polynomial_degree,
+                            window=self.window,
+                            future_regressor=cut_regr,
+                            # these rely the if part not being run if None
+                            regressor_per_series=(
+                                self.regressor_per_series_train[x_col]
+                                if self.regressor_per_series_train is not None
+                                else None
+                            ),
+                            static_regressor=(
+                                static_regressor.loc[x_col].to_frame().T
+                                if self.static_regressor is not None
+                                else None
+                            ),
+                            cointegration=self.cointegration,
+                            cointegration_lag=self.cointegration_lag,
+                            series_id=x_col if self.series_hash else None,
+                            slice_index=self.slice_index,
+                        )
+                        for x_col in base.columns
+                    ]
+                )
+
             del base
             if self.probabilistic:
                 from sklearn.ensemble import GradientBoostingRegressor
@@ -3260,6 +3561,7 @@ class MultivariateRegression(ModelObject):
                 self.X = self.scale_data(self.X)
 
             # Remember the X datetime is for the previous day to the Y datetime here
+            assert self.X.index[-1] == df.index[-2]
             self.model.fit(self.X.to_numpy(), self.Y)
 
             if self.probabilistic and not self.multioutputgpr:
@@ -3316,7 +3618,7 @@ class MultivariateRegression(ModelObject):
             forecast_length = self.forecast_length
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        forecast = pd.DataFrame()
+        forecast = []
         upper_forecast = pd.DataFrame()
         lower_forecast = pd.DataFrame()
         if self.regressor_train is not None:
@@ -3383,7 +3685,7 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
-            forecast = pd.concat([forecast, pred_clean])
+            forecast.append(pred_clean)
             # a lot slower
             if self.probabilistic:
                 if self.multioutputgpr:
@@ -3421,6 +3723,7 @@ class MultivariateRegression(ModelObject):
                 ]
             )
 
+        forecast = pd.concat(forecast)
         forecast = forecast[self.column_names]
         if not self.probabilistic:
             upper_forecast, lower_forecast = Point_to_Probability(
@@ -3465,10 +3768,11 @@ class MultivariateRegression(ModelObject):
             model_choice = generate_regressor_params(
                 model_dict=multivariate_model_dict, method=method
             )
-            window_choice = random.choices([None, 3, 7, 10], [0.2, 0.3, 0.1, 0.05])[0]
+            window_choice = random.choices([None, 3, 7, 10], [0.3, 0.3, 0.1, 0.05])[0]
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
-            [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
+            [0.3, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
         )[0]
         if mean_rolling_periods_choice is not None:
             macd_periods_choice = seasonal_int(small=True)
@@ -3498,7 +3802,7 @@ class MultivariateRegression(ModelObject):
         )[0]
         abs_energy_choice = False
         rolling_autocorr_periods_choice = random.choices(
-            [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
+            [None, 2, 7, 12, 30], [0.99, 0.01, 0.01, 0.01, 0.01]
         )[0]
         nonzero_last_n = random.choices(
             [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]
@@ -3516,8 +3820,9 @@ class MultivariateRegression(ModelObject):
                 "expanded_binarized",
                 "common_fourier_rw",
                 ["dayofweek", 365.25],
+                "simple_binarized2_poly",
             ],
-            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05],
+            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
@@ -3559,6 +3864,9 @@ class MultivariateRegression(ModelObject):
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
+            "frac_slice": random.choices(
+                [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
+            )[0],
         }
         return parameter_dict
 
@@ -3589,6 +3897,7 @@ class MultivariateRegression(ModelObject):
             "cointegration": self.cointegration,
             "cointegration_lag": self.cointegration_lag,
             "series_hash": self.series_hash,
+            "frac_slice": self.frac_slice,
         }
         return parameter_dict
 
@@ -3600,7 +3909,7 @@ class VectorizedMultiOutputGPR:
         kernel (str): linear, polynomial, rbf, periodic, locally_periodic, exponential
         noise_var (float): noise variance, effectively regularization. Close to zero little regularization, larger values create more model flexiblity and noise tolerance.
         gamma: For the RBF, Exponential, and Locally Periodic kernels, γ is essentially an inverse length scale. [0.1,1,10,100].
-        lambda_: For the Periodic and Locally Periodic kernels, \lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
+        lambda_: For the Periodic and Locally Periodic kernels, lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
         lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as lambda_.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
@@ -3624,7 +3933,9 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

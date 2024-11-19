@@ -1,5 +1,6 @@
 """Higher-level functions of automated time series modeling."""
 
+from collections.abc import Callable
 import random
 import copy
 import json
@@ -49,14 +50,16 @@ from autots.models.ensemble import (
     is_mosaic,
     parse_mosaic,
     full_ensemble_test_list,
+    create_unpredictability_score,
 )
-from autots.models.model_list import model_lists, no_shared, update_fit
+from autots.models.model_list import model_lists, no_shared, update_fit, model_classes
 from autots.tools.cpu_count import set_n_jobs
 from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,
 )
 from autots.tools.constraint import constraint_new_params
+from autots.tools.profile import profile_time_series
 
 
 class AutoTS(object):
@@ -141,6 +144,7 @@ class AutoTS(object):
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         force_gc (bool): if True, run gc.collect() after each model run. Probably won't make much difference.
         horizontal_ensemble_validation (bool): True is slower but more reliable model selection on unstable data, if horz. ensembles are used
+        custom metric (callable): a function to generate a custom metric. Expects func(A, F, df_train, prediction_interval) where the first three are np arrays of wide style 2d.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -168,7 +172,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 20,
+        max_generations: int = 25,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = None,  # 'auto',
@@ -195,7 +199,7 @@ class AutoTS(object):
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = None,
-        model_list: str = 'default',
+        model_list: str = 'scalable',
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
@@ -212,7 +216,10 @@ class AutoTS(object):
         generation_timeout: int = None,
         current_model_file: str = None,
         force_gc: bool = False,
-        horizontal_ensemble_validation: bool = False,
+        horizontal_ensemble_validation: bool = True,
+        custom_metric: Callable[
+            [np.ndarray, np.ndarray, np.ndarray, float], np.ndarray
+        ] = None,
         verbose: int = 1,
         n_jobs: int = 0.5,
     ):
@@ -252,6 +259,7 @@ class AutoTS(object):
         self.current_model_file = current_model_file
         self.force_gc = force_gc
         self.horizontal_ensemble_validation = horizontal_ensemble_validation
+        self.custom_metric = custom_metric
         self.validate_import = None
         self.best_model_original = None
         self.best_model_original_id = None
@@ -295,7 +303,7 @@ class AutoTS(object):
             elif any([x for x in model_list if x in ['PytorchForecasting', 'GluonTS']]):
                 ensemble = None
             else:
-                ensemble = ['simple', "distance", "horizontal-max"]
+                ensemble = ['simple', "horizontal-max"]
         if isinstance(ensemble, str):
             self.ensemble = ensemble.split(",")
         elif isinstance(ensemble, list):
@@ -420,11 +428,12 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[index, 'TransformationParameters'] = (
-                    json.dumps(full_params)
-                )
+                self.initial_template.loc[
+                    index, 'TransformationParameters'
+                ] = json.dumps(full_params)
 
         self.regressor_used = False
+        self.subset_flag = False
         self.grouping_ids = None
         self.validation_results = self.initial_results = TemplateEvalObject()
         self.best_model = pd.DataFrame()
@@ -440,9 +449,11 @@ class AutoTS(object):
         self.preclean_transformer = None
         self.score_per_series = None
         self.best_model_non_horizontal = None
+        self.best_model_unpredictability_adjusted = None
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
         self.validation_results = None
+        self.validation_indexes = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -488,27 +499,37 @@ class AutoTS(object):
             )[0]
             max_generations = random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0]
         else:
-            max_generations = random.choices([15, 25, 50, 200], [0.2, 0.5, 0.2, 0.1])[0]
+            max_generations = random.choices(
+                [15, 20, 25, 35, 50, 200], [0.2, 0.05, 0.4, 0.05, 0.2, 0.1]
+            )[0]
             ensemble_choice = random.choices(
                 [
                     None,
                     ["simple"],
                     ["simple", "horizontal-max"],
-                    [
-                        "mosaic-weighted-0-40",
-                        "mosaic-weighted-0-20",
+                    [  # daily, post eval loop
+                        # "mosaic-weighted-0-40",
+                        "mosaic-weighted-0-30",
+                        "mosaic-mae-profile-0-10",
+                        "mosaic-spl-unpredictability_adjusted-0-30",
+                        "mosaic-mae-median-crosshair_lite-0-30",
                         "horizontal-min-20",
                     ],
                     full_ensemble_test_list,
+                    [  # daily, direct
+                        "horizontal",
+                        "mosaic-mae-0-horizontal",
+                        "mosaic-mae-median-profile-horizontal",
+                        "mosaic-weighted-median-0-30",
+                    ],
+                    [  # works well on demand forecasting
+                        "simple",
+                        "mosaic-mae-median-profile",
+                    ],
                 ],
-                [0.3, 0.1, 0.2, 0.2, 0.1],
+                [0.3, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1],
             )[0]
-        if ensemble_choice in [None, ['simple']]:
-            horizontal_ensemble_validation = False
-        else:
-            horizontal_ensemble_validation = random.choices([True, False], [0.5, 0.5])[
-                0
-            ]
+        horizontal_ensemble_validation = random.choices([True, False], [0.8, 0.2])[0]
         if method in ["full", "fast", "superfast"]:
             metric_weighting = {
                 "smape_weighting": random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
@@ -1244,8 +1265,6 @@ class AutoTS(object):
                 self.subset_flag = False
             else:
                 self.subset_flag = True
-        else:
-            self.subset_flag = False
 
         #
         # take a subset of the data if working with a large number of series
@@ -1423,82 +1442,7 @@ class AutoTS(object):
                     f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                 )
 
-        # drop any duplicates in results
-        self.initial_results.model_results = (
-            self.initial_results.model_results.drop_duplicates(
-                subset=(['ID'] + self.template_cols)
-            )
-        )
-
-        # validation model count if float
-        if (self.models_to_validate < 1) and (self.models_to_validate > 0):
-            val_frac = self.models_to_validate
-            val_frac = 1 if val_frac >= 0.99 else val_frac
-            temp_len = self.initial_results.model_results.shape[0]
-            self.models_to_validate = val_frac * temp_len
-            self.models_to_validate = int(np.ceil(self.models_to_validate))
-        if self.max_per_model_class is None:
-            temp_len = len(self.model_list)
-            self.max_per_model_class = (self.models_to_validate / temp_len) + 1
-            self.max_per_model_class = int(np.ceil(self.max_per_model_class))
-
-        # construct validation template
-        validation_template = self.initial_results.model_results[
-            self.initial_results.model_results['Exceptions'].isna()
-        ]
-        validation_template = validation_template[validation_template['Ensemble'] <= 1]
-        validation_template = validation_template.drop_duplicates(
-            subset=template_cols, keep='first'
-        )
-        validation_template = validation_template.sort_values(
-            by="Score", ascending=True, na_position='last'
-        )
-        if str(self.max_per_model_class).isdigit():
-            validation_template = (
-                validation_template.sort_values(
-                    'Score', ascending=True, na_position='last'
-                )
-                .groupby('Model')
-                .head(self.max_per_model_class)
-                .reset_index(drop=True)
-            )
-        validation_template = validation_template.sort_values(
-            'Score', ascending=True, na_position='last'
-        ).head(self.models_to_validate)
-        # add on best per_series models (which may not be in the top scoring)
-        if self.h_ens_used or self.mosaic_used:
-            model_results = self.initial_results.model_results
-            if self.models_to_validate < 50:
-                n_per_series = 1
-            elif self.models_to_validate > 500:
-                n_per_series = 5
-            else:
-                n_per_series = 3
-            self.score_per_series = generate_score_per_series(
-                self.initial_results, self.metric_weighting, 1
-            )
-            mods = self.score_per_series.index[
-                np.argsort(-self.score_per_series.values, axis=0)[
-                    -1 : -1 - n_per_series : -1
-                ].flatten()
-            ]
-            per_series_val = model_results[
-                model_results['ID'].isin(mods.unique().tolist())
-            ]
-            validation_template = pd.concat(
-                [validation_template, per_series_val], axis=0
-            )
-            validation_template = validation_template.drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-        self.validation_template = validation_template[self.template_cols_id]
-        if self.validate_import is not None:
-            self.validation_template = pd.concat(
-                [self.validation_template, self.validate_import]
-            ).drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-            # might want to add a drop here of models that failed in initial generations
+        self = self._construct_validation_template()
 
         # run validations
         if self.num_validations > 0:
@@ -1605,31 +1549,33 @@ class AutoTS(object):
                         f"Mosaic Ensemble Generation Error: {repr(e)}:  {''.join(tb.format_exception(None, e, e.__traceback__))}"
                     )
             try:
-                # test on initial test split to make sure they work
-                self._run_template(
-                    ensemble_templates,
-                    df_train,
-                    df_test,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_test=future_regressor_test,
-                    current_weights=current_weights,
-                    validation_round=0,
-                    max_generations="Horizontal Ensembles",
-                    model_count=0,
-                    current_generation=0,
-                    result_file=result_file,
-                )
                 if self.horizontal_ensemble_validation:
                     self._run_validations(
                         df_wide_numeric=self.df_wide_numeric,
-                        num_validations=self.num_validations,
+                        num_validations=self.num_validations + 1,
                         validation_template=ensemble_templates,
                         future_regressor=self.future_regressor_train,
                         first_validation=False,
-                        skip_first_index=True,
+                        skip_first_index=False,
                         return_template=False,
                         subset_override=False,
-                        additional_msg="horizontal ensemble validations",
+                        additional_msg=" horizontal ensemble validations",
+                        shifted_starts=True,  # this is to try and reduce choice based on overfitting
+                    )
+                else:
+                    # test on initial test split to make sure they work
+                    self._run_template(
+                        ensemble_templates,
+                        df_train,
+                        df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0,
+                        max_generations="Horizontal Ensembles",
+                        model_count=0,
+                        current_generation=0,
+                        result_file=result_file,
                     )
             except Exception as e:
                 if self.verbose >= 0:
@@ -1645,6 +1591,84 @@ class AutoTS(object):
         # clean up any remaining print statements
         sys.stdout.flush()
         self.fitRuntime = pd.Timestamp.now() - self.fitStart
+        return self
+
+    def _construct_validation_template(self):
+        # drop any duplicates in results
+        self.initial_results.model_results = (
+            self.initial_results.model_results.drop_duplicates(
+                subset=(['ID'] + self.template_cols)
+            )
+        )
+        # validation model count if float
+        if (self.models_to_validate < 1) and (self.models_to_validate > 0):
+            val_frac = self.models_to_validate
+            val_frac = 1 if val_frac >= 0.99 else val_frac
+            temp_len = self.initial_results.model_results.shape[0]
+            self.models_to_validate = val_frac * temp_len
+            self.models_to_validate = int(np.ceil(self.models_to_validate))
+        if self.max_per_model_class is None:
+            temp_len = len(self.model_list)
+            self.max_per_model_class = (self.models_to_validate / temp_len) + 1
+            self.max_per_model_class = int(np.ceil(self.max_per_model_class))
+
+        # construct validation template
+        validation_template = self.initial_results.model_results[
+            self.initial_results.model_results['Exceptions'].isna()
+        ]
+        validation_template = validation_template[validation_template['Ensemble'] <= 1]
+        validation_template = validation_template.drop_duplicates(
+            subset=self.template_cols, keep='first'
+        )
+        validation_template = validation_template.sort_values(
+            by="Score", ascending=True, na_position='last'
+        )
+        if str(self.max_per_model_class).isdigit():
+            validation_template = (
+                validation_template.sort_values(
+                    'Score', ascending=True, na_position='last'
+                )
+                .groupby('Model')
+                .head(self.max_per_model_class)
+                .reset_index(drop=True)
+            )
+        validation_template = validation_template.sort_values(
+            'Score', ascending=True, na_position='last'
+        ).head(self.models_to_validate)
+        # add on best per_series models (which may not be in the top scoring)
+        if self.h_ens_used or self.mosaic_used:
+            model_results = self.initial_results.model_results
+            if self.models_to_validate < 50:
+                n_per_series = 1
+            elif self.models_to_validate > 500:
+                n_per_series = 5
+            else:
+                n_per_series = 3
+            self.score_per_series = generate_score_per_series(
+                self.initial_results, self.metric_weighting, 1
+            )
+            mods = self.score_per_series.index[
+                np.argsort(-self.score_per_series.values, axis=0)[
+                    -1 : -1 - n_per_series : -1
+                ].flatten()
+            ]
+            per_series_val = model_results[
+                model_results['ID'].isin(mods.unique().tolist())
+            ]
+            validation_template = pd.concat(
+                [validation_template, per_series_val], axis=0
+            )
+            validation_template = validation_template.drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
+        self.validation_template = validation_template[self.template_cols_id]
+        if self.validate_import is not None:
+            self.validation_template = pd.concat(
+                [self.validation_template, self.validate_import]
+            ).drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
+            # might want to add a drop here of models that failed in initial generations
         return self
 
     def validation_agg(self):
@@ -1733,6 +1757,45 @@ class AutoTS(object):
         self.best_model, self.best_model_non_horizontal = self._return_best_model(
             metric_weighting=metric_weighting, allow_horizontal=allow_horizontal, n=n
         )
+        # create best model from MAE adjusted for unpredictability
+        try:
+            if self.initial_results.full_mae_errors:
+                scores = create_unpredictability_score(
+                    self.initial_results.full_mae_errors,
+                    self.initial_results.full_mae_vals,
+                    total_vals=self.num_validations + 1,
+                    df_wide=self.df_wide_numeric[
+                        self.initial_results.per_series_mae.columns
+                    ],
+                    validation_test_indexes=self.validation_test_indexes,
+                    scale=True,
+                )
+                weight_dict = {
+                    idx: scores.reindex(val).to_numpy()
+                    for idx, val in enumerate(self.validation_test_indexes)
+                }
+                tuple_list = [
+                    (x * weight_dict[y], z)
+                    for y, x, z in sorted(
+                        zip(
+                            self.initial_results.full_mae_vals,
+                            self.initial_results.full_mae_errors,
+                            self.initial_results.full_mae_ids,
+                        ),
+                        key=lambda pair: pair[0],
+                    )
+                    if z
+                    not in self.initial_results.model_results[
+                        self.initial_results.model_results["Ensemble"] == 2
+                    ]["ID"].tolist()
+                ]
+                errors_array, id_array = zip(*tuple_list)
+                id_best = np.nanmean(np.array(errors_array), axis=(1, 2)).argmin()
+                self.best_model_unpredictability_adjusted = id_array[id_best]
+            else:
+                self.best_model_unpredictability_adjusted = None
+        except Exception as e:
+            print(repr(e))
         # give a more convenient dict option
         self.parse_best_model()
         return self
@@ -1903,6 +1966,7 @@ class AutoTS(object):
             mosaic_used=self.mosaic_used,
             force_gc=self.force_gc,
             additional_msg=additional_msg,
+            custom_metric=self.custom_metric,
         )
         if model_count == 0:
             self.model_count += template_result.model_count
@@ -1910,10 +1974,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results['TotalRuntime'] = (
-                template_result.model_results['TotalRuntime'].fillna(
-                    pd.Timedelta(seconds=60)
-                )
+            template_result.model_results[
+                'TotalRuntime'
+            ] = template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60)
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -1940,17 +2004,26 @@ class AutoTS(object):
 
     def _run_validations(
         self,
-        df_wide_numeric,
-        num_validations,
-        validation_template,
-        future_regressor,
+        df_wide_numeric=None,
+        num_validations=None,
+        validation_template=None,
+        future_regressor=None,
         first_validation=True,  # if any validation run and indices generated
         skip_first_index=True,  # assuming first eval already done
         return_template=False,  # if True, return template instead of storing in self
         subset_override=False,  # if True, force not to subset
         additional_msg="",
+        shifted_starts=False,
     ):
         """Loop through a template for n validation segments."""
+        if df_wide_numeric is None:
+            df_wide_numeric = self.df_wide_numeric
+        if num_validations is None:
+            num_validations = self.num_validations
+        if validation_template is None:
+            validation_template = self.validation_template
+        if future_regressor is None:
+            future_regressor = self.future_regressor_train
         if return_template:
             result_overall = TemplateEvalObject()
         for y in range(num_validations):
@@ -1959,6 +2032,11 @@ class AutoTS(object):
                 print("Validation Round: {}".format(str(cslc)))
             # slice the validation data into current validation slice
             current_slice = df_wide_numeric.reindex(self.validation_indexes[cslc])
+            # do a slift shift, this is intended to make mosaic ensemble validation more robust, reduce overfitting
+            if shifted_starts:
+                shift = num_validations - cslc
+                if shift > 0:
+                    current_slice = current_slice.iloc[:-shift]
 
             # subset series (if used) and take a new train/test split
             if self.subset_flag and not subset_override:
@@ -2016,9 +2094,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
-                    np.nan
-                )
+                val_df_train.iloc[
+                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
+                ] = np.nan
 
             # run validation template on current slice
             result = self._run_template(
@@ -2056,22 +2134,41 @@ class AutoTS(object):
         future_regressor_train=None,
         refit=False,  # refit model
         bypass_save=False,  # don't even try saving model
+        model_id=None,
     ):
-        use_model = self.best_model_name if model_name is None else model_name
-        use_params = (
-            self.best_model_params.copy() if model_params is None else model_params
-        )
-        use_trans = (
-            self.best_model_transformation_params
-            if model_transformation_params is None
-            else model_transformation_params
-        )
+        if model_id is not None:
+            use_mod = self.initial_results.model_results[
+                self.initial_results.model_results["ID"] == model_id
+            ].iloc[0]
+            use_model = use_mod["Model"]
+            use_params = use_mod["ModelParameters"]
+            use_trans = use_mod["TransformationParameters"]
+        else:
+            use_model = self.best_model_name if model_name is None else model_name
+            use_params = (
+                self.best_model_params.copy() if model_params is None else model_params
+            )
+            use_trans = (
+                self.best_model_transformation_params
+                if model_transformation_params is None
+                else model_transformation_params
+            )
         use_data = self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric
         use_regr_train = (
             self.future_regressor_train
             if future_regressor_train is None
             else future_regressor_train
         )
+        if future_regressor is None and use_regr_train is not None:
+            print(
+                "future_regressor not provided to _predict but was provided for training"
+            )
+        if verbose == "self":
+            verbose = self.verbose
+        if forecast_length == "self":
+            forecast_length = self.forecast_length
+        if prediction_interval == "self":
+            prediction_interval = self.prediction_interval
         self.update_fit_check = (
             use_model in update_fit
         )  # True means model can be updated without retraining
@@ -2250,13 +2347,19 @@ class AutoTS(object):
             result_set (str): 'validation' or 'initial'
         """
         if result_set == 'validation':
-            return self.validation_results.model_results.sort_values(
-                "Score", ascending=True
-            )
+            if self.validation_results is None:
+                return "No validation results found! Model fit not performed."
+            else:
+                return self.validation_results.model_results.sort_values(
+                    "Score", ascending=True
+                )
         else:
-            return self.initial_results.model_results.sort_values(
-                "Score", ascending=True
-            )
+            if self.initial_results.model_results.empty:
+                return "No results found. Model fit not performed."
+            else:
+                return self.initial_results.model_results.sort_values(
+                    "Score", ascending=True
+                )
 
     def failure_rate(self, result_set: str = 'initial'):
         """Return fraction of models passing with exceptions.
@@ -2269,9 +2372,10 @@ class AutoTS(object):
 
         """
         initial_results = self.results(result_set=result_set)
-        n = initial_results.shape[0]
-        x = (n - initial_results['Exceptions'].isna().sum()) / n
-        return x
+        if not isinstance(initial_results, str):
+            n = initial_results.shape[0]
+            x = (n - initial_results['Exceptions'].isna().sum()) / n
+            return x
 
     def export_template(
         self,
@@ -2283,6 +2387,7 @@ class AutoTS(object):
         unpack_ensembles: bool = False,
         min_metrics: list = ['smape', 'spl', 'wasserstein', 'mle', 'imle', 'ewmae'],
         max_metrics: list = None,
+        focus_models: list = None,
     ):
         """Export top results as a reusable template.
 
@@ -2297,6 +2402,7 @@ class AutoTS(object):
             unpack_ensembles (bool): if True, ensembles are returned only as components (will result in larger n models, as full ensemble counts as 1 model)
             min_metrics (list): if not None and models=='best', include the lowest for this metric, a way to include even if not a major part of metric weighting as an addon
             max_metrics (list): for metrics to take the max model for
+            focus_models (list): also pull the best score/min/max metrics as per just this model
         """
         if models == 'all':
             export_template = self.initial_results.model_results[self.template_cols_id]
@@ -2306,15 +2412,23 @@ class AutoTS(object):
             if n == 1 and not include_results:
                 export_template = self.best_model
             else:
-                export_template = self.validation_results.model_results
+                export_template = self.validation_results.model_results.copy()
                 # all validated models + horizontal ensembles
                 export_template = export_template[
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
                 ]
+                # clean up any bad data (hopefully there is none anyway...)
+                export_template = export_template[
+                    (~export_template['ModelParameters'].isnull())
+                    & (~export_template['Model'].isnull())
+                ]
                 extra_mods = []
                 if min_metrics is not None:
                     for metric in min_metrics:
+                        export_template[metric] = pd.to_numeric(
+                            export_template[metric], errors="coerce"
+                        )
                         extra_mods.append(
                             export_template.nsmallest(1, columns=metric).copy()
                         )
@@ -2326,6 +2440,9 @@ class AutoTS(object):
                         )
                 if max_metrics is not None:
                     for metric in max_metrics:
+                        export_template[metric] = pd.to_numeric(
+                            export_template[metric], errors="coerce"
+                        )
                         extra_mods.append(
                             export_template.nlargest(1, columns=metric).copy()
                         )
@@ -2335,6 +2452,31 @@ class AutoTS(object):
                             .nlargest(1, columns=metric)
                             .copy()
                         )
+                # do it all again but for best metrics templates for each focus model
+                if focus_models is not None:
+                    for mod in focus_models:
+                        one_model = export_template[export_template["Model"] == mod]
+                        extra_mods.append(
+                            extra_mods.append(
+                                one_model.nsmallest(1, columns=['Score']).copy()
+                            )
+                        )
+                        if min_metrics is not None:
+                            export_template[metric] = pd.to_numeric(
+                                export_template[metric], errors="coerce"
+                            )
+                            for metric in min_metrics:
+                                extra_mods.append(
+                                    one_model.nsmallest(1, columns=metric).copy()
+                                )
+                        if max_metrics is not None:
+                            export_template[metric] = pd.to_numeric(
+                                export_template[metric], errors="coerce"
+                            )
+                            for metric in max_metrics:
+                                extra_mods.append(
+                                    one_model.nlargest(1, columns=metric).copy()
+                                )
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
@@ -2348,7 +2490,7 @@ class AutoTS(object):
                     export_template = pd.concat(
                         [export_template, extra_mods]
                     ).drop_duplicates()
-                if self.best_model_id not in export_template['ID']:
+                if self.best_model_id not in export_template['ID'].unique().tolist():
                     export_template = pd.concat(
                         [
                             self.validation_results.model_results[
@@ -2368,7 +2510,13 @@ class AutoTS(object):
                 ),
             )
         else:
-            raise ValueError("`models` must be 'all' or 'best'")
+            raise ValueError("`models` must be 'all' or 'best' or 'slowest'")
+
+        # clean up any bad data (hopefully there is none anyway...)
+        export_template = export_template[
+            (~export_template['ModelParameters'].isnull())
+            & (~export_template['Model'].isnull())
+        ]
         if unpack_ensembles:
             export_template = unpack_ensemble_models(
                 export_template, self.template_cols, keep_ensemble=False, recursive=True
@@ -2496,6 +2644,9 @@ class AutoTS(object):
             addon_flag = False
 
         import_template = self.load_template(filename)
+
+        # because somehow NaN models can be exported with a bug...
+        import_template = import_template[~import_template["Model"].isnull()]
 
         import_template = unpack_ensemble_models(
             import_template, self.template_cols, keep_ensemble=True, recursive=True
@@ -2633,13 +2784,16 @@ class AutoTS(object):
         if ensemble is None:
             ensemble = self.ensemble
 
+        mae_weighting = self.metric_weighting.get('mae_weighting', 0.0)
+        spl_weighting = self.metric_weighting.get('spl_weighting', 0.0)
+        rmse_weighting = self.metric_weighting.get('rmse_weighting', 0.0)
+        if (mae_weighting + spl_weighting + rmse_weighting) == 0:
+            mae_weighting = 1
+            spl_weighting = 0.05
         weight_per_value = (
-            np.asarray(initial_results.full_mae_errors)
-            * self.metric_weighting.get('mae_weighting', 0.0)
-            + np.asarray(initial_results.full_pl_errors)
-            * self.metric_weighting.get('spl_weighting', 0.0)
-            + np.asarray(initial_results.squared_errors)
-            * self.metric_weighting.get('rmse_weighting', 0.0)
+            np.asarray(initial_results.full_mae_errors) * mae_weighting
+            + np.asarray(initial_results.full_pl_errors) * spl_weighting
+            + np.asarray(initial_results.squared_errors) * rmse_weighting
         )
         runtime_weighting = self.metric_weighting.get("runtime_weighting", 0)
         if runtime_weighting != 0:
@@ -2672,6 +2826,7 @@ class AutoTS(object):
 
         mosaic_ensembles = [x for x in ensemble if "mosaic" in x]
         ensemble_templates = pd.DataFrame()
+        self.mosaic_template_generation_success = True
         for mos in mosaic_ensembles:
             try:
                 mosaic_config = parse_mosaic(mos)
@@ -2697,6 +2852,11 @@ class AutoTS(object):
                     ]
                 else:
                     full_mae_err = errs
+                # need as info for some
+                if df_subset is None:
+                    df_wide = self.df_wide_numeric
+                else:
+                    df_wide = df_subset
                 # refine to n_models if necessary
                 if isinstance(mosaic_config.get("n_models"), (int, float)):
                     # find a way of parsing it down to n models to use
@@ -2709,6 +2869,13 @@ class AutoTS(object):
                         total_vals=total_vals,
                         models_to_use=models_to_use,
                         smoothing_window=None,
+                        filtered=mosaic_config.get("filtered", False),
+                        unpredictability_adjusted=mosaic_config.get(
+                            "unpredictability_adjusted", False
+                        ),
+                        validation_test_indexes=self.validation_test_indexes,
+                        full_mae_vals=initial_results.full_mae_vals,
+                        df_wide=df_wide,
                     )
                     # so it's summarized by progressively longer chunks
                     chunks = parse_forecast_length(self.forecast_length)
@@ -2727,6 +2894,14 @@ class AutoTS(object):
                     modz = models_to_use
                 else:
                     modz = None
+                id_to_group_mapping = None
+                if mosaic_config.get("profiled", False):
+                    id_to_group_mapping = (
+                        profile_time_series(df_wide)
+                        .set_index("SERIES")
+                        .to_dict()["PROFILE"]
+                    )
+                # and actually generate the template
                 ens_templates = generate_mosaic_template(
                     initial_results=initial_results.model_results,
                     full_mae_ids=initial_results.full_mae_ids,
@@ -2736,11 +2911,20 @@ class AutoTS(object):
                     smoothing_window=mosaic_config.get("smoothing_window"),
                     metric_name=str(mos),
                     models_to_use=modz,
+                    id_to_group_mapping=id_to_group_mapping,
+                    filtered=mosaic_config.get("filtered", False),
+                    unpredictability_adjusted=mosaic_config.get(
+                        "unpredictability_adjusted", False
+                    ),
+                    validation_test_indexes=self.validation_test_indexes,
+                    full_mae_vals=initial_results.full_mae_vals,
+                    df_wide=df_wide,
                 )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
                 )
             except Exception as e:
+                self.mosaic_template_generation_success = False
                 print(
                     f"Error in mosaic template {mosaic_config} in generation: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
                 )
@@ -2819,6 +3003,7 @@ class AutoTS(object):
                     traceback=self.traceback,
                     current_model_file=self.current_model_file,
                     force_gc=self.force_gc,
+                    custom_metric=self.custom_metric,
                 )
             )
         # this handles missing runtime information, which really shouldn't be missing
@@ -2831,18 +3016,21 @@ class AutoTS(object):
         )
         return result
 
-    def expand_horizontal(self):
+    def expand_horizontal(self, force=False):
         """Enables expanding horizontal models trained on a subset to full data.
-        Reruns template models and generates new template.
+        Reruns template models and generates new template. Requires a horizontal model set as best model.
 
         see best_model_original and best_model_original_id for reference back to original best model after this runs
+
+        Args:
+            force (bool): if True, runs expansions whether subset or not. Necessary on imported template without .fit() as subset flag is set in fit
         """
         # if not horizontal, skip with message if verbose
         if self.best_model_ensemble != 2:
             if self.verbose > 0:
                 print("not using horizontal ensemble, expansion unnecessary")
             return self
-        elif not self.subset_flag:
+        elif not self.subset_flag and not force:
             if self.verbose > 0:
                 print("not using subset, expansion unnecessary")
             return self
@@ -3017,12 +3205,20 @@ class AutoTS(object):
         results.name = "Model"
         series = series.merge(results, left_on="ID", right_index=True)
         # series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")  # old
-        series = series.merge(
-            self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
-        )
-        series = series.merge(
-            self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
-        )
+        if "profile" not in self.best_model_params["model_metric"]:
+            series = series.merge(
+                self.df_wide_numeric.std().to_frame(),
+                right_index=True,
+                left_on="Series",
+            )
+            series = series.merge(
+                self.df_wide_numeric.mean().to_frame(),
+                right_index=True,
+                left_on="Series",
+            )
+        else:
+            series["Mean"] = 1
+            series["Volatility"] = 1
         series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
         series['Transformers'] = series['ID'].copy()
         series['FillNA'] = series['ID'].copy()
@@ -3090,7 +3286,7 @@ class AutoTS(object):
 
         Args:
             method (str): 'fillna' or 'transformers' - which to plot
-            color_list = list of colors to *sample* for bar colors. Can be names or hex.
+            color_list = list of colors to *sample* for bar colors. Can be names or hex. Or "roman".
             **kwargs passed to pandas.plot()
         """
         series = self.horizontal_to_df()
@@ -3104,6 +3300,16 @@ class AutoTS(object):
             title = "Most Frequently Chosen Preprocessing"
         if color_list is None:
             color_list = colors_list
+        if color_list == "roman":
+            color_list = ancient_roman
+            if len(color_list) < transformers.shape[0]:
+                import matplotlib.pyplot as plt
+
+                additional_colors = plt.cm.hsv(
+                    np.linspace(0, 1, transformers.shape[0] - len(color_list))
+                )
+                color_list = np.vstack((color_list, additional_colors))
+
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
@@ -3210,7 +3416,7 @@ class AutoTS(object):
             if self.best_model_non_horizontal is not None and compare_horizontal:
                 validation_template = pd.concat(
                     [self.best_model, self.best_model_non_horizontal], axis=0
-                )
+                ).drop_duplicates()
             else:
                 validation_template = self.best_model
         elif isinstance(models, str):
@@ -3379,6 +3585,8 @@ class AutoTS(object):
                 'chosen_lower': '#A7AFB2',
                 'chosen_upper': '#A7AFB2',
             }
+        # the validation_forecasts should contain all models from all plots
+        # but template will contain only the current request
         needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []
         for x in self.validation_forecasts.keys():
@@ -3456,11 +3664,9 @@ class AutoTS(object):
             else:
                 title = f"Validation Forecasts for {series}"
         # actual plotting section
+        colb = [x for x in plot_df.columns if "_lower" not in x and "_upper" not in x]
         if colors is not None:
-            # this will need to change is users are allowed to input colors
-            colb = [
-                x for x in plot_df.columns if "_lower" not in x and "_upper" not in x
-            ]
+            # this will need to change if users are allowed to input colors
             new_colors = {x: random.choice(colors_list) for x in colb}
             colors = {**new_colors, **colors}
             ax = plot_df[colb].plot(title=title, color=colors, **kwargs)
@@ -3473,7 +3679,12 @@ class AutoTS(object):
                     color="#A5ADAF",
                 )
         else:
-            ax = plot_df.plot(title=title, **kwargs)
+            # path currently active in the compare_horizontal case
+            if not include_bounds:
+                renaming = {x: x[:8] for x in colb}
+                ax = plot_df[colb].rename(columns=renaming).plot(title=title, **kwargs)
+            else:
+                ax = plot_df.plot(title=title, **kwargs)
         if end_color is not None:
             ax.vlines(
                 x=self.validation_forecast_cuts_ends,
@@ -3556,7 +3767,10 @@ class AutoTS(object):
 
         temp = self.best_model_per_series_mape().reset_index().head(max_series)
 
-        if self.best_model_ensemble == 2:
+        if (
+            self.best_model_ensemble == 2
+            and "profile" not in self.best_model_params["model_metric"]
+        ):
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
             temp['Series'] = (
@@ -3649,11 +3863,15 @@ class AutoTS(object):
         temp.columns = ["Series", "Error"]
         temp["Error"] = temp["Error"].clip(upper=upper_clip, lower=0)
         if self.best_model["Ensemble"].iloc[0] == 2:
-            series = self.horizontal_to_df()
-            temp = temp.merge(series, on='Series')
-            temp['Series'] = (
-                temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
-            )
+            if "profile" not in self.best_model_params["model_metric"]:
+                series = self.horizontal_to_df()
+                temp = temp.merge(series, on='Series')
+                temp['Series'] = (
+                    temp['Series'].str.slice(0, max_name_chars)
+                    + " ("
+                    + temp["Model"]
+                    + ")"
+                )
 
         if kind == "pie":
             temp.set_index("Series").plot(
@@ -3934,6 +4152,569 @@ class AutoTS(object):
             raise ValueError("model id not found in results")
         return temp[temp['ID'] == model_id].iloc[0][self.template_cols_id].to_dict()
 
+    def create_unpredictability_score(self, df_wide=None, scale=False):
+        """Create a dataframe per validation index of relative unpredictability. Most representative on longer model searches."""
+        total_vals = self.num_validations + 1
+
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
+        # handle the fact that results are only available for subset fraction if subset used
+        if self.subset_flag:
+            cols = self.initial_results.per_series_mae.columns
+        else:
+            cols = df_wide.columns
+
+        # full_mae_ids = self.initial_results.full_mae_ids
+        full_mae_errors = self.initial_results.full_mae_errors
+        full_mae_vals = self.initial_results.full_mae_vals
+
+        if full_mae_errors:
+            return create_unpredictability_score(
+                full_mae_errors=full_mae_errors,
+                full_mae_vals=full_mae_vals,
+                total_vals=total_vals,
+                df_wide=df_wide[cols],
+                validation_test_indexes=self.validation_test_indexes,
+                scale=scale,
+            )
+        else:
+            return []
+
+    def plot_unpredictability(self, df_wide=None, series=None, **kwargs):
+        import matplotlib.pyplot as plt
+
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
+
+        if series is None:
+            if self.subset_flag:
+                col = self.initial_results.per_series_mae.columns[-1]
+            else:
+                col = df_wide.columns[-1]
+        else:
+            col = str(series)
+
+        unpredictability_scores = self.create_unpredictability_score(df_wide=df_wide)
+        if isinstance(unpredictability_scores, pd.DataFrame):
+            unpredictability_scores = unpredictability_scores.where(
+                unpredictability_scores > unpredictability_scores.median() * 1.4,
+                unpredictability_scores.min(),
+                axis=1,
+            )
+            time_series = df_wide[col]
+            time_series = time_series[time_series.index > "2022-01-01"]
+            unpredictability_score = unpredictability_scores[col]
+
+            fig, ax1 = plt.subplots(figsize=(12, 6), **kwargs)
+
+            # Plot the original time series on the primary y-axis (left)
+            ax1.plot(time_series, color='blue', label=str(col))
+            ax1.set_xlabel('Time')
+            ax1.set_ylabel('Original Time Series', color='blue')
+            ax1.tick_params(axis='y', labelcolor='blue')
+
+            # Create a secondary y-axis (right) for the unpredictability score
+            ax2 = ax1.twinx()
+            ax2.plot(
+                unpredictability_score,
+                color='red',
+                label='Unpredictability Score',
+                alpha=0.8,
+            )  # , linestyle='--'
+            ax2.set_ylabel('Unpredictability Score', color='red')
+            ax2.tick_params(axis='y', labelcolor='red')
+
+            plt.title(f'{col} Unpredictability Score')
+
+            fig.legend(loc="upper right", bbox_to_anchor=(0.9, 0.9))
+
+            return fig
+
+    def plot_chosen_transformer(
+        self,
+        df_wide=None,
+        series=None,
+        chosen_params=None,
+        color1='grey',
+        color2='darkorange',
+    ):
+        """visualizes the best model transformer, fit_transform (not inverse) effects.
+        Won't show much for ensembles, only shows overall transformer if present.
+
+        Args:
+            df_wide (pd.DataFrame): optional, useful if preclean used
+            series (str): name of time series to plot
+            chosen_params (dict): the parameters of the transformer to use, defaults to best of model search
+            color1 (str): color of original
+            color2 (str): color of transformed
+        """
+        if not self.best_model_transformation_params:
+            return "no transformer directly used"
+        if chosen_params is None:
+            chosen_params = self.best_model_transformation_params
+        if isinstance(chosen_params, str):
+            chosen_params = json.loads(chosen_params)
+
+        import matplotlib.pyplot as plt
+
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
+
+        if series is None:
+            if self.subset_flag:
+                col = self.initial_results.per_series_mae.columns[-1]
+            else:
+                col = df_wide.columns[-1]
+        else:
+            col = str(series)
+
+        self.chosen_transformer = GeneralTransformer(
+            **chosen_params,
+            n_jobs=self.n_jobs,
+            holiday_country=self.holiday_country,
+            verbose=self.verbose,
+            random_seed=self.random_seed,
+            forecast_length=self.forecast_length,
+        )
+        df2 = self.chosen_transformer.fit_transform(df_wide)
+
+        # Set up the figure and first axis
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+
+        with plt.rc_context({'font.family': 'serif'}):
+            # Plot df1[column_name] with enhancements on the first y-axis
+            ax1.plot(df_wide.index, df_wide[col], color=color1, label='original')
+            ax1.set_ylabel(col, color=color1, fontsize=12)
+            ax1.tick_params(axis='y', labelcolor=color1)
+
+            # Customize gridlines for readability
+            ax1.grid(True, which='major', axis='x', linestyle='--', alpha=0.5)
+
+            # Create a second y-axis sharing the x-axis
+            ax2 = ax1.twinx()
+            ax2.plot(
+                df2.index, df2[col], color=color2, linestyle='--', label='transformed'
+            )
+            ax2.set_ylabel('transformed', color=color2, fontsize=12)
+            ax2.tick_params(axis='y', labelcolor=color2)
+
+            # Set x-axis label and title with enhanced styles
+            ax1.set_xlabel('Time', family="serif")
+            plt.title(f'Comparison of Chosen Transformer on {col}', fontsize=14)
+
+            # Improve legend appearance by placing it inside the plot with a background
+            ax1.legend(
+                loc='upper left', frameon=True, facecolor='white', edgecolor='gray'
+            )
+            ax2.legend(
+                loc='upper right', frameon=True, facecolor='white', edgecolor='gray'
+            )
+
+            # Show the plot
+            plt.show()
+            return fig
+
+    def plot_mosaic(self, max_series: int = 60, max_rows: int = None, colors=None):
+        """Show the mosaic in a mosaic ensemble, if used."""
+        if (
+            self.best_model_ensemble != 2
+            or "mosaic" not in self.best_model_params["model_metric"]
+        ):
+            return None
+
+        import matplotlib.pyplot as plt
+
+        # from matplotlib.colors import ListedColormap
+
+        df = self.mosaic_to_df()
+        if max_series is not None:
+            df = df.iloc[:, 0:max_series]
+        if max_rows is not None:
+            df = df.iloc[0:max_rows, :]
+        unique_values = pd.unique(df.to_numpy().ravel())
+
+        # Generate a larger custom qualitative palette using 'tab20c' and 'hsv' for better differentiation
+        if colors is None:
+            colors = ancient_roman
+        if len(colors) < len(unique_values):
+            additional_colors = plt.cm.hsv(
+                np.linspace(0, 1, len(unique_values) - len(colors))
+            )
+            colors = np.vstack((colors, additional_colors))
+
+        # Update value-to-color mapping with new colors
+        value_to_color = {value: colors[i] for i, value in enumerate(unique_values)}
+
+        # Plot the mosaic with the new color mapping
+        fig, ax = plt.subplots(figsize=(12, 12))
+        for i in range(df.shape[0]):
+            for j in range(df.shape[1]):
+                color = value_to_color[df.iloc[i, j]]
+                ax.add_patch(plt.Rectangle((j, df.shape[0] - i - 1), 1, 1, color=color))
+
+        # Formatting the plot
+        ax.set_xlim(0, df.shape[1])
+        ax.set_ylim(0, df.shape[0])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal')
+
+        plt.title("Mosaic Representation of Mosaic Ensemble")
+        plt.xlabel("time series")
+        plt.ylabel("forecast steps")
+
+        # Create a better multi-column legend plot with improved formatting
+        fig_legend, ax_legend = plt.subplots(figsize=(15, 15))
+        columns = 4  # Number of columns for the legend
+        rows = (
+            len(value_to_color) + columns - 1
+        ) // columns  # Calculate number of rows needed
+
+        for i, (value, color) in enumerate(value_to_color.items()):
+            col = i % columns
+            row = i // columns
+            ax_legend.add_patch(plt.Rectangle((col * 3, row), 1, 1, color=color))
+            ax_legend.text(col * 3 + 1.2, row + 0.5, value, va='center')
+
+        ax_legend.set_xlim(0, columns * 3)
+        ax_legend.set_ylim(0, rows)
+        ax_legend.set_xticks([])
+        ax_legend.set_yticks([])
+        plt.title("Legend for Mosaic")
+        return ax, ax_legend
+
+    def plot_transformer_by_class(
+        self,
+        template=None,
+        colors: dict = None,
+        top_n: int = 15,
+        plot_group: str = "ModelClass",
+    ):
+        """Using the best results (from exported template), plot usage of transformers by model class.
+
+        Args:
+            template (pd.DataFrame): template object of models to use for assesement, uses best 50 otherwise
+            colors (dict): color mapping of model class to color
+            top_n (int): number of most frequently used transformers to plot
+        """
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        # Read the CSV file
+        if template is None:
+            methods = self.export_template(n=50, unpack_ensembles=True).copy()
+        else:
+            methods = template
+
+        # Initialize a list to collect transformer data
+        transformer_data = []
+
+        # Variable to assign unique IDs to models
+        model_counter = 0
+
+        # Iterate over each method to extract model and transformer information
+        for index, row in methods.iterrows():
+            current_params = json.loads(row['ModelParameters'])
+            ModelParameters = current_params.copy()
+            if 'series' in ModelParameters.keys():
+                # Ensemble model
+                series = ModelParameters['series']
+                series = pd.DataFrame.from_dict(series, orient="index").reset_index(
+                    drop=False
+                )
+                if series.shape[1] > 2:
+                    # For mosaic style ensembles, choose the mode model id
+                    series.set_index(series.columns[0], inplace=True)
+                    series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
+                series.columns = ['Series', 'ID']
+                results = pd.Series(
+                    {
+                        x: current_params['models'][x]['Model']
+                        for x in current_params['models'].keys()
+                    }
+                )
+                results.name = "Model"
+                series = series.merge(results, left_on="ID", right_index=True)
+                series.columns = ["Series", "ID", 'Model']
+                # Get transformers for each model
+                lookup = {}
+                for k, v in ModelParameters['models'].items():
+                    try:
+                        trans_params = json.loads(
+                            v.get('TransformationParameters', '{}')
+                        )
+                        transformations = trans_params.get('transformations', {})
+                        transformers_str = ",".join(transformations.values())
+                        lookup[k] = transformers_str
+                    except Exception:
+                        lookup[k] = "None"
+                series['Transformers'] = (
+                    series['ID'].replace(lookup).replace("", "None")
+                )
+                # Collect data
+                for idx, row_series in series.iterrows():
+                    model_name = row_series['Model']
+                    transformers_list = row_series['Transformers'].split(',')
+                    model_class = model_classes.get(model_name, 'other')
+                    # Assign a unique model ID
+                    model_id = f"model_{model_counter}"
+                    model_counter += 1
+                    for transformer in transformers_list:
+                        if transformer == '':
+                            transformer = 'None'
+                        transformer_data.append(
+                            {
+                                'ModelID': model_id,
+                                'Model': model_name,
+                                'ModelClass': model_class,
+                                'Transformer': transformer,
+                            }
+                        )
+            else:
+                # Single model
+                model_name = row['Model']
+                model_class = model_classes.get(model_name, 'other')
+                # Assign a unique model ID
+                model_id = f"model_{model_counter}"
+                model_counter += 1
+                try:
+                    trans_params = json.loads(row['TransformationParameters'])
+                    transformations = trans_params.get('transformations', {})
+                    transformers_list = transformations.values()
+                    for transformer in transformers_list:
+                        if transformer == '':
+                            transformer = 'None'
+                        transformer_data.append(
+                            {
+                                'ModelID': model_id,
+                                'Model': model_name,
+                                'ModelClass': model_class,
+                                'Transformer': transformer,
+                            }
+                        )
+                except Exception:
+                    # No transformers
+                    transformer_data.append(
+                        {
+                            'ModelID': model_id,
+                            'Model': model_name,
+                            'ModelClass': model_class,
+                            'Transformer': 'None',
+                        }
+                    )
+
+        # Create a DataFrame from the collected data
+        transformer_df = pd.DataFrame(transformer_data)
+        self.transformer_by_class = transformer_df
+
+        # Calculate total unique models per model class
+        unique_models = transformer_df[[plot_group, 'ModelID']].drop_duplicates()
+        model_class_counts = (
+            unique_models.groupby(plot_group).size().reset_index(name='TotalModels')
+        )
+
+        # Calculate total models overall
+        total_models_overall = model_class_counts['TotalModels'].sum()
+
+        # Calculate counts of transformers per model class
+        counts = (
+            transformer_df.groupby([plot_group, 'Transformer'])
+            .size()
+            .reset_index(name='Count')
+        )
+
+        # Calculate proportion of models in each class that used each transformer
+        counts = counts.merge(model_class_counts, on=plot_group)
+        counts['ProportionInClass'] = counts['Count'] / counts['TotalModels']
+
+        # Calculate proportion of each model class in the total models
+        model_class_counts['ClassProportion'] = (
+            model_class_counts['TotalModels'] / total_models_overall
+        )
+
+        # Merge ClassProportion into counts
+        counts = counts.merge(
+            model_class_counts[[plot_group, 'ClassProportion']],
+            on=plot_group,
+            suffixes=('', '_y'),
+        )
+
+        # Calculate adjusted proportion
+        counts['AdjustedProportion'] = (
+            counts['ProportionInClass'] * counts['ClassProportion']
+        )
+
+        # For each transformer, normalize the adjusted proportions so that they sum to 1
+        counts['NormalizedProportion'] = counts.groupby('Transformer')[
+            'AdjustedProportion'
+        ].transform(lambda x: x / x.sum())
+
+        # Select the top N transformers based on total usage
+        total_transformer_counts = (
+            transformer_df.groupby('Transformer')['ModelID']
+            .nunique()
+            .reset_index(name='TotalCount')
+        )
+        top_transformers = (
+            total_transformer_counts.sort_values(by='TotalCount', ascending=False)
+            .head(top_n)['Transformer']
+            .tolist()
+        )
+
+        # Filter counts to include only top transformers
+        counts_top = counts[counts['Transformer'].isin(top_transformers)]
+
+        # Ensure the transformers are in the desired order
+        counts_top.loc[:, 'Transformer'] = pd.Categorical(
+            counts_top['Transformer'], categories=top_transformers, ordered=True
+        )
+
+        # Define pastel colors for model classes
+        if colors is None:
+            if plot_group == "ModelClass":
+                sns_colors = sns.color_palette("pastel")
+                model_class_colors = {
+                    'motif': sns_colors[0],
+                    'ML': sns_colors[1],
+                    'stat': sns_colors[2],
+                    'naive': sns_colors[3],
+                    'DL': sns_colors[4],
+                    'other': sns_colors[5],
+                }
+            else:
+                model_class_colors = dict(
+                    zip(transformer_df["Model"].unique().tolist(), colors_list)
+                )
+        else:
+            model_class_colors = colors
+
+        # Update font sizes using rcParams for consistency
+        plt.rcParams.update(
+            {
+                'font.size': 16,  # Base font size
+                'axes.titlesize': 18,  # Title font size
+                'axes.labelsize': 16,  # Axes labels font size
+                'xtick.labelsize': 14,  # X-axis tick labels font size
+                'ytick.labelsize': 14,  # Y-axis tick labels font size
+                'legend.fontsize': 14,  # Legend font size
+                'legend.title_fontsize': 16,  # Legend title font size
+            }
+        )
+
+        # Set the style for publication quality
+        sns.set_theme(style='whitegrid', context='paper', font_scale=1.8)
+
+        # Pivot the data for plotting
+        plot_data = counts_top.pivot_table(
+            index='Transformer',
+            columns=plot_group,
+            values='NormalizedProportion',
+            fill_value=0,
+        ).reindex(index=top_transformers)
+
+        # Plot using custom bar plot to add percentage labels
+        fig, ax = plt.subplots(figsize=(12, 8))
+        bottoms = [0] * len(plot_data)
+        transformer_indices = range(len(plot_data))
+        for model_class in plot_data.columns:
+            proportions = plot_data[model_class].values
+            bars = ax.bar(
+                transformer_indices,
+                proportions,
+                bottom=bottoms,
+                color=model_class_colors.get(model_class, '#333333'),
+                edgecolor='black',
+                label=model_class,
+            )
+            # Add percentage labels
+            for idx, bar in enumerate(bars):
+                height = bar.get_height()
+                if height > 0.025:  # Only label if the segment is larger than 1.5%
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bottoms[idx] + height / 2,
+                        f'{round(height*100)}%',
+                        ha='center',
+                        va='center',
+                        fontsize=12,
+                        color='black',
+                        alpha=0.5,
+                    )
+            bottoms = [sum(x) for x in zip(bottoms, proportions)]
+
+        # Customize plot appearance
+        ax.set_xticks(transformer_indices)
+        ax.set_xticklabels(plot_data.index, rotation=90)
+        ax.set_xlabel('Transformer')
+        ax.set_ylabel('Frequency Adjusted Proportion')
+        ax.set_title('Transformer Usage by Model Class', fontweight='bold')
+
+        # Remove y-axis grid lines
+        ax.yaxis.grid(False)
+        ax.xaxis.grid(False)
+
+        # Remove top and right spines for a cleaner look
+        sns.despine(trim=True, left=True)
+
+        # Adjust y-axis to show percentages rounded to whole numbers
+        ax.yaxis.set_major_formatter(
+            plt.FuncFormatter(lambda y, _: '{:.0%}'.format(round(y * 100) / 100))
+        )
+
+        # Adjust legend position to avoid blocking bars
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(
+            handles=handles,
+            labels=labels,
+            title='Model Class',
+            fontsize=14,
+            title_fontsize=16,
+            loc='center left',
+            bbox_to_anchor=(1, 0.5),
+            frameon=False,
+        )
+
+        # Adjust layout to fit larger text and legend
+        plt.tight_layout(
+            rect=[0, 0, 0.92, 1]
+        )  # Adjust right margin to make space for legend
+
+    def plot_failure_rate(self, target="transformers"):
+        initial_results = self.results()
+        failures = []
+        successes = []
+        for idx, row in initial_results.iterrows():
+            failed = not pd.isnull(row['Exceptions'])
+            if target == "transformers":
+                transforms = list(
+                    json.loads(row['TransformationParameters'])
+                    .get('transformations', {})
+                    .values()
+                )
+            elif target == "models":
+                transforms = [row["Model"]]
+            else:
+                raise ValueError(f"target {target} not recognized")
+            if failed:
+                failures = failures + transforms
+            else:
+                successes = successes + transforms
+        total = pd.concat(
+            [
+                pd.Series(failures).value_counts().rename("failures").to_frame(),
+                pd.Series(successes).value_counts().rename("successes"),
+            ],
+            axis=1,
+        ).fillna(0)
+        total['failure_rate'] = total['failures'] / (
+            total['successes'] + total['failures']
+        )
+        return (
+            total.sort_values("failure_rate", ascending=False)['failure_rate']
+            .iloc[0:20]
+            .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+        )
+
     def diagnose_params(self, target='runtime', waterfall_plots=True):
         """Attempt to explain params causing measured outcomes using shap and linear regression coefficients.
 
@@ -3972,9 +4753,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y['Model'] = (
-                        x  # might need to remove this and do analysis independently for each
-                    )
+                    y[
+                        'Model'
+                    ] = x  # might need to remove this and do analysis independently for each
                     res.append(
                         pd.DataFrame(
                             {
@@ -4205,19 +4986,19 @@ colors_list = [
     '#2F4F4F',
     '#FFDEAD',
     '#800000',
-    '#FDF5E6',
-    '#F5F5F5',
-    '#F0FFF0',
+    '#FFDAB9',
+    '#D3D3D3',
+    '#98FB98',
     '#87CEEB',
     '#A52A2A',
-    '#90EE90',
+    '#FFA07A',
     '#7FFF00',
     '#E9967A',
     '#1E90FF',
-    '#FFF0F5',
+    '#FF69B4',
     '#ADD8E6',
     '#008B8B',
-    '#FFF5EE',
+    '#FF7F50',
     '#00FA9A',
     '#9370DB',
     '#4682B4',
@@ -4229,7 +5010,79 @@ colors_list = [
     '#00008B',
     '#4B0082',
     '#0403A7',
-    "#000000",
+    '#000000',
+    '#B0C4DE',
+    '#5F9EA0',
+    '#708090',
+    '#556B2F',
+    '#FF4500',
+    '#FA8072',
+    '#FFD700',
+    '#DA70D6',
+    '#DC143C',
+    '#B22222',
+    '#00CED1',
+    '#40E0D0',
+    '#FF1493',
+    '#483D8B',
+    '#2E8B57',
+    '#D2691E',
+    '#8FBC8F',
+    '#FF8C00',
+    '#FFB6C1',
+    '#8A2BE2',
+    '#D8BFD8',
+]
+
+# colors you might see in a mosaic or fresco, llm based and only partially accurate but want to do more depth on this later
+ancient_roman = [
+    '#66023C',  # Tyrian Purple (Murex snail secretion - corrected to a more authentic red-purple)
+    '#D4AF37',  # Gold (Gold leaf or gold powder)
+    '#B55A30',  # Terracotta (Clay-based pigments)
+    '#5E503F',  # Taupe (Earthy brown pigments)
+    '#DC143C',  # Crimson (Kermes red, extracted from scale insects)
+    '#D8C3A5',  # Pale Sand (Limestone-based pigments)
+    '#BAA378',  # Olive Tan (Natural ochre)
+    '#3A5F3F',  # Dark Green Serpentine (stone)
+    '#2E4057',  # Deep Slate Blue (Copper)
+    '#6A7B76',  # Muted Teal (Malachite or copper-based pigments)
+    '#965D62',  # Burnt Rose (Red ochre or iron oxide)
+    '#7F9B9B',  # Grayish Blue (Indigo or woad mixed with white)
+    '#7C0A02',  # Cinnabar Red (Mercury sulfide, known as vermilion)
+    '#8A3324',  # Burnt Umber (Natural iron oxide)
+    '#4682B4',  # Steel Blue (Egyptian Blue - a silicate of copper and calcium)
+    '#CD5C5C',  # Indian Red (Red ochre)
+    '#B8860B',  # Dark Goldenrod (Orpiment, arsenic trisulfide)
+    '#6B8E23',  # Olive Drab (Plant-based green pigments like verdigris)
+    '#2E8B57',  # Sea Green (Verdigris or malachite)
+    '#9932CC',  # Dark Orchid (Could represent a more intense version of murex purple)
+    '#9400D3',  # Dark Violet (A possible representation of Tyrian purple)
+    '#4B0082',  # Indigo (Indigo plant dye)
+    '#6A5ACD',  # Slate Blue (Cobalt blue mixed with white)
+    '#483D8B',  # Dark Slate Blue (Natural mineral blue)
+    '#DA70D6',  # Orchid (Similar to a diluted murex purple)
+    '#1C1C1C',  # Obsidian Black (stone)
+    '#D8BFD8',  # Thistle (Light violet)
+    '#FF2400',  # Cinnabar Red (Mercury sulfide)
+    '#1F75FE',  # Egyptian Blue (Silicate of copper and calcium)
+    '#FFD700',  # Bright Gold (Orpiment or actual gold leaf)
+    '#32CD32',  # Bright Verdigris Green (Copper acetate-based)
+    '#FFA07A',  # Light Coral (Madder Lake - derived from madder plant)
+    '#FF4500',  # Bright Orange (Ochre or plant-based)
+    '#ADD8E6',  # Light Blue (Sky blue fresco made with calcium-based pigments)
+    '#FFFFE0',  # Light Yellow (Lead-tin yellow)
+    '#00FA9A',  # Medium Spring Green (Copper-based greens)
+    '#F4A460',  # Sandy Brown (Saffron)
+    '#FFFACD',  # Lemon Chiffon (Lighter ochre)
+    '#E9967A',  # Dark Salmon (in accents for walls)
+    '#8B0000',  # Dark Red (Alizarin, a plant dye)
+    '#2B2B2B',  # Basalt Gray (stone)
+    '#FF6347',  # Tomato (Bright red accent, also achievable with madder dye)
+    '#FF8C00',  # Dark Orange (Bright ochre)
+    '#40E0D0',  # Turquoise (Copper-based turquoise pigment)
+    '#FA8072',  # Salmon (Warm pinks used in fresco detailing)
+    '#D5C3AA',  # Travertine Beige (stone)
+    '#EAE6DA',  # Carrara White Marble (stone)
 ]
 
 

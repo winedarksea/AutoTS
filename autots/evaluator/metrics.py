@@ -604,6 +604,7 @@ def full_metric_evaluation(
     cumsum_A=None,
     diff_A=None,
     last_of_array=None,
+    custom_metric=None,
     **kwargs,
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
@@ -613,6 +614,7 @@ def full_metric_evaluation(
         A (np.array): array or df of actuals
         F (np.array): array or df of forecasts
         return_components (bool): if True, return tuple of detailed errors
+        custom metric (callable): a function to generate a custom metric. Expects func(A, F, df_train, prediction_interval) where the first three are np arrays of wide style 2d.
     """
     # THIS IS USED IN AMFM so try to modify without changing inputs and outputs
     # arrays are faster for math than pandas dataframes
@@ -682,7 +684,10 @@ def full_metric_evaluation(
     else:
         mate = np.abs(np.sum(full_errors, axis=0))
     # possibly temporary
-    matse_scale = np.sum(np.abs(A), axis=0)
+    if nan_flag:
+        matse_scale = np.nansum(np.abs(A), axis=0)
+    else:
+        matse_scale = np.sum(np.abs(A), axis=0)
     matse_scale[matse_scale == 0] = 1
     matse = mate / matse_scale
 
@@ -697,6 +702,11 @@ def full_metric_evaluation(
 
     # over/under estimate mask
     ovm = full_errors > 0
+
+    if custom_metric is not None:
+        score = custom_metric(A, F, df_train, prediction_interval)
+    else:
+        score = np.zeros_like(mate)
 
     # note a number of these are created from my own imagination (winedarksea)
     # those are also subject to change as they are tested and refined
@@ -765,6 +775,7 @@ def full_metric_evaluation(
             'wasserstein': precomp_wasserstein(F, cumsum_A) / scaler,
             "dwd": unsorted_wasserstein(np.abs(diff_F), np.abs(diff_A))
             / scaler,  # differential wasserstein distance, pronounced "DUDE"
+            "custom": score,
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),

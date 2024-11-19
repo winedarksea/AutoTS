@@ -69,7 +69,7 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 ### What to Worry About
 There are some basic things to beware of that can commonly lead to poor results:
 
-1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
+1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. Also remove all time series that are entirely NaN or entirely zero.
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
 3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. Along with this, beware of a changing pattern of NaN occurrences, as learned FillNA may not longer apply.
 4. Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events. 
@@ -288,6 +288,9 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 The contour and MADE metrics are useful as they encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.
 
 If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.
+
+It may be worth viewing something like: `model.score_breakdown[model.score_breakdown.index == model.best_model_id].iloc[0]` to see if any one score is skewing selection. 
+Generally you would want the numbers here to follow the balance requested in the `metric_weighting`.
 
 ##### Plots
 ```python
@@ -868,8 +871,11 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
 |  KalmanStateSpace       |              |                         |    True       |                 |       |              |              |               |
 |  FFT                    |              |                         |    True       |                 |       |              |              |               |
+|  DMD                    |              |                         |    True       |                 |       | True         |              |               |
+|  BasicLinearModel       |              |                         |    True       |                 |       |              |              | True          |
 |  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |              |               |
 |  NeuralForecast         | NeuralForecast |                       |    True       |                 | yes   | True         |              | True          |
+|  TVVAR                  |              |                         |    True       |                 |       | True         |              | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |
