@@ -21,10 +21,10 @@ def extract_seasonal_val_periods(validation_method):
 
 
 def validate_num_validations(
-    validation_method,
-    num_validations,
-    df_wide_numeric,
-    forecast_length,
+    validation_method="backwards",
+    num_validations=2,
+    df_wide_numeric=None,
+    forecast_length=None,
     min_allowed_train_percent=0.5,
     verbose=0,
 ):
