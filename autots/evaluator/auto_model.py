@@ -1669,6 +1669,7 @@ def _eval_prediction_for_template(
     ).reset_index(drop=True)
 
     ps_metric = model_error.per_series_metrics
+    ps_metric["ValidationRound"] = validation_round
     ps_metric.index.name = "autots_eval_metric"
     ps_metric = ps_metric.reset_index(drop=False)
     ps_metric.index = [model_id] * ps_metric.shape[0]
