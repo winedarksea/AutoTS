@@ -2847,8 +2847,8 @@ class AlignLastValue(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "rows": random.choices([1, 2, 4, 7], [0.83, 0.02, 0.05, 0.1])[0],
-            "lag": random.choices([1, 2, 7, 28], [0.8, 0.05, 0.1, 0.05])[0],
+            "rows": random.choices([1, 2, 4, 7, 24, 84, 168], [0.83, 0.02, 0.05, 0.1, 0.01, 0.05, 0.05])[0],
+            "lag": random.choices([1, 2, 7, 28, 84, 168], [0.8, 0.05, 0.1, 0.05, 0.05, 0.01])[0],
             "method": random.choices(["additive", "multiplicative"], [0.9, 0.1])[0],
             "strength": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
