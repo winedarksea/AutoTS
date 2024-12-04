@@ -1141,6 +1141,9 @@ def looped_motif(
         if point_method == "closest":
             idx = np.argsort(A, axis=0)[:k].flatten()
         else:
+            if k > A.shape[0]:
+                print("k too large for size of data in motif")
+                k = A.shape[0]
             idx = np.argpartition(A, k, axis=0)[:k].flatten()
     # distances for weighted mean
     results = y[idx]
