@@ -6644,17 +6644,20 @@ def transformer_list_to_dict(transformer_list):
         transformer_list = "superfast"
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
-    elif transformer_list in ["fast", "default", "Fast", "auto"]:
+    elif transformer_list in ["fast", "default", "Fast", "auto", "fast_no_slice"]:
         transformer_list = fast_transformer_dict
-    elif transformer_list == "superfast":
+    elif transformer_list in ["superfast", "superfast_no_slice"]:
         transformer_list = superfast_transformer_dict
-    elif transformer_list == "scalable":
+    elif transformer_list in ["scalable", "scalable_no_slice"]:
         # "scalable" meant to be even smaller than "fast" subset of transformers
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         del transformer_list["ReplaceConstant"]
         del transformer_list["ThetaTransformer"]  # just haven't tested it enough yet
+    elif "no_slice" in transformer_list:
+        # slice can be a problem child in some cases, so can remove by adding this
+        del transformer_list["Slice"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
