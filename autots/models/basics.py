@@ -3158,6 +3158,8 @@ class BallTreeMultivariateMotif(ModelObject):
         distance_metric: str = "canberra",
         k: int = 10,
         sample_fraction=None,
+        comparison_transformation: dict = None,
+        combination_transformation: dict = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -3175,6 +3177,8 @@ class BallTreeMultivariateMotif(ModelObject):
         self.distance_metric = distance_metric
         self.k = k
         self.sample_fraction = sample_fraction
+        self.comparison_transformation = comparison_transformation
+        self.combination_transformation = combination_transformation
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -3203,10 +3207,27 @@ class BallTreeMultivariateMotif(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         phrase_n = self.window + forecast_length
+        # fit transform only, no need for inverse as this is only for finding windows
+        if self.comparison_transformation is not None:
+            self.comparison_transformer = GeneralTransformer(
+                **self.comparison_transformation
+            )
+            compare_df = self.comparison_transformer.fit_transform(self.df)
+        else:
+            compare_df = self.df
+        # applied once, then inversed after windows combined as forecast
+        if self.combination_transformation is not None:
+            self.combination_transformer = GeneralTransformer(
+                **self.combination_transformation
+            )
+            wind_arr = self.combination_transformer.fit_transform(self.df)
+        else:
+            wind_arr = self.df
+
         if False:
             # OLD WAY
             x = sliding_window_view(
-                self.df.to_numpy(dtype=np.float32), phrase_n, axis=0
+                compare_df.to_numpy(dtype=np.float32), phrase_n, axis=0
             )
             Xa = x.reshape(-1, x.shape[-1])
             if self.sample_fraction is not None:
@@ -3222,7 +3243,7 @@ class BallTreeMultivariateMotif(ModelObject):
         else:
             # shared with WindowRegression
             Xa = chunk_reshape(
-                self.df.to_numpy(dtype=np.float32),
+                compare_df.to_numpy(dtype=np.float32),
                 phrase_n,
                 sample_fraction=self.sample_fraction,
                 random_seed=self.random_seed,
@@ -3239,7 +3260,7 @@ class BallTreeMultivariateMotif(ModelObject):
 
             tree = BallTree(Xa[:, : self.window], metric=self.distance_metric)
             # Query the KDTree to find k nearest neighbors for each point in Xa
-        Xb = self.df.iloc[-self.window :].to_numpy().T
+        Xb = wind_arr.iloc[-self.window :].to_numpy().T
         A, self.windows = tree.query(Xb, k=self.k)
         # (k, forecast_length, n_series)
         self.result_windows = Xa[self.windows][:, :, self.window :].transpose(1, 2, 0)
@@ -3273,6 +3294,14 @@ class BallTreeMultivariateMotif(ModelObject):
         upper_forecast = pd.DataFrame(
             upper_forecast, index=test_index, columns=self.column_names
         )
+        if self.combination_transformation is not None:
+            forecast = self.combination_transformer.inverse_transform(forecast)
+            lower_forecast = self.combination_transformer.inverse_transform(
+                lower_forecast
+            )
+            upper_forecast = self.combination_transformer.inverse_transform(
+                upper_forecast
+            )
         if just_point_forecast:
             return forecast
         else:
@@ -3331,6 +3360,21 @@ class BallTreeMultivariateMotif(ModelObject):
             k_choice = random.choices(
                 [1, 3, 5, 10, 15, 20, 100], [0.02, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0]
+        transformers_none = random.choices([True, False], [0.7, 0.3])[0]
+        if transformers_none:
+            comparison_transformation = None
+            combination_transformation = None
+        else:
+            comparison_transformation = RandomTransform(
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
+            )
+            combination_transformation = RandomTransform(
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
+            )
         return {
             "window": random.choices(
                 [2, 3, 5, 7, 10, 14, 28, 60],
@@ -3343,6 +3387,8 @@ class BallTreeMultivariateMotif(ModelObject):
             "distance_metric": random.choices(metric_list, metric_probabilities)[0],
             "k": k_choice,
             "sample_fraction": sample_fraction,
+            "comparison_transformation": comparison_transformation,
+            "combination_transformation": combination_transformation,
         }
 
     def get_params(self):
@@ -3353,6 +3399,8 @@ class BallTreeMultivariateMotif(ModelObject):
             "distance_metric": self.distance_metric,
             "k": self.k,
             "sample_fraction": self.sample_fraction,
+            "comparison_transformation": self.comparison_transformation,
+            "combination_transformation": self.combination_transformation,
         }
 
 
