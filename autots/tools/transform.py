@@ -1200,14 +1200,14 @@ class DatepartRegressionTransformer(EmptyTransformer):
         else:
             polynomial_choice = None
 
-        if method == "all":
+        if method in ["all", "deep"]:
             choice = generate_regressor_params()
         elif method == "fast":
             choice = generate_regressor_params(
                 model_dict={
                     "ElasticNet": 0.5,
                     "DecisionTree": 0.25,
-                    # "KNN": 0.02,
+                    # "KNN": 0.002,  # simply uses too much memory at scale
                 }
             )
         else:

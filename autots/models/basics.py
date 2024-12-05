@@ -3260,10 +3260,20 @@ class BallTreeMultivariateMotif(ModelObject):
 
             tree = BallTree(Xa[:, : self.window], metric=self.distance_metric)
             # Query the KDTree to find k nearest neighbors for each point in Xa
-        Xb = wind_arr.iloc[-self.window :].to_numpy().T
-        A, self.windows = tree.query(Xb, k=self.k)
+        Xb = compare_df.iloc[-self.window :].to_numpy().T
+        A, self.windows = tree.query(Xb, k=self.k)  # dualtree=True
+        if self.combination_transformation is not None or self.comparison_transformation is not None:
+            del Xa
+            Xc = chunk_reshape(
+                wind_arr.to_numpy(dtype=np.float32),
+                phrase_n,
+                sample_fraction=self.sample_fraction,
+                random_seed=self.random_seed,
+            )
+        else:
+            Xc = Xa
         # (k, forecast_length, n_series)
-        self.result_windows = Xa[self.windows][:, :, self.window :].transpose(1, 2, 0)
+        self.result_windows = Xc[self.windows][:, :, self.window :].transpose(1, 2, 0)
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
