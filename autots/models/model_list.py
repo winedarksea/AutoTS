@@ -50,6 +50,7 @@ all_models = [
     "DMD",  # 45 models
     "BasicLinearModel",
     "TVVAR",
+    "BallTreeRegressionMotif",
 ]
 # used for graphing, not for model selection
 model_classes = {
@@ -100,6 +101,7 @@ model_classes = {
     'SeasonalNaive': 'naive',
     'ZeroesNaive': 'naive',
     "TVVAR": "stat",
+    "BallTreeRegressionMotif": "motif",
 }
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -136,6 +138,8 @@ default = {
     'Cassandra': 0.8,
     'BasicLinearModel': 0.8,
     'TVVAR': 0.4,
+    "BallTreeMultivariateMotif": 0.4,
+    # "BallTreeRegressionMotif",
 }
 # fastest models at any scale
 superfast = [
@@ -174,6 +178,7 @@ fast = {
     'FFT': 0.8,
     "BallTreeMultivariateMotif": 0.5,  # keep an eye on RAM, not the fastest at scale but works...
     "BasicLinearModel": 0.6,
+    # "TVVAR": 0.6,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -212,7 +217,7 @@ fast_parallel_no_arima = {
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting']
+        + ['MultivariateRegression', 'NeuralForecast', 'PytorchForecasting']
     )
 )
 
@@ -261,6 +266,7 @@ probabilistic = [
     "NeuralForecast",  # mostly
     "BasicLinearModel",
     "TVVAR",
+    "BallTreeRegressionMotif",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -287,6 +293,7 @@ multivariate = [
     "NeuralForecast",
     "DMD",
     "TVVAR",
+    "BallTreeRegressionMotif",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -337,6 +344,7 @@ recombination_approved = [
     "DMD",
     "BasicLinearModel",
     "TVVAR",
+    "BallTreeRegressionMotif",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -388,6 +396,7 @@ regressor = [
     "NeuralForecast",
     "BasicLinearModel",
     "TVVAR",
+    "BallTreeRegressionMotif",
 ]
 motifs = [
     'UnivariateMotif',
@@ -397,6 +406,7 @@ motifs = [
     'MetricMotif',
     'SeasonalityMotif',
     'BallTreeMultivariateMotif',
+    "BallTreeRegressionMotif",
 ]
 regressions = [
     'RollingRegression',
@@ -417,6 +427,8 @@ all_result_path = [
     "Motif",
     "ARCH",  # simulations not motifs but similar
     "PytorchForecasting",
+    # "BallTreeRegressionMotif",
+    # "BallTreeMultivariateMotif",
 ]
 # these are those that require a parameter, and return a dict
 diff_window_motif_list = [

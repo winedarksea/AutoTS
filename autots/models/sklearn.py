@@ -291,6 +291,7 @@ def rolling_x_regressor_regressor(
     cointegration_lag: int = 1,
     series_id=None,
     slice_index=None,
+    series_id_to_multiindex=None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -327,16 +328,17 @@ def rolling_x_regressor_regressor(
         X['series_id'] = df.columns[0]
         X = X.merge(static_regressor, left_on="series_id", right_index=True, how='left')
         X = X.drop(columns=['series_id'])
+    if slice_index is not None:
+        X = X[X.index.isin(slice_index)]
+    if series_id_to_multiindex is not None:
+        X["series_id"] = str(series_id_to_multiindex)
+        X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
-    if slice_index is not None:
-        return X[X.index.isin(slice_index)]
-    else:
-        return X
+    return X
 
 
 def retrieve_regressor(
@@ -1148,7 +1150,9 @@ def generate_regressor_params(
                     "n_neighbors": random.choices([3, 5, 10, 14], [0.2, 0.7, 0.1, 0.1])[
                         0
                     ],
-                    "weights": random.choices(['uniform', 'distance'], [0.7, 0.3])[0],
+                    "weights": random.choices(['uniform', 'distance'], [0.999, 0.001])[
+                        0
+                    ],
                     'p': random.choices([2, 1, 1.5], [0.7, 0.1, 0.1])[0],
                     'leaf_size': random.choices([30, 10, 50], [0.8, 0.1, 0.1])[0],
                 },
@@ -3442,7 +3446,7 @@ class MultivariateRegression(ModelObject):
                     n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600
                 )(
                     delayed(rolling_x_regressor_regressor)(
-                        base[x_col].to_frame(),
+                        base[x_col].to_frame().astype(float),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
                         std_rolling_periods=self.std_rolling_periods,
@@ -3485,7 +3489,7 @@ class MultivariateRegression(ModelObject):
                 self.X = pd.concat(
                     [
                         rolling_x_regressor_regressor(
-                            base[x_col].to_frame(),
+                            base[x_col].to_frame().astype(float),
                             mean_rolling_periods=self.mean_rolling_periods,
                             macd_periods=self.macd_periods,
                             std_rolling_periods=self.std_rolling_periods,
@@ -3933,9 +3937,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

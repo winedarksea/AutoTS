@@ -751,6 +751,11 @@ base_seasonalities = [  # this needs to be a list
     ["dayofweek", (365.25, 4)],
     ["dayofweek", (365.25, 14)],
     ["dayofweek", (365.25, 24)],
+    [
+        "dayofweek",
+        (365.25, 14),
+        (354.37, 10),
+    ],  # 354.37 should be islamic calendar avg length
     "other",
 ]
 
@@ -780,6 +785,7 @@ def random_datepart(method='random'):
             0.05,
             0.05,
             0.05,
+            0.02,
             0.02,
             0.3,
         ],

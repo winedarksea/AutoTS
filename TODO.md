@@ -13,34 +13,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.16 🇺🇦 🇺🇦 🇺🇦
-* export_template added focus_models option
-* added OneClassSVM and GaussianMixture anomaly model options
-* added plot_unpredictability_score
-* added a few more NeuralForecast search options
-* bounds_only to Constraint transformer
-* updates for deprecated upstream args
-* FIRFilter transformer added
-* mle and imle downscaled to reduce score imbalance issues with these two in generate score
-* SectionalMotif now more robust to forecast lengths longer than history
-* new transformer and metric options for SectionalMotif
-* NaN robustness to matse
-* 'round' option to Constraint
-* minor change to mosaic min style ensembles to remove edge case errors
-* 'mosaic-profile', 'filtered', 'unpredictability_adjusted' and 'median' style mosaics added
-* updated profiler, and improved feature generation for horizontal generalization
-* changepoint style trend as an option to GLM and GLS
-* added ShiftFirstValue which is only a minor nuance on PositiveShift transformer
-* added BasicLinearModel model
-* datepart_method, scale, and fourier encodig to WindowRegression
-* trimmed_mean and more date part options to SeasonalityMotif
-* some additional options to MultivariateRegression
-* added ThetaTransformer
-* added TVVAR model (time varying VAR)
-* added ChangepointDetrend transformer
-* added MeanPercentSplitter transformer
-* updated load_daily with more recent history
-* added support for passing a custom metric
+# 0.6.17 🇺🇦 🇺🇦 🇺🇦
+* minor adjustments and bug fixes for scalability
+* added BallTreeRegressionMotif
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

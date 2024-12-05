@@ -48,6 +48,7 @@ from autots.models.basics import (
     BallTreeMultivariateMotif,
     BasicLinearModel,
     TVVAR,
+    BallTreeRegressionMotif,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -723,6 +724,17 @@ def ModelMonster(
         )
     elif model == 'TVVAR':
         return TVVAR(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'BallTreeRegressionMotif':
+        return BallTreeRegressionMotif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
@@ -1669,6 +1681,7 @@ def _eval_prediction_for_template(
     ).reset_index(drop=True)
 
     ps_metric = model_error.per_series_metrics
+    ps_metric["ValidationRound"] = validation_round
     ps_metric.index.name = "autots_eval_metric"
     ps_metric = ps_metric.reset_index(drop=False)
     ps_metric.index = [model_id] * ps_metric.shape[0]
@@ -2016,6 +2029,27 @@ horizontal_post_processors = [
             },
         },
     },
+    {  # best on VPV, 19.7 smape
+        "fillna": "quadratic",
+        "transformations": {"0": "AlignLastValue", "1": "ChangepointDetrend"},
+        "transformation_params": {
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "1": {
+                "model": "Linear",
+                "changepoint_spacing": 180,
+                "changepoint_distance_end": 360,
+                "datepart_method": None,
+            },
+        },
+    },
 ]
 
 
@@ -2360,58 +2394,58 @@ def TemplateWizard(
         )
         ps = template_result.per_series_metrics
         template_result.per_series_mae = ps[ps['autots_eval_metric'] == 'mae'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_made = ps[ps['autots_eval_metric'] == 'made'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_contour = ps[
             ps['autots_eval_metric'] == 'contour'
-        ].drop(columns='autots_eval_metric')
+        ].drop(columns=['autots_eval_metric', "ValidationRound"])
         template_result.per_series_rmse = ps[ps['autots_eval_metric'] == 'rmse'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_spl = ps[ps['autots_eval_metric'] == 'spl'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_mle = ps[ps['autots_eval_metric'] == 'mle'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_imle = ps[ps['autots_eval_metric'] == 'imle'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_maxe = ps[ps['autots_eval_metric'] == 'maxe'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_oda = ps[ps['autots_eval_metric'] == 'oda'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_mqae = ps[ps['autots_eval_metric'] == 'mqae'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_dwae = ps[ps['autots_eval_metric'] == 'dwae'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_ewmae = ps[ps['autots_eval_metric'] == 'ewmae'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_uwmse = ps[ps['autots_eval_metric'] == 'uwmse'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_smoothness = ps[
             ps['autots_eval_metric'] == 'smoothness'
-        ].drop(columns='autots_eval_metric')
+        ].drop(columns=['autots_eval_metric', "ValidationRound"])
         template_result.per_series_mate = ps[ps['autots_eval_metric'] == 'mate'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_matse = ps[ps['autots_eval_metric'] == 'matse'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
         template_result.per_series_wasserstein = ps[
             ps['autots_eval_metric'] == 'wasserstein'
-        ].drop(columns='autots_eval_metric')
+        ].drop(columns=['autots_eval_metric', "ValidationRound"])
         template_result.per_series_dwd = ps[ps['autots_eval_metric'] == 'dwd'].drop(
-            columns='autots_eval_metric'
+            columns=['autots_eval_metric', "ValidationRound"]
         )
     else:
         template_result.per_series_metrics = pd.DataFrame()

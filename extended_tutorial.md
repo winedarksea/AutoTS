@@ -76,6 +76,8 @@ There are some basic things to beware of that can commonly lead to poor results:
 
 What you don't need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing. 
 
+One of the most common causes of failures for loading a template on a new dataset is models failing on series that are too short (or essentially all missing). Filter out series that are too new or have been discontinued, before proceeding.
+
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
 Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points. 
@@ -876,6 +878,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |              |               |
 |  NeuralForecast         | NeuralForecast |                       |    True       |                 | yes   | True         |              | True          |
 |  TVVAR                  |              |                         |    True       |                 |       | True         |              | True          |
+| BallTreeRegressionMotif | sklearn      |                         |    True       |     joblib      |       | True         |              | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

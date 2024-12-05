@@ -516,7 +516,8 @@ class HPFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         part = random.choices(["trend", "cycle"], weights=[0.98, 0.02])[0]
         lamb = random.choices(
-            [1600, 6.25, 129600, 104976000000], weights=[0.5, 0.2, 0.2, 0.1]
+            [1600, 6.25, 129600, 104976000000, 4, 16, 62.5, 1049760000000],
+            weights=[0.5, 0.2, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025],
         )[0]
         return {"part": part, "lamb": lamb}
 
@@ -1200,14 +1201,14 @@ class DatepartRegressionTransformer(EmptyTransformer):
         else:
             polynomial_choice = None
 
-        if method == "all":
+        if method in ["all", "deep"]:
             choice = generate_regressor_params()
         elif method == "fast":
             choice = generate_regressor_params(
                 model_dict={
                     "ElasticNet": 0.5,
                     "DecisionTree": 0.25,
-                    "KNN": 0.02,
+                    # "KNN": 0.002,  # simply uses too much memory at scale
                 }
             )
         else:
@@ -2238,6 +2239,7 @@ class ScipyFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         if method == "fast":
             method = random.choice(['butter', 'savgol_filter'])
+            polyorder = random.choices([1, 2, 3, 4], [0.5, 0.5, 0.25, 0.2])[0]
         else:
             method = random.choices(
                 [
@@ -2253,6 +2255,7 @@ class ScipyFilter(EmptyTransformer):
                 [0.1, 0.1, 0.9, 0.9],
                 k=1,
             )[0]
+            polyorder = random.choice([1, 2, 3, 4])
         # analog_choice = bool(random.randint(0, 1))
         analog_choice = False
         xn = random.randint(1, 99)
@@ -2262,7 +2265,7 @@ class ScipyFilter(EmptyTransformer):
         elif method == "savgol_filter":
             method_args = {
                 'window_length': random.choices([7, 31, 91], [0.4, 0.3, 0.3])[0],
-                'polyorder': random.choice([1, 2, 3, 4]),
+                'polyorder': polyorder,
                 'deriv': random.choices([0, 1], [0.8, 0.2])[0],
                 'mode': random.choice(['mirror', 'nearest', 'interp']),
             }
@@ -2847,8 +2850,12 @@ class AlignLastValue(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "rows": random.choices([1, 2, 4, 7], [0.83, 0.02, 0.05, 0.1])[0],
-            "lag": random.choices([1, 2, 7, 28], [0.8, 0.05, 0.1, 0.05])[0],
+            "rows": random.choices(
+                [1, 2, 4, 7, 24, 84, 168], [0.83, 0.02, 0.05, 0.1, 0.01, 0.05, 0.05]
+            )[0],
+            "lag": random.choices(
+                [1, 2, 7, 28, 84, 168], [0.8, 0.05, 0.1, 0.05, 0.05, 0.01]
+            )[0],
             "method": random.choices(["additive", "multiplicative"], [0.9, 0.1])[0],
             "strength": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
@@ -6508,7 +6515,7 @@ superfast_transformer_dict = {
     "DifferencedTransformer": 0.05,
     "PositiveShift": 0.02,
     "Log": 0.01,
-    "SeasonalDifference": 0.1,
+    "SeasonalDifference": 0.05,
     "bkfilter": 0.05,
     "ClipOutliers": 0.05,
     # "Discretize": 0.01,  # excessive memory use for some of this
@@ -6517,13 +6524,13 @@ superfast_transformer_dict = {
     "AlignLastValue": 0.05,
     "AlignLastDiff": 0.05,
     "HistoricValues": 0.005,  # need to test more
-    "CenterSplit": 0.005,  # need to test more
+    "CenterSplit": 0.0005,  # need to test more
     "Round": 0.01,
     "CenterLastValue": 0.01,
     "ShiftFirstValue": 0.005,
     "Constraint": 0.005,  # not well tested yet on speed/ram
-    # "BKBandpassFilter": 0.01,  # seems feasible, untested
-    # "DiffSmoother": 0.005,  # seems feasible, untested
+    "BKBandpassFilter": 0.01,  # seems feasible, untested
+    "DiffSmoother": 0.005,  # seems feasible, untested
     # "FIRFilter": 0.005,  # seems feasible, untested
     # "FFTFilter": 0.01,  # seems feasible, untested
     # "FFTDecomposition": 0.01,  # seems feasible, untested
@@ -6644,17 +6651,20 @@ def transformer_list_to_dict(transformer_list):
         transformer_list = "superfast"
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
-    elif transformer_list in ["fast", "default", "Fast", "auto"]:
+    elif transformer_list in ["fast", "default", "Fast", "auto", "fast_no_slice"]:
         transformer_list = fast_transformer_dict
-    elif transformer_list == "superfast":
+    elif transformer_list in ["superfast", "superfast_no_slice"]:
         transformer_list = superfast_transformer_dict
-    elif transformer_list == "scalable":
+    elif transformer_list in ["scalable", "scalable_no_slice"]:
         # "scalable" meant to be even smaller than "fast" subset of transformers
         transformer_list = fast_transformer_dict.copy()
         del transformer_list["SinTrend"]  # no observed issues, but for efficiency
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         del transformer_list["ReplaceConstant"]
         del transformer_list["ThetaTransformer"]  # just haven't tested it enough yet
+    elif "no_slice" in transformer_list:
+        # slice can be a problem child in some cases, so can remove by adding this
+        del transformer_list["Slice"]
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())

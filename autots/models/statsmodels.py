@@ -388,7 +388,7 @@ class GLM(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=3600)(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=7200)(
                 delayed(glm_forecast_by_column)(
                     current_series=df[col],
                     X=X,
@@ -550,7 +550,6 @@ class ETS(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         parallel = True
@@ -566,6 +565,8 @@ class ETS(ModelObject):
 
         def ets_forecast_by_column(current_series, args):
             """Run one series of ETS and return prediction."""
+            from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
             series_name = current_series.name
             with warnings.catch_warnings():
                 if args['verbose'] < 2:
@@ -615,8 +616,10 @@ class ETS(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(ets_forecast_by_column)(self.df_train[col], args)
+            df_list = Parallel(
+                n_jobs=self.n_jobs, timeout=36000
+            )(  # 10 hour timeout, should be enough...
+                delayed(ets_forecast_by_column)(self.df_train[col].astype(float), args)
                 for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
@@ -665,7 +668,9 @@ class ETS(ModelObject):
         seasonal_probability = [0.2, 0.2, 0.6]
         seasonal_choice = random.choices(seasonal_list, seasonal_probability)[0]
         if seasonal_choice in ["additive", "multiplicative"]:
-            seasonal_period_choice = seasonal_int()
+            seasonal_period_choice = seasonal_int(
+                small=True if method != "deep" else False
+            )
         else:
             seasonal_period_choice = None
         parameter_dict = {
@@ -852,7 +857,7 @@ class ARIMA(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
                 delayed(arima_seek_the_oracle)(
                     current_series=self.df_train[col], args=args, series=col
                 )
@@ -1136,7 +1141,7 @@ class UnobservedComponents(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
                 delayed(uc_forecast_by_column)(
                     current_series=self.df_train[col],
                     args=args,
@@ -2061,7 +2066,7 @@ class Theta(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
                 delayed(theta_forecast_by_column)(
                     current_series=self.df_train[col], args=args
                 )
@@ -2307,7 +2312,7 @@ class ARDL(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=72000)(
                 delayed(ardl_per_column)(
                     current_series=self.df_train[col],
                     args=args,
