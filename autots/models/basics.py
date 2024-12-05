@@ -3278,7 +3278,7 @@ class BallTreeMultivariateMotif(ModelObject):
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
-            weights = np.repeat(A.T[..., np.newaxis, :], 14, axis=1)
+            weights = np.repeat(A.T[..., np.newaxis, :], forecast_length, axis=1)
             if weights.sum() == 0:
                 weights = None
             forecast = np.average(self.result_windows, axis=0, weights=weights)
@@ -3289,7 +3289,7 @@ class BallTreeMultivariateMotif(ModelObject):
         elif self.point_method == "midhinge":
             q1 = nan_quantile(self.result_windows, q=0.25, axis=0)
             q2 = nan_quantile(self.result_windows, q=0.75, axis=0)
-            forecast = (q1 + q2) / q2
+            forecast = (q1 + q2) / 2
         elif self.point_method == 'closest':
             # assumes the first K is the smallest distance (true when written)
             forecast = self.result_windows[0]
@@ -4786,7 +4786,11 @@ class BallTreeRegressionMotif(ModelObject):
         # filter because we need that last bit
         self.Xb = self.Xa[self.Xa.index.get_level_values(0) == self.Xa.index.get_level_values(0).max()]
         # don't include a certain amount of the end as they won't have any usable history
-        self.Xa = self.Xa[self.Xa.index.get_level_values(0).isin(self.Xa.index.get_level_values(0).unique().sort_values()[:-self.window])]  # int(self.forecast_length / 2)
+        if self.window is not None:
+            toss_bit = self.window
+        else:
+            toss_bit = int(forecast_length / 2)
+        self.Xa = self.Xa[self.Xa.index.get_level_values(0).isin(self.Xa.index.get_level_values(0).unique().sort_values()[:-toss_bit])]  # int(self.forecast_length / 2)
 
         if self.distance_metric in ["euclidean", 'kdtree']:
             from scipy.spatial import KDTree
@@ -4854,7 +4858,7 @@ class BallTreeRegressionMotif(ModelObject):
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
-            weights = np.repeat(A.T[..., np.newaxis, :], 14, axis=1)
+            weights = np.repeat(A.T[..., np.newaxis, :], forecast_length, axis=1)
             if weights.sum() == 0:
                 weights = None
             forecast = np.average(self.result_windows, axis=0, weights=weights)
@@ -4865,7 +4869,7 @@ class BallTreeRegressionMotif(ModelObject):
         elif self.point_method == "midhinge":
             q1 = nan_quantile(self.result_windows, q=0.25, axis=0)
             q2 = nan_quantile(self.result_windows, q=0.75, axis=0)
-            forecast = (q1 + q2) / q2
+            forecast = (q1 + q2) / 2
         elif self.point_method == 'closest':
             # assumes the first K is the smallest distance (true when written)
             forecast = self.result_windows[0]

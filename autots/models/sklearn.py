@@ -328,6 +328,8 @@ def rolling_x_regressor_regressor(
         X['series_id'] = df.columns[0]
         X = X.merge(static_regressor, left_on="series_id", right_index=True, how='left')
         X = X.drop(columns=['series_id'])
+    if slice_index is not None:
+        X = X[X.index.isin(slice_index)]
     if series_id_to_multiindex is not None:
         X["series_id"] = str(series_id_to_multiindex)
         X = X.set_index("series_id", append=True)
@@ -337,10 +339,7 @@ def rolling_x_regressor_regressor(
             % 10**16
         )
         X['series_id'] = hashed
-    if slice_index is not None:
-        return X[X.index.isin(slice_index)]
-    else:
-        return X
+    return X
 
 
 def retrieve_regressor(
