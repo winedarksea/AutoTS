@@ -616,7 +616,9 @@ class ETS(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(  # 10 hour timeout, should be enough...
+            df_list = Parallel(
+                n_jobs=self.n_jobs, timeout=36000
+            )(  # 10 hour timeout, should be enough...
                 delayed(ets_forecast_by_column)(self.df_train[col].astype(float), args)
                 for (col) in cols
             )
@@ -666,7 +668,9 @@ class ETS(ModelObject):
         seasonal_probability = [0.2, 0.2, 0.6]
         seasonal_choice = random.choices(seasonal_list, seasonal_probability)[0]
         if seasonal_choice in ["additive", "multiplicative"]:
-            seasonal_period_choice = seasonal_int(small=True if method != "deep" else False)
+            seasonal_period_choice = seasonal_int(
+                small=True if method != "deep" else False
+            )
         else:
             seasonal_period_choice = None
         parameter_dict = {

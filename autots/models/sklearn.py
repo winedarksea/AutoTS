@@ -335,8 +335,7 @@ def rolling_x_regressor_regressor(
         X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -1151,7 +1150,9 @@ def generate_regressor_params(
                     "n_neighbors": random.choices([3, 5, 10, 14], [0.2, 0.7, 0.1, 0.1])[
                         0
                     ],
-                    "weights": random.choices(['uniform', 'distance'], [0.999, 0.001])[0],
+                    "weights": random.choices(['uniform', 'distance'], [0.999, 0.001])[
+                        0
+                    ],
                     'p': random.choices([2, 1, 1.5], [0.7, 0.1, 0.1])[0],
                     'leaf_size': random.choices([30, 10, 50], [0.8, 0.1, 0.1])[0],
                 },
@@ -3936,9 +3937,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

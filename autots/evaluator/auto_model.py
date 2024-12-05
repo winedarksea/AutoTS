@@ -2033,9 +2033,22 @@ horizontal_post_processors = [
         "fillna": "quadratic",
         "transformations": {"0": "AlignLastValue", "1": "ChangepointDetrend"},
         "transformation_params": {
-            "0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": False, "threshold": None, "threshold_method": "mean"},
-            "1": {"model": "Linear", "changepoint_spacing": 180, "changepoint_distance_end": 360, "datepart_method": None}
-        }
+            "0": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "1": {
+                "model": "Linear",
+                "changepoint_spacing": 180,
+                "changepoint_distance_end": 360,
+                "datepart_method": None,
+            },
+        },
     },
 ]
 

@@ -516,7 +516,8 @@ class HPFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         part = random.choices(["trend", "cycle"], weights=[0.98, 0.02])[0]
         lamb = random.choices(
-            [1600, 6.25, 129600, 104976000000, 4, 16, 62.5, 1049760000000], weights=[0.5, 0.2, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025]
+            [1600, 6.25, 129600, 104976000000, 4, 16, 62.5, 1049760000000],
+            weights=[0.5, 0.2, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025],
         )[0]
         return {"part": part, "lamb": lamb}
 
@@ -2849,8 +2850,12 @@ class AlignLastValue(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            "rows": random.choices([1, 2, 4, 7, 24, 84, 168], [0.83, 0.02, 0.05, 0.1, 0.01, 0.05, 0.05])[0],
-            "lag": random.choices([1, 2, 7, 28, 84, 168], [0.8, 0.05, 0.1, 0.05, 0.05, 0.01])[0],
+            "rows": random.choices(
+                [1, 2, 4, 7, 24, 84, 168], [0.83, 0.02, 0.05, 0.1, 0.01, 0.05, 0.05]
+            )[0],
+            "lag": random.choices(
+                [1, 2, 7, 28, 84, 168], [0.8, 0.05, 0.1, 0.05, 0.05, 0.01]
+            )[0],
             "method": random.choices(["additive", "multiplicative"], [0.9, 0.1])[0],
             "strength": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]

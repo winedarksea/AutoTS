@@ -3263,7 +3263,10 @@ class BallTreeMultivariateMotif(ModelObject):
             # Query the KDTree to find k nearest neighbors for each point in Xa
         Xb = compare_df.iloc[-self.window :].to_numpy().T
         A, self.windows = tree.query(Xb, k=self.k)  # dualtree=True
-        if self.combination_transformation is not None or self.comparison_transformation is not None:
+        if (
+            self.combination_transformation is not None
+            or self.comparison_transformation is not None
+        ):
             del Xa
             Xc = chunk_reshape(
                 wind_arr.to_numpy(dtype=np.float32),
@@ -4615,7 +4618,13 @@ class BallTreeRegressionMotif(ModelObject):
         self.series_hash = series_hash
         self.frac_slice = frac_slice
 
-    def fit(self, df, future_regressor=None, static_regressor=None, regressor_per_series=None,):
+    def fit(
+        self,
+        df,
+        future_regressor=None,
+        static_regressor=None,
+        regressor_per_series=None,
+    ):
         """Train algorithm given data supplied.
 
         Args:
@@ -4639,7 +4648,12 @@ class BallTreeRegressionMotif(ModelObject):
         return self
 
     def predict(
-        self, forecast_length: int, future_regressor=None, just_point_forecast=False, static_regressor=None, regressor_per_series=None,
+        self,
+        forecast_length: int,
+        future_regressor=None,
+        just_point_forecast=False,
+        static_regressor=None,
+        regressor_per_series=None,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -4692,9 +4706,7 @@ class BallTreeRegressionMotif(ModelObject):
         # joblib multiprocessing to loop through series
         # this might be causing issues, TBD Key Error from Resource Tracker
         if parallel:
-            self.Xa = Parallel(
-                n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000
-            )(
+            self.Xa = Parallel(n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000)(
                 delayed(rolling_x_regressor_regressor)(
                     compare_df[x_col].to_frame(),
                     mean_rolling_periods=self.mean_rolling_periods,
@@ -4784,13 +4796,19 @@ class BallTreeRegressionMotif(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         # filter because we need that last bit
-        self.Xb = self.Xa[self.Xa.index.get_level_values(0) == self.Xa.index.get_level_values(0).max()]
+        self.Xb = self.Xa[
+            self.Xa.index.get_level_values(0) == self.Xa.index.get_level_values(0).max()
+        ]
         # don't include a certain amount of the end as they won't have any usable history
         if self.window is not None:
             toss_bit = self.window
         else:
             toss_bit = int(forecast_length / 2)
-        self.Xa = self.Xa[self.Xa.index.get_level_values(0).isin(self.Xa.index.get_level_values(0).unique().sort_values()[:-toss_bit])]  # int(self.forecast_length / 2)
+        self.Xa = self.Xa[
+            self.Xa.index.get_level_values(0).isin(
+                self.Xa.index.get_level_values(0).unique().sort_values()[:-toss_bit]
+            )
+        ]  # int(self.forecast_length / 2)
 
         if self.distance_metric in ["euclidean", 'kdtree']:
             from scipy.spatial import KDTree
@@ -4803,13 +4821,17 @@ class BallTreeRegressionMotif(ModelObject):
             tree = BallTree(self.Xa, metric=self.distance_metric)
             # Query the KDTree to find k nearest neighbors for each point in Xa
         A, self.windows = tree.query(self.Xb, k=self.k)
-        
-        
+
         # extend data to future to assure full length for windows, forward fill
         if self.extend_df:
-            extension = pd.DataFrame(np.nan, 
-                 index = pd.date_range(start=wind_arr.index[-1], periods=int(forecast_length/2) + 1, freq=self.frequency)[1:],
-                 columns = self.column_names,
+            extension = pd.DataFrame(
+                np.nan,
+                index=pd.date_range(
+                    start=wind_arr.index[-1],
+                    periods=int(forecast_length / 2) + 1,
+                    freq=self.frequency,
+                )[1:],
+                columns=self.column_names,
             )
             wind_arr = pd.concat([wind_arr, extension], axis=0).ffill()
 
@@ -4823,21 +4845,31 @@ class BallTreeRegressionMotif(ModelObject):
         series_selected_flat = series_array[self.windows.flatten()]
 
         # Find positions in df.index where dates are greater than selected datetimes
-        pos_in_df_index = wind_arr.index.searchsorted(dt_selected_flat, side='right')  # Shape: (N,)
+        pos_in_df_index = wind_arr.index.searchsorted(
+            dt_selected_flat, side='right'
+        )  # Shape: (N,)
 
         # Create positions for forecast_length ahead
-        positions = pos_in_df_index[:, None] + np.arange(forecast_length)[None, :]  # Shape: (N, forecast_length)
-        
+        positions = (
+            pos_in_df_index[:, None] + np.arange(forecast_length)[None, :]
+        )  # Shape: (N, forecast_length)
+
         # Handle positions exceeding the length of df.index
         max_index = len(wind_arr.index)
         valid_positions = (positions >= 0) & (positions < max_index)
-        
+
         # Map series names to column indices
-        series_name_to_col_idx = {name: idx for idx, name in enumerate(wind_arr.columns)}
-        col_indices = np.array([series_name_to_col_idx[name] for name in series_selected_flat])
-        
+        series_name_to_col_idx = {
+            name: idx for idx, name in enumerate(wind_arr.columns)
+        }
+        col_indices = np.array(
+            [series_name_to_col_idx[name] for name in series_selected_flat]
+        )
+
         # Broadcast col_indices to match the shape of positions
-        col_indices_broadcasted = np.repeat(col_indices, forecast_length).reshape(N, forecast_length)
+        col_indices_broadcasted = np.repeat(col_indices, forecast_length).reshape(
+            N, forecast_length
+        )
 
         # Use advanced indexing to extract data
         data = np.full((N, forecast_length), np.nan)
@@ -4849,12 +4881,16 @@ class BallTreeRegressionMotif(ModelObject):
         positions_flat_valid = positions_flat[valid_mask_flat]
         col_indices_flat_valid = col_indices_flat[valid_mask_flat]
         data_flat = data.flatten()
-        data_flat[valid_mask_flat] = wind_arr.values[positions_flat_valid, col_indices_flat_valid]
+        data_flat[valid_mask_flat] = wind_arr.values[
+            positions_flat_valid, col_indices_flat_valid
+        ]
 
         # Reshape data back to original dimensions
         data = data_flat.reshape(N, forecast_length)
         # (k, forecast_length, n_series)
-        self.result_windows = data.reshape(n_series, k, forecast_length).transpose(1, 2, 0)
+        self.result_windows = data.reshape(n_series, k, forecast_length).transpose(
+            1, 2, 0
+        )
 
         # now aggregate results into point and bound forecasts
         if self.point_method == "weighted_mean":
@@ -5105,4 +5141,3 @@ class BallTreeRegressionMotif(ModelObject):
             "series_hash": self.series_hash,
             "frac_slice": self.frac_slice,
         }
-
