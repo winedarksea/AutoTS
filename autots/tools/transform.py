@@ -516,7 +516,7 @@ class HPFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         part = random.choices(["trend", "cycle"], weights=[0.98, 0.02])[0]
         lamb = random.choices(
-            [1600, 6.25, 129600, 104976000000], weights=[0.5, 0.2, 0.2, 0.1]
+            [1600, 6.25, 129600, 104976000000, 4, 16, 62.5, 1049760000000], weights=[0.5, 0.2, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025]
         )[0]
         return {"part": part, "lamb": lamb}
 
@@ -6510,7 +6510,7 @@ superfast_transformer_dict = {
     "DifferencedTransformer": 0.05,
     "PositiveShift": 0.02,
     "Log": 0.01,
-    "SeasonalDifference": 0.1,
+    "SeasonalDifference": 0.05,
     "bkfilter": 0.05,
     "ClipOutliers": 0.05,
     # "Discretize": 0.01,  # excessive memory use for some of this
@@ -6519,13 +6519,13 @@ superfast_transformer_dict = {
     "AlignLastValue": 0.05,
     "AlignLastDiff": 0.05,
     "HistoricValues": 0.005,  # need to test more
-    "CenterSplit": 0.005,  # need to test more
+    "CenterSplit": 0.0005,  # need to test more
     "Round": 0.01,
     "CenterLastValue": 0.01,
     "ShiftFirstValue": 0.005,
     "Constraint": 0.005,  # not well tested yet on speed/ram
-    # "BKBandpassFilter": 0.01,  # seems feasible, untested
-    # "DiffSmoother": 0.005,  # seems feasible, untested
+    "BKBandpassFilter": 0.01,  # seems feasible, untested
+    "DiffSmoother": 0.005,  # seems feasible, untested
     # "FIRFilter": 0.005,  # seems feasible, untested
     # "FFTFilter": 0.01,  # seems feasible, untested
     # "FFTDecomposition": 0.01,  # seems feasible, untested
