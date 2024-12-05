@@ -3343,7 +3343,7 @@ class BallTreeMultivariateMotif(ModelObject):
             'cityblock',
             'euclidean',
             'hamming',
-            'mahalanobis',
+            # 'mahalanobis',
             'minkowski',
             'kdtree',
         ]
@@ -3354,7 +3354,7 @@ class BallTreeMultivariateMotif(ModelObject):
             0.05,
             0.9,
             0.05,
-            0.05,
+            # 0.05,
             0.05,
             0.05,
         ]
@@ -4840,7 +4840,7 @@ class BallTreeRegressionMotif(ModelObject):
         col_indices_broadcasted = np.repeat(col_indices, forecast_length).reshape(N, forecast_length)
 
         # Use advanced indexing to extract data
-        data = np.full((N, forecast_length), np.nan)  # Initialize data array with NaNs
+        data = np.full((N, forecast_length), np.nan)
         positions_flat = positions.flatten()
         col_indices_flat = col_indices_broadcasted.flatten()
         valid_mask_flat = valid_positions.flatten()
@@ -4923,7 +4923,7 @@ class BallTreeRegressionMotif(ModelObject):
             'cityblock',
             'euclidean',
             'hamming',
-            'mahalanobis',
+            # 'mahalanobis',
             'minkowski',
             'kdtree',
         ]
@@ -4934,7 +4934,7 @@ class BallTreeRegressionMotif(ModelObject):
             0.05,
             0.9,
             0.05,
-            0.05,
+            # 0.05,
             0.05,
             0.05,
         ]
