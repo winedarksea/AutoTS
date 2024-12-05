@@ -388,7 +388,7 @@ class GLM(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=3600)(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=7200)(
                 delayed(glm_forecast_by_column)(
                     current_series=df[col],
                     X=X,
@@ -616,7 +616,7 @@ class ETS(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs)(
+            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(  # 10 hour timeout, should be enough...
                 delayed(ets_forecast_by_column)(self.df_train[col].astype(float), args)
                 for (col) in cols
             )
@@ -853,7 +853,7 @@ class ARIMA(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
                 delayed(arima_seek_the_oracle)(
                     current_series=self.df_train[col], args=args, series=col
                 )
@@ -1137,7 +1137,7 @@ class UnobservedComponents(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
                 delayed(uc_forecast_by_column)(
                     current_series=self.df_train[col],
                     args=args,
@@ -2062,7 +2062,7 @@ class Theta(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
                 delayed(theta_forecast_by_column)(
                     current_series=self.df_train[col], args=args
                 )
@@ -2308,7 +2308,7 @@ class ARDL(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=72000)(
                 delayed(ardl_per_column)(
                     current_series=self.df_train[col],
                     args=args,

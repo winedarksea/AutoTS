@@ -14,7 +14,8 @@
 * trimmed_mean to AverageValueNaive
 
 # 0.6.17 🇺🇦 🇺🇦 🇺🇦
-* minor adjustments and bug fixes
+* minor adjustments and bug fixes for scalability
+* added BallTreeRegressionMotif
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

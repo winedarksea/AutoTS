@@ -878,6 +878,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  TiDE                   | tensorflow   |                         |               |                 | yes   | True         |              |               |
 |  NeuralForecast         | NeuralForecast |                       |    True       |                 | yes   | True         |              | True          |
 |  TVVAR                  |              |                         |    True       |                 |       | True         |              | True          |
+| BallTreeRegressionMotif | sklearn      |                         |    True       |     joblib      |       | True         |              | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

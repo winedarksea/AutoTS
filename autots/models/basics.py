@@ -38,6 +38,7 @@ from autots.tools.transform import (
 from autots.tools.fft import fourier_extrapolation
 from autots.tools.impute import FillNA
 from autots.evaluator.metrics import wasserstein
+from autots.models.sklearn import rolling_x_regressor_regressor
 
 
 # these are all optional packages
@@ -4506,3 +4507,598 @@ class TVVAR(BasicLinearModel):
             "mode": self.mode,
             "holiday_countries_used": self.holiday_countries_used,
         }
+
+
+class BallTreeRegressionMotif(ModelObject):
+    """Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+    This version uses a feature ala MultivariateRegression but with motifs instead of a regression ML model.
+    Many of these motifs will struggle when the forecast_length is large and history is short.
+
+    Args:
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        n_jobs (int): how many parallel processes to run
+        random_seed (int): used in selecting windows if max_windows is less than total available
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): all valid values for scipy cdist
+        k (int): number of closest neighbors to consider
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        n_jobs: int = 1,
+        window: int = 5,
+        point_method: str = "mean",
+        distance_metric: str = "canberra",
+        k: int = 10,
+        sample_fraction=None,
+        comparison_transformation: dict = None,
+        combination_transformation: dict = None,
+        extend_df: bool = True,
+        # multivar params
+        holiday: bool = False,
+        mean_rolling_periods: int = 30,
+        macd_periods: int = None,
+        std_rolling_periods: int = 7,
+        max_rolling_periods: int = 7,
+        min_rolling_periods: int = 7,
+        ewm_var_alpha: float = None,
+        quantile90_rolling_periods: int = None,
+        quantile10_rolling_periods: int = None,
+        ewm_alpha: float = 0.5,
+        additional_lag_periods: int = None,
+        abs_energy: bool = False,
+        rolling_autocorr_periods: int = None,
+        nonzero_last_n: int = None,
+        datepart_method: str = None,
+        polynomial_degree: int = None,
+        probabilistic: bool = False,
+        scale_full_X: bool = False,
+        cointegration: str = None,
+        cointegration_lag: int = None,
+        series_hash: bool = False,
+        frac_slice: float = None,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            "BallTreeRegressionMotif",
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.window = window
+        self.point_method = point_method
+        self.distance_metric = distance_metric
+        self.k = k
+        self.sample_fraction = sample_fraction
+        self.comparison_transformation = comparison_transformation
+        self.combination_transformation = combination_transformation
+        self.extend_df = extend_df
+        # multivar params
+        self.holiday = holiday
+        self.mean_rolling_periods = mean_rolling_periods
+        if mean_rolling_periods is None:
+            self.macd_periods = None
+        else:
+            self.macd_periods = macd_periods
+        self.std_rolling_periods = std_rolling_periods
+        self.max_rolling_periods = max_rolling_periods
+        self.min_rolling_periods = min_rolling_periods
+        self.ewm_var_alpha = ewm_var_alpha
+        self.quantile90_rolling_periods = quantile90_rolling_periods
+        self.quantile10_rolling_periods = quantile10_rolling_periods
+        self.ewm_alpha = ewm_alpha
+        self.additional_lag_periods = additional_lag_periods
+        self.abs_energy = abs_energy
+        self.rolling_autocorr_periods = rolling_autocorr_periods
+        self.nonzero_last_n = nonzero_last_n
+        self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
+        self.regressor_train = None
+        self.regressor_per_series_train = None
+        self.static_regressor = None
+        self.probabilistic = probabilistic
+        self.scale_full_X = scale_full_X
+        self.cointegration = cointegration
+        self.cointegration_lag = cointegration_lag
+        self.series_hash = series_hash
+        self.frac_slice = frac_slice
+
+    def fit(self, df, future_regressor=None, static_regressor=None, regressor_per_series=None,):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        if self.regression_type is not None:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but not future_regressor supplied."
+                )
+            else:
+                self.regressor_train = future_regressor.reindex(df.index)
+            if regressor_per_series is not None:
+                self.regressor_per_series_train = regressor_per_series
+            if static_regressor is not None:
+                self.static_regressor = static_regressor
+
+        df = self.basic_profile(df)
+        self.df = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False, static_regressor=None, regressor_per_series=None,
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        # fit transform only, no need for inverse as this is only for finding windows
+        if self.comparison_transformation is not None:
+            self.comparison_transformer = GeneralTransformer(
+                **self.comparison_transformation
+            )
+            compare_df = self.comparison_transformer.fit_transform(self.df)
+        else:
+            compare_df = self.df
+        # applied once, then inversed after windows combined as forecast
+        if self.combination_transformation is not None:
+            self.combination_transformer = GeneralTransformer(
+                **self.combination_transformation
+            )
+            wind_arr = self.combination_transformer.fit_transform(self.df)
+        else:
+            wind_arr = self.df
+
+        ############################
+        # fractional slicing to reduce size
+        if self.frac_slice is not None:
+            slice_size = int(self.df.shape[0] * self.frac_slice)
+            self.slice_index = self.df.index[slice_size:]
+        else:
+            self.slice_index = None
+        # handle regressor
+        if self.regression_type is not None:
+            cut_regr = self.regressor_train
+            cut_regr.index = compare_df.index
+        else:
+            cut_regr = None
+
+        parallel = True
+        if self.n_jobs in [0, 1] or compare_df.shape[1] < 20:
+            parallel = False
+        elif not joblib_present:
+            parallel = False
+        # joblib multiprocessing to loop through series
+        # this might be causing issues, TBD Key Error from Resource Tracker
+        if parallel:
+            self.Xa = Parallel(
+                n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000
+            )(
+                delayed(rolling_x_regressor_regressor)(
+                    compare_df[x_col].to_frame(),
+                    mean_rolling_periods=self.mean_rolling_periods,
+                    macd_periods=self.macd_periods,
+                    std_rolling_periods=self.std_rolling_periods,
+                    max_rolling_periods=self.max_rolling_periods,
+                    min_rolling_periods=self.min_rolling_periods,
+                    ewm_var_alpha=self.ewm_var_alpha,
+                    quantile90_rolling_periods=self.quantile90_rolling_periods,
+                    quantile10_rolling_periods=self.quantile10_rolling_periods,
+                    additional_lag_periods=self.additional_lag_periods,
+                    ewm_alpha=self.ewm_alpha,
+                    abs_energy=self.abs_energy,
+                    rolling_autocorr_periods=self.rolling_autocorr_periods,
+                    nonzero_last_n=self.nonzero_last_n,
+                    add_date_part=self.datepart_method,
+                    holiday=self.holiday,
+                    holiday_country=self.holiday_country,
+                    polynomial_degree=self.polynomial_degree,
+                    window=self.window,
+                    future_regressor=cut_regr,
+                    # these rely the if part not being run if None
+                    regressor_per_series=(
+                        self.regressor_per_series_train[x_col]
+                        if self.regressor_per_series_train is not None
+                        else None
+                    ),
+                    static_regressor=(
+                        self.static_regressor.loc[x_col].to_frame().T
+                        if self.static_regressor is not None
+                        else None
+                    ),
+                    cointegration=self.cointegration,
+                    cointegration_lag=self.cointegration_lag,
+                    series_id=x_col if self.series_hash else None,
+                    slice_index=self.slice_index,
+                    series_id_to_multiindex=x_col,
+                )
+                for x_col in compare_df.columns
+            )
+            self.Xa = pd.concat(self.Xa)
+        else:
+            self.Xa = pd.concat(
+                [
+                    rolling_x_regressor_regressor(
+                        compare_df[x_col].to_frame(),
+                        mean_rolling_periods=self.mean_rolling_periods,
+                        macd_periods=self.macd_periods,
+                        std_rolling_periods=self.std_rolling_periods,
+                        max_rolling_periods=self.max_rolling_periods,
+                        min_rolling_periods=self.min_rolling_periods,
+                        ewm_var_alpha=self.ewm_var_alpha,
+                        quantile90_rolling_periods=self.quantile90_rolling_periods,
+                        quantile10_rolling_periods=self.quantile10_rolling_periods,
+                        additional_lag_periods=self.additional_lag_periods,
+                        ewm_alpha=self.ewm_alpha,
+                        abs_energy=self.abs_energy,
+                        rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        nonzero_last_n=self.nonzero_last_n,
+                        add_date_part=self.datepart_method,
+                        holiday=self.holiday,
+                        holiday_country=self.holiday_country,
+                        polynomial_degree=self.polynomial_degree,
+                        window=self.window,
+                        future_regressor=cut_regr,
+                        # these rely the if part not being run if None
+                        regressor_per_series=(
+                            self.regressor_per_series_train[x_col]
+                            if self.regressor_per_series_train is not None
+                            else None
+                        ),
+                        static_regressor=(
+                            self.static_regressor.loc[x_col].to_frame().T
+                            if self.static_regressor is not None
+                            else None
+                        ),
+                        cointegration=self.cointegration,
+                        cointegration_lag=self.cointegration_lag,
+                        series_id=x_col if self.series_hash else None,
+                        slice_index=self.slice_index,
+                        series_id_to_multiindex=x_col,
+                    )
+                    for x_col in compare_df.columns
+                ]
+            )
+        ############################
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        # filter because we need that last bit
+        self.Xb = self.Xa[self.Xa.index.get_level_values(0) == self.Xa.index.get_level_values(0).max()]
+        # don't include a certain amount of the end as they won't have any usable history
+        self.Xa = self.Xa[self.Xa.index.get_level_values(0).isin(self.Xa.index.get_level_values(0).unique().sort_values()[:-self.window])]  # int(self.forecast_length / 2)
+
+        if self.distance_metric in ["euclidean", 'kdtree']:
+            from scipy.spatial import KDTree
+
+            # Build a KDTree for Xb
+            tree = KDTree(self.Xa, leafsize=40)
+        else:
+            from sklearn.neighbors import BallTree
+
+            tree = BallTree(self.Xa, metric=self.distance_metric)
+            # Query the KDTree to find k nearest neighbors for each point in Xa
+        A, self.windows = tree.query(self.Xb, k=self.k)
+        
+        
+        # extend data to future to assure full length for windows, forward fill
+        if self.extend_df:
+            extension = pd.DataFrame(np.nan, 
+                 index = pd.date_range(start=wind_arr.index[-1], periods=int(forecast_length/2) + 1, freq=self.frequency)[1:],
+                 columns = self.column_names,
+            )
+            wind_arr = pd.concat([wind_arr, extension], axis=0).ffill()
+
+        dt_array = self.Xa.index.get_level_values(0).values  # Datetime array
+        series_array = self.Xa.index.get_level_values(1).values  # Series names array
+
+        # Flatten windows array to work with 1D arrays
+        n_series, k = self.windows.shape
+        N = n_series * k
+        dt_selected_flat = dt_array[self.windows.flatten()]
+        series_selected_flat = series_array[self.windows.flatten()]
+
+        # Find positions in df.index where dates are greater than selected datetimes
+        pos_in_df_index = wind_arr.index.searchsorted(dt_selected_flat, side='right')  # Shape: (N,)
+
+        # Create positions for forecast_length ahead
+        positions = pos_in_df_index[:, None] + np.arange(forecast_length)[None, :]  # Shape: (N, forecast_length)
+        
+        # Handle positions exceeding the length of df.index
+        max_index = len(wind_arr.index)
+        valid_positions = (positions >= 0) & (positions < max_index)
+        
+        # Map series names to column indices
+        series_name_to_col_idx = {name: idx for idx, name in enumerate(wind_arr.columns)}
+        col_indices = np.array([series_name_to_col_idx[name] for name in series_selected_flat])
+        
+        # Broadcast col_indices to match the shape of positions
+        col_indices_broadcasted = np.repeat(col_indices, forecast_length).reshape(N, forecast_length)
+
+        # Use advanced indexing to extract data
+        data = np.full((N, forecast_length), np.nan)  # Initialize data array with NaNs
+        positions_flat = positions.flatten()
+        col_indices_flat = col_indices_broadcasted.flatten()
+        valid_mask_flat = valid_positions.flatten()
+
+        # Extract valid data
+        positions_flat_valid = positions_flat[valid_mask_flat]
+        col_indices_flat_valid = col_indices_flat[valid_mask_flat]
+        data_flat = data.flatten()
+        data_flat[valid_mask_flat] = wind_arr.values[positions_flat_valid, col_indices_flat_valid]
+
+        # Reshape data back to original dimensions
+        data = data_flat.reshape(N, forecast_length)
+        # (k, forecast_length, n_series)
+        self.result_windows = data.reshape(n_series, k, forecast_length).transpose(1, 2, 0)
+
+        # now aggregate results into point and bound forecasts
+        if self.point_method == "weighted_mean":
+            weights = np.repeat(A.T[..., np.newaxis, :], 14, axis=1)
+            if weights.sum() == 0:
+                weights = None
+            forecast = np.average(self.result_windows, axis=0, weights=weights)
+        elif self.point_method == "mean":
+            forecast = np.nanmean(self.result_windows, axis=0)
+        elif self.point_method == "median":
+            forecast = np.nanmedian(self.result_windows, axis=0)
+        elif self.point_method == "midhinge":
+            q1 = nan_quantile(self.result_windows, q=0.25, axis=0)
+            q2 = nan_quantile(self.result_windows, q=0.75, axis=0)
+            forecast = (q1 + q2) / q2
+        elif self.point_method == 'closest':
+            # assumes the first K is the smallest distance (true when written)
+            forecast = self.result_windows[0]
+
+        pred_int = round((1 - self.prediction_interval) / 2, 5)
+        upper_forecast = nan_quantile(self.result_windows, q=(1 - pred_int), axis=0)
+        lower_forecast = nan_quantile(self.result_windows, q=pred_int, axis=0)
+
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            lower_forecast, index=test_index, columns=self.column_names
+        )
+        upper_forecast = pd.DataFrame(
+            upper_forecast, index=test_index, columns=self.column_names
+        )
+        if self.combination_transformation is not None:
+            forecast = self.combination_transformer.inverse_transform(forecast)
+            lower_forecast = self.combination_transformer.inverse_transform(
+                lower_forecast
+            )
+            upper_forecast = self.combination_transformer.inverse_transform(
+                upper_forecast
+            )
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                # so it's producing float32 but pandas is better with float64
+                lower_forecast=lower_forecast.astype(float),
+                forecast=forecast.astype(float),
+                upper_forecast=upper_forecast.astype(float),
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        metric_list = [
+            'braycurtis',
+            'canberra',
+            'chebyshev',
+            'cityblock',
+            'euclidean',
+            'hamming',
+            'mahalanobis',
+            'minkowski',
+            'kdtree',
+        ]
+        metric_probabilities = [
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+            0.9,
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+        ]
+        if method != "deep":
+            # evidence suggests 20 million can fit in 5 GB of RAM with a window of 28
+            sample_fraction = random.choice([5000000, 50000000])
+        else:
+            sample_fraction = random.choice([0.2, 0.5, 100000000, None])
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.02, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
+        transformers_none = random.choices([True, False], [0.7, 0.3])[0]
+        if transformers_none:
+            comparison_transformation = None
+            combination_transformation = None
+        else:
+            comparison_transformation = RandomTransform(
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
+            )
+            combination_transformation = RandomTransform(
+                transformer_list=superfast_transformer_dict,
+                transformer_max_depth=1,
+                allow_none=True,
+            )
+        # multivar params
+        if method == "deep":
+            window = random.choices(
+                [None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05]
+            )[0]
+            # random.choices([2, 3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01])[0]
+        else:
+            window = random.choices([None, 3, 7, 10], [0.3, 0.3, 0.1, 0.05])[0]
+        mean_rolling_periods_choice = random.choices(
+            [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
+            [0.3, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
+        )[0]
+        if mean_rolling_periods_choice is not None:
+            macd_periods_choice = seasonal_int(small=True)
+            if macd_periods_choice == mean_rolling_periods_choice:
+                macd_periods_choice = mean_rolling_periods_choice + 10
+        else:
+            macd_periods_choice = None
+        std_rolling_periods_choice = random.choices(
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.4, 0.1, 0.1, 0.05])[0]
+        quantile90_rolling_periods = random.choices(
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        quantile10_rolling_periods = random.choices(
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        max_rolling_periods_choice = random.choices(
+            [None, seasonal_int(small=True)], [0.2, 0.5]
+        )[0]
+        min_rolling_periods_choice = random.choices(
+            [None, seasonal_int(small=True)], [0.2, 0.5]
+        )[0]
+        lag_periods_choice = None
+        ewm_choice = random.choices(
+            [None, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.1, 0.1, 0.05]
+        )[0]
+        abs_energy_choice = False
+        rolling_autocorr_periods_choice = random.choices(
+            [None, 2, 7, 12, 30], [0.99, 0.01, 0.01, 0.01, 0.01]
+        )[0]
+        nonzero_last_n = random.choices(
+            [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]
+        )[0]
+        add_date_part_choice = random.choices(
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_2_poly",
+                "simple_binarized",
+                "common_fourier",
+                "expanded_binarized",
+                "common_fourier_rw",
+                ["dayofweek", 365.25],
+                "simple_binarized2_poly",
+            ],
+            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05, 0.05],
+        )[0]
+        holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
+        polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+
+        return {
+            "window": window,
+            "point_method": random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.2, 0.2, 0.2],
+            )[0],
+            "distance_metric": random.choices(metric_list, metric_probabilities)[0],
+            "k": k_choice,
+            "sample_fraction": sample_fraction,
+            "comparison_transformation": comparison_transformation,
+            "combination_transformation": combination_transformation,
+            "extend_df": random.choices([True, False], [True, False])[0],
+            # multivar params
+            'mean_rolling_periods': mean_rolling_periods_choice,
+            'macd_periods': macd_periods_choice,
+            'std_rolling_periods': std_rolling_periods_choice,
+            'max_rolling_periods': max_rolling_periods_choice,
+            'min_rolling_periods': min_rolling_periods_choice,
+            "quantile90_rolling_periods": quantile90_rolling_periods,
+            "quantile10_rolling_periods": quantile10_rolling_periods,
+            'ewm_alpha': ewm_choice,
+            "ewm_var_alpha": ewm_var_alpha,
+            'additional_lag_periods': lag_periods_choice,
+            'abs_energy': abs_energy_choice,
+            'rolling_autocorr_periods': rolling_autocorr_periods_choice,
+            'nonzero_last_n': nonzero_last_n,
+            'datepart_method': add_date_part_choice,
+            'polynomial_degree': polynomial_degree_choice,
+            'regression_type': regression_choice,
+            'holiday': holiday_choice,
+            'scale_full_X': random.choices([True, False], [0.2, 0.8])[0],
+            "series_hash": random.choices([True, False], [0.5, 0.5])[0],
+            "frac_slice": random.choices(
+                [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "window": self.window,
+            "point_method": self.point_method,
+            "distance_metric": self.distance_metric,
+            "k": self.k,
+            "sample_fraction": self.sample_fraction,
+            "comparison_transformation": self.comparison_transformation,
+            "combination_transformation": self.combination_transformation,
+            "extend_df": self.extend_df,
+            # multivar params
+            'mean_rolling_periods': self.mean_rolling_periods,
+            'macd_periods': self.macd_periods,
+            'std_rolling_periods': self.std_rolling_periods,
+            'max_rolling_periods': self.max_rolling_periods,
+            'min_rolling_periods': self.min_rolling_periods,
+            "quantile90_rolling_periods": self.quantile90_rolling_periods,
+            "quantile10_rolling_periods": self.quantile10_rolling_periods,
+            'ewm_alpha': self.ewm_alpha,
+            "ewm_var_alpha": self.ewm_var_alpha,
+            'additional_lag_periods': self.additional_lag_periods,
+            'abs_energy': self.abs_energy,
+            'rolling_autocorr_periods': self.rolling_autocorr_periods,
+            'nonzero_last_n': self.nonzero_last_n,
+            'datepart_method': self.datepart_method,
+            'polynomial_degree': self.polynomial_degree,
+            'regression_type': self.regression_type,
+            'holiday': self.holiday,
+            'scale_full_X': self.scale_full_X,
+            "series_hash": self.series_hash,
+            "frac_slice": self.frac_slice,
+        }
+
