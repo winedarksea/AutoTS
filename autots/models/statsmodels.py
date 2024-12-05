@@ -550,7 +550,6 @@ class ETS(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         parallel = True
@@ -566,6 +565,8 @@ class ETS(ModelObject):
 
         def ets_forecast_by_column(current_series, args):
             """Run one series of ETS and return prediction."""
+            from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
             series_name = current_series.name
             with warnings.catch_warnings():
                 if args['verbose'] < 2:
@@ -616,7 +617,7 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(ets_forecast_by_column)(self.df_train[col], args)
+                delayed(ets_forecast_by_column)(self.df_train[col].astype(float), args)
                 for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
@@ -665,7 +666,7 @@ class ETS(ModelObject):
         seasonal_probability = [0.2, 0.2, 0.6]
         seasonal_choice = random.choices(seasonal_list, seasonal_probability)[0]
         if seasonal_choice in ["additive", "multiplicative"]:
-            seasonal_period_choice = seasonal_int()
+            seasonal_period_choice = seasonal_int(small=True if method != "deep" else False)
         else:
             seasonal_period_choice = None
         parameter_dict = {

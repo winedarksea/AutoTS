@@ -1207,7 +1207,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 model_dict={
                     "ElasticNet": 0.5,
                     "DecisionTree": 0.25,
-                    "KNN": 0.02,
+                    # "KNN": 0.02,
                 }
             )
         else:
@@ -2238,6 +2238,7 @@ class ScipyFilter(EmptyTransformer):
     def get_new_params(method: str = "random"):
         if method == "fast":
             method = random.choice(['butter', 'savgol_filter'])
+            polyorder = random.choices([1, 2, 3, 4], [0.5, 0.5, 0.25, 0.2])[0]
         else:
             method = random.choices(
                 [
@@ -2253,6 +2254,7 @@ class ScipyFilter(EmptyTransformer):
                 [0.1, 0.1, 0.9, 0.9],
                 k=1,
             )[0]
+            polyorder = random.choice([1, 2, 3, 4])
         # analog_choice = bool(random.randint(0, 1))
         analog_choice = False
         xn = random.randint(1, 99)
@@ -2262,7 +2264,7 @@ class ScipyFilter(EmptyTransformer):
         elif method == "savgol_filter":
             method_args = {
                 'window_length': random.choices([7, 31, 91], [0.4, 0.3, 0.3])[0],
-                'polyorder': random.choice([1, 2, 3, 4]),
+                'polyorder': polyorder,
                 'deriv': random.choices([0, 1], [0.8, 0.2])[0],
                 'mode': random.choice(['mirror', 'nearest', 'interp']),
             }
