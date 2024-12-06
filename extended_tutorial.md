@@ -112,6 +112,9 @@ While NaN values are handled, model selection will suffer if any series have lar
 Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data. 
 In these cases, avoid the `even` cross validation and use one of the other validation methods. 
 
+Having many validations is critical with noisy data. If a large anomaly occurs, it can result in a model being chosen that predicted that anomaly, even though the prediction was by chance and the model is generally poor otherwise, that large spike by mature of it's magnitude dominates the accuracy metrics. 
+One partial hack to deal with limited history and anomalies is to have multiple custom validations that overlap but have slightly different start and end dates. As the anomalies will fall on different forecast horizons in each holdout, it's less likely a model can predict the anomalies all by chance. 
+
 ### Another Example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as `RollingRegression`, `VARMAX`, and `VECM`. 
@@ -606,6 +609,8 @@ print(model)
 ```
 
 For models here in the lower level api, confusingly, regression_type="User" must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.
+
+Keep in mind that no preprocessing/transformers are done on regressors in most cases here, so it is recommended to clean the regressors of anomalies, and often it may be helpful to deseasonalize and scale the regressors as well.
 
 ## Simulation Forecasting
 Simulation forecasting allows for experimenting with different potential future scenarios to examine the potential effects on the forecast. 
