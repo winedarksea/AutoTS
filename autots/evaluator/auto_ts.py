@@ -203,7 +203,7 @@ class AutoTS(object):
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
-        num_validations: int = "auto",
+        num_validations: str = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
         validation_method: str = 'backwards',
@@ -221,7 +221,7 @@ class AutoTS(object):
             [np.ndarray, np.ndarray, np.ndarray, float], np.ndarray
         ] = None,
         verbose: int = 1,
-        n_jobs: int = 0.5,
+        n_jobs: float = 0.5,
     ):
         assert forecast_length > 0, "forecast_length must be greater than 0"
         # assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
