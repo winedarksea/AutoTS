@@ -13,9 +13,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.17 🇺🇦 🇺🇦 🇺🇦
-* minor adjustments and bug fixes for scalability
-* added BallTreeRegressionMotif
+# 0.6.18 🇺🇦 🇺🇦 🇺🇦
+* minor tweaks and bug fixes
+* updated python version required to 3.9 to allow more typing options
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

@@ -6635,7 +6635,10 @@ na_probs = {
 
 def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
-    if transformer_list in ["fast", "default", "Fast", "auto", 'scalable']:
+    if transformer_list in [
+            "fast", "default", "Fast", "auto", 'scalable',
+            'fast_no_slice', 'superfast_no_slice', 'scalable_no_slice'
+    ]:
         # remove any slow transformers
         fast_transformer_dict = transformer_dict.copy()
         # downweight some
