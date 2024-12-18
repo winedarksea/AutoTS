@@ -603,7 +603,7 @@ def generalize_horizontal(
         k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
         # check if any series are missing from model list
         if not k:
-            raise ValueError("Horizontal template has no models matching this data!")
+            raise ValueError(f"Horizontal template has no models matching this data! Series known {list(known_matches.keys())[0:3]}, series present {org_list[0:3]} available models {available_models}")
         # test if generalization is needed
         if len(set(org_list) - set(list(k.keys()))) > 0:
             # filter down to only models available for all
