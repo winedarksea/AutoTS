@@ -3879,6 +3879,7 @@ class TVVAR(BasicLinearModel):
         var_postprocessing: dict = False,
         mode: str = 'additive',
         holiday_countries_used: bool = True,
+        store_phi: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -3911,6 +3912,7 @@ class TVVAR(BasicLinearModel):
         self.max_cycles = max_cycles
         self.mode = str(mode).lower()
         self.holiday_countries_used = holiday_countries_used
+        self.store_phi = store_phi
 
     def empty_scaler(self, df):
         self.scaler_std = pd.Series(1.0, index=df.columns)
@@ -4040,6 +4042,7 @@ class TVVAR(BasicLinearModel):
             self.x_scaler = EmptyTransformer()
             X_values = X.to_numpy().astype(float)
 
+        self.phi_history = []
         if self.phi is None:
             if self.lambda_ is not None:
                 I = np.eye(X_values.shape[1])
@@ -4093,9 +4096,13 @@ class TVVAR(BasicLinearModel):
                     theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
                 except np.linalg.LinAlgError:
                     theta_t = np.linalg.pinv(S_reg) @ r
+                if self.store_phi:
+                    self.phi_history.append(theta_t)
             self.beta = theta_t  # Use the last theta_t as beta
             # Post-process coefficients to set small values to zero
             self.beta = self.apply_beta_threshold()
+            if self.store_phi:
+                self.phi_history = np.array(self.phi_history)
             # Calculate residuals
             Y_pred = X_np @ self.beta
             residuals = Y_np - Y_pred
