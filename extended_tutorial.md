@@ -51,7 +51,6 @@ The simplest way to improve accuracy is to increase the number of generations `m
 Another approach that may improve accuracy is to set `ensemble='all'`. Ensemble parameter expects a single string, and can for example be `'simple,dist'`, or `'horizontal'`. As this means storing more details of every model, this takes more time and memory.
 
 A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives=True`. This forces forecasts to be greater than or equal to 0. 
-A similar function is `constraint=2.0`. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above `max(training data) + 2.0 * st.dev(training data)`, as well as the reverse on the minimum side. A constraint of `0` would constrain forecasts to historical mins and maxes. 
 
 Another convenience function is `drop_most_recent=1` specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete. 
 `drop_data_older_than_periods` provides similar functionality but drops the oldest data to speed up the process on large datasets. 
@@ -794,6 +793,91 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
+
+### Constraints
+Constraints are very useful in situations where modelling has, well constraints. 
+These are upper or lower bounds (either absolute or relative to history) that the data will not cross. 
+These are applied during cross validation as well as output on the immediate predition from the models. 
+For a simple example:
+```python
+constraint = {"constraints": [
+{# don't go below zero
+    "constraint_method": "absolute",
+    "constraint_value": 0,  # can also be an array or Series
+    "constraint_direction": "lower",
+    "constraint_regularization": 1.0,
+    "bounds": True,
+},
+]}
+```
+the slightly odd syntax, of a dictionary and then a list, is for backwards compatibility with older constraint and to allow more flexbility. 
+
+As many constraints can be used as desired, and are applied in order they are in the list. 
+`constraint_regularization` of 1.0 is a strict, cannot cross constraint. 
+Constraint of 0.5 would allow 50% of the excess above threshold to continue to exist in the forecast. 
+`bounds` determines whether this is applied to just the point forecast or to the upper and lower bounds as well. 
+`constraint_method` and `constraint_value` are the most variable, with value being able to take a dictionary of args in many cases.
+
+```python
+constraint = {"constraints": [
+    {  # don't exceed historic max
+        "constraint_method": "quantile",
+        "constraint_value": 1.0,
+        "constraint_direction": "upper",
+        "constraint_regularization": 1.0,
+        "bounds": True,
+    },
+    {  # don't exceed 2% growth by end of forecast horizon
+        "constraint_method": "slope",
+        "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01},
+        "constraint_direction": "upper",
+        "constraint_regularization": 0.9,
+        "bounds": False,
+    },
+    {  # don't go below the last 10 values - 10%
+        "constraint_method": "last_window",
+        "constraint_value": {"window": 10, "threshold": -0.1},
+        "constraint_direction": "lower",
+        "constraint_regularization": 1.0,
+        "bounds": False,
+    },
+    {  # don't go below historic min  - 1 st dev
+        "constraint_method": "stdev_min",
+        "constraint_value": 1.0,
+        "constraint_direction": "lower",
+        "constraint_regularization": 1.0,
+        "bounds": True,
+    },
+    {  # don't go above historic mean  + 3 st devs, soft limit
+        "constraint_method": "stdev",
+        "constraint_value": 3.0,
+        "constraint_direction": "upper",
+        "constraint_regularization": 0.5,
+        "bounds": True,
+    },
+    {  # use a log curve shaped by the historic min/max growth rate to limit
+        "constraint_method": "historic_growth",
+        "constraint_value": {'threshold': 2.0, 'window': 360},
+        "constraint_direction": "upper",
+        "constraint_regularization": 1.0,
+        "bounds": True,
+    },
+    {  # like slope but steps
+        'constraint_method': 'historic_diff',
+        'constraint_direction': 'upper',
+        'constraint_regularization': 1.0,
+        'constraint_value': 1.0,
+        'bounds_only': True,
+        'fillna': None
+     },
+    {  # flattens out series, regardless
+        "constraint_method": "dampening",
+        "constraint_value": 0.98,
+        "bounds": True,
+    },]
+},
+```
+
 
 ## Using the Transformers independently
 The transformers expect data only in the `wide` shape with ascending date. 

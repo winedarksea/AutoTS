@@ -37,6 +37,7 @@ from autots.evaluator.auto_model import (
     horizontal_template_to_model_list,
     create_model_id,
     ModelPrediction,
+    all_valid_weightings,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -321,6 +322,9 @@ class AutoTS(object):
             raise ValueError(
                 f"Metric weightings should generally be >= 0. Current weightings: {self.metric_weighting}"
             )
+        metric_weighting_keys_invalid = [x for x in self.metric_weighting.keys() if x not in all_valid_weightings]
+        if metric_weighting_keys_invalid:
+            raise ValueError(f"metric_weighting has unrecognized inputs {metric_weighting_keys_invalid}. Should be of style `metric_weighting`: 1")
         if (
             'seasonal' in self.validation_method
             and self.validation_method != "seasonal"

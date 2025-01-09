@@ -3038,6 +3038,34 @@ def validation_aggregation(
     return validation_results
 
 
+# uses this for a test of user input
+all_valid_weightings = [
+    'smape_weighting',
+    'mae_weighting',
+    'rmse_weighting',
+    'containment_weighting',
+    'runtime_weighting',
+    'spl_weighting',
+    'contour_weighting',
+    'made_weighting',
+    'mage_weighting',
+    'custom_weighting',
+    'mle_weighting',
+    'imle_weighting',
+    'maxe_weighting',
+    'oda_weighting',
+    'mqae_weighting',
+    'dwae_weighting',
+    'ewmae_weighting',
+    'uwmse_weighting',
+    'smoothness_weighting',
+    'mate_weighting',
+    'wasserstein_weighting',
+    'dwd_weighting',
+    'matse_weighting',
+]
+
+
 def generate_score(
     model_results,
     metric_weighting: dict = {},

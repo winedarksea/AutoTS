@@ -101,6 +101,14 @@ class TestConstraint(unittest.TestCase):
                     "constraint_regularization": 1.0,
                     "bounds": True,
                 },
+                {  # like slope but steps
+                    'constraint_method': 'historic_diff',
+                    'constraint_direction': 'upper',
+                    'constraint_regularization': 1.0,
+                    'constraint_value': 1.0,
+                    'bounds_only': True,
+                    'fillna': None
+                 },
             ]},
             "dampening": {
                 "constraints": [{
