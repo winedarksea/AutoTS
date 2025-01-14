@@ -6668,6 +6668,14 @@ def transformer_list_to_dict(transformer_list):
     elif "no_slice" in transformer_list:
         # slice can be a problem child in some cases, so can remove by adding this
         del transformer_list["Slice"]
+    elif transformer_list == "filters":
+        transformer_list = filters.copy()
+    elif transformer_list == "scalers":
+        transformer_list = scalers.copy()
+    elif transformer_list == "postprocessing":
+        transformer_list = postprocessing.copy()
+    elif transformer_list == "decompositions":
+        transformer_list = decompositions.copy()
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
