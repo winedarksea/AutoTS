@@ -169,3 +169,5 @@ class TestConstraint(unittest.TestCase):
                     self.assertTrue(pred_max <= hist_max)
                 if key in ["last_value"]:
                     self.assertTrue(prediction.forecast.iloc[0, :].max() == df.iloc[-1, :].max())
+                # test for nulls
+                self.assertTrue(prediction.forecast.isnull().sum().sum() == 0)
