@@ -877,7 +877,8 @@ constraint = {"constraints": [
     },]
 },
 ```
-
+Constraints are extremely useful in automated forecasting. This is because it is almost impossible not to generate at least a few "bad" forecasts, due to bad data, volatile data, short data, etc. 
+Constraints can help assure that truly "ridiculous" forecasts are not generated. 
 
 ## Using the Transformers independently
 The transformers expect data only in the `wide` shape with ascending date. 
