@@ -340,6 +340,7 @@ class HolidayDetector(object):
             use_hebrew_holidays=self.use_hebrew_holidays,
             use_hindu_holidays=self.use_hindu_holidays,
         )
+        return self
 
     def plot_anomaly(self, kwargs={}):
         self.anomaly_model.plot(**kwargs)
