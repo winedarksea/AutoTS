@@ -26,7 +26,6 @@ from autots.tools.holiday import holiday_flag
 try:
     from statsmodels.tsa.statespace.sarimax import SARIMAX
     from statsmodels.api import GLM as SM_GLM
-    from statsmodels.tsa.holtwinters import ExponentialSmoothing
 except Exception:
     pass
 try:
@@ -474,51 +473,6 @@ class GLM(ModelObject):
         }
 
 
-def ets_forecast_by_column(current_series, args, test_index):
-    """Run one series of ETS and return prediction."""
-    series_name = current_series.name
-    with warnings.catch_warnings():
-        if args['verbose'] < 2:
-            warnings.simplefilter("ignore")
-        try:
-            # handle statsmodels 0.13 method changes
-            try:
-                esModel = ExponentialSmoothing(
-                    current_series,
-                    damped_trend=args['damped_trend'],
-                    trend=args['trend'],
-                    seasonal=args['seasonal'],
-                    seasonal_periods=args['seasonal_periods'],
-                    # initialization_method=None,
-                    # freq=args['freq'],
-                )
-            except Exception as e:
-                if args['verbose'] > 1:
-                    print(f"ETS error {repr(e)}")
-                esModel = ExponentialSmoothing(
-                    current_series,
-                    damped=args['damped_trend'],
-                    trend=args['trend'],
-                    seasonal=args['seasonal'],
-                    seasonal_periods=args['seasonal_periods'],
-                    # initialization_method='heuristic',  # estimated
-                    freq=args['freq'],
-                )
-            esResult = esModel.fit(method=args["method"])
-            srt = current_series.shape[0]
-            esPred = esResult.predict(
-                start=srt, end=srt + args['forecast_length'] - 1
-            )
-            esPred = pd.Series(esPred)
-        except Exception as e:
-            # this error handling is meant for horizontal ensembles where it will only then be needed for select series
-            if args['verbose'] > 1:
-                print(f"ETS failed on {series_name} with {repr(e)}")
-            esPred = pd.Series((np.zeros((args["forecast_length"],))), index=test_index)
-    esPred.name = series_name
-    return esPred
-
-
 class ETS(ModelObject):
     """Exponential Smoothing from Statsmodels
 
@@ -618,12 +572,59 @@ class ETS(ModelObject):
             parallel = False
         elif not joblib_present:
             parallel = False
+
+        # seems to perhaps be more stable when defined inside, unclear
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+        def ets_forecast_by_column(current_series, args, test_index):
+            """Run one series of ETS and return prediction."""
+            series_name = current_series.name
+            with warnings.catch_warnings():
+                if args['verbose'] < 2:
+                    warnings.simplefilter("ignore")
+                try:
+                    # handle statsmodels 0.13 method changes
+                    try:
+                        esModel = ExponentialSmoothing(
+                            current_series,
+                            damped_trend=args['damped_trend'],
+                            trend=args['trend'],
+                            seasonal=args['seasonal'],
+                            seasonal_periods=args['seasonal_periods'],
+                            # initialization_method=None,
+                            # freq=args['freq'],
+                        )
+                    except Exception as e:
+                        if args['verbose'] > 1:
+                            print(f"ETS error {repr(e)}")
+                        esModel = ExponentialSmoothing(
+                            current_series,
+                            damped=args['damped_trend'],
+                            trend=args['trend'],
+                            seasonal=args['seasonal'],
+                            seasonal_periods=args['seasonal_periods'],
+                            # initialization_method='heuristic',  # estimated
+                            freq=args['freq'],
+                        )
+                    esResult = esModel.fit(method=args["method"])
+                    srt = current_series.shape[0]
+                    esPred = esResult.predict(
+                        start=srt, end=srt + args['forecast_length'] - 1
+                    )
+                    esPred = pd.Series(esPred)
+                except Exception as e:
+                    # this error handling is meant for horizontal ensembles where it will only then be needed for select series
+                    if args['verbose'] > 1:
+                        print(f"ETS failed on {series_name} with {repr(e)}")
+                    esPred = pd.Series((np.zeros((args["forecast_length"],))), index=test_index)
+            esPred.name = series_name
+            return esPred
+
         # joblib multiprocessing to loop through series
         if parallel:
-            with Parallel(n_jobs=self.n_jobs, timeout=36000) as executor:
-                df_list = executor(delayed(ets_forecast_by_column)(
-                    self.df_train[col].astype(float), args, test_index
-                ) for col in cols)
+            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(delayed(ets_forecast_by_column)(
+                self.df_train[col].astype(float), args, test_index
+            ) for col in cols)
             forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
