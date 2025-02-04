@@ -113,7 +113,6 @@ class TestConstraint(unittest.TestCase):
                     'constraint_direction': 'upper',
                     'constraint_regularization': 1.0,
                     'constraint_value': 1.0,
-                    'fillna': None
                  },
             ]},
             "dampening": {
