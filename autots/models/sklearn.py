@@ -947,9 +947,14 @@ def generate_regressor_params(
     method="default",
 ):
     """Generate new parameters for input to regressor."""
-    # force neural networks for testing purposes
     if method in ["default", 'random', 'fast']:
-        pass
+        if model_dict is None:
+            if method == "fast":
+                model_dict = datepart_model_dict
+            else:
+                model_dict = sklearn_model_dict
+        else:
+            pass
     elif method == "neuralnets":
         model_dict = {
             'KerasRNN': 0.05,
