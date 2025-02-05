@@ -123,6 +123,7 @@ class AutoTS(object):
             'seasonal' most similar indexes
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
             'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
+            'mixed_length' - validation_indexes is a list of tuples (train, test). Can be different forecast lengths. Mosaic ensembles not functional with this
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
@@ -591,8 +592,8 @@ class AutoTS(object):
                 )[0],
             }
             validation_method = random.choices(
-                ["backwards", "even", "similarity", "seasonal 364", "seasonal"],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
+                ["backwards", "even", "similarity", "seasonal 364", "seasonal", "mixed_length"],
+                [0.4, 0.1, 0.3, 0.3, 0.2, 0.03],
             )[0]
         else:
             metric_weighting = {
@@ -622,8 +623,8 @@ class AutoTS(object):
                 )[0],
             }
             validation_method = random.choices(
-                ["backwards", "even", "similarity", "seasonal 364"],
-                [0.4, 0.1, 0.3, 0.3],
+                ["backwards", "even", "similarity", "seasonal 364", "seasonal"],
+                [0.4, 0.1, 0.3, 0.3, 0.3],
             )[0]
         preclean_choice = random.choices(
             [
@@ -1949,7 +1950,7 @@ class AutoTS(object):
             df_test=df_test,
             weights=current_weights,
             model_count=model_count,
-            forecast_length=len(df_test.index),
+            forecast_length=len(df_test.index),  # allows for mixed length validations
             frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,

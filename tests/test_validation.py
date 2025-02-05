@@ -119,6 +119,7 @@ class TestValidationSegments(unittest.TestCase):
         validation_params = {}
 
         # Set up a dummy transformer that simply returns the input dataframe.
+        # this is a llm suggestion. GeneralTransformer with empty params would do the same just fine
         transformer_instance = MagicMock()
         transformer_instance.fit_transform.side_effect = lambda df: df
         mock_transformer.return_value = transformer_instance
@@ -148,6 +149,8 @@ class TestValidationSegments(unittest.TestCase):
 
     @patch("auto_ts.seasonal_window_match")
     def test_generate_validation_indices_seasonal(self, mock_seasonal_match):
+        # it might be worth rewriting this without the @patch
+
         # For seasonal method without extra period (i.e. exactly "seasonal")
         df = create_dummy_df(n_rows=10)
         forecast_length = 2
@@ -333,5 +336,5 @@ class TestValidationSegments(unittest.TestCase):
         self.assertEqual(result, 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
+# if __name__ == "__main__":
+#     unittest.main()

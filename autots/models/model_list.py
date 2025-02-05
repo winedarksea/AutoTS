@@ -445,6 +445,7 @@ update_fit = [
     'WindowRegression',
     'Cassandra',
     'PreprocessingRegression',
+    # BasicLinearModel, TVVAR probably could be made too
 ]
 model_lists = {
     "all": all_models,

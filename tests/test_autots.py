@@ -525,6 +525,50 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(forecasts_df.isna().any().any())
         self.assertEqual(forecast_length, len(forecasts_df.index))
 
+    def test_mixedlengthval(self):
+        print("Starting test_mixedlengthval")
+        df = load_artificial(long=False)
+        forecast_length = 2
+        n_jobs = 1
+        verbose = -1
+        validation_method = "mixed_length"
+        generations = 1
+        model_list = [
+            'ConstantNaive',
+            'LastValueNaive',
+            'AverageValueNaive',
+            'SeasonalNaive',
+        ]
+
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='infer',
+            max_generations=generations,
+            validation_method=validation_method,
+            model_list=model_list,
+            n_jobs=n_jobs,
+            verbose=verbose,
+            ensemble=None,
+        )
+        model = model.fit(
+            df,
+        )
+        prediction = model.predict(verbose=0)
+        forecasts_df = prediction.forecast
+        initial_results = model.results()
+
+        expected_idx = pd.date_range(
+            start=df.index[-1], periods=forecast_length + 1, freq='D'
+        )[1:]
+        check_fails = initial_results.groupby("Model")["mae"].count() > 0
+        self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
+        # check the generated forecasts look right
+        self.assertEqual(forecasts_df.shape[0], forecast_length)
+        self.assertEqual(forecasts_df.shape[1], df.shape[1])
+        self.assertFalse(forecasts_df.isna().any().any())
+        self.assertEqual(forecast_length, len(forecasts_df.index))
+        self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
+
     def test_all_models_load(self):
         print("Starting test_all_models_load")
         # make sure it can at least load a template of all models

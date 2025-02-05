@@ -967,7 +967,7 @@ def mlens_helper(models, models_source="bestn"):
 
 def EnsembleTemplateGenerator(
     initial_results,
-    forecast_length: int = 14,
+    forecast_length: int = 14,  # used just for classic distance ensembles
     ensemble: str = "simple",
     score_per_series=None,
     use_validation=False,
@@ -1372,7 +1372,7 @@ def n_limited_horz(per_series, K, safety_model=False):
 def HorizontalTemplateGenerator(
     per_series,
     model_results,
-    forecast_length: int = 14,
+    forecast_length: int = 14,  # UNUSED
     ensemble: str = "horizontal",
     subset_flag: bool = True,
     per_series2=None,
@@ -1673,13 +1673,22 @@ def create_unpredictability_score(
     scale=False,
 ):
     results = []
-    threshold = np.nanmedian(full_mae_errors) * 1.1
+    # handle mismatched lengths as seen in mixed_length validations
+    if all(len(arr) == len(full_mae_errors[0]) for arr in full_mae_errors):
+        errors_array_1 = full_mae_errors
+        min_length = full_mae_errors[0].shape[0]
+    else:
+        # this is a simple cut to shortest, for simplicity
+        min_length = min(len(arr) for arr in full_mae_errors)
+        print(f"mixed length validations with minimum length {min_length}")
+        errors_array_1 = np.array([arr[:min_length] for arr in full_mae_errors])
+    threshold = np.nanmedian(errors_array_1) * 1.1
     for val in range(total_vals):
         errors_array = np.array(
             [
                 x
                 for y, x in sorted(
-                    zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
+                    zip(full_mae_vals, errors_array_1), key=lambda pair: pair[0]
                 )
                 if y == val
             ]
@@ -1698,11 +1707,11 @@ def create_unpredictability_score(
         score = min_error
         # score = score / np.min(score)
         score = pd.DataFrame(
-            score, index=validation_test_indexes[val], columns=df_wide.columns
+            score, index=validation_test_indexes[val][:min_length], columns=df_wide.columns
         )
         # scale
         score = score / pd.DataFrame(
-            index=validation_test_indexes[val], columns=df_wide.columns
+            index=validation_test_indexes[val][:min_length], columns=df_wide.columns
         ).fillna(df_wide.mean())
         results.append(score)
 

@@ -102,6 +102,8 @@ For example with daily data, forecasting for a month ahead, and `n=364`, the fir
 
 `backwards`, `even` and `seasonal` validation all perform initial evaluation on the most recent split of data. `custom` performs initial evaluation on the first index in the list provided, while `similarity` acts on the closest distance segment first.
 
+`mixed_length` uses different forecast_length values simultaneously. This can also be achieved with `custom` and `validation_indexes` passed as a list of tuples `[(train_index1, test_index1), (train_index2, test_index2)]` but this method won't work with mosaic ensembles.
+
 Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
 If a float in 0 to 1 is provided, it is treated as a % of models to select. 
 If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
