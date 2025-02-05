@@ -70,7 +70,9 @@ def generate_validation_indices(
     preclean=None,
     verbose=0,
 ):
-    """generate validation indices (equals num_validations + 1 as includes initial eval).
+    """generate validation indices (total indicies is num_validations + 1 as it includes zero based initial 'eval' section, yes, I know, confusing).
+    Note that for most methods this is currently the full index, with the end of forecas't_length being the test period
+    mixed_length now returns a tuple of (train index, test index).
 
     Args:
         validation_method (str): 'backwards', 'even', 'similarity', 'seasonal', 'seasonal 364', etc.
