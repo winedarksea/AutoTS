@@ -1285,23 +1285,26 @@ class AutoTS(object):
             df_subset = self.df_wide_numeric.copy()
         # go to first index
         first_idx = self.validation_indexes[0]
-        if max(first_idx) > max(df_subset.index):
-            raise ValueError("provided validation index exceeds historical data period")
-        df_subset = df_subset.reindex(first_idx)
+        if isinstance(first_idx, tuple):
+            df_train = df_subset.reindex(first_idx[0])
+            df_test = df_subset.reindex(first_idx[1])
+        else:
+            if max(first_idx) > max(df_subset.index):
+                raise ValueError("provided validation index exceeds historical data period")
+            # split train and test portions, and split regressor if present
+            df_train, df_test = simple_train_test_split(
+                df_subset,
+                forecast_length=self.forecast_length,
+                min_allowed_train_percent=self.min_allowed_train_percent,
+                verbose=self.verbose,
+            )
 
         # subset the weighting information as well
         if not self.weighted:
-            current_weights = {x: 1 for x in df_subset.columns}
+            current_weights = {x: 1 for x in df_train.columns}
         else:
-            current_weights = {x: self.weights[x] for x in df_subset.columns}
+            current_weights = {x: self.weights[x] for x in df_train.columns}
 
-        # split train and test portions, and split regressor if present
-        df_train, df_test = simple_train_test_split(
-            df_subset,
-            forecast_length=self.forecast_length,
-            min_allowed_train_percent=self.min_allowed_train_percent,
-            verbose=self.verbose,
-        )
         self.validation_train_indexes.append(df_train.index)
         self.validation_test_indexes.append(df_test.index)
         if future_regressor is not None:
@@ -1542,7 +1545,7 @@ class AutoTS(object):
             try:
                 if self.mosaic_used:
                     ens_templates = self._generate_mosaic_template(
-                        df_subset, models_to_use=models_to_use
+                        df_train, models_to_use=models_to_use
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1946,7 +1949,7 @@ class AutoTS(object):
             df_test=df_test,
             weights=current_weights,
             model_count=model_count,
-            forecast_length=self.forecast_length,
+            forecast_length=len(df_test.index),
             frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
@@ -2035,7 +2038,11 @@ class AutoTS(object):
             if self.verbose > 0:
                 print("Validation Round: {}".format(str(cslc)))
             # slice the validation data into current validation slice
-            current_slice = df_wide_numeric.reindex(self.validation_indexes[cslc])
+            cval_idx = self.validation_indexes[cslc]
+            if isinstance(cval_idx, tuple):
+                current_slice = df_wide_numeric.reindex(cval_idx[0].union(cval_idx[1]))
+            else:
+                current_slice = df_wide_numeric.reindex(cval_idx)
             # do a slift shift, this is intended to make mosaic ensemble validation more robust, reduce overfitting
             if shifted_starts:
                 shift = num_validations - cslc
@@ -2065,12 +2072,17 @@ class AutoTS(object):
             else:
                 current_weights = {x: self.weights[x] for x in df_subset.columns}
 
-            val_df_train, val_df_test = simple_train_test_split(
-                df_subset,
-                forecast_length=self.forecast_length,
-                min_allowed_train_percent=self.min_allowed_train_percent,
-                verbose=self.verbose,
-            )
+            if isinstance(cval_idx, tuple):
+                val_df_train = df_subset.reindex(cval_idx[0])
+                val_df_test = df_subset.reindex(cval_idx[1])
+                
+            else:
+                val_df_train, val_df_test = simple_train_test_split(
+                    df_subset,
+                    forecast_length=self.forecast_length,
+                    min_allowed_train_percent=self.min_allowed_train_percent,
+                    verbose=self.verbose,
+                )
             if first_validation:
                 self.validation_train_indexes.append(val_df_train.index)
                 self.validation_test_indexes.append(val_df_test.index)
@@ -3452,12 +3464,17 @@ class AutoTS(object):
             self.validation_forecast_cuts_ends = []
             # self.validation_forecasts = {}
             for val in range(len(self.validation_indexes)):
-                val_df_train, val_df_test = simple_train_test_split(
-                    self.df_wide_numeric.reindex(self.validation_indexes[val]),
-                    forecast_length=self.forecast_length,
-                    min_allowed_train_percent=self.min_allowed_train_percent,
-                    verbose=self.verbose,
-                )
+                cval_idx = self.validation_indexes[val]
+                if isinstance(cval_idx, tuple):
+                    val_df_train = self.df_wide_numeric.reindex(cval_idx[0])
+                    val_df_test = self.df_wide_numeric.reindex(cval_idx[1])
+                else:
+                    val_df_train, val_df_test = simple_train_test_split(
+                        self.df_wide_numeric.reindex(cval_idx),
+                        forecast_length=self.forecast_length,
+                        min_allowed_train_percent=self.min_allowed_train_percent,
+                        verbose=self.verbose,
+                    )
                 sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
                 self.validation_forecast_cuts_ends.append(sec_idx[-1])
@@ -3478,7 +3495,7 @@ class AutoTS(object):
                     val_id = str(val) + "_" + str(idz)
                     if val_id not in self.validation_forecasts.keys():
                         df_forecast = self._predict(
-                            forecast_length=self.forecast_length,
+                            forecast_length=len(sec_idx),
                             prediction_interval=self.prediction_interval,
                             future_regressor=fut_reg,
                             fail_on_forecast_nan=False,
