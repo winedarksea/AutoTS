@@ -6637,7 +6637,7 @@ def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
     if transformer_list in [
             "fast", "default", "Fast", "auto", 'scalable',
-            'fast_no_slice', 'superfast_no_slice', 'scalable_no_slice'
+            'fast_no_slice', 'superfast_no_slice', 'scalable_no_slice',
     ]:
         # remove any slow transformers
         fast_transformer_dict = transformer_dict.copy()
@@ -6665,6 +6665,8 @@ def transformer_list_to_dict(transformer_list):
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         del transformer_list["ReplaceConstant"]
         del transformer_list["ThetaTransformer"]  # just haven't tested it enough yet
+    elif transformer_list in ["no_expanding"]:
+        transformer_list = {x: y for x, y in transformer_dict.items() if x not in expanding_transformers and x != "Slice"}
     elif "no_slice" in transformer_list:
         # slice can be a problem child in some cases, so can remove by adding this
         del transformer_list["Slice"]

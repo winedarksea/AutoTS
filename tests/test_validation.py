@@ -11,8 +11,7 @@ import numpy as np
 import pandas as pd
 from unittest.mock import patch, MagicMock
 
-# Assuming the functions below are defined in auto_ts.py
-from auto_ts import (
+from autots.evaluator.validation import (
     extract_seasonal_val_periods,
     validate_num_validations,
     generate_validation_indices,
@@ -22,7 +21,7 @@ from auto_ts import (
 def create_dummy_df(n_rows=10, n_cols=1):
     # Using a simple integer index here for clarity.
     data = np.random.randn(n_rows, n_cols)
-    return pd.DataFrame(data, index=pd.Index(range(n_rows)))
+    return pd.DataFrame(data, index=pd.date_range("2020-01-01", freq='D', periods=n_rows))
 
 
 class TestValidationSegments(unittest.TestCase):
