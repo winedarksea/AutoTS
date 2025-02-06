@@ -839,6 +839,15 @@ class ModelPrediction(ModelObject):
             }
         if self.transformation_dict is None:
             self.transformation_dict = {}
+        transformations = self.transformation_dict.get("transformations", {})
+        transformers_used = transformations.values().tolist()
+        self.forecast_length_needed = self.forecast_length
+        if "UpscaleDownscaleTransformer" in transformers_used:
+            params = self.transformation_dict.get("transformation_params", {})
+            for x, y in transformations.items():
+                if y == "UpscaleDownscaleTransformer":
+                    if params[x].get("mode") == "upscale":
+                        self.forecast_length_needed *= (params["factor"] + 1)
         self.transformer_object = GeneralTransformer(
             **self.transformation_dict,
             n_jobs=self.n_jobs,
@@ -864,7 +873,7 @@ class ModelPrediction(ModelObject):
             holiday_country=self.holiday_country,
             random_seed=self.random_seed,
             verbose=self.verbose,
-            forecast_length=self.forecast_length,
+            forecast_length=self.forecast_length_needed,
             n_jobs=self.n_jobs,
         )
         transformationStartTime = datetime.datetime.now()
@@ -907,7 +916,7 @@ class ModelPrediction(ModelObject):
 
     def predict(self, forecast_length=None, future_regressor=None):
         if forecast_length is None:
-            forecast_length = self.forecast_length
+            forecast_length = self.forecast_length_needed
         if not self._fit_complete:
             raise ValueError("Model not yet fit.")
         df_forecast = self.model.predict(

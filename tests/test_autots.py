@@ -831,6 +831,7 @@ class ModelTest(unittest.TestCase):
             "ThetaTransformer",  # new in 0.6.16
             "ChangepointDetrend",  # new in 0.6.16
             "MeanPercentSplitter",  # new in 0.6.16
+            # "UpscaleDownscaleTransformer",  # new in 0.6.18
         ]
 
         timings = {}

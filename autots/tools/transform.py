@@ -5798,7 +5798,235 @@ class MeanPercentSplitter(EmptyTransformer):
         return params
 
 
-class StandardScaler:
+class UpscaleDownscaleTransformer(EmptyTransformer):
+    """
+    Transformer that either upscales or downscales time series data for forecasting,
+    inspired by audio processing techniques.
+
+    Upscaling will require an increase in forecast_length (handled internally by auto_model)
+    Depending on the chosen mode:
+    
+      - 'upscale': transform() increases the resolution of the data by inserting
+        additional rows (using interpolation) so that (for example) a scaling factor
+        of 3 creates three extra rows between every two original rows (i.e. 4× as many rows).
+        inverse_transform() then downsamples (using decimation) back to the original index.
+        
+      - 'downscale': transform() downsamples the (high-resolution) data by aggregating
+        blocks of rows (using either decimation or a moving average). inverse_transform()
+        then upsamples (via interpolation) to recover the original index.
+    
+    Args:
+        mode (str): Either 'upscale' or 'downscale'. In 'upscale' mode, transform() will
+            add new rows and inverse_transform() will remove them; in 'downscale' mode,
+            transform() will remove rows and inverse_transform() will add them back.
+        factor (int): The scaling factor. For example, factor=3 means that for each original
+            interval the upscaled data will contain (factor+1) equally spaced rows.
+        down_method (str): When downsampling, the method used. Options:
+            - 'decimate': simply select every (factor+1)-th row.
+            - 'mean': compute the mean (i.e. moving average) over each block.
+        fill_method (str): When upsampling, the interpolation method (e.g., 'linear', 'cubic').
+    """
+    
+    def __init__(self, mode='upscale', factor=3, down_method='decimate', fill_method='linear', **kwargs):
+        super().__init__(name="UpscaleDownscaleTransformer")
+        if mode not in ['upscale', 'downscale']:
+            raise ValueError("mode must be either 'upscale' or 'downscale'")
+        if factor < 1:
+            raise ValueError("factor must be at least 1")
+        self.mode = mode
+        self.factor = factor
+        self.down_method = down_method
+        self.fill_method = fill_method
+
+    def fit(self, df):
+        """
+        Fit the transformer to the data.
+        
+        Stores the original index and columns. Also computes an approximate time delta
+        (using the median difference between timestamps) which is used for resampling.
+        
+        Args:
+            df (pandas.DataFrame): Input DataFrame with a pd.DatetimeIndex.
+        """
+        self.original_index = df.index
+        self.columns = df.columns
+
+        # Compute an approximate original time delta (assumes reasonably regular spacing)
+        dt_diffs = df.index.to_series().diff().dropna()
+        self.orig_delta = dt_diffs.median()  # a pandas.Timedelta
+        
+        # When upscaling: we will insert self.factor additional rows per original interval.
+        # (factor + 1) points will now represent the same interval.
+        self.new_delta = self.orig_delta / (self.factor + 1)
+        return self
+
+    def transform(self, df):
+        """
+        Transform the data by either upscaling (increasing the resolution) or downscaling
+        (reducing the resolution). The new index is computed so that the inverse_transform
+        will ultimately yield a DataFrame with the same DatetimeIndex as the original.
+        
+        Args:
+            df (pandas.DataFrame): Input DataFrame with a pd.DatetimeIndex.
+            
+        Returns:
+            pandas.DataFrame: Transformed DataFrame with a new index.
+        """
+        if not hasattr(self, 'original_index'):
+            raise RuntimeError("Transformer has not been fitted. Call fit() before transform().")
+        
+        if self.mode == 'upscale':
+            # Create a new (high-resolution) index from the original index.
+            new_index = self._create_upscaled_index(self.original_index, self.new_delta)
+            # Reindex the original data to the new index. This introduces NaNs where data did not exist.
+            df_up = df.reindex(new_index)
+            # Use the FillNA function to interpolate the missing rows.
+            df_up_filled = FillNA(df_up, method=self.fill_method)
+            # Save the new index so that inverse_transform() knows how to go back.
+            self.transformed_index = new_index
+            return df_up_filled
+        
+        elif self.mode == 'downscale':
+            # In downscale mode, we expect the input df to be high-resolution.
+            # Compute a downsampled index: select every (factor+1)-th timestamp from the original.
+            downsampled_index = self.original_index[::(self.factor + 1)]
+            
+            if self.down_method == 'decimate':
+                # Simple decimation: select rows that exactly match the downsampled index.
+                df_down = df.loc[downsampled_index]
+            elif self.down_method == 'mean':
+                # Aggregate blocks of (factor+1) rows using the mean.
+                # (If the number of rows isn’t exactly divisible, the trailing rows are dropped.)
+                arr = df.to_numpy()
+                n_rows = arr.shape[0]
+                block_size = self.factor + 1
+                n_complete_blocks = n_rows // block_size
+                arr = arr[:n_complete_blocks * block_size, :]
+                # Reshape so that each block is along axis 1.
+                arr_reshaped = arr.reshape(n_complete_blocks, block_size, -1)
+                # Compute the mean over each block (axis=1).
+                arr_down = arr_reshaped.mean(axis=1)
+                df_down = pd.DataFrame(arr_down, index=downsampled_index[:n_complete_blocks], columns=df.columns)
+            else:
+                raise ValueError("Invalid down_method. Must be 'decimate' or 'mean'.")
+            
+            self.transformed_index = df_down.index
+            return df_down
+
+    def inverse_transform(self, df):
+        """
+        Inverse transform the data back to the original frequency.
+        
+        For 'upscale' mode, if the incoming DataFrame df contains the training timestamps
+        (self.original_index) they are used; but if df represents future forecasts (with a
+        high-resolution index that does not intersect self.original_index), a new index is
+        generated starting from an anchor based on the training data.
+        
+        For 'downscale' mode, the low-resolution forecast data is reindexed to the new index
+        and then missing values are filled.
+        
+        Args:
+            df (pandas.DataFrame): Transformed DataFrame.
+            
+        Returns:
+            pandas.DataFrame: DataFrame resampled to the original frequency.
+        """
+        if not hasattr(self, 'transformed_index'):
+            raise RuntimeError("Transformer has not been fitted/transformed properly.")
+    
+        # Check if the training original timestamps are present in the input index.
+        # (This is typically true for in-sample data but not for forecasts.)
+        if df.index.max() > self.original_index[-1]:
+            # Forecast scenario: generate a new index at the original frequency.
+            # We use the training anchor so that the new index remains aligned.
+            if self.mode == 'downscale':
+                new_start = self.original_index[-1] + self.orig_delta
+                print(new_start)
+            else:
+                start_anchor = self.original_index[0]
+                offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
+                new_start = start_anchor + offset * self.orig_delta
+            new_index = pd.date_range(start=new_start, end=df.index[-1], freq=self.orig_delta)
+        else:
+            new_index = self.original_index
+    
+        if self.mode == 'upscale':
+            # For upscale mode, sample the high-resolution data to the new original frequency.
+            # We use nearest neighbor selection.
+            df_inv = df.reindex(new_index, method='nearest')
+            return df_inv
+    
+        elif self.mode == 'downscale':
+            # For downscale mode, upsample the low-resolution data to the new index and fill gaps.
+            df_up = df.reindex(new_index)
+            df_up_filled = FillNA(df_up, method=self.fill_method)
+            return df_up_filled
+
+
+    def _create_upscaled_index(self, original_index, new_delta):
+        """
+        Create a new high-resolution index given the original index and a new time delta.
+        
+        The new index starts at the first timestamp and ends at the last timestamp
+        of the original index. (Some minor approximation is used if the interval does
+        not divide evenly.)
+        
+        Args:
+            original_index (pd.DatetimeIndex): The original index.
+            new_delta (pd.Timedelta): The desired time step between rows.
+            
+        Returns:
+            pd.DatetimeIndex: The upscaled index.
+        """
+        start = original_index[0]
+        end = original_index[-1]
+        # Total seconds between start and end
+        total_seconds = (end - start).total_seconds()
+        new_delta_seconds = new_delta.total_seconds()
+        # Compute number of periods (ensure we include both endpoints)
+        periods = int(np.floor(total_seconds / new_delta_seconds) + 1)
+        new_index = pd.date_range(start=start, periods=periods,
+                                  freq=pd.Timedelta(seconds=new_delta_seconds))
+        # Guarantee that the original end timestamp is included
+        if new_index[-1] < end:
+            new_index = new_index.append(pd.DatetimeIndex([end]))
+        return new_index
+
+    def fit_transform(self, df):
+        """
+        Fit to data, then transform it.
+        
+        Args:
+            df (pandas.DataFrame): Input DataFrame with a pd.DatetimeIndex.
+            
+        Returns:
+            pandas.DataFrame: Transformed DataFrame.
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """
+        Generate new random parameters for the transformer.
+        
+        Args:
+            method (str): Method to generate new parameters. (Currently only "random" is supported.)
+            
+        Returns:
+            dict: Dictionary of transformer parameters.
+        """
+        params = {
+            "mode": random.choice(["upscale", "downscale"]),
+            "factor": random.choice([1, 2, 3, 4]),
+            "down_method": random.choice(["decimate", "mean"]),
+            "fill_method": random.choice(["linear", "cubic", "pchip", "akima"])
+        }
+        return params
+
+
+
+class StandardScaler(EmptyTransformer):
     def __init__(self):
         self.means = None
         self.stds = None
@@ -5927,6 +6155,7 @@ have_params = {
     "ThetaTransformer": ThetaTransformer,
     "ChangepointDetrend": ChangepointDetrend,
     "MeanPercentSplitter": MeanPercentSplitter,
+    "UpscaleDownscaleTransformer": UpscaleDownscaleTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -6036,6 +6265,7 @@ class GeneralTransformer(object):
             "ThetaTransformer": decomposes into theta lines, then recombines
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
+            "UpscaleDownscaleTransformer": upscales and downscales
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -6101,8 +6331,8 @@ class GeneralTransformer(object):
         ]
 
     @staticmethod
-    def get_new_params(method="fast"):
-        return RandomTransform(transformer_list=method)
+    def get_new_params(method="fast", **kwargs):
+        return RandomTransform(transformer_list=method, **kwargs)
 
     def fill_na(self, df, window: int = 10):
         """
@@ -6500,6 +6730,7 @@ transformer_dict = {
     "ThetaTransformer": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
+    "UpscaleDownscaleTransformer": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -6607,6 +6838,7 @@ expanding_transformers = [
     "LocalLinearTrend",
     "ThetaTransformer",
     "MeanPercentSplitter",
+    "UpscaleDownscaleTransformer",
 ]  # note there is also prob_trans below for preventing reuse of these in one transformer
 
 transformer_class = {}
@@ -6802,6 +7034,7 @@ def RandomTransform(
         "LocalLinearTrend",
         "ThetaTransformer",
         "MeanPercentSplitter",
+        "UpscaleDownscaleTransformer",
     }
     if any(x in prob_trans for x in trans):
         # for loop, only way I saw to do this right now

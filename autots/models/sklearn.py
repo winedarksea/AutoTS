@@ -4169,6 +4169,9 @@ class PreprocessingRegression(ModelObject):
                 )
         from autots.tools.transform import GeneralTransformer  # avoid circular imports
 
+        if self.transformation_dict is None:
+            raise ValueError("transformation_dict cannot be None with PreprocessingRegression")
+
         self.transformer_object = GeneralTransformer(
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
@@ -4487,8 +4490,12 @@ class PreprocessingRegression(ModelObject):
         wnd_sz_choice = random.choice([5, 10, 20, seasonal_int()])
         if method != "deep":
             wnd_sz_choice = wnd_sz_choice if wnd_sz_choice < 91 else 90
+        if method == "fast":
+            model_dict = datepart_model_dict
+        else:
+            model_dict = sklearn_model_dict
         model_choice = generate_regressor_params(
-            model_dict=sklearn_model_dict, method=method
+            model_dict=model_dict, method=method
         )
         if "regressor" in method:
             regression_type_choice = "User"

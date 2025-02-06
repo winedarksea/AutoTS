@@ -23,7 +23,7 @@ def create_forecast_index(frequency, forecast_length, train_last_date, last_date
     return pd.date_range(
         freq=frequency,
         start=train_last_date if last_date is None else last_date,
-        periods=forecast_length + 1,
+        periods=int(forecast_length + 1),
     )[
         1:
     ]  # note the disposal of the first (already extant) date
