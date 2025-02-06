@@ -2153,6 +2153,7 @@ class AutoTS(object):
         bypass_save=False,  # don't even try saving model
         model_id=None,
     ):
+        """useful for when you want to mess with the best model a bit."""
         if model_id is not None:
             use_mod = self.initial_results.model_results[
                 self.initial_results.model_results["ID"] == model_id

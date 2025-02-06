@@ -18,6 +18,7 @@
 * updated python version required to 3.9 to allow more typing options
 * validation_indexes can now be a list of tuples with mixed forecast lengths
 * "mixed_length" validation option, for limited testing of longer forecast lengths
+* kalman method for ensemble aggregation (ala sensor fusion)
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
