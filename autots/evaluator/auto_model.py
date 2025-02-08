@@ -830,7 +830,7 @@ class ModelPrediction(ModelObject):
                 self.parameter_dict = json.loads(parameter_dict)
         else:
             self.parameter_dict = parameter_dict
-        if model_str == "PreprocessingRegression":
+        if model_str in ["PreprocessingRegression", "PreprocessingExperts"]:
             self.parameter_dict['transformation_dict'] = self.transformation_dict
             self.transformation_dict = {
                 'fillna': None,

@@ -196,7 +196,7 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
-fast_parallel_no_arima = {
+scalable = fast_parallel_no_arima = {
     i: fast_parallel[i]
     for i in fast_parallel
     if i
@@ -455,7 +455,7 @@ model_lists = {
     "parallel": parallel,
     "fast_parallel": fast_parallel,
     "fast_parallel_no_arima": fast_parallel_no_arima,
-    "scalable": fast_parallel_no_arima,
+    "scalable": scalable,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
     "univariate": univariate,

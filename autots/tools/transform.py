@@ -6625,6 +6625,7 @@ class GeneralTransformer(object):
         trans_method: str = "forecast",
         fillzero: bool = False,
         bounds: bool = False,
+        start: int = None,
     ):
         """Undo the madness.
 
@@ -6639,7 +6640,8 @@ class GeneralTransformer(object):
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         try:
             for i in sorted(self.transformations.keys(), reverse=True):
-                df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
+                if start is None or i <= start:
+                    df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
         except Exception as e:
             err_str = f"Transformer {self.c_trans_n} failed on inverse"
             if self.verbose >= 1:
