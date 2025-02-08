@@ -20,6 +20,7 @@
 * "mixed_length" validation option, for limited testing of longer forecast lengths
 * kalman method for ensemble aggregation (ala sensor fusion)
 * UpscaleDownscaleTransformer added
+* PreprocessingExperts model added (experimental)
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
@@ -31,6 +32,7 @@
 	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
 	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
 	* if model has regressors, make sure it meets Simulation Forecasting needs (method=="regressor", fails on no regressor if "User")
+	* if model has result_windows, add to appropriate model_list noting also diff_window_motif_list
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns

@@ -4602,6 +4602,7 @@ class AutoTS(object):
                     'stat': sns_colors[2],
                     'naive': sns_colors[3],
                     'DL': sns_colors[4],
+                    "ensemble": sns_colors[6],
                     'other': sns_colors[5],
                 }
             else:

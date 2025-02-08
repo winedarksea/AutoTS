@@ -922,7 +922,7 @@ class RollingMeanTransformer(EmptyTransformer):
     def __init__(
         self,
         window: int = 10,
-        fixed: bool = False,
+        fixed: bool = True,  # fixed=False appears to be broken as of 2025 for first values
         macro_micro: bool = False,
         suffix: str = "_lltmicro",
         center: bool = False,
@@ -937,7 +937,7 @@ class RollingMeanTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        bool_c = random.choices([True, False], [0.7, 0.3])[0]
+        bool_c = random.choices([True, False], [0.9, 0.1])[0]
         center = random.choices([True, False], [0.5, 0.5])[0]
         macro_micro = random.choices([True, False], [0.2, 0.8])[0]
         if macro_micro:
@@ -6071,7 +6071,7 @@ class StandardScaler(EmptyTransformer):
 trans_dict = {
     "None": EmptyTransformer(),
     None: EmptyTransformer(),
-    "RollingMean10": RollingMeanTransformer(window=10),
+    "RollingMean10": RollingMeanTransformer(window=10, fixed=True),
     # "DifferencedTransformer": DifferencedTransformer(),
     "PctChangeTransformer": PctChangeTransformer(),
     "SinTrend": SinTrend(),
@@ -6488,13 +6488,13 @@ class GeneralTransformer(object):
             window = int(df.shape[0] / 100)
             window = 2 if window < 2 else window
             self.window = window
-            return RollingMeanTransformer(window=self.window)
+            return RollingMeanTransformer(window=self.window, fixed=True)
 
         elif transformation == "RollingMean10thN":
             window = int(df.shape[0] / 10)
             window = 2 if window < 2 else window
             self.window = window
-            return RollingMeanTransformer(window=self.window)
+            return RollingMeanTransformer(window=self.window, fixed=True)
 
         # must be at bottom as it has duplicates of above inside
         elif transformation in list(have_params.keys()):
@@ -6690,7 +6690,7 @@ transformer_dict = {
     "DifferencedTransformer": 0.05,
     "SinTrend": 0.01,
     "PctChangeTransformer": 0.01,
-    "CumSumTransformer": 0.02,
+    "CumSumTransformer": 0.005,
     "PositiveShift": 0.02,
     "Log": 0.01,
     "IntermittentOccurrence": 0.01,

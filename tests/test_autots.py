@@ -691,6 +691,7 @@ class ModelTest(unittest.TestCase):
             "DMD",  # 0.6.12
             "BasicLinearModel", "TVVAR",  # 0.6.16
             # "BallTreeRegressionMotif",  # 0.6.17
+            # "PreprocessingExperts",  # 0.6.18
         ]
         # models that for whatever reason arne't consistent across test sessions
         run_only_no_score = ['FBProphet', 'RRVAR', "TMF"]

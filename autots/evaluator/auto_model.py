@@ -75,6 +75,7 @@ from autots.models.sklearn import (
     ComponentAnalysis,
     PreprocessingRegression,
 )
+from autots.models.composite import PreprocessingExperts
 
 
 def create_model_id(
@@ -744,6 +745,17 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == 'PreprocessingExperts':
+        return PreprocessingExperts(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     elif model == "":
         raise AttributeError(
             ("Model name is empty. Likely this means AutoTS has not been fit.")
@@ -840,7 +852,7 @@ class ModelPrediction(ModelObject):
         if self.transformation_dict is None:
             self.transformation_dict = {}
         transformations = self.transformation_dict.get("transformations", {})
-        transformers_used = transformations.values().tolist()
+        transformers_used = list(transformations.values())
         self.forecast_length_needed = self.forecast_length
         if "UpscaleDownscaleTransformer" in transformers_used:
             params = self.transformation_dict.get("transformation_params", {})
