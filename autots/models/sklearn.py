@@ -3434,7 +3434,7 @@ class MultivariateRegression(ModelObject):
                     holiday_country=self.holiday_country,
                     verbose=self.verbose,
                     random_seed=self.random_seed,
-                    forecast_length=self.forecast_length,
+                    forecast_length=1,  # note this
                     **self.transformation_dict,
                 )
                 df = self.transformer_object.fit_transform(df)
@@ -3715,6 +3715,7 @@ class MultivariateRegression(ModelObject):
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
             if self.transformation_dict:
+                # should only ever be 1 step
                 pred_clean = self.transformer_object.inverse_transform(pred_clean)
             forecast.append(pred_clean)
             # a lot slower
@@ -3871,7 +3872,7 @@ class MultivariateRegression(ModelObject):
             coint_choice = None
         if coint_choice is not None:
             coint_lag = random.choice([1, 2, 7])
-        transform_choice = random.choice([True, None]),
+        transform_choice = random.choices([True, None], [0.5, 0.5])[0]
         if transform_choice:
             from autots.tools.transform import GeneralTransformer  # avoid circular imports
 

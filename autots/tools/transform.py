@@ -6825,7 +6825,7 @@ postprocessing = {
     "Round": 0.1,
     "HistoricValues": 0.1,
     "BKBandpassFilter": 0.1,
-    "KalmanSmoothing": 0.1,
+    "KalmanSmoothing": 0.01,
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
     "Constraint": 0.1,
