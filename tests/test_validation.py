@@ -108,7 +108,7 @@ class TestValidationSegments(unittest.TestCase):
         self.assertEqual(result_max, 1)
 
     @patch("autots.tools.window_functions.retrieve_closest_indices")
-    @patch("autots.tools.seasonal.GeneralTransformer")
+    @patch("autots.tools.transform.GeneralTransformer")
     def test_generate_validation_indices_similarity(self, mock_transformer, mock_retrieve):
         # For similarity method, we patch GeneralTransformer and retrieve_closest_indices.
         df = create_dummy_df(n_rows=10)
@@ -146,7 +146,7 @@ class TestValidationSegments(unittest.TestCase):
         self.assertEqual(list(result[0]), list(expected_first))
         self.assertEqual(list(result[1]), list(expected_second))
 
-    @patch("autots.seasonal_window_match")
+    @patch("autots.tools.seasonal.seasonal_window_match")
     def test_generate_validation_indices_seasonal(self, mock_seasonal_match):
         # it might be worth rewriting this without the @patch
 

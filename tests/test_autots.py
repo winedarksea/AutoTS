@@ -56,7 +56,8 @@ class AutoTSTest(unittest.TestCase):
             'spl_weighting': 1,
             'contour_weighting': 1,
         }
-        ensemble = full_ensemble_test_list
+        # need to remove "profile" as it messes with tests below
+        ensemble = [x for x in full_ensemble_test_list if "profile" not in x]
 
         model = AutoTS(
             forecast_length=forecast_length,

@@ -298,6 +298,8 @@ class AutoTS(object):
                 'mosaic-window',
                 "subsample",
                 'mlensemble',
+                "mosaic-mae-profile-0-36",
+                "mosaic-weighted-profile-median-filtered-unpredictability_adjusted-crosshair_lite-3-30",  # maxxed out config
             ]
         elif ensemble == 'auto':
             if model_list in ['superfast']:
