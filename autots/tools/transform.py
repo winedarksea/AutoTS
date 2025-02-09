@@ -6943,7 +6943,7 @@ def RandomTransform(
 
     BTCD is used as a signal that slow parameters are allowed.
     """
-    transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
+    transformer_actual_list, transformer_prob = transformer_list_to_dict(transformer_list)
     if transformer_max_depth <= 0:
         transformer_max_depth = 0
         transformer_min_depth = 0
@@ -6952,7 +6952,7 @@ def RandomTransform(
     if fast_params is None:
         fast_params = True
         slow_flags = ["BTCD"]
-        intersects = [i for i in slow_flags if i in transformer_list]
+        intersects = [i for i in slow_flags if i in transformer_actual_list]
         if intersects:
             fast_params = False
     if superfast_params is None:
@@ -6963,7 +6963,7 @@ def RandomTransform(
             "QuantileTransformer",
             "KalmanSmoothing",
         ]
-        intersects = [i for i in slow_flags if i in transformer_list]
+        intersects = [i for i in slow_flags if i in transformer_actual_list]
         if not intersects:
             superfast_params = True
 
@@ -7015,19 +7015,19 @@ def RandomTransform(
             }
     if traditional_order:
         # handle these not being in TransformerList
-        randos = random.choices(transformer_list, transformer_prob, k=4)
-        clip = "ClipOutliers" if "ClipOutliers" in transformer_list else randos[0]
-        detrend = "Detrend" if "Detrend" in transformer_list else randos[1]
+        randos = random.choices(transformer_actual_list, transformer_prob, k=4)
+        clip = "ClipOutliers" if "ClipOutliers" in transformer_actual_list else randos[0]
+        detrend = "Detrend" if "Detrend" in transformer_actual_list else randos[1]
         # formerly Discretize
         discretize = (
-            "AlignLastValue" if "AlignLastValue" in transformer_list else randos[2]
+            "AlignLastValue" if "AlignLastValue" in transformer_actual_list else randos[2]
         )
         # create new dictionary in fixed order
         trans = [clip, detrend, randos[3], discretize]
         trans = trans[0:num_trans]
         num_trans = len(trans)
     else:
-        trans = random.choices(transformer_list, transformer_prob, k=num_trans)
+        trans = random.choices(transformer_actual_list, transformer_prob, k=num_trans)
 
     # remove duplication of some which scale memory exponentially
     # only allow one of these
@@ -7039,28 +7039,30 @@ def RandomTransform(
         "MeanPercentSplitter",
         "UpscaleDownscaleTransformer",
     }
-    if any(x in prob_trans for x in trans):
-        # for loop, only way I saw to do this right now
-        seen = False
-        result = []
-        for item in trans:
-            if item in prob_trans:
-                if not seen:
-                    seen = True
+    # with all, allow a deep search that repeats these
+    if transformer_list not in ["all"]:
+        if any(x in prob_trans for x in trans):
+            # for loop, only way I saw to do this right now
+            seen = False
+            result = []
+            for item in trans:
+                if item in prob_trans:
+                    if not seen:
+                        seen = True
+                        result.append(item)
+                else:
                     result.append(item)
-            else:
-                result.append(item)
-        trans = result
-        keys = list(range(len(trans)))
-    else:
-        keys = list(range(num_trans))
-    # now get the parameters for the specified transformers
-    params = [get_transformer_params(x, method=params_method) for x in trans]
-    return {
-        "fillna": na_choice,
-        "transformations": dict(zip(keys, trans)),
-        "transformation_params": dict(zip(keys, params)),
-    }
+            trans = result
+            keys = list(range(len(trans)))
+        else:
+            keys = list(range(num_trans))
+        # now get the parameters for the specified transformers
+        params = [get_transformer_params(x, method=params_method) for x in trans]
+        return {
+            "fillna": na_choice,
+            "transformations": dict(zip(keys, trans)),
+            "transformation_params": dict(zip(keys, params)),
+        }
 
 
 def random_cleaners():

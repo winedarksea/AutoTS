@@ -456,6 +456,7 @@ class AutoTS(object):
         self.preclean_transformer = None
         self.score_per_series = None
         self.best_model_non_horizontal = None
+        self.best_model_non_ensemble = None
         self.best_model_unpredictability_adjusted = None
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
@@ -1730,6 +1731,10 @@ class AutoTS(object):
         best_model_non_horizontal = self._best_non_horizontal(
             metric_weighting=metric_weighting, n=n, template_cols=template_cols
         )
+        # not passing this around yet, because it's just a diagnostic curiosity mostly
+        self.best_model_non_ensemble = self._best_non_horizontal(
+            metric_weighting=metric_weighting, n=n, template_cols=template_cols, include_ensemble=False
+        )
         if (not hens_model_results.empty) and requested_H_ens:
             hens_model_results['Score'] = generate_score(
                 hens_model_results,
@@ -1811,7 +1816,7 @@ class AutoTS(object):
         return self
 
     def _best_non_horizontal(
-        self, metric_weighting=None, series=None, n=1, template_cols=None
+        self, metric_weighting=None, series=None, n=1, template_cols=None, include_ensemble=True,
     ):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
@@ -1824,13 +1829,17 @@ class AutoTS(object):
             metric_weighting = self.metric_weighting
         if template_cols is None:
             template_cols = self.template_cols_id
+        if include_ensemble:
+            ensemble_lvl = 2
+        else:
+            ensemble_lvl = 1
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
             (
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
             )
-            & (self.validation_results.model_results['Ensemble'] < 2)
+            & (self.validation_results.model_results['Ensemble'] < ensemble_lvl)
         ].copy()
         if eligible_models.empty:
             # this may occur if there is enough data for full validations
@@ -4517,7 +4526,8 @@ class AutoTS(object):
                                 'Transformer': transformer,
                             }
                         )
-                except Exception:
+                except Exception as e:
+                    print(repr(e))
                     # No transformers
                     transformer_data.append(
                         {

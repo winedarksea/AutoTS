@@ -842,15 +842,20 @@ class ModelPrediction(ModelObject):
                 self.parameter_dict = json.loads(parameter_dict)
         else:
             self.parameter_dict = parameter_dict
+        if self.transformation_dict is None:
+            self.transformation_dict = {}
+        # special models that get fed in the transformation parameters from the main definition
         if model_str in ["PreprocessingRegression", "PreprocessingExperts"]:
+            # this is messy and likely to be broken indirectly, basically overwriting inner transformations with empty
             self.parameter_dict['transformation_dict'] = self.transformation_dict
-            self.transformation_dict = {
+            use_trans_params = {
                 'fillna': None,
                 'transformations': {},
                 'transformation_params': {},
             }
-        if self.transformation_dict is None:
-            self.transformation_dict = {}
+        else:
+            use_trans_params = self.transformation_dict
+        # this extends the length for the upscaled forecasts as necessary
         transformations = self.transformation_dict.get("transformations", {})
         transformers_used = list(transformations.values())
         self.forecast_length_needed = self.forecast_length
@@ -861,7 +866,7 @@ class ModelPrediction(ModelObject):
                     if params[x].get("mode") == "upscale":
                         self.forecast_length_needed *= (params[x]["factor"] + 1)
         self.transformer_object = GeneralTransformer(
-            **self.transformation_dict,
+            **use_trans_params,
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
             verbose=self.verbose,

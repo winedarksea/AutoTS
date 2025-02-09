@@ -252,7 +252,7 @@ class PreprocessingExperts(ModelObject):
                 "model_str": model_type,
                 "parameter_dict": model_params,
                 "transformation_dict": RandomTransform(
-                    transformer_list="scalable", transformer_max_depth=2
+                    transformer_list="scalable", transformer_max_depth=2, allow_none=True
                 ),
             },
             'transformation_dict': None,  # assume this passed via AutoTS transformer dict
