@@ -4727,8 +4727,10 @@ class AutoTS(object):
                     .get('transformations', {})
                     .values()
                 )
+                title = 'Transformers by Failure Rate'
             elif target == "models":
                 transforms = [row["Model"]]
+                title = 'Models by Failure Rate'
             else:
                 raise ValueError(f"target {target} not recognized")
             if failed:
@@ -4748,7 +4750,7 @@ class AutoTS(object):
         return (
             total.sort_values("failure_rate", ascending=False)['failure_rate']
             .iloc[0:20]
-            .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+            .plot(kind='bar', title=title, color='forestgreen')
         )
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):

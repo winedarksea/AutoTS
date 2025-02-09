@@ -148,10 +148,11 @@ def date_part(
 
     # add extra time to make sure full flags are captured
     # this is more a backup for the Cateogorical flags which handle this directly
-    if "binarized" in method and set_index:
-        expansion_flag = True
-    else:
-        expansion_flag = False
+    expansion_flag = False
+    if isinstance(method, str):
+        if "binarized" in method and set_index:
+            expansion_flag = True
+       
     if expansion_flag:
         # code shared with holiday_flag
         frequency = infer_frequency(DTindex)

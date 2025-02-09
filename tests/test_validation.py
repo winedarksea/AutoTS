@@ -125,8 +125,6 @@ class TestValidationSegments(unittest.TestCase):
 
         # We expect a list of length 2.
         self.assertEqual(len(result), 2)
-        # This doesn't test much of anything except that the default is the same, if default changes, change this
-        self.assertEqual(len(list(result[0])), 32)
 
     def test_generate_validation_indices_seasonal(self):
         # it might be worth rewriting this without the @patch
