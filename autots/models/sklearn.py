@@ -3871,6 +3871,12 @@ class MultivariateRegression(ModelObject):
             coint_choice = None
         if coint_choice is not None:
             coint_lag = random.choice([1, 2, 7])
+        transform_choice = random.choice([True, None]),
+        if transform_choice:
+            from autots.tools.transform import GeneralTransformer  # avoid circular imports
+
+            transform_choice = GeneralTransformer.get_new_params("postprocessing", transformer_max_depth=1, allow_none=False)
+
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -3899,7 +3905,7 @@ class MultivariateRegression(ModelObject):
             "frac_slice": random.choices(
                 [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
             )[0],
-            "transformation_dict": None,
+            "transformation_dict": transform_choice,
         }
         return parameter_dict
 
