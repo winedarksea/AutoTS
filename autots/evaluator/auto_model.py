@@ -859,7 +859,7 @@ class ModelPrediction(ModelObject):
             for x, y in transformations.items():
                 if y == "UpscaleDownscaleTransformer":
                     if params[x].get("mode") == "upscale":
-                        self.forecast_length_needed *= (params["factor"] + 1)
+                        self.forecast_length_needed *= (params[x]["factor"] + 1)
         self.transformer_object = GeneralTransformer(
             **self.transformation_dict,
             n_jobs=self.n_jobs,

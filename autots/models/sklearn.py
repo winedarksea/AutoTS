@@ -3875,7 +3875,11 @@ class MultivariateRegression(ModelObject):
         if transform_choice:
             from autots.tools.transform import GeneralTransformer  # avoid circular imports
 
-            transform_choice = GeneralTransformer.get_new_params("postprocessing", transformer_max_depth=1, allow_none=False)
+            if method == "deep":
+                transformer_list = "scalable"
+            else:
+                transformer_list = "postprocessing"
+            transform_choice = GeneralTransformer.get_new_params(transformer_list, transformer_max_depth=1, allow_none=False)
 
         parameter_dict = {
             'regression_model': model_choice,
