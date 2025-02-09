@@ -18,7 +18,7 @@ nohup python production_example.py > /dev/null &
 try:  # needs to go first
     from sklearnex import patch_sklearn
 
-    patch_sklearn()
+    # patch_sklearn()
 except Exception as e:
     print(repr(e))
 import json
@@ -31,22 +31,23 @@ from autots import AutoTS, load_live_daily, create_regressor
 
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 gsa_key = None
+eia_key = None  # EIA https://www.eia.gov/opendata/index.php
 
-forecast_name = "example"
+forecast_name = "prod"  # "prod_ltt"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = (
     "D"  # "infer" for automatic alignment, but specific offsets are most reliable, 'D' is daily
 )
-forecast_length = 60  # number of periods to forecast ahead
+forecast_length = 30  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
 num_validations = (
-    2  # number of cross validation runs. More is better but slower, usually
+    5  # number of cross validation runs. More is better but slower, usually
 )
 validation_method = "backwards"  # "similarity", "backwards", "seasonal 364"
-n_jobs = "auto"  # or set to number of CPU cores
+n_jobs = 4  # "auto"  # or set to number of CPU cores
 prediction_interval = (
-    0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
+    0.95  # sets the upper and lower forecast range by probability range. Bigger = wider
 )
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
 evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
@@ -54,9 +55,43 @@ archive_templates = True  # save a copy of the model template used with a timest
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
 template_filename = f"autots_forecast_template_{forecast_name}.csv"
 forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
-model_list = 'fast_parallel'
-transformer_list = "fast"  # 'superfast'
-transformer_max_depth = 5
+model_list = {
+    'ETS': 1,
+    'FBProphet': 0.8,
+    'GLM': 1,
+    'UnobservedComponents': 1,
+    'UnivariateMotif': 1,
+    'MultivariateMotif': 1,
+    'Theta': 1,
+    'ARDL': 1,
+    'ARCH': 1,
+    'ConstantNaive': 1,
+    'LastValueNaive': 1.5,
+    'AverageValueNaive': 1,
+    'GLS': 1,
+    'SeasonalNaive': 1,
+    'VAR': 0.8,
+    'VECM': 0.8,
+    'WindowRegression': 0.5,
+    'DatepartRegression': 0.8,
+    'SectionalMotif': 1,
+    'NVAR': 0.3,
+    'MAR': 0.25,
+    'RRVAR': 0.4,
+    'KalmanStateSpace': 0.4,
+    'MetricMotif': 1,
+    'Cassandra': 0.6,
+    'SeasonalityMotif': 1.5,
+    'FFT': 0.8,
+    'BallTreeMultivariateMotif': 0.4,
+    "DMD": 0.4,
+    "BasicLinearModel": 1.2,
+    "MultivariateRegression": 0.8,
+    "TVVAR": 0.8,
+    "BallTreeRegressionMotif": 0.8,
+}
+transformer_list = "scalable"  # 'superfast'
+transformer_max_depth = 8
 models_mode = "default"  # "deep", "regressor"
 initial_template = 'random'  # 'random' 'general+random'
 preclean = None
@@ -85,26 +120,43 @@ if initial_training == "auto":
         print("Existing template found.")
 
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
-# if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
+# if include_ensemble is specified in import_templates, some ensembles can progressively nest over generations
+ensemble = [
+    # 'simple', 'subsample',
+    'horizontal-min-20',
+    'horizontal-min-40',
+    "mosaic-mae-crosshair-0-20",
+    "mosaic-weighted-crosshair-0-40",
+    "mosaic-weighted-0-20",
+    "mosaic-weighted-0-10",
+    "mosaic-weighted-3-20",
+    "mosaic-weighted-0-40",
+    "mosaic-weighted-crosshair_lite-0-30",
+    "mosaic-mae-profile-0-10",
+    "mosaic-spl-unpredictability_adjusted-0-30",
+    "mosaic-mae-median-profile",
+    "mosaic-mae-0-horizontal",
+    'mosaic-weighted-median-0-30',
+    "mosaic-mae-median-profile-crosshair_lite-horizontal",
+]
+# ensemble = ["horizontal-max", "dist", "simple"]  # 'mlensemble'
 if initial_training:
-    gens = 100
-    generation_timeout = 10000  # minutes
+    gens = 1000
+    generation_timeout = 1000  # minutes
     models_to_validate = 0.15
-    ensemble = ["horizontal-max", "dist", "simple"]  # , "mosaic", "mosaic-window", 'mlensemble'
+    
 elif evolve:
-    gens = 500
-    generation_timeout = 300  # minutes
+    gens = 1000
+    generation_timeout = 600  # minutes
     models_to_validate = 0.15
-    ensemble = ["horizontal-max"]  # "mosaic", "mosaic-window", "subsample"
 else:
     gens = 0
     generation_timeout = 60  # minutes
     models_to_validate = 0.99
-    ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window",
 
 # only save the very best model if not evolve
 if evolve:
-    n_export = 50
+    n_export = 60
 else:
     n_export = 1  # wouldn't be a bad idea to do > 1, allowing some future adaptability
 
@@ -122,10 +174,12 @@ if not csv_load:
         "DAAA",
         "DEXUSUK",
         "T10Y2Y",
+        "DHHNGSP",
     ]
-    tickers = ["MSFT", "PG"]
+    tickers = ["MSFT", "PG", "YUM", "MMM", "UPS", "HON"]
     trend_list = ["forecasting", "msft", "p&g"]
     weather_event_types = ["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"]
+    weather_event_types = None
     wikipedia_pages = ['all', 'Microsoft', "Procter_%26_Gamble", "YouTube", "United_States"]
     df = load_live_daily(
         long=False,
@@ -133,7 +187,8 @@ if not csv_load:
         fred_series=fred_series,
         tickers=tickers,
         trends_list=trend_list,
-        earthquake_min_magnitude=5,
+        weather_stations=["USW00014771"],
+        earthquake_min_magnitude=None,
         weather_years=3,
         london_air_days=700,
         wikipedia_pages=wikipedia_pages,
@@ -141,6 +196,9 @@ if not csv_load:
         gov_domain_list=None,  # ['usajobs.gov', 'usps.com', 'weather.gov'],
         gov_domain_limit=700,
         weather_event_types=weather_event_types,
+        caiso_query=None,
+        eia_key=eia_key,
+        eia_respondents=["MISO", "PJM", "TVA", "US48"],
         sleep_seconds=15,
     )
     # be careful of very noisy, large value series mixed into more well-behaved data as they can skew some metrics such that they get most of the attention
@@ -196,8 +254,11 @@ if not csv_load:
     # saving this to make it possible to rerun without waiting for download, but remove this in production
     df.to_csv(f"training_data_{forecast_name}.csv")
 else:
+    print("using saved csv data")
     df = pd.read_csv(f"training_data_{forecast_name}.csv", index_col=0, parse_dates=[0])
 
+if forecast_name == "prod_ltt":
+    df = df.rolling(180).mean().dropna(how='all')
 # example future_regressor with some things we can glean from data and datetime index
 # note this only accepts `wide` style input dataframes
 # and this is optional, not required for the modeling
@@ -219,6 +280,8 @@ regr_train, regr_fcst = create_regressor(
 # remove the first forecast_length rows (because those are lost in regressor)
 df = df.iloc[forecast_length:]
 regr_train = regr_train.iloc[forecast_length:]
+future_regressor_train = regr_train
+future_regressor_forecast = regr_fcst
 
 print("data setup completed, beginning modeling")
 """
@@ -229,15 +292,15 @@ metric_weighting = {
     'smape_weighting': 2,
     'mae_weighting': 2,
     'rmse_weighting': 1.5,
-    'made_weighting': 1,
+    'made_weighting': 2,
     'mage_weighting': 0,
     'mate_weighting': 0.01,
-    'mle_weighting': 0.1,
-    'imle_weighting': 0,
+    'mle_weighting': 0,  # avoid underestimate, this tends to be out of balance so keep it quite small
+    'imle_weighting': 0.0001,  # avoid overestimate, this tends to be out of balance so keep it quite small
     'spl_weighting': 3,
     'dwae_weighting': 1,
     'uwmse_weighting': 1,
-    'dwd_weighting': 0.1,
+    'dwd_weighting': 1,
     "oda_weighting": 0.1,
     'runtime_weighting': 0.05,
 }
@@ -266,15 +329,17 @@ model = AutoTS(
     # subset=100,
     # prefill_na=0,
     # remove_leading_zeroes=True,
-    # current_model_file=f"current_model_{forecast_name}",
+    current_model_file=f"current_model_{forecast_name}",
     generation_timeout=generation_timeout,
     n_jobs=n_jobs,
-    verbose=1,
+    verbose=0,
 )
 
 if not initial_training:
     if evolve:
-        model.import_template(template_filename, method="addon")
+        model.import_template(template_filename, method="addon", force_validation=True)
+        # extra
+        # model.import_template("template_categories_1.csv", method="addon", force_validation=True)
     else:
         # model.import_template(template_filename, method="only")
         model.import_best_model(template_filename)  # include_ensemble=False
@@ -296,6 +361,9 @@ if initial_training or evolve:
         n=n_export,
         max_per_model_class=6,
         include_results=True,
+        min_metrics=['smape', 'mae', 'spl', 'dwae', 'wasserstein', 'dwd', "ewmae", "uwmse", "mqae"],
+        max_metrics=['oda', "containment"],
+        focus_models=["TVVAR", "Cassandra", "BallTreeMultivariateMotif", "MetricMotif", "MultivariateRegression", "BallTreeRegressionMotif", "ARDL", "VAR", "KalmanStateSpace", "VECM", "Theta"],
     )
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
@@ -323,16 +391,9 @@ forecasts_lower_df = prediction.lower_forecast
 # accuracy of all tried model results
 model_results = model.results()
 validation_results = model.results("validation")
-
-print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-print(f'The following model types failed completely {model.list_failed_model_types()}')
-print("Slowest models:")
-print(
-    model_results[model_results["Ensemble"] < 1]
-    .groupby("Model")
-    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
-    .idxmax()
-)
+val_with_score = model.score_breakdown.rename(columns=lambda x: x + "_score").merge(validation_results, left_index=True, right_on='ID')
+temp = model.score_breakdown[model.score_breakdown.index == model.best_model_id]
+which_greater = temp > (temp.median().median() * 100)
 
 model_parameters = json.loads(model.best_model["ModelParameters"].iloc[0])
  # model.export_template("all_results.csv", models='all')
@@ -384,20 +445,71 @@ if graph:
         ax = model.plot_validations(subset='worst')
         plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
         plt.show()
-    
+
         if model.best_model_ensemble == 2:
             plt.subplots_adjust(bottom=0.5)
             model.plot_horizontal_transformers()
             plt.show()
             model.plot_horizontal_model_count()
+            plt.savefig("horizontal.png", dpi=300, bbox_inches="tight")
             plt.show()
     
             model.plot_horizontal()
             plt.show()
             # plt.savefig("horizontal.png", dpi=300, bbox_inches="tight")
-    
+
+            most_common_models = model.get_top_n_counts(model.best_model_params['series'], n=5)
+            print(most_common_models)
+            model.get_params_from_id(most_common_models[0][0])
+
             if str(model_parameters["model_name"]).lower() in ["mosaic", "mosaic-window"]:
                 mosaic_df = model.mosaic_to_df()
                 print(mosaic_df[mosaic_df.columns[0:5]].head(5))
+                # Plot the DataFrame as a table
+                fig, ax = plt.subplots(figsize=(10, 2))  # Adjust figsize as needed
+                ax.axis('tight')
+                ax.axis('off')
+                tbl = pd.plotting.table(ax, mosaic_df[mosaic_df.columns[0:5]].head(5), loc='center', cellLoc='center', colWidths=[0.3] * len(mosaic_df[mosaic_df.columns[0:5]].head(5).columns))
+                tbl.auto_set_font_size(False)
+                tbl.set_fontsize(12)
+                tbl.scale(1.2, 1.2)
+                header = tbl.get_celld()[(0,0)].get_text().get_fontproperties().set_weight('bold')
+                for key, cell in tbl.get_celld().items():
+                    if key[0] == 0:
+                        cell.set_fontsize(14)
+                        cell.set_text_props(weight='bold', color='white')
+                        cell.set_facecolor('grey')
+                # plt.savefig("mosaic_table.png", dpi=300, bbox_inches="tight")
+                plt.show()
 
-print(f"Completed at system time: {datetime.datetime.now()}")
+        model.plot_transformer_failure_rate()
+        plt.show()
+
+        model.plot_model_failure_rate()
+        plt.show()
+
+        model.plot_unpredictability()
+        plt.show()
+
+if model.best_model_ensemble == 2:
+    top_ids = pd.Series(pd.DataFrame.from_dict(model.best_model_params['series']).to_numpy().ravel()).value_counts().sort_values(ascending=False).to_frame()
+    top_individual_models = top_ids.merge(model_results[['ID', "Model", "ModelParameters", "TransformationParameters"]].drop_duplicates(), left_index=True, right_on='ID')
+    print(top_individual_models.head()[['ID', 'Model']])
+
+#### Keep print statements at the bottom where they can be seen at the end most easily
+
+if which_greater.sum().sum() > 0:
+    print(f"the following metrics may be out of balance: {temp.columns[which_greater.sum() > 0].tolist()}")
+
+print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
+print(f'The following model types failed completely {model.list_failed_model_types()}')
+print("Slowest models:")
+print(
+    model_results[model_results["Ensemble"] < 1]
+    .groupby("Model")
+    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
+    .idxmax()
+)
+
+end_of_times = datetime.datetime.now()
+print(f"Completed at system time: {end_of_times}")
