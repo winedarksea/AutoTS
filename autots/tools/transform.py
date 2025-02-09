@@ -2824,6 +2824,7 @@ class AlignLastValue(EmptyTransformer):
         lag (int): use last value as this lag back, 1 is no shift, 2 is lag one from end, ie second to last
         method (str): 'additive', 'multiplicative'
         strength (float): softening parameter [0, 1], 1.0 for full difference
+        threshold (float): if below this threshold then the shift is not applied
     """
 
     def __init__(

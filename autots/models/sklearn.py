@@ -3312,6 +3312,7 @@ class MultivariateRegression(ModelObject):
         cointegration_lag: int = 1,
         series_hash: bool = False,
         frac_slice: float = None,
+        transformation_dict: dict = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -3358,6 +3359,7 @@ class MultivariateRegression(ModelObject):
         self.cointegration_lag = cointegration_lag
         self.series_hash = series_hash
         self.frac_slice = frac_slice
+        self.transformation_dict = transformation_dict
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -3423,6 +3425,19 @@ class MultivariateRegression(ModelObject):
                     self.regressor_per_series_train = regressor_per_series
                 if static_regressor is not None:
                     self.static_regressor = static_regressor
+            # setup preprocessor if used
+            if self.transformation_dict:
+                from autots.tools.transform import GeneralTransformer  # avoid circular imports
+                
+                self.transformer_object = GeneralTransformer(
+                    n_jobs=self.n_jobs,
+                    holiday_country=self.holiday_country,
+                    verbose=self.verbose,
+                    random_seed=self.random_seed,
+                    forecast_length=self.forecast_length,
+                    **self.transformation_dict,
+                )
+                df = self.transformer_object.fit_transform(df)
             # define X and Y
             if self.frac_slice is not None:
                 slice_size = int(df.shape[0] * self.frac_slice)
@@ -3571,6 +3586,7 @@ class MultivariateRegression(ModelObject):
 
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
+
             self.model.fit(self.X.to_numpy(), self.Y)
 
             if self.probabilistic and not self.multioutputgpr:
@@ -3644,10 +3660,14 @@ class MultivariateRegression(ModelObject):
             cur_regr = None
             if self.regression_type is not None:
                 cur_regr = base_regr.reindex(current_x.index)
+            if self.transformation_dict:
+                pred_x = self.transformer_object.fit_transform(current_x)
+            else:
+                pred_x = current_x
             self.X_pred = pd.concat(
                 [
                     rolling_x_regressor_regressor(
-                        current_x[x_col].to_frame(),
+                        pred_x[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
                         std_rolling_periods=self.std_rolling_periods,
@@ -3694,6 +3714,8 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
+            if self.transformation_dict:
+                pred_clean = self.transformer_object.inverse_transform(pred_clean)
             forecast.append(pred_clean)
             # a lot slower
             if self.probabilistic:
@@ -3708,8 +3730,6 @@ class MultivariateRegression(ModelObject):
                     pred_lower = pd.DataFrame(
                         med - stdev, index=[index[fcst_step]], columns=current_x.columns
                     )
-                    upper_forecast = pd.concat([upper_forecast, pred_upper])
-                    lower_forecast = pd.concat([lower_forecast, pred_lower])
                 else:
                     rfPred_upper = self.model_upper.predict(c_x_pred)
                     pred_upper = pd.DataFrame(
@@ -3723,8 +3743,11 @@ class MultivariateRegression(ModelObject):
                         index=current_x.columns,
                         columns=[index[fcst_step]],
                     ).transpose()
-                    upper_forecast = pd.concat([upper_forecast, pred_upper])
-                    lower_forecast = pd.concat([lower_forecast, pred_lower])
+                if self.transformation_dict:
+                    pred_upper = self.transformer_object.inverse_transform(pred_upper)
+                    pred_lower = self.transformer_object.inverse_transform(pred_lower)
+                upper_forecast = pd.concat([upper_forecast, pred_upper])
+                lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
@@ -3876,6 +3899,7 @@ class MultivariateRegression(ModelObject):
             "frac_slice": random.choices(
                 [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
             )[0],
+            "transformation_dict": None,
         }
         return parameter_dict
 
@@ -3907,6 +3931,7 @@ class MultivariateRegression(ModelObject):
             "cointegration_lag": self.cointegration_lag,
             "series_hash": self.series_hash,
             "frac_slice": self.frac_slice,
+            "transformation_dict": self.transformation_dict,
         }
         return parameter_dict
 
