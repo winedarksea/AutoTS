@@ -9,7 +9,6 @@ Created on Wed Feb  5 08:21:47 2025
 import unittest
 import numpy as np
 import pandas as pd
-from unittest.mock import patch, MagicMock
 
 from autots.evaluator.validation import (
     extract_seasonal_val_periods,
@@ -107,26 +106,13 @@ class TestValidationSegments(unittest.TestCase):
         # In the "max" branch, returns max_possible - 1 = 2 - 1 = 1.
         self.assertEqual(result_max, 1)
 
-    @patch("autots.tools.window_functions.retrieve_closest_indices")
-    @patch("autots.tools.transform.GeneralTransformer")
-    def test_generate_validation_indices_similarity(self, mock_transformer, mock_retrieve):
+    def test_generate_validation_indices_similarity(self):
         # For similarity method, we patch GeneralTransformer and retrieve_closest_indices.
-        df = create_dummy_df(n_rows=10)
+        df = create_dummy_df(n_rows=100)
         forecast_length = 1
         num_validations = 1
         validation_method = "similarity"
         validation_params = {}
-
-        # Set up a dummy transformer that simply returns the input dataframe.
-        # this is a llm suggestion. GeneralTransformer with empty params would do the same just fine
-        transformer_instance = MagicMock()
-        transformer_instance.fit_transform.side_effect = lambda df: df
-        mock_transformer.return_value = transformer_instance
-
-        # Set up a dummy retrieve_closest_indices:
-        # Return a list of two numpy arrays (since num_validations+1 == 2).
-        dummy_created_idx = [np.array([0, 1, 2, 3]), np.array([0, 1, 2, 3, 4, 5])]
-        mock_retrieve.return_value = dummy_created_idx
 
         result = generate_validation_indices(
             validation_method=validation_method,
@@ -139,34 +125,18 @@ class TestValidationSegments(unittest.TestCase):
 
         # We expect a list of length 2.
         self.assertEqual(len(result), 2)
-        # For the first created index, the last value is 3 so we expect df.index[df.index <= 3].
-        expected_first = df.index[df.index <= 3]
-        expected_second = df.index[df.index <= 5]
-        # Convert indices to lists for comparison.
-        self.assertEqual(list(result[0]), list(expected_first))
-        self.assertEqual(list(result[1]), list(expected_second))
+        # This doesn't test much of anything except that the default is the same, if default changes, change this
+        self.assertEqual(len(list(result[0])), 32)
 
-    @patch("autots.tools.seasonal.seasonal_window_match")
-    def test_generate_validation_indices_seasonal(self, mock_seasonal_match):
+    def test_generate_validation_indices_seasonal(self):
         # it might be worth rewriting this without the @patch
 
         # For seasonal method without extra period (i.e. exactly "seasonal")
-        df = create_dummy_df(n_rows=10)
+        df = create_dummy_df(n_rows=100)
         forecast_length = 2
         num_validations = 2
         validation_method = "seasonal"
         validation_params = {}
-
-        # Create a dummy return value for seasonal_window_match.
-        # seasonal_window_match returns (test, _) where test is a 2D array.
-        # We need to have test.T produce columns whose last element (x[-1]) gives a slicing index.
-        # For example, let test = [[4, 5, 6],
-        #                           [4, 5, 6]]
-        # Then test.T gives columns [ [4,4], [5,5], [6,6] ]
-        # and x[-1] will be 4, 5, and 6 respectively.
-        dummy_test = np.array([[4, 5, 6],
-                               [4, 5, 6]])
-        mock_seasonal_match.return_value = (dummy_test, None)
 
         result = generate_validation_indices(
             validation_method=validation_method,
@@ -177,11 +147,9 @@ class TestValidationSegments(unittest.TestCase):
             verbose=0,
         )
 
-        # Expect three slices corresponding to x[-1] values of 4, 5, and 6.
         self.assertEqual(len(result), 3)
-        expected_slices = [df.index[0:4], df.index[0:5], df.index[0:6]]
-        for res, exp in zip(result, expected_slices):
-            self.assertEqual(list(res), list(exp))
+        # This doesn't test much of anything except that the default is the same, if default changes, change this
+        self.assertEqual(len(list(result[0])), 94)
 
     def test_generate_validation_indices_backwards(self):
         # Test the backwards method (e.g., "backwards" or its variants)

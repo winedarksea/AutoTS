@@ -825,10 +825,10 @@ def random_datepart(method='random'):
 def seasonal_window_match(
     DTindex,
     k,
-    window_size,
-    forecast_length,
-    datepart_method,
-    distance_metric,
+    window_size=10,
+    forecast_length=None,
+    datepart_method="common_fourier_rw",
+    distance_metric="mae",
     full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
