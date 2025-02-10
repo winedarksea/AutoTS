@@ -1634,7 +1634,9 @@ class CumSumTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df.cumsum(skipna=True)
+        trans = df.cumsum(skipna=True)
+        self.last_value_trans = trans.tail(1).copy()
+        return trans
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame
@@ -1661,7 +1663,7 @@ class CumSumTransformer(EmptyTransformer):
             return df
         else:
             df_len = df.shape[0]
-            df = pd.concat([self.last_values, df], axis=0)
+            df = pd.concat([self.last_value_trans, df], axis=0)
             df = df - df.shift(1)
             return df.tail(df_len)
 
