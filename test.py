@@ -111,7 +111,7 @@ preclean = None
     },
 }
 
-pd.set_option('future.no_silent_downcasting', True)
+# pd.set_option('future.no_silent_downcasting', True)
 ensemble = [
     # "simple",
     # 'mlensemble',
