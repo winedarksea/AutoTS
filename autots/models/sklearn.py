@@ -335,7 +335,8 @@ def rolling_x_regressor_regressor(
         X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -3427,8 +3428,10 @@ class MultivariateRegression(ModelObject):
                     self.static_regressor = static_regressor
             # setup preprocessor if used
             if self.transformation_dict:
-                from autots.tools.transform import GeneralTransformer  # avoid circular imports
-                
+                from autots.tools.transform import (
+                    GeneralTransformer,
+                )  # avoid circular imports
+
                 self.transformer_object = GeneralTransformer(
                     n_jobs=self.n_jobs,
                     holiday_country=self.holiday_country,
@@ -3874,13 +3877,17 @@ class MultivariateRegression(ModelObject):
             coint_lag = random.choice([1, 2, 7])
         transform_choice = random.choices([True, None], [0.5, 0.5])[0]
         if transform_choice:
-            from autots.tools.transform import GeneralTransformer  # avoid circular imports
+            from autots.tools.transform import (
+                GeneralTransformer,
+            )  # avoid circular imports
 
             if method == "deep":
                 transformer_list = "scalable"
             else:
                 transformer_list = "postprocessing"
-            transform_choice = GeneralTransformer.get_new_params(transformer_list, transformer_max_depth=1, allow_none=False)
+            transform_choice = GeneralTransformer.get_new_params(
+                transformer_list, transformer_max_depth=1, allow_none=False
+            )
 
         parameter_dict = {
             'regression_model': model_choice,
@@ -3978,7 +3985,9 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 
@@ -4206,7 +4215,9 @@ class PreprocessingRegression(ModelObject):
         from autots.tools.transform import GeneralTransformer  # avoid circular imports
 
         if self.transformation_dict is None:
-            raise ValueError("transformation_dict cannot be None with PreprocessingRegression")
+            raise ValueError(
+                "transformation_dict cannot be None with PreprocessingRegression"
+            )
 
         self.transformer_object = GeneralTransformer(
             n_jobs=self.n_jobs,
@@ -4530,9 +4541,7 @@ class PreprocessingRegression(ModelObject):
             model_dict = datepart_model_dict
         else:
             model_dict = sklearn_model_dict
-        model_choice = generate_regressor_params(
-            model_dict=model_dict, method=method
-        )
+        model_choice = generate_regressor_params(model_dict=model_dict, method=method)
         if "regressor" in method:
             regression_type_choice = "User"
         else:

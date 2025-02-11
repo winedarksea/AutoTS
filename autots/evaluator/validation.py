@@ -172,15 +172,15 @@ def generate_validation_indices(
         for y in range(num_validations + 1):
             if count == 0:
                 cut = int(len(idx) / 2)
-                validation_indexes.append((idx[: cut], idx[cut:]))
+                validation_indexes.append((idx[:cut], idx[cut:]))
             elif count == 1:
                 cut = len(idx) - int(len(idx) / 3)
-                validation_indexes.append((idx[: cut], idx[cut:]))
+                validation_indexes.append((idx[:cut], idx[cut:]))
             else:
                 # gradually remove the end
                 cut = shp0 - (y + 1) * forecast_length
-                current_slice = idx[0 : cut]
-                current_slice_2 = idx[cut: cut + forecast_length]
+                current_slice = idx[0:cut]
+                current_slice_2 = idx[cut : cut + forecast_length]
                 validation_indexes.append((current_slice, current_slice_2))
             count += 1
     return validation_indexes

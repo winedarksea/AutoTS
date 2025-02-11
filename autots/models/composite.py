@@ -10,9 +10,11 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.percentile import nan_quantile, trimmed_mean
 from autots.tools.transform import (
-    GeneralTransformer, RandomTransform,
+    GeneralTransformer,
+    RandomTransform,
 )
 from autots.models.model_list import scalable
+
 
 class PreprocessingExperts(ModelObject):
     """Regression use the last n values as the basis of training data.
@@ -41,18 +43,20 @@ class PreprocessingExperts(ModelObject):
                         'l1_ratio': 0.1,
                         'fit_intercept': True,
                         'selection': 'cyclic',
-                        'max_iter': 1000}},
+                        'max_iter': 1000,
+                    },
+                },
                 'datepart_method': 'expanded_binarized',
                 'polynomial_degree': None,
                 'holiday_countries_used': False,
                 'lags': None,
                 'forward_lags': None,
-                'regression_type': None
+                'regression_type': None,
             },
             "transformation_dict": {
                 'fillna': 'rolling_mean_24',
                 'transformations': {0: 'StandardScaler'},
-                'transformation_params': {0: {}}
+                'transformation_params': {0: {}},
             },
         },
         transformation_dict=None,
@@ -86,7 +90,9 @@ class PreprocessingExperts(ModelObject):
         # from autots.tools.transform import GeneralTransformer  # avoid circular imports
 
         if self.transformation_dict is None:
-            raise ValueError("transformation_dict cannot be None with PreprocessingRegression")
+            raise ValueError(
+                "transformation_dict cannot be None with PreprocessingRegression"
+            )
 
         self.transformer_object = GeneralTransformer(
             n_jobs=self.n_jobs,
@@ -98,24 +104,28 @@ class PreprocessingExperts(ModelObject):
         )
         df = self.transformer_object._first_fit(df)
 
-        from autots.evaluator.auto_model import ModelPrediction  # avoid circular imports
+        from autots.evaluator.auto_model import (
+            ModelPrediction,
+        )  # avoid circular imports
 
         new_df = df
         self.model = {}
         trans_keys = sorted(list(self.transformer_object.transformations.keys()))
-        
+
         self.model[0] = ModelPrediction(
-            forecast_length=self.forecast_length, frequency=self.frequency,
-            **self.model_params
-        ).fit(new_df, future_regressor=future_regressor)  
+            forecast_length=self.forecast_length,
+            frequency=self.frequency,
+            **self.model_params,
+        ).fit(new_df, future_regressor=future_regressor)
         for i in trans_keys:
             trans_name = self.transformer_object.transformations[i]
             # assumes first i is always 0
             if trans_name not in ['Slice']:
                 new_df = self.transformer_object._fit_one(new_df, i)
             self.model[int(i) + 1] = ModelPrediction(
-                forecast_length=self.forecast_length, frequency=self.frequency,
-                **self.model_params
+                forecast_length=self.forecast_length,
+                frequency=self.frequency,
+                **self.model_params,
             ).fit(new_df, future_regressor=future_regressor)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -156,12 +166,16 @@ class PreprocessingExperts(ModelObject):
         self.saved = {}
         trans_keys = sorted(list(self.transformer_object.transformations.keys()))
         # first one is on no preprocessing
-        rfPred = self.model[0].predict(forecast_length, future_regressor=future_regressor)
+        rfPred = self.model[0].predict(
+            forecast_length, future_regressor=future_regressor
+        )
         self.saved[0] = rfPred.forecast.copy()
         df_list.append(rfPred.forecast)
         for i in trans_keys:
             key = int(i) + 1
-            rfPred = self.model[key].predict(forecast_length, future_regressor=future_regressor)
+            rfPred = self.model[key].predict(
+                forecast_length, future_regressor=future_regressor
+            )
             self.saved[key] = rfPred.forecast.copy()
             # rfPred_upper = self.transformer_object.inverse_transform(rfPred.upper_forecast, start=i)
             # rfPred_lower = self.transformer_object.inverse_transform(rfPred.lower_forecast, start=i)
@@ -234,7 +248,7 @@ class PreprocessingExperts(ModelObject):
         from autots.evaluator.auto_model import ModelMonster  # avoid circular imports
 
         model_type = random.choices(list(scalable.keys()), list(scalable.values()))[0]
-        model_params =  ModelMonster(model_type).get_new_params(method="default")
+        model_params = ModelMonster(model_type).get_new_params(method="default")
         return {
             "point_method": random.choices(
                 [
@@ -252,7 +266,9 @@ class PreprocessingExperts(ModelObject):
                 "model_str": model_type,
                 "parameter_dict": model_params,
                 "transformation_dict": RandomTransform(
-                    transformer_list="scalable", transformer_max_depth=2, allow_none=True
+                    transformer_list="scalable",
+                    transformer_max_depth=2,
+                    allow_none=True,
                 ),
             },
             'transformation_dict': None,  # assume this passed via AutoTS transformer dict

@@ -152,7 +152,7 @@ def date_part(
     if isinstance(method, str):
         if "binarized" in method and set_index:
             expansion_flag = True
-       
+
     if expansion_flag:
         # code shared with holiday_flag
         frequency = infer_frequency(DTindex)
@@ -231,7 +231,9 @@ def date_part(
         date_part_df = pd.DataFrame(
             {
                 'isoweek': pd.Categorical(
-                    DTindex.isocalendar().week, categories=list(range(1, 54)), ordered=True
+                    DTindex.isocalendar().week,
+                    categories=list(range(1, 54)),
+                    ordered=True,
                 ),
                 'weekday': pd.Categorical(
                     DTindex.weekday, categories=list(range(7)), ordered=True

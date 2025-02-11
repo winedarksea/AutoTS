@@ -325,9 +325,13 @@ class AutoTS(object):
             raise ValueError(
                 f"Metric weightings should generally be >= 0. Current weightings: {self.metric_weighting}"
             )
-        metric_weighting_keys_invalid = [x for x in self.metric_weighting.keys() if x not in all_valid_weightings]
+        metric_weighting_keys_invalid = [
+            x for x in self.metric_weighting.keys() if x not in all_valid_weightings
+        ]
         if metric_weighting_keys_invalid:
-            raise ValueError(f"metric_weighting has unrecognized inputs {metric_weighting_keys_invalid}. Should be of style `metric_weighting`: 1")
+            raise ValueError(
+                f"metric_weighting has unrecognized inputs {metric_weighting_keys_invalid}. Should be of style `metric_weighting`: 1"
+            )
         if (
             'seasonal' in self.validation_method
             and self.validation_method != "seasonal"
@@ -435,9 +439,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[index, 'TransformationParameters'] = (
-                    json.dumps(full_params)
-                )
+                self.initial_template.loc[
+                    index, 'TransformationParameters'
+                ] = json.dumps(full_params)
 
         self.regressor_used = False
         self.subset_flag = False
@@ -595,7 +599,14 @@ class AutoTS(object):
                 )[0],
             }
             validation_method = random.choices(
-                ["backwards", "even", "similarity", "seasonal 364", "seasonal", "mixed_length"],
+                [
+                    "backwards",
+                    "even",
+                    "similarity",
+                    "seasonal 364",
+                    "seasonal",
+                    "mixed_length",
+                ],
                 [0.4, 0.1, 0.3, 0.3, 0.2, 0.03],
             )[0]
         else:
@@ -1294,7 +1305,9 @@ class AutoTS(object):
             df_test = df_subset.reindex(first_idx[1])
         else:
             if max(first_idx) > max(df_subset.index):
-                raise ValueError("provided validation index exceeds historical data period")
+                raise ValueError(
+                    "provided validation index exceeds historical data period"
+                )
             # split train and test portions, and split regressor if present
             df_train, df_test = simple_train_test_split(
                 df_subset,
@@ -1733,7 +1746,10 @@ class AutoTS(object):
         )
         # not passing this around yet, because it's just a diagnostic curiosity mostly
         self.best_model_non_ensemble = self._best_non_horizontal(
-            metric_weighting=metric_weighting, n=n, template_cols=template_cols, include_ensemble=False
+            metric_weighting=metric_weighting,
+            n=n,
+            template_cols=template_cols,
+            include_ensemble=False,
         )
         if (not hens_model_results.empty) and requested_H_ens:
             hens_model_results['Score'] = generate_score(
@@ -1816,7 +1832,12 @@ class AutoTS(object):
         return self
 
     def _best_non_horizontal(
-        self, metric_weighting=None, series=None, n=1, template_cols=None, include_ensemble=True,
+        self,
+        metric_weighting=None,
+        series=None,
+        n=1,
+        template_cols=None,
+        include_ensemble=True,
     ):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
@@ -1993,10 +2014,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results['TotalRuntime'] = (
-                template_result.model_results['TotalRuntime'].fillna(
-                    pd.Timedelta(seconds=60)
-                )
+            template_result.model_results[
+                'TotalRuntime'
+            ] = template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60)
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -2087,7 +2108,7 @@ class AutoTS(object):
             if isinstance(cval_idx, tuple):
                 val_df_train = df_subset.reindex(cval_idx[0])
                 val_df_test = df_subset.reindex(cval_idx[1])
-                
+
             else:
                 val_df_train, val_df_test = simple_train_test_split(
                     df_subset,
@@ -2122,9 +2143,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
-                    np.nan
-                )
+                val_df_train.iloc[
+                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
+                ] = np.nan
 
             # run validation template on current slice
             result = self._run_template(
@@ -4791,9 +4812,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y['Model'] = (
-                        x  # might need to remove this and do analysis independently for each
-                    )
+                    y[
+                        'Model'
+                    ] = x  # might need to remove this and do analysis independently for each
                     res.append(
                         pd.DataFrame(
                             {

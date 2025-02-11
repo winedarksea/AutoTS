@@ -6,6 +6,7 @@ Created on Wed Feb  5 16:29:58 2025
 
 import numpy as np
 import pandas as pd
+
 try:
     from scipy.stats import norm
 except Exception:
@@ -26,13 +27,13 @@ def kalman_fusion_forecasts(
     method: str = "multi_series",
     Q_init=0.1,
     R_init=1.0,
-    adapt_Q: str = None,    # "none" or "spread"
-    adapt_R: str = None,    # "none" or "spread"
+    adapt_Q: str = None,  # "none" or "spread"
+    adapt_R: str = None,  # "none" or "spread"
     initial_x=None,
     initial_P=None,
     min_std=1e-15,
     scale: bool = True,
-    a: float = 1.0  # autoregressive term
+    a: float = 1.0,  # autoregressive term
 ):
     """
     Fuse multiple forecasts using a Kalman Filter for each forecast step.
@@ -199,7 +200,9 @@ def kalman_fusion_forecasts(
             # Measurement update
             z_k = F[:, k, :].reshape(n * T)  # stack the forecasts into a (n*T,) vector
             y_k = H @ x_pred
-            R_k = compute_measurement_noise(k, R_init, meas_dim, spread_value=spread_value)
+            R_k = compute_measurement_noise(
+                k, R_init, meas_dim, spread_value=spread_value
+            )
             S_k = H @ P_pred @ H.T + R_k
             K_k = P_pred @ H.T @ np.linalg.pinv(S_k)
             x_update = x_pred + K_k @ (z_k - y_k)

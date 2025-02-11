@@ -566,7 +566,6 @@ class ETS(ModelObject):
             "method": self.method,
         }
 
-
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
@@ -616,20 +615,27 @@ class ETS(ModelObject):
                     # this error handling is meant for horizontal ensembles where it will only then be needed for select series
                     if args['verbose'] > 1:
                         print(f"ETS failed on {series_name} with {repr(e)}")
-                    esPred = pd.Series((np.zeros((args["forecast_length"],))), index=test_index)
+                    esPred = pd.Series(
+                        (np.zeros((args["forecast_length"],))), index=test_index
+                    )
             esPred.name = series_name
             return esPred
 
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(delayed(ets_forecast_by_column)(
-                self.df_train[col].astype(float), args, test_index
-            ) for col in cols)
+            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(
+                delayed(ets_forecast_by_column)(
+                    self.df_train[col].astype(float), args, test_index
+                )
+                for col in cols
+            )
             forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
             for col in cols:
-                df_list.append(ets_forecast_by_column(self.df_train[col], args, test_index))
+                df_list.append(
+                    ets_forecast_by_column(self.df_train[col], args, test_index)
+                )
             forecast = pd.concat(df_list, axis=1)
         if just_point_forecast:
             return forecast
@@ -681,7 +687,9 @@ class ETS(ModelObject):
             'trend': trend_choice,
             'seasonal': seasonal_choice,
             'seasonal_periods': seasonal_period_choice,
-            'method': random.choices([None, "SLSQP", "L-BFGS-B", "least_squares"], [0.3, 0.2, 0.2, 0.2])[0],
+            'method': random.choices(
+                [None, "SLSQP", "L-BFGS-B", "least_squares"], [0.3, 0.2, 0.2, 0.2]
+            )[0],
         }
         return parameter_dict
 

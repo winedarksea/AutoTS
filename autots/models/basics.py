@@ -2124,11 +2124,13 @@ class SectionalMotif(ModelObject):
         """Returns dict of new parameters for parameter tuning"""
         if method in ["deep"]:
             point_method = random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "kalman"], [0.4, 0.2, 0.2, 0.2, 0.2]
+                ["weighted_mean", "mean", "median", "midhinge", "kalman"],
+                [0.4, 0.2, 0.2, 0.2, 0.2],
             )[0]
         else:
             point_method = random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "kalman"], [0.4, 0.2, 0.2, 0.2, 0.001]
+                ["weighted_mean", "mean", "median", "midhinge", "kalman"],
+                [0.4, 0.2, 0.2, 0.2, 0.001],
             )[0]
         metric_list = [
             'braycurtis',

@@ -92,6 +92,14 @@ autots.tools.impute module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.kalman module
+--------------------------
+
+.. automodule:: autots.tools.kalman
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.lunar module
 -------------------------
 
