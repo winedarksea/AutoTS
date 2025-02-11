@@ -7041,7 +7041,7 @@ def RandomTransform(
     num_trans = random.randint(transformer_min_depth, transformer_max_depth)
     # sometimes return no transformation
     if num_trans == 1 and allow_none:
-        test = random.choices(["None", "Some"], [0.1, 0.9])[0]
+        test = random.choices(["None", "Some"], [0.05, 0.95])[0]
         if test == "None":
             return {
                 "fillna": na_choice,
@@ -7095,13 +7095,15 @@ def RandomTransform(
             keys = list(range(len(trans)))
         else:
             keys = list(range(num_trans))
-        # now get the parameters for the specified transformers
-        params = [get_transformer_params(x, method=params_method) for x in trans]
-        return {
-            "fillna": na_choice,
-            "transformations": dict(zip(keys, trans)),
-            "transformation_params": dict(zip(keys, params)),
-        }
+    else:
+        keys = list(range(num_trans))
+    # now get the parameters for the specified transformers
+    params = [get_transformer_params(x, method=params_method) for x in trans]
+    return {
+        "fillna": na_choice,
+        "transformations": dict(zip(keys, trans)),
+        "transformation_params": dict(zip(keys, params)),
+    }
 
 
 def random_cleaners():

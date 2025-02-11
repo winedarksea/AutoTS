@@ -13,14 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.18 🇺🇦 🇺🇦 🇺🇦
-* minor tweaks and bug fixes
-* updated python version required to 3.9 to allow more typing options
-* validation_indexes can now be a list of tuples with mixed forecast lengths
-* "mixed_length" validation option, for limited testing of longer forecast lengths
-* kalman method for ensemble aggregation (ala sensor fusion)
-* UpscaleDownscaleTransformer added
-* PreprocessingExperts model added (experimental)
+# 0.6.19 🇺🇦 🇺🇦 🇺🇦
+* bug fix for transformer_list="all"
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

@@ -2633,15 +2633,16 @@ def trans_dict_recomb(dict_array):
     """Recombine two transformation param dictionaries from array of dicts."""
     empty_trans = (None, {})
     a, b = random.sample(dict_array, 2)
-    na_choice = random.sample([a, b], 1)[0]['fillna']
+
+    na_choice = random.sample([a, b], 1)[0].get('fillna', None)
 
     a_result = [
         (a['transformations'][key], a['transformation_params'][key])
-        for key in sorted(a['transformations'].keys())
+        for key in sorted(a.get('transformations', {}).keys())
     ]
     b_result = [
         (b['transformations'][key], b['transformation_params'][key])
-        for key in sorted(b['transformations'].keys())
+        for key in sorted(b.get('transformations', {}).keys())
     ]
     combi = zip_longest(a_result, b_result, fillvalue=empty_trans)
     selected = [random.choice(x) for x in combi]

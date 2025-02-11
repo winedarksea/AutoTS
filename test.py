@@ -38,7 +38,7 @@ models_to_validate = 0.22  # 0.99 to validate every tried (use with template imp
 template_filename = "template_" + str(platform.node()) + ".csv"
 template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
-random_seed = 2023
+random_seed = 2025
 forecast_length = 90
 long = False
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
@@ -437,9 +437,10 @@ new_weighting = {
 }
 temp['Score'] = generate_score(temp, metric_weighting=new_weighting)
 new_mod = temp.sort_values('Score').iloc[0]
-print(json.loads(new_mod['ModelParameters'])['model_name'])
-print(json.loads(new_mod['ModelParameters'])['model_metric'])
-print(new_mod['smape'])
+if new_mod['Ensemble'] == 2:
+    print(json.loads(new_mod['ModelParameters'])['model_name'])
+    print(json.loads(new_mod['ModelParameters'])['model_metric'])
+    print(new_mod['smape'])
 
 if graph:
     ### Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer
