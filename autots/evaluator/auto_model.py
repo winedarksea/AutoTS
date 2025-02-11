@@ -75,6 +75,7 @@ from autots.models.sklearn import (
     ComponentAnalysis,
     PreprocessingRegression,
 )
+from autots.models.composite import PreprocessingExperts
 
 
 def create_model_id(
@@ -744,6 +745,17 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == 'PreprocessingExperts':
+        return PreprocessingExperts(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     elif model == "":
         raise AttributeError(
             ("Model name is empty. Likely this means AutoTS has not been fit.")
@@ -815,6 +827,7 @@ class ModelPrediction(ModelObject):
         self.current_model_file = current_model_file
         self.model_count = model_count
         self.force_gc = force_gc
+        self.fore_len_increase = False
         # handle still in JSON form
         if isinstance(transformation_dict, str):
             if transformation_dict == "":
@@ -830,17 +843,32 @@ class ModelPrediction(ModelObject):
                 self.parameter_dict = json.loads(parameter_dict)
         else:
             self.parameter_dict = parameter_dict
-        if model_str == "PreprocessingRegression":
+        if self.transformation_dict is None:
+            self.transformation_dict = {}
+        # special models that get fed in the transformation parameters from the main definition
+        if model_str in ["PreprocessingRegression", "PreprocessingExperts"]:
+            # this is messy and likely to be broken indirectly, basically overwriting inner transformations with empty
             self.parameter_dict['transformation_dict'] = self.transformation_dict
-            self.transformation_dict = {
+            use_trans_params = {
                 'fillna': None,
                 'transformations': {},
                 'transformation_params': {},
             }
-        if self.transformation_dict is None:
-            self.transformation_dict = {}
+        else:
+            use_trans_params = self.transformation_dict
+        # this extends the length for the upscaled forecasts as necessary
+        transformations = self.transformation_dict.get("transformations", {})
+        transformers_used = list(transformations.values())
+        self.forecast_length_needed = self.forecast_length
+        if "UpscaleDownscaleTransformer" in transformers_used:
+            params = self.transformation_dict.get("transformation_params", {})
+            for x, y in transformations.items():
+                if y == "UpscaleDownscaleTransformer":
+                    if params[x].get("mode") == "upscale":
+                        self.fore_len_increase = params[x]["factor"] + 1
+                        self.forecast_length_needed *= self.fore_len_increase
         self.transformer_object = GeneralTransformer(
-            **self.transformation_dict,
+            **use_trans_params,
             n_jobs=self.n_jobs,
             holiday_country=self.holiday_country,
             verbose=self.verbose,
@@ -864,7 +892,7 @@ class ModelPrediction(ModelObject):
             holiday_country=self.holiday_country,
             random_seed=self.random_seed,
             verbose=self.verbose,
-            forecast_length=self.forecast_length,
+            forecast_length=self.forecast_length_needed,
             n_jobs=self.n_jobs,
         )
         transformationStartTime = datetime.datetime.now()
@@ -907,7 +935,9 @@ class ModelPrediction(ModelObject):
 
     def predict(self, forecast_length=None, future_regressor=None):
         if forecast_length is None:
-            forecast_length = self.forecast_length
+            forecast_length = self.forecast_length_needed
+        elif self.fore_len_increase:
+            forecast_length *= self.fore_len_increase
         if not self._fit_complete:
             raise ValueError("Model not yet fit.")
         df_forecast = self.model.predict(
@@ -938,7 +968,7 @@ class ModelPrediction(ModelObject):
         )
 
         # CHECK Forecasts are proper length!
-        if df_forecast.forecast.shape[0] != self.forecast_length:
+        if df_forecast.forecast.shape[0] < self.forecast_length:
             raise ValueError(
                 f"Model {self.model_str} returned improper forecast_length. Returned: {df_forecast.forecast.shape[0]} and requested: {self.forecast_length}"
             )
@@ -3036,6 +3066,34 @@ def validation_aggregation(
             per_series_agg, left_on='ID', right_index=True, how='left'
         )
     return validation_results
+
+
+# uses this for a test of user input
+all_valid_weightings = [
+    'smape_weighting',
+    'mae_weighting',
+    'rmse_weighting',
+    'containment_weighting',
+    'runtime_weighting',
+    'spl_weighting',
+    'contour_weighting',
+    'made_weighting',
+    'mage_weighting',
+    'custom_weighting',
+    'mle_weighting',
+    'imle_weighting',
+    'maxe_weighting',
+    'oda_weighting',
+    'mqae_weighting',
+    'dwae_weighting',
+    'ewmae_weighting',
+    'uwmse_weighting',
+    'smoothness_weighting',
+    'mate_weighting',
+    'wasserstein_weighting',
+    'dwd_weighting',
+    'matse_weighting',
+]
 
 
 def generate_score(

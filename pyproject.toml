@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autots"
-version = "0.6.17"
+version = "0.6.18"
 authors = [
   { name="Colin Catlin", email="colin.catlin@gmail.com" },
 ]
 description = "Automated Time Series Forecasting"
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.9"
 license = {text = "MIT License"}
 classifiers = [
     "Programming Language :: Python :: 3",

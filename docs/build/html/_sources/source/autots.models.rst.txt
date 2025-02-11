@@ -36,6 +36,14 @@ autots.models.cassandra module
    :undoc-members:
    :show-inheritance:
 
+autots.models.composite module
+------------------------------
+
+.. automodule:: autots.models.composite
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.dnn module
 ------------------------
 

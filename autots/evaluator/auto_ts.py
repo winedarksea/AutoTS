@@ -37,6 +37,7 @@ from autots.evaluator.auto_model import (
     horizontal_template_to_model_list,
     create_model_id,
     ModelPrediction,
+    all_valid_weightings,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -122,6 +123,7 @@ class AutoTS(object):
             'seasonal' most similar indexes
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
             'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
+            'mixed_length' - validation_indexes is a list of tuples (train, test). Can be different forecast lengths. Mosaic ensembles not functional with this
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
@@ -203,7 +205,7 @@ class AutoTS(object):
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
-        num_validations: int = "auto",
+        num_validations: str = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
         validation_method: str = 'backwards',
@@ -221,7 +223,7 @@ class AutoTS(object):
             [np.ndarray, np.ndarray, np.ndarray, float], np.ndarray
         ] = None,
         verbose: int = 1,
-        n_jobs: int = 0.5,
+        n_jobs: float = 0.5,
     ):
         assert forecast_length > 0, "forecast_length must be greater than 0"
         # assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
@@ -296,6 +298,8 @@ class AutoTS(object):
                 'mosaic-window',
                 "subsample",
                 'mlensemble',
+                "mosaic-mae-profile-0-36",
+                "mosaic-weighted-profile-median-filtered-unpredictability_adjusted-crosshair_lite-3-30",  # maxxed out config
             ]
         elif ensemble == 'auto':
             if model_list in ['superfast']:
@@ -320,6 +324,13 @@ class AutoTS(object):
         if sum(metric_weighting_values) < -10:
             raise ValueError(
                 f"Metric weightings should generally be >= 0. Current weightings: {self.metric_weighting}"
+            )
+        metric_weighting_keys_invalid = [
+            x for x in self.metric_weighting.keys() if x not in all_valid_weightings
+        ]
+        if metric_weighting_keys_invalid:
+            raise ValueError(
+                f"metric_weighting has unrecognized inputs {metric_weighting_keys_invalid}. Should be of style `metric_weighting`: 1"
             )
         if (
             'seasonal' in self.validation_method
@@ -428,9 +439,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[index, 'TransformationParameters'] = (
-                    json.dumps(full_params)
-                )
+                self.initial_template.loc[
+                    index, 'TransformationParameters'
+                ] = json.dumps(full_params)
 
         self.regressor_used = False
         self.subset_flag = False
@@ -449,6 +460,7 @@ class AutoTS(object):
         self.preclean_transformer = None
         self.score_per_series = None
         self.best_model_non_horizontal = None
+        self.best_model_non_ensemble = None
         self.best_model_unpredictability_adjusted = None
         self.validation_forecasts_template = None
         self.validation_forecasts = {}
@@ -587,8 +599,15 @@ class AutoTS(object):
                 )[0],
             }
             validation_method = random.choices(
-                ["backwards", "even", "similarity", "seasonal 364", "seasonal"],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
+                [
+                    "backwards",
+                    "even",
+                    "similarity",
+                    "seasonal 364",
+                    "seasonal",
+                    "mixed_length",
+                ],
+                [0.4, 0.1, 0.3, 0.3, 0.2, 0.03],
             )[0]
         else:
             metric_weighting = {
@@ -618,8 +637,8 @@ class AutoTS(object):
                 )[0],
             }
             validation_method = random.choices(
-                ["backwards", "even", "similarity", "seasonal 364"],
-                [0.4, 0.1, 0.3, 0.3],
+                ["backwards", "even", "similarity", "seasonal 364", "seasonal"],
+                [0.4, 0.1, 0.3, 0.3, 0.3],
             )[0]
         preclean_choice = random.choices(
             [
@@ -1281,23 +1300,28 @@ class AutoTS(object):
             df_subset = self.df_wide_numeric.copy()
         # go to first index
         first_idx = self.validation_indexes[0]
-        if max(first_idx) > max(df_subset.index):
-            raise ValueError("provided validation index exceeds historical data period")
-        df_subset = df_subset.reindex(first_idx)
+        if isinstance(first_idx, tuple):
+            df_train = df_subset.reindex(first_idx[0])
+            df_test = df_subset.reindex(first_idx[1])
+        else:
+            if max(first_idx) > max(df_subset.index):
+                raise ValueError(
+                    "provided validation index exceeds historical data period"
+                )
+            # split train and test portions, and split regressor if present
+            df_train, df_test = simple_train_test_split(
+                df_subset,
+                forecast_length=self.forecast_length,
+                min_allowed_train_percent=self.min_allowed_train_percent,
+                verbose=self.verbose,
+            )
 
         # subset the weighting information as well
         if not self.weighted:
-            current_weights = {x: 1 for x in df_subset.columns}
+            current_weights = {x: 1 for x in df_train.columns}
         else:
-            current_weights = {x: self.weights[x] for x in df_subset.columns}
+            current_weights = {x: self.weights[x] for x in df_train.columns}
 
-        # split train and test portions, and split regressor if present
-        df_train, df_test = simple_train_test_split(
-            df_subset,
-            forecast_length=self.forecast_length,
-            min_allowed_train_percent=self.min_allowed_train_percent,
-            verbose=self.verbose,
-        )
         self.validation_train_indexes.append(df_train.index)
         self.validation_test_indexes.append(df_test.index)
         if future_regressor is not None:
@@ -1538,7 +1562,7 @@ class AutoTS(object):
             try:
                 if self.mosaic_used:
                     ens_templates = self._generate_mosaic_template(
-                        df_subset, models_to_use=models_to_use
+                        df_train, models_to_use=models_to_use
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1720,6 +1744,13 @@ class AutoTS(object):
         best_model_non_horizontal = self._best_non_horizontal(
             metric_weighting=metric_weighting, n=n, template_cols=template_cols
         )
+        # not passing this around yet, because it's just a diagnostic curiosity mostly
+        self.best_model_non_ensemble = self._best_non_horizontal(
+            metric_weighting=metric_weighting,
+            n=n,
+            template_cols=template_cols,
+            include_ensemble=False,
+        )
         if (not hens_model_results.empty) and requested_H_ens:
             hens_model_results['Score'] = generate_score(
                 hens_model_results,
@@ -1801,7 +1832,12 @@ class AutoTS(object):
         return self
 
     def _best_non_horizontal(
-        self, metric_weighting=None, series=None, n=1, template_cols=None
+        self,
+        metric_weighting=None,
+        series=None,
+        n=1,
+        template_cols=None,
+        include_ensemble=True,
     ):
         if self.validation_results is None:
             if not self.initial_results.model_results.empty:
@@ -1814,13 +1850,17 @@ class AutoTS(object):
             metric_weighting = self.metric_weighting
         if template_cols is None:
             template_cols = self.template_cols_id
+        if include_ensemble:
+            ensemble_lvl = 2
+        else:
+            ensemble_lvl = 1
         # choose best model, when no horizontal ensembling is done
         eligible_models = self.validation_results.model_results[
             (
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
             )
-            & (self.validation_results.model_results['Ensemble'] < 2)
+            & (self.validation_results.model_results['Ensemble'] < ensemble_lvl)
         ].copy()
         if eligible_models.empty:
             # this may occur if there is enough data for full validations
@@ -1942,7 +1982,7 @@ class AutoTS(object):
             df_test=df_test,
             weights=current_weights,
             model_count=model_count,
-            forecast_length=self.forecast_length,
+            forecast_length=len(df_test.index),  # allows for mixed length validations
             frequency=self.used_frequency,
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
@@ -1974,10 +2014,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results['TotalRuntime'] = (
-                template_result.model_results['TotalRuntime'].fillna(
-                    pd.Timedelta(seconds=60)
-                )
+            template_result.model_results[
+                'TotalRuntime'
+            ] = template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60)
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -2031,7 +2071,11 @@ class AutoTS(object):
             if self.verbose > 0:
                 print("Validation Round: {}".format(str(cslc)))
             # slice the validation data into current validation slice
-            current_slice = df_wide_numeric.reindex(self.validation_indexes[cslc])
+            cval_idx = self.validation_indexes[cslc]
+            if isinstance(cval_idx, tuple):
+                current_slice = df_wide_numeric.reindex(cval_idx[0].union(cval_idx[1]))
+            else:
+                current_slice = df_wide_numeric.reindex(cval_idx)
             # do a slift shift, this is intended to make mosaic ensemble validation more robust, reduce overfitting
             if shifted_starts:
                 shift = num_validations - cslc
@@ -2061,12 +2105,17 @@ class AutoTS(object):
             else:
                 current_weights = {x: self.weights[x] for x in df_subset.columns}
 
-            val_df_train, val_df_test = simple_train_test_split(
-                df_subset,
-                forecast_length=self.forecast_length,
-                min_allowed_train_percent=self.min_allowed_train_percent,
-                verbose=self.verbose,
-            )
+            if isinstance(cval_idx, tuple):
+                val_df_train = df_subset.reindex(cval_idx[0])
+                val_df_test = df_subset.reindex(cval_idx[1])
+
+            else:
+                val_df_train, val_df_test = simple_train_test_split(
+                    df_subset,
+                    forecast_length=self.forecast_length,
+                    min_allowed_train_percent=self.min_allowed_train_percent,
+                    verbose=self.verbose,
+                )
             if first_validation:
                 self.validation_train_indexes.append(val_df_train.index)
                 self.validation_test_indexes.append(val_df_test.index)
@@ -2094,9 +2143,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
-                    np.nan
-                )
+                val_df_train.iloc[
+                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
+                ] = np.nan
 
             # run validation template on current slice
             result = self._run_template(
@@ -2136,6 +2185,7 @@ class AutoTS(object):
         bypass_save=False,  # don't even try saving model
         model_id=None,
     ):
+        """useful for when you want to mess with the best model a bit."""
         if model_id is not None:
             use_mod = self.initial_results.model_results[
                 self.initial_results.model_results["ID"] == model_id
@@ -3448,12 +3498,17 @@ class AutoTS(object):
             self.validation_forecast_cuts_ends = []
             # self.validation_forecasts = {}
             for val in range(len(self.validation_indexes)):
-                val_df_train, val_df_test = simple_train_test_split(
-                    self.df_wide_numeric.reindex(self.validation_indexes[val]),
-                    forecast_length=self.forecast_length,
-                    min_allowed_train_percent=self.min_allowed_train_percent,
-                    verbose=self.verbose,
-                )
+                cval_idx = self.validation_indexes[val]
+                if isinstance(cval_idx, tuple):
+                    val_df_train = self.df_wide_numeric.reindex(cval_idx[0])
+                    val_df_test = self.df_wide_numeric.reindex(cval_idx[1])
+                else:
+                    val_df_train, val_df_test = simple_train_test_split(
+                        self.df_wide_numeric.reindex(cval_idx),
+                        forecast_length=self.forecast_length,
+                        min_allowed_train_percent=self.min_allowed_train_percent,
+                        verbose=self.verbose,
+                    )
                 sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
                 self.validation_forecast_cuts_ends.append(sec_idx[-1])
@@ -3474,7 +3529,7 @@ class AutoTS(object):
                     val_id = str(val) + "_" + str(idz)
                     if val_id not in self.validation_forecasts.keys():
                         df_forecast = self._predict(
-                            forecast_length=self.forecast_length,
+                            forecast_length=len(sec_idx),
                             prediction_interval=self.prediction_interval,
                             future_regressor=fut_reg,
                             fail_on_forecast_nan=False,
@@ -4492,7 +4547,8 @@ class AutoTS(object):
                                 'Transformer': transformer,
                             }
                         )
-                except Exception:
+                except Exception as e:
+                    print(repr(e))
                     # No transformers
                     transformer_data.append(
                         {
@@ -4579,6 +4635,7 @@ class AutoTS(object):
                     'stat': sns_colors[2],
                     'naive': sns_colors[3],
                     'DL': sns_colors[4],
+                    "ensemble": sns_colors[6],
                     'other': sns_colors[5],
                 }
             else:
@@ -4691,8 +4748,10 @@ class AutoTS(object):
                     .get('transformations', {})
                     .values()
                 )
+                title = 'Transformers by Failure Rate'
             elif target == "models":
                 transforms = [row["Model"]]
+                title = 'Models by Failure Rate'
             else:
                 raise ValueError(f"target {target} not recognized")
             if failed:
@@ -4712,7 +4771,7 @@ class AutoTS(object):
         return (
             total.sort_values("failure_rate", ascending=False)['failure_rate']
             .iloc[0:20]
-            .plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
+            .plot(kind='bar', title=title, color='forestgreen')
         )
 
     def diagnose_params(self, target='runtime', waterfall_plots=True):
@@ -4753,9 +4812,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y['Model'] = (
-                        x  # might need to remove this and do analysis independently for each
-                    )
+                    y[
+                        'Model'
+                    ] = x  # might need to remove this and do analysis independently for each
                     res.append(
                         pd.DataFrame(
                             {

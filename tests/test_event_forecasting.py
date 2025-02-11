@@ -33,6 +33,7 @@ class TestEventRisk(unittest.TestCase):
             model_forecast_kwargs={
                 "max_generations": 6,
                 "verbose": 1,
+                "transformer_list": "no_expanding",
             }
         )
         # .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)
@@ -80,6 +81,7 @@ class TestEventRisk(unittest.TestCase):
                 "verbose": 2,
                 "n_jobs": "auto",
                 "random_seed": 321,
+                "transformer_list": "no_expanding",
             },
         )
         model.fit(model_list="fast")

@@ -51,6 +51,7 @@ all_models = [
     "BasicLinearModel",
     "TVVAR",
     "BallTreeRegressionMotif",
+    "PreprocessingExperts",
 ]
 # used for graphing, not for model selection
 model_classes = {
@@ -102,6 +103,9 @@ model_classes = {
     'ZeroesNaive': 'naive',
     "TVVAR": "stat",
     "BallTreeRegressionMotif": "motif",
+    "PreprocessingExperts": "ensemble",
+    "Ensemble": "ensemble",
+    "MLEnsemble": "ensemble",
 }
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -196,7 +200,7 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
-fast_parallel_no_arima = {
+scalable = fast_parallel_no_arima = {
     i: fast_parallel[i]
     for i in fast_parallel
     if i
@@ -267,6 +271,7 @@ probabilistic = [
     "BasicLinearModel",
     "TVVAR",
     "BallTreeRegressionMotif",
+    # "PreprocessingExperts",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -345,6 +350,7 @@ recombination_approved = [
     "BasicLinearModel",
     "TVVAR",
     "BallTreeRegressionMotif",
+    "PreprocessingExperts",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -417,7 +423,7 @@ regressions = [
     'PreprocessingRegression',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel_no_arima)))
-# this should be implementable with some models in gluonts
+# models with result_windows defined
 all_result_path = [
     "UnivariateMotif",
     "MultivariateMotif",
@@ -427,8 +433,9 @@ all_result_path = [
     "Motif",
     "ARCH",  # simulations not motifs but similar
     "PytorchForecasting",
-    # "BallTreeRegressionMotif",
-    # "BallTreeMultivariateMotif",
+    "BallTreeRegressionMotif",
+    "BallTreeMultivariateMotif",
+    "PreprocessingExperts",
 ]
 # these are those that require a parameter, and return a dict
 diff_window_motif_list = [
@@ -445,6 +452,7 @@ update_fit = [
     'WindowRegression',
     'Cassandra',
     'PreprocessingRegression',
+    # BasicLinearModel, TVVAR probably could be made too
 ]
 model_lists = {
     "all": all_models,
@@ -454,7 +462,7 @@ model_lists = {
     "parallel": parallel,
     "fast_parallel": fast_parallel,
     "fast_parallel_no_arima": fast_parallel_no_arima,
-    "scalable": fast_parallel_no_arima,
+    "scalable": scalable,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
     "univariate": univariate,

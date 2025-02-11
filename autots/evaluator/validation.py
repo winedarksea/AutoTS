@@ -70,7 +70,9 @@ def generate_validation_indices(
     preclean=None,
     verbose=0,
 ):
-    """generate validation indices (equals num_validations + 1 as includes initial eval).
+    """generate validation indices (total indicies is num_validations + 1 as it includes zero based initial 'eval' section, yes, I know, confusing).
+    Note that for most methods this is currently the full index, with the end of forecas't_length being the test period
+    mixed_length now returns a tuple of (train index, test index).
 
     Args:
         validation_method (str): 'backwards', 'even', 'similarity', 'seasonal', 'seasonal 364', etc.
@@ -127,6 +129,8 @@ def generate_validation_indices(
         'seasonal' in validation_method and validation_method != "seasonal"
     ):
         validation_indexes = [df_wide_numeric.index]
+    elif validation_method in ["mixed_length"]:
+        validation_indexes = []
     else:
         raise ValueError(
             f"Validation Method `{validation_method}` not recognized try 'backwards'"
@@ -161,4 +165,22 @@ def generate_validation_indices(
             val_per = shp0 - val_per
             current_slice = idx[0:val_per]
             validation_indexes.append(current_slice)
+    elif validation_method in ["mixed_length"]:
+        idx = df_wide_numeric.index
+        shp0 = df_wide_numeric.shape[0]
+        count = 0
+        for y in range(num_validations + 1):
+            if count == 0:
+                cut = int(len(idx) / 2)
+                validation_indexes.append((idx[:cut], idx[cut:]))
+            elif count == 1:
+                cut = len(idx) - int(len(idx) / 3)
+                validation_indexes.append((idx[:cut], idx[cut:]))
+            else:
+                # gradually remove the end
+                cut = shp0 - (y + 1) * forecast_length
+                current_slice = idx[0:cut]
+                current_slice_2 = idx[cut : cut + forecast_length]
+                validation_indexes.append((current_slice, current_slice_2))
+            count += 1
     return validation_indexes

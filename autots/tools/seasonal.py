@@ -146,6 +146,25 @@ def date_part(
         method = method.replace("_poly", "")
         polynomial_degree = 2
 
+    # add extra time to make sure full flags are captured
+    # this is more a backup for the Cateogorical flags which handle this directly
+    expansion_flag = False
+    if isinstance(method, str):
+        if "binarized" in method and set_index:
+            expansion_flag = True
+
+    if expansion_flag:
+        # code shared with holiday_flag
+        frequency = infer_frequency(DTindex)
+        backup = DTindex.copy()
+        new_index = pd.date_range(
+            DTindex[-1], end=DTindex[-1] + pd.Timedelta(days=900), freq=frequency
+        )
+        prev_index = pd.date_range(
+            DTindex[0] - pd.Timedelta(days=365), end=DTindex[0], freq=frequency
+        )
+        DTindex = prev_index[:-1].append(DTindex.append(new_index[1:]))
+
     if isinstance(method, (int, float)):
         date_part_df = fourier_df(DTindex, seasonality=method, order=6)
     elif is_seasonality_list:
@@ -211,7 +230,11 @@ def date_part(
     elif "simple_binarized2" in method:
         date_part_df = pd.DataFrame(
             {
-                'isoweek': DTindex.isocalendar().week,
+                'isoweek': pd.Categorical(
+                    DTindex.isocalendar().week,
+                    categories=list(range(1, 54)),
+                    ordered=True,
+                ),
                 'weekday': pd.Categorical(
                     DTindex.weekday, categories=list(range(7)), ordered=True
                 ),
@@ -437,6 +460,8 @@ def date_part(
         date_part_df = pd.Series(date_part_df)
     if set_index:
         date_part_df.index = DTindex
+        if expansion_flag:
+            date_part_df = date_part_df.reindex(backup)
     if holiday_country is not None and holiday_countries_used:
         date_part_df = pd.concat(
             [
@@ -803,10 +828,10 @@ def random_datepart(method='random'):
 def seasonal_window_match(
     DTindex,
     k,
-    window_size,
-    forecast_length,
-    datepart_method,
-    distance_metric,
+    window_size=10,
+    forecast_length=None,
+    datepart_method="common_fourier_rw",
+    distance_metric="mae",
     full_sort=False,
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()

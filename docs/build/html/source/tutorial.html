@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Tutorial &#8212; AutoTS 0.6.17 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.6.18 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=0d21fabb"></script>
+    <script src="../_static/documentation_options.js?v=e53b5979"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -96,8 +96,7 @@ Alternatively, the data may be in a <em>wide</em> format where the index is a <c
 <h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Link to this heading">¶</a></h4>
 <p>The simplest way to improve accuracy is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
 <p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. Ensemble parameter expects a single string, and can for example be <code class="docutils literal notranslate"><span class="pre">'simple,dist'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'horizontal'</span></code>. As this means storing more details of every model, this takes more time and memory.</p>
-<p>A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set <code class="docutils literal notranslate"><span class="pre">no_negatives=True</span></code>. This forces forecasts to be greater than or equal to 0.
-A similar function is <code class="docutils literal notranslate"><span class="pre">constraint=2.0</span></code>. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above <code class="docutils literal notranslate"><span class="pre">max(training</span> <span class="pre">data)</span> <span class="pre">+</span> <span class="pre">2.0</span> <span class="pre">*</span> <span class="pre">st.dev(training</span> <span class="pre">data)</span></code>, as well as the reverse on the minimum side. A constraint of <code class="docutils literal notranslate"><span class="pre">0</span></code> would constrain forecasts to historical mins and maxes.</p>
+<p>A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set <code class="docutils literal notranslate"><span class="pre">no_negatives=True</span></code>. This forces forecasts to be greater than or equal to 0.</p>
 <p>Another convenience function is <code class="docutils literal notranslate"><span class="pre">drop_most_recent=1</span></code> specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete.
 <code class="docutils literal notranslate"><span class="pre">drop_data_older_than_periods</span></code> provides similar functionality but drops the oldest data to speed up the process on large datasets.
 <code class="docutils literal notranslate"><span class="pre">remove_leading_zeroes=True</span></code> is useful for data where leading zeroes represent a process which has not yet started.</p>
@@ -138,6 +137,7 @@ For example with daily data, forecasting for a month ahead, and <code class="doc
 <p><strong>Similarity</strong> automatically finds the data sections most similar to the most recent data that will be used for prediction. This is the best general purpose choice but currently can be sensitive to messy data.</p>
 <p><strong>Custom</strong> allows validations of any type. If used, .fit() needs <code class="docutils literal notranslate"><span class="pre">validation_indexes</span></code> passed - a list of pd.DatetimeIndex’s, tail of forecast_length of each is used as test (which should be of the same length as <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> + 1).</p>
 <p><code class="docutils literal notranslate"><span class="pre">backwards</span></code>, <code class="docutils literal notranslate"><span class="pre">even</span></code> and <code class="docutils literal notranslate"><span class="pre">seasonal</span></code> validation all perform initial evaluation on the most recent split of data. <code class="docutils literal notranslate"><span class="pre">custom</span></code> performs initial evaluation on the first index in the list provided, while <code class="docutils literal notranslate"><span class="pre">similarity</span></code> acts on the closest distance segment first.</p>
+<p><code class="docutils literal notranslate"><span class="pre">mixed_length</span></code> uses different forecast_length values simultaneously. This can also be achieved with <code class="docutils literal notranslate"><span class="pre">custom</span></code> and <code class="docutils literal notranslate"><span class="pre">validation_indexes</span></code> passed as a list of tuples <code class="docutils literal notranslate"><span class="pre">[(train_index1,</span> <span class="pre">test_index1),</span> <span class="pre">(train_index2,</span> <span class="pre">test_index2)]</span></code> but this method won’t work with mosaic ensembles.</p>
 <p>Only a subset of models are taken from initial validation to cross validation. The number of models is set such as <code class="docutils literal notranslate"><span class="pre">models_to_validate=10</span></code>.
 If a float in 0 to 1 is provided, it is treated as a % of models to select.
 If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter.
@@ -145,6 +145,8 @@ However, increasing this value above, say, <code class="docutils literal notrans
 <p>While NaN values are handled, model selection will suffer if any series have large numbers of NaN values in any of the generated train/test splits.
 Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data.
 In these cases, avoid the <code class="docutils literal notranslate"><span class="pre">even</span></code> cross validation and use one of the other validation methods.</p>
+<p>Having many validations is critical with noisy data. If a large anomaly occurs, it can result in a model being chosen that predicted that anomaly, even though the prediction was by chance and the model is generally poor otherwise, that large spike by mature of it’s magnitude dominates the accuracy metrics.
+One partial hack to deal with limited history and anomalies is to have multiple custom validations that overlap but have slightly different start and end dates. As the anomalies will fall on different forecast horizons in each holdout, it’s less likely a model can predict the anomalies all by chance.</p>
 </section>
 <section id="id3">
 <h3>Another Example:<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
@@ -619,6 +621,7 @@ To prevent forecast accuracy for considering these additional series too heavily
 </pre></div>
 </div>
 <p>For models here in the lower level api, confusingly, regression_type=”User” must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.</p>
+<p>Keep in mind that no preprocessing/transformers are done on regressors in most cases here, so it is recommended to clean the regressors of anomalies, and often it may be helpful to deseasonalize and scale the regressors as well.</p>
 </section>
 </section>
 <section id="id8">
@@ -805,6 +808,91 @@ thus properly capturing the relative sequence (ie ‘low’=1, ‘medium’=2, �
 <h3>Custom and Unusual Frequencies<a class="headerlink" href="#custom-and-unusual-frequencies" title="Link to this heading">¶</a></h3>
 <p>Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects</a>
 Some models will support a more limited range of frequencies.</p>
+</section>
+<section id="constraints">
+<h3>Constraints<a class="headerlink" href="#constraints" title="Link to this heading">¶</a></h3>
+<p>Constraints are very useful in situations where modelling has, well constraints.
+These are upper or lower bounds (either absolute or relative to history) that the data will not cross.
+These are applied during cross validation as well as output on the immediate predition from the models.
+For a simple example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">constraint</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="p">[</span>
+<span class="p">{</span><span class="c1"># don&#39;t go below zero</span>
+    <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;absolute&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>  <span class="c1"># can also be an array or Series</span>
+    <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">},</span>
+<span class="p">]}</span>
+</pre></div>
+</div>
+<p>the slightly odd syntax, of a dictionary and then a list, is for backwards compatibility with older constraint and to allow more flexbility.</p>
+<p>As many constraints can be used as desired, and are applied in order they are in the list.
+<code class="docutils literal notranslate"><span class="pre">constraint_regularization</span></code> of 1.0 is a strict, cannot cross constraint.
+Constraint of 0.5 would allow 50% of the excess above threshold to continue to exist in the forecast.
+<code class="docutils literal notranslate"><span class="pre">bounds</span></code> determines whether this is applied to just the point forecast or to the upper and lower bounds as well.
+<code class="docutils literal notranslate"><span class="pre">constraint_method</span></code> and <code class="docutils literal notranslate"><span class="pre">constraint_value</span></code> are the most variable, with value being able to take a dictionary of args in many cases.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">constraint</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span>  <span class="c1"># don&#39;t exceed historic max</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;quantile&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># don&#39;t exceed 2% growth by end of forecast horizon</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;slope&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;slope&quot;</span><span class="p">:</span> <span class="mf">0.02</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;window_agg&quot;</span><span class="p">:</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">},</span>
+        <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># don&#39;t go below the last 10 values - 10%</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;last_window&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">0.1</span><span class="p">},</span>
+        <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># don&#39;t go below historic min  - 1 st dev</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;stdev_min&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># don&#39;t go above historic mean  + 3 st devs, soft limit</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;stdev&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># use a log curve shaped by the historic min/max growth rate to limit</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;historic_growth&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;threshold&#39;</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span> <span class="s1">&#39;window&#39;</span><span class="p">:</span> <span class="mi">360</span><span class="p">},</span>
+        <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># like slope but steps</span>
+        <span class="s1">&#39;constraint_method&#39;</span><span class="p">:</span> <span class="s1">&#39;historic_diff&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;constraint_direction&#39;</span><span class="p">:</span> <span class="s1">&#39;upper&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;constraint_regularization&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s1">&#39;constraint_value&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="s1">&#39;bounds_only&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s1">&#39;fillna&#39;</span><span class="p">:</span> <span class="kc">None</span>
+     <span class="p">},</span>
+    <span class="p">{</span>  <span class="c1"># flattens out series, regardless</span>
+        <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;dampening&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">0.98</span><span class="p">,</span>
+        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">},]</span>
+<span class="p">},</span>
+</pre></div>
+</div>
+<p>Constraints are extremely useful in automated forecasting. This is because it is almost impossible not to generate at least a few “bad” forecasts, due to bad data, volatile data, short data, etc.
+Constraints can help assure that truly “ridiculous” forecasts are not generated.</p>
 </section>
 </section>
 <section id="using-the-transformers-independently">
@@ -1298,7 +1386,17 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>MotifSimulation</p></td>
+<tr class="row-odd"><td><p>PreprocessingExperts</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1308,7 +1406,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>Greykite</p></td>
+<tr class="row-odd"><td><p>Greykite</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1318,7 +1416,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TensorflowSTS</p></td>
+<tr class="row-even"><td><p>TensorflowSTS</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1328,7 +1426,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TFPRegression</p></td>
+<tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1338,7 +1436,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
+<tr class="row-even"><td><p>ComponentAnalysis</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td></td>
@@ -1440,7 +1538,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2024, Colin Catlin.
+      &copy;2025, Colin Catlin.
       
       |
       <a href="../_sources/source/tutorial.rst.txt"

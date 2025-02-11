@@ -10,6 +10,7 @@ from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 from autots.models.sklearn import retrieve_classifier
 from autots.tools.profile import profile_time_series, summarize_series
+from autots.tools.kalman import kalman_fusion_forecasts
 
 
 horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
@@ -301,6 +302,133 @@ def BestNEnsemble(
         ens_df = pd.DataFrame(ens_df, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
+    elif point_method == "kalman":
+        F = np.array([forecasts[m].values for m in forecast_keys])
+        ens_df, ens_df_lower, ens_df_upper = kalman_fusion_forecasts(
+            F=F,
+            index=indices,
+            columns=columnz,
+            coverage=prediction_interval,
+            method="multi_series",  # "per_series",  # single Kalman filter for all T=2 series
+            Q_init=1.2,  # these look like they could be tuned a good bit
+            R_init=2.0,
+            adapt_Q="spread",
+            adapt_R="spread",
+            scale=True,
+        )
+        if False:
+            # ------------------
+            # KALMAN FILTER CASE
+            # ------------------
+            F = np.array(
+                [forecasts[m].values for m in forecast_keys]
+            )  # shape = (n, S, T)
+            # F_lower = np.array([lower_forecasts[m].values for m in forecast_keys])  # (n, S, T)
+            # F_upper = np.array([upper_forecasts[m].values for m in forecast_keys])  # (n, S, T)
+
+            # F has shape (num_models, forecast_length, num_series) = (n, S, T)
+            n, S, T = F.shape
+
+            # 1) Build measurement matrix H of shape ((n*T), T).
+            #    Repeats the identity T times vertically => each model sees the same underlying state
+            #    Example: if T=3, n=5, shape of H => (15, 3)
+            #    H * x_k => replicates x_k for each model
+            H = np.tile(np.eye(T), (n, 1))  # shape (n*T, T)
+
+            # 2) We'll assume an Identity transition: x_{k+1} = x_k + w_k
+            A = np.eye(T)  # shape (T, T)
+
+            # 3) Get or define the process-noise covariance Q.
+            #    e.g. a small constant or user-specified. Must be (T, T).
+            KF_Q = ensemble_params.get("KF_Q", 0.1)
+            if np.isscalar(KF_Q):
+                Q = KF_Q * np.eye(T)
+            else:
+                Q = np.array(KF_Q, dtype=float)
+                if Q.shape != (T, T):
+                    raise ValueError("KF_Q must match shape (num_series, num_series)")
+
+            # 4) Define measurement noise R. This must be ((n*T), (n*T)).
+            #    If user gave a scalar, we'll assume diagonal with that scalar
+            KF_R = ensemble_params.get("KF_R", 1.0)
+            if np.isscalar(KF_R):
+                R = KF_R * np.eye(n * T)
+            else:
+                R = np.array(KF_R, dtype=float)
+                if R.shape != (n * T, n * T):
+                    raise ValueError("KF_R must be shape (n*num_series, n*num_series)")
+
+            # 5) Initialize x_0, P_0
+            #    A simple choice: x_0 is the average across all models for the first step
+            #    We'll set P_0 = identity*(some large number) or small
+            x_0 = np.mean(F[:, 0, :], axis=0)  # shape (T,)
+            P_0 = 1.0 * np.eye(T)  # you can tune this initial covariance
+
+            # We'll store results in arrays:
+            # X_{k} for the Kalman estimate, shape (S, T)
+            # Lower_{k} and Upper_{k} for intervals
+            X_kalman = np.zeros((S, T))
+            X_lower = np.zeros((S, T))
+            X_upper = np.zeros((S, T))
+
+            # For convenience, pre-compute the normal z for the given coverage
+            # (assuming normal approximation)
+            from scipy.stats import norm
+
+            z = norm.ppf(0.5 + prediction_interval / 2.0)
+
+            # Current x and P
+            x_curr = x_0
+            P_curr = P_0
+
+            for k in range(S):
+                # 5a) Time update: x_{k|k-1} = A x_{k-1|k-1}, P_{k|k-1} = A P_{k-1|k-1} A^T + Q
+                x_pred = A @ x_curr
+                P_pred = A @ P_curr @ A.T + Q
+
+                # 5b) Measurement update:
+                #     measurement z_k is shape (n,T) => flatten => shape (n*T,)
+                z_k = F[:, k, :].reshape(n * T)  # all model forecasts at step k
+
+                #     y_k = H x_pred, shape (n*T,)
+                y_k = H @ x_pred
+
+                #     S_k = H P_pred H^T + R, shape (n*T, n*T)
+                S_k = H @ P_pred @ H.T + R
+
+                #     K_k = P_pred H^T S_k^{-1}, shape (T, n*T)
+                #     We need a solve or inversion
+                K_k = P_pred @ H.T @ np.linalg.inv(S_k)
+
+                #     x_{k|k} = x_pred + K_k (z_k - y_k)
+                x_update = x_pred + K_k @ (z_k - y_k)
+
+                #     P_{k|k} = (I - K_k H) P_pred
+                #     for numerical stability, sometimes do P_{k|k} = (I - K_k H) P_pred (I - K_k H)^T + K_k R K_k^T
+                I_t = np.eye(T)
+                temp = I_t - K_k @ H
+                P_update = temp @ P_pred @ temp.T + K_k @ R @ K_k.T
+
+                # store result
+                X_kalman[k, :] = x_update
+
+                # confidence intervals from the diagonal of P_{k|k}
+                variances = np.diag(P_update)
+                stds = np.sqrt(
+                    np.maximum(variances, 1e-15)
+                )  # ensure no negative float rounding
+                X_lower[k, :] = x_update - z * stds
+                X_upper[k, :] = x_update + z * stds
+
+                # move to next time step
+                x_curr = x_update
+                P_curr = P_update
+
+            # Convert arrays to DataFrames
+            ens_df = pd.DataFrame(X_kalman, index=indices, columns=columnz)
+            ens_df_lower = pd.DataFrame(X_lower, index=indices, columns=columnz)
+            ens_df_upper = pd.DataFrame(X_upper, index=indices, columns=columnz)
+
     else:
         # these might be faster but the current method works fine
         # np.average(forecast_array, axis=0, weights=model_weights.values())
@@ -603,7 +731,9 @@ def generalize_horizontal(
         k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
         # check if any series are missing from model list
         if not k:
-            raise ValueError("Horizontal template has no models matching this data!")
+            raise ValueError(
+                f"Horizontal template has no models matching this data! Series known {list(known_matches.keys())[0:3]}, series present {org_list[0:3]} available models {available_models}"
+            )
         # test if generalization is needed
         if len(set(org_list) - set(list(k.keys()))) > 0:
             # filter down to only models available for all
@@ -967,7 +1097,7 @@ def mlens_helper(models, models_source="bestn"):
 
 def EnsembleTemplateGenerator(
     initial_results,
-    forecast_length: int = 14,
+    forecast_length: int = 14,  # used just for classic distance ensembles
     ensemble: str = "simple",
     score_per_series=None,
     use_validation=False,
@@ -1053,6 +1183,17 @@ def EnsembleTemplateGenerator(
                 model_name='BestN',
                 model_metric="mixed_metric",
                 point_method="median",
+            ),
+            index=[0],
+        )
+        ensemble_templates = pd.concat([ensemble_templates, best5m_params], axis=0)
+        # same but Kalman
+        best5m_params = pd.DataFrame(
+            _generate_bestn_dict(
+                best5metric,
+                model_name='BestN',
+                model_metric="mixed_metric",
+                point_method="kalman",
             ),
             index=[0],
         )
@@ -1372,7 +1513,7 @@ def n_limited_horz(per_series, K, safety_model=False):
 def HorizontalTemplateGenerator(
     per_series,
     model_results,
-    forecast_length: int = 14,
+    forecast_length: int = 14,  # UNUSED
     ensemble: str = "horizontal",
     subset_flag: bool = True,
     per_series2=None,
@@ -1673,13 +1814,22 @@ def create_unpredictability_score(
     scale=False,
 ):
     results = []
-    threshold = np.nanmedian(full_mae_errors) * 1.1
+    # handle mismatched lengths as seen in mixed_length validations
+    if all(len(arr) == len(full_mae_errors[0]) for arr in full_mae_errors):
+        errors_array_1 = full_mae_errors
+        min_length = full_mae_errors[0].shape[0]
+    else:
+        # this is a simple cut to shortest, for simplicity
+        min_length = min(len(arr) for arr in full_mae_errors)
+        print(f"mixed length validations with minimum length {min_length}")
+        errors_array_1 = np.array([arr[:min_length] for arr in full_mae_errors])
+    threshold = np.nanmedian(errors_array_1) * 1.1
     for val in range(total_vals):
         errors_array = np.array(
             [
                 x
                 for y, x in sorted(
-                    zip(full_mae_vals, full_mae_errors), key=lambda pair: pair[0]
+                    zip(full_mae_vals, errors_array_1), key=lambda pair: pair[0]
                 )
                 if y == val
             ]
@@ -1698,11 +1848,13 @@ def create_unpredictability_score(
         score = min_error
         # score = score / np.min(score)
         score = pd.DataFrame(
-            score, index=validation_test_indexes[val], columns=df_wide.columns
+            score,
+            index=validation_test_indexes[val][:min_length],
+            columns=df_wide.columns,
         )
         # scale
         score = score / pd.DataFrame(
-            index=validation_test_indexes[val], columns=df_wide.columns
+            index=validation_test_indexes[val][:min_length], columns=df_wide.columns
         ).fillna(df_wide.mean())
         results.append(score)
 
@@ -2188,15 +2340,15 @@ def _buildup_mosaics(
             f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
             + mi
         ) from e
-    melted['forecast'] = (
-        fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
-    melted['upper_forecast'] = (
-        u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
-    melted['lower_forecast'] = (
-        l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    )
+    melted[
+        'forecast'
+    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'upper_forecast'
+    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'lower_forecast'
+    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
 
     forecast_df = melted.pivot(
         values="forecast", columns="series_id", index="forecast_period"

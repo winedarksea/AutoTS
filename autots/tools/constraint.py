@@ -294,7 +294,7 @@ def fit_constraint(
         # have the slope start above a threshold to allow more volatility
         if threshold is not None:
             end_o_data = end_o_data + end_o_data * threshold
-        train_min = train_max = (
+        train_min = train_max = np.nan_to_num(
             end_o_data.to_numpy()
             + end_o_data.to_numpy()[np.newaxis, :] * changes[:, np.newaxis]
         )

@@ -39,6 +39,7 @@ from autots.tools.fft import fourier_extrapolation
 from autots.tools.impute import FillNA
 from autots.evaluator.metrics import wasserstein
 from autots.models.sklearn import rolling_x_regressor_regressor
+from autots.tools.kalman import kalman_fusion_forecasts
 
 
 # these are all optional packages
@@ -1286,7 +1287,11 @@ class Motif(ModelObject):
 
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+            if isinstance(self.n_jobs, (int, float)):
+                n_jobs = self.n_jobs - 1
+            else:
+                n_jobs = self.n_jobs
+            df_list = Parallel(n_jobs=(n_jobs))(
                 delayed(looped_motif)(
                     Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
                     Xb=self.df.iloc[-self.window :, i].to_numpy().reshape(1, -1),
@@ -2042,6 +2047,22 @@ class SectionalMotif(ModelObject):
             q1 = nan_quantile(results, q=0.25, axis=0)
             q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
+        elif point_method == "kalman":
+            forecast, ens_df_lower, ens_df_upper = kalman_fusion_forecasts(
+                F=results,
+                index=test_index,
+                columns=self.column_names,
+                coverage=self.prediction_interval,
+                method="multi_series",  # "per_series",  # single Kalman filter for all T=2 series
+                Q_init=1.2,  # these look like they could be tuned a good bit
+                R_init=2.0,
+                adapt_Q="spread",
+                adapt_R="spread",
+                scale=True,
+                # a=0.999,
+            )
+        else:
+            raise ValueError(f"point_method {point_method} not recognized")
 
         pred_int = round((1 - self.prediction_interval) / 2, 5)
         upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
@@ -2101,6 +2122,16 @@ class SectionalMotif(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
+        if method in ["deep"]:
+            point_method = random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "kalman"],
+                [0.4, 0.2, 0.2, 0.2, 0.2],
+            )[0]
+        else:
+            point_method = random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "kalman"],
+                [0.4, 0.2, 0.2, 0.2, 0.001],
+            )[0]
         metric_list = [
             'braycurtis',
             'canberra',
@@ -2154,6 +2185,8 @@ class SectionalMotif(ModelObject):
             k_choice = random.choices(
                 [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0]
+        if point_method == "kalman":
+            k_choice = k_choice if k_choice < 10 else 10
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -2166,9 +2199,7 @@ class SectionalMotif(ModelObject):
             "window": random.choices(
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
-            "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
-            )[0],
+            "point_method": point_method,
             "distance_metric": random.choice(metric_list),
             "include_differenced": random.choices([True, False], [0.9, 0.1])[0],
             "k": k_choice,
@@ -2684,6 +2715,20 @@ class MetricMotif(ModelObject):
             forecast = (q1 + q2) / 2
         elif point_method == "closest":
             forecast = results[0]
+        elif point_method == "kalman":
+            forecast, ens_df_lower, ens_df_upper = kalman_fusion_forecasts(
+                F=results,
+                index=test_index,
+                columns=self.column_names,
+                coverage=self.prediction_interval,
+                method="per_series",  # "multi_series",  # single Kalman filter for all T=2 series
+                Q_init=1.0,  # these look like they could be tuned a good bit
+                R_init=2.0,
+                adapt_Q="spread",
+                adapt_R="spread",
+                scale=True,
+                # a=0.999,
+            )
         else:
             raise ValueError(f"point_method {point_method} not recognized")
 
@@ -2747,6 +2792,10 @@ class MetricMotif(ModelObject):
         # comparisons['StandardScaler'] = 0.05
         # combinations = filters.copy()
         # combinations['AlignLastValue'] = 0.1
+        point_method = random.choices(
+            ["weighted_mean", "mean", "median", "midhinge", "closest", "kalman"],
+            [0.1, 0.3, 0.2, 0.2, 0.1, 0.02],
+        )[0]
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
@@ -2755,15 +2804,14 @@ class MetricMotif(ModelObject):
             k_choice = random.choices(
                 [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0]
+        if point_method == "kalman":
+            k_choice = k_choice if k_choice < 12 else 12
         return {
             "window": random.choices(
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
             )[0],
             # weighted mean is effective but higher memory usage (weights= call)
-            "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "closest"],
-                [0.1, 0.3, 0.2, 0.2, 0.1],
-            )[0],
+            "point_method": point_method,
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
             "comparison_transformation": RandomTransform(
@@ -3879,6 +3927,7 @@ class TVVAR(BasicLinearModel):
         var_postprocessing: dict = False,
         mode: str = 'additive',
         holiday_countries_used: bool = True,
+        store_phi: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -3911,6 +3960,7 @@ class TVVAR(BasicLinearModel):
         self.max_cycles = max_cycles
         self.mode = str(mode).lower()
         self.holiday_countries_used = holiday_countries_used
+        self.store_phi = store_phi
 
     def empty_scaler(self, df):
         self.scaler_std = pd.Series(1.0, index=df.columns)
@@ -4040,6 +4090,7 @@ class TVVAR(BasicLinearModel):
             self.x_scaler = EmptyTransformer()
             X_values = X.to_numpy().astype(float)
 
+        self.phi_history = []
         if self.phi is None:
             if self.lambda_ is not None:
                 I = np.eye(X_values.shape[1])
@@ -4093,9 +4144,13 @@ class TVVAR(BasicLinearModel):
                     theta_t = np.linalg.solve(S_reg.astype(float), r.astype(float))
                 except np.linalg.LinAlgError:
                     theta_t = np.linalg.pinv(S_reg) @ r
+                if self.store_phi:
+                    self.phi_history.append(theta_t)
             self.beta = theta_t  # Use the last theta_t as beta
             # Post-process coefficients to set small values to zero
             self.beta = self.apply_beta_threshold()
+            if self.store_phi:
+                self.phi_history = np.array(self.phi_history)
             # Calculate residuals
             Y_pred = X_np @ self.beta
             residuals = Y_np - Y_pred

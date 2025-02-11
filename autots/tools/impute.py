@@ -185,7 +185,7 @@ df_interpolate = {
     'zero': 0.1,
     'quadratic': 0.1,
     'cubic': 0.1,
-    'barycentric': 0.01,  # this parallelizes and is noticeably slower
+    # 'barycentric': 0.01,  # this parallelizes and is noticeably slower, and crashes with long history
     'piecewise_polynomial': 0.01,
     'spline': 0.01,  # can fail sometimes
     'pchip': 0.1,

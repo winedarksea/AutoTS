@@ -551,6 +551,12 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler", "2": "AlignLastValue", "3": "MinMaxScaler", "4": "MinMaxScaler"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 100}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.2, "first_value_only": false, "threshold": 1, "threshold_method": "max"}, "3": {}, "4": {}}}',
         'Ensemble': 0,
     },
+    "89": {  # VPV best score
+        'Model': 'BasicLinearModel',
+        'ModelParameters': '{"datepart_method": "recurring", "changepoint_spacing": 28, "changepoint_distance_end": 90, "regression_type": null, "lambda_": 0.01, "trend_phi": 0.98, "holiday_countries_used": true}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Slice", "1": "ClipOutliers", "2": "SeasonalDifference", "3": "LevelShiftTransformer", "4": "LevelShiftTransformer", "5": "PositiveShift"}, "transformation_params": {"0": {"method": 0.2}, "1": {"method": "clip", "std_threshold": 3, "fillna": null}, "2": {"lag_1": 12, "method": 5}, "3": {"window_size": 7, "alpha": 2.0, "grouping_forward_limit": 5, "max_level_shifts": 30, "alignment": "rolling_diff_3nn"}, "4": {"window_size": 7, "alpha": 2.0, "grouping_forward_limit": 5, "max_level_shifts": 30, "alignment": "rolling_diff_3nn"}, "5": {}}}',
+        'Ensemble': 0,
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

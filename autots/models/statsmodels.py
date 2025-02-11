@@ -496,6 +496,7 @@ class ETS(ModelObject):
         trend: str = None,
         seasonal: str = None,
         seasonal_periods: int = None,
+        method: str = None,
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
@@ -522,6 +523,7 @@ class ETS(ModelObject):
             self.seasonal_periods = None
         else:
             self.seasonal_periods = abs(int(seasonal_periods))
+        self.method = method
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied
@@ -561,12 +563,20 @@ class ETS(ModelObject):
             'freq': self.frequency,
             'forecast_length': forecast_length,
             'verbose': self.verbose,
+            "method": self.method,
         }
 
-        def ets_forecast_by_column(current_series, args):
-            """Run one series of ETS and return prediction."""
-            from statsmodels.tsa.holtwinters import ExponentialSmoothing
+        cols = self.df_train.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 4:
+            parallel = False
+        elif not joblib_present:
+            parallel = False
 
+        # seems to perhaps be more stable when defined inside, unclear
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+        def ets_forecast_by_column(current_series, args, test_index):
+            """Run one series of ETS and return prediction."""
             series_name = current_series.name
             with warnings.catch_warnings():
                 if args['verbose'] < 2:
@@ -595,7 +605,7 @@ class ETS(ModelObject):
                             # initialization_method='heuristic',  # estimated
                             freq=args['freq'],
                         )
-                    esResult = esModel.fit()
+                    esResult = esModel.fit(method=args["method"])
                     srt = current_series.shape[0]
                     esPred = esResult.predict(
                         start=srt, end=srt + args['forecast_length'] - 1
@@ -605,28 +615,27 @@ class ETS(ModelObject):
                     # this error handling is meant for horizontal ensembles where it will only then be needed for select series
                     if args['verbose'] > 1:
                         print(f"ETS failed on {series_name} with {repr(e)}")
-                    esPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
+                    esPred = pd.Series(
+                        (np.zeros((args["forecast_length"],))), index=test_index
+                    )
             esPred.name = series_name
             return esPred
 
-        cols = self.df_train.columns.tolist()
-        if self.n_jobs in [0, 1] or len(cols) < 4:
-            parallel = False
-        elif not joblib_present:
-            parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(
-                n_jobs=self.n_jobs, timeout=36000
-            )(  # 10 hour timeout, should be enough...
-                delayed(ets_forecast_by_column)(self.df_train[col].astype(float), args)
-                for (col) in cols
+            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(
+                delayed(ets_forecast_by_column)(
+                    self.df_train[col].astype(float), args, test_index
+                )
+                for col in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
             for col in cols:
-                df_list.append(ets_forecast_by_column(self.df_train[col], args))
+                df_list.append(
+                    ets_forecast_by_column(self.df_train[col], args, test_index)
+                )
             forecast = pd.concat(df_list, axis=1)
         if just_point_forecast:
             return forecast
@@ -678,6 +687,9 @@ class ETS(ModelObject):
             'trend': trend_choice,
             'seasonal': seasonal_choice,
             'seasonal_periods': seasonal_period_choice,
+            'method': random.choices(
+                [None, "SLSQP", "L-BFGS-B", "least_squares"], [0.3, 0.2, 0.2, 0.2]
+            )[0],
         }
         return parameter_dict
 
@@ -688,6 +700,7 @@ class ETS(ModelObject):
             'trend': self.trend,
             'seasonal': self.seasonal,
             'seasonal_periods': self.seasonal_periods,
+            'method': self.method,
         }
         return parameter_dict
 

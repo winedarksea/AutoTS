@@ -922,7 +922,7 @@ class RollingMeanTransformer(EmptyTransformer):
     def __init__(
         self,
         window: int = 10,
-        fixed: bool = False,
+        fixed: bool = True,  # fixed=False appears to be broken as of 2025 for first values
         macro_micro: bool = False,
         suffix: str = "_lltmicro",
         center: bool = False,
@@ -937,7 +937,7 @@ class RollingMeanTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        bool_c = random.choices([True, False], [0.7, 0.3])[0]
+        bool_c = random.choices([True, False], [0.8, 0.2])[0]
         center = random.choices([True, False], [0.5, 0.5])[0]
         macro_micro = random.choices([True, False], [0.2, 0.8])[0]
         if macro_micro:
@@ -960,15 +960,16 @@ class RollingMeanTransformer(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.shape = df.shape
-        self.last_values = df.tail(self.window).ffill().bfill()
-        self.first_values = df.head(self.window).ffill().bfill()
+        if not self.macro_micro:
+            self.last_values = df.tail(self.window).ffill().bfill()
+            self.first_values = df.head(self.window).ffill().bfill()
 
-        df = (
-            df.tail(self.window + 1)
-            .rolling(window=self.window, min_periods=1, center=self.center)
-            .mean()
-        )
-        self.last_rolling = df.tail(1)
+        # df = (
+        #     df.tail(self.window + 1)
+        #     .rolling(window=self.window, min_periods=1, center=self.center)
+        #     .mean()
+        # )
+        # self.last_rolling = df.tail(1)
         return self
 
     def transform(self, df):
@@ -982,6 +983,7 @@ class RollingMeanTransformer(EmptyTransformer):
             micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
             return pd.concat([macro, micro], axis=1)
         else:
+            self.last_rolling = macro.tail(self.window)
             return macro
 
     def fit_transform(self, df):
@@ -1014,9 +1016,7 @@ class RollingMeanTransformer(EmptyTransformer):
             window = self.window
             if trans_method == "original":
                 staged = self.first_values
-                diffed = ((df.astype(float) - df.shift(1).astype(float)) * window).tail(
-                    len(df.index) - window
-                )
+                diffed = (df.astype(float).diff() * window).tail(len(df.index) - window)
                 temp_cols = diffed.columns
                 for n in range(len(diffed.index)):
                     temp_index = diffed.index[n]
@@ -1029,13 +1029,16 @@ class RollingMeanTransformer(EmptyTransformer):
                     temp_row.index = pd.DatetimeIndex([temp_index])
                     staged = pd.concat([staged, temp_row], axis=0)
                 return staged
-            # current_inversed = current * window - cumsum(window-1 to previous)
+            # a rolling mean current diff value is the difference between the tail of the window and the incoming value
             elif trans_method == "forecast":
+                tail_len = df.shape[0]
                 staged = self.last_values
                 # these are all rolling values at first (forecast rolling and historic)
                 df = pd.concat([self.last_rolling, df], axis=0).astype(float)
-                diffed = (df - df.shift(1)) * window
-                diffed = diffed.tail(len(diffed.index) - 1)
+                diffed = df.diff()  # * window
+                # diffed = diffed.tail(len(diffed.index) - 1)
+                diffed = diffed.tail(tail_len)
+                # self.diffed = diffed
                 temp_cols = diffed.columns
                 for n in range(len(diffed.index)):
                     temp_index = diffed.index[n]
@@ -1047,7 +1050,7 @@ class RollingMeanTransformer(EmptyTransformer):
                     )
                     temp_row.index = pd.DatetimeIndex([temp_index])
                     staged = pd.concat([staged, temp_row], axis=0)
-                return staged.tail(len(diffed.index))
+                return staged.tail(tail_len)
 
 
 class SeasonalDifference(EmptyTransformer):
@@ -1625,7 +1628,7 @@ class CumSumTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.last_values = df.tail(1)
+        # self.last_values = df.tail(1)
         self.first_values = df.head(1)
         return self
 
@@ -1634,7 +1637,9 @@ class CumSumTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df.cumsum(skipna=True)
+        trans = df.cumsum(skipna=True)
+        self.last_value_trans = trans.tail(1).copy()
+        return trans
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame
@@ -1661,7 +1666,7 @@ class CumSumTransformer(EmptyTransformer):
             return df
         else:
             df_len = df.shape[0]
-            df = pd.concat([self.last_values, df], axis=0)
+            df = pd.concat([self.last_value_trans, df], axis=0)
             df = df - df.shift(1)
             return df.tail(df_len)
 
@@ -1871,7 +1876,9 @@ class Slice(EmptyTransformer):
             choice = random.choices([100, 0.5, 0.2], [0.3, 0.5, 0.2], k=1)[0]
         else:
             choice = random.choices(
-                [100, 0.5, 0.8, 0.9, 0.3], [0.2, 0.2, 0.2, 0.2, 0.2], k=1
+                [100, 0.5, 0.8, 0.9, 0.3, "3forecastlength"],
+                [0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
+                k=1,
             )[0]
         return {
             "method": choice,
@@ -2824,6 +2831,7 @@ class AlignLastValue(EmptyTransformer):
         lag (int): use last value as this lag back, 1 is no shift, 2 is lag one from end, ie second to last
         method (str): 'additive', 'multiplicative'
         strength (float): softening parameter [0, 1], 1.0 for full difference
+        threshold (float): if below this threshold then the shift is not applied
     """
 
     def __init__(
@@ -5798,7 +5806,249 @@ class MeanPercentSplitter(EmptyTransformer):
         return params
 
 
-class StandardScaler:
+class UpscaleDownscaleTransformer(EmptyTransformer):
+    """
+    Transformer that either upscales or downscales time series data for forecasting,
+    inspired by audio processing techniques.
+
+    Upscaling will require an increase in forecast_length (handled internally by auto_model)
+    Depending on the chosen mode:
+
+      - 'upscale': transform() increases the resolution of the data by inserting
+        additional rows (using interpolation) so that (for example) a scaling factor
+        of 3 creates three extra rows between every two original rows (i.e. 4× as many rows).
+        inverse_transform() then downsamples (using decimation) back to the original index.
+
+      - 'downscale': transform() downsamples the (high-resolution) data by aggregating
+        blocks of rows (using either decimation or a moving average). inverse_transform()
+        then upsamples (via interpolation) to recover the original index.
+
+    Args:
+        mode (str): Either 'upscale' or 'downscale'. In 'upscale' mode, transform() will
+            add new rows and inverse_transform() will remove them; in 'downscale' mode,
+            transform() will remove rows and inverse_transform() will add them back.
+        factor (int): The scaling factor. For example, factor=3 means that for each original
+            interval the upscaled data will contain (factor+1) equally spaced rows.
+        down_method (str): When downsampling, the method used. Options:
+            - 'decimate': simply select every (factor+1)-th row.
+            - 'mean': compute the mean (i.e. moving average) over each block.
+        fill_method (str): When upsampling, the interpolation method (e.g., 'linear', 'cubic').
+    """
+
+    def __init__(
+        self,
+        mode='upscale',
+        factor=3,
+        down_method='decimate',
+        fill_method='linear',
+        **kwargs,
+    ):
+        super().__init__(name="UpscaleDownscaleTransformer")
+        if mode not in ['upscale', 'downscale']:
+            raise ValueError("mode must be either 'upscale' or 'downscale'")
+        if factor < 1:
+            raise ValueError("factor must be at least 1")
+        self.mode = mode
+        self.factor = factor
+        self.down_method = down_method
+        self.fill_method = fill_method
+
+    def fit(self, df):
+        """
+        Fit the transformer to the data.
+
+        Stores the original index and columns. Also computes an approximate time delta
+        (using the median difference between timestamps) which is used for resampling.
+
+        Args:
+            df (pandas.DataFrame): Input DataFrame with a pd.DatetimeIndex.
+        """
+        self.original_index = df.index
+        self.columns = df.columns
+
+        # Compute an approximate original time delta (assumes reasonably regular spacing)
+        dt_diffs = df.index.to_series().diff().dropna()
+        self.orig_delta = dt_diffs.median()  # a pandas.Timedelta
+
+        # When upscaling: we will insert self.factor additional rows per original interval.
+        # (factor + 1) points will now represent the same interval.
+        self.new_delta = self.orig_delta / (self.factor + 1)
+        return self
+
+    def transform(self, df):
+        """
+        Transform the data by either upscaling (increasing the resolution) or downscaling
+        (reducing the resolution). The new index is computed so that the inverse_transform
+        will ultimately yield a DataFrame with the same DatetimeIndex as the original.
+
+        Args:
+            df (pandas.DataFrame): Input DataFrame with a pd.DatetimeIndex.
+
+        Returns:
+            pandas.DataFrame: Transformed DataFrame with a new index.
+        """
+        if not hasattr(self, 'original_index'):
+            raise RuntimeError(
+                "Transformer has not been fitted. Call fit() before transform()."
+            )
+
+        if self.mode == 'upscale':
+            # Create a new (high-resolution) index from the original index.
+            new_index = self._create_upscaled_index(self.original_index, self.new_delta)
+            # Reindex the original data to the new index. This introduces NaNs where data did not exist.
+            df_up = df.reindex(new_index)
+            # Use the FillNA function to interpolate the missing rows.
+            df_up_filled = FillNA(df_up, method=self.fill_method)
+            # Save the new index so that inverse_transform() knows how to go back.
+            self.transformed_index = new_index
+            return df_up_filled
+
+        elif self.mode == 'downscale':
+            # In downscale mode, we expect the input df to be high-resolution.
+            # Compute a downsampled index: select every (factor+1)-th timestamp from the original.
+            downsampled_index = self.original_index[:: (self.factor + 1)]
+
+            if self.down_method == 'decimate':
+                # Simple decimation: select rows that exactly match the downsampled index.
+                df_down = df.loc[downsampled_index]
+            elif self.down_method == 'mean':
+                # Aggregate blocks of (factor+1) rows using the mean.
+                # (If the number of rows isn’t exactly divisible, the trailing rows are dropped.)
+                arr = df.to_numpy()
+                n_rows = arr.shape[0]
+                block_size = self.factor + 1
+                n_complete_blocks = n_rows // block_size
+                arr = arr[: n_complete_blocks * block_size, :]
+                # Reshape so that each block is along axis 1.
+                arr_reshaped = arr.reshape(n_complete_blocks, block_size, -1)
+                # Compute the mean over each block (axis=1).
+                arr_down = arr_reshaped.mean(axis=1)
+                df_down = pd.DataFrame(
+                    arr_down,
+                    index=downsampled_index[:n_complete_blocks],
+                    columns=df.columns,
+                )
+            else:
+                raise ValueError("Invalid down_method. Must be 'decimate' or 'mean'.")
+
+            self.transformed_index = df_down.index
+            return df_down
+
+    def inverse_transform(self, df):
+        """
+        Inverse transform the data back to the original frequency.
+
+        For 'upscale' mode, if the incoming DataFrame df contains the training timestamps
+        (self.original_index) they are used; but if df represents future forecasts (with a
+        high-resolution index that does not intersect self.original_index), a new index is
+        generated starting from an anchor based on the training data.
+
+        For 'downscale' mode, the low-resolution forecast data is reindexed to the new index
+        and then missing values are filled.
+
+        Args:
+            df (pandas.DataFrame): Transformed DataFrame.
+
+        Returns:
+            pandas.DataFrame: DataFrame resampled to the original frequency.
+        """
+        if not hasattr(self, 'transformed_index'):
+            raise RuntimeError("Transformer has not been fitted/transformed properly.")
+
+        # Check if the training original timestamps are present in the input index.
+        # (This is typically true for in-sample data but not for forecasts.)
+        if df.index.max() > self.original_index[-1]:
+            # Forecast scenario: generate a new index at the original frequency.
+            # We use the training anchor so that the new index remains aligned.
+            if self.mode == 'downscale':
+                new_start = self.original_index[-1] + self.orig_delta
+                print(new_start)
+            else:
+                start_anchor = self.original_index[0]
+                offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
+                new_start = start_anchor + offset * self.orig_delta
+            new_index = pd.date_range(
+                start=new_start, end=df.index[-1], freq=self.orig_delta
+            )
+        else:
+            new_index = self.original_index
+
+        if self.mode == 'upscale':
+            # For upscale mode, sample the high-resolution data to the new original frequency.
+            # We use nearest neighbor selection.
+            df_inv = df.reindex(new_index, method='nearest')
+            return df_inv
+
+        elif self.mode == 'downscale':
+            # For downscale mode, upsample the low-resolution data to the new index and fill gaps.
+            df_up = df.reindex(new_index)
+            df_up_filled = FillNA(df_up, method=self.fill_method)
+            return df_up_filled
+
+    def _create_upscaled_index(self, original_index, new_delta):
+        """
+        Create a new high-resolution index given the original index and a new time delta.
+
+        The new index starts at the first timestamp and ends at the last timestamp
+        of the original index. (Some minor approximation is used if the interval does
+        not divide evenly.)
+
+        Args:
+            original_index (pd.DatetimeIndex): The original index.
+            new_delta (pd.Timedelta): The desired time step between rows.
+
+        Returns:
+            pd.DatetimeIndex: The upscaled index.
+        """
+        start = original_index[0]
+        end = original_index[-1]
+        # Total seconds between start and end
+        total_seconds = (end - start).total_seconds()
+        new_delta_seconds = new_delta.total_seconds()
+        # Compute number of periods (ensure we include both endpoints)
+        periods = int(np.floor(total_seconds / new_delta_seconds) + 1)
+        new_index = pd.date_range(
+            start=start, periods=periods, freq=pd.Timedelta(seconds=new_delta_seconds)
+        )
+        # Guarantee that the original end timestamp is included
+        if new_index[-1] < end:
+            new_index = new_index.append(pd.DatetimeIndex([end]))
+        return new_index
+
+    def fit_transform(self, df):
+        """
+        Fit to data, then transform it.
+
+        Args:
+            df (pandas.DataFrame): Input DataFrame with a pd.DatetimeIndex.
+
+        Returns:
+            pandas.DataFrame: Transformed DataFrame.
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """
+        Generate new random parameters for the transformer.
+
+        Args:
+            method (str): Method to generate new parameters. (Currently only "random" is supported.)
+
+        Returns:
+            dict: Dictionary of transformer parameters.
+        """
+        params = {
+            "mode": random.choice(["upscale", "downscale"]),
+            "factor": random.choice([1, 2, 3, 4]),
+            "down_method": random.choice(["decimate", "mean"]),
+            "fill_method": random.choice(["linear", "cubic", "pchip", "akima"]),
+        }
+        return params
+
+
+class StandardScaler(EmptyTransformer):
     def __init__(self):
         self.means = None
         self.stds = None
@@ -5843,7 +6093,7 @@ class StandardScaler:
 trans_dict = {
     "None": EmptyTransformer(),
     None: EmptyTransformer(),
-    "RollingMean10": RollingMeanTransformer(window=10),
+    "RollingMean10": RollingMeanTransformer(window=10, fixed=True),
     # "DifferencedTransformer": DifferencedTransformer(),
     "PctChangeTransformer": PctChangeTransformer(),
     "SinTrend": SinTrend(),
@@ -5927,6 +6177,7 @@ have_params = {
     "ThetaTransformer": ThetaTransformer,
     "ChangepointDetrend": ChangepointDetrend,
     "MeanPercentSplitter": MeanPercentSplitter,
+    "UpscaleDownscaleTransformer": UpscaleDownscaleTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -6036,6 +6287,7 @@ class GeneralTransformer(object):
             "ThetaTransformer": decomposes into theta lines, then recombines
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
+            "UpscaleDownscaleTransformer": upscales and downscales
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -6056,7 +6308,7 @@ class GeneralTransformer(object):
         n_jobs: int = 1,
         holiday_country: list = None,
         verbose: int = 0,
-        forecast_length: int = 30,
+        forecast_length: int = 90,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -6101,8 +6353,8 @@ class GeneralTransformer(object):
         ]
 
     @staticmethod
-    def get_new_params(method="fast"):
-        return RandomTransform(transformer_list=method)
+    def get_new_params(method="fast", **kwargs):
+        return RandomTransform(transformer_list=method, **kwargs)
 
     def fill_na(self, df, window: int = 10):
         """
@@ -6139,7 +6391,7 @@ class GeneralTransformer(object):
         random_seed: int = 2020,
         n_jobs: int = 1,
         holiday_country: list = None,
-        forecast_length: int = 30,
+        forecast_length: int = 90,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -6168,8 +6420,8 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
-        elif transformation in ["Constraint", "MeanPercentSplitter"]:
-            return Constraint(forecast_length=forecast_length, **param)
+        elif transformation in ["Constraint", "MeanPercentSplitter", "Slice"]:
+            return have_params[transformation](forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -6258,13 +6510,13 @@ class GeneralTransformer(object):
             window = int(df.shape[0] / 100)
             window = 2 if window < 2 else window
             self.window = window
-            return RollingMeanTransformer(window=self.window)
+            return RollingMeanTransformer(window=self.window, fixed=True)
 
         elif transformation == "RollingMean10thN":
             window = int(df.shape[0] / 10)
             window = 2 if window < 2 else window
             self.window = window
-            return RollingMeanTransformer(window=self.window)
+            return RollingMeanTransformer(window=self.window, fixed=True)
 
         # must be at bottom as it has duplicates of above inside
         elif transformation in list(have_params.keys()):
@@ -6395,6 +6647,7 @@ class GeneralTransformer(object):
         trans_method: str = "forecast",
         fillzero: bool = False,
         bounds: bool = False,
+        start: int = None,
     ):
         """Undo the madness.
 
@@ -6409,7 +6662,10 @@ class GeneralTransformer(object):
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         try:
             for i in sorted(self.transformations.keys(), reverse=True):
-                df = self._inverse_one(df, i, trans_method=trans_method, bounds=bounds)
+                if start is None or i <= start:
+                    df = self._inverse_one(
+                        df, i, trans_method=trans_method, bounds=bounds
+                    )
         except Exception as e:
             err_str = f"Transformer {self.c_trans_n} failed on inverse"
             if self.verbose >= 1:
@@ -6458,7 +6714,7 @@ transformer_dict = {
     "DifferencedTransformer": 0.05,
     "SinTrend": 0.01,
     "PctChangeTransformer": 0.01,
-    "CumSumTransformer": 0.02,
+    "CumSumTransformer": 0.005,
     "PositiveShift": 0.02,
     "Log": 0.01,
     "IntermittentOccurrence": 0.01,
@@ -6500,6 +6756,7 @@ transformer_dict = {
     "ThetaTransformer": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
+    "UpscaleDownscaleTransformer": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -6591,7 +6848,7 @@ postprocessing = {
     "Round": 0.1,
     "HistoricValues": 0.1,
     "BKBandpassFilter": 0.1,
-    "KalmanSmoothing": 0.1,
+    "KalmanSmoothing": 0.01,
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
     "Constraint": 0.1,
@@ -6607,6 +6864,7 @@ expanding_transformers = [
     "LocalLinearTrend",
     "ThetaTransformer",
     "MeanPercentSplitter",
+    "UpscaleDownscaleTransformer",
 ]  # note there is also prob_trans below for preventing reuse of these in one transformer
 
 transformer_class = {}
@@ -6635,7 +6893,16 @@ na_probs = {
 
 def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
-    if transformer_list in ["fast", "default", "Fast", "auto", 'scalable']:
+    if transformer_list in [
+        "fast",
+        "default",
+        "Fast",
+        "auto",
+        'scalable',
+        'fast_no_slice',
+        'superfast_no_slice',
+        'scalable_no_slice',
+    ]:
         # remove any slow transformers
         fast_transformer_dict = transformer_dict.copy()
         # downweight some
@@ -6662,9 +6929,23 @@ def transformer_list_to_dict(transformer_list):
         # del transformer_list["HolidayTransformer"]  # improved, should be good enough
         del transformer_list["ReplaceConstant"]
         del transformer_list["ThetaTransformer"]  # just haven't tested it enough yet
+    elif transformer_list in ["no_expanding"]:
+        transformer_list = {
+            x: y
+            for x, y in transformer_dict.items()
+            if x not in expanding_transformers and x != "Slice"
+        }
     elif "no_slice" in transformer_list:
         # slice can be a problem child in some cases, so can remove by adding this
         del transformer_list["Slice"]
+    elif transformer_list == "filters":
+        transformer_list = filters.copy()
+    elif transformer_list == "scalers":
+        transformer_list = scalers.copy()
+    elif transformer_list == "postprocessing":
+        transformer_list = postprocessing.copy()
+    elif transformer_list == "decompositions":
+        transformer_list = decompositions.copy()
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
@@ -6695,7 +6976,9 @@ def RandomTransform(
 
     BTCD is used as a signal that slow parameters are allowed.
     """
-    transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
+    transformer_actual_list, transformer_prob = transformer_list_to_dict(
+        transformer_list
+    )
     if transformer_max_depth <= 0:
         transformer_max_depth = 0
         transformer_min_depth = 0
@@ -6704,7 +6987,7 @@ def RandomTransform(
     if fast_params is None:
         fast_params = True
         slow_flags = ["BTCD"]
-        intersects = [i for i in slow_flags if i in transformer_list]
+        intersects = [i for i in slow_flags if i in transformer_actual_list]
         if intersects:
             fast_params = False
     if superfast_params is None:
@@ -6715,7 +6998,7 @@ def RandomTransform(
             "QuantileTransformer",
             "KalmanSmoothing",
         ]
-        intersects = [i for i in slow_flags if i in transformer_list]
+        intersects = [i for i in slow_flags if i in transformer_actual_list]
         if not intersects:
             superfast_params = True
 
@@ -6767,19 +7050,23 @@ def RandomTransform(
             }
     if traditional_order:
         # handle these not being in TransformerList
-        randos = random.choices(transformer_list, transformer_prob, k=4)
-        clip = "ClipOutliers" if "ClipOutliers" in transformer_list else randos[0]
-        detrend = "Detrend" if "Detrend" in transformer_list else randos[1]
+        randos = random.choices(transformer_actual_list, transformer_prob, k=4)
+        clip = (
+            "ClipOutliers" if "ClipOutliers" in transformer_actual_list else randos[0]
+        )
+        detrend = "Detrend" if "Detrend" in transformer_actual_list else randos[1]
         # formerly Discretize
         discretize = (
-            "AlignLastValue" if "AlignLastValue" in transformer_list else randos[2]
+            "AlignLastValue"
+            if "AlignLastValue" in transformer_actual_list
+            else randos[2]
         )
         # create new dictionary in fixed order
         trans = [clip, detrend, randos[3], discretize]
         trans = trans[0:num_trans]
         num_trans = len(trans)
     else:
-        trans = random.choices(transformer_list, transformer_prob, k=num_trans)
+        trans = random.choices(transformer_actual_list, transformer_prob, k=num_trans)
 
     # remove duplication of some which scale memory exponentially
     # only allow one of these
@@ -6789,29 +7076,32 @@ def RandomTransform(
         "LocalLinearTrend",
         "ThetaTransformer",
         "MeanPercentSplitter",
+        "UpscaleDownscaleTransformer",
     }
-    if any(x in prob_trans for x in trans):
-        # for loop, only way I saw to do this right now
-        seen = False
-        result = []
-        for item in trans:
-            if item in prob_trans:
-                if not seen:
-                    seen = True
+    # with all, allow a deep search that repeats these
+    if transformer_list not in ["all"]:
+        if any(x in prob_trans for x in trans):
+            # for loop, only way I saw to do this right now
+            seen = False
+            result = []
+            for item in trans:
+                if item in prob_trans:
+                    if not seen:
+                        seen = True
+                        result.append(item)
+                else:
                     result.append(item)
-            else:
-                result.append(item)
-        trans = result
-        keys = list(range(len(trans)))
-    else:
-        keys = list(range(num_trans))
-    # now get the parameters for the specified transformers
-    params = [get_transformer_params(x, method=params_method) for x in trans]
-    return {
-        "fillna": na_choice,
-        "transformations": dict(zip(keys, trans)),
-        "transformation_params": dict(zip(keys, params)),
-    }
+            trans = result
+            keys = list(range(len(trans)))
+        else:
+            keys = list(range(num_trans))
+        # now get the parameters for the specified transformers
+        params = [get_transformer_params(x, method=params_method) for x in trans]
+        return {
+            "fillna": na_choice,
+            "transformations": dict(zip(keys, trans)),
+            "transformation_params": dict(zip(keys, params)),
+        }
 
 
 def random_cleaners():

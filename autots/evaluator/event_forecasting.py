@@ -211,6 +211,7 @@ class EventRiskForecast(object):
             "verbose": 1,
             "n_jobs": "auto",
             "random_seed": 321,
+            "transformer_list": "no_expanding",
         },
         future_regressor_train=None,
         future_regressor_forecast=None,

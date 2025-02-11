@@ -101,6 +101,19 @@ class TestConstraint(unittest.TestCase):
                     "constraint_regularization": 1.0,
                     "bounds": True,
                 },
+                {  # use a log curve shaped by the historic min/max growth rate to limit
+                    "constraint_method": "historic_growth",
+                    "constraint_value": {'threshold': 2.0, 'window': 360},
+                    "constraint_direction": "upper",
+                    "constraint_regularization": 1.0,
+                    "bounds": True,
+                },
+                {  # like slope but steps
+                    'constraint_method': 'historic_diff',
+                    'constraint_direction': 'upper',
+                    'constraint_regularization': 1.0,
+                    'constraint_value': 1.0,
+                 },
             ]},
             "dampening": {
                 "constraints": [{
@@ -154,3 +167,5 @@ class TestConstraint(unittest.TestCase):
                     self.assertTrue(pred_max <= hist_max)
                 if key in ["last_value"]:
                     self.assertTrue(prediction.forecast.iloc[0, :].max() == df.iloc[-1, :].max())
+                # test for nulls
+                self.assertTrue(prediction.forecast.isnull().sum().sum() == 0)

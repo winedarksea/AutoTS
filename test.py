@@ -4,6 +4,7 @@ import json
 import timeit
 import os
 import platform
+import numpy as np
 import pandas as pd
 from autots.datasets import (  # noqa
     load_daily,
@@ -19,6 +20,7 @@ from autots.datasets import (  # noqa
 )
 from autots import AutoTS, create_regressor, model_forecast, __version__  # noqa
 from autots.models.base import plot_distributions
+from autots.evaluator.auto_model import generate_score
 import matplotlib.pyplot as plt
 
 print(f"AutoTS version: {__version__}")
@@ -28,8 +30,9 @@ save_template = True
 force_univariate = False  # long = False
 back_forecast = False
 graph = True
+run_param_impacts = False
 template_import_method = "addon"  # "only" "addon"
-models_to_validate = 0.25  # 0.99 to validate every tried (use with template import)
+models_to_validate = 0.22  # 0.99 to validate every tried (use with template import)
 
 # this is the template file imported:
 template_filename = "template_" + str(platform.node()) + ".csv"
@@ -42,6 +45,8 @@ long = False
 # df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
 # df = load_artificial(long=long, date_start="2018-01-01")
 df = load_daily(long=long)
+df_p2 = df.tail(forecast_length)
+df = df.iloc[:-forecast_length]
 # df.iloc[5, :] = np.nan
 interest_series = [
     'wiki_all',
@@ -62,13 +67,13 @@ if not long and interest_series[0] not in df.columns:
 prediction_interval = 0.9
 n_jobs = "auto"
 verbose = 2
-validation_method = "backwards"  # "similarity"
+validation_method = "backwards"  # "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 100
-generation_timeout = 5
-num_validations = 2  # "auto"
-initial_template = "Random"  # "General+Random" 
+generations = 10000
+generation_timeout = 20
+num_validations = 4  # "auto"
+initial_template = "General+Random"   # "Random"  # "General+Random" 
 if use_template:
     initial_training = not os.path.exists(template_filename)
     if initial_training:
@@ -79,50 +84,90 @@ if use_template:
 if force_univariate:
     df = df.iloc[:, 0]
 
-transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer", 'AlignLastDiff']
-transformer_max_depth = 4
+transformer_list = "no_expanding"  # "fast", "all", "superfast"
+# transformer_list = ["SeasonalDifference", 'MinMaxScaler', "AlignLastValue", "ClipOutliers", "QuantileTransformer", "LevelShiftTransformer", 'FIRFilter', 'UpscaleDownscaleTransformer']
+transformer_max_depth = 8
 models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
 # model_list = "fast"  # fast_parallel, all, fast
 # model_list = ["BallTreeMultivariateMotif", "WindowRegression", 'SeasonalityMotif', 'SeasonalNaive']
-# model_list = ['PreprocessingRegression', 'MultivariateRegression', 'DatepartRegression', 'WindowRegression']
-
-# only saving with superfast
-if model_list == "superfast" and save_template:
-    save_template = True
-else:
-    save_template = False
+# model_list = ['PreprocessingExperts', 'PreprocessingRegression']
+# model_list = ["PreprocessingExperts"]
+if "NeuralForecast" in model_list:
+    import os
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 preclean = None
 {
     "fillna": None,
-    "transformations": {"0": "LocalLinearTrend"},
+    "transformations": {"0": "RollingMeanTransformer"},
     "transformation_params": {
         "0": {
-            'rolling_window': 30,
-             'n_tails': 0.1,
-             'n_future': 0.2,
-             'method': 'mean',
-             'macro_micro': True
-         },
+            'window': 90,
+            'fixed': False,
+            'center': True,
+            'macro_micro': True,
+        },
     },
 }
+
+# pd.set_option('future.no_silent_downcasting', True)
 ensemble = [
     # "simple",
     # 'mlensemble',
     'horizontal-max',
     # "mosaic-window",
     # 'mosaic-crosshair',
+    "mosaic-weighted-0-10",
+    "mosaic-weighted-profile",
+    "mosaic-mae-profile-0-10",  # good
+    "mosaic-mae-profile-0-20",  # good
+    "mosaic-mae-crosshair-0-10",
+    "mosaic-mae-median-0-6",
+    "mosaic-mae-median-0-10",
+    "mosaic-mae-median-0-20",
+    "mosaic-mae-median-0-30",
+    "mosaic-mae-median-filtered-0-30",
+    "mosiac-mae-0-30",
+    "mosaic-weighted-median-0-15",
+    "mosaic-weighted-median-0-30",  # popular
+    "mosaic-mae-median-profile-0-10",
+    # "mosaic-weighted-median",  # not as good on eval loop
+    "mosaic-weighted-median-filtered",  # good
+    "mosaic-weighted-unpredictability_adjusted-filtered",
+    "mosaic-weighted-median-unpredictability_adjusted-filtered",
+    "mosaic-weighted-median-unpredictability_adjusted-crosshair_lite-filtered",
+    "mosaic-weighted-median-unpredictability_adjusted-crosshair_lite-filtered-horizontal",
+    "mosaic-mae-filtered-0-20",
+    # "mosaic-mae-unpredictability_adjusted",
+    "mosaic-mae-unpredictability_adjusted-0-horizontal",
+    "mosaic-weighted-unpredictability_adjusted-0-30",
+    "mosaic-spl-unpredictability_adjusted-0-30",
+    # "mosaic-weighted-unpredictability_adjusted-median",
+    "mosaic-mae-0-horizontal",
+    "mosaic-mae-median-0-horizontal",
+    "mosaic-mae-median-crosshair_lite-0-30",
+    "mosaic-mae-median-crosshair-0-30",
+    "mosaic-mae-median-profile-crosshair_lite-horizontal",  # best 11/15
+    "mosaic-mae-3-horizontal",
 ]  # "dist", "subsample", "mosaic-window", "horizontal"
+# ensemble = ["simple"]
 # ensemble = None
+
+# only saving with superfast
+if model_list == "superfast" and save_template and transformer_list in ["fast", "scalable", "all", "no_expanding"] and preclean is None and ensemble is not None:
+    save_template = True
+else:
+    save_template = False
+
 metric_weighting = {
     'smape_weighting': 5,
     'mae_weighting': 2,
     'rmse_weighting': 1,
-    'made_weighting': 1,
+    'made_weighting': 0.1,
     'mage_weighting': 0,
-    'mate_weighting': 1,
+    'mate_weighting': 0.005,
+    'matse_weighting': 0.01,
     'mle_weighting': 0,  # avoid underestimate
     'imle_weighting': 0,  # avoid overestimate
     'spl_weighting': 3,
@@ -132,20 +177,15 @@ metric_weighting = {
     'maxe_weighting': 0,
     'oda_weighting': 0,
     'mqae_weighting': 0,
+    'ewmae_weighting': 0.1,
     'uwmse_weighting': 1,
     'wasserstein_weighting': 0,
-    'dwd_weighting': 1,
-    'smoothness_weighting': -0.5,
+    'dwd_weighting': 0.3,
+    'smoothness_weighting': -0.1,
 }
 
 # metric_weighting = {'ewmae_weighting': 1}
-constraint = {
-    "constraint_method": "quantile",
-    "constraint_regularization": 0.9,
-    "upper_constraint": 0.9,
-    "lower_constraint": 0.1,
-    "bounds": True,
-}
+
 if not long:
     if isinstance(df, pd.Series):
         cols = [df.name]
@@ -158,21 +198,36 @@ if not long:
     lower_constraint = pd.DataFrame(0, index=forecast_index, columns=cols)
     # add in your dates you want as definitely 0
     upper_constraint.loc["2022-10-31"] = 0
-upper_constraint = 0
-lower_constraint = 0
-constraint = {
-    "constraint_method": "absolute",
-    "upper_constraint": upper_constraint,
-    "lower_constraint": lower_constraint,
-    "bounds": True,
-}
+
 constraint = {
     "constraint_method": "stdev_min",
+    "constraint_regularization": 0.9,
     "upper_constraint": 2.0,
     "lower_constraint": 2.0,
     "bounds": True,
 }
+constraint = {"constraints": [
+    {
+         "constraint_method": "dampening",
+         "constraint_value": 0.9,
+         "bounds": True,
+    },
+]}
 constraint = None
+
+def custom_metric(A, F, df_train=None, prediction_interval=None):
+    submission = F
+    objective = A
+    abs_err = np.nansum(np.abs(submission - objective))
+    err = np.nansum((submission - objective))
+    score = abs_err + abs(err)
+    epsilon = 1
+    big_sum = (
+        np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum()
+        + epsilon
+    )
+    score /= big_sum
+    return score
 
 model = AutoTS(
     forecast_length=forecast_length,
@@ -197,13 +252,16 @@ model = AutoTS(
     introduce_na=None,
     preclean=preclean,
     # prefill_na=0,
-    # subset=2,
+    subset=50,
     no_negatives=True,
     verbose=verbose,
     models_mode=models_mode,
     random_seed=random_seed,
     # current_model_file=f"current_model_{name}",
+    horizontal_ensemble_validation=True,
+    custom_metric=custom_metric,
 )
+model.traceback = True
 
 if not long:
     regr_train, regr_fcst = create_regressor(
@@ -236,17 +294,25 @@ else:
     regr_fcst = None
 
 # model = model.import_results('test.pickle')
+# model = model.import_results(temp_df)
 if use_template:
     if os.path.exists(template_filename):
         model = model.import_template(
             template_filename, method=template_import_method,
-            enforce_model_list=False, force_validation=True,
+            enforce_model_list=True, force_validation=True,
         )
-    file2 = "/Users/colincatlin/Downloads/test_import.csv"
-    if os.path.exists(file2):
-        model = model.import_template(
-            file2, method=template_import_method, enforce_model_list=False, force_validation=True,
-        )
+    elif isinstance(model_list, list) and (len(model_list) == 1):
+        file2 = f"/Users/colincatlin/Downloads/{model_list[0]}_reg.csv"
+        if os.path.exists(file2):
+            model = model.import_template(
+                file2, method=template_import_method, enforce_model_list=False, force_validation=True,
+            )
+    elif model_list == ['PreprocessingExperts', 'PreprocessingRegression']:
+        file2 = "/Users/colincatlin/Downloads/PreprocessingBoth.csv"
+        if os.path.exists(file2):
+            model = model.import_template(
+                file2, method=template_import_method, enforce_model_list=False, force_validation=True,
+            )
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -261,13 +327,28 @@ model = model.fit(
 )
 
 if save_template:
-    model.export_template(
-        template_filename,
-        models="best",
-        n=20,
-        max_per_model_class=5,
-        include_results=True,
-    )
+    if isinstance(model_list, list) and (len(model_list) == 1):
+        file2 = f"/Users/colincatlin/Downloads/{model_list[0]}_reg.csv"
+        model.export_template(
+            "/Users/colincatlin/Downloads/{model_list[0]}_reg.csv",
+            models="best", n=10, max_per_model_class=5, include_results=True
+        )
+    elif model_list == ['PreprocessingExperts', 'PreprocessingRegression']:
+        model.export_template(
+            "/Users/colincatlin/Downloads/PreprocessingBoth.csv",
+            models="best", n=15, max_per_model_class=5, include_results=True
+        )
+    else:
+        model.export_template(
+            template_filename,
+            models="best",
+            n=30,
+            max_per_model_class=5,
+            include_results=True,
+            focus_models=["SeasonalityMotif"],
+            min_metrics=['smape', 'mage', 'dwae', 'spl', 'wasserstein', 'dwd', 'rmse', 'ewmae', 'uwmse', 'mqae'],
+            max_metrics=['oda'],
+        )
     if False:
         model.export_template(
             "slowest_models_template.csv",
@@ -277,6 +358,8 @@ if save_template:
         )
 
 elapsed_for = timeit.default_timer() - start_time_for
+
+model.expand_horizontal()
 
 prediction = model.predict(
     future_regressor=regr_fcst, verbose=1, fail_on_forecast_nan=True
@@ -288,6 +371,14 @@ forecasts_df = prediction.forecast
 initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
+# Score Breakdown
+model.score_breakdown["sum"] = model.score_breakdown.sum(axis=1)
+val_with_score = model.score_breakdown.rename(columns=lambda x: x + "_score").merge(validation_results, left_index=True, right_on='ID')
+best_scores = model.score_breakdown[model.score_breakdown.index == model.best_model_id]
+which_greater = best_scores > (best_scores.median().median() * 20)
+if which_greater.sum().sum() > 0:
+    print(f"the following metrics may be out of balance: {best_scores.columns[which_greater.sum() > 0].tolist()}")
+
 if long:
     cols = model.df_wide_numeric.columns.tolist()
 
@@ -306,25 +397,66 @@ runtimes = initial_results[initial_results["Ensemble"] < 1].groupby("Model").agg
 print(runtimes["TotalRuntimeSeconds"].rename(columns={"mean": "slowest_avg_runtime", "max": "slowest_max_runtime"}).idxmax())
 print(runtimes['smape'].idxmin())
 
-### Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer
-failures = []
-successes = []
-for idx, row in initial_results.iterrows():
-    failed = not pd.isnull(row['Exceptions'])
-    transforms = list(json.loads(row['TransformationParameters']).get('transformations', {}).values())
-    if failed:
-        failures = failures + transforms
-    else:
-        successes = successes + transforms
-total = pd.concat([pd.Series(failures).value_counts().rename("failures").to_frame(),pd.Series(successes).value_counts().rename("successes")], axis=1).fillna(0)
-total['failure_rate'] = total['failures'] / (total['successes'] + total['failures'])
-total.sort_values("failure_rate", ascending=False)['failure_rate'].iloc[0:20].plot(kind='bar', title='Transformers by Failure Rate', color='forestgreen')
-plt.show()
+# minimizing metrics only
+# no weights present on metrics
+target_metric = "smape"
+new_weighting = {
+    str(target_metric) + '_weighting': 1,
+}
+temp_cols = ['ID', 'Model', 'ModelParameters', 'TransformationParameters', 'Ensemble', target_metric]
+new_mod = model._return_best_model(new_weighting, template_cols=temp_cols)
+new_mod_non = new_mod[1]
+new_mod = new_mod[0]
+if new_mod['Ensemble'].iloc[0] == 2:
+    min_pos = validation_results[validation_results['Ensemble'] == 2][target_metric].min()
+    min_pos_non = validation_results[(validation_results['Ensemble'] < 2) & (validation_results['Runs'] > model.num_validations)][target_metric].min()
+    chos_pos = new_mod[target_metric].iloc[0]
+    print(min_pos)
+    print(validation_results[validation_results['Ensemble'] == 2][target_metric].max())
+    print(chos_pos)
+    print(chos_pos <= min_pos)
+    print(np.allclose(chos_pos, min_pos))
+    print(np.allclose(new_mod_non[target_metric].iloc[0], min_pos_non))
+    print(json.loads(new_mod['ModelParameters'].iloc[0])['model_name'])
+    print(json.loads(new_mod['ModelParameters'].iloc[0])['model_metric'])
+
+# test generating a new score
+temp = validation_results[validation_results['Runs'] >= num_validations + 1].copy()
+new_weighting = {
+    'smape_weighting': 4,
+    'mae_weighting': 1,
+    'mage_weighting': 0.1,
+    'spl_weighting': 2,
+    'containment_weighting': 0.1,
+    'runtime_weighting': 0.001,
+    'oda_weighting': 0.1,
+    'mqae_weighting': 0.1,
+    'uwmse_weighting': 1,
+    'wasserstein_weighting': 0.01,
+    'dwd_weighting': 1,
+}
+temp['Score'] = generate_score(temp, metric_weighting=new_weighting)
+new_mod = temp.sort_values('Score').iloc[0]
+print(json.loads(new_mod['ModelParameters'])['model_name'])
+print(json.loads(new_mod['ModelParameters'])['model_metric'])
+print(new_mod['smape'])
 
 if graph:
+    ### Failure Rate per Transformer type (ignoring ensembles), failure may be due to other model or transformer
+    model.plot_failure_rate()
+    plt.show()
+
+    model.plot_failure_rate(target="models")
+    plt.show()
+    # yes, there are duplicates for the same thing...
+    model.plot_transformer_failure_rate()
+    plt.show()
+    model.plot_model_failure_rate()
+    plt.show()
+
     start_date = "auto"
     # issues with long and preclean vary 'raw' df choice
-    use_df = df if not long else model.df_wide_numeric
+    use_df = pd.concat([df, df_p2]) if not long else model.df_wide_numeric
     prediction.plot(
         use_df,
         series=cols[0],
@@ -355,6 +487,10 @@ if graph:
     plt.show()
 
     if model.best_model_ensemble == 2:
+        most_common_models = model.get_top_n_counts(model.best_model_params['series'], n=5)
+        print(most_common_models)
+        model.get_params_from_id(most_common_models[0][0])
+
         model.plot_horizontal_model_count()
         plt.show()
 
@@ -377,17 +513,35 @@ if graph:
             mosaic_df = model.mosaic_to_df()
             print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
+            model.plot_mosaic()  # max_rows=df.shape[1])
+
         try:
             prediction.plot_ensemble_runtimes()
             plt.show()
         except Exception as e:
             print(repr(e))
+    else:
+        model.plot_chosen_transformer()
 
     plt.show()
     if back_forecast:
         model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
+    # plot a comparison of validation forecasts of several best models by different criteria
+    compare_mods = [model.best_model_id, model.best_model_non_horizontal['ID'].iloc[0]]
+    spl_min = validation_results[validation_results['Runs'] >= (model.num_validations + 1)].nsmallest(1, columns='spl').iloc[0]['ID']
+    compare_mods.append(spl_min)
+    mage_min = validation_results[validation_results['Runs'] >= (model.num_validations + 1)].nsmallest(1, columns='mage').iloc[0]['ID']
+    compare_mods.append(spl_min)
+    ax = model.plot_validations(use_df, models=compare_mods, include_bounds=False)
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
     ax = model.plot_validations(use_df, subset='Worst', compare_horizontal=True, include_bounds=False)
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
+    ax = model.plot_validations(use_df, compare_horizontal=True, include_bounds=False)
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
@@ -413,6 +567,23 @@ if graph:
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
+    ax = model.plot_validations(use_df, subset='agg')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
+    model.plot_transformer_by_class()
+    plt.show()
+
+    model.plot_transformer_by_class(plot_group="Model")
+    plt.show()
+
+    model.plot_unpredictability()
+    # plt.savefig("uncertainty_plot.png", dpi=300)
+    plt.show()
+    for column in df.sample(5, axis=1).columns:
+        model.plot_unpredictability(series=column)
+        plt.show()
+
     val_df = model.retrieve_validation_forecasts()
 
     try:
@@ -424,10 +595,13 @@ if graph:
         plot_distributions(f_res, group_col='Model', y_col='TotalRuntimeSeconds', xlim=0, xlim_right=0.98)
         plt.show()
         # model.metric_corr.loc['wasserstein'].sort_values()
+
+        model.plot_series_corr()
+        plt.show()
     except Exception as e:
         print(repr(e))
 
-    if True:
+    if run_param_impacts:
         param_impacts_runtime = model.diagnose_params(target="runtime")
         param_impacts_mae = model.diagnose_params(target="mae")
         param_impacts_exception = model.diagnose_params(target="exception")
@@ -446,6 +620,7 @@ print("Transformers used: " + extract_single_transformer(
 
 if not [x for x in interest_series if x in model.df_wide_numeric.columns.tolist()]:
     interest_series = model.df_wide_numeric.columns.tolist()[0:5]
+
 if model.best_model["Ensemble"].iloc[0] == 2:
     interest_models = []
     for x, y in model.best_model_params['series'].items():
@@ -463,13 +638,14 @@ if model.best_model["Ensemble"].iloc[0] == 2:
                 )
     interest_models = pd.Series(interest_models).value_counts().head(10)
     print(interest_models)
-    print(
-        [
-            y
-            for x, y in model.best_model_params['models'].items()
-            if x in interest_models.index.to_list()
-        ]
-    )
+    if False:
+        print(
+            [
+                y
+                for x, y in model.best_model_params['models'].items()
+                if x in interest_models.index.to_list()
+            ]
+        )
 else:
     for x in interest_series:
         if graph:
@@ -481,35 +657,11 @@ else:
                 figsize=(16,12),
             )
 
+# new_pred = model._predict(model_id="075c17a03f5b4c5f79eca944629bf944")
+# new_pred.plot_grid(use_df)
+
 print("test run complete")
 
-"""
-forecasts = model_forecast(
-    model_name="UnivariateMotif",
-    model_param_dict={'window': 10, "pointed_method":"weighted_mean", "distance_metric": "cosine", "k": 10, "return_result_windows": True},
-    model_transform_dict={
-        'fillna': 'rolling_mean',
-        'transformations': {'0': 'MinMaxScaler', "1": "PCA"},
-        'transformation_params': {'0': {}, '1': {"whiten": True}}
-    },
-    df_train=model.df_wide_numeric,
-    forecast_length=forecast_length,
-    frequency='infer',
-    prediction_interval=prediction_interval,
-    no_negatives=False,
-    # future_regressor_train=future_regressor_train2d,
-    # future_regressor_forecast=future_regressor_forecast2d,
-    random_seed=321,
-    verbose=1,
-    n_jobs="auto",
-    return_model=True,
-)
-result = forecasts.forecast.head(5)
-print(result)
-print(forecasts.upper_forecast.head(5))
-print(forecasts.lower_forecast.head(5))
-result_windows = forecasts.model.result_windows
-"""
 
 """
 # default save location of files is apparently root
@@ -526,6 +678,9 @@ systemctl kill background_cmd_service
 scp colin@192.168.1.122:/home/colin/AutoTS/general_template_colin-1135.csv ./Documents/AutoTS
 scp colin@192.168.1.122:/general_template_colin-1135.csv ./Documents/AutoTS
 
+screen -ls
+screen -S python csv_example_dap.py
+screen -XS 5900 quit
 
 PACKAGE RELEASE
 # update version in setup.py, /docs/conf.py, /autots/_init__.py
@@ -537,6 +692,7 @@ export PYTHONPATH=/users/colincatlin/Documents/AutoTS:$PYTHONPATH
 
 python -m unittest discover ./tests
 python -m unittest tests.test_autots.ModelTest.test_models
+python -m unittest tests.test_autots.ModelTest.test_transforms
 python -m unittest tests.test_impute.TestImpute.test_impute
 
 pytest tests/ --durations=0
@@ -550,7 +706,8 @@ mistune==0.8.4 markupsafe==2.0.1 jinja2==2.11.3
 https://github.com/sphinx-doc/sphinx/issues/3382
 # pip install sphinx==2.4.4
 # m2r does not yet work on sphinx 3.0
-# pip install m2r2 (replaces old m2r)
+# pip install m2r2 (replaces old m2r and works on new sphinx)
+# pip install sphinxcontrib-googleanalytics
 cd <project dir>
 # delete docs/source and /build (not tutorial or intro.rst)
 sphinx-apidoc -f -o docs/source autots

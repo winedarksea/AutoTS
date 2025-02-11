@@ -335,7 +335,8 @@ def rolling_x_regressor_regressor(
         X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -947,9 +948,14 @@ def generate_regressor_params(
     method="default",
 ):
     """Generate new parameters for input to regressor."""
-    # force neural networks for testing purposes
     if method in ["default", 'random', 'fast']:
-        pass
+        if model_dict is None:
+            if method == "fast":
+                model_dict = datepart_model_dict
+            else:
+                model_dict = sklearn_model_dict
+        else:
+            pass
     elif method == "neuralnets":
         model_dict = {
             'KerasRNN': 0.05,
@@ -3307,6 +3313,7 @@ class MultivariateRegression(ModelObject):
         cointegration_lag: int = 1,
         series_hash: bool = False,
         frac_slice: float = None,
+        transformation_dict: dict = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -3353,6 +3360,7 @@ class MultivariateRegression(ModelObject):
         self.cointegration_lag = cointegration_lag
         self.series_hash = series_hash
         self.frac_slice = frac_slice
+        self.transformation_dict = transformation_dict
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -3418,6 +3426,21 @@ class MultivariateRegression(ModelObject):
                     self.regressor_per_series_train = regressor_per_series
                 if static_regressor is not None:
                     self.static_regressor = static_regressor
+            # setup preprocessor if used
+            if self.transformation_dict:
+                from autots.tools.transform import (
+                    GeneralTransformer,
+                )  # avoid circular imports
+
+                self.transformer_object = GeneralTransformer(
+                    n_jobs=self.n_jobs,
+                    holiday_country=self.holiday_country,
+                    verbose=self.verbose,
+                    random_seed=self.random_seed,
+                    forecast_length=1,  # note this
+                    **self.transformation_dict,
+                )
+                df = self.transformer_object.fit_transform(df)
             # define X and Y
             if self.frac_slice is not None:
                 slice_size = int(df.shape[0] * self.frac_slice)
@@ -3566,6 +3589,7 @@ class MultivariateRegression(ModelObject):
 
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
+
             self.model.fit(self.X.to_numpy(), self.Y)
 
             if self.probabilistic and not self.multioutputgpr:
@@ -3639,10 +3663,14 @@ class MultivariateRegression(ModelObject):
             cur_regr = None
             if self.regression_type is not None:
                 cur_regr = base_regr.reindex(current_x.index)
+            if self.transformation_dict:
+                pred_x = self.transformer_object.fit_transform(current_x)
+            else:
+                pred_x = current_x
             self.X_pred = pd.concat(
                 [
                     rolling_x_regressor_regressor(
-                        current_x[x_col].to_frame(),
+                        pred_x[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
                         std_rolling_periods=self.std_rolling_periods,
@@ -3689,6 +3717,9 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
+            if self.transformation_dict:
+                # should only ever be 1 step
+                pred_clean = self.transformer_object.inverse_transform(pred_clean)
             forecast.append(pred_clean)
             # a lot slower
             if self.probabilistic:
@@ -3703,8 +3734,6 @@ class MultivariateRegression(ModelObject):
                     pred_lower = pd.DataFrame(
                         med - stdev, index=[index[fcst_step]], columns=current_x.columns
                     )
-                    upper_forecast = pd.concat([upper_forecast, pred_upper])
-                    lower_forecast = pd.concat([lower_forecast, pred_lower])
                 else:
                     rfPred_upper = self.model_upper.predict(c_x_pred)
                     pred_upper = pd.DataFrame(
@@ -3718,8 +3747,11 @@ class MultivariateRegression(ModelObject):
                         index=current_x.columns,
                         columns=[index[fcst_step]],
                     ).transpose()
-                    upper_forecast = pd.concat([upper_forecast, pred_upper])
-                    lower_forecast = pd.concat([lower_forecast, pred_lower])
+                if self.transformation_dict:
+                    pred_upper = self.transformer_object.inverse_transform(pred_upper)
+                    pred_lower = self.transformer_object.inverse_transform(pred_lower)
+                upper_forecast = pd.concat([upper_forecast, pred_upper])
+                lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
@@ -3843,6 +3875,20 @@ class MultivariateRegression(ModelObject):
             coint_choice = None
         if coint_choice is not None:
             coint_lag = random.choice([1, 2, 7])
+        transform_choice = random.choices([True, None], [0.5, 0.5])[0]
+        if transform_choice:
+            from autots.tools.transform import (
+                GeneralTransformer,
+            )  # avoid circular imports
+
+            if method == "deep":
+                transformer_list = "scalable"
+            else:
+                transformer_list = "postprocessing"
+            transform_choice = GeneralTransformer.get_new_params(
+                transformer_list, transformer_max_depth=1, allow_none=False
+            )
+
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -3871,6 +3917,7 @@ class MultivariateRegression(ModelObject):
             "frac_slice": random.choices(
                 [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
             )[0],
+            "transformation_dict": transform_choice,
         }
         return parameter_dict
 
@@ -3902,6 +3949,7 @@ class MultivariateRegression(ModelObject):
             "cointegration_lag": self.cointegration_lag,
             "series_hash": self.series_hash,
             "frac_slice": self.frac_slice,
+            "transformation_dict": self.transformation_dict,
         }
         return parameter_dict
 
@@ -3937,7 +3985,9 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 
@@ -4163,6 +4213,11 @@ class PreprocessingRegression(ModelObject):
                     "regression_type='User' but no future_regressor passed"
                 )
         from autots.tools.transform import GeneralTransformer  # avoid circular imports
+
+        if self.transformation_dict is None:
+            raise ValueError(
+                "transformation_dict cannot be None with PreprocessingRegression"
+            )
 
         self.transformer_object = GeneralTransformer(
             n_jobs=self.n_jobs,
@@ -4482,9 +4537,11 @@ class PreprocessingRegression(ModelObject):
         wnd_sz_choice = random.choice([5, 10, 20, seasonal_int()])
         if method != "deep":
             wnd_sz_choice = wnd_sz_choice if wnd_sz_choice < 91 else 90
-        model_choice = generate_regressor_params(
-            model_dict=sklearn_model_dict, method=method
-        )
+        if method == "fast":
+            model_dict = datepart_model_dict
+        else:
+            model_dict = sklearn_model_dict
+        model_choice = generate_regressor_params(model_dict=model_dict, method=method)
         if "regressor" in method:
             regression_type_choice = "User"
         else:

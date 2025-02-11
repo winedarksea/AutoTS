@@ -11,7 +11,7 @@ Installation
    pip install autots
 
 
-Requirements: Python 3.6+, numpy, pandas, statsmodels, and scikit-learn.
+Requirements: Python 3.9+, numpy, pandas, statsmodels, and scikit-learn.
 
 Getting Started
 ===================
