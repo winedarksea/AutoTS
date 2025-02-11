@@ -2634,6 +2634,7 @@ def trans_dict_recomb(dict_array):
     empty_trans = (None, {})
     a, b = random.sample(dict_array, 2)
     if a is None:
+        print("REALLY?!?")
         a = {
             "fillna": "ffill",
             "transformations": {},

@@ -1975,6 +1975,8 @@ class AutoTS(object):
         additional_msg="",
     ):
         """Get results for one batch of models."""
+        # this fillna is the result of a as-of-yet untraced bug producing "null" transformation params
+        template["TransformationParameters"] = template["TransformationParameters"].replace("null", "{}").fillna('{}')
         model_count = self.model_count if model_count is None else model_count
         template_result = TemplateWizard(
             template,
