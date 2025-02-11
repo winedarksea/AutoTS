@@ -827,6 +827,7 @@ class ModelPrediction(ModelObject):
         self.current_model_file = current_model_file
         self.model_count = model_count
         self.force_gc = force_gc
+        self.fore_len_increase = False
         # handle still in JSON form
         if isinstance(transformation_dict, str):
             if transformation_dict == "":
@@ -864,7 +865,8 @@ class ModelPrediction(ModelObject):
             for x, y in transformations.items():
                 if y == "UpscaleDownscaleTransformer":
                     if params[x].get("mode") == "upscale":
-                        self.forecast_length_needed *= (params[x]["factor"] + 1)
+                        self.fore_len_increase = params[x]["factor"] + 1
+                        self.forecast_length_needed *= self.fore_len_increase
         self.transformer_object = GeneralTransformer(
             **use_trans_params,
             n_jobs=self.n_jobs,
@@ -934,6 +936,8 @@ class ModelPrediction(ModelObject):
     def predict(self, forecast_length=None, future_regressor=None):
         if forecast_length is None:
             forecast_length = self.forecast_length_needed
+        elif self.fore_len_increase:
+            forecast_length *= self.fore_len_increase
         if not self._fit_complete:
             raise ValueError("Model not yet fit.")
         df_forecast = self.model.predict(
@@ -964,7 +968,7 @@ class ModelPrediction(ModelObject):
         )
 
         # CHECK Forecasts are proper length!
-        if df_forecast.forecast.shape[0] != self.forecast_length:
+        if df_forecast.forecast.shape[0] < self.forecast_length:
             raise ValueError(
                 f"Model {self.model_str} returned improper forecast_length. Returned: {df_forecast.forecast.shape[0]} and requested: {self.forecast_length}"
             )

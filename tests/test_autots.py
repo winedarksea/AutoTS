@@ -833,7 +833,7 @@ class ModelTest(unittest.TestCase):
             "ThetaTransformer",  # new in 0.6.16
             "ChangepointDetrend",  # new in 0.6.16
             "MeanPercentSplitter",  # new in 0.6.16
-            # "UpscaleDownscaleTransformer",  # new in 0.6.18
+            "UpscaleDownscaleTransformer",  # new in 0.6.18
         ]
 
         timings = {}
@@ -862,10 +862,21 @@ class ModelTest(unittest.TestCase):
 
         for x in transforms:
             print(x)
-            param = {} if x not in ['QuantileTransformer'] else {"n_quantiles": 100}
+            forecast_length = 5
+            if x in['QuantileTransformer']:
+                param = {"n_quantiles": 100}
+            elif x in ["UpscaleDownscaleTransformer"]:
+                param = {
+                    'mode': 'upscale',
+                    'factor': 3,
+                    'down_method': 'decimate',
+                    'fill_method': 'pchip',
+                }
+            else:
+                param = {}
             start_time = timeit.default_timer()
             model = ModelPrediction(
-                forecast_length=5,
+                forecast_length=forecast_length,
                 transformation_dict={
                     "fillna": "ffill",
                     "transformations": {"0": x},
@@ -882,7 +893,7 @@ class ModelTest(unittest.TestCase):
                 return_model=True,
             )
             model = model.fit(df)
-            df_forecast = model.predict(forecast_length=5)
+            df_forecast = model.predict(forecast_length=forecast_length)
             forecasts2[x] = df_forecast.forecast.round(2)
             upper_forecasts2[x] = df_forecast.upper_forecast.round(2)
             lower_forecasts2[x] = df_forecast.lower_forecast.round(2)

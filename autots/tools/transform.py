@@ -1878,7 +1878,7 @@ class Slice(EmptyTransformer):
             choice = random.choices([100, 0.5, 0.2], [0.3, 0.5, 0.2], k=1)[0]
         else:
             choice = random.choices(
-                [100, 0.5, 0.8, 0.9, 0.3], [0.2, 0.2, 0.2, 0.2, 0.2], k=1
+                [100, 0.5, 0.8, 0.9, 0.3, "3forecastlength"], [0.2, 0.2, 0.2, 0.2, 0.2, 0.2], k=1
             )[0]
         return {
             "method": choice,
@@ -6294,7 +6294,7 @@ class GeneralTransformer(object):
         n_jobs: int = 1,
         holiday_country: list = None,
         verbose: int = 0,
-        forecast_length: int = 30,
+        forecast_length: int = 90,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -6377,7 +6377,7 @@ class GeneralTransformer(object):
         random_seed: int = 2020,
         n_jobs: int = 1,
         holiday_country: list = None,
-        forecast_length: int = 30,
+        forecast_length: int = 90,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -6406,8 +6406,8 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
-        elif transformation in ["Constraint", "MeanPercentSplitter"]:
-            return Constraint(forecast_length=forecast_length, **param)
+        elif transformation in ["Constraint", "MeanPercentSplitter", "Slice"]:
+            return have_params[transformation](forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
