@@ -7095,13 +7095,15 @@ def RandomTransform(
             keys = list(range(len(trans)))
         else:
             keys = list(range(num_trans))
-        # now get the parameters for the specified transformers
-        params = [get_transformer_params(x, method=params_method) for x in trans]
-        return {
-            "fillna": na_choice,
-            "transformations": dict(zip(keys, trans)),
-            "transformation_params": dict(zip(keys, params)),
-        }
+    else:
+        keys = list(range(num_trans))
+    # now get the parameters for the specified transformers
+    params = [get_transformer_params(x, method=params_method) for x in trans]
+    return {
+        "fillna": na_choice,
+        "transformations": dict(zip(keys, trans)),
+        "transformation_params": dict(zip(keys, params)),
+    }
 
 
 def random_cleaners():

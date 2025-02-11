@@ -44,7 +44,7 @@ class AutoTSTest(unittest.TestCase):
             'DatepartRegression',
         ]
 
-        transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
+        transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
         transformer_max_depth = 3
 
         metric_weighting = {

@@ -2633,19 +2633,7 @@ def trans_dict_recomb(dict_array):
     """Recombine two transformation param dictionaries from array of dicts."""
     empty_trans = (None, {})
     a, b = random.sample(dict_array, 2)
-    if a is None:
-        print("REALLY?!?")
-        a = {
-            "fillna": "ffill",
-            "transformations": {},
-            "transformation_params": {},
-        }
-    if b is None:
-        b = {
-            "fillna": "ffill",
-            "transformations": {},
-            "transformation_params": {},
-        }
+
     na_choice = random.sample([a, b], 1)[0].get('fillna', None)
 
     a_result = [
