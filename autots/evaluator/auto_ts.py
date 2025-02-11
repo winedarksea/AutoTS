@@ -439,9 +439,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[
-                    index, 'TransformationParameters'
-                ] = json.dumps(full_params)
+                self.initial_template.loc[index, 'TransformationParameters'] = (
+                    json.dumps(full_params)
+                )
 
         self.regressor_used = False
         self.subset_flag = False
@@ -1976,7 +1976,9 @@ class AutoTS(object):
     ):
         """Get results for one batch of models."""
         # this fillna is the result of a as-of-yet untraced bug producing "null" transformation params
-        template["TransformationParameters"] = template["TransformationParameters"].replace("null", "{}").fillna('{}')
+        template["TransformationParameters"] = (
+            template["TransformationParameters"].replace("null", "{}").fillna('{}')
+        )
         model_count = self.model_count if model_count is None else model_count
         template_result = TemplateWizard(
             template,
@@ -2016,10 +2018,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results[
-                'TotalRuntime'
-            ] = template_result.model_results['TotalRuntime'].fillna(
-                pd.Timedelta(seconds=60)
+            template_result.model_results['TotalRuntime'] = (
+                template_result.model_results['TotalRuntime'].fillna(
+                    pd.Timedelta(seconds=60)
+                )
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -2145,9 +2147,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[
-                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
-                ] = np.nan
+                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
+                    np.nan
+                )
 
             # run validation template on current slice
             result = self._run_template(
@@ -4814,9 +4816,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y[
-                        'Model'
-                    ] = x  # might need to remove this and do analysis independently for each
+                    y['Model'] = (
+                        x  # might need to remove this and do analysis independently for each
+                    )
                     res.append(
                         pd.DataFrame(
                             {
