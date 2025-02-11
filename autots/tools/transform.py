@@ -937,7 +937,7 @@ class RollingMeanTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        bool_c = random.choices([True, False], [0.9, 0.1])[0]
+        bool_c = random.choices([True, False], [0.8, 0.2])[0]
         center = random.choices([True, False], [0.5, 0.5])[0]
         macro_micro = random.choices([True, False], [0.2, 0.8])[0]
         if macro_micro:
@@ -960,15 +960,16 @@ class RollingMeanTransformer(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.shape = df.shape
-        self.last_values = df.tail(self.window).ffill().bfill()
-        self.first_values = df.head(self.window).ffill().bfill()
+        if not self.macro_micro:
+            self.last_values = df.tail(self.window).ffill().bfill()
+            self.first_values = df.head(self.window).ffill().bfill()
 
-        df = (
-            df.tail(self.window + 1)
-            .rolling(window=self.window, min_periods=1, center=self.center)
-            .mean()
-        )
-        self.last_rolling = df.tail(1)
+        # df = (
+        #     df.tail(self.window + 1)
+        #     .rolling(window=self.window, min_periods=1, center=self.center)
+        #     .mean()
+        # )
+        # self.last_rolling = df.tail(1)
         return self
 
     def transform(self, df):
@@ -982,6 +983,7 @@ class RollingMeanTransformer(EmptyTransformer):
             micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
             return pd.concat([macro, micro], axis=1)
         else:
+            self.last_rolling = macro.tail(self.window)
             return macro
 
     def fit_transform(self, df):
@@ -1014,7 +1016,7 @@ class RollingMeanTransformer(EmptyTransformer):
             window = self.window
             if trans_method == "original":
                 staged = self.first_values
-                diffed = ((df.astype(float) - df.shift(1).astype(float)) * window).tail(
+                diffed = (df.astype(float).diff() * window).tail(
                     len(df.index) - window
                 )
                 temp_cols = diffed.columns
@@ -1029,13 +1031,16 @@ class RollingMeanTransformer(EmptyTransformer):
                     temp_row.index = pd.DatetimeIndex([temp_index])
                     staged = pd.concat([staged, temp_row], axis=0)
                 return staged
-            # current_inversed = current * window - cumsum(window-1 to previous)
+            # a rolling mean current diff value is the difference between the tail of the window and the incoming value
             elif trans_method == "forecast":
+                tail_len = df.shape[0]
                 staged = self.last_values
                 # these are all rolling values at first (forecast rolling and historic)
                 df = pd.concat([self.last_rolling, df], axis=0).astype(float)
-                diffed = (df - df.shift(1)) * window
-                diffed = diffed.tail(len(diffed.index) - 1)
+                diffed = df.diff()  # * window
+                # diffed = diffed.tail(len(diffed.index) - 1)
+                diffed = diffed.tail(tail_len)
+                # self.diffed = diffed
                 temp_cols = diffed.columns
                 for n in range(len(diffed.index)):
                     temp_index = diffed.index[n]
@@ -1047,7 +1052,7 @@ class RollingMeanTransformer(EmptyTransformer):
                     )
                     temp_row.index = pd.DatetimeIndex([temp_index])
                     staged = pd.concat([staged, temp_row], axis=0)
-                return staged.tail(len(diffed.index))
+                return staged.tail(tail_len)
 
 
 class SeasonalDifference(EmptyTransformer):
@@ -1625,7 +1630,7 @@ class CumSumTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.last_values = df.tail(1)
+        # self.last_values = df.tail(1)
         self.first_values = df.head(1)
         return self
 
