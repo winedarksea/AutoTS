@@ -205,7 +205,7 @@ class AutoTS(object):
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
-        num_validations: str = "auto",
+        num_validations: int = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
         validation_method: str = 'backwards',
