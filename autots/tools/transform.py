@@ -5841,6 +5841,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         factor=3,
         down_method='decimate',
         fill_method='linear',
+        forecast_length=None,
         **kwargs,
     ):
         super().__init__(name="UpscaleDownscaleTransformer")
@@ -5852,6 +5853,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         self.factor = factor
         self.down_method = down_method
         self.fill_method = fill_method
+        self.forecast_length = forecast_length
 
     def fit(self, df):
         """
@@ -5934,7 +5936,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             self.transformed_index = df_down.index
             return df_down
 
-    def inverse_transform(self, df):
+    def inverse_transform(self, df, trans_method="forecast"):
         """
         Inverse transform the data back to the original frequency.
 
@@ -5971,6 +5973,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
                 start=new_start, end=df.index[-1], freq=self.orig_delta
             )
         else:
+            trans_method = "original"
             new_index = self.original_index
 
         if self.mode == 'upscale':
@@ -5983,6 +5986,8 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             # For downscale mode, upsample the low-resolution data to the new index and fill gaps.
             df_up = df.reindex(new_index)
             df_up_filled = FillNA(df_up, method=self.fill_method)
+            if self.forecast_length is not None and trans_method != "original":
+                df_up_filled = df_up_filled.head(self.forecast_length)
             return df_up_filled
 
     def _create_upscaled_index(self, original_index, new_delta):
@@ -6420,7 +6425,7 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
-        elif transformation in ["Constraint", "MeanPercentSplitter", "Slice"]:
+        elif transformation in ["Constraint", "MeanPercentSplitter", "Slice", "UpscaleDownscaleTransformer"]:
             return have_params[transformation](forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":

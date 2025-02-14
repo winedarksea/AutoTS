@@ -225,7 +225,7 @@ class FBProphet(ModelObject):
                     m.add_country_holidays(country_name=args['holiday_country'])
             else:
                 raise ValueError("`holiday` arg for Prophet not recognized")
-            if args['regression_type'] == 'User':
+            if args['regression_type'] in ['User', 'user']:
                 current_series = pd.concat(
                     [current_series, args['regressor_train']], axis=1
                 )
@@ -235,7 +235,7 @@ class FBProphet(ModelObject):
             future = m.make_future_dataframe(
                 periods=forecast_length, include_history=False
             )
-            if args['regression_type'] == 'User':
+            if args['regression_type'] in ['User', 'user']:
                 if future_regressor.ndim > 1:
                     # a = args['dimensionality_reducer'].transform(future_regressor)
                     if future_regressor.shape[1] > 1:
