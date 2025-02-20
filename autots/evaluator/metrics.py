@@ -706,6 +706,7 @@ def full_metric_evaluation(
     if custom_metric is not None:
         score = custom_metric(A, F, df_train, prediction_interval)
     else:
+        # when no custom metric function is provided, just output zero
         score = np.zeros_like(mate)
 
     # note a number of these are created from my own imagination (winedarksea)

@@ -6046,7 +6046,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         """
         params = {
             "mode": random.choice(["upscale", "downscale"]),
-            "factor": random.choice([1, 2, 3, 4]),
+            "factor": random.choice([1, 2, 3, 4, 6]),
             "down_method": random.choice(["decimate", "mean"]),
             "fill_method": random.choice(["linear", "cubic", "pchip", "akima"]),
         }
