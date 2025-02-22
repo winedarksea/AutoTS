@@ -2442,6 +2442,7 @@ class AutoTS(object):
         min_metrics: list = ['smape', 'spl', 'wasserstein', 'mle', 'imle', 'ewmae'],
         max_metrics: list = None,
         focus_models: list = None,
+        include_ensemble: bool = True,
     ):
         """Export top results as a reusable template.
 
@@ -2457,6 +2458,7 @@ class AutoTS(object):
             min_metrics (list): if not None and models=='best', include the lowest for this metric, a way to include even if not a major part of metric weighting as an addon
             max_metrics (list): for metrics to take the max model for
             focus_models (list): also pull the best score/min/max metrics as per just this model
+            include_ensemble (bool): if False, exclude Ensembles (ignored with "all" models)
         """
         if models == 'all':
             export_template = self.initial_results.model_results[self.template_cols_id]
@@ -2472,6 +2474,8 @@ class AutoTS(object):
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
                 ]
+                if not include_ensemble:
+                    export_template = export_template[export_template["Ensemble"] == 0]
                 # clean up any bad data (hopefully there is none anyway...)
                 export_template = export_template[
                     (~export_template['ModelParameters'].isnull())
@@ -2557,9 +2561,12 @@ class AutoTS(object):
                 if not include_results:
                     export_template = export_template[self.template_cols_id]
         elif models == "slowest":
+            export_template = self.initial_results.model_results
+            if not include_ensemble:
+                export_template = export_template[export_template["Ensemble"] == 0]
             return self.save_template(
                 filename,
-                self.initial_results.model_results.nlargest(
+                export_template.nlargest(
                     n, columns=['TotalRuntime']
                 ),
             )
