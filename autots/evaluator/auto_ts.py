@@ -1449,18 +1449,21 @@ class AutoTS(object):
                     ensemble=self.ensemble,
                     score_per_series=self.score_per_series,
                 )
-                self._run_template(
-                    ensemble_templates,
-                    df_train,
-                    df_test,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_test=future_regressor_test,
-                    current_weights=current_weights,
-                    validation_round=0,
-                    max_generations="Ensembles",
-                    current_generation=(current_generation + 1),
-                    result_file=result_file,
-                )
+                if not ensemble_templates.empty:
+                    self._run_template(
+                        self.ensemble_templates,
+                        df_train,
+                        df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0,
+                        max_generations="Ensembles",
+                        current_generation=(current_generation + 1),
+                        result_file=result_file,
+                    )
+                elif "simple" in self.ensemble:
+                    print("Simple ensemble missing, error unclear")
             except Exception as e:
                 print(
                     f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
@@ -1506,25 +1509,26 @@ class AutoTS(object):
                         score_per_series=self.score_per_series,
                     )
                     self.ensemble_templates2 = ensemble_templates
-                    self._run_template(
-                        ensemble_templates,
-                        df_train,
-                        df_test,
-                        future_regressor_train=future_regressor_train,
-                        future_regressor_test=future_regressor_test,
-                        current_weights=current_weights,
-                        validation_round=0,
-                        max_generations="Ensembles",
-                        current_generation=(current_generation + 2),
-                        result_file=result_file,
-                    )
-                    self._run_validations(
-                        df_wide_numeric=self.df_wide_numeric,
-                        num_validations=self.num_validations,
-                        validation_template=ensemble_templates,
-                        future_regressor=self.future_regressor_train,
-                        first_validation=False,
-                    )
+                    if not ensemble_templates.empty:
+                        self._run_template(
+                            ensemble_templates,
+                            df_train,
+                            df_test,
+                            future_regressor_train=future_regressor_train,
+                            future_regressor_test=future_regressor_test,
+                            current_weights=current_weights,
+                            validation_round=0,
+                            max_generations="Ensembles",
+                            current_generation=(current_generation + 2),
+                            result_file=result_file,
+                        )
+                        self._run_validations(
+                            df_wide_numeric=self.df_wide_numeric,
+                            num_validations=self.num_validations,
+                            validation_template=ensemble_templates,
+                            future_regressor=self.future_regressor_train,
+                            first_validation=False,
+                        )
                 except Exception as e:
                     print(
                         f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
