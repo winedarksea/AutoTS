@@ -986,7 +986,7 @@ def _DMD(
         # Calculate captured energy for each singular value
         captured_energy = np.cumsum(s**2) / total_energy
         r = np.searchsorted(captured_energy, ecr_threshold)
-        print(f"ECR rank is {r}")
+        # print(f"ECR rank is {r}")
     elif r > 0 and r < 1:
         r = int(data.shape[0] * r)
         # print(f"Rational rank is {r}")
