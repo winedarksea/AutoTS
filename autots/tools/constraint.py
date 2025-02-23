@@ -165,8 +165,8 @@ def constraint_new_params(method: str = "fast"):
         )[0]
     elif method_choice in ["dampening"]:
         params["constraint_value"] = random.choices(
-            [0.99, 0.9, 0.8, 0.999, 0.98, 0.9999, 0.95],
-            [0.5, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1],
+            [0.99, 0.9, 0.8, 0.999, 0.98, 0.9999, 0.95, 0.985, 0.97],
+            [0.5, 0.2, 0.1, 0.2, 0.2, 0.2, 0.1, 0.05, 0.05],
         )[0]
         params['constraint_direction'] = "upper"
         params["constraint_regularization"] = 1.0
