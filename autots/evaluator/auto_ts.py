@@ -2036,12 +2036,21 @@ class AutoTS(object):
         # gather results of template run
         if not return_template:
             self.initial_results = self.initial_results.concat(template_result)
-            scores, score_dict = generate_score(
-                self.initial_results.model_results,
-                metric_weighting=self.metric_weighting,
-                prediction_interval=self.prediction_interval,
-                return_score_dict=True,
-            )
+            try:
+                scores, score_dict = generate_score(
+                    self.initial_results.model_results,
+                    metric_weighting=self.metric_weighting,
+                    prediction_interval=self.prediction_interval,
+                    return_score_dict=True,
+                )
+            except Exception as e:
+                mod_res = self.initial_results.model_results
+                print(mod_res.head())
+                print(self.metric_weighting)
+                print(mod_res.columns)
+                print(mod_res.index)
+                print(f"Succeeded model count this template: {mod_res[mod_res['Exceptions'].isnull()].shape[0]}. If this is zero, try importing a different template or changing initial template. Check data too.")
+                raise ValueError("unknown score generation error") from e
             self.initial_results.model_results['Score'] = scores
             self.score_breakdown = pd.DataFrame(score_dict).set_index("ID")
         else:
