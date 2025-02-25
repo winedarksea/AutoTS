@@ -606,8 +606,13 @@ class Cassandra(ModelObject):
                     f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
                 )
             raise ValueError("nan values in x_array")
-        if np.all(self.df == 0):
-            raise ValueError("transformed data is all zeroes")
+        if np.all(self.df == self.df.iloc[0, 0]):
+            # this actually happens when you run AutoTS *per series* on many datasets. This prevents full failure.
+            if self.verbose >= 0:
+                print(f"Cassandra transformed data is all {self.df.iloc[0, 0]}! Adding noise...")
+            noise = pd.DataFrame(np.random.normal(0, 0.001, size=self.df.shape), 
+                     columns=self.df.columns, index=self.df.index)
+            self.df = self.df + noise
         if np.any((self.df.isnull().all())):
             raise ValueError("transformed df has NaN filled series")
         # remove zero variance (corr is nan)
@@ -2928,6 +2933,7 @@ if False:
     df_daily = load_daily(long=False)
     # add nan
     df_daily.iloc[100, :] = np.nan
+    # df_daily = pd.DataFrame(np.zeros_like(df_daily.to_numpy()), index=df_daily.index, columns=df_daily.columns)
     forecast_length = 240
     include_history = True
     df_train = df_daily[:-forecast_length].iloc[:, 1:]
