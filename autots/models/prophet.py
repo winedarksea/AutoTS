@@ -46,7 +46,7 @@ class FBProphet(ModelObject):
         prediction_interval: float = 0.9,
         holiday: bool = False,
         regression_type: str = None,
-        holiday_country: str = 'US',
+        holiday_country: str = None,
         yearly_seasonality="auto",
         weekly_seasonality="auto",
         daily_seasonality="auto",
@@ -55,13 +55,15 @@ class FBProphet(ModelObject):
         changepoint_prior_scale: float = 0.05,
         seasonality_mode: str = "additive",
         changepoint_range: float = 0.8,
-        changepoint_spacing: int = 60,
+        changepoint_spacing: int = None,
+        changepoint_distance_end: int = None,  # optional for other style of changepoints
         seasonality_prior_scale: float = 10.0,
         weekly_seasonality_prior_scale: float = None,
         yearly_seasonality_prior_scale: float = None,
         yearly_seasonality_order: int = None,
         holidays_prior_scale: float = 10.0,
         trend_phi: float = 1,
+        holidays = None,
         random_seed: int = 2024,
         verbose: int = 0,
         n_jobs: int = None,
@@ -88,12 +90,14 @@ class FBProphet(ModelObject):
         self.seasonality_mode = seasonality_mode
         self.changepoint_range = changepoint_range
         self.changepoint_spacing = changepoint_spacing
+        self.changepoint_distance_end = changepoint_distance_end
         self.seasonality_prior_scale = seasonality_prior_scale
         self.weekly_seasonality_prior_scale = weekly_seasonality_prior_scale
         self.yearly_seasonality_prior_scale = yearly_seasonality_prior_scale
         self.yearly_seasonality_order = yearly_seasonality_order
         self.holidays_prior_scale = holidays_prior_scale
         self.trend_phi = trend_phi
+        self.holidays = holidays
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -164,7 +168,7 @@ class FBProphet(ModelObject):
 
         # defining in function helps with Joblib it seems
         def seek_the_oracle(
-            current_series, args, series, forecast_length, future_regressor
+            current_series, args, series, forecast_length, future_regressor, holidays
         ):
             """Prophet for for loop or parallel."""
             current_series = current_series.rename(columns={series: 'y'})
@@ -192,15 +196,20 @@ class FBProphet(ModelObject):
                 "seasonality_prior_scale": self.seasonality_prior_scale,
                 "holidays_prior_scale": self.holidays_prior_scale,
             }
-            if self.changepoint_range > 1:
+            if holidays is not None:
+                pargs["holidays"] = holidays
+            # handle AMFM style changepoint improvements
+            # n_changepoints -> changepoint_spacing
+            # changepoint_range -> changepoint_distance_end
+            if self.changepoint_range > 1 or self.changepoint_distance_end is not None:
                 pargs['changepoints'] = get_changepoints(
                     current_series.index[0],
                     current_series.index[-1],
-                    self.changepoint_spacing,
-                    int(self.changepoint_range),
+                    changepoint_spacing=int(len(current_series.index) / self.n_changepoints) if self.changepoint_spacing is None else int(self.changepoint_spacing),
+                    changepoint_distance_end=int(self.changepoint_range) if self.changepoint_distance_end is None else int(self.changepoint_distance_end),
                 )
-                pargs.pop("changepoint_range")
-                pargs.pop("n_changepoints")
+                pargs.pop("changepoint_range", None)
+                pargs.pop("n_changepoints", None)
             m = Prophet(**pargs)
             if self.weekly_seasonality_prior_scale not in [None, "None"]:
                 m.add_seasonality(
@@ -219,9 +228,16 @@ class FBProphet(ModelObject):
                     prior_scale=self.yearly_seasonality_prior_scale,
                 )
             if isinstance(args['holiday'], pd.DataFrame):
-                m.holidays = args['holiday'][args['holiday']['series'] == series]
-            elif isinstance(args['holiday'], bool):
-                if args['holiday']:
+                add_holidays = args['holiday'][args['holiday']['series'] == series]
+                if isinstance(m.holidays, pd.DataFrame):
+                    if not m.holidays.empty:
+                        add_holidays = pd.concat([m.holidays, add_holidays])
+                m.holidays = add_holidays
+            if args["holiday_country"] not in [None, "None"]:
+                if isinstance(args["holiday_country"], list):
+                    for hol in args["holiday_country"]:
+                        m.add_country_holidays(country_name=hol)
+                else:
                     m.add_country_holidays(country_name=args['holiday_country'])
             else:
                 raise ValueError("`holiday` arg for Prophet not recognized")
@@ -298,7 +314,7 @@ class FBProphet(ModelObject):
             forecast.name = series
             lower_forecast.name = series
             upper_forecast.name = series
-            return (forecast, lower_forecast, upper_forecast)
+            return (forecast, lower_forecast, upper_forecast, fcst)
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         args = {
@@ -334,6 +350,7 @@ class FBProphet(ModelObject):
                     series=col,
                     forecast_length=forecast_length,
                     future_regressor=future_regressor,
+                    holidays=self.holidays
                 )
                 for col in cols
             )
@@ -347,6 +364,7 @@ class FBProphet(ModelObject):
                         col,
                         forecast_length=forecast_length,
                         future_regressor=future_regressor,
+                        holidays=self.holidays,
                     )
                 )
         complete = list(map(list, zip(*df_list)))
@@ -359,6 +377,7 @@ class FBProphet(ModelObject):
         upper_forecast = pd.concat(complete[2], axis=1)
         upper_forecast.index = test_index
         upper_forecast = upper_forecast[self.column_names]
+        self.components = complete[3]
 
         if just_point_forecast:
             return forecast
@@ -379,6 +398,10 @@ class FBProphet(ModelObject):
             )
 
             return prediction
+
+    def process_components(self):
+        # process components is a wide style with a multiindex, level 0 = series name
+        return pd.concat(self.components, axis=1, keys=self.column_names)
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
