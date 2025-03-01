@@ -4371,8 +4371,9 @@ class AutoTS(object):
 
             # Create a second y-axis sharing the x-axis
             ax2 = ax1.twinx()
+            col_here = col if col in df2.columns else [colz for colz in df2.columns if col in colz]
             ax2.plot(
-                df2.index, df2[col], color=color2, linestyle='--', label='transformed'
+                df2.index, df2[col_here], color=color2, linestyle='--', label='transformed'
             )
             ax2.set_ylabel('transformed', color=color2, fontsize=12)
             ax2.tick_params(axis='y', labelcolor=color2)
