@@ -372,7 +372,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
-        self.assertGreater(validation_results[validation_results['Runs'] > model.num_validations]['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
+        self.assertGreater(validation_results[validation_results['Runs'] > model.num_validations]['Score'].quantile(0.05), best_model_result['Score'].iloc[0], model.best_model.iloc[0]["Model"])
         # test metrics
         self.assertTrue(initial_results['Score'].min() > 0)
         self.assertTrue(initial_results['mae'].min() >= 0)
