@@ -155,7 +155,10 @@ ensemble = [
 # ensemble = None
 
 # only saving with superfast
-if model_list == "superfast" and save_template and transformer_list in ["fast", "scalable", "all", "no_expanding"] and preclean is None and ensemble is not None:
+accepted_trans = ["fast", "scalable", "all", "no_expanding"]
+superfast_check = model_list == "superfast" and save_template and transformer_list in accepted_trans and preclean is None and ensemble is not None
+single_model_check = isinstance(model_list, list) and (len(model_list) == 1) and transformer_list in accepted_trans and preclean is None
+if superfast_check or single_model_check:
     save_template = True
 else:
     save_template = False
@@ -296,23 +299,26 @@ else:
 # model = model.import_results('test.pickle')
 # model = model.import_results(temp_df)
 if use_template:
-    if os.path.exists(template_filename):
-        model = model.import_template(
-            template_filename, method=template_import_method,
-            enforce_model_list=True, force_validation=True,
-        )
-    elif isinstance(model_list, list) and (len(model_list) == 1):
+    if single_model_check:
         file2 = f"/Users/colincatlin/Downloads/{model_list[0]}_reg.csv"
         if os.path.exists(file2):
             model = model.import_template(
                 file2, method=template_import_method, enforce_model_list=False, force_validation=True,
             )
+            print(f"template for {model_list[0]} imported")
     elif model_list == ['PreprocessingExperts', 'PreprocessingRegression']:
         file2 = "/Users/colincatlin/Downloads/PreprocessingBoth.csv"
         if os.path.exists(file2):
             model = model.import_template(
                 file2, method=template_import_method, enforce_model_list=False, force_validation=True,
             )
+    elif os.path.exists(template_filename):
+        model = model.import_template(
+            template_filename, method=template_import_method,
+            enforce_model_list=True, force_validation=True,
+        )
+    else:
+        print("no template valid")
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -327,10 +333,10 @@ model = model.fit(
 )
 
 if save_template:
-    if isinstance(model_list, list) and (len(model_list) == 1):
+    if single_model_check:
         file2 = f"/Users/colincatlin/Downloads/{model_list[0]}_reg.csv"
         model.export_template(
-            "/Users/colincatlin/Downloads/{model_list[0]}_reg.csv",
+            file2,
             models="best", n=10, max_per_model_class=5, include_results=True
         )
     elif model_list == ['PreprocessingExperts', 'PreprocessingRegression']:
@@ -355,6 +361,7 @@ if save_template:
             models="slowest",
             n=10,
             include_results=True,
+            include_ensemble=False,
         )
 
 elapsed_for = timeit.default_timer() - start_time_for
@@ -538,6 +545,10 @@ if graph:
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
+    ax = model.plot_validations(use_df, compare_horizontal=True, include_bounds=False)
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
     ax = model.plot_validations(use_df, subset='Worst', compare_horizontal=True, include_bounds=False)
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
@@ -660,6 +671,15 @@ else:
 
 # new_pred = model._predict(model_id="075c17a03f5b4c5f79eca944629bf944")
 # new_pred.plot_grid(use_df)
+prediction.evaluate(df_p2)
+print(prediction.avg_metrics["smape"])
+
+if False:
+    id_try = validation_results[validation_results["Runs"] >= (num_validations + 1)].sort_values("Score")["ID"].iloc[1]
+    new_pred = model._predict(model_id=id_try)
+    new_pred.evaluate(df_p2)
+    new_pred.plot_grid(use_df)
+    print(new_pred.avg_metrics["smape"])
 
 print("test run complete")
 

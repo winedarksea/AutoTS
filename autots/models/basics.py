@@ -3615,6 +3615,10 @@ class BasicLinearModel(ModelObject):
         # Convert X and df (Y) to NumPy arrays for linear regression
         X_values = X.to_numpy().astype(float)
         Y_values = df.to_numpy().astype(float)
+        # handle Y singular matrix
+        if np.all(Y_values == Y_values[0, 0]):
+            noise = np.random.normal(0, 0.001, size=Y_values)
+            Y_values = Y_values + noise
 
         if self.lambda_ is not None:
             I = np.eye(X_values.shape[1])
@@ -4068,6 +4072,10 @@ class TVVAR(BasicLinearModel):
         X = X.dropna()
         # note the DF here not df_scaled so potentially index could be different which is not accounted for
         Y_values = df_scaled.loc[X.index].to_numpy().astype(float)
+        # handle Y singular matrix
+        if np.all(Y_values == Y_values[0, 0]):
+            noise = np.random.normal(0, 0.001, size=Y_values)
+            Y_values = Y_values + noise
         # Optionally apply PCA
         if self.apply_pca and (self.lags is not None or self.rolling_means is not None):
             from sklearn.decomposition import PCA

@@ -205,7 +205,7 @@ class AutoTS(object):
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
-        num_validations: str = "auto",
+        num_validations: int = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
         validation_method: str = 'backwards',
@@ -1449,18 +1449,21 @@ class AutoTS(object):
                     ensemble=self.ensemble,
                     score_per_series=self.score_per_series,
                 )
-                self._run_template(
-                    ensemble_templates,
-                    df_train,
-                    df_test,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_test=future_regressor_test,
-                    current_weights=current_weights,
-                    validation_round=0,
-                    max_generations="Ensembles",
-                    current_generation=(current_generation + 1),
-                    result_file=result_file,
-                )
+                if not ensemble_templates.empty:
+                    self._run_template(
+                        self.ensemble_templates,
+                        df_train,
+                        df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0,
+                        max_generations="Ensembles",
+                        current_generation=(current_generation + 1),
+                        result_file=result_file,
+                    )
+                elif "simple" in self.ensemble:
+                    print("Simple ensemble missing, error unclear")
             except Exception as e:
                 print(
                     f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
@@ -1506,25 +1509,26 @@ class AutoTS(object):
                         score_per_series=self.score_per_series,
                     )
                     self.ensemble_templates2 = ensemble_templates
-                    self._run_template(
-                        ensemble_templates,
-                        df_train,
-                        df_test,
-                        future_regressor_train=future_regressor_train,
-                        future_regressor_test=future_regressor_test,
-                        current_weights=current_weights,
-                        validation_round=0,
-                        max_generations="Ensembles",
-                        current_generation=(current_generation + 2),
-                        result_file=result_file,
-                    )
-                    self._run_validations(
-                        df_wide_numeric=self.df_wide_numeric,
-                        num_validations=self.num_validations,
-                        validation_template=ensemble_templates,
-                        future_regressor=self.future_regressor_train,
-                        first_validation=False,
-                    )
+                    if not ensemble_templates.empty:
+                        self._run_template(
+                            ensemble_templates,
+                            df_train,
+                            df_test,
+                            future_regressor_train=future_regressor_train,
+                            future_regressor_test=future_regressor_test,
+                            current_weights=current_weights,
+                            validation_round=0,
+                            max_generations="Ensembles",
+                            current_generation=(current_generation + 2),
+                            result_file=result_file,
+                        )
+                        self._run_validations(
+                            df_wide_numeric=self.df_wide_numeric,
+                            num_validations=self.num_validations,
+                            validation_template=ensemble_templates,
+                            future_regressor=self.future_regressor_train,
+                            first_validation=False,
+                        )
                 except Exception as e:
                     print(
                         f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
@@ -2032,12 +2036,23 @@ class AutoTS(object):
         # gather results of template run
         if not return_template:
             self.initial_results = self.initial_results.concat(template_result)
-            scores, score_dict = generate_score(
-                self.initial_results.model_results,
-                metric_weighting=self.metric_weighting,
-                prediction_interval=self.prediction_interval,
-                return_score_dict=True,
-            )
+            try:
+                scores, score_dict = generate_score(
+                    self.initial_results.model_results,
+                    metric_weighting=self.metric_weighting,
+                    prediction_interval=self.prediction_interval,
+                    return_score_dict=True,
+                )
+            except Exception as e:
+                mod_res = self.initial_results.model_results
+                print(mod_res.head())
+                print(self.metric_weighting)
+                print(mod_res.columns)
+                print(mod_res.index)
+                print(
+                    f"Succeeded model count this template: {mod_res[mod_res['Exceptions'].isnull()].shape[0]}. If this is zero, try importing a different template or changing initial template. Check data too."
+                )
+                raise ValueError("unknown score generation error") from e
             self.initial_results.model_results['Score'] = scores
             self.score_breakdown = pd.DataFrame(score_dict).set_index("ID")
         else:
@@ -2442,6 +2457,7 @@ class AutoTS(object):
         min_metrics: list = ['smape', 'spl', 'wasserstein', 'mle', 'imle', 'ewmae'],
         max_metrics: list = None,
         focus_models: list = None,
+        include_ensemble: bool = True,
     ):
         """Export top results as a reusable template.
 
@@ -2457,6 +2473,7 @@ class AutoTS(object):
             min_metrics (list): if not None and models=='best', include the lowest for this metric, a way to include even if not a major part of metric weighting as an addon
             max_metrics (list): for metrics to take the max model for
             focus_models (list): also pull the best score/min/max metrics as per just this model
+            include_ensemble (bool): if False, exclude Ensembles (ignored with "all" models)
         """
         if models == 'all':
             export_template = self.initial_results.model_results[self.template_cols_id]
@@ -2472,6 +2489,8 @@ class AutoTS(object):
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
                 ]
+                if not include_ensemble:
+                    export_template = export_template[export_template["Ensemble"] == 0]
                 # clean up any bad data (hopefully there is none anyway...)
                 export_template = export_template[
                     (~export_template['ModelParameters'].isnull())
@@ -2557,11 +2576,12 @@ class AutoTS(object):
                 if not include_results:
                     export_template = export_template[self.template_cols_id]
         elif models == "slowest":
+            export_template = self.initial_results.model_results
+            if not include_ensemble:
+                export_template = export_template[export_template["Ensemble"] == 0]
             return self.save_template(
                 filename,
-                self.initial_results.model_results.nlargest(
-                    n, columns=['TotalRuntime']
-                ),
+                export_template.nlargest(n, columns=['TotalRuntime']),
             )
         else:
             raise ValueError("`models` must be 'all' or 'best' or 'slowest'")
@@ -4351,8 +4371,17 @@ class AutoTS(object):
 
             # Create a second y-axis sharing the x-axis
             ax2 = ax1.twinx()
+            col_here = (
+                col
+                if col in df2.columns
+                else [colz for colz in df2.columns if col in colz]
+            )
             ax2.plot(
-                df2.index, df2[col], color=color2, linestyle='--', label='transformed'
+                df2.index,
+                df2[col_here],
+                color=color2,
+                linestyle='--',
+                label='transformed',
             )
             ax2.set_ylabel('transformed', color=color2, fontsize=12)
             ax2.tick_params(axis='y', labelcolor=color2)

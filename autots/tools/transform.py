@@ -2928,6 +2928,7 @@ class AlignLastValue(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
             adjustment (float): size of shift, utilized for adjusting the upper and lower bounds to match point forecast
         """
+        # adjustment passing is how the upper/lower bounds get the same shift as the point forecast
         if self.adjustment is not None:
             self.adjustment = adjustment
         if trans_method == "original":
@@ -5262,6 +5263,7 @@ class FIRFilter(EmptyTransformer):
         window: str = "hamming",
         on_transform: bool = True,
         on_inverse: bool = False,
+        bounds_only: bool = False,
         **kwargs,
     ):
         super().__init__(name="FIRFilter")
@@ -5271,6 +5273,8 @@ class FIRFilter(EmptyTransformer):
         self.window = window
         self.on_transform = on_transform
         self.on_inverse = on_inverse
+        self.bounds_only = bounds_only
+        self.adjustment = None
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -5314,14 +5318,20 @@ class FIRFilter(EmptyTransformer):
         else:
             return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast"):
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
         """Return data to original *or* forecast form.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
         if self.on_inverse:
-            return self.filter(df)
+            # reusing the adjustments style arg from alignlastvalue for determining if bounds
+            if not self.bounds_only or (self.bounds_only and adjustment is not None):
+                return self.filter(df)
+            else:
+                # if point forecast, don't do anything for bounds_only
+                self.adjustment = True
+                return df
         else:
             return df
 
@@ -5341,6 +5351,10 @@ class FIRFilter(EmptyTransformer):
         params["sampling_frequency"] = seasonal_int(include_one=False)
         params["on_transform"] = selection
         params["on_inverse"] = not selection
+        if not selection:
+            params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]
+        else:
+            params["bounds_only"] = False
         return params
 
 
@@ -5841,6 +5855,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         factor=3,
         down_method='decimate',
         fill_method='linear',
+        forecast_length=None,
         **kwargs,
     ):
         super().__init__(name="UpscaleDownscaleTransformer")
@@ -5852,6 +5867,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         self.factor = factor
         self.down_method = down_method
         self.fill_method = fill_method
+        self.forecast_length = forecast_length
 
     def fit(self, df):
         """
@@ -5934,7 +5950,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             self.transformed_index = df_down.index
             return df_down
 
-    def inverse_transform(self, df):
+    def inverse_transform(self, df, trans_method="forecast"):
         """
         Inverse transform the data back to the original frequency.
 
@@ -5971,6 +5987,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
                 start=new_start, end=df.index[-1], freq=self.orig_delta
             )
         else:
+            trans_method = "original"
             new_index = self.original_index
 
         if self.mode == 'upscale':
@@ -5983,6 +6000,8 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             # For downscale mode, upsample the low-resolution data to the new index and fill gaps.
             df_up = df.reindex(new_index)
             df_up_filled = FillNA(df_up, method=self.fill_method)
+            if self.forecast_length is not None and trans_method != "original":
+                df_up_filled = df_up_filled.head(self.forecast_length)
             return df_up_filled
 
     def _create_upscaled_index(self, original_index, new_delta):
@@ -6041,7 +6060,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         """
         params = {
             "mode": random.choice(["upscale", "downscale"]),
-            "factor": random.choice([1, 2, 3, 4]),
+            "factor": random.choice([1, 2, 3, 4, 6]),
             "down_method": random.choice(["decimate", "mean"]),
             "fill_method": random.choice(["linear", "cubic", "pchip", "akima"]),
         }
@@ -6329,8 +6348,13 @@ class GeneralTransformer(object):
         self.forecast_length = forecast_length
         self.transformers = {}
         self.adjustments = {}
-        # upper/lower forecast inverses are different
-        self.bounded_oddities = ["AlignLastValue", "AlignLastDiff", "Constraint"]
+        # upper/lower forecast inverses are different, these also must be in oddities_list
+        self.bounded_oddities = [
+            "AlignLastValue",
+            "AlignLastDiff",
+            "Constraint",
+            "FIRFilter",
+        ]
         # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",
@@ -6350,6 +6374,7 @@ class GeneralTransformer(object):
             "AlignLastValue",
             "AlignLastDiff",
             "Constraint",
+            "FIRFilter",
         ]
 
     @staticmethod
@@ -6420,7 +6445,12 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
-        elif transformation in ["Constraint", "MeanPercentSplitter", "Slice"]:
+        elif transformation in [
+            "Constraint",
+            "MeanPercentSplitter",
+            "Slice",
+            "UpscaleDownscaleTransformer",
+        ]:
             return have_params[transformation](forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":

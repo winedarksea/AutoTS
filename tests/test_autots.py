@@ -372,7 +372,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
-        self.assertGreater(validation_results[validation_results['Runs'] > model.num_validations]['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
+        self.assertGreater(validation_results[validation_results['Runs'] > model.num_validations]['Score'].quantile(0.05), best_model_result['Score'].iloc[0], model.best_model.iloc[0]["Model"])
         # test metrics
         self.assertTrue(initial_results['Score'].min() > 0)
         self.assertTrue(initial_results['mae'].min() >= 0)
@@ -540,6 +540,19 @@ class AutoTSTest(unittest.TestCase):
             'AverageValueNaive',
             'SeasonalNaive',
         ]
+        def custom_metric(A, F, df_train=None, prediction_interval=None):
+            submission = F
+            objective = A
+            abs_err = np.nansum(np.abs(submission - objective))
+            err = np.nansum((submission - objective))
+            score = abs_err + abs(err)
+            epsilon = 1
+            big_sum = (
+                np.nan_to_num(objective, nan=0.0, posinf=0.0, neginf=0.0).sum().sum()
+                + epsilon
+            )
+            score /= big_sum
+            return score
 
         model = AutoTS(
             forecast_length=forecast_length,
@@ -550,6 +563,7 @@ class AutoTSTest(unittest.TestCase):
             n_jobs=n_jobs,
             verbose=verbose,
             ensemble=None,
+            custom_metric=custom_metric,
         )
         model = model.fit(
             df,
@@ -569,6 +583,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(forecasts_df.isna().any().any())
         self.assertEqual(forecast_length, len(forecasts_df.index))
         self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
+        # test custom metric is non-zero
+        self.assertNotAlmostEqual(initial_results["custom"].mean(), 0)
 
     def test_all_models_load(self):
         print("Starting test_all_models_load")

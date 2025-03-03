@@ -1481,6 +1481,7 @@ def model_forecast(
                     current_model_file=current_model_file,
                     model_count=model_count,
                     force_gc=force_gc,
+                    internal_validation=False,  # allow sub ensembles to have postprocessing
                 )
                 model_id = create_model_id(
                     df_forecast.model_name,
@@ -1527,6 +1528,7 @@ def model_forecast(
                 forecast_length=forecast_length,
             )
             transformer_object.fit(df_train)
+            # forecast inverse MUST come before upper and lower bounds inverse
             ens_forecast.forecast = transformer_object.inverse_transform(
                 ens_forecast.forecast
             )
@@ -1736,7 +1738,7 @@ def _eval_prediction_for_template(
 
 
 horizontal_post_processors = [
-    {
+    {  # consistently used as best
         "fillna": "fake_date",
         "transformations": {"0": "AlignLastValue", "1": "AlignLastValue"},
         "transformation_params": {
@@ -1785,7 +1787,7 @@ horizontal_post_processors = [
         },
     },  # best wasserstein on daily
     # {"fillna": "linear", "transformations": {"0": "bkfilter", "1": "DifferencedTransformer", "2": "BKBandpassFilter"}, "transformation_params": {"0": {}, "1": {"lag": 1, "fill": "zero"}, "2": {"low": 12, "high": 32, "K": 6, "lanczos_factor": False, "return_diff": False, "on_transform": False, "on_inverse": True}}},
-    {
+    {  # observed used best on LRP 2025-02-20, neat
         "fillna": "rolling_mean_24",
         "transformations": {"0": "bkfilter", "1": "FIRFilter", "2": "AlignLastDiff"},
         "transformation_params": {
@@ -1834,8 +1836,8 @@ horizontal_post_processors = [
                 "threshold_method": "mean",
             },
         },
-    },  # best mae on daily, a bit weird otherwise, 1x best mage daily
-    {
+    },
+    {  # best mae on daily, a bit weird otherwise, 1x best mage daily
         "fillna": "median",
         "transformations": {
             "0": "DiffSmoother",
@@ -1867,7 +1869,6 @@ horizontal_post_processors = [
         "fillna": "fake_date",
         "transformations": {
             "0": "AlignLastValue",
-            "1": "PositiveShift",
             "2": "HistoricValues",
         },
         "transformation_params": {
@@ -1880,8 +1881,7 @@ horizontal_post_processors = [
                 "threshold": 10,
                 "threshold_method": "mean",
             },
-            "1": {},
-            "2": {"window": 28},
+            "1": {"window": 28},
         },
     },  # best competition on VN1
     {
@@ -2021,44 +2021,6 @@ horizontal_post_processors = [
             },
         },
     },
-    {  # balanced on wiki daily
-        "fillna": "cubic",
-        "transformations": {"0": "AlignLastValue", "1": "DatepartRegression"},
-        "transformation_params": {
-            "0": {
-                "rows": 1,
-                "lag": 7,
-                "method": "multiplicative",
-                "strength": 0.9,
-                "first_value_only": False,
-                "threshold": 3,
-                "threshold_method": "max",
-            },
-            "1": {
-                "regression_model": {
-                    "model": "ElasticNet",
-                    "model_params": {
-                        "l1_ratio": 0.5,
-                        "fit_intercept": True,
-                        "selection": "cyclic",
-                        "max_iter": 1000,
-                    },
-                },
-                "datepart_method": "common_fourier",
-                "polynomial_degree": None,
-                "transform_dict": {
-                    "fillna": None,
-                    "transformations": {"0": "ClipOutliers"},
-                    "transformation_params": {
-                        "0": {"method": "clip", "std_threshold": 4}
-                    },
-                },
-                "holiday_countries_used": False,
-                "lags": None,
-                "forward_lags": None,
-            },
-        },
-    },
     {  # best on VPV, 19.7 smape
         "fillna": "quadratic",
         "transformations": {"0": "AlignLastValue", "1": "ChangepointDetrend"},
@@ -2078,6 +2040,69 @@ horizontal_post_processors = [
                 "changepoint_distance_end": 360,
                 "datepart_method": None,
             },
+        },
+    },
+    {  # hand tuned, might be replaceable with better FIR combination
+        'fillna': 'fake_date',
+        'transformations': {
+            '0': 'FIRFilter',
+            "1": "AlignLastValue",
+            "2": "AlignLastValue",
+        },
+        'transformation_params': {
+            '0': {
+                'numtaps': 32,
+                'cutoff_hz': 0.1,
+                'window': "triang",
+                'sampling_frequency': 12,
+                'on_transform': False,
+                'on_inverse': True,
+                'bounds_only': True,
+            },
+            "1": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": False,
+                "threshold": None,
+                "threshold_method": "mean",
+            },
+            "2": {
+                "rows": 1,
+                "lag": 1,
+                "method": "multiplicative",
+                "strength": 1.0,
+                "first_value_only": True,
+                "threshold": 10,
+                "threshold_method": "max",
+            },
+        },
+    },
+    {  # on wiki daily horizontal, mainly smape
+        'fillna': 'ffill',
+        'transformations': {
+            '0': 'LevelShiftTransformer',
+            '1': 'Constraint',
+            '2': 'HistoricValues',
+        },
+        'transformation_params': {
+            '0': {
+                'window_size': 120,
+                'alpha': 3.5,
+                'grouping_forward_limit': 3,
+                'max_level_shifts': 5,
+                'alignment': 'rolling_diff',
+            },
+            '1': {
+                'constraint_method': 'dampening',
+                'constraint_direction': 'upper',
+                'constraint_regularization': 1.0,
+                'constraint_value': 0.99,
+                'bounds_only': False,
+                'fillna': None,
+            },
+            '2': {'window': None},
         },
     },
 ]
@@ -2197,6 +2222,7 @@ def TemplateWizard(
             if ensemble_input == 2 and transformation_dict:
                 # SKIP BECAUSE TRANSFORMERS (PRE DEFINED) ARE DONE BELOW TO REDUCE FORECASTS RERUNS
                 # ON INTERNAL VALIDATION ONLY ON TEMPLATES
+                # this does mean that "custom" postprocessing won't work with template wizard
                 if verbose >= 1:
                     print(
                         "skipping horizontal with transformation due to that being done on internal validation"
@@ -2299,6 +2325,7 @@ def TemplateWizard(
                         forecast_length=forecast_length,
                     )
                     transformer_object.fit(df_train)
+                    # forecast inverse MUST come before upper and lower bounds inverse
                     df_forecast2.forecast = transformer_object.inverse_transform(
                         df_forecast2.forecast
                     )

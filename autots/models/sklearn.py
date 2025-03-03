@@ -712,7 +712,7 @@ def retrieve_classifier(
 sklearn_model_dict = {
     # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
-    'MLP': 0.05,
+    'MLP': 0.02,
     'DecisionTree': 0.02,
     'KNN': 0.05,
     'Adaboost': 0.01,
@@ -736,7 +736,7 @@ sklearn_model_dict = {
 multivariate_model_dict = {
     'RandomForest': 0.02,
     # 'ElasticNet': 0.05,
-    'MLP': 0.03,
+    'MLP': 0.01,
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
@@ -756,7 +756,7 @@ multivariate_model_dict = {
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
     'ElasticNet': 0.05,
-    'MLP': 0.05,
+    'MLP': 0.02,
     'DecisionTree': 0.05,
     'KNN': 0.03,
     'Adaboost': 0.05,
@@ -773,7 +773,7 @@ univariate_model_dict = {
 rolling_regression_dict = {
     'RandomForest': 0.02,
     'ElasticNet': 0.05,
-    'MLP': 0.05,
+    'MLP': 0.02,
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
@@ -800,7 +800,7 @@ no_shared_model_dict = {
 # these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
     'ElasticNet': 0.1,
-    'MLP': 0.05,
+    'MLP': 0.02,
     'DecisionTree': 0.03,
     'Adaboost': 0.05,
     'SVM': 0.0001,
@@ -813,7 +813,7 @@ datepart_model_dict_deep = {
     'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.1,
     'xgboost': 0.05,
-    'MLP': 0.05,
+    'MLP': 0.02,
     'DecisionTree': 0.02,
     'Adaboost': 0.05,
     'SVM': 0.01,

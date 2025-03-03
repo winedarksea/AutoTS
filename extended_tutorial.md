@@ -395,6 +395,8 @@ result = model_forecast(
 result.forecast
 ```
 
+Ensembles use the top level `TransformationParameters` _only_ as postprocessing. Data is otherwise passed unaltered to the component models with their own transformation parameters.
+
 ## Installation and Dependency Versioning
 `pip install autots`
 
