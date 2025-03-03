@@ -63,7 +63,7 @@ class FBProphet(ModelObject):
         yearly_seasonality_order: int = None,
         holidays_prior_scale: float = 10.0,
         trend_phi: float = 1,
-        holidays = None,
+        holidays=None,
         random_seed: int = 2024,
         verbose: int = 0,
         n_jobs: int = None,
@@ -205,8 +205,16 @@ class FBProphet(ModelObject):
                 pargs['changepoints'] = get_changepoints(
                     current_series.index[0],
                     current_series.index[-1],
-                    changepoint_spacing=int(len(current_series.index) / self.n_changepoints) if self.changepoint_spacing is None else int(self.changepoint_spacing),
-                    changepoint_distance_end=int(self.changepoint_range) if self.changepoint_distance_end is None else int(self.changepoint_distance_end),
+                    changepoint_spacing=(
+                        int(len(current_series.index) / self.n_changepoints)
+                        if self.changepoint_spacing is None
+                        else int(self.changepoint_spacing)
+                    ),
+                    changepoint_distance_end=(
+                        int(self.changepoint_range)
+                        if self.changepoint_distance_end is None
+                        else int(self.changepoint_distance_end)
+                    ),
                 )
                 pargs.pop("changepoint_range", None)
                 pargs.pop("n_changepoints", None)
@@ -350,7 +358,7 @@ class FBProphet(ModelObject):
                     series=col,
                     forecast_length=forecast_length,
                     future_regressor=future_regressor,
-                    holidays=self.holidays
+                    holidays=self.holidays,
                 )
                 for col in cols
             )

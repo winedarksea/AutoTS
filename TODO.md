@@ -13,8 +13,10 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.19 🇺🇦 🇺🇦 🇺🇦
-* bug fix for transformer_list="all"
+# 0.6.20 🇺🇦 🇺🇦 🇺🇦
+* transformer bug fixes
+* Prophet package adjustments
+* linear model singular matrix handling
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

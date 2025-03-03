@@ -153,7 +153,8 @@ def generate_random_fir_params(method='random', data_type="time_series"):
 
     # Random number of taps (filter length)
     params["numtaps"] = random.choices(
-        [4, 7, 12, 32, 64, 128, 256, 512, 1024], [0.1, 0.2, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1]
+        [4, 7, 12, 32, 64, 128, 256, 512, 1024],
+        [0.1, 0.2, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1],
     )[0]
 
     if data_type == "audio":
@@ -169,8 +170,38 @@ def generate_random_fir_params(method='random', data_type="time_series"):
 
     # Random window type
     params["window"] = random.choices(
-        ["hamming", "hann", "blackman", "kaiser", "tukey", "boxcar", "taylor", ("kaiser", 4.0), ('exponential', None, 0.25), ('exponential', None, 1.), ('exponential', None, 3.), 'triang', ("gaussian", 1.0), ('chebwin', 100)],
-        [0.2, 0.1, 0.1, 0.1, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05, 0.025, 0.05, 0.025, 0.025],
+        [
+            "hamming",
+            "hann",
+            "blackman",
+            "kaiser",
+            "tukey",
+            "boxcar",
+            "taylor",
+            ("kaiser", 4.0),
+            ('exponential', None, 0.25),
+            ('exponential', None, 1.0),
+            ('exponential', None, 3.0),
+            'triang',
+            ("gaussian", 1.0),
+            ('chebwin', 100),
+        ],
+        [
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.05,
+            0.15,
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+            0.025,
+            0.05,
+            0.025,
+            0.025,
+        ],
     )[0]
 
     return params

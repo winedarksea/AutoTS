@@ -6349,7 +6349,12 @@ class GeneralTransformer(object):
         self.transformers = {}
         self.adjustments = {}
         # upper/lower forecast inverses are different, these also must be in oddities_list
-        self.bounded_oddities = ["AlignLastValue", "AlignLastDiff", "Constraint", "FIRFilter"]
+        self.bounded_oddities = [
+            "AlignLastValue",
+            "AlignLastDiff",
+            "Constraint",
+            "FIRFilter",
+        ]
         # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",
@@ -6440,7 +6445,12 @@ class GeneralTransformer(object):
             return RegressionFilter(
                 holiday_country=holiday_country, n_jobs=n_jobs, **param
             )
-        elif transformation in ["Constraint", "MeanPercentSplitter", "Slice", "UpscaleDownscaleTransformer"]:
+        elif transformation in [
+            "Constraint",
+            "MeanPercentSplitter",
+            "Slice",
+            "UpscaleDownscaleTransformer",
+        ]:
             return have_params[transformation](forecast_length=forecast_length, **param)
 
         elif transformation == "MinMaxScaler":

@@ -609,9 +609,14 @@ class Cassandra(ModelObject):
         if np.all(self.df == self.df.iloc[0, 0]):
             # this actually happens when you run AutoTS *per series* on many datasets. This prevents full failure.
             if self.verbose >= 0:
-                print(f"Cassandra transformed data is all {self.df.iloc[0, 0]}! Adding noise...")
-            noise = pd.DataFrame(np.random.normal(0, 0.001, size=self.df.shape), 
-                     columns=self.df.columns, index=self.df.index)
+                print(
+                    f"Cassandra transformed data is all {self.df.iloc[0, 0]}! Adding noise..."
+                )
+            noise = pd.DataFrame(
+                np.random.normal(0, 0.001, size=self.df.shape),
+                columns=self.df.columns,
+                index=self.df.index,
+            )
             self.df = self.df + noise
         if np.any((self.df.isnull().all())):
             raise ValueError("transformed df has NaN filled series")

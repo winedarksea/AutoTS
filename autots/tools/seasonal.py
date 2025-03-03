@@ -770,7 +770,10 @@ base_seasonalities = [  # this needs to be a list
     [52, 'quarter'],
     [168, "hour"],
     ["morlet_365.25_12_12", "ricker_7_7_1"],
-    ["db2_365.25_12_0.5", "morlet_7_7_1"], # this actually is working surprisingly well, could probably be expanded upon
+    [
+        "db2_365.25_12_0.5",
+        "morlet_7_7_1",
+    ],  # this actually is working surprisingly well, could probably be expanded upon
     ["weekdaymonthofyear", "quarter", "dayofweek"],
     "lunar_phase",
     ["dayofweek", (365.25, 4)],

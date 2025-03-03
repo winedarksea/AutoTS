@@ -1836,7 +1836,7 @@ horizontal_post_processors = [
                 "threshold_method": "mean",
             },
         },
-    },  
+    },
     {  # best mae on daily, a bit weird otherwise, 1x best mage daily
         "fillna": "median",
         "transformations": {
@@ -2042,20 +2042,23 @@ horizontal_post_processors = [
             },
         },
     },
-
     {  # hand tuned, might be replaceable with better FIR combination
         'fillna': 'fake_date',
-        'transformations': {'0': 'FIRFilter', "1": "AlignLastValue", "2": "AlignLastValue"},
+        'transformations': {
+            '0': 'FIRFilter',
+            "1": "AlignLastValue",
+            "2": "AlignLastValue",
+        },
         'transformation_params': {
-           '0': {
-               'numtaps': 32,
+            '0': {
+                'numtaps': 32,
                 'cutoff_hz': 0.1,
                 'window': "triang",
                 'sampling_frequency': 12,
                 'on_transform': False,
                 'on_inverse': True,
                 'bounds_only': True,
-             },
+            },
             "1": {
                 "rows": 1,
                 "lag": 1,
@@ -2074,17 +2077,33 @@ horizontal_post_processors = [
                 "threshold": 10,
                 "threshold_method": "max",
             },
-          },
-     },
-    { # on wiki daily horizontal, mainly smape
+        },
+    },
+    {  # on wiki daily horizontal, mainly smape
         'fillna': 'ffill',
         'transformations': {
-            '0': 'LevelShiftTransformer', '1': 'Constraint', '2': 'HistoricValues'},
+            '0': 'LevelShiftTransformer',
+            '1': 'Constraint',
+            '2': 'HistoricValues',
+        },
         'transformation_params': {
-            '0': {'window_size': 120, 'alpha': 3.5, 'grouping_forward_limit': 3, 'max_level_shifts': 5, 'alignment': 'rolling_diff'},
-            '1': {'constraint_method': 'dampening', 'constraint_direction': 'upper', 'constraint_regularization': 1.0, 'constraint_value': 0.99, 'bounds_only': False, 'fillna': None},
+            '0': {
+                'window_size': 120,
+                'alpha': 3.5,
+                'grouping_forward_limit': 3,
+                'max_level_shifts': 5,
+                'alignment': 'rolling_diff',
+            },
+            '1': {
+                'constraint_method': 'dampening',
+                'constraint_direction': 'upper',
+                'constraint_regularization': 1.0,
+                'constraint_value': 0.99,
+                'bounds_only': False,
+                'fillna': None,
+            },
             '2': {'window': None},
-        }
+        },
     },
 ]
 
