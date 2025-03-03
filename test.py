@@ -299,12 +299,7 @@ else:
 # model = model.import_results('test.pickle')
 # model = model.import_results(temp_df)
 if use_template:
-    if os.path.exists(template_filename):
-        model = model.import_template(
-            template_filename, method=template_import_method,
-            enforce_model_list=True, force_validation=True,
-        )
-    elif single_model_check:
+    if single_model_check:
         file2 = f"/Users/colincatlin/Downloads/{model_list[0]}_reg.csv"
         if os.path.exists(file2):
             model = model.import_template(
@@ -317,6 +312,13 @@ if use_template:
             model = model.import_template(
                 file2, method=template_import_method, enforce_model_list=False, force_validation=True,
             )
+    elif os.path.exists(template_filename):
+        model = model.import_template(
+            template_filename, method=template_import_method,
+            enforce_model_list=True, force_validation=True,
+        )
+    else:
+        print("no template valid")
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -671,6 +673,13 @@ else:
 # new_pred.plot_grid(use_df)
 prediction.evaluate(df_p2)
 print(prediction.avg_metrics["smape"])
+
+if False:
+    id_try = validation_results[validation_results["Runs"] >= (num_validations + 1)].sort_values("Score")["ID"].iloc[1]
+    new_pred = model._predict(model_id=id_try)
+    new_pred.evaluate(df_p2)
+    new_pred.plot_grid(use_df)
+    print(new_pred.avg_metrics["smape"])
 
 print("test run complete")
 

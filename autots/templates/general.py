@@ -581,9 +581,15 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "fake_date", "transformations": {"0": "DifferencedTransformer", "1": "QuantileTransformer", "2": "SeasonalDifference", "3": "Discretize"}, "transformation_params": {"0": {"lag": 1, "fill": "bfill"}, "1": {"output_distribution": "uniform", "n_quantiles": 268}, "2": {"lag_1": 2, "method": "LastValue"}, "3": {"discretization": "upper", "n_bins": 10}}}',
         'Ensemble': 0,
     },
+    "94": {  # load daily best overall, moderately deep search, 26 smape in val and holdout, 2025-03-03
+        'Model': 'FBProphet',
+        'ModelParameters': '{"holiday": false, "regression_type": null, "growth": "linear", "n_changepoints": 20, "changepoint_prior_scale": 30, "seasonality_mode": "additive", "changepoint_range": 0.8, "seasonality_prior_scale": 0.01, "holidays_prior_scale": 10.0, "trend_phi": 1}',
+        'TransformationParameters': '{"fillna": "rolling_mean_24", "transformations": {"0": "Log", "1": "AlignLastValue", "2": "LevelShiftTransformer", "3": "SinTrend", "4": "AlignLastValue"}, "transformation_params": {"0": {}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": 10, "threshold_method": "max"}, "2": {"window_size": 30, "alpha": 2.5, "grouping_forward_limit": 2, "max_level_shifts": 5, "alignment": "average"}, "3": {}, "4": {"rows": 4, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": null, "threshold_method": "max"}}}',
+        'Ensemble': 0,
+    },
 }
 """
-"94": {  # load daily best on some
+"95": {  # load daily best on some
     'Model': 'PreprocessingRegression',
     'ModelParameters': '',
     'TransformationParameters': '',
