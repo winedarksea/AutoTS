@@ -129,9 +129,9 @@ def profile_time_series(
         & (metrics_df['cv_squared'] >= cvar_threshold),
         'PROFILE',
     ] = 'lumpy'
-    metrics_df.loc[metrics_df['zero_diff_proportion'] >= flat_threshold, 'PROFILE'] = (
-        'flat'
-    )
+    metrics_df.loc[
+        metrics_df['zero_diff_proportion'] >= flat_threshold, 'PROFILE'
+    ] = 'flat'
     metrics_df.loc[
         metrics_df['null_percentage'] >= new_product_threshold, 'PROFILE'
     ] = 'new_product'

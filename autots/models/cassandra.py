@@ -480,6 +480,7 @@ class Cassandra(ModelObject):
                 multivar_df = (
                     trs_df.T.groupby(self.categorical_groups)  # axis=1
                     .mean()
+                    .transpose()
                     .iloc[lag_1_indx]
                 )
                 multivar_df.index = self.df.index
@@ -543,7 +544,7 @@ class Cassandra(ModelObject):
                 x_t = create_changepoint_features(
                     self.df.index,
                     changepoint_spacing=60,
-                    changepoint_distance_end=120,
+                    changepoint_distance_end=180,
                 )
                 x_list.append(x_t)
             else:
@@ -643,13 +644,16 @@ class Cassandra(ModelObject):
                     print(f"Dropping colinear feature columns {corel}")
                 # x_array = x_array.drop(columns=corel)
                 self.drop_colz.extend(corel.tolist())
+
         if self.max_multicolinearity is not None:
             colin = x_array.columns[w < self.max_multicolinearity]
-            if len(colin) > 0:
+            if len(colin) > 1:
                 if self.verbose > 2:
                     print(f"Dropping multi-colinear feature columns {colin}")
                 # x_array = x_array.drop(columns=colin)
                 self.drop_colz.extend(colin.tolist())
+        if len(set(self.drop_colz)) == x_array.shape[1]:
+            self.drop_colz = list(set(self.drop_colz))[1:]
         x_array = x_array.drop(columns=self.drop_colz)
 
         # things we want modeled but want to discard from evaluation (standins)
@@ -657,6 +661,7 @@ class Cassandra(ModelObject):
             "randnorm_",
             "rolling_trend_",
             "randomwalk_",
+            "changepoint_",
         ]  # "intercept" added after, so not included
 
         # RUN LINEAR MODEL
@@ -810,6 +815,7 @@ class Cassandra(ModelObject):
             self.residual_uncertainty_upper_std = res_upper.std()
             self.residual_uncertainty_lower_std = res_lower.std()
         else:
+            slope = np.zeros_like(self.df)
             self.residual_uncertainty_upper = pd.Series(0, index=self.df.columns)
             self.residual_uncertainty_lower = pd.Series(0, index=self.df.columns)
             self.residual_uncertainty_upper_std = pd.Series(0, index=self.df.columns)
