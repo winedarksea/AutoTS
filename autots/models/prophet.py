@@ -67,7 +67,7 @@ class FBProphet(ModelObject):
         random_seed: int = 2024,
         verbose: int = 0,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,

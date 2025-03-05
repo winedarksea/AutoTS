@@ -479,7 +479,8 @@ class Cassandra(ModelObject):
             elif self.multivariate_feature == "group_average":
                 multivar_df = (
                     trs_df.T.groupby(self.categorical_groups)  # axis=1
-                    .mean().transpose()
+                    .mean()
+                    .transpose()
                     .iloc[lag_1_indx]
                 )
                 multivar_df.index = self.df.index
@@ -660,7 +661,7 @@ class Cassandra(ModelObject):
             "randnorm_",
             "rolling_trend_",
             "randomwalk_",
-            "changepoint_"
+            "changepoint_",
         ]  # "intercept" added after, so not included
 
         # RUN LINEAR MODEL
