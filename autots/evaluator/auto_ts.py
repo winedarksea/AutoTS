@@ -156,6 +156,7 @@ class AutoTS(object):
         best_model_params (dict): model params
         best_model_transformation_params (dict): transformation parameters
         best_model_ensemble (int): Ensemble type int id
+        used_frequency (str): datetime frequency offset string
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
         df_wide_numeric (pd.DataFrame): dataframe containing shaped final data, will include preclean
         initial_results.model_results (object): contains a collection of result metrics
