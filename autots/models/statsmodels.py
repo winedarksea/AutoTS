@@ -1244,7 +1244,7 @@ class UnobservedComponents(ModelObject):
             'level': level_choice,
             'maxiter': random.choice([50, 100, 250]),
             'cov_type': random.choices(
-                ["opg", "oim", "approx", 'robust'], [0.8, 0.1, 0.1, 0.1]
+                ["opg", "oim", "approx", 'robust'], [0.8, 0.02, 0.1, 0.1]
             )[0],
             'method': random.choices(
                 ["lbfgs", "bfgs", "powell", "cg", "newton", "nm"],

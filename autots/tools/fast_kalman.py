@@ -335,7 +335,7 @@ def new_kalman_params(method=None, allow_auto=True):
                 'observation_model': [[1, 1, 0, 0]],
                 'observation_noise': random.choices(
                     [0.25, 0.04, 0.57, 1.0, 0.08, 0.02, 0.8, 'auto'],
-                    [0.2, 0.3, 0.3, 0.3, 0.1, 0.05, 0.05, 0.05],
+                    [0.2, 0.3, 0.3, 0.3, 0.1, 0.05, 0.05, 0.025],
                 )[
                     0
                 ],  # 'auto' is slow
