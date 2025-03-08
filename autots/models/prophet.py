@@ -59,10 +59,12 @@ class FBProphet(ModelObject):
         changepoint_distance_end: int = None,  # optional for other style of changepoints
         seasonality_prior_scale: float = 10.0,
         weekly_seasonality_prior_scale: float = None,
+        weekly_seasonality_order: int = 4,
         yearly_seasonality_prior_scale: float = None,
         yearly_seasonality_order: int = None,
         holidays_prior_scale: float = 10.0,
         trend_phi: float = 1,
+        phi: float = None,  # needed for Meta import and usage of this
         holidays=None,
         random_seed: int = 2024,
         verbose: int = 0,
@@ -94,10 +96,13 @@ class FBProphet(ModelObject):
         self.changepoint_distance_end = changepoint_distance_end
         self.seasonality_prior_scale = seasonality_prior_scale
         self.weekly_seasonality_prior_scale = weekly_seasonality_prior_scale
+        self.weekly_seasonality_order = weekly_seasonality_order
         self.yearly_seasonality_prior_scale = yearly_seasonality_prior_scale
         self.yearly_seasonality_order = yearly_seasonality_order
         self.holidays_prior_scale = holidays_prior_scale
         self.trend_phi = trend_phi
+        if phi is not None:
+            self.trend_phi = phi
         self.holidays = holidays
 
     def fit(self, df, future_regressor=None):
@@ -226,7 +231,7 @@ class FBProphet(ModelObject):
                 m.add_seasonality(
                     name='weekly',
                     period=168 if "H" in self.frequency else 7,
-                    fourier_order=4,
+                    fourier_order=int(self.weekly_seasonality_order),
                     prior_scale=self.weekly_seasonality_prior_scale,
                 )
             if self.yearly_seasonality_prior_scale not in [None, "None"]:
