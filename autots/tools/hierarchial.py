@@ -152,3 +152,126 @@ test.reconcile(test_df)
 # how to assign blame/reconcile
 # multiple group levels
 # one additional overall-level
+
+
+def mint_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarray:
+    """
+    MinT reconciliation formula:
+       y_all^r = S (S' W^-1 S)^-1 S' W^-1 y_all
+
+    Parameters
+    ----------
+    S : np.ndarray, shape (L, M)
+        The hierarchy (aggregator) matrix. L = number of hierarchical levels
+        (top + middle + bottom), M = number of bottom-level series.
+    y_all : np.ndarray, shape (T, L)
+        Forecasts at all levels for T time points (the second dimension L
+        must match S.shape[0]).
+    W : np.ndarray, shape (L, L)
+        The (regularized) covariance (or weighting) matrix for the hierarchical levels.
+
+    Returns
+    -------
+    y_all_reconciled : np.ndarray, shape (T, L)
+        Reconciled forecasts for all L levels (top, middle, bottom).
+    """
+    # Invert W
+    W_inv = np.linalg.inv(W)
+    # (S' W^-1 S)^-1
+    S_T = S.T
+    M = S_T @ W_inv @ S   # shape (M, M)
+    M_inv = np.linalg.inv(M)
+
+    # Reconcile (vectorized for all T)
+    y_all_T = y_all.T  # (L, T)
+    step_a = S_T @ W_inv @ y_all_T  # (M, T)
+    step_b = M_inv @ step_a         # (M, T)
+    step_c = S @ step_b             # (L, T)
+    y_all_reconciled = step_c.T     # (T, L)
+    return y_all_reconciled
+
+
+def erm_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarray:
+    """
+    ERM (Error or Empirical Risk Minimization) Reconciliation:
+      Solve Weighted LS:  min_{y_bottom}  ||y_all - S y_bottom||_W^2
+      subject to hierarchical constraints.
+
+    The closed-form solution for y_bottom^r:
+       y_bottom^r = (S' W S)^{-1} S' W y_all
+    => y_all^r = S y_bottom^r = S (S' W S)^{-1} S' W y_all
+
+    Parameters
+    ----------
+    S : np.ndarray, shape (L, M)
+        Hierarchy matrix. L = # total levels, M = # bottom series.
+    y_all : np.ndarray, shape (T, L)
+        Forecasts for T time points, dimension L.
+    W : np.ndarray, shape (L, L)
+        Weight (covariance) matrix for the Weighted LS objective.
+
+    Returns
+    -------
+    y_all_reconciled : np.ndarray, shape (T, L)
+        Reconciled forecasts for all L levels.
+    """
+    S_T = S.T
+    A = S_T @ W @ S  # shape (M, M)
+    A_inv = np.linalg.inv(A)
+
+    # P = S (S' W S)^{-1} S' W
+    P = S @ A_inv @ S_T @ W  # shape (L, L)
+
+    # (T, L) @ (L, L) => (T, L)
+    y_reconciled = y_all @ P.T
+    return y_reconciled
+
+
+def ledoit_wolf_covariance(X: np.ndarray, assume_centered: bool = False) -> np.ndarray:
+    """
+    Computes the Ledoit-Wolf shrunk covariance matrix of X.
+
+    Parameters
+    ----------
+    X : np.ndarray, shape (n_samples, n_features)
+        The data matrix. Each row is an observation, each column is a variable.
+    assume_centered : bool
+        If True, X is assumed to already be centered.
+
+    Returns
+    -------
+    lw_cov : np.ndarray, shape (n_features, n_features)
+        The Ledoit-Wolf shrunk covariance matrix estimate.
+
+    Notes
+    -----
+    - This shrinks the sample covariance toward the identity matrix.
+    - The shrinkage intensity gamma is determined from data per Ledoit & Wolf (2004).
+    """
+    n_samples, n_features = X.shape
+    if not assume_centered:
+        X = X - X.mean(axis=0, keepdims=True)
+
+    # Empirical covariance
+    emp_cov = (X.T @ X) / (n_samples - 1)
+
+    # mu = average of diag(emp_cov)
+    mu = np.trace(emp_cov) / n_features
+
+    # Sum-of-squared differences for beta
+    den = (n_samples - 1.0) ** 2
+    beta = 0.0
+    # Minimal for-loop to accumulate squared difference
+    for i in range(n_samples):
+        row = X[i, :]
+        diff = np.outer(row, row) - emp_cov
+        beta += (diff * diff).sum()
+    beta /= den
+
+    # gamma = beta / sum((emp_cov - mu*I)^2)
+    diff = emp_cov - mu * np.eye(n_features)
+    gamma = beta / (diff * diff).sum()
+    gamma = max(0.0, min(1.0, gamma))  # clip
+
+    shrunk_cov = (1.0 - gamma) * emp_cov + gamma * mu * np.eye(n_features)
+    return shrunk_cov

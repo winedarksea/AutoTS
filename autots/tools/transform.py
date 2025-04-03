@@ -40,6 +40,7 @@ from autots.tools.fir_filter import (
     generate_random_fir_params,
     fft_fir_filter_to_timeseries,
 )
+from autots.tools.hierarchial import ledoit_wolf_covariance, mint_reconcile, erm_reconcile
 
 try:
     from scipy.signal import butter, sosfiltfilt, savgol_filter
@@ -6067,6 +6068,351 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         return params
 
 
+class ReconciliationTransformer:
+    """
+    A transformer that:
+      - Builds (or uses provided) hierarchical groupings of bottom-level columns.
+      - Fills NaN with 0 before computations.
+      - In transform(), aggregates bottom-level series into middle + top levels,
+        appending them as new columns.
+      - In inverse_transform(), reconciles forecasts (MinT or ERM) using either
+        historical or forecast-based covariance, with optional Ledoit-Wolf or manual shrink,
+        plus a small ridge to ensure numerical stability.
+      - Returns only the reconciled bottom-level columns.
+
+    Parameters
+    ----------
+    group_size : int
+        Number of bottom-level series to combine into one middle-level aggregator
+        if no hierarchy_map is provided.
+    hierarchy_map : dict or None
+        If provided, describes aggregator sums for top/middle levels. E.g.,
+          { "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }.
+        If None, automatically creates groups of size group_size plus a single "TOP".
+    reconciliation_params : dict
+        Dict of parameters for reconciliation. Some keys:
+          - "method": str, one of ["mint", "erm", "none"]. (default "mint")
+          - "cov_source": str, one of ["historical", "forecasts"]. (default "historical")
+          - "weighting": str, one of ["identity", "diagonal", "full"]. (default "diagonal")
+          - "shrinkage": float in [0,1], manual shrink to diagonal. (0 => none)
+          - "ledoit_wolf": bool => if True, use Ledoit-Wolf (default False)
+          - "ridge": float or None => if not None, adds ridge * I to W before inversion. (default 1e-9)
+    """
+
+    def __init__(
+        self,
+        group_size: int = 10,
+        hierarchy_map=None,
+        reconciliation_params=None,
+    ):
+        self.group_size = group_size
+        self.hierarchy_map = hierarchy_map
+
+        # Default reconciliation params
+        default_recon = {
+            "method": "mint",         # "mint", "erm", or "none"
+            "cov_source": "historical", # "historical" or "forecasts"
+            "weighting": "diagonal",   # "identity", "diagonal", "full"
+            "shrinkage": 0.02,         # manual linear shrink
+            "ledoit_wolf": False,     # if True, apply Ledoit-Wolf
+            "ridge": 1e-9,           # small ridge for numerical stability (None => no ridge)
+        }
+        if reconciliation_params is None:
+            reconciliation_params = {}
+        self.reconciliation_params = {**default_recon, **reconciliation_params}
+
+        self.bottom_level_cols_ = None
+        self.all_level_cols_ = None
+        self.agg_matrix_ = None   # The S matrix for the hierarchy: shape (n_levels_, n_bottom_)
+        self.n_bottom_ = None
+        self.n_levels_ = None
+        self.col_index_map_ = None
+        self.fitted_ = False
+
+        # We'll store historical covariance of bottom-level data
+        self.cov_bottom_ = None  # shape (n_bottom_, n_bottom_)
+
+    def fit(self, df: pd.DataFrame) -> "ReconciliationTransformer":
+        """
+        - Fills NaNs with 0.
+        - Builds aggregator matrix S based on bottom-level columns + hierarchy map.
+        - Estimates bottom-level historical covariance for future use.
+
+        About the S matrix:
+          - Suppose we have M bottom-level time series (columns).
+          - We define aggregator rows for each top or middle-level aggregator. Each aggregator row
+            contains 1's in the columns that belong to that aggregator, 0 otherwise.
+          - Then we append the M identity rows (one per bottom-level column) at the bottom of S,
+            forming a final matrix of shape (L_agg + M, M).
+            => The row ordering is [ aggregator_1, aggregator_2, ..., aggregator_L_agg, bottom_1, bottom_2, ..., bottom_M ].
+          - If we multiply S by a vector of bottom-level forecasts, we get a vector of length L_agg+M
+            which includes top+middle aggregator sums and the original bottom-level values.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Input DataFrame with each column as a bottom-level series (wide format).
+
+        Returns
+        -------
+        self : ReconciliationTransformer
+            Fitted transformer.
+        """
+        # 1) Fill NaNs with 0
+        df = df.fillna(0.0)
+
+        # 2) Identify bottom-level columns
+        self.bottom_level_cols_ = list(df.columns)
+
+        # 3) Build or use given hierarchy
+        if self.hierarchy_map is None:
+            # Auto-create artificial hierarchy in groups of self.group_size
+            bottom_cols = self.bottom_level_cols_
+            chunked = [
+                bottom_cols[i : i + self.group_size]
+                for i in range(0, len(bottom_cols), self.group_size)
+            ]
+            hierarchy_map_auto = {}
+            for i, chunk in enumerate(chunked):
+                mid_name = f"MID_{i}"
+                hierarchy_map_auto[mid_name] = chunk
+            # Also define a top aggregator name
+            top_name = "TOP"
+            hierarchy_map_auto[top_name] = bottom_cols
+            self.generated_hierarchy_map_ = hierarchy_map_auto
+        else:
+            self.generated_hierarchy_map_ = self.hierarchy_map
+
+        # 4) Create aggregator matrix S
+        all_agg_names = list(self.generated_hierarchy_map_.keys())  # top+middle aggregator names
+        L_agg = len(all_agg_names)
+        M_bot = len(self.bottom_level_cols_)
+
+        # aggregator part => shape (L_agg, M_bot)
+        S_agg = np.zeros((L_agg, M_bot), dtype=float)
+        for row_idx, agg_name in enumerate(all_agg_names):
+            bottom_list = self.generated_hierarchy_map_[agg_name]
+            for b_col in bottom_list:
+                col_j = self.bottom_level_cols_.index(b_col)
+                S_agg[row_idx, col_j] = 1.0
+
+        # Identity for bottom => shape (M_bot, M_bot)
+        I_bottom = np.eye(M_bot)
+        # Final aggregator matrix => shape (L_agg + M_bot, M_bot)
+        S = np.vstack([S_agg, I_bottom])
+
+        self.n_bottom_ = M_bot
+        self.n_levels_ = L_agg + M_bot
+        row_names = all_agg_names + self.bottom_level_cols_
+        self.col_index_map_ = {row_names[i]: i for i in range(self.n_levels_)}
+        self.agg_matrix_ = S
+        self.all_level_cols_ = row_names
+
+        # 5) Estimate bottom-level covariance from historical data:
+        #    The user might choose to use it in "historical" mode in inverse_transform.
+        #    shape => (M_bot, M_bot).
+        bottom_data = df[self.bottom_level_cols_].values  # shape (T, M_bot)
+        if self.reconciliation_params.get("ledoit_wolf", False):
+            self.cov_bottom_ = ledoit_wolf_covariance(bottom_data, assume_centered=False)
+        else:
+            self.cov_bottom_ = np.cov(bottom_data, rowvar=False)
+
+        self.fitted_ = True
+        return self
+
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Fills NaNs with 0, then aggregates bottom-level series into
+        middle/top levels, appending them as new columns.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            A DataFrame with the bottom-level columns.
+
+        Returns
+        -------
+        df_transformed : pd.DataFrame
+            A DataFrame with columns for top, middle, and bottom levels.
+        """
+        if not self.fitted_:
+            raise ValueError("Transformer has not been fitted yet.")
+
+        df = df.fillna(0.0)
+
+        # Y_bottom => shape (T, M_bottom)
+        Y_bottom = df[self.bottom_level_cols_].values
+        # Y_all => shape (T, n_levels_)
+        Y_all = Y_bottom @ self.agg_matrix_.T
+
+        df_agg = pd.DataFrame(
+            Y_all,
+            index=df.index,
+            columns=self.all_level_cols_,
+        )
+
+        # Avoid duplicating bottom columns: keep the original bottom from df
+        # and only add aggregator columns
+        top_mid_cols = self.all_level_cols_[:-self.n_bottom_]
+        new_agg_cols = [c for c in top_mid_cols if c not in df.columns]
+
+        df_out = pd.concat([df, df_agg[new_agg_cols]], axis=1)
+        return df_out
+
+    def inverse_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Reconcile the forecasts in df (which must include top, middle, and bottom levels)
+        using the method in self.reconciliation_params["method"] => "mint", "erm", or "none".
+
+        Covariance matrix W is built depending on:
+          - "cov_source" => "historical" or "forecasts"
+          - "weighting" => "identity", "diagonal", or "full"
+          - "ledoit_wolf" => whether to apply Ledoit-Wolf
+          - "shrinkage" => scalar in [0,1] (manual shrink to diagonal)
+          - "ridge" => optional float to add to diagonal for stability
+
+        Returns only the reconciled bottom-level columns.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            A DataFrame with columns for all levels (the same columns transform() produces).
+
+        Returns
+        -------
+        df_reconciled_bottom : pd.DataFrame
+            A DataFrame with only the bottom-level columns, reconciled to ensure hierarchical consistency.
+        """
+        if not self.fitted_:
+            raise ValueError("Transformer has not been fitted yet.")
+
+        df = df.fillna(0.0)
+
+        method = self.reconciliation_params.get("method", "mint").lower()
+        if method == "none":
+            # No reconciliation => just return bottom portion
+            return df[self.bottom_level_cols_]
+        elif method not in ["mint", "erm"]:
+            raise NotImplementedError(f"Method '{method}' is not implemented.")
+
+        # Collect other parameters
+        cov_source = self.reconciliation_params.get("cov_source", "historical")
+        weighting = self.reconciliation_params.get("weighting", "diagonal")
+        manual_shrink = self.reconciliation_params.get("shrinkage", 0.0)
+        ledoit_wolf_flag = self.reconciliation_params.get("ledoit_wolf", False)
+        ridge_val = self.reconciliation_params.get("ridge", 1e-9)  # can be None
+
+        # 1) Extract forecast matrix in correct order
+        missing_cols = [c for c in self.all_level_cols_ if c not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"The provided DataFrame is missing these hierarchy columns: {missing_cols}"
+            )
+        y_all_forecast = df[self.all_level_cols_].values  # (T, n_levels_)
+
+        # 2) Build base covariance from either historical or forecast data
+        S = self.agg_matrix_  # shape => (n_levels_, n_bottom_)
+
+        if cov_source == "historical":
+            # Use S cov_bottom S'
+            # self.cov_bottom_ is (M_bottom x M_bottom)
+            cov_all_base = S @ self.cov_bottom_ @ S.T
+        elif cov_source == "forecasts":
+            # Re-estimate from forecast data => shape (T, n_levels_)
+            if ledoit_wolf_flag:
+                cov_all_base = ledoit_wolf_covariance(y_all_forecast, assume_centered=False)
+            else:
+                cov_all_base = np.cov(y_all_forecast, rowvar=False)
+        else:
+            raise ValueError(f"Unknown cov_source: {cov_source}")
+
+        # 3) Apply weighting mode
+        n_levels = self.n_levels_
+        if weighting == "identity":
+            W = np.eye(n_levels)
+        elif weighting == "diagonal":
+            diag_vals = np.diag(cov_all_base)
+            W = np.diag(diag_vals)
+        elif weighting == "full":
+            W = cov_all_base.copy()
+        else:
+            raise ValueError(f"Unknown weighting: {weighting}")
+
+        # 4) Manual shrink => W_shrunk = alpha*diag(W) + (1 - alpha)*W
+        if manual_shrink > 0.0:
+            diagW = np.diag(np.diag(W))
+            W = manual_shrink * diagW + (1.0 - manual_shrink) * W
+
+        # 5) Optional ridge for stability
+        if ridge_val is not None and ridge_val > 0.0:
+            W += np.eye(n_levels) * ridge_val
+
+        # 6) Reconcile with MinT or ERM
+        if method == "mint":
+            y_all_reconciled = mint_reconcile(S, y_all_forecast, W)
+        else:  # method == "erm"
+            y_all_reconciled = erm_reconcile(S, y_all_forecast, W)
+
+        # 7) Slice out the bottom portion => last M_bottom columns
+        bottom_start_idx = n_levels - self.n_bottom_
+        y_bottom_reconciled = y_all_reconciled[:, bottom_start_idx:]
+
+        # Build DataFrame
+        df_bottom_reconciled = pd.DataFrame(
+            y_bottom_reconciled,
+            index=df.index,
+            columns=self.bottom_level_cols_,
+        )
+        return df_bottom_reconciled
+
+    def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convenience method to fit and then transform."""
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """
+        Returns new random parameters for demonstration, possibly including:
+         - method="mint"/"erm"/"none"
+         - cov_source="historical"/"forecasts"
+         - weighting="identity"/"diagonal"/"full"
+         - shrinkage in [0.0, 0.5]
+         - led_wolf in [True, False]
+         - ridge in [None, 1e-9, 1e-8, 1e-5, ...]
+
+        This can be adapted for random or grid-search hyperparameter tuning.
+        """
+        if method == "fast":
+            group_size = random.choice([5, 10])
+        else:
+            group_size = random.choice([5, 10, 20, 30])
+
+        rec_method = random.choice(["mint", "erm", "none"])
+        cov_source = random.choice(["historical", "forecasts"])
+        weighting_opts = ["identity", "diagonal", "full"]
+        weighting_choice = random.choice(weighting_opts)
+        led_wolf = random.choice([True, False])
+        shrink_val = random.choice([0.0, 0.1, 0.3, 0.5])
+        # Some possible ridge values, or None
+        ridge_candidates = [None, 1e-12, 1e-9, 1e-8, 1e-6]
+        ridge_val = random.choice(ridge_candidates)
+
+        params = {
+            "group_size": group_size,
+            "hierarchy_map": None,  # or generate a custom map
+            "reconciliation_params": {
+                "method": rec_method,
+                "cov_source": cov_source,
+                "weighting": weighting_choice,
+                "shrinkage": shrink_val,
+                "ledoit_wolf": led_wolf,
+                "ridge": ridge_val,
+            },
+        }
+        return params
+
+
 class StandardScaler(EmptyTransformer):
     def __init__(self):
         self.means = None
@@ -6197,6 +6543,7 @@ have_params = {
     "ChangepointDetrend": ChangepointDetrend,
     "MeanPercentSplitter": MeanPercentSplitter,
     "UpscaleDownscaleTransformer": UpscaleDownscaleTransformer,
+    "ReconciliationTransformer": ReconciliationTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -6208,6 +6555,7 @@ shared_trans = [
     "Cointegration",
     "HolidayTransformer",  # confirmed
     "RegressionFilter",
+    "ReconciliationTransformer",
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -6223,7 +6571,7 @@ external_transformers = [
 
 
 class GeneralTransformer(object):
-    """Remove fillNA and then mathematical transformations.
+    """Remove fillNA and then mathematical transformations. Has .fit(), .fit_transform(), and inverse_transform() primary methods.
 
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
 
@@ -6307,6 +6655,7 @@ class GeneralTransformer(object):
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
             "UpscaleDownscaleTransformer": upscales and downscales
+            "ReconciliationTransformer": creates hierarchies then reconciles on the way back
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -6376,6 +6725,9 @@ class GeneralTransformer(object):
             "Constraint",
             "FIRFilter",
         ]
+
+    def __repr__(self):
+        return f"AutoTS general purpose transformer with transformers {self.transformations}."
 
     @staticmethod
     def get_new_params(method="fast", **kwargs):
@@ -6787,6 +7139,7 @@ transformer_dict = {
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
     "UpscaleDownscaleTransformer": 0.01,
+    "ReconciliationTransformer": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -6895,6 +7248,7 @@ expanding_transformers = [
     "ThetaTransformer",
     "MeanPercentSplitter",
     "UpscaleDownscaleTransformer",
+    "ReconciliationTransformer",
 ]  # note there is also prob_trans below for preventing reuse of these in one transformer
 
 transformer_class = {}

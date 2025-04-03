@@ -13,8 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 * trimmed_mean to AverageValueNaive
 
-# 0.6.21 🇺🇦 🇺🇦 🇺🇦
-* Prophet and Cassandra bug fixes
+# 0.6.22 🇺🇦 🇺🇦 🇺🇦
+* added ReconciliationTransformer
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
