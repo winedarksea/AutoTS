@@ -850,6 +850,7 @@ class ModelTest(unittest.TestCase):
             "ChangepointDetrend",  # new in 0.6.16
             "MeanPercentSplitter",  # new in 0.6.16
             "UpscaleDownscaleTransformer",  # new in 0.6.18
+            # "ReconciliationTransformer",  # new in 0.6.22
         ]
 
         timings = {}

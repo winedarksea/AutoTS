@@ -6068,7 +6068,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         return params
 
 
-class ReconciliationTransformer:
+class ReconciliationTransformer(EmptyTransformer):
     """
     A transformer that:
       - Builds (or uses provided) hierarchical groupings of bottom-level columns.
@@ -6105,6 +6105,7 @@ class ReconciliationTransformer:
         hierarchy_map=None,
         reconciliation_params=None,
     ):
+        super().__init__(name="ReconciliationTransformer")
         self.group_size = group_size
         self.hierarchy_map = hierarchy_map
 
@@ -6259,7 +6260,7 @@ class ReconciliationTransformer:
         df_out = pd.concat([df, df_agg[new_agg_cols]], axis=1)
         return df_out
 
-    def inverse_transform(self, df: pd.DataFrame) -> pd.DataFrame:
+    def inverse_transform(self, df: pd.DataFrame, trans_method="forecast") -> pd.DataFrame:
         """
         Reconcile the forecasts in df (which must include top, middle, and bottom levels)
         using the method in self.reconciliation_params["method"] => "mint", "erm", or "none".
@@ -6383,19 +6384,16 @@ class ReconciliationTransformer:
 
         This can be adapted for random or grid-search hyperparameter tuning.
         """
-        if method == "fast":
-            group_size = random.choice([5, 10])
-        else:
-            group_size = random.choice([5, 10, 20, 30])
+        group_size = random.choice([5, 10, 20, 30])
 
-        rec_method = random.choice(["mint", "erm", "none"])
-        cov_source = random.choice(["historical", "forecasts"])
+        rec_method = random.choices(["mint", "erm", "none"], [0.5, 0.1, 0.3])[0]
+        cov_source = random.choices(["historical", "forecasts"], [0.7, 0.3])[0]
         weighting_opts = ["identity", "diagonal", "full"]
         weighting_choice = random.choice(weighting_opts)
-        led_wolf = random.choice([True, False])
-        shrink_val = random.choice([0.0, 0.1, 0.3, 0.5])
+        led_wolf = random.choices([True, False], [0.3, 0.7])[0]
+        shrink_val = random.choices([0.0, 0.05, 0.1, 0.15, 0.3, 0.5, 0.7], [0.1, 0.2, 0.3, 0.2, 0.1, 0.2, 0.1])[0]
         # Some possible ridge values, or None
-        ridge_candidates = [None, 1e-12, 1e-9, 1e-8, 1e-6]
+        ridge_candidates = [None, 1e-12, 1e-9, 1e-8, 1e-7, 1e-6]
         ridge_val = random.choice(ridge_candidates)
 
         params = {
