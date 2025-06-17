@@ -2077,7 +2077,7 @@ class WindowRegression(ModelObject):
             if isinstance(self.X, pd.DataFrame):
                 self.X.columns = self.X.columns.astype(str)
             self.X = self.scaler.fit_transform(self.X)
-        if self.fourier_encoding_components is not None:
+        if self.x is not None:
             self.fourier_encoder = RandomFourierEncoding(
                 n_components=int(self.X.shape[1] * self.fourier_encoding_components),
                 sigma=1.0,
@@ -3314,6 +3314,7 @@ class MultivariateRegression(ModelObject):
         series_hash: bool = False,
         frac_slice: float = None,
         transformation_dict: dict = None,
+        discard_data: float = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -3361,6 +3362,7 @@ class MultivariateRegression(ModelObject):
         self.series_hash = series_hash
         self.frac_slice = frac_slice
         self.transformation_dict = transformation_dict
+        self.discard_data = discard_data
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -3595,6 +3597,15 @@ class MultivariateRegression(ModelObject):
             if self.probabilistic and not self.multioutputgpr:
                 self.model_upper.fit(self.X.to_numpy(), self.Y)
                 self.model_lower.fit(self.X.to_numpy(), self.Y)
+            
+            if self.discard_data is not None:
+                pred_y = self.model.predict(self.X.to_numpy())
+                error = np.abs(pred_y - self.Y)
+                error_percentile = np.percentile(error, self.discard_data)
+                error_check = error < error_percentile
+                new_X = self.X[error_check]
+                new_Y = self.Y[error_check]
+                self.model.fit(new_X, new_Y)
             # we only need the N most recent points for predict
             # self.sktraindata = df.tail(self.min_threshold)
             self.fit_data(df)
@@ -3917,6 +3928,7 @@ class MultivariateRegression(ModelObject):
             "frac_slice": random.choices(
                 [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
             )[0],
+            "discard_data": random.choices([None, 50, 90, 98], [0.7, 0.1, 0.1, 0.1])[0],
             "transformation_dict": transform_choice,
         }
         return parameter_dict
@@ -3949,6 +3961,7 @@ class MultivariateRegression(ModelObject):
             "cointegration_lag": self.cointegration_lag,
             "series_hash": self.series_hash,
             "frac_slice": self.frac_slice,
+            "discard_data": self.discard_data,
             "transformation_dict": self.transformation_dict,
         }
         return parameter_dict
