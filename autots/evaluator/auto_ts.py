@@ -1147,6 +1147,9 @@ class AutoTS(object):
                 print(
                     "future_regressor row count does not match length of training data"
                 )
+                future_regressor = future_regressor.reindex(
+                    self.df_wide_numeric.index, fill_value=0
+                )
                 time.sleep(2)
 
             # handle any non-numeric data, crudely
