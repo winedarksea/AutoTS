@@ -2,7 +2,7 @@
 """Tests."""
 
 import unittest
-from autots import create_lagged_regressor, load_daily, create_regressor
+from autots import AutoTS, create_lagged_regressor, load_daily, create_regressor
 
 
 class test_create_lagged_regressor(unittest.TestCase):
@@ -50,3 +50,36 @@ class test_create_lagged_regressor(unittest.TestCase):
         self.assertFalse(regr.isna().any().any())
         self.assertFalse(fcst.isna().any().any())
         self.assertTrue((df.index == regr.index).all())
+
+
+class FutureRegressorAlignmentTest(unittest.TestCase):
+    def test_future_regressor_alignment(self):
+        forecast_length = 5
+        df = load_daily(long=False).iloc[:50]
+        df = df.drop(df.index[5])
+        reg_df = df[[df.columns[0]]].copy()
+        reg_train, _ = create_lagged_regressor(
+            reg_df,
+            forecast_length=forecast_length,
+            frequency='infer',
+            scale=False,
+            summarize=None,
+            backfill='bfill',
+            fill_na='pchip',
+        )
+        reg_train = reg_train.iloc[forecast_length:]
+        df_train = df.iloc[forecast_length:]
+        model = AutoTS(
+            forecast_length=forecast_length,
+            max_generations=1,
+            num_validations=1,
+            validation_method='backwards',
+            model_list=['LastValueNaive'],
+            transformer_list=[],
+            verbose=0,
+        )
+        model = model.fit(df_train, future_regressor=reg_train)
+        self.assertEqual(
+            model.future_regressor_train.shape[0],
+            model.df_wide_numeric.shape[0],
+        )
