@@ -111,3 +111,224 @@ class TestAnomalies(unittest.TestCase):
         temp = mod.dates_to_holidays(full_dates, style="long")  # noqa
         # this is a weak test, but will capture some functionality
         self.assertEqual(holidays_detected, 1, "no methods detected holidays")
+
+
+class TestVAEAnomalies(unittest.TestCase):
+    """Test VAE anomaly detection functionality."""
+    
+    @classmethod
+    def setUpClass(cls):
+        """Set up test data once for all tests."""
+        np.random.seed(42)
+        dates = pd.date_range(start='2020-01-01', periods=200, freq='D')
+        
+        # Create normal data with patterns
+        data = {
+            'series_1': np.random.normal(100, 10, 200),
+            'series_2': np.random.normal(50, 5, 200) + 10 * np.sin(np.arange(200) * 2 * np.pi / 7),
+            'series_3': np.random.normal(75, 8, 200) + 5 * np.cos(np.arange(200) * 2 * np.pi / 30)
+        }
+        
+        # Add some anomalies
+        data['series_1'][50] = 200  # spike
+        data['series_1'][51] = 210  # spike
+        data['series_2'][100] = 0   # drop
+        data['series_3'][150] = 150 # spike
+        
+        cls.df = pd.DataFrame(data, index=dates)
+    
+    def test_vae_availability(self):
+        """Test that VAEOutlier is available in the methods."""
+        from autots.tools.anomaly_utils import available_methods
+        self.assertIn("VAEOutlier", available_methods, "VAEOutlier not found in available methods")
+    
+    def test_vae_parameter_generation(self):
+        """Test parameter generation for VAEOutlier."""
+        params = AnomalyDetector.get_new_params(method="VAEOutlier")
+        self.assertEqual(params['method'], 'VAEOutlier', "Method should be VAEOutlier")
+        self.assertIn('method_params', params, "method_params should be present")
+        
+        # Check that key parameters are present
+        method_params = params['method_params']
+        expected_params = ['depth', 'batch_size', 'epochs', 'learning_rate', 'loss_function', 
+                          'dropout_rate', 'beta', 'contamination']
+        for param in expected_params:
+            self.assertIn(param, method_params, f"Parameter {param} should be present")
+    
+    def test_vae_anomaly_detection(self):
+        """Test VAE anomaly detection functionality."""
+        try:
+            import torch
+            torch_available = True
+        except ImportError:
+            self.skipTest("PyTorch not available, skipping VAE test")
+        
+        detector = AnomalyDetector(
+            method="VAEOutlier",
+            method_params={
+                'depth': 1,
+                'batch_size': 32,
+                'epochs': 10,  # small for testing
+                'learning_rate': 1e-3,
+                'loss_function': 'elbo',
+                'contamination': 0.1,
+                'random_state': 42
+            }
+        )
+        
+        anomalies, scores = detector.detect(self.df)
+        
+        # Check output shapes
+        self.assertEqual(anomalies.shape, self.df.shape, "Anomalies shape should match input")
+        self.assertEqual(scores.shape, self.df.shape, "Scores shape should match input")
+        
+        # Check that some anomalies were detected
+        num_anomalies = np.sum((anomalies == -1).values)
+        self.assertGreater(num_anomalies, 0, "Should detect at least some anomalies")
+        self.assertLess(num_anomalies, len(self.df) * 0.5, "Should not detect too many anomalies")
+        
+        # Check that values are in expected range
+        self.assertTrue(np.all(np.isin(anomalies.values, [-1, 1])), "Anomalies should be -1 or 1")
+        self.assertTrue(np.all(scores.values >= 0), "Scores should be non-negative")
+    
+    def test_vae_univariate_detection(self):
+        """Test VAE anomaly detection in univariate mode."""
+        try:
+            import torch
+            torch_available = True
+        except ImportError:
+            self.skipTest("PyTorch not available, skipping VAE test")
+        
+        detector = AnomalyDetector(
+            output='univariate',
+            method="VAEOutlier",
+            method_params={
+                'depth': 1,
+                'batch_size': 32,
+                'epochs': 10,
+                'learning_rate': 1e-3,
+                'contamination': 0.1,
+                'random_state': 42
+            }
+        )
+        
+        anomalies, scores = detector.detect(self.df)
+        
+        # Check output shapes for univariate
+        self.assertEqual(anomalies.shape, (len(self.df), 1), "Univariate anomalies should have single column")
+        self.assertEqual(scores.shape, (len(self.df), 1), "Univariate scores should have single column")
+    
+    def test_vae_error_handling(self):
+        """Test VAE error handling when PyTorch is not available."""
+        # Mock torch_available to False
+        from autots.tools import anomaly_utils
+        original_torch_available = anomaly_utils.torch_available
+        anomaly_utils.torch_available = False
+        
+        try:
+            detector = AnomalyDetector(
+                method="VAEOutlier",
+                method_params={'epochs': 10}
+            )
+            
+            with self.assertRaises(ImportError):
+                detector.detect(self.df)
+        finally:
+            # Restore original value
+            anomaly_utils.torch_available = original_torch_available
+    
+    def test_vae_different_loss_functions(self):
+        """Test VAE with different loss functions."""
+        try:
+            import torch
+            torch_available = True
+        except ImportError:
+            self.skipTest("PyTorch not available, skipping VAE test")
+        
+        loss_functions = ['elbo', 'mse', 'lmse']
+        
+        for loss_func in loss_functions:
+            with self.subTest(loss_function=loss_func):
+                detector = AnomalyDetector(
+                    method="VAEOutlier",
+                    method_params={
+                        'depth': 1,
+                        'batch_size': 32,
+                        'epochs': 5,  # very small for testing
+                        'learning_rate': 1e-3,
+                        'loss_function': loss_func,
+                        'contamination': 0.1,
+                        'random_state': 42
+                    }
+                )
+                
+                try:
+                    anomalies, scores = detector.detect(self.df)
+                    self.assertEqual(anomalies.shape, self.df.shape)
+                    self.assertTrue(np.all(np.isin(anomalies.values, [-1, 1])))
+                except Exception as e:
+                    self.fail(f"VAE with {loss_func} loss failed: {e}")
+    
+    def test_vae_depth_parameter(self):
+        """Test VAE with different depth parameters."""
+        try:
+            import torch
+            torch_available = True
+        except ImportError:
+            self.skipTest("PyTorch not available, skipping VAE test")
+        
+        for depth in [1, 2]:
+            with self.subTest(depth=depth):
+                detector = AnomalyDetector(
+                    method="VAEOutlier",
+                    method_params={
+                        'depth': depth,
+                        'batch_size': 32,
+                        'epochs': 5,
+                        'learning_rate': 1e-3,
+                        'contamination': 0.1,
+                        'random_state': 42
+                    }
+                )
+                
+                try:
+                    anomalies, scores = detector.detect(self.df)
+                    self.assertEqual(anomalies.shape, self.df.shape)
+                except Exception as e:
+                    self.fail(f"VAE with depth {depth} failed: {e}")
+
+    def test_vae_anomaly_removal_transformer(self):
+        """Test AnomalyRemoval transformer with VAE method."""
+        try:
+            import torch
+            torch_available = True
+        except ImportError:
+            self.skipTest("PyTorch not available, skipping VAE test")
+        
+        from autots.tools.transform import AnomalyRemoval
+        
+        transformer = AnomalyRemoval(
+            method="VAEOutlier",
+            method_params={
+                'depth': 1,
+                'batch_size': 32,
+                'epochs': 5,
+                'learning_rate': 1e-3,
+                'contamination': 0.1,
+                'random_state': 42
+            },
+            fillna="mean"
+        )
+        
+        try:
+            cleaned_df = transformer.fit_transform(self.df)
+            # Should have fewer or equal rows (anomalies removed)
+            self.assertLessEqual(len(cleaned_df), len(self.df))
+            # Should have same number of columns
+            self.assertEqual(cleaned_df.shape[1], self.df.shape[1])
+        except Exception as e:
+            self.fail(f"AnomalyRemoval with VAE failed: {e}")
+
+
+if __name__ == '__main__':
+    unittest.main()
