@@ -147,26 +147,35 @@ class AnomalyDetector(object):
             self.anomalies[mask_replace] = 1
         return self.anomalies, self.scores
 
-    def plot(self, series_name=None, title=None, marker_size=None, plot_kwargs={}):
+    def plot(self, series_name=None, title=None, marker_size=None, plot_kwargs={}, start_date=None):
         import matplotlib.pyplot as plt
 
         if series_name is None:
             series_name = random.choice(self.df.columns)
         if title is None:
             title = series_name[0:50] + f" with {self.method} outliers"
+        
+        # Filter data by start_date if provided
+        df_plot = self.df
+        anomalies_plot = self.anomalies
+        if start_date is not None:
+            start_date = pd.to_datetime(start_date)
+            df_plot = self.df.loc[self.df.index >= start_date]
+            anomalies_plot = self.anomalies.loc[self.anomalies.index >= start_date]
+        
         fig, ax = plt.subplots()
-        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        df_plot[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if self.output == "univariate":
-            i_anom = self.anomalies.index[self.anomalies.iloc[:, 0] == -1]
+            i_anom = anomalies_plot.index[anomalies_plot.iloc[:, 0] == -1]
         else:
-            series_anom = self.anomalies[series_name]
+            series_anom = anomalies_plot[series_name]
             i_anom = series_anom[series_anom == -1].index
         if len(i_anom) > 0:
             if marker_size is None:
                 marker_size = max(20, fig.dpi * 0.45)
             ax.scatter(
                 i_anom.tolist(),
-                self.df.loc[i_anom, :][series_name],
+                df_plot.loc[i_anom, :][series_name],
                 c="red",
                 s=marker_size,
             )
@@ -343,6 +352,7 @@ class HolidayDetector(object):
         return self
 
     def plot_anomaly(self, kwargs={}):
+        # Extract start_date if provided in kwargs to pass to the anomaly detector plot method
         self.anomaly_model.plot(**kwargs)
 
     def plot(
@@ -353,6 +363,7 @@ class HolidayDetector(object):
         marker_size=None,
         plot_kwargs={},
         series=None,
+        start_date=None,
     ):
         import matplotlib.pyplot as plt
 
@@ -366,8 +377,15 @@ class HolidayDetector(object):
                 series_name[0:50]
                 + f" with {self.anomaly_detector_params['method']} holidays"
             )
+        
+        # Filter data by start_date if provided
+        df_plot = self.df
+        if start_date is not None:
+            start_date = pd.to_datetime(start_date)
+            df_plot = self.df.loc[self.df.index >= start_date]
+        
         fig, ax = plt.subplots()
-        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        df_plot[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if marker_size is None:
             marker_size = max(20, fig.dpi * 0.45)
         if include_anomalies:
@@ -379,20 +397,30 @@ class HolidayDetector(object):
             else:
                 series_anom = self.anomaly_model.anomalies[series_name]
                 i_anom = series_anom[series_anom == -1].index
+            
+            # Filter anomalies by start_date if provided
+            if start_date is not None:
+                i_anom = i_anom[i_anom >= start_date]
+            
             if len(i_anom) > 0:
                 ax.scatter(
                     i_anom.tolist(),
-                    self.df.loc[i_anom, :][series_name],
+                    df_plot.loc[i_anom, :][series_name],
                     c="red",
                     s=marker_size,
                 )
         # now the actual holidays
-        i_anom = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
-        i_anom = i_anom.index[i_anom == 1]
+        holiday_dates = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
+        i_anom = holiday_dates.index[holiday_dates == 1]
+        
+        # Filter holidays by start_date if provided
+        if start_date is not None:
+            i_anom = i_anom[i_anom >= start_date]
+        
         if len(i_anom) > 0:
             ax.scatter(
                 i_anom.tolist(),
-                self.df.loc[i_anom, :][series_name],
+                df_plot.loc[i_anom, :][series_name],
                 c="green",
                 s=marker_size,
             )
