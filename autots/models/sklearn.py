@@ -2077,7 +2077,7 @@ class WindowRegression(ModelObject):
             if isinstance(self.X, pd.DataFrame):
                 self.X.columns = self.X.columns.astype(str)
             self.X = self.scaler.fit_transform(self.X)
-        if self.x is not None:
+        if self.fourier_encoding_components is not None:
             self.fourier_encoder = RandomFourierEncoding(
                 n_components=int(self.X.shape[1] * self.fourier_encoding_components),
                 sigma=1.0,
