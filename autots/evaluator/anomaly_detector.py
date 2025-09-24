@@ -92,7 +92,13 @@ class AnomalyDetector(object):
                 verbose=2, **self.transform_dict
             )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
             # the post selecting by columns is for CenterSplit and any similar renames or expansions
-            self.df_anomaly = model.fit_transform(self.df_anomaly)[self.df.columns]
+            transformed_df = model.fit_transform(self.df_anomaly)
+            # Only select columns that exist in both original and transformed data (from expanding transformers)
+            common_cols = [col for col in self.df.columns if col in transformed_df.columns]
+            if common_cols:
+                self.df_anomaly = transformed_df[common_cols]
+            else:
+                self.df_anomaly = transformed_df
 
         if self.forecast_params is not None:
             backcast = back_forecast(
@@ -121,8 +127,11 @@ class AnomalyDetector(object):
             self.df_anomaly.columns = df.columns
 
         if self.method in ["prediction_interval"]:
+            df_for_limits = self.df_anomaly
+            if self.eval_period is not None:
+                df_for_limits = self.df_anomaly.tail(self.eval_period)
             self.anomalies, self.scores = limits_to_anomalies(
-                self.df_anomaly,
+                df_for_limits,
                 output=self.output,
                 method_params=self.method_params,
                 upper_limit=backcast.upper_forecast,
