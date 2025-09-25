@@ -216,7 +216,11 @@ def rolling_x_regressor(
             X.append(
                 pd.DataFrame(
                     np.matmul(
-                        coint_johansen(local_df.values, k_ar_diff=cointegration_lag),
+                        coint_johansen(
+                            local_df.values,
+                            k_ar_diff=cointegration_lag,
+                            fast=True,
+                        ),
                         (local_df.values).T,
                     ).T,
                     index=local_df.index,

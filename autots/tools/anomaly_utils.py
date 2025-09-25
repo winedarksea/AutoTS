@@ -44,11 +44,12 @@ except Exception:
 
 try:
     import torch
-    import torch.nn as nn
     import torch.nn.functional as F
+    from torch.nn import Module, Linear, Dropout
     from torch.utils.data import DataLoader, TensorDataset
     torch_available = True
 except Exception:
+    from autots.tools.mocks import Module
     torch_available = False
 
 
@@ -125,7 +126,7 @@ def loop_sk_outliers(df, method, method_params={}, n_jobs=1):
     return res, scores
 
 
-class VAEEncoder(nn.Module):
+class VAEEncoder(Module):
     """VAE Encoder network."""
     
     def __init__(self, input_dim, latent_dim, depth=1, dropout_rate=0.0):
@@ -135,22 +136,22 @@ class VAEEncoder(nn.Module):
         
         # First layer
         layer1_dim = max(1, int(input_dim * 2 / 3))
-        self.fc1 = nn.Linear(input_dim, layer1_dim)
+        self.fc1 = Linear(input_dim, layer1_dim)
         
         # Second layer if depth > 1
         if depth > 1:
             layer2_dim = max(1, int(input_dim * 1 / 2))
-            self.fc2 = nn.Linear(layer1_dim, layer2_dim)
+            self.fc2 = Linear(layer1_dim, layer2_dim)
             hidden_dim = layer2_dim
         else:
             hidden_dim = layer1_dim
         
         # Latent layers
-        self.fc_mean = nn.Linear(hidden_dim, latent_dim)
-        self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
+        self.fc_mean = Linear(hidden_dim, latent_dim)
+        self.fc_logvar = Linear(hidden_dim, latent_dim)
         
         if dropout_rate > 0:
-            self.dropout = nn.Dropout(dropout_rate)
+            self.dropout = Dropout(dropout_rate)
         
     def forward(self, x):
         # First layer
@@ -171,7 +172,7 @@ class VAEEncoder(nn.Module):
         return mean, logvar
 
 
-class VAEDecoder(nn.Module):
+class VAEDecoder(Module):
     """VAE Decoder network."""
     
     def __init__(self, input_dim, latent_dim, depth=1, dropout_rate=0.0):
@@ -181,21 +182,21 @@ class VAEDecoder(nn.Module):
         
         # First layer
         layer1_dim = max(1, int(input_dim * 2 / 3))
-        self.fc1 = nn.Linear(latent_dim, layer1_dim)
+        self.fc1 = Linear(latent_dim, layer1_dim)
         
         # Second layer if depth > 1
         if depth > 1:
             layer2_dim = max(1, int(input_dim * 1 / 2))
-            self.fc2 = nn.Linear(layer1_dim, layer2_dim)
+            self.fc2 = Linear(layer1_dim, layer2_dim)
             hidden_dim = layer2_dim
         else:
             hidden_dim = layer1_dim
         
         # Output layer
-        self.fc_out = nn.Linear(hidden_dim, input_dim)
+        self.fc_out = Linear(hidden_dim, input_dim)
         
         if dropout_rate > 0:
-            self.dropout = nn.Dropout(dropout_rate)
+            self.dropout = Dropout(dropout_rate)
     
     def forward(self, z):
         # First layer
@@ -215,7 +216,7 @@ class VAEDecoder(nn.Module):
         return x
 
 
-class VAE(nn.Module):
+class VAE(Module):
     """Complete VAE model."""
     
     def __init__(self, input_dim, latent_dim, depth=1, dropout_rate=0.0):
