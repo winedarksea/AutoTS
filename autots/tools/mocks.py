@@ -27,6 +27,33 @@ class Module:  # fake version of torch.nn.Module
     def eval(self):
         return self
 
+
+class Dataset:  # fake version of torch.utils.data.Dataset
+    def __init__(self, *args, **kwargs):
+        # Store args for debugging if needed
+        self.args = args
+        self.kwargs = kwargs
+
+    def __len__(self):
+        return 0
+
+    def __getitem__(self, idx):
+        return None
+
+
+class DataLoader:  # fake version of torch.utils.data.DataLoader
+    def __init__(self, dataset, *args, **kwargs):
+        # Store dataset and other args for debugging if needed
+        self.dataset = dataset
+        self.args = args
+        self.kwargs = kwargs
+
+    def __iter__(self):
+        return iter([])
+
+    def __len__(self):
+        return 0
+
 tqdm = lambda x, **kwargs: x  # fake version of tqdm
 curve_fit = lambda x: "scipy import failed"
 butter = lambda x: "scipy import failed"

@@ -15,6 +15,11 @@
 
 # 0.6.22 🇺🇦 🇺🇦 🇺🇦
 * added ReconciliationTransformer
+* updated cointegration code, replaced Cointegration with CointegrationTransformer
+* added mocks for dependency fallbacks
+* added variational autoencoder anomaly detection method
+* added experimental deep state space model
+* some fixes for breaking changes in dependencies
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

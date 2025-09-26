@@ -334,8 +334,7 @@ def rolling_x_regressor_regressor(
         X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -3594,7 +3593,7 @@ class MultivariateRegression(ModelObject):
             if self.probabilistic and not self.multioutputgpr:
                 self.model_upper.fit(self.X.to_numpy(), self.Y)
                 self.model_lower.fit(self.X.to_numpy(), self.Y)
-            
+
             if self.discard_data is not None:
                 pred_y = self.model.predict(self.X.to_numpy())
                 error = np.abs(pred_y - self.Y)
@@ -3995,9 +3994,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 
