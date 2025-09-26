@@ -11,7 +11,7 @@ from autots.tools.seasonal import (
     random_datepart,
     half_yr_spacing,
 )
-from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.tools.cointegration import btcd_decompose
 from autots.tools.constraint import (
     fit_constraint,
     apply_fit_constraint,
@@ -2663,73 +2663,359 @@ class MeanDifference(EmptyTransformer):
             return df
 
 
-class Cointegration(EmptyTransformer):
-    """Johansen Cointegration Decomposition."""
+class CointegrationTransformer(EmptyTransformer):
+    """Fast Cointegration Transformer using Residualized CCA/RRR with SVD and light shrinkage.
+    
+    This transformer is designed for maximum speed and memory efficiency, with graceful error handling.
+    It expands the number of output columns by creating cointegrated combinations of the input series.
+    
+    Args:
+        n_components (int): Number of cointegration vectors to use. If None, uses min(n_series, max_components)
+        max_components (int): Maximum number of components to extract
+        shrinkage (float): Regularization parameter for numerical stability (0.0 to 1.0)
+        method (str): Cointegration method - 'cca' for Canonical Correlation Analysis, 'rrr' for Reduced Rank Regression
+        min_periods (int): Minimum number of observations required
+        chunk_size (int): Process data in chunks for memory efficiency
+    """
 
     def __init__(
         self,
-        det_order: int = -1,
-        k_ar_diff: int = 1,
-        name: str = "Cointegration",
-        **kwargs,
+        n_components=None,
+        max_components=10,
+        shrinkage=1e-4,
+        method='cca',
+        min_periods=20,
+        chunk_size=10000,
+        **kwargs
     ):
-        self.name = name
-        self.det_order = det_order
-        self.k_ar_diff = k_ar_diff
+        super().__init__(name="CointegrationTransformer")
+        self.n_components = n_components
+        self.max_components = max_components
+        self.shrinkage = shrinkage
+        self.method = method
+        self.min_periods = min_periods
+        self.chunk_size = chunk_size
+        self.components_ = None
+        self.mean_ = None
+        self.original_columns = None
+        self.n_features_out_ = None
+        self.failed_fit = False
+
+    def _safe_svd(self, X, n_components=None):
+        """Perform SVD with error handling and memory management."""
+        try:
+            # Use economic SVD for large matrices
+            full_matrices = False if X.shape[0] > X.shape[1] else True
+            U, s, Vt = np.linalg.svd(X, full_matrices=full_matrices)
+            
+            # Apply light shrinkage to singular values for stability
+            s_shrunk = s / (s + self.shrinkage * s.max())
+            
+            if n_components is not None:
+                n_comp = min(n_components, len(s_shrunk))
+                return U[:, :n_comp], s_shrunk[:n_comp], Vt[:n_comp, :]
+            else:
+                return U, s_shrunk, Vt
+                
+        except (np.linalg.LinAlgError, MemoryError) as e:
+            return None, None, None
+
+    def _compute_cointegration_cca(self, X):
+        """Compute cointegration vectors using Canonical Correlation Analysis."""
+        try:
+            n_obs, n_vars = X.shape
+            
+            # Center the data
+            X_centered = X - self.mean_
+            
+            # Create first differences for CCA
+            dX = np.diff(X_centered, axis=0)
+            X_lag = X_centered[:-1, :]
+            
+            # Compute cross-covariance matrices with regularization
+            reg = self.shrinkage * np.trace(np.cov(dX.T)) / n_vars
+            
+            C00 = np.cov(dX.T) + reg * np.eye(n_vars)
+            C11 = np.cov(X_lag.T) + reg * np.eye(n_vars)
+            C01 = np.cov(dX.T, X_lag.T)[:n_vars, n_vars:]
+            
+            # Solve generalized eigenvalue problem using SVD for stability
+            try:
+                # Use Cholesky decomposition when possible
+                L0 = np.linalg.cholesky(C00)
+                L1 = np.linalg.cholesky(C11)
+                
+                # Transform to standard form
+                A = np.linalg.solve(L1, C01.T)
+                A = np.linalg.solve(L0, A.T).T
+                
+                # SVD of the transformed matrix
+                U, s, Vt = self._safe_svd(A, self.n_components)
+                if U is None:
+                    return None
+                    
+                # Transform back to original space
+                components = np.linalg.solve(L1, U.T).T
+                
+            except np.linalg.LinAlgError:
+                # Fallback to regularized pseudoinverse
+                try:
+                    C00_inv = np.linalg.pinv(C00)
+                    C11_inv = np.linalg.pinv(C11)
+                    
+                    # Compute the matrix for eigendecomposition
+                    M = C01 @ C11_inv @ C01.T @ C00_inv
+                    eigenvals, eigenvecs = np.linalg.eigh(M)
+                    
+                    # Sort by eigenvalues
+                    idx = np.argsort(eigenvals)[::-1]
+                    components = eigenvecs[:, idx[:self.n_components]].T
+                    
+                except:
+                    return None
+            
+            return components
+            
+        except Exception as e:
+            return None
+
+    def _compute_cointegration_rrr(self, X):
+        """Compute cointegration vectors using Reduced Rank Regression."""
+        try:
+            n_obs, n_vars = X.shape
+            
+            # Center the data
+            X_centered = X - self.mean_
+            
+            # Create regression setup: Y = X[1:], X = X[:-1]
+            Y = X_centered[1:, :]
+            X_reg = X_centered[:-1, :]
+            
+            # Add regularization
+            reg = self.shrinkage * np.trace(np.cov(Y.T)) / n_vars
+            
+            # Compute covariance matrices
+            Sigma_XX = np.cov(X_reg.T) + reg * np.eye(n_vars)
+            Sigma_YX = np.cov(Y.T, X_reg.T)[:n_vars, n_vars:]
+            Sigma_YY = np.cov(Y.T) + reg * np.eye(n_vars)
+            
+            # Reduced rank regression via SVD
+            try:
+                Sigma_XX_inv_sqrt = np.linalg.inv(np.linalg.cholesky(Sigma_XX))
+                Sigma_YY_inv_sqrt = np.linalg.inv(np.linalg.cholesky(Sigma_YY))
+                
+                # Transform the cross-covariance matrix
+                M = Sigma_YY_inv_sqrt @ Sigma_YX @ Sigma_XX_inv_sqrt
+                
+                # SVD decomposition
+                U, s, Vt = self._safe_svd(M, self.n_components)
+                if U is None:
+                    return None
+                
+                # Transform back to get cointegration vectors
+                components = Vt @ Sigma_XX_inv_sqrt
+                
+            except np.linalg.LinAlgError:
+                # Fallback using pseudoinverse
+                try:
+                    Sigma_XX_pinv = np.linalg.pinv(Sigma_XX)
+                    M = Sigma_YX @ Sigma_XX_pinv
+                    
+                    U, s, Vt = self._safe_svd(M, self.n_components)
+                    if U is None:
+                        return None
+                        
+                    components = Vt
+                    
+                except:
+                    return None
+            
+            return components
+            
+        except Exception as e:
+            return None
 
     def fit(self, df):
-        """Learn behavior of data to change.
-
+        """Fit the cointegration transformer.
+        
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Input dataframe with time series data
         """
-        if df.shape[1] < 2:
-            raise ValueError("Coint only works on multivarate series")
-        # might be helpful to add a fast test for correlation?
-        self.components_ = coint_johansen(df.values, self.det_order, self.k_ar_diff)
-        return self
+        try:
+            # Input validation
+            if df.shape[1] < 2:
+                self.failed_fit = True
+                return self
+                
+            if df.shape[0] < self.min_periods:
+                self.failed_fit = True
+                return self
+                
+            # Remove any infinite or extremely large values
+            df_clean = df.replace([np.inf, -np.inf], np.nan)
+            if df_clean.isnull().all().any():
+                self.failed_fit = True
+                return self
+                
+            # Store metadata
+            self.original_columns = df.columns
+            
+            # Determine number of components
+            n_vars = df.shape[1]
+            if self.n_components is None:
+                self.n_components = min(n_vars, self.max_components)
+            else:
+                self.n_components = min(self.n_components, n_vars, self.max_components)
+                
+            self.n_features_out_ = self.n_components
+            
+            # Compute mean for centering (use robust estimation for large datasets)
+            if df.shape[0] > self.chunk_size:
+                # Process in chunks for memory efficiency
+                chunk_means = []
+                chunk_sizes = []
+                for i in range(0, df.shape[0], self.chunk_size):
+                    chunk = df_clean.iloc[i:i+self.chunk_size]
+                    chunk_mean = chunk.mean()
+                    chunk_size = len(chunk)
+                    chunk_means.append(chunk_mean * chunk_size)
+                    chunk_sizes.append(chunk_size)
+                
+                # Weighted average across chunks
+                total_size = sum(chunk_sizes)
+                self.mean_ = sum(chunk_means) / total_size
+            else:
+                self.mean_ = df_clean.mean()
+                
+            self.mean_ = self.mean_.values
+            
+            # Compute cointegration vectors
+            if self.method.lower() == 'cca':
+                components = self._compute_cointegration_cca(df_clean.values)
+            elif self.method.lower() == 'rrr':
+                components = self._compute_cointegration_rrr(df_clean.values)
+            else:
+                components = self._compute_cointegration_cca(df_clean.values)
+            
+            if components is None:
+                self.failed_fit = True
+                return self
+            else:
+                self.components_ = components
+                
+            # Ensure components have the right shape
+            if self.components_.shape[0] != self.n_components:
+                self.components_ = self.components_[:self.n_components, :]
+                
+            if self.components_.shape[1] != n_vars:
+                self.failed_fit = True
+                return self
+                
+            return self
+            
+        except Exception as e:
+            # Graceful failure - set failed flag
+            self.failed_fit = True
+            return self
 
     def transform(self, df):
-        """Return changed data.
-
+        """Transform the data using cointegration vectors.
+        
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Input dataframe to transform
+            
+        Returns:
+            pandas.DataFrame: Transformed dataframe with cointegration features
         """
-        return pd.DataFrame(
-            np.matmul(self.components_, (df.values).T).T,
-            index=df.index,
-            columns=df.columns,
-        )
+        try:
+            if self.failed_fit or self.components_ is None:
+                # Return a dummy transformation to avoid breaking the pipeline
+                n_cols = min(df.shape[1], self.max_components)
+                return df.iloc[:, :n_cols].copy()
+                
+            # Center the data
+            X_centered = df.values - self.mean_
+            
+            # Apply cointegration transformation
+            transformed = X_centered @ self.components_.T
+            
+            # Create column names
+            col_names = [f"coint_{i}" for i in range(self.n_components)]
+            
+            return pd.DataFrame(
+                transformed,
+                index=df.index,
+                columns=col_names
+            )
+            
+        except Exception as e:
+            # Graceful fallback
+            n_cols = min(df.shape[1], self.max_components)
+            return df.iloc[:, :n_cols].copy()
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
-        """Return data to original space.
-
+        """Inverse transform from cointegration space back to original space.
+        
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Transformed dataframe to inverse transform
+            trans_method (str): Not used, kept for compatibility
+            
+        Returns:
+            pandas.DataFrame: DataFrame in original feature space
         """
-        return pd.DataFrame(
-            # np.dot(np.linalg.pinv(df), self.components_),
-            np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
-            # np.linalg.solve(self.components_, df.T).T,
-            index=df.index,
-            columns=df.columns,
-        ).astype(float)
+        try:
+            if self.failed_fit or self.components_ is None:
+                # Return data as-is if fit failed
+                return df
+                
+            # Use pseudoinverse for numerical stability
+            try:
+                components_pinv = np.linalg.pinv(self.components_)
+            except:
+                # Fallback to least squares
+                components_pinv = np.linalg.lstsq(self.components_.T, np.eye(self.components_.shape[0]), rcond=None)[0].T
+                
+            # Transform back to original space
+            X_reconstructed = df.values @ components_pinv.T
+            
+            # Add back the mean
+            X_reconstructed += self.mean_
+            
+            return pd.DataFrame(
+                X_reconstructed,
+                index=df.index,
+                columns=self.original_columns
+            )
+            
+        except Exception as e:
+            # Graceful fallback - return input as-is
+            return df
 
     def fit_transform(self, df):
-        """Fits and Returns *Magical* DataFrame.
-
+        """Fit and transform the data.
+        
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Input dataframe
+            
+        Returns:
+            pandas.DataFrame: Transformed dataframe
         """
         return self.fit(df).transform(df)
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        """Generate new random parameters"""
-        return {
-            "det_order": random.choice([-1, 0, 1]),
-            "k_ar_diff": random.choice([0, 1, 2]),
+        """Generate new random parameters for the transformer."""
+        import random
+        
+        params = {
+            "n_components": random.choice([None, 2, 3, 5, 8]),
+            "max_components": random.choice([5, 10, 15, 20]),
+            "shrinkage": random.choice([1e-6, 1e-5, 1e-4, 1e-3, 1e-2]),
+            "method": random.choice(["cca", "rrr"]),
+            "min_periods": random.choice([10, 15, 20, 30]),
         }
+        
+        return params
 
 
 class BTCD(EmptyTransformer):
@@ -6515,7 +6801,6 @@ have_params = {
     "FastICA": FastICA,
     "PCA": PCA,
     "BTCD": BTCD,
-    "Cointegration": Cointegration,
     "AlignLastValue": AlignLastValue,
     "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
     "HolidayTransformer": HolidayTransformer,
@@ -6542,6 +6827,8 @@ have_params = {
     "MeanPercentSplitter": MeanPercentSplitter,
     "UpscaleDownscaleTransformer": UpscaleDownscaleTransformer,
     "ReconciliationTransformer": ReconciliationTransformer,
+    "CointegrationTransformer": CointegrationTransformer,
+    "Cointegration": CointegrationTransformer,  # alias for replacement of old Cointegration
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -6550,10 +6837,10 @@ shared_trans = [
     "DatepartRegression",
     "MeanDifference",
     "BTCD",
-    "Cointegration",
     "HolidayTransformer",  # confirmed
     "RegressionFilter",
     "ReconciliationTransformer",
+    "CointegrationTransformer",
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -6629,7 +6916,6 @@ class GeneralTransformer(object):
             "STLFilter" - seasonal decompose and keep just one part of decomposition
             "EWMAFilter" - use an exponential weighted moving average to smooth data
             "MeanDifference" - joint version of differencing
-            "Cointegration" - VECM but just the vectors
             "BTCD" - Box Tiao decomposition
             'AlignLastValue': align forecast start to end of training data
             'AnomalyRemoval': more tailored anomaly removal options
@@ -6654,6 +6940,7 @@ class GeneralTransformer(object):
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
             "UpscaleDownscaleTransformer": upscales and downscales
             "ReconciliationTransformer": creates hierarchies then reconciles on the way back
+            "CointegrationTransformer": creates stationary features from cointegrated sets of series
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -7115,7 +7402,6 @@ transformer_dict = {
     "EWMAFilter": 0.02,
     "MeanDifference": 0.002,
     "BTCD": 0.01,
-    "Cointegration": 0.01,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
@@ -7138,6 +7424,7 @@ transformer_dict = {
     "MeanPercentSplitter": 0.01,
     "UpscaleDownscaleTransformer": 0.01,
     "ReconciliationTransformer": 0.01,
+    "CointegrationTransformer": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -7247,6 +7534,7 @@ expanding_transformers = [
     "MeanPercentSplitter",
     "UpscaleDownscaleTransformer",
     "ReconciliationTransformer",
+    "CointegrationTransformer",
 ]  # note there is also prob_trans below for preventing reuse of these in one transformer
 
 transformer_class = {}
@@ -7291,7 +7579,7 @@ def transformer_list_to_dict(transformer_list):
         fast_transformer_dict['ReplaceConstant'] = 0.002
         # del fast_transformer_dict["SinTrend"]
         del fast_transformer_dict["FastICA"]
-        del fast_transformer_dict["Cointegration"]
+        # del fast_transformer_dict["CointegrationTransformer"]  # might be fine, needs more testing
         del fast_transformer_dict["BTCD"]
         del fast_transformer_dict["LocalLinearTrend"]
         del fast_transformer_dict["KalmanSmoothing"]  # potential kernel/RAM issues

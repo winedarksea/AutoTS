@@ -40,7 +40,7 @@ try:
     from sklearn.preprocessing import MinMaxScaler
     from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy, beta
 except Exception:
-    pass
+    from autots.tools.mocks import norm
 
 try:
     import torch

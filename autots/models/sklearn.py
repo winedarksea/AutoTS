@@ -39,13 +39,7 @@ from autots.tools.shaping import infer_frequency
 try:
     from scipy.stats import norm
 except Exception:
-
-    class norm(object):
-        @staticmethod
-        def ppf(x):
-            return 1.95996398454
-
-        # norm.ppf((1 + 0.95) / 2)
+    from autots.tools.mocks import norm
 
 
 # for numba engine more is required, optional
