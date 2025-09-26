@@ -976,7 +976,7 @@ class ModelTest(unittest.TestCase):
                     trans = gtrans.retrieve_transformer(transform_str)
                     params = trans.get_new_params(method=method)
                     self.assertIsInstance(params, dict)
-                    trans = gtrans.retrieve_transformer(transform_str, params=params)
+                    trans = gtrans.retrieve_transformer(transform_str, param=params)
 
     def test_sklearn(self):
         from autots import load_daily
