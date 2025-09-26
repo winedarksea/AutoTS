@@ -54,6 +54,18 @@ class DataLoader:  # fake version of torch.utils.data.DataLoader
     def __len__(self):
         return 0
 
+
+class TensorDataset:  # fake version of torch.utils.data.TensorDataset
+    def __init__(self, *tensors):
+        # Store tensors for debugging if needed
+        self.tensors = tensors
+
+    def __len__(self):
+        return len(self.tensors[0]) if self.tensors else 0
+
+    def __getitem__(self, idx):
+        return tuple(tensor[idx] for tensor in self.tensors)
+
 tqdm = lambda x, **kwargs: x  # fake version of tqdm
 curve_fit = lambda x: "scipy import failed"
 butter = lambda x: "scipy import failed"

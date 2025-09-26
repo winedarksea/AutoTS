@@ -21,39 +21,12 @@ try:
     import torch.nn as nn
     import torch.nn.functional as F
     from torch.nn import Module
-    from torch.utils.data import DataLoader, Dataset
+    from torch.utils.data import DataLoader, Dataset, TensorDataset
 except Exception:
-    from autots.tools.mocks import Module, Dataset, DataLoader
+    from autots.tools.mocks import Module, Dataset, DataLoader, TensorDataset
 
 
-# Custom Dataset and Loss
-class TimeSeriesDataset(Dataset):
-    def __init__(self, ts_data, feature_data, context_length):
-        super().__init__()
-        self.ts_data = ts_data
-        self.feature_data = feature_data
-        self.context_length = context_length
-        self.n_timesteps, self.n_series = ts_data.shape
-        self.feature_dim = feature_data.shape[1]
-
-    def __len__(self):
-        return (self.n_timesteps - self.context_length) * self.n_series
-
-    def __getitem__(self, idx):
-        series_idx = idx % self.n_series
-        start_idx = idx // self.n_series
-        end_idx = start_idx + self.context_length
-
-        # Pre-allocate arrays to reduce memory allocations
-        x = np.empty((self.context_length, 1 + self.feature_dim), dtype=np.float32)
-        x[:, 0] = self.ts_data[start_idx:end_idx, series_idx]
-        x[:, 1:] = self.feature_data[start_idx:end_idx]
-
-        y = self.ts_data[
-            start_idx + 1 : end_idx + 1, series_idx : series_idx + 1
-        ].astype(np.float32)
-
-        return torch.from_numpy(x), torch.from_numpy(y)
+# Custom Loss Functions Only - Dataset creation now uses window_maker
 
 
 class CombinedNLLWassersteinLoss(Module):
@@ -511,8 +484,57 @@ class MambaSSM(ModelObject):
         self.feature_scaler = StandardScaler()
         train_feats_scaled = self.feature_scaler.fit_transform(feat_df_train.values)
 
-        # 4. Torch plumbing
-        input_dim = 1 + train_feats_scaled.shape[1]
+        # 4. Create training windows using efficient approach similar to window_maker
+        # Use efficient sliding window generation but match MambaSSM's expected format
+        
+        # Calculate maximum windows for memory efficiency
+        max_possible_windows = (y_train.shape[0] - self.context_length) * y_train.shape[1]
+        max_windows = min(50000, max_possible_windows)
+        
+        # Pre-allocate arrays for efficiency
+        X_list = []
+        Y_list = []
+        
+        # Use numpy for efficient window generation via stride tricks
+        y_windows = sliding_window_view(y_train_scaled, self.context_length + 1, axis=0)
+        feat_windows = sliding_window_view(train_feats_scaled, self.context_length, axis=0) 
+        
+        # Flatten across all series and time windows
+        num_windows_per_series = y_windows.shape[0]
+        total_windows = num_windows_per_series * y_train.shape[1]
+        
+        # Sample windows if we exceed max_windows
+        if total_windows > max_windows:
+            rng = np.random.default_rng(self.random_seed)
+            selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
+        else:
+            selected_indices = np.arange(total_windows)
+            
+        # Generate training samples efficiently using vectorized operations
+        num_features = train_feats_scaled.shape[1]
+        
+        # Vectorized index calculations (much faster than Python loop)
+        series_indices = selected_indices % y_train.shape[1]
+        window_indices = selected_indices // y_train.shape[1]
+        
+        # Pre-allocate output arrays
+        X_data = np.empty((len(selected_indices), self.context_length, 1 + num_features), dtype=np.float32)
+        Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
+        
+        # Vectorized data extraction using advanced indexing
+        # Time series values: y_windows[window_indices, series_indices, :context_length]
+        X_data[:, :, 0] = y_windows[window_indices, series_indices, :self.context_length]
+        
+        # Feature values: broadcast feat_windows across all selected samples
+        # feat_windows[window_indices] has shape (n_samples, n_features, context_length)
+        # We need (n_samples, context_length, n_features) so transpose the last two dimensions
+        X_data[:, :, 1:] = feat_windows[window_indices].transpose(0, 2, 1)
+        
+        # Target values: y_windows[window_indices, series_indices, context_length]
+        Y_data[:, 0] = y_windows[window_indices, series_indices, self.context_length]
+
+        # 5. Torch plumbing
+        input_dim = 1 + num_features
         self.model = MambaCore(
             input_dim,
             self.d_model,
@@ -523,9 +545,16 @@ class MambaSSM(ModelObject):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
         criterion = self._get_loss_function()
 
-        dataset = TimeSeriesDataset(
-            y_train_scaled, train_feats_scaled, self.context_length
-        )
+        # Create tensors and dataset
+        try:
+            X_tensor = torch.tensor(X_data, dtype=torch.float32)
+            Y_tensor = torch.tensor(Y_data, dtype=torch.float32)
+        except (AttributeError, NameError):
+            # Fallback when torch is not available
+            X_tensor = X_data
+            Y_tensor = Y_data
+        
+        dataset = TensorDataset(X_tensor, Y_tensor)
         dataloader = DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -551,7 +580,12 @@ class MambaSSM(ModelObject):
                 x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
                 optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
-                loss = criterion(mu, sigma, y_batch)
+                
+                # Extract only the last timestep prediction for loss calculation
+                mu_last = mu[:, -1, :]  # Shape: (batch_size, 1)
+                sigma_last = sigma[:, -1, :]  # Shape: (batch_size, 1)
+                
+                loss = criterion(mu_last, sigma_last, y_batch)
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
