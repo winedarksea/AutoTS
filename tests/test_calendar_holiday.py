@@ -121,6 +121,7 @@ class TestSeasonal(unittest.TestCase):
         self.assertEqual(np.sum(date_part_df.isnull().to_numpy()), 0, msg="date part generating NaN")
         self.assertEqual(date_part_df.select_dtypes("number").shape, date_part_df.shape)
         # assert column names match expected
+        # if this raises a "AssertionError: Element counts were not equal" error likely the holiday names were changed in the package version of holidays
         expected_cols = [
             'day',
              'weekend',
@@ -161,20 +162,20 @@ class TestSeasonal(unittest.TestCase):
              'quarter_3',
              'quarter_4',
              'Christmas Day',
-             'Christmas Day (Observed)',
+             'Christmas Day (observed)',
              'Columbus Day',
              'Independence Day',
-             'Independence Day (Observed)',
+             'Independence Day (observed)',
              'Juneteenth National Independence Day',
-             'Juneteenth National Independence Day (Observed)',
+             'Juneteenth National Independence Day (observed)',
              'Labor Day',
              'Martin Luther King Jr. Day',
              'Memorial Day',
              "New Year's Day",
-             "New Year's Day (Observed)",
-             'Thanksgiving',
+             "New Year's Day (observed)",
+             'Thanksgiving Day',
              'Veterans Day',
-             'Veterans Day (Observed)',
+             'Veterans Day (observed)',
              "Washington's Birthday",
          ]
         self.assertCountEqual(date_part_df.columns.tolist(), expected_cols)

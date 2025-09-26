@@ -800,6 +800,7 @@ def load_artificial(long=False, date_start=None, date_end=None):
     """
     import scipy.signal
     from scipy.ndimage import maximum_filter1d
+    from autots.tools.wavelet import create_mexican_hat_wavelet, create_morlet_wavelet
 
     if date_end is None:
         date_end = datetime.datetime.now().date()
@@ -890,10 +891,10 @@ def load_artificial(long=False, date_start=None, date_end=None):
                 + rng.normal(0, 0.15, size)
             ),
             "wavelet_ricker": np.tile(
-                scipy.signal.ricker(33, 1), int(np.ceil(size / 33))
+                create_mexican_hat_wavelet(33, sigma=1.0), int(np.ceil(size / 33))
             )[:size],
             "wavelet_morlet": np.real(
-                np.tile(scipy.signal.morlet2(100, 6.0, 6.0), int(np.ceil(size / 100)))[
+                np.tile(create_morlet_wavelet(100, 6.0, 6.0), int(np.ceil(size / 100)))[
                     :size
                 ]
                 * 10
@@ -960,13 +961,13 @@ def load_artificial(long=False, date_start=None, date_end=None):
                 np.arange(size) < (4 * size) / 5,
                 np.real(
                     np.tile(
-                        scipy.signal.morlet2(50, 6.0, 6.0), int(np.ceil(size / 50))
+                        create_morlet_wavelet(50, 6.0, 6.0), int(np.ceil(size / 50))
                     )[:size]
                     * 10
                 ),
                 np.real(
                     np.tile(
-                        scipy.signal.morlet2(50, 6.0, 0.0), int(np.ceil(size / 50))
+                        create_morlet_wavelet(50, 6.0, 0.0), int(np.ceil(size / 50))
                     )[:size]
                     * 10
                 ),

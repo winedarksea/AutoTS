@@ -1,68 +1,62 @@
 import pandas as pd
 import numpy as np
 import datetime
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
 from dataclasses import dataclass
-from scipy.stats import norm
-from tqdm import tqdm
-from sklearn.preprocessing import StandardScaler
 
-# Corrected import path
 from autots.tools.seasonal import date_part
+from autots.models.base import ModelObject, PredictionObject
+from autots.tools.probabilistic import Point_to_Probability
+from autots.tools.seasonal import date_part, seasonal_int, random_datepart
+from autots.tools.window_functions import window_maker, last_window, sliding_window_view
+from autots.tools.holiday import holiday_flag
+from autots.tools.shaping import infer_frequency
 
-# Placeholder for the base class (unchanged)
-class ModelObject:
-    def __init__(self, name, frequency, prediction_interval, **kwargs):
-        self.name = name
-        self.frequency = frequency
-        self.prediction_interval = prediction_interval
-        self.fit_runtime = datetime.timedelta(0)
-        self.verbose = kwargs.get('verbose', 0)
-        self.random_seed = kwargs.get('random_seed', 2023)
-        self.holiday_country = kwargs.get('holiday_country', 'US') # Added for consistency
-        self.column_names = []
-        self.df_train = None
+# this is done to allow users to use the rest of AutoTS without these libraries installed
+try:
+    from scipy.stats import norm
+    from tqdm import tqdm
+    from sklearn.preprocessing import StandardScaler
+except Exception:
+    from autots.tools.mocks import norm, tqdm, StandardScaler
 
-    def basic_profile(self, df):
-        self.column_names = df.columns
-        self.df_train = df
-        return df
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.nn import Module
+    from torch.utils.data import DataLoader, Dataset
+except Exception:
+    from autots.tools.mocks import Module
 
-    def create_forecast_index(self, forecast_length):
-        if self.df_train.index.freq is None:
-            freq = pd.infer_freq(self.df_train.index)
-            if freq is None: raise ValueError("Could not infer frequency from DatetimeIndex.")
-        else:
-            freq = self.df_train.index.freq
-        return pd.date_range(start=self.df_train.index[-1], periods=forecast_length + 1, freq=freq)[1:]
-
-# Placeholder for the output object
-@dataclass
-class PredictionObject:
-    model_name: str; forecast_length: int; forecast_index: pd.DatetimeIndex; forecast_columns: pd.Index
-    lower_forecast: pd.DataFrame; forecast: pd.DataFrame; upper_forecast: pd.DataFrame
-    prediction_interval: float; predict_runtime: datetime.timedelta; fit_runtime: datetime.timedelta; model_parameters: dict
 
 # Custom Dataset and Loss
 class TimeSeriesDataset(Dataset):
     def __init__(self, ts_data, feature_data, context_length):
-        super().__init__(); self.ts_data = ts_data; self.feature_data = feature_data
-        self.context_length = context_length; self.n_timesteps, self.n_series = ts_data.shape
-    def __len__(self): return (self.n_timesteps - self.context_length) * self.n_series
+        super().__init__()
+        self.ts_data = ts_data
+        self.feature_data = feature_data
+        self.context_length = context_length
+        self.n_timesteps, self.n_series = ts_data.shape
+        self.feature_dim = feature_data.shape[1]
+        
+    def __len__(self): 
+        return (self.n_timesteps - self.context_length) * self.n_series
+    
     def __getitem__(self, idx):
-        series_idx = idx % self.n_series; start_idx = idx // self.n_series
+        series_idx = idx % self.n_series
+        start_idx = idx // self.n_series
         end_idx = start_idx + self.context_length
-        x_ts = self.ts_data[start_idx:end_idx, series_idx]
-        x_features = self.feature_data[start_idx:end_idx]
-        x = np.concatenate([x_ts[:, None], x_features], axis=1)
-        y_ts = self.ts_data[start_idx + 1 : end_idx + 1, series_idx]
-        y = y_ts[:, None]
-        return torch.from_numpy(x).float(), torch.from_numpy(y).float()
+        
+        # Pre-allocate arrays to reduce memory allocations
+        x = np.empty((self.context_length, 1 + self.feature_dim), dtype=np.float32)
+        x[:, 0] = self.ts_data[start_idx:end_idx, series_idx]
+        x[:, 1:] = self.feature_data[start_idx:end_idx]
+        
+        y = self.ts_data[start_idx + 1:end_idx + 1, series_idx:series_idx + 1].astype(np.float32)
+        
+        return torch.from_numpy(x), torch.from_numpy(y)
 
-class CombinedNLLWassersteinLoss(nn.Module):
+class CombinedNLLWassersteinLoss(Module):
     def __init__(self, nll_weight=1.0, wasserstein_weight=0.1):
         super().__init__(); self.nll_weight = nll_weight; self.wasserstein_weight = wasserstein_weight
         self.nll_loss = nn.GaussianNLLLoss(reduction='mean')
@@ -75,48 +69,102 @@ class CombinedNLLWassersteinLoss(nn.Module):
         return self.nll_weight * nll + self.wasserstein_weight * wasserstein
 
 # Self-contained Mamba Block and Core Model
-class MambaMinimalBlock(nn.Module):
-    def __init__(self, d_model, d_state=16, d_conv=4, expand=2):
+class MambaMinimalBlock(Module):
+    def __init__(self, d_model, d_state=16, d_conv=4, expand=2, use_extra_gating=False):
         super().__init__()
         self.d_model, self.d_state, self.d_conv, self.expand = d_model, d_state, d_conv, expand
+        self.use_extra_gating = use_extra_gating
         self.d_inner = int(self.expand * self.d_model)
         self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=False)
         self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=False)
         self.conv1d = nn.Conv1d(in_channels=self.d_inner, out_channels=self.d_inner, kernel_size=d_conv, bias=True, groups=self.d_inner, padding=d_conv - 1)
         self.x_proj = nn.Linear(self.d_inner, self.d_state + self.d_state, bias=False)
         self.dt_proj = nn.Linear(self.d_inner, self.d_inner, bias=True)
+        
+        # Optional extra gating mechanism
+        if self.use_extra_gating:
+            self.gate_proj = nn.Linear(self.d_inner, self.d_inner, bias=True)
+
         A_log = torch.log(torch.arange(1, d_state + 1, dtype=torch.float32)).unsqueeze(1).repeat(1, self.d_inner).T
         self.A_log = nn.Parameter(A_log)
         self.D = nn.Parameter(torch.ones(self.d_inner))
     def forward(self, x):
         B, L, _ = x.shape
-        xz = self.in_proj(x); x, z = xz.chunk(2, dim=-1)
-        x = x.transpose(1, 2); x = self.conv1d(x)[:, :, :L]; x = x.transpose(1, 2)
-        x = F.silu(x); y = self.ssm(x)
-        y = y * F.silu(z); output = self.out_proj(y)
+        xz = self.in_proj(x)
+        x, z = xz.chunk(2, dim=-1)
+        
+        # More efficient conv1d with fewer operations
+        x = x.transpose(1, 2)
+        x = self.conv1d(x)[:, :, :L]
+        x = x.transpose(1, 2)
+        
+        x = F.silu(x)
+        y = self.ssm(x)
+        
+        # Combine gating and output projection
+        z_gated = F.silu(z)
+        y = y * z_gated
+        output = self.out_proj(y)
         return output
     def ssm(self, x):
-        B, L, d_inner = x.shape; A = -torch.exp(self.A_log.float()); delta = F.softplus(self.dt_proj(x))
-        bc = self.x_proj(x); B_val, C_val = torch.split(bc, self.d_state, dim=-1)
-        h = torch.zeros(B, d_inner, self.d_state, device=x.device); ys = []
+        B, L, d_inner = x.shape
+        A = -torch.exp(self.A_log.float())
+        delta = F.softplus(self.dt_proj(x))
+        
+        # Optional extra gating mechanism
+        if self.use_extra_gating:
+            gate = torch.sigmoid(self.gate_proj(x))
+        
+        bc = self.x_proj(x)
+        B_val, C_val = torch.split(bc, self.d_state, dim=-1)
+        
+        h = torch.zeros(B, d_inner, self.d_state, device=x.device)
+        y = torch.zeros(B, L, d_inner, device=x.device, dtype=x.dtype)
+        
         for i in range(L):
-            delta_i = delta[:, i, :].unsqueeze(-1); A_bar = torch.exp(delta_i * A)
+            delta_i = delta[:, i, :].unsqueeze(-1)
+            A_bar = torch.exp(delta_i * A)
             B_bar = delta_i * B_val[:, i, :].unsqueeze(1)
-            h = A_bar * h + B_bar * x[:, i, :].unsqueeze(-1)
-            y_i = torch.sum(h * C_val[:, i, :].unsqueeze(1), dim=-1)
-            ys.append(y_i)
-        y = torch.stack(ys, dim=1); y = y + x * self.D
+            
+            if self.use_extra_gating:
+                # Additional gating on state transition
+                gate_i = gate[:, i, :].unsqueeze(-1)
+                h = (gate_i * A_bar) * h + B_bar * x[:, i, :].unsqueeze(-1)
+            else:
+                # Standard Mamba SSM update (already has implicit gating via delta/A_bar)
+                h = A_bar * h + B_bar * x[:, i, :].unsqueeze(-1)
+            
+            y[:, i, :] = torch.sum(h * C_val[:, i, :].unsqueeze(1), dim=-1)
+            
+        y = y + x * self.D
         return y
-class MambaCore(nn.Module):
-    def __init__(self, input_dim, d_model=64, n_layers=4, d_state=16, d_conv=4):
+class MambaCore(Module):
+    def __init__(self, input_dim, d_model=64, n_layers=4, d_state=16, d_conv=4, use_extra_gating=False):
         super().__init__()
-        self.input_projection = nn.Linear(input_dim, d_model); self.dropout = nn.Dropout(0.1)
-        self.layers = nn.ModuleList([nn.ModuleList([nn.LayerNorm(d_model), MambaMinimalBlock(d_model=d_model, d_state=d_state, d_conv=d_conv)]) for _ in range(n_layers)])
-        self.norm_f = nn.LayerNorm(d_model); self.out_mu = nn.Linear(d_model, 1); self.out_sigma = nn.Linear(d_model, 1); self.softplus = nn.Softplus()
+        self.input_projection = nn.Linear(input_dim, d_model)
+        self.dropout = nn.Dropout(0.1)
+        self.layers = nn.ModuleList([
+            nn.ModuleList([nn.LayerNorm(d_model), 
+                          MambaMinimalBlock(d_model=d_model, d_state=d_state, d_conv=d_conv, use_extra_gating=use_extra_gating)]) 
+            for _ in range(n_layers)
+        ])
+        self.norm_f = nn.LayerNorm(d_model)
+        self.out_mu = nn.Linear(d_model, 1)
+        self.out_sigma = nn.Linear(d_model, 1)
+        self.softplus = nn.Softplus()
+        
     def forward(self, x):
-        x = self.input_projection(x); x = self.dropout(x)
-        for norm, block in self.layers: x = block(norm(x)) + x
-        x = self.norm_f(x); mu = self.out_mu(x); sigma = self.softplus(self.out_sigma(x)) + 1e-6
+        x = self.dropout(self.input_projection(x))
+        
+        for norm, block in self.layers:
+            # Cache normalized input to avoid recomputation
+            x_norm = norm(x)
+            x = block(x_norm) + x
+            
+        x = self.norm_f(x)
+        mu = self.out_mu(x)
+        sigma = self.softplus(self.out_sigma(x))
+        sigma = torch.clamp(sigma, min=1e-6)  # More efficient than addition
         return mu, sigma
 
 # Main Forecaster Class with all fixes
@@ -126,7 +174,7 @@ class MambaSSMForecaster(ModelObject):
         random_seed: int = 2023, verbose: int = 1, context_length: int = 120, d_model: int = 32, n_layers: int = 2,
         d_state: int = 8, epochs: int = 10, batch_size: int = 32, lr: float = 1e-3, nll_weight: float = 1.0,
         wasserstein_weight: float = 0.1, prediction_batch_size: int = 60, datepart_method: str = 'expanded',
-        holiday_countries_used: bool = False, **kwargs,
+        holiday_countries_used: bool = False, use_extra_gating: bool = False, **kwargs,
     ):
         ModelObject.__init__(
             self, name, frequency, prediction_interval, holiday_country=holiday_country,
@@ -134,6 +182,7 @@ class MambaSSMForecaster(ModelObject):
         )
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
+        self.use_extra_gating = use_extra_gating
         self.context_length = context_length; self.d_model = d_model; self.n_layers = n_layers
         self.d_state = d_state; self.epochs = epochs; self.batch_size = batch_size; self.lr = lr
         self.nll_weight = nll_weight; self.wasserstein_weight = wasserstein_weight
@@ -148,7 +197,8 @@ class MambaSSMForecaster(ModelObject):
         fit_start_time = datetime.datetime.now()
     
         # 1. Book-keeping
-        df = self.basic_profile(df)                       # saves col names / df_train
+        df = self.basic_profile(df)                       # saves col names
+        self.df_train = df                                # Store training data for predict method
         y_train = df.to_numpy(dtype=np.float32)
         train_index = df.index
     
@@ -184,7 +234,7 @@ class MambaSSMForecaster(ModelObject):
     
         # 4. Torch plumbing
         input_dim = 1 + train_feats_scaled.shape[1]
-        self.model  = MambaCore(input_dim, self.d_model, self.n_layers, self.d_state).to(self.device)
+        self.model  = MambaCore(input_dim, self.d_model, self.n_layers, self.d_state, use_extra_gating=self.use_extra_gating).to(self.device)
         optimizer   = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
         criterion   = CombinedNLLWassersteinLoss(self.nll_weight, self.wasserstein_weight)
     
@@ -248,14 +298,17 @@ class MambaSSMForecaster(ModelObject):
         )
         future_feats_scaled = self.feature_scaler.transform(feat_future_df.values)
     
-        # 3. Context tensors (scaled)
-        y_train_scaled = (self.df_train.to_numpy(dtype=np.float32) - self.scaler_means) / self.scaler_stds
-        ctx_ts   = torch.tensor(y_train_scaled[-self.context_length:, :], device=self.device)
+        # 3. Context tensors (scaled) - cache the scaled training data
+        if not hasattr(self, '_cached_y_train_scaled'):
+            self._cached_y_train_scaled = (self.df_train.to_numpy(dtype=np.float32) - self.scaler_means) / self.scaler_stds
+        
+        ctx_ts = torch.tensor(self._cached_y_train_scaled[-self.context_length:, :], 
+                             device=self.device, dtype=torch.float32)
     
         ctx_feat_np = self.feature_scaler.transform(
             self.features.iloc[-self.context_length:].values.astype(np.float32)
         )
-        ctx_feat = torch.tensor(ctx_feat_np, device=self.device)
+        ctx_feat = torch.tensor(ctx_feat_np, device=self.device, dtype=torch.float32)
     
         num_series = self.df_train.shape[1]
         forecast_mu_scaled    = np.zeros((forecast_length, num_series), dtype=np.float32)
@@ -263,23 +316,31 @@ class MambaSSMForecaster(ModelObject):
     
         # 4. Roll forward
         with torch.no_grad():
+            # Pre-allocate broadcast tensor shape to avoid repeated allocations
+            feat_broadcast_shape = (num_series, self.context_length, ctx_feat.shape[1])
+            
             for step in range(forecast_length):
                 if self.verbose and step % self.prediction_batch_size == 0:
                     print(f"Predicting step {step+1}/{forecast_length}")
     
-                feat_broadcast = ctx_feat.unsqueeze(0).repeat(num_series, 1, 1)
-                model_in       = torch.cat([ctx_ts.T.unsqueeze(-1), feat_broadcast], dim=-1)
-                mu, sigma      = self.model(model_in)
+                # More efficient broadcasting without repeat()
+                feat_broadcast = ctx_feat.unsqueeze(0).expand(feat_broadcast_shape)
+                model_in = torch.cat([ctx_ts.T.unsqueeze(-1), feat_broadcast], dim=-1)
+                mu, sigma = self.model(model_in)
     
-                mu_next    = mu[:, -1, :].squeeze(-1)
-                sigma_next = sigma[:, -1, :].squeeze(-1)
+                # Extract next predictions (already on correct device)
+                mu_next = mu[:, -1, 0]  # Remove unnecessary squeeze operations
+                sigma_next = sigma[:, -1, 0]
     
-                forecast_mu_scaled[step]    = mu_next.cpu().numpy()
+                # Store predictions (convert to numpy once)
+                forecast_mu_scaled[step] = mu_next.cpu().numpy()
                 forecast_sigma_scaled[step] = sigma_next.cpu().numpy()
     
-                ctx_ts = torch.cat([ctx_ts[1:], mu_next.unsqueeze(0)], dim=0).detach()
-                ctx_feat = torch.roll(ctx_feat, shifts=-1, dims=0)
-                ctx_feat[-1] = torch.tensor(future_feats_scaled[step], device=self.device)
+                # Update context more efficiently
+                ctx_ts = torch.cat([ctx_ts[1:], mu_next.unsqueeze(0)], dim=0)
+                # Update features by shifting and replacing last element
+                ctx_feat[:-1] = ctx_feat[1:]
+                ctx_feat[-1] = torch.tensor(future_feats_scaled[step], device=self.device, dtype=ctx_feat.dtype)
     
         # 5. Un-scale & wrap
         mu_unscaled    = forecast_mu_scaled * self.scaler_stds + self.scaler_means
@@ -314,42 +375,32 @@ class MambaSSMForecaster(ModelObject):
             "epochs": self.epochs, "batch_size": self.batch_size, "lr": self.lr, "nll_weight": self.nll_weight,
             "wasserstein_weight": self.wasserstein_weight, "prediction_batch_size": self.prediction_batch_size,
             "datepart_method": self.datepart_method, "holiday_countries_used": self.holiday_countries_used,
+            "use_extra_gating": self.use_extra_gating,
         }
 
-
-# Create some dummy data for demonstration
-num_series = 100  # Reduced for faster demonstration
-num_timesteps = 500
-print(f"Generating dummy data for {num_series} series...")
-
-dates = pd.date_range(start='2020-01-01', periods=num_timesteps, freq='D')
-data = np.random.randn(num_timesteps, num_series).astype(np.float32)
-time_factor = np.linspace(0, 5, num_timesteps)[:, None]
-seasonality = np.sin(np.arange(num_timesteps) * 2 * np.pi / 365.25)[:, None]
-data += time_factor + seasonality * 5
-
-df_train = pd.DataFrame(data, index=dates, columns=[f'series_{i}' for i in range(num_series)])
-print("Data shape:", df_train.shape)
-
-# Instantiate and run the model
-mamba_model = MambaSSMForecaster(
-    context_length=90,
-    epochs=3, # Reduced epochs for demo
-    batch_size=32,
-    verbose=1,
-)
-
-# Fit the model
-mamba_model.fit(df_train)
-
-# Make a forecast
-forecast_horizon = 90
-prediction = mamba_model.predict(forecast_length=forecast_horizon)
-
-# Inspect the results
-print("\n--- Forecast Results ---")
-print(f"Fit runtime: {prediction.fit_runtime}")
-print(f"Predict runtime: {prediction.predict_runtime}")
-
-print("\nPoint Forecast:")
-print(prediction.forecast.iloc[:5, :5])
+if False:
+    from autots import load_daily
+    df_train = load_daily(long=False).ffill().bfill()
+    # Instantiate and run the model
+    mamba_model = MambaSSMForecaster(
+        context_length=90,
+        epochs=3, # Reduced epochs for demo
+        batch_size=32,
+        verbose=1,
+    )
+    
+    # Fit the model
+    mamba_model.fit(df_train)
+    
+    # Make a forecast
+    forecast_horizon = 90
+    prediction = mamba_model.predict(forecast_length=forecast_horizon)
+    
+    # Inspect the results
+    print("\n--- Forecast Results ---")
+    print(f"Fit runtime: {prediction.fit_runtime}")
+    print(f"Predict runtime: {prediction.predict_runtime}")
+    
+    print("\nPoint Forecast:")
+    print(prediction.forecast.iloc[:5, :5])
+    pd.concat([df_train["SP500"].rename("actual"), prediction.forecast["SP500"].rename("forecast")], axis=1).plot()

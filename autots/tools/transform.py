@@ -48,12 +48,7 @@ try:
     from scipy.stats import norm
     from scipy.signal import fftconvolve
 except Exception:
-    norm = lambda x: 0.05
-    curve_fit = lambda x: "scipy import failed"
-    butter = lambda x: "scipy import failed"
-    sosfiltfilt = lambda x: "scipy import failed"
-    savgol_filter = lambda x: "scipy import failed"
-    fftconvolve = lambda x: "scipy import failed"
+    from autots.tools.mocks import norm, curve_fit, butter, sosfiltfilt, savgol_filter, fftconvolve
 
 try:
     from joblib import Parallel, delayed

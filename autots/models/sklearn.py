@@ -37,9 +37,10 @@ from autots.tools.shaping import infer_frequency
 
 # scipy is technically optional but most likely is present
 try:
+    from sklearn.preprocessing import StandardScaler
     from scipy.stats import norm
 except Exception:
-    from autots.tools.mocks import norm
+    from autots.tools.mocks import norm, StandardScaler
 
 
 # for numba engine more is required, optional
@@ -2069,8 +2070,6 @@ class WindowRegression(ModelObject):
         elif self.Y.shape[1] < 2:
             multioutput = False
         if self.scale:
-            from sklearn.preprocessing import StandardScaler
-
             self.scaler = StandardScaler()
             if isinstance(self.X, pd.DataFrame):
                 self.X.columns = self.X.columns.astype(str)

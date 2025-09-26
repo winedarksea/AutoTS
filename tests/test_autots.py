@@ -11,7 +11,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots import AutoTS, model_forecast, ModelPrediction
+from autots import AutoTS, model_forecast, ModelPrediction, GeneralTransformer
 from autots.evaluator.auto_ts import fake_regressor
 from autots.evaluator.auto_model import ModelMonster
 from autots.models.ensemble import full_ensemble_test_list
@@ -679,6 +679,40 @@ class AutoTSTest(unittest.TestCase):
         # test on all models that for each model, failure rate is < 100%
 
 
+transforms = [
+    'MinMaxScaler', 'PowerTransformer', 'QuantileTransformer',
+    'MaxAbsScaler', 'StandardScaler', 'RobustScaler',
+    'PCA', 'FastICA', "DatepartRegression",
+    "EWMAFilter", 'STLFilter', 'HPFilter', 'Detrend', 'Slice',
+    'ScipyFilter', 'Round', 'ClipOutliers', 'IntermittentOccurrence',
+    'CenterLastValue', 'Discretize', 'SeasonalDifference',
+    'RollingMeanTransformer', 'bkfilter', 'cffilter', 'Log',
+    'DifferencedTransformer', 'PctChangeTransformer', 'PositiveShift',
+    'SineTrend', 'convolution_filter', 'CumSumTransformer',
+    'AlignLastValue',  # new 0.4.3
+    'AnomalyRemoval', "HolidayTransformer",  # new 0.5.0
+    'LocalLinearTrend',  # new 0.5.1
+    "KalmanSmoothing",  # new 0.5.1
+    "RegressionFilter",   # new 0.5.7
+    "LevelShiftTransformer",  # new 0.6.0
+    "CenterSplit",   # new 0.6.1
+    "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
+    "FFTDecomposition",  # new in 0.6.2
+    "HistoricValues",  # new in 0.6.7
+    "BKBandpassFilter",  # new in 0.6.8
+    "Constraint",  # new in 0.6.15
+    "DiffSmoother",  # new in 0.6.15
+    "FIRFilter",  # new in 0.6.16
+    "ShiftFirstValue",  # new in 0.6.16
+    "ThetaTransformer",  # new in 0.6.16
+    "ChangepointDetrend",  # new in 0.6.16
+    "MeanPercentSplitter",  # new in 0.6.16
+    "UpscaleDownscaleTransformer",  # new in 0.6.18
+    # "ReconciliationTransformer",  # new in 0.6.22
+    # "CointegrationTransformer",  # new in 0.6.22
+]
+
+
 class ModelTest(unittest.TestCase):
     
     def test_models_get_params(self):
@@ -821,37 +855,6 @@ class ModelTest(unittest.TestCase):
         n_jobs = 1
         random_seed = 300
         df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
-        transforms = [
-            'MinMaxScaler', 'PowerTransformer', 'QuantileTransformer',
-            'MaxAbsScaler', 'StandardScaler', 'RobustScaler',
-            'PCA', 'FastICA', "DatepartRegression",
-            "EWMAFilter", 'STLFilter', 'HPFilter', 'Detrend', 'Slice',
-            'ScipyFilter', 'Round', 'ClipOutliers', 'IntermittentOccurrence',
-            'CenterLastValue', 'Discretize', 'SeasonalDifference',
-            'RollingMeanTransformer', 'bkfilter', 'cffilter', 'Log',
-            'DifferencedTransformer', 'PctChangeTransformer', 'PositiveShift',
-            'SineTrend', 'convolution_filter', 'CumSumTransformer',
-            'AlignLastValue',  # new 0.4.3
-            'AnomalyRemoval', "HolidayTransformer",  # new 0.5.0
-            'LocalLinearTrend',  # new 0.5.1
-            "KalmanSmoothing",  # new 0.5.1
-            "RegressionFilter",   # new 0.5.7
-            "LevelShiftTransformer",  # new 0.6.0
-            "CenterSplit",   # new 0.6.1
-            "FFTFilter", "ReplaceConstant", "AlignLastDiff",  # new 0.6.2
-            "FFTDecomposition",  # new in 0.6.2
-            "HistoricValues",  # new in 0.6.7
-            "BKBandpassFilter",  # new in 0.6.8
-            "Constraint",  # new in 0.6.15
-            "DiffSmoother",  # new in 0.6.15
-            "FIRFilter",  # new in 0.6.16
-            "ShiftFirstValue",  # new in 0.6.16
-            "ThetaTransformer",  # new in 0.6.16
-            "ChangepointDetrend",  # new in 0.6.16
-            "MeanPercentSplitter",  # new in 0.6.16
-            "UpscaleDownscaleTransformer",  # new in 0.6.18
-            # "ReconciliationTransformer",  # new in 0.6.22
-        ]
 
         timings = {}
         forecasts = {}
@@ -961,6 +964,19 @@ class ModelTest(unittest.TestCase):
                 }, file
             )
         """
+
+    def test_transforms_get_params(self):
+        """See if new random params can be generated without error."""
+        default_methods = ['deep', 'fast', 'random', 'default', 'superfast']
+        gtrans = GeneralTransformer()
+        for method in default_methods:
+            for transform_str in transforms:
+                with self.subTest(i=transform_str):
+                    # could maybe only test the transformers in the have_params dictionary
+                    trans = gtrans.retrieve_transformer(transform_str)
+                    params = trans.get_new_params(method=method)
+                    self.assertIsInstance(params, dict)
+                    trans = gtrans.retrieve_transformer(transform_str, params=params)
 
     def test_sklearn(self):
         from autots import load_daily
