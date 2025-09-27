@@ -3162,8 +3162,8 @@ class FFT(ModelObject):
         """Returns dict of new parameters for parameter tuning"""
         return {
             "n_harmonics": random.choices(
-                [2, 3, 4, 5, 6, 10, 20, 100, 1000, 5000],
-                [0.1, 0.02, 0.2, 0.02, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1],
+                [2, 3, 4, 5, 6, 10, 20, 100, 1000, 5000, 20000],
+                [0.1, 0.02, 0.2, 0.02, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.01],
             )[0],
             "detrend": random.choices([None, "linear", 'quadratic'], [0.2, 0.7, 0.1])[
                 0
