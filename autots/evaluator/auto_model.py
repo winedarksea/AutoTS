@@ -3242,14 +3242,12 @@ def generate_score(
             score_dict['mage'] = mage_score * mage_weighting
             overall_score = overall_score + (mage_score * mage_weighting)
         if custom_weighting != 0:
-            custom_scaler = divisor_results['custom_weighted'][
-                divisor_results['custom_weighted'] != 0
-            ].min()
-            # potential edge case where weighting is > 0 but not custom metric is provided and is all zeroes
-            if not pd.isnull(custom_scaler):
-                custom_score = model_results['custom_weighted'] / custom_scaler
-            else:
-                custom_score = model_results['custom_weighted']
+            custom_values = model_results['custom_weighted'].copy()
+            # Replace NaN and infinite values with a large penalty (bad performance)
+            custom_values = custom_values.replace([np.inf, -np.inf, np.nan], 1e10)
+            min_val = custom_values.min()
+            custom_score = custom_values - min_val + 1.0
+
             score_dict['custom'] = custom_score * custom_weighting
             overall_score = overall_score + (custom_score * custom_weighting)
         if mle_weighting != 0:
