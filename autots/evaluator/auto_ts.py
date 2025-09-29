@@ -117,6 +117,7 @@ class AutoTS(object):
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
+        skip_slow_models_seconds (float): if not None, skip models from the initial round that took longer than this many seconds during validation. Does not apply to ensemble models. Defaults to None (no skipping).
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
@@ -209,6 +210,7 @@ class AutoTS(object):
         num_validations: int = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
+        skip_slow_models_seconds: float = None,
         validation_method: str = 'backwards',
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
@@ -247,6 +249,7 @@ class AutoTS(object):
         self.num_validations = num_validations
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
+        self.skip_slow_models_seconds = skip_slow_models_seconds
         self.validation_method = str(validation_method).lower()
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
@@ -1650,6 +1653,22 @@ class AutoTS(object):
             self.initial_results.model_results['Exceptions'].isna()
         ]
         validation_template = validation_template[validation_template['Ensemble'] <= 1]
+        
+        # filter out slow models if skip_slow_models_seconds is specified
+        # only apply to non-ensemble models during validation
+        if (self.skip_slow_models_seconds is not None and 
+            'TotalRuntimeSeconds' in validation_template.columns):
+            # Keep ensemble models (Ensemble > 0) regardless of runtime
+            # Filter non-ensemble models (Ensemble == 0) based on runtime
+            slow_models_mask = (
+                (validation_template['Ensemble'] == 0) & 
+                (validation_template['TotalRuntimeSeconds'] > self.skip_slow_models_seconds)
+            )
+            if self.verbose > 0:
+                num_slow = slow_models_mask.sum()
+                if num_slow > 0:
+                    print(f"Skipping {num_slow} models that took longer than {self.skip_slow_models_seconds} seconds")
+            validation_template = validation_template[~slow_models_mask]
         validation_template = validation_template.drop_duplicates(
             subset=self.template_cols, keep='first'
         )
