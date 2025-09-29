@@ -4,7 +4,14 @@ import datetime
 
 from autots.tools.seasonal import date_part
 from autots.models.base import ModelObject, PredictionObject
-from autots.tools.seasonal import date_part, random_datepart
+from autots.tools.seasonal import (
+    date_part,
+    create_changepoint_features,
+    changepoint_fcst_from_last_row,
+    half_yr_spacing,
+    random_datepart,
+    generate_random_changepoint_params,
+)
 from autots.tools.window_functions import window_maker, last_window, sliding_window_view
 from autots.tools.shaping import infer_frequency
 
@@ -389,6 +396,8 @@ class MambaSSM(ModelObject):
         datepart_method: str = "expanded",
         holiday_countries_used: bool = False,
         use_extra_gating: bool = False,
+        changepoint_method: str = "basic",
+        changepoint_params: dict = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -403,6 +412,8 @@ class MambaSSM(ModelObject):
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
         self.use_extra_gating = use_extra_gating
+        self.changepoint_method = changepoint_method
+        self.changepoint_params = changepoint_params if changepoint_params is not None else {}
         self.context_length = context_length
         self.d_model = d_model
         self.n_layers = n_layers
@@ -454,20 +465,42 @@ class MambaSSM(ModelObject):
         y_train = df.to_numpy(dtype=np.float32)
         train_index = df.index
 
-        # 2. Date-part + optional regressors
+        # 2. Date-part + changepoint features + optional regressors
         date_feats_train = date_part(
             train_index,
             method=self.datepart_method,
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
         )
+        
+        # Set default changepoint parameters for basic method if not provided
+        if self.changepoint_method == 'basic' and not self.changepoint_params:
+            half_yr_space = half_yr_spacing(df)
+            self.changepoint_params = {
+                'changepoint_spacing': int(half_yr_space),
+                'changepoint_distance_end': int(half_yr_space / 2)
+            }
+        
+        # Create changepoint features
+        # For advanced methods that need data, provide the training data
+        changepoint_data = None
+        if self.changepoint_method in ['pelt', 'l1_fused_lasso', 'l1_total_variation']:
+            changepoint_data = y_train
+        
+        changepoint_feats_train = create_changepoint_features(
+            train_index,
+            method=self.changepoint_method,
+            params=self.changepoint_params,
+            data=changepoint_data,
+        )
+        self.last_changepoint_row = changepoint_feats_train.iloc[-1]  # Store for prediction
 
+        # Combine all features
+        feature_list = [date_feats_train, changepoint_feats_train]
         if future_regressor is not None:
-            feat_df_train = pd.concat(
-                [date_feats_train, future_regressor], axis=1
-            ).reindex(train_index)
-        else:
-            feat_df_train = date_feats_train
+            feature_list.append(future_regressor)
+            
+        feat_df_train = pd.concat(feature_list, axis=1).reindex(train_index)
 
         feat_df_train = feat_df_train.ffill().bfill().astype(np.float32)
         feat_df_train.columns = [str(c) for c in feat_df_train.columns]
@@ -614,10 +647,19 @@ class MambaSSM(ModelObject):
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
         )
+        
+        # Create future changepoint features
+        future_changepoint_feats = changepoint_fcst_from_last_row(
+            self.last_changepoint_row, forecast_length
+        )
+        future_changepoint_feats.index = forecast_index
+        
+        # Combine all future features
+        feature_list = [future_date_feats, future_changepoint_feats]
         if future_regressor is not None:
-            feat_future_df = pd.concat([future_date_feats, future_regressor], axis=1)
-        else:
-            feat_future_df = future_date_feats
+            feature_list.append(future_regressor)
+            
+        feat_future_df = pd.concat(feature_list, axis=1)
 
         feat_future_df = (
             feat_future_df.reindex(columns=self.feature_columns)
@@ -730,8 +772,11 @@ class MambaSSM(ModelObject):
             "datepart_method": self.datepart_method,
             "holiday_countries_used": self.holiday_countries_used,
             "use_extra_gating": self.use_extra_gating,
+            "changepoint_method": self.changepoint_method,
+            "changepoint_params": self.changepoint_params,
         }
 
+    @staticmethod
     def get_new_params(method: str = "random"):
         """
         Generate new random parameters for MambaSSM model.
@@ -805,6 +850,9 @@ class MambaSSM(ModelObject):
         extra_gating_options = [True, False]  
         gating_weights = [0.25, 0.75]  # Prefer False for stability
         
+        # Generate changepoint method and parameters using dedicated function
+        changepoint_method, changepoint_params = generate_random_changepoint_params()
+
         # Generate random selections
         selected_params = {
             "context_length": random.choices(context_lengths, weights=context_weights, k=1)[0],
@@ -820,6 +868,8 @@ class MambaSSM(ModelObject):
             "datepart_method": random_datepart(),
             "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
             "use_extra_gating": random.choices(extra_gating_options, weights=gating_weights, k=1)[0],
+            "changepoint_method": changepoint_method,
+            "changepoint_params": changepoint_params,
         }
         
         # Add prediction_batch_size based on context_length (longer contexts need smaller batches)
@@ -838,7 +888,7 @@ if False:
     # Instantiate and run the model
     mamba_model = MambaSSM(
         context_length=90,
-        epochs=3,  # Reduced epochs for demo
+        epochs=10,  # Reduced epochs for demo
         batch_size=32,
         verbose=1,
     )

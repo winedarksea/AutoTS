@@ -42,7 +42,9 @@ class MambaSSMTest(unittest.TestCase):
             n_layers=1,         # Single layer
             d_state=4,          # Small state size
             verbose=1,
-            random_seed=42
+            random_seed=42,
+            changepoint_method="basic",    # Test changepoint features
+            changepoint_params={"changepoint_spacing": 60, "changepoint_distance_end": 30}
         )
         
         # Test fitting
@@ -112,6 +114,13 @@ class MambaSSMTest(unittest.TestCase):
         self.assertIn('epochs', params, "Parameters should include epochs")
         self.assertEqual(params['epochs'], 2, "Epochs parameter should match initialization")
         
+        # Test changepoint parameters
+        self.assertIn('changepoint_method', params, "Parameters should include changepoint_method")
+        self.assertIn('changepoint_params', params, "Parameters should include changepoint_params")
+        self.assertEqual(params['changepoint_method'], "basic", "Changepoint method should match initialization")
+        self.assertEqual(params['changepoint_params']['changepoint_spacing'], 60, "Changepoint spacing should match initialization")
+        self.assertEqual(params['changepoint_params']['changepoint_distance_end'], 30, "Changepoint distance end should match initialization")
+        
         print("All MambaSSM tests passed!")
 
     def test_model_with_regressors(self):
@@ -173,6 +182,162 @@ class MambaSSMTest(unittest.TestCase):
         self.assertFalse(prediction.forecast.isnull().any().any())
         
         print("MambaSSM with regressors test passed!")
+
+    def test_changepoint_features(self):
+        """Test MambaSSM with explicit changepoint configuration."""
+        print("Testing MambaSSM with changepoint features")
+        
+        # Create minimal test data
+        n_timesteps = 120  # Enough data for changepoints
+        n_series = 2
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+        
+        np.random.seed(42)
+        # Create data with a clear trend change
+        data1 = np.random.randn(n_timesteps // 2, n_series).astype(np.float32)
+        data2 = np.random.randn(n_timesteps // 2, n_series).astype(np.float32) + 2  # Level shift
+        data = np.vstack([data1, data2])
+        
+        df_train = pd.DataFrame(data, index=dates, columns=['A', 'B'])
+        
+        forecast_length = 7
+        
+        # Test with specific changepoint parameters
+        model = MambaSSM(
+            context_length=30,
+            epochs=1,  # Minimal for speed
+            batch_size=8,
+            d_model=8,
+            n_layers=1,
+            d_state=2,
+            verbose=0,
+            random_seed=42,
+            changepoint_method="basic",  # Should detect the change around day 60
+            changepoint_params={"changepoint_spacing": 25, "changepoint_distance_end": 10}
+        )
+        
+        # Fit and predict
+        model.fit(df_train)
+        prediction = model.predict(forecast_length=forecast_length)
+        
+        # Basic validation
+        self.assertIsNotNone(prediction.forecast, "Forecast with changepoints should not be None")
+        self.assertEqual(prediction.forecast.shape, (forecast_length, n_series))
+        self.assertFalse(prediction.forecast.isnull().any().any())
+        
+        # Verify changepoint parameters were stored correctly
+        params = model.get_params()
+        self.assertEqual(params['changepoint_method'], "basic")
+        self.assertEqual(params['changepoint_params']['changepoint_spacing'], 25)
+        self.assertEqual(params['changepoint_params']['changepoint_distance_end'], 10)
+        
+        print("MambaSSM changepoint features test passed!")
+
+    def test_get_new_params_includes_changepoints(self):
+        """Test that get_new_params includes changepoint parameters."""
+        print("Testing get_new_params with changepoint parameters")
+        
+        # Generate new parameters
+        new_params = MambaSSM.get_new_params()
+        
+        # Verify changepoint parameters are included
+        self.assertIn('changepoint_method', new_params, "New params should include changepoint_method")
+        self.assertIn('changepoint_params', new_params, "New params should include changepoint_params")
+        
+        # Verify method is valid
+        valid_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation']
+        self.assertIn(new_params['changepoint_method'], valid_methods, "Changepoint method should be valid")
+        
+        # Verify parameters are appropriate for the method
+        method = new_params['changepoint_method']
+        params = new_params['changepoint_params']
+        self.assertIsInstance(params, dict, "Changepoint params should be a dictionary")
+        
+        if method == 'basic':
+            self.assertIn('changepoint_spacing', params)
+            self.assertIn('changepoint_distance_end', params)
+            self.assertIsInstance(params['changepoint_spacing'], int)
+            self.assertIsInstance(params['changepoint_distance_end'], int)
+            self.assertGreater(params['changepoint_spacing'], 0)
+            self.assertGreater(params['changepoint_distance_end'], 0)
+        elif method == 'pelt':
+            self.assertIn('penalty', params)
+            self.assertIn('loss_function', params)
+            self.assertIn('min_segment_length', params)
+        elif method in ['l1_fused_lasso', 'l1_total_variation']:
+            self.assertIn('lambda_reg', params)
+        
+        print("get_new_params changepoint test passed!")
+
+    def test_l1_changepoint_methods(self):
+        """Test MambaSSM with L1 changepoint methods."""
+        print("Testing MambaSSM with L1 changepoint methods")
+        
+        # Create minimal test data with clear level shifts
+        n_timesteps = 40
+        n_series = 1
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+        
+        np.random.seed(42)
+        # Create data with clear level shifts for better L1 detection
+        data1 = np.random.randn(20, n_series).astype(np.float32) + 10
+        data2 = np.random.randn(20, n_series).astype(np.float32) + 15  # Clear level shift
+        data = np.vstack([data1, data2])
+        
+        df_train = pd.DataFrame(data, index=dates, columns=['A'])
+        
+        forecast_length = 5
+        
+        # Test L1 Fused Lasso method
+        model_l1fl = MambaSSM(
+            context_length=10,
+            epochs=1,
+            batch_size=4,
+            d_model=8,
+            n_layers=1,
+            d_state=2,
+            verbose=0,
+            random_seed=42,
+            changepoint_method="l1_fused_lasso",
+            changepoint_params={"lambda_reg": 2.0}
+        )
+        
+        model_l1fl.fit(df_train)
+        prediction_l1fl = model_l1fl.predict(forecast_length=forecast_length)
+        
+        self.assertIsNotNone(prediction_l1fl.forecast, "L1 fused lasso forecast should not be None")
+        self.assertEqual(prediction_l1fl.forecast.shape, (forecast_length, n_series))
+        
+        # Test L1 Total Variation method
+        model_l1tv = MambaSSM(
+            context_length=10,
+            epochs=1,
+            batch_size=4,
+            d_model=8,
+            n_layers=1,
+            d_state=2,
+            verbose=0,
+            random_seed=42,
+            changepoint_method="l1_total_variation",
+            changepoint_params={"lambda_reg": 1.0}
+        )
+        
+        model_l1tv.fit(df_train)
+        prediction_l1tv = model_l1tv.predict(forecast_length=forecast_length)
+        
+        self.assertIsNotNone(prediction_l1tv.forecast, "L1 total variation forecast should not be None")
+        self.assertEqual(prediction_l1tv.forecast.shape, (forecast_length, n_series))
+        
+        # Test parameter retrieval for L1 methods
+        params_l1fl = model_l1fl.get_params()
+        self.assertEqual(params_l1fl['changepoint_method'], "l1_fused_lasso")
+        self.assertEqual(params_l1fl['changepoint_params']['lambda_reg'], 2.0)
+        
+        params_l1tv = model_l1tv.get_params()
+        self.assertEqual(params_l1tv['changepoint_method'], "l1_total_variation")
+        self.assertEqual(params_l1tv['changepoint_params']['lambda_reg'], 1.0)
+        
+        print("L1 changepoint methods test passed!")
 
 
 if __name__ == '__main__':
