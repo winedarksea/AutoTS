@@ -59,7 +59,7 @@ model_list = {
     'ETS': 1,
     'FBProphet': 0.8,
     'GLM': 1,
-    'UnobservedComponents': 1,
+    'UnobservedComponents': 0.2,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'Theta': 1,
@@ -78,7 +78,7 @@ model_list = {
     'NVAR': 0.3,
     'MAR': 0.25,
     'RRVAR': 0.4,
-    'KalmanStateSpace': 0.4,
+    'KalmanStateSpace': 0.2,
     'MetricMotif': 1,
     'Cassandra': 0.6,
     'SeasonalityMotif': 1.5,
@@ -333,6 +333,7 @@ model = AutoTS(
     generation_timeout=generation_timeout,
     n_jobs=n_jobs,
     verbose=0,
+    skip_slow_models_seconds=1000,
 )
 
 if not initial_training:
@@ -486,6 +487,10 @@ if graph:
         plt.show()
 
         model.plot_model_failure_rate()
+        plt.show()
+
+        model.plot_transformer_by_class()
+        plt.savefig("transformer_by_class_pro.png", dpi=300, bbox_inches="tight")
         plt.show()
 
         model.plot_unpredictability()
