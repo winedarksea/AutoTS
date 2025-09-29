@@ -20,6 +20,10 @@
 * added variational autoencoder anomaly detection method
 * added experimental deep state space model
 * some fixes for breaking changes in dependencies
+* adjustment to how custom_metric is scaled so it can work with negatives
+* improvements to the calendars, Hindu calendar should be working now
+* changes to HistoricValues which hopefully makes it more reliable
+* added pMLP and MambaSSM models
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
