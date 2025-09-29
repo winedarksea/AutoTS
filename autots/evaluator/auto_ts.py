@@ -1459,7 +1459,7 @@ class AutoTS(object):
                 )
                 if not ensemble_templates.empty:
                     self._run_template(
-                        self.ensemble_templates,
+                        ensemble_templates,
                         df_train,
                         df_test,
                         future_regressor_train=future_regressor_train,
@@ -1516,7 +1516,7 @@ class AutoTS(object):
                         ensemble=self.ensemble,
                         score_per_series=self.score_per_series,
                     )
-                    self.ensemble_templates2 = ensemble_templates
+                    self.ensemble_templates = ensemble_templates
                     if not ensemble_templates.empty:
                         self._run_template(
                             ensemble_templates,

@@ -92,7 +92,17 @@ def create_feature(
                 )
         elif model_name in all_result_path:
             result_windows = extract_result_windows(forecasts, model_name=model_name)
-    res = np.stack(res)
+    
+    # Align all DataFrames to have consistent columns before stacking
+    target_columns = df_train.columns
+    aligned_res = []
+    for df in res:
+        if isinstance(df, pd.DataFrame):
+            aligned_res.append(df.reindex(columns=target_columns, fill_value=0).values)
+        else:
+            aligned_res.append(df)  # In case some items are already numpy arrays
+    
+    res = np.stack(aligned_res)
     if result_windows is not None:
         res = np.concatenate([res, result_windows], axis=0)
     # add regressor as a feature

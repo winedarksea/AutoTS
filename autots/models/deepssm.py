@@ -11,6 +11,8 @@ from autots.tools.seasonal import (
     half_yr_spacing,
     random_datepart,
     generate_random_changepoint_params,
+    find_market_changepoints_multivariate,
+    ChangePointDetector,
 )
 from autots.tools.window_functions import window_maker, last_window, sliding_window_view
 from autots.tools.shaping import infer_frequency
@@ -29,11 +31,79 @@ try:
     import torch.nn.functional as F
     from torch.nn import Module
     from torch.utils.data import DataLoader, Dataset, TensorDataset
+    HAS_TORCH = True
 except Exception:
     from autots.tools.mocks import Module, Dataset, DataLoader, TensorDataset
+    HAS_TORCH = False
 
 
 # Custom Loss Functions Only - Dataset creation now uses window_maker
+
+
+def create_training_windows(
+    y_train_scaled, 
+    train_feats_scaled, 
+    context_length, 
+    max_windows=50000, 
+    random_seed=2023
+):
+    """
+    Efficient shared function to create training windows for both MambaSSM and pMLP.
+    
+    Args:
+        y_train_scaled: Scaled time series data (n_timesteps, n_series)
+        train_feats_scaled: Scaled feature data (n_timesteps, n_features)  
+        context_length: Length of context window
+        max_windows: Maximum number of windows to generate
+        random_seed: Random seed for sampling
+        
+    Returns:
+        tuple: (X_data, Y_data) where X_data has shape (n_windows, context_length, 1+n_features)
+               and Y_data has shape (n_windows, 1)
+    """
+    # Calculate maximum possible windows for memory efficiency
+    max_possible_windows = (y_train_scaled.shape[0] - context_length) * y_train_scaled.shape[1]
+    max_windows = min(max_windows, max_possible_windows)
+    
+    # Use numpy for efficient window generation via stride tricks
+    y_windows = sliding_window_view(y_train_scaled, context_length + 1, axis=0)
+    feat_windows = sliding_window_view(train_feats_scaled, context_length, axis=0) 
+    
+    # Flatten across all series and time windows
+    num_windows_per_series = y_windows.shape[0]
+    total_windows = num_windows_per_series * y_train_scaled.shape[1]
+    
+    # Sample windows if we exceed max_windows
+    if total_windows > max_windows:
+        rng = np.random.default_rng(random_seed)
+        selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
+    else:
+        selected_indices = np.arange(total_windows)
+        
+    # Generate training samples efficiently using vectorized operations
+    num_features = train_feats_scaled.shape[1]
+    
+    # Vectorized index calculations (much faster than Python loop)
+    series_indices = selected_indices % y_train_scaled.shape[1]
+    window_indices = selected_indices // y_train_scaled.shape[1]
+    
+    # Pre-allocate output arrays
+    X_data = np.empty((len(selected_indices), context_length, 1 + num_features), dtype=np.float32)
+    Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
+    
+    # Vectorized data extraction using advanced indexing
+    # Time series values: y_windows[window_indices, series_indices, :context_length]
+    X_data[:, :, 0] = y_windows[window_indices, series_indices, :context_length]
+    
+    # Feature values: broadcast feat_windows across all selected samples
+    # feat_windows[window_indices] has shape (n_samples, n_features, context_length)
+    # We need (n_samples, context_length, n_features) so transpose the last two dimensions
+    X_data[:, :, 1:] = feat_windows[window_indices].transpose(0, 2, 1)
+    
+    # Target values: y_windows[window_indices, series_indices, context_length]
+    Y_data[:, 0] = y_windows[window_indices, series_indices, context_length]
+
+    return X_data, Y_data
 
 
 class CombinedNLLWassersteinLoss(Module):
@@ -233,6 +303,264 @@ class RegularizedGaussianNLL(Module):
         return nll + sigma_reg
 
 
+class RankedSharpeLoss(Module):
+    def __init__(self, nll_weight=0.7, rank_weight=0.3, temperature=1.0, use_kendall=False):
+        """
+        Loss function optimized for ranked Sharpe metric performance.
+        
+        Combines Gaussian NLL for probabilistic anchoring with rank correlation
+        objectives to optimize cross-series relative performance.
+        
+        Args:
+            nll_weight: Weight for Gaussian NLL anchoring term
+            rank_weight: Weight for rank correlation term
+            temperature: Temperature parameter for soft ranking (higher = softer)
+            use_kendall: If True, uses Kendall's tau approximation; if False, uses Spearman
+        """
+        super().__init__()
+        self.nll_weight = nll_weight
+        self.rank_weight = rank_weight
+        self.temperature = temperature
+        self.use_kendall = use_kendall
+        self.nll_loss = nn.GaussianNLLLoss(reduction="mean")
+        
+    def _soft_rank(self, x, temperature=1.0):
+        """
+        Compute differentiable soft ranks using temperature-scaled sigmoid.
+        
+        For short horizon forecasting, we need stable gradients that preserve
+        the relative ordering information critical for ranked Sharpe.
+        """
+        # x shape: (batch_size,) - predictions for all series at one timestep
+        n = x.shape[0]
+        
+        # Create pairwise comparison matrix
+        # diff[i,j] = x[i] - x[j]
+        x_expanded = x.unsqueeze(1)  # (n, 1)
+        diff = x_expanded - x_expanded.T  # (n, n)
+        
+        # Soft ranks using sigmoid: higher values get lower ranks (ranks start from 1)
+        # sigmoid(diff/temp) ≈ 1 when x[i] > x[j], ≈ 0 when x[i] < x[j]
+        soft_comparison = torch.sigmoid(diff / temperature)
+        
+        # Sum gives approximate rank (higher values = higher ranks)
+        # Add 1 to make ranks start from 1 instead of 0
+        soft_ranks = soft_comparison.sum(dim=1) + 1
+        
+        return soft_ranks
+    
+    def _kendall_tau_loss(self, pred_ranks, true_ranks):
+        """
+        Compute differentiable approximation of Kendall's tau correlation.
+        
+        Kendall's tau is more robust for short sequences and focuses on
+        pairwise concordance, which aligns well with ranked Sharpe objectives.
+        """
+        n = pred_ranks.shape[0]
+        if n < 2:
+            return torch.tensor(0.0, device=pred_ranks.device)
+        
+        # Create all pairwise differences
+        pred_diff = pred_ranks.unsqueeze(1) - pred_ranks.unsqueeze(0)  # (n, n)
+        true_diff = true_ranks.unsqueeze(1) - true_ranks.unsqueeze(0)  # (n, n)
+        
+        # Concordant pairs: same sign in both differences
+        # Use tanh to make it differentiable
+        concordant = torch.tanh(pred_diff / self.temperature) * torch.tanh(true_diff / self.temperature)
+        
+        # Sum over upper triangle (avoid diagonal and duplicates)
+        mask = torch.triu(torch.ones_like(concordant), diagonal=1)
+        kendall = (concordant * mask).sum() / mask.sum()
+        
+        # Return negative for minimization (we want to maximize correlation)
+        return -kendall
+    
+    def _spearman_loss(self, pred_ranks, true_ranks):
+        """
+        Compute differentiable Spearman correlation using soft ranks.
+        
+        This matches the Spearman correlation used in your ranked Sharpe metric.
+        """
+        # Center the ranks
+        pred_centered = pred_ranks - pred_ranks.mean()
+        true_centered = true_ranks - true_ranks.mean()
+        
+        # Compute correlation
+        numerator = (pred_centered * true_centered).sum()
+        pred_var = (pred_centered ** 2).sum()
+        true_var = (true_centered ** 2).sum()
+        
+        # Add epsilon for numerical stability
+        epsilon = 1e-8
+        correlation = numerator / (torch.sqrt(pred_var * true_var) + epsilon)
+        
+        # Return negative for minimization
+        return -correlation
+    
+    def forward(self, mu, sigma, y_true):
+        """
+        Forward pass combining NLL anchoring with rank correlation optimization.
+        
+        Args:
+            mu: Mean predictions, shape (batch_size, 1) or (batch_size,)
+            sigma: Std predictions, same shape as mu
+            y_true: True values, same shape as mu
+            
+        Returns:
+            Combined loss value (scalar)
+        """
+        # Ensure proper shapes
+        if mu.dim() > 1:
+            mu = mu.squeeze(-1)
+        if sigma.dim() > 1:
+            sigma = sigma.squeeze(-1)
+        if y_true.dim() > 1:
+            y_true = y_true.squeeze(-1)
+            
+        sigma = torch.clamp(sigma, min=1e-6)
+        
+        # 1. Probabilistic anchoring term (Gaussian NLL)
+        nll = self.nll_loss(mu.unsqueeze(-1), y_true.unsqueeze(-1), sigma.pow(2).unsqueeze(-1))
+        
+        # 2. Rank correlation term
+        # For short horizon forecasting, we focus on cross-series ranking at each timestep
+        if mu.shape[0] >= 2:  # Need at least 2 series for ranking
+            # Compute soft ranks for predictions and actuals
+            pred_ranks = self._soft_rank(mu, self.temperature)
+            true_ranks = self._soft_rank(y_true, self.temperature)
+            
+            # Choose correlation method
+            if self.use_kendall:
+                rank_loss = self._kendall_tau_loss(pred_ranks, true_ranks)
+            else:
+                rank_loss = self._spearman_loss(pred_ranks, true_ranks)
+        else:
+            rank_loss = torch.tensor(0.0, device=mu.device)
+        
+        # Combine losses
+        total_loss = self.nll_weight * nll + self.rank_weight * rank_loss
+        
+        return total_loss
+
+
+class ShortHorizonRankLoss(Module):
+    def __init__(self, nll_weight=0.6, rank_weight=0.3, consistency_weight=0.1, 
+                 temperature=0.5, horizon_steps=4):
+        """
+        Specialized loss for short horizon (≤4 steps) ranked Sharpe optimization.
+        
+        Adds temporal consistency term to ensure predictions maintain relative
+        rankings across the short forecast horizon.
+        
+        Args:
+            nll_weight: Weight for probabilistic anchoring
+            rank_weight: Weight for cross-series rank correlation
+            consistency_weight: Weight for temporal ranking consistency
+            temperature: Temperature for soft ranking
+            horizon_steps: Number of forecast steps to optimize for
+        """
+        super().__init__()
+        self.nll_weight = nll_weight
+        self.rank_weight = rank_weight
+        self.consistency_weight = consistency_weight
+        self.temperature = temperature
+        self.horizon_steps = horizon_steps
+        self.nll_loss = nn.GaussianNLLLoss(reduction="mean")
+        
+        # Store recent predictions for temporal consistency
+        self.register_buffer('recent_predictions', torch.zeros(horizon_steps, 1))
+        self.register_buffer('recent_actuals', torch.zeros(horizon_steps, 1))
+        self.step_count = 0
+        
+    def _soft_rank(self, x, temperature=1.0):
+        """Compute differentiable soft ranks."""
+        n = x.shape[0]
+        if n < 2:
+            return x  # Return original if can't rank
+            
+        x_expanded = x.unsqueeze(1)
+        diff = x_expanded - x_expanded.T
+        soft_comparison = torch.sigmoid(diff / temperature)
+        soft_ranks = soft_comparison.sum(dim=1) + 1
+        return soft_ranks
+        
+    def _rank_correlation_loss(self, pred_ranks, true_ranks):
+        """Compute Spearman correlation loss."""
+        pred_centered = pred_ranks - pred_ranks.mean()
+        true_centered = true_ranks - true_ranks.mean()
+        
+        numerator = (pred_centered * true_centered).sum()
+        pred_var = (pred_centered ** 2).sum()
+        true_var = (true_centered ** 2).sum()
+        
+        epsilon = 1e-8
+        correlation = numerator / (torch.sqrt(pred_var * true_var) + epsilon)
+        return -correlation
+        
+    def _temporal_consistency_loss(self, current_pred_ranks):
+        """
+        Penalize sudden changes in relative rankings across timesteps.
+        
+        For short horizons, maintaining ranking consistency helps achieve
+        better Sharpe ratios by reducing ranking volatility.
+        """
+        if self.step_count < 2:
+            return torch.tensor(0.0, device=current_pred_ranks.device)
+            
+        # Get the most recent stored prediction ranks
+        if hasattr(self, '_prev_pred_ranks'):
+            prev_ranks = self._prev_pred_ranks
+            
+            # Compute ranking change penalty
+            rank_diff = torch.abs(current_pred_ranks - prev_ranks)
+            consistency_loss = rank_diff.mean()
+            
+            return consistency_loss
+        
+        return torch.tensor(0.0, device=current_pred_ranks.device)
+    
+    def forward(self, mu, sigma, y_true):
+        """
+        Forward pass with temporal consistency for short horizon optimization.
+        """
+        # Ensure proper shapes
+        if mu.dim() > 1:
+            mu = mu.squeeze(-1)
+        if sigma.dim() > 1:
+            sigma = sigma.squeeze(-1)
+        if y_true.dim() > 1:
+            y_true = y_true.squeeze(-1)
+            
+        sigma = torch.clamp(sigma, min=1e-6)
+        
+        # 1. Probabilistic anchoring
+        nll = self.nll_loss(mu.unsqueeze(-1), y_true.unsqueeze(-1), sigma.pow(2).unsqueeze(-1))
+        
+        # 2. Cross-series rank correlation
+        rank_loss = torch.tensor(0.0, device=mu.device)
+        consistency_loss = torch.tensor(0.0, device=mu.device)
+        
+        if mu.shape[0] >= 2:
+            pred_ranks = self._soft_rank(mu, self.temperature)
+            true_ranks = self._soft_rank(y_true, self.temperature)
+            
+            rank_loss = self._rank_correlation_loss(pred_ranks, true_ranks)
+            
+            # 3. Temporal consistency (only during training)
+            if self.training:
+                consistency_loss = self._temporal_consistency_loss(pred_ranks)
+                # Store current ranks for next timestep
+                self._prev_pred_ranks = pred_ranks.detach()
+                self.step_count += 1
+        
+        # Combine all terms
+        total_loss = (self.nll_weight * nll + 
+                     self.rank_weight * rank_loss + 
+                     self.consistency_weight * consistency_loss)
+        
+        return total_loss
+
+
 # Self-contained Mamba Block and Core Model
 class MambaMinimalBlock(Module):
     def __init__(self, d_model, d_state=16, d_conv=4, expand=2, use_extra_gating=False):
@@ -373,6 +701,99 @@ class MambaCore(Module):
         return mu, sigma
 
 
+class MLPCore(Module):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dims=[512, 256],  # Wide but shallow by default
+        dropout_rate=0.2,
+        use_batch_norm=True,
+        activation='relu',
+    ):
+        super().__init__()
+        self.activation_name = activation
+        self.use_batch_norm = use_batch_norm
+        
+        # Choose activation function
+        if activation == 'relu':
+            self.activation = nn.ReLU()
+        elif activation == 'gelu':
+            self.activation = nn.GELU()
+        elif activation == 'silu':
+            self.activation = nn.SiLU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation}")
+        
+        # Build layers
+        layers = []
+        prev_dim = input_dim
+        
+        for i, hidden_dim in enumerate(hidden_dims):
+            # Linear layer
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            
+            # Batch normalization (optional, but often helps with wide networks)
+            if use_batch_norm:
+                layers.append(nn.BatchNorm1d(hidden_dim))
+            
+            # Activation
+            layers.append(self.activation)
+            
+            # Dropout (skip on last hidden layer to avoid over-regularization before output)
+            if i < len(hidden_dims) - 1:
+                layers.append(nn.Dropout(dropout_rate))
+            
+            prev_dim = hidden_dim
+        
+        self.backbone = nn.Sequential(*layers)
+        
+        # Output heads for probabilistic forecasting
+        self.out_mu = nn.Linear(prev_dim, 1)
+        self.out_sigma = nn.Linear(prev_dim, 1)
+        self.softplus = nn.Softplus()
+        
+        # Initialize weights for better convergence
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize weights using Xavier/Glorot initialization for better convergence."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+    
+    def forward(self, x):
+        """
+        Forward pass for MLP.
+        
+        Args:
+            x: Input tensor of shape (batch_size, seq_len, input_dim) or (batch_size, input_dim)
+            
+        Returns:
+            mu: Mean predictions 
+            sigma: Standard deviation predictions
+        """
+        # Handle both sequence and non-sequence inputs
+        if x.dim() == 3:
+            # For sequence input, we can either:
+            # 1. Take the last timestep (like RNN)
+            # 2. Global average pooling
+            # 3. Flatten the sequence
+            # For time series, taking last timestep often works well
+            x = x[:, -1, :]  # Take last timestep: (batch_size, input_dim)
+        
+        # Process through backbone
+        hidden = self.backbone(x)
+        
+        # Generate probabilistic outputs
+        mu = self.out_mu(hidden)
+        sigma = self.softplus(self.out_sigma(hidden))
+        sigma = torch.clamp(sigma, min=1e-6)  # Ensure positive sigma
+        
+        return mu, sigma
+
+
 class MambaSSM(ModelObject):
     def __init__(
         self,
@@ -398,6 +819,7 @@ class MambaSSM(ModelObject):
         use_extra_gating: bool = False,
         changepoint_method: str = "basic",
         changepoint_params: dict = None,
+        regression_type: str = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -408,7 +830,9 @@ class MambaSSM(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            regression_type=regression_type,
         )
+        self.regression_type = regression_type
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
         self.use_extra_gating = use_extra_gating
@@ -449,10 +873,26 @@ class MambaSSM(ModelObject):
             return EnergyScore()
         elif self.loss_function == "regularized_nll":
             return RegularizedGaussianNLL()
+        elif self.loss_function == "ranked_sharpe":
+            return RankedSharpeLoss(
+                nll_weight=getattr(self, 'nll_weight', 0.7),
+                rank_weight=getattr(self, 'rank_weight', 0.3),
+                temperature=getattr(self, 'temperature', 1.0),
+                use_kendall=getattr(self, 'use_kendall', False)
+            )
+        elif self.loss_function == "short_horizon_rank":
+            return ShortHorizonRankLoss(
+                nll_weight=getattr(self, 'nll_weight', 0.6),
+                rank_weight=getattr(self, 'rank_weight', 0.3),
+                consistency_weight=getattr(self, 'consistency_weight', 0.1),
+                temperature=getattr(self, 'temperature', 0.5),
+                horizon_steps=getattr(self, 'horizon_steps', 4)
+            )
         else:
             raise ValueError(
                 f"Unknown loss function: {self.loss_function}. "
-                "Options: 'combined_nll_wasserstein', 'quantile', 'crps', 'energy', 'regularized_nll'"
+                "Options: 'combined_nll_wasserstein', 'quantile', 'crps', 'energy', 'regularized_nll', "
+                "'ranked_sharpe', 'short_horizon_rank'"
             )
 
     def fit(self, df, future_regressor=None, **kwargs):
@@ -464,6 +904,12 @@ class MambaSSM(ModelObject):
         self.df_train = df  # Store training data for predict method
         y_train = df.to_numpy(dtype=np.float32)
         train_index = df.index
+
+        if self.regression_type is not None:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but not future_regressor supplied."
+                )
 
         # 2. Date-part + changepoint features + optional regressors
         date_feats_train = date_part(
@@ -481,22 +927,24 @@ class MambaSSM(ModelObject):
                 'changepoint_distance_end': int(half_yr_space / 2)
             }
         
-        # Create changepoint features
-        # For advanced methods that need data, provide the training data
-        changepoint_data = None
-        if self.changepoint_method in ['pelt', 'l1_fused_lasso', 'l1_total_variation']:
-            changepoint_data = y_train
+        # Changepoint features
+        if self.changepoint_method != "none":
+            self.changepoint_detector = ChangePointDetector(
+                method=self.changepoint_method,
+                method_params=self.changepoint_params,
+                **kwargs,
+            )
+            self.changepoint_detector.detect(df)
+            changepoint_features = self.changepoint_detector.create_features(
+                forecast_length=0
+            )
+            self.changepoint_features_columns = changepoint_features.columns
+        else:
+            self.changepoint_detector = None
+            changepoint_features = pd.DataFrame(index=df.index)
         
-        changepoint_feats_train = create_changepoint_features(
-            train_index,
-            method=self.changepoint_method,
-            params=self.changepoint_params,
-            data=changepoint_data,
-        )
-        self.last_changepoint_row = changepoint_feats_train.iloc[-1]  # Store for prediction
-
         # Combine all features
-        feature_list = [date_feats_train, changepoint_feats_train]
+        feature_list = [date_feats_train, changepoint_features]
         if future_regressor is not None:
             feature_list.append(future_regressor)
             
@@ -517,56 +965,17 @@ class MambaSSM(ModelObject):
         self.feature_scaler = StandardScaler()
         train_feats_scaled = self.feature_scaler.fit_transform(feat_df_train.values)
 
-        # 4. Create training windows using efficient approach similar to window_maker
-        # Use efficient sliding window generation but match MambaSSM's expected format
-        
-        # Calculate maximum windows for memory efficiency
-        max_possible_windows = (y_train.shape[0] - self.context_length) * y_train.shape[1]
-        max_windows = min(50000, max_possible_windows)
-        
-        # Pre-allocate arrays for efficiency
-        X_list = []
-        Y_list = []
-        
-        # Use numpy for efficient window generation via stride tricks
-        y_windows = sliding_window_view(y_train_scaled, self.context_length + 1, axis=0)
-        feat_windows = sliding_window_view(train_feats_scaled, self.context_length, axis=0) 
-        
-        # Flatten across all series and time windows
-        num_windows_per_series = y_windows.shape[0]
-        total_windows = num_windows_per_series * y_train.shape[1]
-        
-        # Sample windows if we exceed max_windows
-        if total_windows > max_windows:
-            rng = np.random.default_rng(self.random_seed)
-            selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
-        else:
-            selected_indices = np.arange(total_windows)
-            
-        # Generate training samples efficiently using vectorized operations
-        num_features = train_feats_scaled.shape[1]
-        
-        # Vectorized index calculations (much faster than Python loop)
-        series_indices = selected_indices % y_train.shape[1]
-        window_indices = selected_indices // y_train.shape[1]
-        
-        # Pre-allocate output arrays
-        X_data = np.empty((len(selected_indices), self.context_length, 1 + num_features), dtype=np.float32)
-        Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
-        
-        # Vectorized data extraction using advanced indexing
-        # Time series values: y_windows[window_indices, series_indices, :context_length]
-        X_data[:, :, 0] = y_windows[window_indices, series_indices, :self.context_length]
-        
-        # Feature values: broadcast feat_windows across all selected samples
-        # feat_windows[window_indices] has shape (n_samples, n_features, context_length)
-        # We need (n_samples, context_length, n_features) so transpose the last two dimensions
-        X_data[:, :, 1:] = feat_windows[window_indices].transpose(0, 2, 1)
-        
-        # Target values: y_windows[window_indices, series_indices, context_length]
-        Y_data[:, 0] = y_windows[window_indices, series_indices, self.context_length]
+        # 4. Create training windows using shared efficient function
+        X_data, Y_data = create_training_windows(
+            y_train_scaled, 
+            train_feats_scaled, 
+            self.context_length, 
+            max_windows=50000,
+            random_seed=self.random_seed
+        )
 
         # 5. Torch plumbing
+        num_features = train_feats_scaled.shape[1]
         input_dim = 1 + num_features
         self.model = MambaCore(
             input_dim,
@@ -649,10 +1058,14 @@ class MambaSSM(ModelObject):
         )
         
         # Create future changepoint features
-        future_changepoint_feats = changepoint_fcst_from_last_row(
-            self.last_changepoint_row, forecast_length
-        )
-        future_changepoint_feats.index = forecast_index
+        if self.changepoint_detector is not None:
+            # Generate features for training + forecast, then extract forecast portion
+            all_changepoint_features = self.changepoint_detector.create_features(
+                forecast_length=forecast_length
+            )
+            future_changepoint_feats = all_changepoint_features.tail(forecast_length)
+        else:
+            future_changepoint_feats = pd.DataFrame(index=forecast_index)
         
         # Combine all future features
         feature_list = [future_date_feats, future_changepoint_feats]
@@ -774,6 +1187,7 @@ class MambaSSM(ModelObject):
             "use_extra_gating": self.use_extra_gating,
             "changepoint_method": self.changepoint_method,
             "changepoint_params": self.changepoint_params,
+            "regression_type": self.regression_type,
         }
 
     @staticmethod
@@ -828,9 +1242,11 @@ class MambaSSM(ModelObject):
             "crps", 
             "quantile", 
             "regularized_nll", 
-            "energy"
+            "energy",
+            "short_horizon_rank",      # Best for short horizon ranked Sharpe
+            "ranked_sharpe",           # General ranked Sharpe optimization
         ]
-        loss_weights = [0.3, 0.25, 0.2, 0.15, 0.1]  # Prefer combined and crps
+        loss_weights = [0.3, 0.25, 0.2, 0.15, 0.05, 0.03, 0.03]
         
         # NLL weight for combined loss
         nll_weights = [0.5, 0.8, 1.0, 1.2, 1.5]
@@ -853,6 +1269,12 @@ class MambaSSM(ModelObject):
         # Generate changepoint method and parameters using dedicated function
         changepoint_method, changepoint_params = generate_random_changepoint_params()
 
+        # Regression type logic
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+
         # Generate random selections
         selected_params = {
             "context_length": random.choices(context_lengths, weights=context_weights, k=1)[0],
@@ -870,6 +1292,7 @@ class MambaSSM(ModelObject):
             "use_extra_gating": random.choices(extra_gating_options, weights=gating_weights, k=1)[0],
             "changepoint_method": changepoint_method,
             "changepoint_params": changepoint_params,
+            "regression_type": regression_choice,
         }
         
         # Add prediction_batch_size based on context_length (longer contexts need smaller batches)
@@ -877,6 +1300,544 @@ class MambaSSM(ModelObject):
             selected_params["prediction_batch_size"] = random.choices([30, 45, 60], weights=[0.4, 0.4, 0.2], k=1)[0]
         else:
             selected_params["prediction_batch_size"] = random.choices([45, 60, 90], weights=[0.3, 0.4, 0.3], k=1)[0]
+        
+        return selected_params
+
+
+class pMLP(ModelObject):
+    def __init__(
+        self,
+        name: str = "pMLP",  # Probabilistic MLP
+        frequency: str = "infer",
+        prediction_interval: float = 0.9,
+        holiday_country: str = "US",
+        random_seed: int = 2023,
+        verbose: int = 1,
+        context_length: int = 60,  # Shorter default for MLP efficiency
+        hidden_dims: list = None,  # Will default to wide, shallow architecture
+        dropout_rate: float = 0.2,
+        use_batch_norm: bool = True,
+        activation: str = 'relu',
+        epochs: int = 15,  # Slightly more epochs since MLPs train faster
+        batch_size: int = 64,  # Larger batch size for efficiency
+        lr: float = 2e-3,  # Slightly higher LR for MLPs
+        loss_function: str = "combined_nll_wasserstein",
+        nll_weight: float = 1.0,
+        wasserstein_weight: float = 0.1,
+        prediction_batch_size: int = 100,  # Larger for efficiency
+        datepart_method: str = "expanded",
+        holiday_countries_used: bool = False,
+        changepoint_method: str = "basic",
+        changepoint_params: dict = None,
+        regression_type: str = None,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            regression_type=regression_type,
+        )
+        self.regression_type = regression_type
+        self.datepart_method = datepart_method
+        self.holiday_countries_used = holiday_countries_used
+        self.changepoint_method = changepoint_method
+        self.changepoint_params = changepoint_params if changepoint_params is not None else {}
+        self.context_length = context_length
+        
+        # Default to wide, shallow architecture if not specified
+        if hidden_dims is None:
+            hidden_dims = [768, 256]  # Wide first layer, narrower second
+        self.hidden_dims = hidden_dims
+        
+        self.dropout_rate = dropout_rate
+        self.use_batch_norm = use_batch_norm
+        self.activation = activation
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.lr = lr
+
+        # Loss function parameters
+        self.loss_function = loss_function
+        self.nll_weight = nll_weight
+        self.wasserstein_weight = wasserstein_weight
+
+        self.prediction_batch_size = prediction_batch_size
+        self.model = None
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.backends.mps.is_available():
+            self.device = "mps"  # Added for MacOS users
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+
+    def _get_loss_function(self):
+        """Create the appropriate loss function based on the loss_function parameter."""
+        if self.loss_function == "combined_nll_wasserstein":
+            return CombinedNLLWassersteinLoss(self.nll_weight, self.wasserstein_weight)
+        elif self.loss_function == "quantile":
+            return QuantileLoss(
+                prediction_interval=self.prediction_interval
+            )
+        elif self.loss_function == "crps":
+            return CRPSLoss()
+        elif self.loss_function == "energy":
+            return EnergyScore()
+        elif self.loss_function == "regularized_nll":
+            return RegularizedGaussianNLL()
+        elif self.loss_function == "ranked_sharpe":
+            return RankedSharpeLoss(
+                nll_weight=getattr(self, 'nll_weight', 0.7),
+                rank_weight=getattr(self, 'rank_weight', 0.3),
+                temperature=getattr(self, 'temperature', 1.0),
+                use_kendall=getattr(self, 'use_kendall', False)
+            )
+        elif self.loss_function == "short_horizon_rank":
+            return ShortHorizonRankLoss(
+                nll_weight=getattr(self, 'nll_weight', 0.6),
+                rank_weight=getattr(self, 'rank_weight', 0.3),
+                consistency_weight=getattr(self, 'consistency_weight', 0.1),
+                temperature=getattr(self, 'temperature', 0.5),
+                horizon_steps=getattr(self, 'horizon_steps', 4)
+            )
+        else:
+            raise ValueError(
+                f"Unknown loss function: {self.loss_function}. "
+                "Options: 'combined_nll_wasserstein', 'quantile', 'crps', 'energy', 'regularized_nll', "
+                "'ranked_sharpe', 'short_horizon_rank'"
+            )
+
+    def fit(self, df, future_regressor=None, **kwargs):
+        """Train the pMLP forecaster."""
+        fit_start_time = datetime.datetime.now()
+
+        # 1. Book-keeping
+        df = self.basic_profile(df)  # saves col names
+        self.df_train = df  # Store training data for predict method
+        y_train = df.to_numpy(dtype=np.float32)
+        train_index = df.index
+
+        if self.regression_type is not None:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but not future_regressor supplied."
+                )
+
+        # 2. Date-part + changepoint features + optional regressors
+        date_feats_train = date_part(
+            train_index,
+            method=self.datepart_method,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+        
+        # Set default changepoint parameters for basic method if not provided
+        if self.changepoint_method == 'basic' and not self.changepoint_params:
+            half_yr_space = half_yr_spacing(df)
+            self.changepoint_params = {
+                'changepoint_spacing': int(half_yr_space),
+                'changepoint_distance_end': int(half_yr_space / 2)
+            }
+        
+        # Changepoint features
+        if self.changepoint_method != "none":
+            self.changepoint_detector = ChangePointDetector(
+                method=self.changepoint_method,
+                method_params=self.changepoint_params,
+                **kwargs,
+            )
+            self.changepoint_detector.detect(df)
+            changepoint_features = self.changepoint_detector.create_features(
+                forecast_length=0
+            )
+            self.changepoint_features_columns = changepoint_features.columns
+        else:
+            self.changepoint_detector = None
+            changepoint_features = pd.DataFrame(index=df.index)
+        
+        # Combine all features
+        feature_list = [date_feats_train, changepoint_features]
+        if future_regressor is not None:
+            feature_list.append(future_regressor)
+            
+        feat_df_train = pd.concat(feature_list, axis=1).reindex(train_index)
+
+        feat_df_train = feat_df_train.ffill().bfill().astype(np.float32)
+        feat_df_train.columns = [str(c) for c in feat_df_train.columns]
+        self.features = feat_df_train  # <- *** stored for predict ***
+        self.feature_columns = feat_df_train.columns
+
+        # 3. Scaling
+        self.scaler_means = np.mean(y_train, axis=0)
+        self.scaler_stds = np.std(y_train, axis=0)
+        self.scaler_stds[self.scaler_stds == 0.0] = 1.0
+
+        y_train_scaled = (y_train - self.scaler_means) / self.scaler_stds
+
+        self.feature_scaler = StandardScaler()
+        train_feats_scaled = self.feature_scaler.fit_transform(feat_df_train.values)
+
+        # 4. Create training windows using shared efficient function
+        X_data, Y_data = create_training_windows(
+            y_train_scaled, 
+            train_feats_scaled, 
+            self.context_length, 
+            max_windows=100000,  # More windows for MLP efficiency
+            random_seed=self.random_seed
+        )
+
+        # 5. Torch setup - optimized for MLP
+        num_features = train_feats_scaled.shape[1]
+        input_dim = 1 + num_features
+        self.model = MLPCore(
+            input_dim * self.context_length,  # Flatten the input for MLP
+            self.hidden_dims,
+            self.dropout_rate,
+            self.use_batch_norm,
+            self.activation,
+        ).to(self.device)
+        
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
+        criterion = self._get_loss_function()
+
+        # Create tensors and dataset - flatten inputs for MLP
+        try:
+            # Flatten the sequence dimension for MLP
+            X_flattened = X_data.reshape(X_data.shape[0], -1)
+            X_tensor = torch.tensor(X_flattened, dtype=torch.float32)
+            Y_tensor = torch.tensor(Y_data, dtype=torch.float32)
+        except (AttributeError, NameError):
+            # Fallback when torch is not available
+            X_tensor = X_data.reshape(X_data.shape[0], -1)
+            Y_tensor = Y_data
+        
+        dataset = TensorDataset(X_tensor, Y_tensor)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=(self.device == "cuda"),
+        )
+
+        if self.verbose:
+            print(f"Training pMLP on {self.device} • {len(dataset):,} samples/epoch")
+
+        # 6. Training loop - optimized for efficiency
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+        self.model.train()
+        
+        # Learning rate scheduler for better convergence
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
+        
+        for epoch in range(self.epochs):
+            running_loss = 0.0
+            epoch_losses = []
+            
+            for x_batch, y_batch in tqdm(
+                dataloader,
+                desc=f"Epoch {epoch+1}/{self.epochs}",
+                disable=(self.verbose == 0),
+            ):
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
+                optimizer.zero_grad()
+                mu, sigma = self.model(x_batch)
+                
+                loss = criterion(mu, sigma, y_batch)
+                loss.backward()
+                
+                # Gradient clipping for stability
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                
+                optimizer.step()
+                loss_item = loss.item()
+                running_loss += loss_item
+                epoch_losses.append(loss_item)
+            
+            avg_loss = running_loss / len(dataloader)
+            scheduler.step(avg_loss)
+            
+            if self.verbose:
+                print(f"Epoch {epoch+1}  avg-loss: {avg_loss:.4f}")
+
+        self.fit_runtime = datetime.datetime.now() - fit_start_time
+        return self
+
+    def predict(self, forecast_length: int, future_regressor=None, **kwargs):
+        """Roll-forward prediction for pMLP."""
+        predict_start_time = datetime.datetime.now()
+        self.model.eval()
+
+        # 1. Forecast index
+        forecast_index = self.create_forecast_index(forecast_length)
+
+        # 2. Future feature frame
+        future_date_feats = date_part(
+            forecast_index,
+            method=self.datepart_method,
+            holiday_country=self.holiday_country,
+            holiday_countries_used=self.holiday_countries_used,
+        )
+        
+        # Create future changepoint features
+        if self.changepoint_detector is not None:
+            # Generate features for training + forecast, then extract forecast portion
+            all_changepoint_features = self.changepoint_detector.create_features(
+                forecast_length=forecast_length
+            )
+            future_changepoint_feats = all_changepoint_features.tail(forecast_length)
+        else:
+            future_changepoint_feats = pd.DataFrame(index=forecast_index)
+        
+        # Combine all future features
+        feature_list = [future_date_feats, future_changepoint_feats]
+        if future_regressor is not None:
+            feature_list.append(future_regressor)
+            
+        feat_future_df = pd.concat(feature_list, axis=1)
+
+        feat_future_df = (
+            feat_future_df.reindex(columns=self.feature_columns)
+            .ffill()
+            .bfill()
+            .fillna(0.0)
+            .astype(np.float32)
+        )
+        future_feats_scaled = self.feature_scaler.transform(feat_future_df.values)
+
+        # 3. Context tensors (scaled) - cache the scaled training data
+        if not hasattr(self, "_cached_y_train_scaled"):
+            self._cached_y_train_scaled = (
+                self.df_train.to_numpy(dtype=np.float32) - self.scaler_means
+            ) / self.scaler_stds
+
+        # Get context window
+        ctx_ts = self._cached_y_train_scaled[-self.context_length :, :]
+        ctx_feat_np = self.feature_scaler.transform(
+            self.features.iloc[-self.context_length :].values.astype(np.float32)
+        )
+
+        num_series = self.df_train.shape[1]
+        forecast_mu_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
+        forecast_sigma_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
+
+        # 4. Roll forward prediction - optimized for MLP
+        with torch.no_grad():
+            for step in range(forecast_length):
+                if self.verbose and step % self.prediction_batch_size == 0:
+                    print(f"Predicting step {step+1}/{forecast_length}")
+
+                # Prepare input for all series at once
+                batch_inputs = []
+                for series_idx in range(num_series):
+                    # Combine time series values with features
+                    ts_values = ctx_ts[:, series_idx:series_idx+1]  # Shape: (context_length, 1)
+                    features = ctx_feat_np  # Shape: (context_length, n_features)
+                    combined = np.concatenate([ts_values, features], axis=1)  # Shape: (context_length, 1+n_features)
+                    flattened = combined.flatten()  # Flatten for MLP
+                    batch_inputs.append(flattened)
+                
+                # Convert to tensor and predict
+                input_tensor = torch.tensor(
+                    np.array(batch_inputs), 
+                    device=self.device, 
+                    dtype=torch.float32
+                )
+                
+                mu, sigma = self.model(input_tensor)
+                
+                # Store predictions
+                forecast_mu_scaled[step] = mu.cpu().numpy().flatten()
+                forecast_sigma_scaled[step] = sigma.cpu().numpy().flatten()
+
+                # Update context for next step
+                new_values = mu.cpu().numpy().flatten()
+                ctx_ts = np.concatenate([ctx_ts[1:], new_values.reshape(1, -1)], axis=0)
+                
+                # Update features
+                if step < len(future_feats_scaled):
+                    new_feat = future_feats_scaled[step].reshape(1, -1)
+                    ctx_feat_np = np.concatenate([ctx_feat_np[1:], new_feat], axis=0)
+
+        # 5. Un-scale & wrap
+        mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means
+        sigma_unscaled = forecast_sigma_scaled * self.scaler_stds
+
+        z = norm.ppf(1 - (1 - self.prediction_interval) / 2)
+        lower = mu_unscaled - z * sigma_unscaled
+        upper = mu_unscaled + z * sigma_unscaled
+
+        forecast_df = pd.DataFrame(
+            mu_unscaled, index=forecast_index, columns=self.column_names
+        )
+        lower_forecast_df = pd.DataFrame(
+            lower, index=forecast_index, columns=self.column_names
+        )
+        upper_forecast_df = pd.DataFrame(
+            upper, index=forecast_index, columns=self.column_names
+        )
+
+        predict_runtime = datetime.datetime.now() - predict_start_time
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=forecast_df.index,
+            forecast_columns=forecast_df.columns,
+            lower_forecast=lower_forecast_df,
+            forecast=forecast_df,
+            upper_forecast=upper_forecast_df,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
+
+    def get_params(self):
+        return {
+            "context_length": self.context_length,
+            "hidden_dims": self.hidden_dims,
+            "dropout_rate": self.dropout_rate,
+            "use_batch_norm": self.use_batch_norm,
+            "activation": self.activation,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "lr": self.lr,
+            "loss_function": self.loss_function,
+            "nll_weight": self.nll_weight,
+            "wasserstein_weight": self.wasserstein_weight,
+            "prediction_batch_size": self.prediction_batch_size,
+            "datepart_method": self.datepart_method,
+            "holiday_countries_used": self.holiday_countries_used,
+            "changepoint_method": self.changepoint_method,
+            "changepoint_params": self.changepoint_params,
+            "regression_type": self.regression_type,
+        }
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """
+        Generate new random parameters for pMLP model.
+        
+        Focuses on wide, shallow architectures and efficient training.
+        
+        Args:
+            method: Method for parameter selection (currently only 'random' supported)
+            
+        Returns:
+            dict: Dictionary of randomly selected parameters
+        """
+        import random
+
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+
+        # Context length options - shorter for MLP efficiency
+        context_lengths = [20, 30, 45, 60, 90, 120]
+        context_weights = [0.15, 0.25, 0.25, 0.2, 0.1, 0.05]  # Prefer shorter contexts
+        
+        # Hidden dimensions - focus on wide, shallow architectures
+        hidden_dim_options = [
+            [512],              # Single wide layer
+            [768],              # Single very wide layer  
+            [1024],             # Single extremely wide layer
+            [2056],             # Single ultra-wide layer
+            [512, 256],         # Wide -> Medium
+            [768, 256],         # Very wide -> Medium
+            [1024, 256],        # Extremely wide -> Medium
+            [512, 256, 128],    # Wide -> Medium -> Narrow (3 layers max)
+            [512, 256, 512],    # Wide -> Medium -> Wide (3 layers max)
+            [768, 384],         # Very wide -> Medium-wide
+            [1024, 512],        # Extremely wide -> Wide
+            [256, 128],         # Medium -> Narrow (for smaller datasets)
+        ]
+        hidden_weights = [0.15, 0.2, 0.15, 0.2, 0.15, 0.1, 0.1, 0.05, 0.05, 0.05, 0.03, 0.02]
+        
+        # Dropout rates - moderate values for regularization
+        dropout_rates = [0.1, 0.15, 0.2, 0.25, 0.3]
+        dropout_weights = [0.15, 0.25, 0.3, 0.25, 0.05]  # Prefer 0.15-0.25 range
+        
+        # Batch normalization - usually helps with wide networks
+        batch_norm_options = [True, False]
+        batch_norm_weights = [0.8, 0.2]  # Strongly prefer batch norm
+        
+        # Activation functions
+        activations = ['relu', 'gelu', 'silu']
+        activation_weights = [0.5, 0.3, 0.2]  # ReLU still dominant, but GELU/SiLU competitive
+        
+        # Training epochs - MLPs train faster, can use more epochs
+        epochs_options = [10, 15, 20, 25, 30]
+        epochs_weights = [0.15, 0.3, 0.3, 0.2, 0.05]  # Prefer 15-20 range
+        
+        # Batch size - larger for efficiency with MLPs
+        batch_sizes = [32, 48, 64, 96, 128]
+        batch_weights = [0.1, 0.2, 0.35, 0.25, 0.1]  # Prefer 64-96 range
+        
+        # Learning rate - MLPs can handle slightly higher learning rates
+        learning_rates = [1e-3, 1.5e-3, 2e-3, 3e-3, 5e-3]
+        lr_weights = [0.2, 0.25, 0.3, 0.2, 0.05]  # Prefer 1.5e-3 to 2e-3
+        
+        # Loss functions - weight by expected performance
+        loss_functions = [
+            "combined_nll_wasserstein", 
+            "crps", 
+            "quantile", 
+            "regularized_nll", 
+            "energy",
+            "short_horizon_rank",      # Best for short horizon ranked Sharpe with MLPs
+            "ranked_sharpe",           # General ranked Sharpe optimization
+        ]
+        loss_weights = [0.3, 0.25, 0.25, 0.15, 0.1, 0.1, 0.1]
+        
+        # NLL weight for combined loss
+        nll_weights = [0.5, 0.8, 1.0, 1.2, 1.5]
+        nll_weight_probs = [0.1, 0.2, 0.4, 0.2, 0.1]
+        
+        # Wasserstein weight for combined loss
+        wasserstein_weights = [0.05, 0.1, 0.15, 0.2, 0.3]
+        wasserstein_weight_probs = [0.15, 0.3, 0.25, 0.2, 0.1]
+        
+        # Datepart method
+        datepart_method = random_datepart()
+        
+        # Boolean options
+        holiday_used_options = [True, False]
+        holiday_weights = [0.3, 0.7]
+        
+        # Generate changepoint method and parameters
+        changepoint_method, changepoint_params = generate_random_changepoint_params()
+
+        # Generate random selections
+        selected_params = {
+            "context_length": random.choices(context_lengths, weights=context_weights, k=1)[0],
+            "hidden_dims": random.choices(hidden_dim_options, weights=hidden_weights, k=1)[0],
+            "dropout_rate": random.choices(dropout_rates, weights=dropout_weights, k=1)[0],
+            "use_batch_norm": random.choices(batch_norm_options, weights=batch_norm_weights, k=1)[0],
+            "activation": random.choices(activations, weights=activation_weights, k=1)[0],
+            "epochs": random.choices(epochs_options, weights=epochs_weights, k=1)[0],
+            "batch_size": random.choices(batch_sizes, weights=batch_weights, k=1)[0],
+            "lr": random.choices(learning_rates, weights=lr_weights, k=1)[0],
+            "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[0],
+            "nll_weight": random.choices(nll_weights, weights=nll_weight_probs, k=1)[0],
+            "wasserstein_weight": random.choices(wasserstein_weights, weights=wasserstein_weight_probs, k=1)[0],
+            "datepart_method": datepart_method,
+            "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
+            "changepoint_method": changepoint_method,
+            "changepoint_params": changepoint_params,
+            "regression_type": regression_choice,
+        }
+        
+        # Add prediction_batch_size - larger for MLP efficiency
+        prediction_batch_options = [60, 100, 150, 200]
+        prediction_batch_weights = [0.2, 0.4, 0.3, 0.1]
+        selected_params["prediction_batch_size"] = random.choices(
+            prediction_batch_options, weights=prediction_batch_weights, k=1
+        )[0]
         
         return selected_params
 

@@ -974,6 +974,8 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  TVVAR                  |              |                         |    True       |                 |       | True         |              | True          |
 | BallTreeRegressionMotif | sklearn      |                         |    True       |     joblib      |       | True         |              | True          |
 |  PreprocessingExperts   |              |                         |    True       |                 |       |              | True         |               |
+|  MambaSSM               | pytorch      |                         |    True       |                 | yes   |              | True         | True          |
+|  pMLP                   | pytorch      |                         |    True       |                 | yes   |              | True         | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
 |  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |

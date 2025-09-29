@@ -1016,6 +1016,25 @@ def _create_basic_changepoints(DTindex, changepoint_spacing, changepoint_distanc
     return changepoint_features
 
 
+def _calculate_segment_cost(segment_data, loss_function):
+    """Helper to calculate cost of a segment."""
+    if loss_function == 'l2':
+        segment_mean = np.mean(segment_data)
+        return np.sum((segment_data - segment_mean) ** 2)
+    elif loss_function == 'l1':
+        segment_median = np.median(segment_data)
+        return np.sum(np.abs(segment_data - segment_median))
+    elif loss_function == 'huber':
+        delta = 1.345
+        segment_median = np.median(segment_data)
+        residuals = segment_data - segment_median
+        abs_residuals = np.abs(residuals)
+        return np.sum(np.where(abs_residuals <= delta, 
+                                0.5 * residuals**2,
+                                delta * (abs_residuals - 0.5 * delta)))
+    else:
+        raise ValueError(f"Unknown loss function: {loss_function}")
+
 def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_length=1):
     """
     PELT (Pruned Exact Linear Time) changepoint detection algorithm.
@@ -1029,6 +1048,7 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
     Returns:
     np.array: Array of changepoint indices
     """
+    data = np.asarray(data)
     n = len(data)
     if n < 2 * min_segment_length:
         return np.array([])
@@ -1045,48 +1065,30 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
         candidates = []
         for s in R:
             if t - s >= min_segment_length:
-                # Calculate segment cost
-                segment_data = data[s:t]
-                if loss_function == 'l2':
-                    segment_mean = np.mean(segment_data)
-                    cost = np.sum((segment_data - segment_mean) ** 2)
-                elif loss_function == 'l1':
-                    segment_median = np.median(segment_data)
-                    cost = np.sum(np.abs(segment_data - segment_median))
-                elif loss_function == 'huber':
-                    from scipy import optimize
-                    def huber_loss(mu):
-                        delta = 1.345
-                        residuals = segment_data - mu
-                        return np.sum(np.where(np.abs(residuals) <= delta, 
-                                             0.5 * residuals**2,
-                                             delta * (np.abs(residuals) - 0.5 * delta)))
-                    result = optimize.minimize_scalar(huber_loss)
-                    cost = result.fun
-                else:
-                    raise ValueError(f"Unknown loss function: {loss_function}")
-                
+                cost = _calculate_segment_cost(data[s:t], loss_function)
                 total_cost = F[s] + cost + penalty
                 candidates.append((total_cost, s))
         
         if candidates:
             F[t], cp[t] = min(candidates)
             
-            # Pruning step
+            # Pruning step - keep only competitive changepoints
             R_new = []
             for s in R:
-                if F[s] + penalty <= F[t]:
+                # A changepoint s is kept if it could potentially be optimal for future t
+                if F[s] <= F[t]:  # Simplified pruning condition
                     R_new.append(s)
-            R = R_new + [t]
+            R_new.append(t)
+            R = R_new
     
     # Backtrack to find changepoints
     changepoints = []
     t = n
-    while cp[t] != 0:
+    while t > 0 and cp[t] != 0:
         changepoints.append(cp[t])
         t = cp[t]
     
-    return np.array(sorted(changepoints[:-1])) if changepoints else np.array([])
+    return np.array(sorted(changepoints)) if changepoints else np.array([])
 
 
 def _detect_l1_trend_changepoints(data, lambda_reg=1.0, method='fused_lasso'):
@@ -1429,6 +1431,21 @@ class ChangePointDetector(object):
                 elif self.method == 'composite_fused_lasso':
                     self.changepoints_[col], self.fitted_trends_[col] = self._detect_composite_fused_lasso(data)
                 
+                elif self.method == 'basic':
+                    # Basic evenly-spaced changepoints (legacy method)
+                    changepoint_spacing = self.method_params.get('changepoint_spacing', 60)
+                    changepoint_distance_end = self.method_params.get('changepoint_distance_end', 120)
+                    # Convert to changepoint indices
+                    n = len(data)
+                    changepoint_range_end = max(1, min(n - changepoint_distance_end, n - 1))
+                    if changepoint_range_end <= 0:
+                        changepoints = np.array([0])
+                    else:
+                        changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
+                        changepoints = np.append(changepoints, changepoint_range_end)
+                    self.changepoints_[col] = changepoints
+                    self.fitted_trends_[col] = data
+                
                 # Handle probabilistic output
                 if self.probabilistic_output:
                     if self.changepoint_probabilities_ is None:
@@ -1466,6 +1483,20 @@ class ChangePointDetector(object):
                 
             elif self.method == 'composite_fused_lasso':
                 self.changepoints_, self.fitted_trends_ = self._detect_composite_fused_lasso(aggregated_data)
+            
+            elif self.method == 'basic':
+                # Basic evenly-spaced changepoints (legacy method)
+                changepoint_spacing = self.method_params.get('changepoint_spacing', 60)
+                changepoint_distance_end = self.method_params.get('changepoint_distance_end', 120)
+                # Convert to changepoint indices
+                n = len(aggregated_data)
+                changepoint_range_end = max(1, min(n - changepoint_distance_end, n - 1))
+                if changepoint_range_end <= 0:
+                    self.changepoints_ = np.array([0])
+                else:
+                    self.changepoints_ = np.arange(0, changepoint_range_end, changepoint_spacing)
+                    self.changepoints_ = np.append(self.changepoints_, changepoint_range_end)
+                self.fitted_trends_ = aggregated_data
             
             # Handle probabilistic output for aggregated data
             if self.probabilistic_output:
@@ -1810,12 +1841,46 @@ class ChangePointDetector(object):
         if len(changepoints) == 0:
             changepoints = np.array([len(self.df) // 2])  # Default middle changepoint
         
-        # Create features
-        n = len(extended_index)
+        # Convert changepoint indices to actual timestamps
+        changepoint_dates = []
+        for cp in changepoints:
+            if cp < len(self.df):
+                changepoint_dates.append(self.df.index[int(cp)])
+            else:
+                # Handle edge case where changepoint is beyond training data
+                changepoint_dates.append(self.df.index[-1])
+        
+        # Create time-based features
         res = []
-        for i, cp in enumerate(changepoints):
+        for i, cp_date in enumerate(changepoint_dates):
             feature_name = f'{self.method}_changepoint_{i+1}'
-            res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+            
+            # Calculate time-based differences
+            if isinstance(extended_index, pd.DatetimeIndex):
+                # For datetime index, calculate differences in periods
+                time_diffs = (extended_index - cp_date).total_seconds()
+                
+                # Infer the time unit from the data frequency
+                try:
+                    freq_str = infer_frequency(self.df.index)
+                    if freq_str:
+                        freq_seconds = pd.Timedelta(freq_str).total_seconds()
+                    else:
+                        # Fallback: use median time difference
+                        freq_seconds = pd.Series(self.df.index).diff().dropna().median().total_seconds()
+                except (ValueError, TypeError):
+                    # Fallback: use median time difference
+                    freq_seconds = pd.Series(self.df.index).diff().dropna().median().total_seconds()
+                
+                time_periods = time_diffs / freq_seconds
+                
+                # Create feature as "periods since changepoint"
+                feature_values = np.maximum(0, time_periods)
+            else:
+                # Fallback for non-datetime indices (shouldn't happen in practice)
+                feature_values = np.maximum(0, np.arange(len(extended_index)) - changepoints[i])
+            
+            res.append(pd.Series(feature_values, name=feature_name))
         
         changepoint_features = pd.concat(res, axis=1)
         changepoint_features.index = extended_index
@@ -1897,7 +1962,7 @@ def generate_random_changepoint_params(method='random'):
         # PELT method parameters
         penalty_options = [1, 5, 10, 20, 50, 100]
         penalty_weights = [0.1, 0.2, 0.3, 0.2, 0.1, 0.1]
-        loss_functions = ['l1', 'l2', 'rbf']
+        loss_functions = ['l1', 'l2', 'huber']
         loss_weights = [0.3, 0.5, 0.2]
         min_segment_options = [1, 2, 5, 10]
         min_segment_weights = [0.4, 0.3, 0.2, 0.1]

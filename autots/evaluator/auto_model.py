@@ -76,6 +76,7 @@ from autots.models.sklearn import (
     PreprocessingRegression,
 )
 from autots.models.composite import PreprocessingExperts
+from autots.models.deepssm import MambaSSM, pMLP
 
 
 def create_model_id(
@@ -747,6 +748,28 @@ def ModelMonster(
         )
     elif model == 'PreprocessingExperts':
         return PreprocessingExperts(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'MambaSSM':
+        return MambaSSM(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'pMLP':
+        return pMLP(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,

@@ -52,6 +52,8 @@ all_models = [
     "TVVAR",
     "BallTreeRegressionMotif",
     "PreprocessingExperts",
+    "MambaSSM",
+    "pMLP",
 ]
 # used for graphing, not for model selection
 model_classes = {
@@ -106,6 +108,8 @@ model_classes = {
     "PreprocessingExperts": "ensemble",
     "Ensemble": "ensemble",
     "MLEnsemble": "ensemble",
+    "MambaSSM": "DL",
+    "pMLP": "DL",
 }
 all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
@@ -242,6 +246,8 @@ gpu = [
     "TiDE",
     "NeuralForecast",
     "NeuralProphet",
+    "MambaSSM",
+    "pMLP",
 ]
 # models with model-based upper/lower forecasts
 probabilistic = [
@@ -272,6 +278,8 @@ probabilistic = [
     "TVVAR",
     "BallTreeRegressionMotif",
     # "PreprocessingExperts",
+    "MambaSSM",
+    "pMLP",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -351,6 +359,8 @@ recombination_approved = [
     "TVVAR",
     "BallTreeRegressionMotif",
     "PreprocessingExperts",
+    "MambaSSM",
+    "pMLP",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -403,6 +413,8 @@ regressor = [
     "BasicLinearModel",
     "TVVAR",
     "BallTreeRegressionMotif",
+    "MambaSSM",
+    "pMLP",
 ]
 motifs = [
     'UnivariateMotif',

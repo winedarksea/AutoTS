@@ -242,19 +242,24 @@ def BestNEnsemble(
 
     # this is expected to have to handle NaN
     if point_method in ["median", "midhinge"]:
+        # Align all forecasts to have the same columns before creating numpy arrays, due to expanding transformers
+        aligned_forecasts = [forecasts[m].reindex(columns=columnz) for m in forecast_keys]
+        aligned_lower_forecasts = [lower_forecasts[m].reindex(columns=columnz) for m in forecast_keys]
+        aligned_upper_forecasts = [upper_forecasts[m].reindex(columns=columnz) for m in forecast_keys]
+        
         forecast_array = np.array(
-            [x.values.reshape(1, -1) if x.ndim == 1 else x for x in forecasts.values()]
+            [x.values.reshape(1, -1) if x.ndim == 1 else x for x in aligned_forecasts]
         )
         l_forecast_array = np.array(
             [
                 x.values.reshape(1, -1) if x.ndim == 1 else x
-                for x in lower_forecasts.values()
+                for x in aligned_lower_forecasts
             ]
         )
         u_forecast_array = np.array(
             [
                 x.values.reshape(1, -1) if x.ndim == 1 else x
-                for x in upper_forecasts.values()
+                for x in aligned_upper_forecasts
             ]
         )
         # checks only upper and middle, assuming lower follows others in NaN
@@ -303,7 +308,9 @@ def BestNEnsemble(
         ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
     elif point_method == "kalman":
-        F = np.array([forecasts[m].values for m in forecast_keys])
+        # Align all forecasts to have the same columns before creating numpy arrays
+        aligned_forecasts = [forecasts[m].reindex(columns=columnz) for m in forecast_keys]
+        F = np.array([x.values for x in aligned_forecasts])
         ens_df, ens_df_lower, ens_df_upper = kalman_fusion_forecasts(
             F=F,
             index=indices,
@@ -441,10 +448,14 @@ def BestNEnsemble(
         ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
         for idx, x in forecasts.items():
             current_weight = float(model_weights.get(idx, 1))
-            ens_df = ens_df + (x * current_weight)
-            # also .get(idx, 0)
-            ens_df_lower = ens_df_lower + (lower_forecasts[idx] * current_weight)
-            ens_df_upper = ens_df_upper + (upper_forecasts[idx] * current_weight)
+            # Align forecasts to have consistent columns
+            x_aligned = x.reindex(columns=columnz, fill_value=0)
+            lower_aligned = lower_forecasts[idx].reindex(columns=columnz, fill_value=0)
+            upper_aligned = upper_forecasts[idx].reindex(columns=columnz, fill_value=0)
+            
+            ens_df = ens_df + (x_aligned * current_weight)
+            ens_df_lower = ens_df_lower + (lower_aligned * current_weight)
+            ens_df_upper = ens_df_upper + (upper_aligned * current_weight)
             model_divisor = model_divisor + current_weight
 
         ens_df = ens_df / model_divisor

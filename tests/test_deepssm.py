@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""MambaSSM testing."""
+"""Deep SSM models testing."""
 import unittest
 import pandas as pd
 import numpy as np
-from autots.models.deepssm import MambaSSM
+from autots.models.deepssm import MambaSSM, pMLP
 
 
-class MambaSSMTest(unittest.TestCase):
+class DeepSSMTest(unittest.TestCase):
     def test_model(self):
         """Test basic functionality of MambaSSM."""
         print("Starting MambaSSM model tests")
@@ -338,6 +338,238 @@ class MambaSSMTest(unittest.TestCase):
         self.assertEqual(params_l1tv['changepoint_params']['lambda_reg'], 1.0)
         
         print("L1 changepoint methods test passed!")
+
+    def test_torch_mlp_basic(self):
+        """Test basic functionality of pMLP model."""
+        print("Testing pMLP basic functionality")
+        
+        # Create simple synthetic time series data
+        n_timesteps = 100  # Reduced for faster testing
+        n_series = 3
+        dates = pd.date_range('2023-01-01', periods=n_timesteps, freq='D')
+        
+        # Create 3 series with different patterns
+        np.random.seed(2023)
+        series1 = np.sin(np.arange(n_timesteps) * 0.1) + np.random.normal(0, 0.1, n_timesteps)
+        series2 = np.cos(np.arange(n_timesteps) * 0.05) + np.random.normal(0, 0.1, n_timesteps)
+        series3 = np.arange(n_timesteps) * 0.01 + np.random.normal(0, 0.1, n_timesteps)
+        
+        df = pd.DataFrame({
+            'series1': series1,
+            'series2': series2, 
+            'series3': series3
+        }, index=dates)
+        
+        forecast_length = 14
+        
+        # Test pMLP with minimal parameters for speed
+        mlp_model = pMLP(
+            context_length=20,
+            hidden_dims=[64, 32],  # Smaller for faster testing
+            epochs=2,  # Quick test
+            batch_size=16,
+            verbose=0,  # Reduce verbosity for testing
+            random_seed=42
+        )
+        
+        # Test fitting
+        print("  Testing pMLP fit...")
+        mlp_model.fit(df)
+        
+        # Verify model was trained
+        self.assertIsNotNone(mlp_model.model, "pMLP model should be initialized after fit")
+        self.assertIsNotNone(mlp_model.scaler_means, "pMLP scaler means should be set")
+        self.assertIsNotNone(mlp_model.scaler_stds, "pMLP scaler stds should be set")
+        self.assertIsNotNone(mlp_model.fit_runtime, "pMLP fit_runtime should be recorded")
+        
+        # Test prediction
+        print("  Testing pMLP predict...")
+        prediction = mlp_model.predict(forecast_length=forecast_length)
+        
+        # Verify prediction object
+        self.assertIsNotNone(prediction, "pMLP prediction should not be None")
+        self.assertIsNotNone(prediction.forecast, "pMLP forecast should not be None")
+        self.assertIsNotNone(prediction.predict_runtime, "pMLP predict_runtime should be recorded")
+        
+        # Verify forecast shape and properties
+        expected_shape = (forecast_length, n_series)
+        self.assertEqual(
+            prediction.forecast.shape, 
+            expected_shape,
+            f"pMLP forecast shape should be {expected_shape}"
+        )
+        
+        # Verify forecast contains no null values
+        self.assertFalse(
+            prediction.forecast.isnull().any().any(),
+            "pMLP forecast should not contain null values"
+        )
+        
+        # Verify forecast is numeric
+        self.assertTrue(
+            np.isfinite(prediction.forecast.values).all(),
+            "pMLP forecast should contain only finite values"
+        )
+        
+        # Verify prediction intervals exist and are properly ordered
+        self.assertIsNotNone(prediction.upper_forecast, "pMLP upper forecast should exist")
+        self.assertIsNotNone(prediction.lower_forecast, "pMLP lower forecast should exist")
+        
+        # Upper should be >= forecast >= lower (approximately)
+        upper_ge_forecast = (prediction.upper_forecast >= prediction.forecast - 1e-6).all().all()
+        forecast_ge_lower = (prediction.forecast >= prediction.lower_forecast - 1e-6).all().all()
+        
+        self.assertTrue(upper_ge_forecast, "pMLP upper forecast should be >= point forecast")
+        self.assertTrue(forecast_ge_lower, "pMLP point forecast should be >= lower forecast")
+        
+        # Verify column names match
+        self.assertEqual(
+            list(prediction.forecast.columns),
+            list(df.columns),
+            "pMLP forecast columns should match training data columns"
+        )
+        
+        # Verify forecast index is proper datetime
+        self.assertTrue(
+            pd.api.types.is_datetime64_any_dtype(prediction.forecast.index),
+            "pMLP forecast index should be datetime"
+        )
+        
+        print("pMLP basic functionality test passed!")
+
+    def test_torch_mlp_parameters(self):
+        """Test pMLP parameter generation and retrieval."""
+        print("Testing pMLP parameter generation")
+        
+        # Test parameter generation
+        new_params = pMLP.get_new_params()
+        
+        # Verify parameters is a dictionary
+        self.assertIsInstance(new_params, dict, "get_new_params should return a dictionary")
+        
+        # Verify key parameters are present
+        expected_params = ['context_length', 'hidden_dims', 'epochs', 'batch_size', 'lr']
+        for param in expected_params:
+            self.assertIn(param, new_params, f"Parameter '{param}' should be in new_params")
+        
+        # Verify parameter types and ranges
+        self.assertIsInstance(new_params['context_length'], int, "context_length should be int")
+        self.assertGreater(new_params['context_length'], 0, "context_length should be positive")
+        
+        self.assertIsInstance(new_params['hidden_dims'], list, "hidden_dims should be list")
+        self.assertGreater(len(new_params['hidden_dims']), 0, "hidden_dims should not be empty")
+        self.assertTrue(all(isinstance(x, int) for x in new_params['hidden_dims']), "hidden_dims should contain integers")
+        
+        self.assertIsInstance(new_params['epochs'], int, "epochs should be int")
+        self.assertGreater(new_params['epochs'], 0, "epochs should be positive")
+        
+        self.assertIsInstance(new_params['batch_size'], int, "batch_size should be int")
+        self.assertGreater(new_params['batch_size'], 0, "batch_size should be positive")
+        
+        self.assertIsInstance(new_params['lr'], (int, float), "lr should be numeric")
+        self.assertGreater(new_params['lr'], 0, "lr should be positive")
+        
+        # Test model initialization with generated parameters
+        test_params = pMLP.get_new_params()
+        test_params['epochs'] = 1  # Minimal for testing
+        test_params['verbose'] = 0
+        
+        model = pMLP(**test_params)
+        
+        # Verify get_params returns the set parameters
+        retrieved_params = model.get_params()
+        for key in ['context_length', 'hidden_dims', 'epochs', 'batch_size']:
+            self.assertEqual(
+                retrieved_params[key], 
+                test_params[key], 
+                f"Retrieved parameter '{key}' should match set parameter"
+            )
+        
+        print("pMLP parameter generation test passed!")
+
+    def test_torch_mlp_vs_mamba_comparison(self):
+        """Compare pMLP vs MambaSSM performance."""
+        print("Testing pMLP vs MambaSSM comparison")
+        
+        # Create test data
+        n_timesteps = 120  # Larger dataset to avoid batch norm issues
+        dates = pd.date_range('2023-01-01', periods=n_timesteps, freq='D')
+        np.random.seed(2023)
+        series = np.sin(np.arange(n_timesteps) * 0.1) + np.random.normal(0, 0.1, n_timesteps)
+        df = pd.DataFrame({'series': series}, index=dates)
+        
+        forecast_length = 10
+        
+        # Test both models with similar minimal configurations
+        models = {
+            'pMLP': pMLP(
+                context_length=15,
+                hidden_dims=[32, 16],
+                epochs=1,
+                batch_size=16,  # Larger batch size
+                use_batch_norm=False,  # Disable to avoid batch norm issues with small data
+                verbose=0,
+                random_seed=42
+            ),
+            'MambaSSM': MambaSSM(
+                context_length=15,
+                epochs=1,
+                batch_size=16,  # Larger batch size
+                d_model=16,
+                n_layers=1,
+                d_state=4,
+                verbose=0,
+                random_seed=42
+            )
+        }
+        
+        results = {}
+        
+        for name, model in models.items():
+            print(f"  Testing {name}...")
+            try:
+                # Fit the model
+                model.fit(df)
+                self.assertIsNotNone(model.fit_runtime, f"{name} should record fit_runtime")
+                
+                # Make prediction
+                prediction = model.predict(forecast_length=forecast_length)
+                self.assertIsNotNone(prediction.predict_runtime, f"{name} should record predict_runtime")
+                
+                # Basic validation
+                self.assertEqual(prediction.forecast.shape, (forecast_length, 1), f"{name} forecast shape should be correct")
+                self.assertFalse(prediction.forecast.isnull().any().any(), f"{name} forecast should not contain nulls")
+                self.assertTrue(np.isfinite(prediction.forecast.values).all(), f"{name} forecast should be finite")
+                
+                results[name] = {
+                    'fit_time': model.fit_runtime.total_seconds(),
+                    'predict_time': prediction.predict_runtime.total_seconds(),
+                    'forecast_shape': prediction.forecast.shape,
+                    'success': True
+                }
+                
+            except Exception as e:
+                self.fail(f"{name} model failed: {e}")
+                results[name] = {'success': False, 'error': str(e)}
+        
+        # Verify both models succeeded
+        for name in models.keys():
+            self.assertTrue(results[name]['success'], f"{name} should succeed")
+            self.assertGreater(results[name]['fit_time'], 0, f"{name} fit_time should be positive")
+            self.assertGreater(results[name]['predict_time'], 0, f"{name} predict_time should be positive")
+        
+        # Compare performance (informational, not a hard test)
+        mlp_total = results['pMLP']['fit_time'] + results['pMLP']['predict_time']
+        mamba_total = results['MambaSSM']['fit_time'] + results['MambaSSM']['predict_time']
+        
+        print(f"    pMLP total time: {mlp_total:.3f}s")
+        print(f"    MambaSSM total time: {mamba_total:.3f}s")
+        
+        # Both models should produce reasonable results
+        self.assertLess(mlp_total, 60, "pMLP should complete within reasonable time")
+        self.assertLess(mamba_total, 60, "MambaSSM should complete within reasonable time")
+        
+        print("pMLP vs MambaSSM comparison test passed!")
 
 
 if __name__ == '__main__':

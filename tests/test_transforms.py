@@ -6,7 +6,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots.tools.transform import ThetaTransformer, FIRFilter
+from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer
 
 class TestTransforms(unittest.TestCase):
     
@@ -130,3 +130,142 @@ class TestTransforms(unittest.TestCase):
             self.assertIsInstance(reconstructed_method, pd.DataFrame)
             self.assertEqual(transformed_method.shape[0], simple_df.shape[0])
             self.assertEqual(reconstructed_method.shape[0], simple_df.shape[0])
+
+    def test_historic_values_basic(self):
+        """Test HistoricValues transformer basic functionality."""
+        df = load_daily(long=False)[:50]  # Small dataset for testing
+        
+        transformer = HistoricValues()
+        params = transformer.get_new_params()
+        self.assertTrue(params)
+        self.assertIsInstance(params, dict)
+        
+        # Test basic fit/transform/inverse
+        transformer.fit(df)
+        transformed = transformer.transform(df)
+        inverse_transformed = transformer.inverse_transform(transformed)
+        
+        # Transform should be identity (no change)
+        pd.testing.assert_frame_equal(df, transformed)
+        
+        # Basic checks
+        self.assertIsInstance(inverse_transformed, pd.DataFrame)
+        self.assertEqual(inverse_transformed.shape, df.shape)
+        self.assertCountEqual(inverse_transformed.index.tolist(), df.index.tolist())
+        self.assertCountEqual(inverse_transformed.columns.tolist(), df.columns.tolist())
+
+    def test_historic_values_with_expanding_transformer(self):
+        """Test HistoricValues with expanding transformers that change column names/counts."""
+        df = load_daily(long=False)[:50]
+        
+        # Test with CenterSplit (expanding transformer that doubles columns)
+        expanding_transform_dict = {
+            "transformations": {"0": "CenterSplit", "1": "HistoricValues"},
+            "transformation_params": {
+                "0": {"center": "zero", "fillna": "linear"},
+                "1": {"window": None}
+            }
+        }
+        
+        try:
+            transformer = GeneralTransformer(**expanding_transform_dict)
+            transformer.fit(df)
+            transformed = transformer.transform(df)
+            inverse_transformed = transformer.inverse_transform(transformed)
+            
+            # Should handle the expanding transformer gracefully
+            self.assertIsInstance(inverse_transformed, pd.DataFrame)
+            self.assertEqual(inverse_transformed.shape[0], df.shape[0])
+            # Note: columns might be different due to expanding transformer
+            
+        except Exception as e:
+            # If it fails, it should fail gracefully with a clear error
+            self.assertIn("HistoricValues", str(e), "Error should mention HistoricValues")
+
+    def test_historic_values_dimension_mismatch(self):
+        """Test HistoricValues behavior when forecast data has different dimensions than training data."""
+        df = load_daily(long=False)[:50]
+        
+        transformer = HistoricValues()
+        transformer.fit(df)
+        
+        # Create forecast data with different number of columns
+        forecast_data_fewer_cols = df.iloc[:10, :2]  # Fewer columns
+        forecast_data_more_cols = pd.concat([df.iloc[:10], df.iloc[:10]], axis=1)  # More columns
+        
+        # Test with fewer columns - should handle gracefully
+        try:
+            result_fewer = transformer.inverse_transform(forecast_data_fewer_cols)
+            self.assertIsInstance(result_fewer, pd.DataFrame)
+        except Exception as e:
+            # Should fail gracefully with informative error
+            self.assertIsInstance(e, (IndexError, ValueError))
+        
+        # Test with more columns - should handle gracefully 
+        try:
+            result_more = transformer.inverse_transform(forecast_data_more_cols)
+            self.assertIsInstance(result_more, pd.DataFrame)
+        except Exception as e:
+            # Should fail gracefully with informative error
+            self.assertIsInstance(e, (IndexError, ValueError))
+
+    def test_historic_values_with_different_column_names(self):
+        """Test HistoricValues when forecast data has different column names than training data."""
+        df = load_daily(long=False)[:50]
+        
+        transformer = HistoricValues()
+        transformer.fit(df)
+        
+        # Create forecast data with different column names but same shape
+        forecast_data = df.iloc[:10].copy()
+        forecast_data.columns = [f"new_{col}" for col in forecast_data.columns]
+        
+        try:
+            result = transformer.inverse_transform(forecast_data)
+            self.assertIsInstance(result, pd.DataFrame)
+            # Result should maintain the forecast data's column names
+            self.assertCountEqual(result.columns.tolist(), forecast_data.columns.tolist())
+        except Exception as e:
+            # Should fail gracefully
+            self.assertIsInstance(e, (KeyError, ValueError, IndexError))
+
+    def test_historic_values_window_functionality(self):
+        """Test HistoricValues with different window settings."""
+        df = load_daily(long=False)[:100]
+        
+        # Test with window=None (full history)
+        transformer_full = HistoricValues(window=None)
+        transformer_full.fit(df)
+        self.assertEqual(transformer_full.df.shape[0], df.shape[0])
+        
+        # Test with window=20 (limited history)
+        transformer_window = HistoricValues(window=20)
+        transformer_window.fit(df)
+        self.assertEqual(transformer_window.df.shape[0], 20)
+        self.assertEqual(transformer_window.df.shape[1], df.shape[1])
+        
+        # Test with window larger than data
+        transformer_large_window = HistoricValues(window=200)
+        transformer_large_window.fit(df)
+        self.assertEqual(transformer_large_window.df.shape[0], df.shape[0])  # Should use all available data
+
+    def test_historic_values_with_missing_data(self):
+        """Test HistoricValues behavior with NaN values."""
+        df = load_daily(long=False)[:50]
+        
+        # Add some NaN values
+        df_with_nan = df.copy()
+        df_with_nan.iloc[10:15, 0] = np.nan
+        df_with_nan.iloc[20:25, 1] = np.nan
+        
+        transformer = HistoricValues()
+        try:
+            transformer.fit(df_with_nan)
+            transformed = transformer.transform(df_with_nan)
+            inverse_transformed = transformer.inverse_transform(transformed)
+            
+            self.assertIsInstance(inverse_transformed, pd.DataFrame)
+            self.assertEqual(inverse_transformed.shape, df_with_nan.shape)
+        except Exception as e:
+            # Should handle NaN gracefully or fail with clear error
+            self.assertIsInstance(e, (ValueError, TypeError))
