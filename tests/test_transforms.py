@@ -6,7 +6,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer
+from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer
 
 class TestTransforms(unittest.TestCase):
     
@@ -269,3 +269,96 @@ class TestTransforms(unittest.TestCase):
         except Exception as e:
             # Should handle NaN gracefully or fail with clear error
             self.assertIsInstance(e, (ValueError, TypeError))
+
+    def test_reconciliation_transformer_basic(self):
+        """Test ReconciliationTransformer basic functionality."""
+        # Create simple test data with multiple series
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=50, freq='D')
+        df = pd.DataFrame({
+            f'series_{i}': np.random.randn(50).cumsum() for i in range(6)
+        }, index=dates)
+        
+        # Test basic MinT method
+        transformer = ReconciliationTransformer(group_size=3)
+        params = transformer.get_new_params()
+        self.assertTrue(params)
+        self.assertIsInstance(params, dict)
+        
+        # Test fit/transform/inverse cycle
+        transformer.fit(df)
+        transformed = transformer.transform(df)
+        inverse_transformed = transformer.inverse_transform(transformed)
+        
+        # Basic shape checks
+        self.assertIsInstance(transformed, pd.DataFrame)
+        self.assertIsInstance(inverse_transformed, pd.DataFrame)
+        self.assertEqual(transformed.shape[0], df.shape[0])
+        self.assertEqual(inverse_transformed.shape[0], df.shape[0])
+        self.assertEqual(inverse_transformed.shape[1], df.shape[1])  # Should return only bottom-level
+        
+        # Check that hierarchy columns are added in transform
+        self.assertGreater(transformed.shape[1], df.shape[1])
+        
+        # Test new reconciliation methods
+        for method in ["volatility_mint", "iterative_mint"]:
+            test_transformer = ReconciliationTransformer(
+                group_size=3,
+                reconciliation_params={"method": method, "max_iterations": 3}  # Low iterations for speed
+            )
+            test_transformer.fit(df)
+            test_transformed = test_transformer.transform(df)
+            test_inverse = test_transformer.inverse_transform(test_transformed)
+            
+            self.assertIsInstance(test_inverse, pd.DataFrame)
+            self.assertEqual(test_inverse.shape, df.shape)
+        
+        # Test with custom hierarchy map
+        hierarchy_map = {"TOP": list(df.columns), "MID1": list(df.columns[:3]), "MID2": list(df.columns[3:])}
+        custom_transformer = ReconciliationTransformer(hierarchy_map=hierarchy_map)
+        custom_transformer.fit(df)
+        custom_transformed = custom_transformer.transform(df)
+        custom_inverse = custom_transformer.inverse_transform(custom_transformed)
+        
+        self.assertIsInstance(custom_inverse, pd.DataFrame)
+        self.assertEqual(custom_inverse.shape, df.shape)
+
+    def test_reconciliation_transformer_performance(self):
+        """Test ReconciliationTransformer performance with moderately sized data."""
+        import time
+        
+        # Create moderately sized dataset to test performance
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=500, freq='D')  # 500 time periods
+        df = pd.DataFrame({
+            f'series_{i}': np.random.randn(500).cumsum() for i in range(20)  # 20 series
+        }, index=dates)
+        
+        # Test that basic reconciliation completes quickly
+        start_time = time.time()
+        transformer = ReconciliationTransformer(group_size=5)
+        transformer.fit(df)
+        transformed = transformer.transform(df)
+        inverse_transformed = transformer.inverse_transform(transformed)
+        elapsed = time.time() - start_time
+        
+        # Should complete in reasonable time (< 5 seconds for this size)
+        self.assertLess(elapsed, 5.0, f"ReconciliationTransformer took {elapsed:.2f}s, too slow")
+        
+        # Test iterative method with limited iterations for performance
+        start_time = time.time()
+        iter_transformer = ReconciliationTransformer(
+            group_size=5,
+            reconciliation_params={"method": "iterative_mint", "max_iterations": 5}
+        )
+        iter_transformer.fit(df)
+        iter_transformed = iter_transformer.transform(df)
+        iter_inverse = iter_transformer.inverse_transform(iter_transformed)
+        iter_elapsed = time.time() - start_time
+        
+        # Should still be reasonable even with iterations
+        self.assertLess(iter_elapsed, 10.0, f"Iterative ReconciliationTransformer took {iter_elapsed:.2f}s, too slow")
+        
+        # Basic correctness checks
+        self.assertEqual(inverse_transformed.shape, df.shape)
+        self.assertEqual(iter_inverse.shape, df.shape)

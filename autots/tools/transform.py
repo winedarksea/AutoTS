@@ -40,7 +40,14 @@ from autots.tools.fir_filter import (
     generate_random_fir_params,
     fft_fir_filter_to_timeseries,
 )
-from autots.tools.hierarchial import ledoit_wolf_covariance, mint_reconcile, erm_reconcile
+from autots.tools.hierarchial import (
+    ledoit_wolf_covariance, 
+    mint_reconcile, 
+    erm_reconcile,
+    volatility_weighted_mint_reconcile,
+    iterative_mint_reconcile,
+    iterative_volatility_mint_reconcile
+)
 
 try:
     from scipy.signal import butter, sosfiltfilt, savgol_filter
@@ -6450,13 +6457,22 @@ class ReconciliationTransformer(EmptyTransformer):
           { "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }.
         If None, automatically creates groups of size group_size plus a single "TOP".
     reconciliation_params : dict
-        Dict of parameters for reconciliation. Some keys:
-          - "method": str, one of ["mint", "erm", "none"]. (default "mint")
+        Dict of parameters for reconciliation. Structure:
+          - "method": str, one of ["mint", "erm", "volatility_mint", "iterative_mint", 
+                                   "iterative_volatility_mint", "none"]. (default "mint")
           - "cov_source": str, one of ["historical", "forecasts"]. (default "historical")
           - "weighting": str, one of ["identity", "diagonal", "full"]. (default "diagonal")
           - "shrinkage": float in [0,1], manual shrink to diagonal. (0 => none)
           - "ledoit_wolf": bool => if True, use Ledoit-Wolf (default False)
           - "ridge": float or None => if not None, adds ridge * I to W before inversion. (default 1e-9)
+          - "volatility_params": dict, parameters for volatility-weighted methods:
+            * "method": str, volatility computation ("variance", "std", "cv")
+            * "power": float, power for volatility weights (default 1.0)
+            * "mix": float in [0,1], mixing parameter for volatility weights (default 0.5)
+          - "iterative_params": dict, parameters for iterative methods:
+            * "max_iterations": int, maximum iterations (default 10)
+            * "convergence_threshold": float, convergence threshold (default 1e-6)
+            * "damping_factor": float in (0,1), damping factor for updates (default 0.7)
     """
 
     def __init__(
@@ -6471,15 +6487,28 @@ class ReconciliationTransformer(EmptyTransformer):
 
         # Default reconciliation params
         default_recon = {
-            "method": "mint",         # "mint", "erm", or "none"
+            "method": "mint",         # "mint", "erm", "volatility_mint", "iterative_mint", "iterative_volatility_mint", or "none"
             "cov_source": "historical", # "historical" or "forecasts"
             "weighting": "diagonal",   # "identity", "diagonal", "full"
             "shrinkage": 0.02,         # manual linear shrink
             "ledoit_wolf": False,     # if True, apply Ledoit-Wolf
             "ridge": 1e-9,           # small ridge for numerical stability (None => no ridge)
+            # Parameters for volatility-weighted methods
+            "volatility_params": {
+                "method": "variance",  # "variance", "std", "cv"
+                "power": 1.0,         # power to raise volatility weights
+                "mix": 0.5,           # mixing parameter for volatility weights [0, 1]
+            },
+            # Parameters for iterative methods
+            "iterative_params": {
+                "max_iterations": 10,      # maximum iterations for iterative methods
+                "convergence_threshold": 1e-6,  # convergence threshold for iterative methods
+                "damping_factor": 0.7,     # damping factor for iterative weight updates
+            },
         }
         if reconciliation_params is None:
             reconciliation_params = {}
+        
         self.reconciliation_params = {**default_recon, **reconciliation_params}
 
         self.bottom_level_cols_ = None
@@ -6519,12 +6548,16 @@ class ReconciliationTransformer(EmptyTransformer):
         self : ReconciliationTransformer
             Fitted transformer.
         """
+        import warnings
+        
         # 1) Fill NaNs with 0
         df = df.fillna(0.0)
 
         # 2) Identify bottom-level columns
         self.bottom_level_cols_ = list(df.columns)
-
+        n_series = len(self.bottom_level_cols_)
+        n_time = len(df)
+        
         # 3) Build or use given hierarchy
         if self.hierarchy_map is None:
             # Auto-create artificial hierarchy in groups of self.group_size
@@ -6549,6 +6582,15 @@ class ReconciliationTransformer(EmptyTransformer):
         L_agg = len(all_agg_names)
         M_bot = len(self.bottom_level_cols_)
 
+        # Set dimensions first
+        self.n_bottom_ = M_bot
+        self.n_levels_ = L_agg + M_bot
+        
+        # 5) Performance check (after n_levels_ is set)
+        method = self.reconciliation_params.get("method", "mint")
+        self._check_performance_limits(n_series, n_time, method)
+
+        # 6) Build aggregator matrix S
         # aggregator part => shape (L_agg, M_bot)
         S_agg = np.zeros((L_agg, M_bot), dtype=float)
         for row_idx, agg_name in enumerate(all_agg_names):
@@ -6562,14 +6604,12 @@ class ReconciliationTransformer(EmptyTransformer):
         # Final aggregator matrix => shape (L_agg + M_bot, M_bot)
         S = np.vstack([S_agg, I_bottom])
 
-        self.n_bottom_ = M_bot
-        self.n_levels_ = L_agg + M_bot
         row_names = all_agg_names + self.bottom_level_cols_
         self.col_index_map_ = {row_names[i]: i for i in range(self.n_levels_)}
         self.agg_matrix_ = S
         self.all_level_cols_ = row_names
 
-        # 5) Estimate bottom-level covariance from historical data:
+        # 7) Estimate bottom-level covariance from historical data:
         #    The user might choose to use it in "historical" mode in inverse_transform.
         #    shape => (M_bot, M_bot).
         bottom_data = df[self.bottom_level_cols_].values  # shape (T, M_bot)
@@ -6580,6 +6620,32 @@ class ReconciliationTransformer(EmptyTransformer):
 
         self.fitted_ = True
         return self
+    
+    def _check_performance_limits(self, n_series: int, n_time: int, method: str):
+        """Check if dataset size might cause performance issues and warn user."""
+        # might be better to generalize this function and use for all transformers at risk of high memory use
+        import warnings
+        
+        # Estimate memory usage (in MB)
+        matrix_size_mb = (self.n_levels_ ** 2 * 8) / (1024 ** 2)  # 8 bytes per float64
+        time_matrix_mb = (n_time * self.n_levels_ * 8) / (1024 ** 2)
+        
+        if method in ["iterative_mint", "iterative_volatility_mint"]:
+            # Iterative methods use ~3x more memory due to temporary matrices
+            estimated_memory_mb = matrix_size_mb * 3 + time_matrix_mb
+            max_recommended_series = 300
+        else:
+            estimated_memory_mb = matrix_size_mb + time_matrix_mb
+            max_recommended_series = 1000
+            
+        estimated_memory_gb = estimated_memory_mb / 1024
+            
+        # Hard limit for very large datasets
+        if estimated_memory_gb > 8:  # > 8GB
+            raise ValueError(
+                f"Dataset too large ({estimated_memory_gb:.1f}GB estimated memory). "
+                f"Reduce group_size (current: {self.group_size}) or number of series."
+            )
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -6653,7 +6719,7 @@ class ReconciliationTransformer(EmptyTransformer):
         if method == "none":
             # No reconciliation => just return bottom portion
             return df[self.bottom_level_cols_]
-        elif method not in ["mint", "erm"]:
+        elif method not in ["mint", "erm", "volatility_mint", "iterative_mint", "iterative_volatility_mint"]:
             raise NotImplementedError(f"Method '{method}' is not implemented.")
 
         # Collect other parameters
@@ -6662,6 +6728,18 @@ class ReconciliationTransformer(EmptyTransformer):
         manual_shrink = self.reconciliation_params.get("shrinkage", 0.0)
         ledoit_wolf_flag = self.reconciliation_params.get("ledoit_wolf", False)
         ridge_val = self.reconciliation_params.get("ridge", 1e-9)  # can be None
+        
+        # Collect parameters for volatility-weighted methods
+        vol_params = self.reconciliation_params.get("volatility_params", {})
+        volatility_method = vol_params.get("method", "variance")
+        volatility_power = vol_params.get("power", 1.0)
+        volatility_mix = vol_params.get("mix", 0.5)
+        
+        # Collect parameters for iterative methods
+        iter_params = self.reconciliation_params.get("iterative_params", {})
+        max_iterations = iter_params.get("max_iterations", 10)
+        convergence_threshold = iter_params.get("convergence_threshold", 1e-6)
+        damping_factor = iter_params.get("damping_factor", 0.7)
 
         # 1) Extract forecast matrix in correct order
         missing_cols = [c for c in self.all_level_cols_ if c not in df.columns]
@@ -6708,11 +6786,27 @@ class ReconciliationTransformer(EmptyTransformer):
         if ridge_val is not None and ridge_val > 0.0:
             W += np.eye(n_levels) * ridge_val
 
-        # 6) Reconcile with MinT or ERM
+        # 6) Reconcile with MinT, ERM, or enhanced methods
         if method == "mint":
             y_all_reconciled = mint_reconcile(S, y_all_forecast, W)
-        else:  # method == "erm"
+        elif method == "erm":
             y_all_reconciled = erm_reconcile(S, y_all_forecast, W)
+        elif method == "volatility_mint":
+            y_all_reconciled = volatility_weighted_mint_reconcile(
+                S, y_all_forecast, W, self.cov_bottom_,
+                volatility_method, volatility_power, volatility_mix
+            )
+        elif method == "iterative_mint":
+            y_all_reconciled = iterative_mint_reconcile(
+                S, y_all_forecast, W,
+                max_iterations, convergence_threshold, damping_factor
+            )
+        elif method == "iterative_volatility_mint":
+            y_all_reconciled = iterative_volatility_mint_reconcile(
+                S, y_all_forecast, W, self.cov_bottom_,
+                volatility_method, volatility_power, volatility_mix,
+                max_iterations, convergence_threshold, damping_factor
+            )
 
         # 7) Slice out the bottom portion => last M_bottom columns
         bottom_start_idx = n_levels - self.n_bottom_
@@ -6734,19 +6828,24 @@ class ReconciliationTransformer(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         """
-        Returns new random parameters for demonstration, possibly including:
-         - method="mint"/"erm"/"none"
+        Returns new random parameters for demonstration, with organized parameter structure:
+         - method="mint"/"erm"/"volatility_mint"/"iterative_mint"/"iterative_volatility_mint"/"none"
          - cov_source="historical"/"forecasts"
          - weighting="identity"/"diagonal"/"full"
          - shrinkage in [0.0, 0.5]
-         - led_wolf in [True, False]
+         - ledoit_wolf in [True, False]
          - ridge in [None, 1e-9, 1e-8, 1e-5, ...]
+         - volatility_params: dict with method-specific parameters
+         - iterative_params: dict with method-specific parameters
 
         This can be adapted for random or grid-search hyperparameter tuning.
         """
         group_size = random.choice([5, 10, 20, 30])
 
-        rec_method = random.choices(["mint", "erm", "none"], [0.5, 0.1, 0.3])[0]
+        rec_method = random.choices(
+            ["mint", "erm", "volatility_mint", "iterative_mint", "iterative_volatility_mint", "none"], 
+            [0.25, 0.1, 0.2, 0.2, 0.15, 0.1]
+        )[0]
         cov_source = random.choices(["historical", "forecasts"], [0.7, 0.3])[0]
         weighting_opts = ["identity", "diagonal", "full"]
         weighting_choice = random.choice(weighting_opts)
@@ -6766,6 +6865,18 @@ class ReconciliationTransformer(EmptyTransformer):
                 "shrinkage": shrink_val,
                 "ledoit_wolf": led_wolf,
                 "ridge": ridge_val,
+                # Volatility parameters (only used by volatility_mint and iterative_volatility_mint)
+                "volatility_params": {
+                    "method": random.choice(["variance", "std", "cv"]),
+                    "power": random.uniform(0.5, 2.0),
+                    "mix": random.uniform(0.0, 1.0),
+                },
+                # Iterative parameters (only used by iterative_mint and iterative_volatility_mint)
+                "iterative_params": {
+                    "max_iterations": random.choice([5, 10, 15, 20]),
+                    "convergence_threshold": random.choice([1e-8, 1e-7, 1e-6, 1e-5, 1e-4]),
+                    "damping_factor": random.uniform(0.3, 0.9),
+                },
             },
         }
         return params
