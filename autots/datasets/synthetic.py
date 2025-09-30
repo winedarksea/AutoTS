@@ -86,11 +86,12 @@ class SyntheticDailyGenerator:
         'time_varying_seasonality': 'Time-Varying Seasonality',
         'seasonality_changepoints': 'Seasonality Changepoints',
         'no_level_shifts': 'No Level Shifts',
-        'chinese_holidays': 'Chinese Holidays',
+        'lunar_holidays': 'Lunar Holidays',
         'ramadan_holidays': 'Ramadan Holidays',
         'variance_regimes': 'Variance Regimes (GARCH)',
         'autocorrelated_noise': 'Autocorrelated Noise (AR)',
         'multiplicative_seasonality': 'Multiplicative Seasonality (AR noise)',
+        'granger_lagged': 'Granger Lagged (7-day lag from Lunar Holidays)',
         'standard': 'Standard',
     }
     
@@ -150,9 +151,14 @@ class SyntheticDailyGenerator:
         self.series_types = {}  # {series_id: series_type}
         self.effect_sizes = {}  # Detailed storage of all effect magnitudes
         self.regressor_impacts = {}  # {series_id: {date: {regressor_name: impact}}}
+        self.lagged_influences = {}  # {series_id: {'source': source_series, 'lag': lag_days, 'coefficient': coef}}
         
         # Component storage for analysis
         self.components = {}  # {series_id: {component_name: array}}
+
+        # Precompute custom holiday templates so all series share the same structure
+        self.random_dom_holidays = self._init_random_dom_holidays()
+        self.random_wkdom_holidays = self._init_random_wkdom_holidays()
         
         # Generate the data
         self.data = None
@@ -172,51 +178,23 @@ class SyntheticDailyGenerator:
             self._generate_regressors()
         
         # Generate each series
+        # Map series index to type for cleaner assignment
+        series_type_map = {
+            0: 'business_day', 1: 'saturating_trend', 2: 'time_varying_seasonality',
+            3: 'seasonality_changepoints', 4: 'no_level_shifts', 5: 'lunar_holidays',
+            6: 'ramadan_holidays', 7: 'variance_regimes', 8: 'autocorrelated_noise',
+            9: 'multiplicative_seasonality', 10: 'granger_lagged'
+        }
+        
         for i in range(self.n_series):
             series_name = f"series_{i}"
             
             # Determine series characteristics
-            if i == 0:
-                # Series 0: Business day series with weekend NaN
-                series_type = 'business_day'
-            elif i == 1:
-                # Series 1: Nonlinear/saturating trends
-                series_type = 'saturating_trend'
-            elif i == 2:
-                # Series 2: Time-varying seasonality
-                series_type = 'time_varying_seasonality'
-            elif i == 3:
-                # Series 3: Seasonality changepoints
-                series_type = 'seasonality_changepoints'
-            elif i == 4:
-                # Series 4: No level shifts
-                series_type = 'no_level_shifts'
-            elif i == 5:
-                # Series 5: Chinese New Year holidays
-                series_type = 'chinese_holidays'
-            elif i == 6:
-                # Series 6: Ramadan holidays
-                series_type = 'ramadan_holidays'
-            elif i == 7:
-                # Series 7: GARCH-like variance regimes
-                series_type = 'variance_regimes'
-            elif i == 8:
-                # Series 8: Smoother, autocorrelated noise
-                series_type = 'autocorrelated_noise'
-            elif i == 9:
-                # Series 9: Multiplicative seasonality with autocorrelated noise
-                series_type = 'multiplicative_seasonality'
-            else:
-                series_type = 'standard'
-            
-            # Store series type for later reference
+            series_type = series_type_map.get(i, 'standard')
             self.series_types[series_name] = series_type
             
-            # Set scale for this series (some 10x larger)
-            if i % 3 == 0:
-                scale = 10.0
-            else:
-                scale = 1.0
+            # Set scale for this series (every 3rd series is 10x larger)
+            scale = 10.0 if i % 3 == 0 else 1.0
             self.series_scales[series_name] = scale
             
             # Generate series components
@@ -375,6 +353,12 @@ class SyntheticDailyGenerator:
                 noise + anomalies + regressor_effect
             )
         
+        # Apply Granger-style lagged influence if this series type requires it
+        if series_type == 'granger_lagged':
+            lagged_influence = self._apply_lagged_influence(series_name, scale)
+            series_data = series_data + lagged_influence
+            self.components[series_name]['lagged_influence'] = lagged_influence
+        
         # Apply business day mask if needed
         if series_type == 'business_day':
             is_weekend = (self.date_index.dayofweek >= 5)
@@ -426,18 +410,37 @@ class SyntheticDailyGenerator:
             changepoint_days = [0] + changepoint_days + [self.n_days]
             
             # Generate slopes with validation for meaningful changes
+            # Use a weighted distribution to favor stronger trends
+            # 40% chance of stronger slope, 60% chance of moderate slope
             slopes = []
             prev_slope = None
             min_change = 0.008 * scale  # Minimum detectable change threshold
             
             for i in range(len(changepoint_days) - 1):
                 if prev_slope is None:
-                    # First slope
-                    new_slope = self.rng.uniform(-0.01, 0.03) * scale
+                    # First slope - favor stronger initial trends
+                    if self.rng.random() < 0.4:
+                        # Stronger trend: -0.03 to -0.015 or 0.02 to 0.05
+                        if self.rng.random() < 0.5:
+                            new_slope = self.rng.uniform(-0.03, -0.015) * scale
+                        else:
+                            new_slope = self.rng.uniform(0.02, 0.05) * scale
+                    else:
+                        # Moderate trend
+                        new_slope = self.rng.uniform(-0.01, 0.03) * scale
                 else:
                     # Ensure meaningful change: try up to 20 times, then force it
                     for attempt in range(20):
-                        new_slope = self.rng.uniform(-0.01, 0.03) * scale
+                        # 40% chance of stronger slope
+                        if self.rng.random() < 0.4:
+                            # Stronger trend
+                            if self.rng.random() < 0.5:
+                                new_slope = self.rng.uniform(-0.03, -0.015) * scale
+                            else:
+                                new_slope = self.rng.uniform(0.02, 0.05) * scale
+                        else:
+                            # Moderate trend
+                            new_slope = self.rng.uniform(-0.01, 0.03) * scale
                         # Accept if change is large enough (allow 20% to be subtler)
                         threshold = min_change * (0.5 if self.rng.random() > 0.8 else 1.0)
                         if abs(new_slope - prev_slope) >= threshold:
@@ -446,7 +449,7 @@ class SyntheticDailyGenerator:
                         # Force a meaningful change if random sampling failed
                         sign = 1 if self.rng.random() > 0.5 else -1
                         new_slope = np.clip(prev_slope + sign * min_change * 1.5, 
-                                          -0.01 * scale, 0.03 * scale)
+                                          -0.03 * scale, 0.05 * scale)
                 
                 slopes.append(new_slope)
                 prev_slope = new_slope
@@ -479,6 +482,14 @@ class SyntheticDailyGenerator:
             self.trend_changepoints[series_name] = changepoint_info
         
         return trend
+    
+    def _combine_shared_events(self, non_shared_days, shared_event_days, participation_prob=0.5):
+        """Combine non-shared and shared events into a unified dict with shared status."""
+        all_days = {day: False for day in non_shared_days}
+        for day in shared_event_days:
+            if self.rng.rand() < participation_prob:
+                all_days[day] = True  # Shared
+        return all_days
     
     def _generate_level_shifts(self, series_name, series_type, scale):
         """Generate instantaneous or ramped level shifts."""
@@ -523,15 +534,7 @@ class SyntheticDailyGenerator:
         shift_info = []
         
         # Combine shared and non-shared events
-        all_shift_days = {} # Use dict to store day and shared status
-        for day in shift_days:
-            all_shift_days[day] = False # Not shared
-            
-        # Add shared level shifts
-        for shift_day in self.shared_events['level_shifts']:
-            # 50% chance for a series to participate in a shared shift
-            if self.rng.rand() < 0.5:
-                all_shift_days[shift_day] = True # Shared
+        all_shift_days = self._combine_shared_events(shift_days, self.shared_events['level_shifts'], participation_prob=0.5)
         
         for shift_day, is_shared in sorted(all_shift_days.items()):
             # Determine shift type
@@ -683,7 +686,7 @@ class SyntheticDailyGenerator:
         holidays = np.zeros(self.n_days)
         holiday_impacts = {}
         holiday_splash_impacts = {}
-        holiday_dates = []  # Track distinct holiday dates (not splash days)
+        holiday_dates = set()  # Track distinct holiday dates (not splash days)
         
         # Get series noise level for scaling holiday impacts
         series_noise_level = self.series_noise_levels[series_name]
@@ -704,29 +707,30 @@ class SyntheticDailyGenerator:
                 'has_splash': self.rng.random() < 0.5,
                 'has_bridge': self.rng.random() < 0.5
             }
-            self.holiday_config['chinese_new_year'] = {
-                'has_splash': self.rng.random() < 0.5,
-                'has_bridge': self.rng.random() < 0.5
+            # Multi-day holidays use deterministic configs to better mimic reality
+            self.holiday_config['lunar_new_year'] = {
+                'has_splash': True,
+                'has_bridge': False
             }
             self.holiday_config['ramadan'] = {
-                'has_splash': self.rng.random() < 0.5,
-                'has_bridge': self.rng.random() < 0.5
+                'has_splash': False,
+                'has_bridge': False
             }
+            for dom_holiday in self.random_dom_holidays:
+                self.holiday_config[dom_holiday['name']] = {
+                    'has_splash': dom_holiday['has_splash'],
+                    'has_bridge': dom_holiday['has_bridge']
+                }
+            for wkdom_holiday in self.random_wkdom_holidays:
+                self.holiday_config[wkdom_holiday['name']] = {
+                    'has_splash': wkdom_holiday['has_splash'],
+                    'has_bridge': wkdom_holiday['has_bridge']
+                }
         
         # Common holidays: December 25th (Christmas)
-        for year in range(self.date_index.year.min(), self.date_index.year.max() + 1):
-            try:
-                christmas = pd.Timestamp(f"{year}-12-25")
-                if christmas in self.date_index:
-                    self._add_holiday_effect(
-                        holidays, holiday_impacts, holiday_splash_impacts, christmas, 
-                        base_impact=holiday_scale,
-                        splash_days=3, 
-                        holiday_name='christmas'
-                    )
-                    holiday_dates.append(christmas)
-            except:
-                pass
+        self._add_yearly_holiday(holidays, holiday_impacts, holiday_splash_impacts, 
+                                holiday_dates, month=12, day=25, impact=holiday_scale, 
+                                splash_days=3, name='christmas')
         
         # Custom holiday: 3rd Tuesday of July
         for year in range(self.date_index.year.min(), self.date_index.year.max() + 1):
@@ -741,25 +745,65 @@ class SyntheticDailyGenerator:
                         splash_days=2, 
                         holiday_name='custom_july'
                     )
-                    holiday_dates.append(custom_holiday)
+                    holiday_dates.add(custom_holiday)
         
-        # Chinese New Year for specific series
-        if series_type == 'chinese_holidays':
+        # Randomly generated day-of-month holidays with consistent naming
+        for dom_holiday in self.random_dom_holidays:
+            self._add_yearly_holiday(holidays, holiday_impacts, holiday_splash_impacts,
+                                    holiday_dates, month=dom_holiday['month'], day=dom_holiday['day'],
+                                    impact=holiday_scale * dom_holiday['scale_multiplier'],
+                                    splash_days=dom_holiday['splash_days'], name=dom_holiday['name'])
+        
+        # Randomly generated weekday-of-month holidays
+        for wkdom_holiday in self.random_wkdom_holidays:
+            for year in range(self.date_index.year.min(), self.date_index.year.max() + 1):
+                wkdom_date = self._get_nth_weekday(year, wkdom_holiday['month'], wkdom_holiday['week'], wkdom_holiday['weekday'])
+                if wkdom_date is not None and wkdom_date in self.date_index:
+                    self._add_holiday_effect(
+                        holidays, holiday_impacts, holiday_splash_impacts, wkdom_date,
+                        base_impact=holiday_scale * wkdom_holiday['scale_multiplier'],
+                        splash_days=wkdom_holiday['splash_days'],
+                        holiday_name=wkdom_holiday['name']
+                    )
+                    holiday_dates.add(wkdom_date)
+        
+        # Lunar New Year for specific series
+        if series_type == 'lunar_holidays':
             try:
                 chinese_dates = gregorian_to_chinese(self.date_index)
-                # Find Chinese New Year dates (month 1, day 1)
+                # Find Lunar New Year dates (month 1, day 1)
                 cny_mask = (chinese_dates['lunar_month'] == 1) & (chinese_dates['lunar_day'] == 1)
                 cny_dates = self.date_index[cny_mask]
                 
                 for cny_date in cny_dates:
-                    self._add_holiday_effect(
-                        holidays, holiday_impacts, holiday_splash_impacts, cny_date,
-                        base_impact=holiday_scale * 1.5,
-                        splash_days=5, 
-                        holiday_name='chinese_new_year'
+                    festival_pattern = [
+                        (-3, 0.35),
+                        (-2, 0.65),
+                        (-1, 0.95),
+                        (0, -1.3),
+                        (1, -1.15),
+                        (2, -1.0),
+                        (3, -0.8),
+                        (4, -0.6),
+                        (5, -0.45),
+                        (6, -0.3),
+                        (7, 0.4),
+                        (8, 0.25),
+                    ]
+                    applied_dates = self._apply_holiday_pattern(
+                        holidays,
+                        holiday_impacts,
+                        holiday_splash_impacts,
+                        cny_date,
+                        base_scale=holiday_scale * 1.2,
+                        pattern=festival_pattern,
+                        core_offsets=set(range(0, 7)),
+                        holiday_name='lunar_new_year',
+                        include_weekend_boost=True,
                     )
-                    holiday_dates.append(cny_date)
-            except Exception as e:
+                    for applied_date in applied_dates:
+                        holiday_dates.add(applied_date)
+            except Exception:
                 # If calendar conversion fails, skip
                 pass
         
@@ -772,22 +816,51 @@ class SyntheticDailyGenerator:
                 ramadan_dates = self.date_index[ramadan_mask]
                 
                 for ramadan_date in ramadan_dates:
-                    # Ramadan has extended effects
-                    self._add_holiday_effect(
-                        holidays, holiday_impacts, holiday_splash_impacts, ramadan_date,
-                        base_impact=holiday_scale * 0.8,
-                        splash_days=7, 
-                        holiday_name='ramadan'
+                    pre_ramadan = [(-3, 0.3), (-2, 0.55), (-1, 0.85)]
+                    core_length = 29
+                    early_decline = np.linspace(-0.45, -0.7, 10)
+                    deep_decline = np.linspace(-0.75, -0.95, 10)
+                    late_decline = np.linspace(-0.9, -0.5, core_length - 20)
+                    ramadan_profile = np.concatenate([early_decline, deep_decline, late_decline])
+                    post_festival = [(core_length, 0.9), (core_length + 1, 0.6), (core_length + 2, 0.35)]
+                    pattern = pre_ramadan + [
+                        (offset, weight) for offset, weight in enumerate(ramadan_profile)
+                    ] + post_festival
+                    applied_dates = self._apply_holiday_pattern(
+                        holidays,
+                        holiday_impacts,
+                        holiday_splash_impacts,
+                        ramadan_date,
+                        base_scale=holiday_scale * 0.85,
+                        pattern=pattern,
+                        core_offsets=set(range(0, core_length)),
+                        holiday_name='ramadan',
+                        include_weekend_boost=False,
                     )
-                    holiday_dates.append(ramadan_date)
-            except Exception as e:
+                    for applied_date in applied_dates:
+                        holiday_dates.add(applied_date)
+            except Exception:
                 # If calendar conversion fails, skip
                 pass
         
         self.holiday_impacts[series_name] = holiday_impacts
         self.holiday_splash_impacts[series_name] = holiday_splash_impacts
-        self.holiday_dates[series_name] = holiday_dates
+        self.holiday_dates[series_name] = sorted(holiday_dates)
         return holidays
+    
+    def _add_yearly_holiday(self, holidays_array, holiday_impacts, holiday_splash_impacts,
+                           holiday_dates, month, day, impact, splash_days, name):
+        """Helper to add a recurring yearly holiday across all years in date range."""
+        for year in range(self.date_index.year.min(), self.date_index.year.max() + 1):
+            try:
+                holiday_date = pd.Timestamp(f"{year}-{month:02d}-{day:02d}")
+                if holiday_date in self.date_index:
+                    self._add_holiday_effect(holidays_array, holiday_impacts, holiday_splash_impacts,
+                                           holiday_date, base_impact=impact, splash_days=splash_days, 
+                                           holiday_name=name)
+                    holiday_dates.add(holiday_date)
+            except (ValueError, Exception):
+                pass
     
     def _add_holiday_effect(self, holidays_array, holiday_impacts, holiday_splash_impacts, 
                            holiday_date, base_impact, splash_days, holiday_name):
@@ -809,7 +882,7 @@ class SyntheticDailyGenerator:
         
         # Main holiday impact (always applied)
         holidays_array[holiday_idx] += base_impact
-        holiday_impacts[holiday_date] = base_impact
+        holiday_impacts[holiday_date] = holiday_impacts.get(holiday_date, 0) + base_impact
         
         # Splash effects (only if configured)
         if config['has_splash']:
@@ -818,13 +891,15 @@ class SyntheticDailyGenerator:
                 if holiday_idx - offset >= 0:
                     splash_impact = base_impact * (1 - offset / (splash_days + 1)) * 0.4
                     holidays_array[holiday_idx - offset] += splash_impact
-                    holiday_splash_impacts[self.date_index[holiday_idx - offset]] = splash_impact
+                    splash_date = self.date_index[holiday_idx - offset]
+                    holiday_splash_impacts[splash_date] = holiday_splash_impacts.get(splash_date, 0) + splash_impact
                 
                 # After holiday
                 if holiday_idx + offset < self.n_days:
                     splash_impact = base_impact * (1 - offset / (splash_days + 1)) * 0.3
                     holidays_array[holiday_idx + offset] += splash_impact
-                    holiday_splash_impacts[self.date_index[holiday_idx + offset]] = splash_impact
+                    splash_date = self.date_index[holiday_idx + offset]
+                    holiday_splash_impacts[splash_date] = holiday_splash_impacts.get(splash_date, 0) + splash_impact
         
         # Bridge day effect (only if configured and holiday is Thursday or Tuesday)
         if config['has_bridge']:
@@ -833,14 +908,131 @@ class SyntheticDailyGenerator:
                 if holiday_idx + 1 < self.n_days and self.date_index[holiday_idx + 1].dayofweek == 4:
                     bridge_impact = base_impact * 0.6
                     holidays_array[holiday_idx + 1] += bridge_impact
-                    holiday_splash_impacts[self.date_index[holiday_idx + 1]] = bridge_impact
+                    bridge_date = self.date_index[holiday_idx + 1]
+                    holiday_splash_impacts[bridge_date] = holiday_splash_impacts.get(bridge_date, 0) + bridge_impact
             elif holiday_date.dayofweek == 1:  # Tuesday
                 # Monday bridge from weekend
                 if holiday_idx - 1 >= 0 and self.date_index[holiday_idx - 1].dayofweek == 0:
                     bridge_impact = base_impact * 0.5
                     holidays_array[holiday_idx - 1] += bridge_impact
-                    holiday_splash_impacts[self.date_index[holiday_idx - 1]] = bridge_impact
+                    bridge_date = self.date_index[holiday_idx - 1]
+                    holiday_splash_impacts[bridge_date] = holiday_splash_impacts.get(bridge_date, 0) + bridge_impact
     
+    def _apply_holiday_pattern(
+        self,
+        holidays_array,
+        holiday_impacts,
+        holiday_splash_impacts,
+        anchor_date,
+        base_scale,
+        pattern,
+        core_offsets,
+        holiday_name,
+        include_weekend_boost=True,
+    ):
+        """Apply a set of relative day offsets and multipliers around a holiday anchor."""
+        applied_dates = []
+        config = self.holiday_config.get(holiday_name, {'has_splash': False, 'has_bridge': False})
+        weekend_multiplier = 1.15 if include_weekend_boost else 1.0
+        if config.get('has_bridge') and include_weekend_boost:
+            weekend_multiplier = max(weekend_multiplier, 1.2)
+
+        for offset, weight in pattern:
+            if weight == 0:
+                continue
+            current_date = anchor_date + pd.Timedelta(days=int(offset))
+            if current_date not in self.date_index:
+                continue
+
+            holiday_idx = self.date_index.get_loc(current_date)
+            impact = base_scale * weight
+            if include_weekend_boost and current_date.dayofweek >= 5:
+                impact *= weekend_multiplier
+
+            holidays_array[holiday_idx] += impact
+            if offset in core_offsets:
+                holiday_impacts[current_date] = holiday_impacts.get(current_date, 0) + impact
+            else:
+                holiday_splash_impacts[current_date] = holiday_splash_impacts.get(current_date, 0) + impact
+
+            applied_dates.append(current_date)
+
+        return applied_dates
+
+    def _init_random_dom_holidays(self):
+        """Create random day-of-month holiday templates shared across series."""
+        holidays = []
+        n_dom = int(self.rng.randint(2, 4))
+        protected = {
+            'dom_12_25',
+            'dom_12_24',
+            'dom_12_31',
+            'dom_01_01',
+            'dom_07_04',
+            'dom_07_01',
+        }
+        attempts = 0
+        while len(holidays) < n_dom and attempts < 40:
+            attempts += 1
+            month = int(self.rng.randint(1, 13))
+            day = int(self.rng.randint(1, 29))  # stay <= 28 to avoid month length issues
+            name = f"dom_{month:02d}_{day:02d}"
+            if name in protected or any(h['name'] == name for h in holidays):
+                continue
+            holidays.append({
+                'name': name,
+                'month': month,
+                'day': day,
+                'scale_multiplier': self.rng.uniform(0.4, 1.1),
+                'splash_days': int(self.rng.randint(1, 4)),
+                'has_splash': self.rng.random() < 0.4,
+                'has_bridge': self.rng.random() < 0.25,
+            })
+        return holidays
+
+    def _init_random_wkdom_holidays(self):
+        """Create random weekday-of-month holiday templates shared across series."""
+        holidays = []
+        n_wkdom = int(self.rng.randint(1, 3))
+        protected = {
+            'wkdom_11_4_4',
+            'wkdom_11_4_3',
+            'wkdom_05_2_6',
+            'wkdom_06_3_6',
+            'wkdom_09_1_0',
+        }
+        attempts = 0
+        while len(holidays) < n_wkdom and attempts < 60:
+            attempts += 1
+            month = int(self.rng.randint(1, 13))
+            week = int(self.rng.randint(1, 5))  # 1-4 inclusive
+            weekday = int(self.rng.randint(0, 7))
+            name = f"wkdom_{month:02d}_{week}_{weekday}"
+            if name in protected or any(h['name'] == name for h in holidays):
+                continue
+            holidays.append({
+                'name': name,
+                'month': month,
+                'week': week,
+                'weekday': weekday,
+                'scale_multiplier': self.rng.uniform(0.5, 1.2),
+                'splash_days': int(self.rng.randint(1, 3)),
+                'has_splash': self.rng.random() < 0.35,
+                'has_bridge': self.rng.random() < 0.3,
+            })
+        return holidays
+
+    def _get_nth_weekday(self, year, month, week, weekday):
+        """Return the nth weekday of a month; fallback to the last occurrence if needed."""
+        month_dates = pd.date_range(f"{year}-{month:02d}-01", periods=31, freq='D')
+        month_dates = month_dates[month_dates.month == month]
+        weekday_matches = month_dates[month_dates.dayofweek == weekday]
+        if len(weekday_matches) == 0:
+            return None
+        if week <= len(weekday_matches):
+            return weekday_matches[week - 1]
+        return weekday_matches[-1]
+
     def _generate_noise(self, series_name, series_type, scale):
         """Generate noise with changepoints and optional GARCH-like regimes."""
         noise = np.zeros(self.n_days)
@@ -1076,15 +1268,12 @@ class SyntheticDailyGenerator:
             attempts += 1
         
         # Combine shared and non-shared anomalies
-        all_anomaly_days = {} # Use dict to store day and shared status
-        for day in anomaly_days:
-            all_anomaly_days[day] = False # Not shared
-            
-        for day in self.shared_events['anomalies']:
-            if self.rng.rand() < 0.5: # 50% chance to participate
-                if (all(abs(day - existing) > 7 for existing in all_anomaly_days.keys()) and
-                    not has_holiday_overlap(day)):
-                    all_anomaly_days[day] = True # Shared
+        all_anomaly_days = self._combine_shared_events(
+            [day for day in anomaly_days],
+            [day for day in self.shared_events['anomalies'] 
+             if all(abs(day - existing) > 7 for existing in anomaly_days) and not has_holiday_overlap(day)],
+            participation_prob=0.5
+        )
 
         anomaly_info = []
         
@@ -1092,7 +1281,7 @@ class SyntheticDailyGenerator:
             # Decide anomaly characteristics
             duration = self.rng.choice([1, 2, 3], p=[0.6, 0.3, 0.1])
             anomaly_type = self.rng.choice([
-                'point_outlier', 'persistent_shift', 'impulse_decay', 'ramp_down', 'transient_change'
+                'point_outlier', 'noisy_burst', 'impulse_decay', 'linear_decay', 'transient_change'
             ], p=[0.4, 0.2, 0.15, 0.15, 0.1])
             
             # Generate magnitude (clearly above noise threshold)
@@ -1108,8 +1297,8 @@ class SyntheticDailyGenerator:
                 # Single-day outlier (spike or dip)
                 anomalies[anomaly_day] += magnitude
             
-            elif anomaly_type == 'persistent_shift':
-                # Multi-day anomaly with same mean (persistent but temporary)
+            elif anomaly_type == 'noisy_burst':
+                # Multi-day anomaly with noisy variation around mean (1-3 days)
                 for d in range(duration):
                     if anomaly_day + d < self.n_days:
                         # Draw from same distribution
@@ -1125,8 +1314,8 @@ class SyntheticDailyGenerator:
                         decay_magnitude = magnitude * np.exp(-decay_rate * d)
                         anomalies[anomaly_day + d] += decay_magnitude
             
-            elif anomaly_type == 'ramp_down':
-                # Ramp down over several days
+            elif anomaly_type == 'linear_decay':
+                # Linear decay to zero over several days (direction-agnostic)
                 ramp_days = 5
                 anomalies[anomaly_day] += magnitude
                 for d in range(1, ramp_days):
@@ -1225,130 +1414,115 @@ class SyntheticDailyGenerator:
         
         return regressor_effect
     
-    # Label access methods
-    
-    def get_trend_changepoints(self, series_name=None):
+    def _apply_lagged_influence(self, series_name, scale):
         """
-        Get trend changepoint labels.
+        Apply Granger-style lagged influence from lunar_holidays series.
+        
+        The lagged series will be influenced by the lunar_holidays series (series_5)
+        with a 7-day lag. The coefficient is randomly determined but scaled to be
+        detectable above noise.
         
         Parameters
         ----------
-        series_name : str, optional
-            If provided, return changepoints for specific series.
-            If None, return all changepoints.
-        
+        series_name : str
+            Name of the current series
+        scale : float
+            Scale factor for this series
+            
         Returns
         -------
-        dict or list
-            Dictionary of {series_name: [(date, old_slope, new_slope), ...]}
-            or list for specific series.
+        np.ndarray
+            Lagged influence component
         """
+        lagged_influence = np.zeros(self.n_days)
+        
+        # Identify the lunar_holidays series (series_5)
+        source_series_name = 'series_5'
+        lag_days = 7
+        
+        # Check if the source series has been generated
+        if source_series_name not in self.components:
+            # Source series hasn't been generated yet, return zeros
+            # This will be filled later in a second pass if needed
+            self.lagged_influences[series_name] = {
+                'source': source_series_name,
+                'lag': lag_days,
+                'coefficient': 0.0,
+                'note': 'Source series not yet generated'
+            }
+            return lagged_influence
+        
+        # Get the source series data (we'll use the combined signal from components)
+        # Use holiday component from lunar series as the primary influence
+        source_component = self.components[source_series_name].get('holidays', np.zeros(self.n_days))
+        
+        # Determine influence coefficient
+        # Should be detectable: 0.3-0.7 of the source signal strength
+        series_noise_level = self.series_noise_levels[series_name]
+        signal_strength = scale * 50
+        noise_std = series_noise_level * signal_strength
+        
+        # Coefficient that makes the lagged effect detectable
+        base_coefficient = self.rng.uniform(0.3, 0.7)
+        
+        # Apply the lag: shift source signal forward by lag_days
+        # lagged_influence[t] = coefficient * source[t - lag_days]
+        for t in range(lag_days, self.n_days):
+            lagged_influence[t] = base_coefficient * source_component[t - lag_days]
+        
+        # Store the lagged influence information
+        self.lagged_influences[series_name] = {
+            'source': source_series_name,
+            'lag': lag_days,
+            'coefficient': base_coefficient
+        }
+        
+        return lagged_influence
+    
+    # Label access methods - consolidated generic getter
+    
+    def _get_label_data(self, attr_name, series_name=None, default=None):
+        """Generic getter for label data with optional series filtering."""
+        data = getattr(self, attr_name)
         if series_name is None:
-            return self.trend_changepoints
-        return self.trend_changepoints.get(series_name, [])
+            return data
+        return data.get(series_name, default if default is not None else ([] if isinstance(data.get(next(iter(data), None), None), list) else {}))
+    
+    def get_trend_changepoints(self, series_name=None):
+        """Get trend changepoint labels: {series_name: [(date, old_slope, new_slope), ...]}"""
+        return self._get_label_data('trend_changepoints', series_name)
     
     def get_level_shifts(self, series_name=None):
-        """
-        Get level shift labels.
-        
-        Returns
-        -------
-        dict or list
-            Dictionary of {series_name: [(date, magnitude, type), ...]}
-        """
-        if series_name is None:
-            return self.level_shifts
-        return self.level_shifts.get(series_name, [])
+        """Get level shift labels: {series_name: [(date, magnitude, type, shared), ...]}"""
+        return self._get_label_data('level_shifts', series_name)
     
     def get_anomalies(self, series_name=None):
-        """
-        Get anomaly labels.
-        
-        Returns
-        -------
-        dict or list
-            Dictionary of {series_name: [(date, magnitude, type, duration), ...]}
-        """
-        if series_name is None:
-            return self.anomalies
-        return self.anomalies.get(series_name, [])
+        """Get anomaly labels: {series_name: [(date, magnitude, type, duration, shared), ...]}"""
+        return self._get_label_data('anomalies', series_name)
     
     def get_holiday_impacts(self, series_name=None):
-        """
-        Get holiday impact labels (main holiday dates only).
-        
-        Returns
-        -------
-        dict
-            Dictionary of {series_name: {date: impact}}
-        """
-        if series_name is None:
-            return self.holiday_impacts
-        return self.holiday_impacts.get(series_name, {})
+        """Get holiday impact labels (main holiday dates only): {series_name: {date: impact}}"""
+        return self._get_label_data('holiday_impacts', series_name)
     
     def get_holiday_splash_impacts(self, series_name=None):
-        """
-        Get holiday splash and bridge day impact labels.
-        
-        Returns
-        -------
-        dict
-            Dictionary of {series_name: {date: impact}}
-        """
-        if series_name is None:
-            return self.holiday_splash_impacts
-        return self.holiday_splash_impacts.get(series_name, {})
+        """Get holiday splash/bridge day impacts: {series_name: {date: impact}}"""
+        return self._get_label_data('holiday_splash_impacts', series_name)
     
     def get_holiday_config(self):
-        """
-        Get configuration of which holidays have splash/bridge effects.
-        
-        Returns
-        -------
-        dict
-            Dictionary of {holiday_name: {'has_splash': bool, 'has_bridge': bool}}
-        """
+        """Get holiday splash/bridge configuration: {holiday_name: {'has_splash': bool, 'has_bridge': bool}}"""
         return self.holiday_config
     
     def get_regressor_impacts(self, series_name=None):
-        """
-        Get regressor impact labels with per-regressor tracing.
-        
-        Returns
-        -------
-        dict
-            Dictionary of {series_name: {'by_date': {date: {regressor: impact}}, 
-                                        'coefficients': {regressor: coef}}}
-        """
-        if series_name is None:
-            return self.regressor_impacts
-        return self.regressor_impacts.get(series_name, {})
+        """Get regressor impacts: {series_name: {'by_date': {date: {regressor: impact}}, 'coefficients': {...}}}"""
+        return self._get_label_data('regressor_impacts', series_name)
     
     def get_noise_changepoints(self, series_name=None):
-        """
-        Get noise distribution changepoint labels.
-        
-        Returns
-        -------
-        dict or list
-            Dictionary of {series_name: [(date, old_params, new_params), ...]}
-        """
-        if series_name is None:
-            return self.noise_changepoints
-        return self.noise_changepoints.get(series_name, [])
+        """Get noise distribution changepoints: {series_name: [(date, old_params, new_params), ...]}"""
+        return self._get_label_data('noise_changepoints', series_name)
     
     def get_seasonality_changepoints(self, series_name=None):
-        """
-        Get seasonality changepoint labels.
-        
-        Returns
-        -------
-        dict or list
-            Dictionary of {series_name: [(date, description), ...]}
-        """
-        if series_name is None:
-            return self.seasonality_changepoints
-        return self.seasonality_changepoints.get(series_name, [])
+        """Get seasonality changepoints: {series_name: [(date, description), ...]}"""
+        return self._get_label_data('seasonality_changepoints', series_name)
     
     def get_noise_to_signal_ratios(self):
         """Get noise-to-signal ratios for all series."""
@@ -1365,6 +1539,26 @@ class SyntheticDailyGenerator:
     def get_series_scales(self):
         """Get scale factors for all series."""
         return self.series_scales
+    
+    def get_lagged_influences(self, series_name=None):
+        """
+        Get lagged influence information for Granger-style causal relationships.
+        
+        Parameters
+        ----------
+        series_name : str, optional
+            If provided, return lagged influence info for specific series.
+            If None, return all lagged influences.
+        
+        Returns
+        -------
+        dict
+            Dictionary of {series_name: {'source': source_series, 'lag': lag_days, 'coefficient': coef}}
+            or single dict if series_name is specified
+        """
+        if series_name is None:
+            return self.lagged_influences
+        return self.lagged_influences.get(series_name, {})
     
     def get_series_type_description(self, series_name):
         """
@@ -1524,6 +1718,15 @@ class SyntheticDailyGenerator:
             if n_season_cp > 0:
                 print(f"  Seasonality changepoints: {n_season_cp}")
         
+        if self.random_dom_holidays or self.random_wkdom_holidays:
+            print("\nAdditional synthetic holiday templates:")
+            if self.random_dom_holidays:
+                dom_names = ", ".join(h['name'] for h in self.random_dom_holidays)
+                print(f"  Day-of-month patterns: {dom_names}")
+            if self.random_wkdom_holidays:
+                wkdom_names = ", ".join(h['name'] for h in self.random_wkdom_holidays)
+                print(f"  Weekday-of-month patterns: {wkdom_names}")
+
         print("\n" + "=" * 70)
     
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
@@ -1582,7 +1785,7 @@ class SyntheticDailyGenerator:
             title = f'Synthetic Data Analysis: {series_name}'
         fig.suptitle(title, fontsize=16, fontweight='bold')
         
-        # ===== Plot 1: Full series with all events marked =====
+        #  Plot 1: Full series with all events marked 
         ax = axes[0]
         ax.plot(self.date_index, series_data, 'b-', alpha=0.7, linewidth=1, label='Full Series')
         
@@ -1636,7 +1839,7 @@ class SyntheticDailyGenerator:
         ]
         ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
         
-        # ===== Plot 2: Trend and Level Shifts =====
+        #  Plot 2: Trend and Level Shifts 
         ax = axes[1]
         trend_component = components['trend']
         level_shift_component = components['level_shift']
@@ -1666,7 +1869,7 @@ class SyntheticDailyGenerator:
         ax.legend(loc='best', fontsize=9)
         ax.grid(True, alpha=0.3)
         
-        # ===== Plot 3: Seasonality and Holidays =====
+        #  Plot 3: Seasonality and Holidays 
         ax = axes[2]
         seasonality_component = components['seasonality']
         holiday_component = components['holidays']
@@ -1676,29 +1879,63 @@ class SyntheticDailyGenerator:
         ax.plot(self.date_index, seasonality_component + holiday_component, 
                 'b-', linewidth=1, alpha=0.8, label='Combined')
         
-        # Mark major holidays
+        # Mark ALL core holiday dates with markers (not just top 5)
+        # This ensures multi-day patterns and random holidays are all visible
         holiday_dates = sorted(labels['holiday_impacts'].keys())
         if holiday_dates:
-            # Get top 5 largest holiday impacts to annotate
-            impacts = [(date, labels['holiday_impacts'][date]) for date in holiday_dates]
-            impacts.sort(key=lambda x: abs(x[1]), reverse=True)
-            for date, impact in impacts[:5]:
+            for date in holiday_dates:
                 ax.axvline(date, color='orange', alpha=0.2, linestyle='--', linewidth=1)
                 idx = self.date_index.get_loc(date)
                 if idx < len(holiday_component):
-                    ax.plot(date, holiday_component[idx], 'o', color='orange', markersize=6)
+                    ax.plot(date, holiday_component[idx], 'o', color='orange', markersize=4, alpha=0.6)
+            
+            # Group holidays by (month, day) or by pattern to find unique holiday types
+            # Then annotate ALL occurrences of the top holiday types
+            from collections import defaultdict
+            holiday_groups = defaultdict(list)
+            
+            for date in holiday_dates:
+                # Create key based on month/day for recurring holidays
+                key = (date.month, date.day)
+                holiday_groups[key].append((date, labels['holiday_impacts'][date]))
+            
+            # Find top holiday types by total impact across all occurrences
+            holiday_type_impacts = []
+            for key, occurrences in holiday_groups.items():
+                total_impact = sum(abs(impact) for _, impact in occurrences)
+                avg_impact = total_impact / len(occurrences)
+                holiday_type_impacts.append((key, occurrences, total_impact, avg_impact))
+            
+            # Sort by total impact to get most significant holiday types
+            holiday_type_impacts.sort(key=lambda x: x[2], reverse=True)
+            
+            # Annotate ALL occurrences of the top 3-5 holiday types
+            max_types = min(5, len(holiday_type_impacts))
+            annotated_count = 0
+            
+            for i, (key, occurrences, total_impact, avg_impact) in enumerate(holiday_type_impacts[:max_types]):
+                for date, impact in occurrences:
+                    idx = self.date_index.get_loc(date)
+                    if idx < len(holiday_component):
+                        # Add text annotation showing the impact value
+                        ax.annotate(f'{impact:+.0f}', 
+                                   xy=(date, holiday_component[idx]),
+                                   xytext=(0, 10), textcoords='offset points',
+                                   fontsize=7, color='darkorange', ha='center',
+                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7, edgecolor='orange'))
+                        annotated_count += 1
         
         ax.set_title('Seasonality and Holiday Effects', fontsize=12, fontweight='bold')
         ax.set_ylabel('Value', fontsize=10)
         ax.legend(loc='best', fontsize=9)
         ax.grid(True, alpha=0.3)
         
-        # ===== Plot 4: Noise and Anomalies =====
+        #  Plot 4: Noise and Anomalies 
         ax = axes[3]
         noise_component = components['noise']
         anomaly_component = components['anomalies']
         
-        ax.plot(self.date_index, noise_component, 'gray', linewidth=0.5, alpha=0.5, label='Noise')
+        ax.plot(self.date_index, noise_component, 'gray', linewidth=0.5, alpha=0.75, label='Noise')
         ax.plot(self.date_index, anomaly_component, 'r-', linewidth=2, alpha=0.8, label='Anomalies')
         
         # Mark anomalies with details

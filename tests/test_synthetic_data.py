@@ -113,13 +113,84 @@ class TestSyntheticDataGeneration(unittest.TestCase):
         christmas_dates = [d for d in holidays_0.keys() if d.month == 12 and d.day == 25]
         self.assertGreaterEqual(len(christmas_dates), 1, "Should have at least one Christmas")
         
-        # Check Chinese holidays (series_5)
+        # Check Lunar holidays (series_5)
         holidays_5 = gen.get_holiday_impacts('series_5')
-        self.assertGreater(len(holidays_5), 0, "series_5 should have Chinese holiday impacts")
+        self.assertGreater(len(holidays_5), 0, "series_5 should have Lunar holiday impacts")
+        chinese_dates_sorted = sorted(holidays_5.keys())
+        longest_cny_streak = 0
+        current_streak = 0
+        last_date = None
+        for date in chinese_dates_sorted:
+            if last_date is not None and (date - last_date).days == 1:
+                current_streak += 1
+            else:
+                current_streak = 1
+            longest_cny_streak = max(longest_cny_streak, current_streak)
+            last_date = date
+        self.assertGreaterEqual(
+            longest_cny_streak,
+            5,
+            "Chinese New Year impacts should span multiple consecutive days",
+        )
         
         # Check Ramadan holidays (series_6)
         holidays_6 = gen.get_holiday_impacts('series_6')
         self.assertGreater(len(holidays_6), 0, "series_6 should have Ramadan holiday impacts")
+        ramadan_dates_sorted = sorted(holidays_6.keys())
+        longest_ramadan_streak = 0
+        current_streak = 0
+        last_date = None
+        for date in ramadan_dates_sorted:
+            if last_date is not None and (date - last_date).days == 1:
+                current_streak += 1
+            else:
+                current_streak = 1
+            longest_ramadan_streak = max(longest_ramadan_streak, current_streak)
+            last_date = date
+        self.assertGreaterEqual(
+            longest_ramadan_streak,
+            20,
+            "Ramadan impacts should cover an extended run of days",
+        )
+
+        # Ensure randomly generated holiday patterns exist
+        config = gen.get_holiday_config()
+        dom_keys = [k for k in config.keys() if k.startswith('dom_')]
+        wkdom_keys = [k for k in config.keys() if k.startswith('wkdom_')]
+        self.assertGreater(len(dom_keys), 0, "Should generate random day-of-month holidays")
+        self.assertGreater(len(wkdom_keys), 0, "Should generate random weekday-of-month holidays")
+
+        all_holiday_dates = list(gen.holiday_dates.values())
+
+        dom_match_found = False
+        for dom_key in dom_keys:
+            month = int(dom_key.split('_')[1])
+            day = int(dom_key.split('_')[2])
+            for series_dates in all_holiday_dates:
+                if any(date.month == month and date.day == day for date in series_dates):
+                    dom_match_found = True
+                    break
+            if dom_match_found:
+                break
+        self.assertTrue(dom_match_found, "Random dom_* holiday should appear in generated dates")
+
+        wkdom_match_found = False
+        for wkdom_key in wkdom_keys:
+            month = int(wkdom_key.split('_')[1])
+            week = int(wkdom_key.split('_')[2])
+            weekday = int(wkdom_key.split('_')[3])
+            for series_dates in all_holiday_dates:
+                for date in series_dates:
+                    if date.month == month and date.dayofweek == weekday:
+                        week_of_month = (date.day - 1) // 7 + 1
+                        if week_of_month == week:
+                            wkdom_match_found = True
+                            break
+                if wkdom_match_found:
+                    break
+            if wkdom_match_found:
+                break
+        self.assertTrue(wkdom_match_found, "Random wkdom_* holiday should appear in generated dates")
     
     def test_regressors(self):
         """Test regressor generation."""
