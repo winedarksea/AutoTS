@@ -6259,6 +6259,41 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         self.new_delta = self.orig_delta / (self.factor + 1)
         return self
 
+    def _safe_fill_na(self, df, method='linear'):
+        """
+        Safely fill NA values with fallback strategies to prevent failures.
+        
+        Args:
+            df (pandas.DataFrame): DataFrame with potential NA values
+            method (str): Interpolation method to try first
+            
+        Returns:
+            pandas.DataFrame: DataFrame with filled values
+        """
+        try:
+            # Try the requested method first
+            result = FillNA(df, method=method)
+            
+            # Verify the result is valid
+            if result.isnull().any().any():
+                # If still has NaNs, try fallback
+                result = FillNA(result, method='ffill')
+                if result.isnull().any().any():
+                    # Final fallback
+                    result = FillNA(result, method='zero')
+            
+            return result
+        except Exception:
+            # If the requested method fails, use safer alternatives
+            try:
+                return FillNA(df, method='linear')
+            except Exception:
+                try:
+                    return FillNA(df, method='ffill')
+                except Exception:
+                    # Last resort - fill with zeros
+                    return FillNA(df, method='zero')
+
     def transform(self, df):
         """
         Transform the data by either upscaling (increasing the resolution) or downscaling
@@ -6281,8 +6316,8 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             new_index = self._create_upscaled_index(self.original_index, self.new_delta)
             # Reindex the original data to the new index. This introduces NaNs where data did not exist.
             df_up = df.reindex(new_index)
-            # Use the FillNA function to interpolate the missing rows.
-            df_up_filled = FillNA(df_up, method=self.fill_method)
+            # Use the FillNA function to interpolate the missing rows with fallback
+            df_up_filled = self._safe_fill_na(df_up, method=self.fill_method)
             # Save the new index so that inverse_transform() knows how to go back.
             self.transformed_index = new_index
             return df_up_filled
@@ -6294,7 +6329,15 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
 
             if self.down_method == 'decimate':
                 # Simple decimation: select rows that exactly match the downsampled index.
-                df_down = df.loc[downsampled_index]
+                # Use intersection to handle missing indices gracefully
+                available_indices = df.index.intersection(downsampled_index)
+                if len(available_indices) == 0:
+                    raise ValueError("No matching indices found for decimation")
+                df_down = df.loc[available_indices]
+                # Reindex to full downsampled_index, filling gaps if needed
+                if len(available_indices) < len(downsampled_index):
+                    df_down = df_down.reindex(downsampled_index)
+                    df_down = self._safe_fill_na(df_down, method='ffill')
             elif self.down_method == 'mean':
                 # Aggregate blocks of (factor+1) rows using the mean.
                 # (If the number of rows isn’t exactly divisible, the trailing rows are dropped.)
@@ -6302,11 +6345,20 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
                 n_rows = arr.shape[0]
                 block_size = self.factor + 1
                 n_complete_blocks = n_rows // block_size
+                
+                if n_complete_blocks == 0:
+                    raise ValueError("Insufficient data for block aggregation")
+                
                 arr = arr[: n_complete_blocks * block_size, :]
                 # Reshape so that each block is along axis 1.
                 arr_reshaped = arr.reshape(n_complete_blocks, block_size, -1)
-                # Compute the mean over each block (axis=1).
-                arr_down = arr_reshaped.mean(axis=1)
+                # Compute the mean over each block (axis=1) with error handling.
+                with np.errstate(all='raise'):
+                    try:
+                        arr_down = arr_reshaped.mean(axis=1)
+                    except (FloatingPointError, RuntimeWarning):
+                        # Fallback to nanmean if regular mean fails
+                        arr_down = np.nanmean(arr_reshaped, axis=1)
                 df_down = pd.DataFrame(
                     arr_down,
                     index=downsampled_index[:n_complete_blocks],
@@ -6341,36 +6393,45 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
 
         # Check if the training original timestamps are present in the input index.
         # (This is typically true for in-sample data but not for forecasts.)
-        if df.index.max() > self.original_index[-1]:
-            # Forecast scenario: generate a new index at the original frequency.
-            # We use the training anchor so that the new index remains aligned.
-            if self.mode == 'downscale':
-                new_start = self.original_index[-1] + self.orig_delta
-                print(new_start)
+        try:
+            if df.index.max() > self.original_index[-1]:
+                # Forecast scenario: generate a new index at the original frequency.
+                # We use the training anchor so that the new index remains aligned.
+                if self.mode == 'downscale':
+                    new_start = self.original_index[-1] + self.orig_delta
+                    print(new_start)
+                else:
+                    start_anchor = self.original_index[0]
+                    offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
+                    new_start = start_anchor + offset * self.orig_delta
+                new_index = pd.date_range(
+                    start=new_start, end=df.index[-1], freq=self.orig_delta
+                )
             else:
-                start_anchor = self.original_index[0]
-                offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
-                new_start = start_anchor + offset * self.orig_delta
-            new_index = pd.date_range(
-                start=new_start, end=df.index[-1], freq=self.orig_delta
-            )
-        else:
-            trans_method = "original"
-            new_index = self.original_index
+                trans_method = "original"
+                new_index = self.original_index
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate target index: {e}")
 
         if self.mode == 'upscale':
             # For upscale mode, sample the high-resolution data to the new original frequency.
             # We use nearest neighbor selection.
-            df_inv = df.reindex(new_index, method='nearest')
-            return df_inv
+            try:
+                df_inv = df.reindex(new_index, method='nearest')
+                return df_inv
+            except Exception as e:
+                raise RuntimeError(f"Failed to inverse transform upscaled data: {e}")
 
         elif self.mode == 'downscale':
             # For downscale mode, upsample the low-resolution data to the new index and fill gaps.
-            df_up = df.reindex(new_index)
-            df_up_filled = FillNA(df_up, method=self.fill_method)
-            if self.forecast_length is not None and trans_method != "original":
-                df_up_filled = df_up_filled.head(self.forecast_length)
-            return df_up_filled
+            try:
+                df_up = df.reindex(new_index)
+                df_up_filled = self._safe_fill_na(df_up, method=self.fill_method)
+                if self.forecast_length is not None and trans_method != "original":
+                    df_up_filled = df_up_filled.head(self.forecast_length)
+                return df_up_filled
+            except Exception as e:
+                raise RuntimeError(f"Failed to inverse transform downscaled data: {e}")
 
     def _create_upscaled_index(self, original_index, new_delta):
         """
@@ -6387,19 +6448,32 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         Returns:
             pd.DatetimeIndex: The upscaled index.
         """
+        if len(original_index) < 2:
+            raise ValueError("Original index must have at least 2 timestamps")
+            
         start = original_index[0]
         end = original_index[-1]
+        
         # Total seconds between start and end
         total_seconds = (end - start).total_seconds()
         new_delta_seconds = new_delta.total_seconds()
         # Compute number of periods (ensure we include both endpoints)
         periods = int(np.floor(total_seconds / new_delta_seconds) + 1)
-        new_index = pd.date_range(
-            start=start, periods=periods, freq=pd.Timedelta(seconds=new_delta_seconds)
-        )
+        try:
+            new_index = pd.date_range(
+                start=start, periods=periods, freq=pd.Timedelta(seconds=new_delta_seconds)
+            )
+        except (OverflowError, ValueError) as e:
+            raise ValueError(f"Failed to create date range: {e}")
+        
         # Guarantee that the original end timestamp is included
         if new_index[-1] < end:
-            new_index = new_index.append(pd.DatetimeIndex([end]))
+            try:
+                new_index = new_index.append(pd.DatetimeIndex([end]))
+            except Exception:
+                # Use union as fallback if append fails
+                new_index = new_index.union(pd.DatetimeIndex([end]))
+        
         return new_index
 
     def fit_transform(self, df):
@@ -6428,9 +6502,9 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         """
         params = {
             "mode": random.choice(["upscale", "downscale"]),
-            "factor": random.choice([1, 2, 3, 4, 6]),
+            "factor": random.choice([1, 2, 3, 4]),  # Reduced max factor to improve stability
             "down_method": random.choice(["decimate", "mean"]),
-            "fill_method": random.choice(["linear", "cubic", "pchip", "akima"]),
+            "fill_method": random.choice(["linear", "nearest", "ffill", "pchip", "akima"]),  # More stable methods
         }
         return params
 

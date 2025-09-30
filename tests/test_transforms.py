@@ -6,7 +6,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer
+from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer
 
 class TestTransforms(unittest.TestCase):
     
@@ -362,3 +362,54 @@ class TestTransforms(unittest.TestCase):
         # Basic correctness checks
         self.assertEqual(inverse_transformed.shape, df.shape)
         self.assertEqual(iter_inverse.shape, df.shape)
+
+    def test_upscale_downscale_transformer_basic(self):
+        """Test UpscaleDownscaleTransformer basic functionality."""
+        # Create simple test data
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=20, freq='D')
+        df = pd.DataFrame({
+            'series1': np.random.randn(20).cumsum(),
+            'series2': np.random.randn(20).cumsum(),
+        }, index=dates)
+        
+        # Test get_new_params
+        transformer = UpscaleDownscaleTransformer()
+        params = transformer.get_new_params()
+        self.assertTrue(params)
+        self.assertIsInstance(params, dict)
+        self.assertIn('mode', params)
+        self.assertIn('factor', params)
+        
+        # Test upscale mode
+        upscale_transformer = UpscaleDownscaleTransformer(mode='upscale', factor=2)
+        upscale_transformer.fit(df)
+        upscaled = upscale_transformer.transform(df)
+        upscale_inverse = upscale_transformer.inverse_transform(upscaled)
+        
+        # Check basic properties
+        self.assertIsInstance(upscaled, pd.DataFrame)
+        self.assertIsInstance(upscale_inverse, pd.DataFrame)
+        self.assertGreater(upscaled.shape[0], df.shape[0])  # Should have more rows
+        self.assertEqual(upscaled.shape[1], df.shape[1])    # Same columns
+        self.assertEqual(upscale_inverse.shape[1], df.shape[1])  # Same columns after inverse
+        
+        # Test downscale mode
+        downscale_transformer = UpscaleDownscaleTransformer(mode='downscale', factor=2, down_method='mean')
+        downscale_transformer.fit(df)
+        downscaled = downscale_transformer.transform(df)
+        downscale_inverse = downscale_transformer.inverse_transform(downscaled)
+        
+        # Check basic properties
+        self.assertIsInstance(downscaled, pd.DataFrame)
+        self.assertIsInstance(downscale_inverse, pd.DataFrame)
+        self.assertLess(downscaled.shape[0], df.shape[0])    # Should have fewer rows
+        self.assertEqual(downscaled.shape[1], df.shape[1])   # Same columns
+        self.assertEqual(downscale_inverse.shape[1], df.shape[1])  # Same columns after inverse
+        
+        # Test error handling with invalid input
+        with self.assertRaises(ValueError):
+            UpscaleDownscaleTransformer(mode='invalid_mode')
+        
+        with self.assertRaises(ValueError):
+            UpscaleDownscaleTransformer(factor=0)
