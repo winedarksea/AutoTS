@@ -15,6 +15,8 @@ from autots.datasets import (
     load_linear,
     load_artificial,
     load_sine,
+    SyntheticDailyGenerator,
+    generate_synthetic_daily_data,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -56,4 +58,6 @@ __all__ = [
     'Cassandra',
     'infer_frequency',
     'ModelPrediction',
+    'SyntheticDailyGenerator',
+    'generate_synthetic_daily_data',
 ]

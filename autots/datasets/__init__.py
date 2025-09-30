@@ -15,6 +15,10 @@ from autots.datasets._base import (
     load_sine,
     load_artificial,
 )
+from autots.datasets.synthetic import (
+    SyntheticDailyGenerator,
+    generate_synthetic_daily_data,
+)
 
 __all__ = [
     'load_daily',
@@ -28,4 +32,6 @@ __all__ = [
     'load_linear',
     'load_sine',
     'load_artificial',
+    'SyntheticDailyGenerator',
+    'generate_synthetic_daily_data',
 ]
