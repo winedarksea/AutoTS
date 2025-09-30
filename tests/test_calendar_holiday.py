@@ -124,6 +124,7 @@ class TestCalendar(unittest.TestCase):
         print("Starting test_chinese_lunar_new_year")
         # Test known Lunar New Year dates (historically accurate)
         known_lunar_new_years = {
+            "2026-02-17": "Lunar New Year 2026",
             "2025-01-29": "Lunar New Year 2025",
             "2024-02-10": "Lunar New Year 2024",
             "2023-01-22": "Lunar New Year 2023",

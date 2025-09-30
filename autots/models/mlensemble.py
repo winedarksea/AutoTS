@@ -93,7 +93,7 @@ def create_feature(
         elif model_name in all_result_path:
             result_windows = extract_result_windows(forecasts, model_name=model_name)
     
-    # Align all DataFrames to have consistent columns before stacking
+    # Align all DataFrames to have consistent columns before stacking, due to expanding transformers
     target_columns = df_train.columns
     aligned_res = []
     for df in res:
