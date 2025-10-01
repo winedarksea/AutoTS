@@ -447,7 +447,9 @@ class TestTransforms(unittest.TestCase):
         self.assertIn('factor', params)
         
         # Test upscale mode
-        upscale_transformer = UpscaleDownscaleTransformer(mode='upscale', factor=2)
+        upscale_transformer = UpscaleDownscaleTransformer(
+            mode='upscale', factor=2, forecast_length=5
+        )
         upscale_transformer.fit(df)
         upscaled = upscale_transformer.transform(df)
         upscale_inverse = upscale_transformer.inverse_transform(upscaled)
@@ -458,6 +460,26 @@ class TestTransforms(unittest.TestCase):
         self.assertGreater(upscaled.shape[0], df.shape[0])  # Should have more rows
         self.assertEqual(upscaled.shape[1], df.shape[1])    # Same columns
         self.assertEqual(upscale_inverse.shape[1], df.shape[1])  # Same columns after inverse
+
+        # Forecast inversion should return the requested forecast length at original frequency
+        future_index = pd.date_range(
+            upscaled.index[-1] + upscale_transformer.new_delta,
+            periods=upscale_transformer.block_size * upscale_transformer.forecast_length,
+            freq=upscale_transformer.new_delta,
+        )
+        forecast_values = pd.DataFrame(
+            np.random.randn(len(future_index), df.shape[1]),
+            index=future_index,
+            columns=df.columns,
+        )
+        upscale_forecast_inverse = upscale_transformer.inverse_transform(forecast_values)
+        self.assertEqual(
+            upscale_forecast_inverse.shape[0], upscale_transformer.forecast_length
+        )
+        self.assertEqual(
+            upscale_forecast_inverse.index[0],
+            df.index[-1] + upscale_transformer.orig_delta,
+        )
         
         # Test downscale mode
         downscale_transformer = UpscaleDownscaleTransformer(mode='downscale', factor=2, down_method='mean')
@@ -471,6 +493,29 @@ class TestTransforms(unittest.TestCase):
         self.assertLess(downscaled.shape[0], df.shape[0])    # Should have fewer rows
         self.assertEqual(downscaled.shape[1], df.shape[1])   # Same columns
         self.assertEqual(downscale_inverse.shape[1], df.shape[1])  # Same columns after inverse
+
+        # Test downscale forecast inversion without forecast_length specified
+        # This tests the fix for the downscale forecast truncation issue
+        # In downscale mode, forecasts are at the ORIGINAL (low) frequency
+        future_index = pd.date_range(
+            downscaled.index[-1] + downscale_transformer.orig_delta,
+            periods=5,  # 5 low-frequency forecast periods
+            freq=downscale_transformer.orig_delta,
+        )
+        forecast_values = pd.DataFrame(
+            np.random.randn(len(future_index), df.shape[1]),
+            index=future_index,
+            columns=df.columns,
+        )
+        downscale_forecast_inverse = downscale_transformer.inverse_transform(forecast_values)
+        # Should have 5 * block_size = 5 * 3 = 15 high-frequency rows after upsampling
+        expected_rows = len(forecast_values) * downscale_transformer.block_size
+        self.assertEqual(downscale_forecast_inverse.shape[0], expected_rows)
+        # First timestamp should be one original delta after last training timestamp
+        self.assertEqual(
+            downscale_forecast_inverse.index[0],
+            df.index[-1] + downscale_transformer.orig_delta,
+        )
         
         # Test error handling with invalid input
         with self.assertRaises(ValueError):
