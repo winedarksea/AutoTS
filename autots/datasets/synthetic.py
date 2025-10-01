@@ -338,9 +338,11 @@ class SyntheticDailyGenerator:
             if min_signal <= 0:
                 base_signal = base_signal - min_signal + scale * 10
             
-            # Convert additive seasonality to multiplicative factor
-            # Scale seasonality to be a percentage change
-            seasonality_factor = seasonality / (scale * 50)  # Normalize by typical signal strength
+            # Convert additive seasonality to a multiplicative factor.
+            # The seasonality component should be a percentage of the base signal.
+            # Avoid division by zero for flat trend sections.
+            safe_base_signal = np.where(base_signal == 0, 1, base_signal)
+            seasonality_factor = seasonality / safe_base_signal
             
             series_data = (
                 base_signal * (1 + seasonality_factor) + 
