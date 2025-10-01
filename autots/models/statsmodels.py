@@ -2130,7 +2130,10 @@ class Theta(ModelObject):
             'use_test': random.choices([True, False], [0.4, 0.2])[0],
             'method': "auto",
             'period': period,
-            'theta': random.choice([1.2, 1.4, 1.6, 2, 2.5, 3, 4]),
+            'theta': random.choices(
+                [1.0, 1.1, 1.2, 1.3, 1.4, 1.6, 2.0, 2.5, 3.0, 4.0],
+                [0.1, 0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+            )[0],
             'use_mle': random.choices([True, False], [0.0001, 0.99])[0],
         }
 

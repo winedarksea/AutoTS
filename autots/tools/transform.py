@@ -1716,7 +1716,8 @@ class ClipOutliers(EmptyTransformer):
             if method_c == "remove":
                 fillna_c = random.choice(["ffill", "mean", "rolling_mean_24"])
         choice = random.choices(
-            [1, 2, 3, 3.5, 4, 4.5, 5], [0.1, 0.2, 0.2, 0.2, 0.4, 0.1, 0.1], k=1
+            [1, 2, 3, 3.25, 3.5, 3.75, 4, 4.5, 5],
+            [0.1, 0.2, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.1], k=1
         )[0]
         return {
             "method": method_c,
