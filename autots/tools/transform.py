@@ -6265,6 +6265,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             raise ValueError("factor must be at least 1")
         self.mode = mode
         self.factor = factor
+        self.block_size = self.factor + 1
         self.down_method = down_method
         self.fill_method = fill_method
         self.forecast_length = forecast_length
@@ -6288,7 +6289,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
 
         # When upscaling: we will insert self.factor additional rows per original interval.
         # (factor + 1) points will now represent the same interval.
-        self.new_delta = self.orig_delta / (self.factor + 1)
+        self.new_delta = self.orig_delta / self.block_size
         return self
 
     def _safe_fill_na(self, df, method='linear'):
@@ -6357,7 +6358,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         elif self.mode == 'downscale':
             # In downscale mode, we expect the input df to be high-resolution.
             # Compute a downsampled index: select every (factor+1)-th timestamp from the original.
-            downsampled_index = self.original_index[:: (self.factor + 1)]
+            downsampled_index = self.original_index[:: self.block_size]
 
             if self.down_method == 'decimate':
                 # Simple decimation: select rows that exactly match the downsampled index.
@@ -6375,7 +6376,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
                 # (If the number of rows isn’t exactly divisible, the trailing rows are dropped.)
                 arr = df.to_numpy()
                 n_rows = arr.shape[0]
-                block_size = self.factor + 1
+                block_size = self.block_size
                 n_complete_blocks = n_rows // block_size
                 
                 if n_complete_blocks == 0:
@@ -6428,16 +6429,18 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         try:
             if df.index.max() > self.original_index[-1]:
                 # Forecast scenario: generate a new index at the original frequency.
-                # We use the training anchor so that the new index remains aligned.
-                if self.mode == 'downscale':
-                    new_start = self.original_index[-1] + self.orig_delta
-                    print(new_start)
+                # Start one original delta after the last training timestamp.
+                new_start = self.original_index[-1] + self.orig_delta
+                if self.forecast_length is not None:
+                    periods = self.forecast_length
                 else:
-                    start_anchor = self.original_index[0]
-                    offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
-                    new_start = start_anchor + offset * self.orig_delta
+                    if self.mode == 'upscale':
+                        periods = int(np.ceil(len(df) / self.block_size))
+                    else:
+                        periods = len(df)
+                    periods = max(periods, 1)
                 new_index = pd.date_range(
-                    start=new_start, end=df.index[-1], freq=self.orig_delta
+                    start=new_start, periods=periods, freq=self.orig_delta
                 )
             else:
                 trans_method = "original"
@@ -6450,6 +6453,8 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             # We use nearest neighbor selection.
             try:
                 df_inv = df.reindex(new_index, method='nearest')
+                if self.forecast_length is not None and trans_method != "original":
+                    df_inv = df_inv.iloc[: self.forecast_length]
                 return df_inv
             except Exception as e:
                 raise RuntimeError(f"Failed to inverse transform upscaled data: {e}")
