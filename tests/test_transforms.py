@@ -6,7 +6,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer
+from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer, MeanPercentSplitter
 
 class TestTransforms(unittest.TestCase):
     
@@ -41,6 +41,71 @@ class TestTransforms(unittest.TestCase):
         
         self.assertCountEqual(transformed.index.tolist(), df.index.tolist())
         self.assertCountEqual(transformed.columns.tolist(), df.columns.tolist())
+
+    def test_mean_percent_splitter(self):
+        """Test MeanPercentSplitter transformer for intermittent demand forecasting."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series1': np.random.randn(100).cumsum() + 100,
+            'series2': np.random.randn(100).cumsum() + 50,
+            'series3': np.random.randn(100).cumsum() + 75,
+        }, index=dates)
+        
+        # Test get_new_params
+        transformer = MeanPercentSplitter()
+        params = transformer.get_new_params()
+        self.assertTrue(params)
+        self.assertIsInstance(params, dict)
+        self.assertIn('window', params)
+        
+        # Test basic fit/transform/inverse with fixed window
+        transformer = MeanPercentSplitter(window=10)
+        transformer.fit(df)
+        transformed = transformer.transform(df)
+        reconstructed = transformer.inverse_transform(transformed)
+        
+        # Check shapes
+        self.assertEqual(transformed.shape[0], df.shape[0])
+        self.assertEqual(transformed.shape[1], df.shape[1] * 2)  # mean + percentage for each column
+        self.assertEqual(reconstructed.shape, df.shape)
+        
+        # Check reconstruction accuracy
+        self.assertTrue(np.allclose(df.values, reconstructed.values, atol=1e-10))
+        
+        # Test that original df is not modified
+        df_copy = df.copy()
+        transformer.fit(df_copy)
+        transformed_copy = transformer.transform(df_copy)
+        pd.testing.assert_frame_equal(df, df_copy)
+        
+        # Test forecast_length mode
+        forecast_len = 10
+        transformer_fl = MeanPercentSplitter(window='forecast_length', forecast_length=forecast_len)
+        transformer_fl.fit(df)
+        transformed_fl = transformer_fl.transform(df)
+        
+        # Create forecast data
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=forecast_len, freq='D')
+        forecast_transformed = pd.DataFrame({
+            'series1_Xmean': np.ones(forecast_len) * 100,
+            'series1_Xpercentage': np.ones(forecast_len) * 1.05,
+            'series2_Xmean': np.ones(forecast_len) * 50,
+            'series2_Xpercentage': np.ones(forecast_len) * 0.95,
+            'series3_Xmean': np.ones(forecast_len) * 75,
+            'series3_Xpercentage': np.ones(forecast_len) * 1.0,
+        }, index=forecast_dates)
+        
+        forecast_reconstructed = transformer_fl.inverse_transform(forecast_transformed)
+        self.assertEqual(forecast_reconstructed.shape[0], forecast_len)
+        self.assertEqual(forecast_reconstructed.shape[1], df.shape[1])
+        self.assertTrue(forecast_reconstructed.index.min() > df.index.max())
+        
+        # Test column naming convention
+        expected_mean_cols = [f"{col}_Xmean" for col in df.columns]
+        expected_pct_cols = [f"{col}_Xpercentage" for col in df.columns]
+        expected_cols = expected_mean_cols + expected_pct_cols
+        self.assertCountEqual(transformed.columns.tolist(), expected_cols)
 
     def test_cointegration_transformer(self):
         from autots.tools.transform import CointegrationTransformer

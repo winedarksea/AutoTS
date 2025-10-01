@@ -4886,9 +4886,9 @@ class ReplaceConstant(EmptyTransformer):
                     'akima',
                     'mean',
                     'ffill',
-                    "SeasonalityMotifImputer1K",
+                    # "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.0001],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2],
             )[0],
         }
 
@@ -6114,23 +6114,28 @@ class MeanPercentSplitter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): Input DataFrame with pd.DatetimeIndex.
         """
-        if self.window == "forecast_length":
-            window_size = self.forecast_length
-        else:
-            window_size = int(self.window)
-
-        rolling_means = df.rolling(window=window_size, min_periods=1).mean()
-        percentages = df / rolling_means.replace(0, 1)
-
-        # Rename columns to distinguish between means and percentages
-        # the X in there is to try to assure uniqueness from input column names
+        # Use pre-computed window_size from fit()
+        rolling_means = df.rolling(window=self.window_size, min_periods=1).mean()
+        
+        # Avoid .replace() by using np.where for better performance
+        # Use .copy() to ensure we don't modify the original dataframe's memory
+        rolling_means_values = rolling_means.to_numpy().copy()
+        df_values = df.to_numpy().copy()
+        percentages_values = np.where(rolling_means_values != 0, df_values / rolling_means_values, df_values)
+        
+        # Create column names more efficiently
         mean_cols = [f"{col}_Xmean" for col in df.columns]
         percentage_cols = [f"{col}_Xpercentage" for col in df.columns]
-
-        rolling_means.columns = mean_cols
-        percentages.columns = percentage_cols
-
-        return pd.concat([rolling_means, percentages], axis=1)
+        
+        # Build result directly from numpy arrays to avoid intermediate DataFrames
+        all_cols = mean_cols + percentage_cols
+        result = pd.DataFrame(
+            np.column_stack([rolling_means_values, percentages_values]),
+            index=df.index,
+            columns=all_cols
+        )
+        
+        return result
 
     def inverse_transform(self, df):
         """Inverse transform the data back to original space.
@@ -6138,13 +6143,15 @@ class MeanPercentSplitter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): Transformed DataFrame with rolling means and percentages.
         """
-        mean_cols = [f"{col}_Xmean" for col in self.columns]
-        percentage_cols = [f"{col}_Xpercentage" for col in self.columns]
-
-        rolling_means = df[mean_cols]
-        percentages = df[percentage_cols]
-
-        original_values = rolling_means.to_numpy() * percentages.to_numpy()
+        # Extract values directly as numpy arrays to avoid intermediate DataFrame operations
+        # Use .copy() to ensure we don't modify the input dataframe's memory
+        n_cols = len(self.columns)
+        all_values = df.to_numpy().copy()
+        rolling_means_values = all_values[:, :n_cols]
+        percentages_values = all_values[:, n_cols:]
+        
+        # Direct multiplication on numpy arrays (creates a new array)
+        original_values = rolling_means_values * percentages_values
 
         original_df = pd.DataFrame(
             original_values, index=df.index, columns=self.columns
@@ -6159,15 +6166,15 @@ class MeanPercentSplitter(EmptyTransformer):
                 # so that the mean of the inverse transformed components for each time series is equal to that final rolling mean value.
 
                 # Compute mean of the inverse transformed components for each time series
-                mean_values = original_df.mean()
+                mean_values = original_values.mean(axis=0)
 
-                # Compute normalization factor
-                finale = rolling_means.iloc[-1, :]
-                finale.index = self.columns
-                normalization_factor = finale / mean_values.replace(0, 1)
+                # Compute normalization factor using the last row of rolling means
+                finale = rolling_means_values[-1, :]
+                # Avoid division by zero
+                normalization_factor = np.where(mean_values != 0, finale / mean_values, 1.0)
 
                 # Multiply original_df by normalization_factor
-                original_df = original_df.multiply(normalization_factor, axis=1)
+                original_df = original_df * normalization_factor
 
         return original_df
 
@@ -7814,7 +7821,7 @@ na_probs = {
     "interpolate": 0.4,
     "KNNImputer": 0.02,  # can get a bit slow
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
-    "SeasonalityMotifImputer": 0.005,  # apparently this is too memory hungry at scale
+    # "SeasonalityMotifImputer": 0.005,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputerLinMix": 0.005,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputer1K": 0.005,  # apparently this is too memory hungry at scale
     "DatepartRegressionImputer": 0.01,  # also slow
@@ -7941,7 +7948,7 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         # throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
         # throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
+        # throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
     # in addition to the above, also remove
     if superfast_params:
