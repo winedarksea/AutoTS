@@ -291,8 +291,8 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return df_knn
 
     elif method == 'SeasonalityMotifImputer':
-        s_imputer = SeasonalityMotifImputer(
-            k=3,
+        # Use SimpleSeasonalityMotifImputer to avoid memory explosion
+        s_imputer = SimpleSeasonalityMotifImputer(
             datepart_method="common_fourier",
             distance_metric="canberra",
             linear_mixed=False,
