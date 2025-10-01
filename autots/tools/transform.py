@@ -6074,16 +6074,28 @@ class ChangepointDetrend(Detrend):
 
 class MeanPercentSplitter(EmptyTransformer):
     """Splits data into rolling means and percentages. Designed to help with intermittent demand forecasting.
+    
+    The transformer separates the level (rolling mean) from the relative magnitude (percentage).
+    This can help models better predict intermittent patterns by learning the baseline level
+    separately from the spikes/variations around that level.
+    
+    For truly intermittent data with many zeros, the percentage becomes the actual value when
+    the rolling mean is zero, which preserves information but loses the percentage interpretation.
+    Consider using CenterSplit transformer for explicit zero-handling or ReplaceConstant for
+    more sophisticated intermittent demand modeling.
 
     Args:
         window (int or str): Rolling window size. If 'forecast_length', uses forecast_length as window.
         forecast_length (int): The forecast length to use if window == 'forecast_length'.
+        min_mean_threshold (float): Minimum mean value to avoid division issues. When rolling mean
+            is below this threshold, percentage will be set to the original value. Default 1e-10.
     """
 
-    def __init__(self, window=10, forecast_length=None, **kwargs):
+    def __init__(self, window=10, forecast_length=None, min_mean_threshold=1e-10, **kwargs):
         super().__init__(name="MeanPercentSplitter")
         self.window = window
         self.forecast_length = forecast_length
+        self.min_mean_threshold = min_mean_threshold
 
     def fit(self, df):
         """Fit the transformer to the data.
@@ -6117,11 +6129,22 @@ class MeanPercentSplitter(EmptyTransformer):
         # Use pre-computed window_size from fit()
         rolling_means = df.rolling(window=self.window_size, min_periods=1).mean()
         
-        # Avoid .replace() by using np.where for better performance
         # Use .copy() to ensure we don't modify the original dataframe's memory
         rolling_means_values = rolling_means.to_numpy().copy()
         df_values = df.to_numpy().copy()
-        percentages_values = np.where(rolling_means_values != 0, df_values / rolling_means_values, df_values)
+        
+        # Calculate percentages, handling near-zero means more explicitly
+        # When mean is very small (below threshold), use a safe fallback
+        # This avoids extreme percentages while preserving information
+        with np.errstate(divide='ignore', invalid='ignore'):
+            percentages_values = np.where(
+                np.abs(rolling_means_values) >= self.min_mean_threshold,
+                df_values / rolling_means_values,
+                df_values  # When mean ≈ 0, store actual value (essentially percentage of 1)
+            )
+        
+        # Handle any remaining NaN or Inf values that might slip through
+        percentages_values = np.nan_to_num(percentages_values, nan=1.0, posinf=1.0, neginf=1.0)
         
         # Create column names more efficiently
         mean_cols = [f"{col}_Xmean" for col in df.columns]
@@ -6192,6 +6215,7 @@ class MeanPercentSplitter(EmptyTransformer):
         """Generate new random parameters"""
         params = {
             "window": random.choice([3, 7, 10, 24, "forecast_length"]),
+            "min_mean_threshold": random.choice([1e-10, 1e-6, 1e-3, 0.01, 0.1]),
         }
         return params
 
