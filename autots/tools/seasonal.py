@@ -1887,7 +1887,7 @@ class ChangePointDetector(object):
         
         return changepoint_features
     
-    def get_new_params(self):
+    def get_new_params(self, method="random"):
         """Generate new random parameters for changepoint detection."""
         method_options = ['pelt', 'l1_fused_lasso', 'l1_total_variation', 'composite_fused_lasso']
         

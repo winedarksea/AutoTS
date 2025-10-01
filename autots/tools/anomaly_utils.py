@@ -55,7 +55,7 @@ except Exception:
 
 def sk_outliers(df, method, method_params={}):
     """scikit-learn outlier methods wrapper."""
-    if method == "IsolationForest":
+    if method in ["IsolationForest", "isolation_forest"]:
         model = IsolationForest(n_jobs=1, **method_params)  # n_estimators=200
         res = model.fit_predict(df)
         scores = model.decision_function(df)
@@ -755,7 +755,7 @@ def detect_anomalies(
         df_anomaly = model.fit_transform(df_anomaly)
     """
 
-    if method in ["IsolationForest", "LOF", "EE", "OneClassSVM", "GaussianMixture"]:
+    if method in ["IsolationForest", "LOF", "EE", "OneClassSVM", "GaussianMixture", "isolation_forest"]:
         if output == "univariate":
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
