@@ -1821,7 +1821,7 @@ class SyntheticDailyGenerator:
         
         # Mark seasonality changepoints
         for date, description in labels['seasonality_changepoints']:
-            ax.axvline(date, color='orange', alpha=0.4, linestyle='-.', linewidth=1.5)
+            ax.axvline(date, color='darkcyan', alpha=0.4, linestyle='-.', linewidth=1.5)
         
         ax.set_title('Full Time Series with Labeled Events', fontsize=12, fontweight='bold')
         ax.set_ylabel('Value', fontsize=10)
@@ -1835,7 +1835,7 @@ class SyntheticDailyGenerator:
             Line2D([0], [0], color='green', linestyle='-', linewidth=2, label='Trend Changes'),
             Line2D([0], [0], color='purple', linestyle=':', linewidth=2, label='Level Shifts'),
             Line2D([0], [0], color='goldenrod', linestyle='-.', linewidth=2, label='Holidays'),
-            Line2D([0], [0], color='orange', linestyle='-.', linewidth=2, label='Season Changes'),
+            Line2D([0], [0], color='darkcyan', linestyle='-.', linewidth=2, label='Seasonality Shift'),
         ]
         ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
         
