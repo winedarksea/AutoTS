@@ -6268,6 +6268,9 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         self.down_method = down_method
         self.fill_method = fill_method
         self.forecast_length = forecast_length
+        # cached values for easier reuse during inverse transforms
+        self._block_size = self.factor + 1
+        self.transformed_index = None
 
     def fit(self, df):
         """
@@ -6288,7 +6291,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
 
         # When upscaling: we will insert self.factor additional rows per original interval.
         # (factor + 1) points will now represent the same interval.
-        self.new_delta = self.orig_delta / (self.factor + 1)
+        self.new_delta = self.orig_delta / self._block_size
         return self
 
     def _safe_fill_na(self, df, method='linear'):
@@ -6423,33 +6426,54 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         if not hasattr(self, 'transformed_index'):
             raise RuntimeError("Transformer has not been fitted/transformed properly.")
 
-        # Check if the training original timestamps are present in the input index.
-        # (This is typically true for in-sample data but not for forecasts.)
+        transformed_len = len(self.transformed_index) if self.transformed_index is not None else 0
+        if transformed_len == 0:
+            transformed_end = self.original_index[-1]
+        else:
+            transformed_end = self.transformed_index[-1]
+
+        # Determine whether this inverse call is acting on a forecast horizon.
+        is_forecast = False
         try:
-            if df.index.max() > self.original_index[-1]:
-                # Forecast scenario: generate a new index at the original frequency.
-                # We use the training anchor so that the new index remains aligned.
-                if self.mode == 'downscale':
-                    new_start = self.original_index[-1] + self.orig_delta
-                    print(new_start)
-                else:
-                    start_anchor = self.original_index[0]
-                    offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
-                    new_start = start_anchor + offset * self.orig_delta
+            if df.index.max() > transformed_end:
+                is_forecast = True
+        except Exception:
+            # If index comparison fails (e.g., non datetime index), fall back on
+            # comparing lengths. Forecast outputs will almost never match the
+            # training transformed length exactly.
+            pass
+        if not is_forecast and transformed_len and df.shape[0] != transformed_len:
+            is_forecast = True
+
+        if not is_forecast:
+            trans_method = "original"
+            new_index = self.original_index
+        else:
+            # Forecast scenario: generate a target index at the original frequency
+            # covering the requested forecast horizon. If forecast_length is not
+            # provided fall back to the available data length.
+            target_length = (
+                self.forecast_length if self.forecast_length else df.shape[0]
+            )
+            if target_length < 1:
+                target_length = df.shape[0]
+            try:
+                forecast_start = self.original_index[-1] + self.orig_delta
                 new_index = pd.date_range(
-                    start=new_start, end=df.index[-1], freq=self.orig_delta
+                    start=forecast_start,
+                    periods=int(target_length),
+                    freq=self.orig_delta,
                 )
-            else:
-                trans_method = "original"
-                new_index = self.original_index
-        except Exception as e:
-            raise RuntimeError(f"Failed to generate target index: {e}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to generate forecast index: {e}")
 
         if self.mode == 'upscale':
             # For upscale mode, sample the high-resolution data to the new original frequency.
             # We use nearest neighbor selection.
             try:
                 df_inv = df.reindex(new_index, method='nearest')
+                if is_forecast and self.forecast_length is not None:
+                    df_inv = df_inv.head(self.forecast_length)
                 return df_inv
             except Exception as e:
                 raise RuntimeError(f"Failed to inverse transform upscaled data: {e}")
@@ -6459,7 +6483,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             try:
                 df_up = df.reindex(new_index)
                 df_up_filled = self._safe_fill_na(df_up, method=self.fill_method)
-                if self.forecast_length is not None and trans_method != "original":
+                if self.forecast_length is not None and is_forecast:
                     df_up_filled = df_up_filled.head(self.forecast_length)
                 return df_up_filled
             except Exception as e:

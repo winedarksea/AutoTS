@@ -478,3 +478,41 @@ class TestTransforms(unittest.TestCase):
         
         with self.assertRaises(ValueError):
             UpscaleDownscaleTransformer(factor=0)
+
+    def test_upscale_inverse_forecast_length(self):
+        """Ensure upscale inverse returns the requested forecast length."""
+        np.random.seed(0)
+        dates = pd.date_range('2021-01-01', periods=6, freq='D')
+        df = pd.DataFrame(
+            {
+                'series1': np.random.randn(6),
+                'series2': np.random.randn(6),
+            },
+            index=dates,
+        )
+
+        forecast_length = 4
+        transformer = UpscaleDownscaleTransformer(
+            mode='upscale', factor=2, fill_method='linear', forecast_length=forecast_length
+        )
+        transformer.fit(df)
+        # establish transformed index information
+        transformer.transform(df)
+
+        new_delta = transformer.new_delta
+        block_size = transformer.factor + 1
+        future_index = pd.date_range(
+            start=transformer.transformed_index[-1] + new_delta,
+            periods=forecast_length * block_size,
+            freq=new_delta,
+        )
+        data = np.arange(len(future_index) * df.shape[1]).reshape(
+            len(future_index), df.shape[1]
+        )
+        df_future = pd.DataFrame(data, index=future_index, columns=df.columns)
+
+        inverse_forecast = transformer.inverse_transform(df_future)
+
+        self.assertEqual(inverse_forecast.shape[0], forecast_length)
+        expected = data[block_size - 1 :: block_size][:forecast_length]
+        np.testing.assert_array_equal(inverse_forecast.to_numpy(), expected)
