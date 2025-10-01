@@ -6437,7 +6437,9 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
                     if self.mode == 'upscale':
                         periods = int(np.ceil(len(df) / self.block_size))
                     else:
-                        periods = len(df)
+                        # In downscale mode, df is at reduced frequency, so we need
+                        # len(df) * block_size periods at original frequency
+                        periods = len(df) * self.block_size
                     periods = max(periods, 1)
                 new_index = pd.date_range(
                     start=new_start, periods=periods, freq=self.orig_delta
