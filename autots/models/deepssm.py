@@ -165,12 +165,13 @@ class QuantileLoss(Module):
         # Convert Gaussian params to quantiles
         sigma = torch.clamp(sigma, min=1e-6)
         losses = []
+        q_tensor = torch.tensor(self.quantiles, device=mu.device, dtype=mu.dtype)
         for q in self.quantiles:
             # Convert quantile to standard normal quantile
-            z_q = torch.erfinv(2 * q - 1) * np.sqrt(2)
+            z_q = torch.erfinv(torch.tensor(2 * q - 1, device=mu.device, dtype=mu.dtype)) * np.sqrt(2)
             q_pred = mu + sigma * z_q
             error = y_true - q_pred
-            loss_q = torch.max(q * error, (q - 1) * error)
+            loss_q = torch.max(torch.tensor(q, device=mu.device, dtype=mu.dtype) * error, (torch.tensor(q, device=mu.device, dtype=mu.dtype) - 1) * error)
             losses.append(loss_q)
         return torch.stack(losses).mean()
 
