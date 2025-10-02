@@ -121,13 +121,13 @@ def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):
 
 def new_kalman_params(method=None, allow_auto=True):
     if method in ['fast']:
-        em_iter = random.choices([None, 10], [0.8, 0.2])[0]
+        em_iter = random.choices([None, 5, 10], [0.8, 0.2, 0.1])[0]
     elif method == "superfast":
         em_iter = None
     elif method == "deep":
         em_iter = random.choices([None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1])[0]
     else:
-        em_iter = random.choices([None, 10, 30], [0.3, 0.7, 0.1])[0]
+        em_iter = random.choices([None, 5, 10,], [0.3, 0.7, 0.1])[0]
 
     def finalize(params_dict):
         params_dict['em_iter'] = em_iter

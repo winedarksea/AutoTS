@@ -2493,6 +2493,7 @@ class KalmanStateSpace(ModelObject):
             "process_noise": self.process_noise,
             "observation_model": self.observation_model,
             "observation_noise": self.observation_noise,
+            "em_iter": self.em_iter,
             "subset": self.subset,
         }
 

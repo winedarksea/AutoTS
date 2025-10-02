@@ -742,9 +742,15 @@ class KalmanFilter(object):
         return res.reshape((n_vars, n_obs, n_obs))
 
     def em(
-        self, data, n_iter=5, initial_value=None, initial_covariance=None, verbose=False
+        self,
+        data,
+        n_iter=5,
+        initial_value=None,
+        initial_covariance=None,
+        verbose=False,
+        tol=None,
     ):
-        if n_iter <= 0:
+        if n_iter is None or n_iter <= 0:
             return self
 
         data = ensure_matrix(data)
@@ -757,43 +763,63 @@ class KalmanFilter(object):
         if initial_value is None:
             initial_value = np.zeros((n_vars, n_states, 1))
 
-        if verbose:
-            print("--- EM algorithm %d iteration(s) to go" % n_iter)
-            print(" * E step")
+        current_model = self
+        remaining = int(n_iter)
 
-        e_step = self.compute(
-            data,
-            n_test=0,
-            initial_value=initial_value,
-            initial_covariance=initial_covariance,
-            smoothed=True,
-            filtered=False,
-            states=True,
-            observations=True,
-            covariances=True,
-            likelihoods=False,
-            gains=True,
-            log_likelihood=False,
-            verbose=verbose,
-        )
+        while remaining > 0:
+            if verbose:
+                print(f"--- EM iteration {n_iter - remaining + 1} / {n_iter}")
+                print(" * E step")
 
-        if verbose:
-            print(" * M step")
+            e_step = current_model.compute(
+                data,
+                n_test=0,
+                initial_value=initial_value,
+                initial_covariance=initial_covariance,
+                smoothed=True,
+                filtered=False,
+                states=True,
+                observations=False,
+                covariances=True,
+                likelihoods=False,
+                gains=True,
+                log_likelihood=False,
+                verbose=verbose,
+            )
 
-        process_noise = self.em_process_noise(e_step, verbose=verbose)
-        observation_noise = self.em_observation_noise(e_step, data, verbose=verbose)
-        initial_value, initial_covariance = em_initial_state(e_step, initial_value)
+            if verbose:
+                print(" * M step")
 
-        new_model = KalmanFilter(
-            self.state_transition,
-            process_noise,
-            self.observation_model,
-            observation_noise,
-        )
+            process_noise = current_model.em_process_noise(e_step, verbose=verbose)
+            observation_noise = current_model.em_observation_noise(
+                e_step, data, verbose=verbose
+            )
+            initial_value, initial_covariance = em_initial_state(
+                e_step, initial_value
+            )
 
-        return new_model.em(
-            data, n_iter - 1, initial_value, initial_covariance, verbose
-        )
+            new_model = KalmanFilter(
+                current_model.state_transition,
+                process_noise,
+                current_model.observation_model,
+                observation_noise,
+            )
+
+            if tol is not None:
+                delta_q = np.max(
+                    np.abs(process_noise - current_model.process_noise)
+                )
+                delta_r = np.max(
+                    np.abs(observation_noise - current_model.observation_noise)
+                )
+                if max(delta_q, delta_r) <= tol:
+                    current_model = new_model
+                    break
+
+            current_model = new_model
+            remaining -= 1
+
+        return current_model
 
 
 def em_initial_state(result, initial_means):
