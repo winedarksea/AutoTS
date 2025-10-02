@@ -27,7 +27,8 @@ from autots.tools.window_functions import (
     chunk_reshape,
 )
 from autots.tools.percentile import nan_quantile, trimmed_mean
-from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
+from autots.tools.fast_kalman import KalmanFilter
+from autots.tools.fast_kalman_params import new_kalman_params
 from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,

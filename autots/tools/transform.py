@@ -31,7 +31,8 @@ from autots.tools.anomaly_utils import (
     dates_to_holidays,
 )
 from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
-from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
+from autots.tools.fast_kalman import KalmanFilter
+from autots.tools.fast_kalman_params import new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
 from autots.tools.fft import FFT as fft_class
