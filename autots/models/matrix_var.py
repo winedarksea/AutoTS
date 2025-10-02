@@ -384,14 +384,33 @@ def update_cg(var, r, q, Aq, rold):
     return var, r, q, rnew
 
 
-def ell_w(ind, W, X, rho):
-    return X @ ((W.T @ X) * ind).T + rho * W
+def ell_w(ind, W, X, rho, wxt=None):
+    """Helper for the TMF solver returning the gradient with respect to W.
+
+    Parameters
+    ----------
+    ind : ndarray
+        Boolean mask identifying observed entries.
+    W, X : ndarray
+        Current factor matrices.
+    rho : float
+        Regularisation strength.
+    wxt : ndarray, optional
+        Pre-computed value of ``W.T @ X`` to avoid recomputation when the
+        caller already has it available.
+    """
+
+    if wxt is None:
+        wxt = W.T @ X
+    return X @ (np.multiply(wxt, ind).T) + rho * W
 
 
 def conj_grad_w(sparse_mat, ind, W, X, rho, maxiter=5):
     rank, dim1 = W.shape
     w = np.reshape(W, -1, order="F")
-    r = np.reshape(X @ sparse_mat.T - ell_w(ind, W, X, rho), -1, order="F")
+    r = np.reshape(
+        X @ sparse_mat.T - ell_w(ind, W, X, rho, wxt=W.T @ X), -1, order="F"
+    )
     q = r.copy()
     rold = np.inner(r, r)
     for it in range(maxiter):
@@ -401,7 +420,7 @@ def conj_grad_w(sparse_mat, ind, W, X, rho, maxiter=5):
     return np.reshape(w, (rank, dim1), order="F")
 
 
-def ell_x(ind, W, X, A, Psi, d, lambda0, rho):
+def ell_x(ind, W, X, A, Psi, d, lambda0, rho, wtx=None):
     rank, dim2 = X.shape
     temp = np.zeros((d * rank, Psi[0].shape[0]))
     for k in range(1, d + 1):
@@ -410,14 +429,19 @@ def ell_x(ind, W, X, A, Psi, d, lambda0, rho):
     temp2 = np.zeros((rank, dim2))
     for k in range(d):
         temp2 += A[:, k * rank : (k + 1) * rank].T @ temp1 @ Psi[k + 1]
-    return W @ ((W.T @ X) * ind) + rho * X + lambda0 * (temp1 @ Psi[0] - temp2)
+    if wtx is None:
+        wtx = W.T @ X
+    return W @ (np.multiply(wtx, ind)) + rho * X + lambda0 * (temp1 @ Psi[0] - temp2)
 
 
 def conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, maxiter=5):
     rank, dim2 = X.shape
     x = np.reshape(X, -1, order="F")
     r = np.reshape(
-        W @ sparse_mat - ell_x(ind, W, X, A, Psi, d, lambda0, rho), -1, order="F"
+        W @ sparse_mat
+        - ell_x(ind, W, X, A, Psi, d, lambda0, rho, wtx=W.T @ X),
+        -1,
+        order="F",
     )
     q = r.copy()
     rold = np.inner(r, r)
@@ -454,14 +478,24 @@ def tmf(sparse_mat, rank, d, lambda0, rho, maxiter=50, inner_maxiter=10):
     X = 0.01 * np.random.randn(rank, dim2)
     A = 0.01 * np.random.randn(rank, d * rank)
     Psi = generate_Psi(dim2, d)
-    temp = np.zeros((d * rank, dim2 - d))
+    Psi_tail = Psi[1:] if d > 0 else []
+    Psi0T = Psi[0].T
+    prev_mat_hat = None
+    frob_norm = np.linalg.norm(sparse_mat, "fro")
+    denom = frob_norm if frob_norm > 0 else 1.0
     for it in range(maxiter):
         W = conj_grad_w(sparse_mat, ind, W, X, rho, inner_maxiter)
         X = conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, inner_maxiter)
-        for k in range(1, d + 1):
-            temp[(k - 1) * rank : k * rank, :] = X @ Psi[k].T
-        A = X @ Psi[0].T @ np.linalg.pinv((temp))
+        if Psi_tail:
+            temp = np.vstack([X @ psi.T for psi in Psi_tail])
+            if temp.shape[1] > 0:
+                A = X @ Psi0T @ np.linalg.pinv(temp, rcond=1e-10)
         mat_hat = W.T @ X
+        if prev_mat_hat is not None:
+            diff = np.linalg.norm(mat_hat - prev_mat_hat, "fro") / denom
+            if diff < 1e-4:
+                break
+        prev_mat_hat = mat_hat
     return mat_hat, W, X, A
 
 
@@ -687,11 +721,10 @@ def latc_imputer(
     rho = rho0
     while True:
         rho = min(rho * 1.05, 1e5)
+        Z_tensor = mat2ten(Z, dim, 0)
         for k in range(len(dim)):
             X[k] = mat2ten(
-                svt_tnn(
-                    ten2mat(mat2ten(Z, dim, 0) - T[k] / rho, k), alpha[k] / rho, theta
-                ),
+                svt_tnn(ten2mat(Z_tensor - T[k] / rho, k), alpha[k] / rho, theta),
                 dim,
                 k,
             )
@@ -701,19 +734,23 @@ def latc_imputer(
         if lambda0 > 0:
             for m in range(dim[0]):
                 Qm = mat_hat[m, ind].T
-                A[m, :] = np.linalg.pinv(Qm) @ Z[m, max_lag:]
+                A[m, :] = np.linalg.lstsq(Qm, Z[m, max_lag:])[0]
                 mat0[m, :] = Qm @ A[m, :]
             mat1 = ten2mat(np.mean(rho * X + T, axis=0), 0)
-            Z[pos_missing] = np.append(
-                (mat1[:, :max_lag] / rho),
-                (mat1[:, max_lag:] + lambda0 * mat0) / (rho + lambda0),
+            combined = np.concatenate(
+                [
+                    mat1[:, :max_lag] / rho,
+                    (mat1[:, max_lag:] + lambda0 * mat0) / (rho + lambda0),
+                ],
                 axis=1,
-            )[pos_missing]
+            )
+            Z[pos_missing] = combined[pos_missing]
         else:
-            Z[pos_missing] = (ten2mat(np.mean(X + T / rho, axis=0), 0))[pos_missing]
-        T = T + rho * (
-            X - np.broadcast_to(mat2ten(Z, dim, 0), np.insert(dim, 0, len(dim)))
-        )
+            avg_tensor = np.mean(X + T / rho, axis=0)
+            Z[pos_missing] = ten2mat(avg_tensor, 0)[pos_missing]
+        Z_tensor = mat2ten(Z, dim, 0)
+        broadcast_Z = np.broadcast_to(Z_tensor, np.insert(dim, 0, len(dim)))
+        T = T + rho * (X - broadcast_Z)
         tol = np.linalg.norm((mat_hat - last_mat), "fro") / snorm
         last_mat = mat_hat.copy()
         it += 1
