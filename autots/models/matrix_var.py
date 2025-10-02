@@ -489,7 +489,7 @@ def tmf(sparse_mat, rank, d, lambda0, rho, maxiter=50, inner_maxiter=10):
         if Psi_tail:
             temp = np.vstack([X @ psi.T for psi in Psi_tail])
             if temp.shape[1] > 0:
-                A = X @ Psi0T @ np.linalg.pinv(temp, rcond=1e-8)
+                A = X @ Psi0T @ np.linalg.pinv(temp, rcond=1e-10)
         mat_hat = W.T @ X
         if prev_mat_hat is not None:
             diff = np.linalg.norm(mat_hat - prev_mat_hat, "fro") / denom
@@ -734,7 +734,7 @@ def latc_imputer(
         if lambda0 > 0:
             for m in range(dim[0]):
                 Qm = mat_hat[m, ind].T
-                A[m, :] = np.linalg.lstsq(Qm, Z[m, max_lag:], rcond=None)[0]
+                A[m, :] = np.linalg.lstsq(Qm, Z[m, max_lag:])[0]
                 mat0[m, :] = Qm @ A[m, :]
             mat1 = ten2mat(np.mean(rho * X + T, axis=0), 0)
             combined = np.concatenate(
