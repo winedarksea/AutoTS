@@ -72,7 +72,6 @@ from autots.models.sklearn import (
     MultivariateRegression,
     DatepartRegression,
     UnivariateRegression,
-    ComponentAnalysis,
     PreprocessingRegression,
 )
 from autots.models.composite import PreprocessingExperts
@@ -334,82 +333,6 @@ def ModelMonster(
             **parameters,
         )
         return model
-    elif model == 'TensorflowSTS':
-        from autots.models.tfp import TensorflowSTS
-
-        if parameters == {}:
-            model = TensorflowSTS(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-            )
-        else:
-            model = TensorflowSTS(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                seasonal_periods=parameters['seasonal_periods'],
-                ar_order=parameters['ar_order'],
-                trend=parameters['trend'],
-                fit_method=parameters['fit_method'],
-                num_steps=parameters['num_steps'],
-            )
-        return model
-    elif model == 'TFPRegression':
-        from autots.models.tfp import TFPRegression
-
-        if parameters == {}:
-            model = TFPRegression(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-            )
-        else:
-            model = TFPRegression(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                kernel_initializer=parameters['kernel_initializer'],
-                epochs=parameters['epochs'],
-                batch_size=parameters['batch_size'],
-                optimizer=parameters['optimizer'],
-                loss=parameters['loss'],
-                dist=parameters['dist'],
-                regression_type=parameters['regression_type'],
-            )
-        return model
-    elif model == 'ComponentAnalysis':
-        if parameters == {}:
-            model = ComponentAnalysis(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                forecast_length=forecast_length,
-            )
-        else:
-            model = ComponentAnalysis(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                model=parameters['model'],
-                model_parameters=parameters['model_parameters'],
-                decomposition=parameters['decomposition'],
-                n_components=parameters['n_components'],
-                forecast_length=forecast_length,
-            )
-        return model
     elif model == 'DatepartRegression':
         model = DatepartRegression(
             frequency=frequency,
@@ -418,20 +341,6 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             forecast_length=forecast_length,
-            n_jobs=n_jobs,
-            **parameters,
-        )
-
-        return model
-    elif model == 'Greykite':
-        from autots.models.greykite import Greykite
-
-        model = Greykite(
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
             n_jobs=n_jobs,
             **parameters,
         )
@@ -491,18 +400,6 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
-            **parameters,
-        )
-    elif model == 'NeuralProphet':
-        from autots.models.prophet import NeuralProphet
-
-        return NeuralProphet(
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            n_jobs=1,
             **parameters,
         )
     elif model == 'DynamicFactorMQ':

@@ -961,7 +961,6 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  RRVAR, MAR, TMF        |              |                         |               |                 |       | True         |              |               |
 |  LATC                   |              |                         |               |                 |       | True         |              |               |
-|  NeuralProphet          | neuralprophet |                        |    nyi        |     pytorch     | yes   |              |              | True          |
 |  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
@@ -977,10 +976,6 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  MambaSSM               | pytorch      |                         |    True       |                 | yes   |              | True         | True          |
 |  pMLP                   | pytorch      |                         |    True       |                 | yes   |              | True         | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
-|  Greykite               | (deprecated) |                         |    True       |     joblib      |       |              | True         |               |
-|  TensorflowSTS          | (deprecated) |                         |    True       |                 | yes   | True         | True         |               |
-|  TFPRegression          | (deprecated) |                         |    True       |                 | yes   | True         | True         | True          |
-|  ComponentAnalysis      | (deprecated) |                         |               |                 |       | True         | True         | _             |
 
 *nyi = not yet implemented*
 * deprecated models are not actively maintained but updates may be requested in issues

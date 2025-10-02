@@ -21,7 +21,6 @@ all_models = [
     'VAR',
     'DatepartRegression',
     "UnivariateRegression",
-    # "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
     'NVAR',
@@ -29,7 +28,6 @@ all_models = [
     'SectionalMotif',
     'Theta',
     'ARDL',
-    'NeuralProphet',
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
@@ -90,7 +88,6 @@ model_classes = {
     "LATC": "stat",
     "MotifSimulation": "motif",
     "NeuralForecast": "DL",
-    "NeuralProphet": "DL",
     "PreprocessingRegression": "ML",
     "PytorchForecasting": "DL",
     "RollingRegression": "ML",
@@ -111,7 +108,7 @@ model_classes = {
     "MambaSSM": "DL",
     "pMLP": "DL",
 }
-all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
+all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX'])))
 # downweight slower models
 default = {
     'ConstantNaive': 1,
@@ -195,7 +192,6 @@ parallel = {
     'ARIMA': 0.2,  # slow
     'GLM': 1,
     'UnobservedComponents': 1,
-    # "Greykite": 0.3,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'Theta': 1,
@@ -232,9 +228,6 @@ best = list(
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
-    'TensorflowSTS',
-    'ComponentAnalysis',
-    'TFPRegression',
 ]
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
@@ -245,7 +238,6 @@ gpu = [
     'PytorchForecasting',
     "TiDE",
     "NeuralForecast",
-    "NeuralProphet",
     "MambaSSM",
     "pMLP",
 ]
@@ -327,10 +319,7 @@ recombination_approved = [
     'RollingRegression',
     'VAR',
     # 'WindowRegression',
-    'TensorflowSTS',
-    'TFPRegression',
     'UnivariateRegression',
-    "Greykite",
     'UnivariateMotif',
     "MultivariateMotif",
     'NVAR',
@@ -338,7 +327,6 @@ recombination_approved = [
     'SectionalMotif',
     'Theta',
     'ARDL',
-    'NeuralProphet',
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
@@ -373,14 +361,11 @@ no_shared = [
     'FBProphet',
     'SeasonalNaive',
     'UnobservedComponents',
-    'TensorflowSTS',
     "GLS",
     "UnivariateRegression",
-    "Greykite",
     'UnivariateMotif',
     'Theta',
     'ARDL',
-    'NeuralProphet',
     'ARCH',
     'KalmanStateSpace',
     'MetricMotif',
@@ -405,7 +390,6 @@ regressor = [
     'MultivariateRegression',
     'SectionalMotif',  # kinda
     'ARDL',
-    'NeuralProphet',
     'ARCH',
     'Cassandra',
     'PreprocessingRegression',

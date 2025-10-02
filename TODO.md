@@ -24,10 +24,11 @@
 * improvements to the calendars, Hindu calendar should be working now
 * changes to HistoricValues which hopefully makes it more reliable
 * added pMLP and MambaSSM models
+* deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet. Unlikely you were using these, deprecated for a while
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
-* Neural Prophet
+* NeuralForecast
 * GluonTS
 
 ### New Model Checklist:
