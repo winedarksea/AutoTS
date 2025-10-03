@@ -1628,6 +1628,8 @@ class VECM(ModelObject):
         parameter_dict = {
             'deterministic': self.deterministic,
             'k_ar_diff': self.k_ar_diff,
+            'seasons': self.seasons,
+            'coint_rank': self.coint_rank,
             'regression_type': self.regression_type,
         }
         return parameter_dict
