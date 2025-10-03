@@ -68,7 +68,7 @@ def test_get_new_params_keys_present_in_get_params():
         except Exception:
             continue
 
-        missing = [key for key in new_params.keys() if key not in current_params]
+        missing = [key for key in new_params if key not in current_params]
         if missing:
             mismatches.append((f"{module_name}.{model_cls.__name__}", missing))
 
