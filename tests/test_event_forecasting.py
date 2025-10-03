@@ -3,6 +3,7 @@
 """
 import unittest
 import numpy as np
+import pandas as pd
 from autots import (
     load_weekly,
     load_daily,
@@ -22,8 +23,15 @@ class TestEventRisk(unittest.TestCase):
 
         upper_limit = 0.8
         # if using manual array limits, historic limit must be defined separately (if used)
-        lower_limit = np.ones((forecast_length, df.shape[1]))
-        historic_lower_limit = np.ones(df.shape)
+        lower_limit = pd.DataFrame(
+            np.ones((forecast_length, df.shape[1])),
+            columns=df.columns,
+        )
+        historic_lower_limit = pd.DataFrame(
+            np.ones(df.shape),
+            index=df.index,
+            columns=df.columns,
+        )
 
         model = EventRiskForecast(
             df,
@@ -40,7 +48,10 @@ class TestEventRisk(unittest.TestCase):
         model.fit()
         risk_df_upper, risk_df_lower = model.predict()
         historic_upper_risk_df, historic_lower_risk_df = model.predict_historic(lower_limit=historic_lower_limit)
-        model.plot(1)
+        model.plot(column=df.columns[0])
+        self.assertTrue(
+            np.array_equal(model.lower_limit_2d, lower_limit.to_numpy())
+        )
 
         # also eval summed version
         threshold = 0.1

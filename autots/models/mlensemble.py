@@ -142,7 +142,7 @@ def create_feature(
         res = np.concatenate(
             (
                 res,
-                np.repeat(date_part_df.to_numpy()[np.newaxis, :, :], 21, axis=0).T,
+                np.repeat(date_part_df.to_numpy()[np.newaxis, :, :], df_train.shape[1], axis=0).T,
             ),
             axis=0,
         )

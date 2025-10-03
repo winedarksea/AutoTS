@@ -172,7 +172,7 @@ class EventRiskForecast(object):
     2. Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.
     3. A dictionary of {"model_name": x,  "model_param_dict": y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
         Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
-    4. a custom input numpy array of shape (forecast_length, num_series)
+    4. a custom input numpy array or pandas DataFrame of shape (forecast_length, num_series)
 
     This can be used to find the "middle" limit too, flip so upper=lower and lower=upper, then abs(U - (1 - L)).
     In some cases it may help to drop the results from the first forecast timestep or two.
@@ -223,24 +223,75 @@ class EventRiskForecast(object):
         upper_limit=0.95,
         model_name="UnivariateMotif",
         model_param_dict={
-            'window': 14,
-            "pointed_method": "median",
+            "window": 3,
+            "point_method": "midhinge",
             "distance_metric": "euclidean",
-            "k": 10,
+            "k": 100,
+            "sample_fraction": 5000000,
+            "comparison_transformation": {
+                "fillna": "cubic",
+                "transformations": {"0": "AlignLastDiff"},
+                "transformation_params": {
+                    "0": {
+                        "rows": 364,
+                        "displacement_rows": 1,
+                        "quantile": 1.0,
+                        "decay_span": None,
+                    }
+                },
+            },
+            "combination_transformation": {
+                "fillna": "time",
+                "transformations": {"0": "AlignLastDiff"},
+                "transformation_params": {
+                    "0": {
+                        "rows": 7,
+                        "displacement_rows": 1,
+                        "quantile": 1.0,
+                        "decay_span": 2,
+                    }
+                },
+            },
+            "extend_df": True,
+            "mean_rolling_periods": 12,
+            "macd_periods": 74,
+            "std_rolling_periods": 30,
+            "max_rolling_periods": 12,
+            "min_rolling_periods": None,
+            "quantile90_rolling_periods": 10,
+            "quantile10_rolling_periods": 10,
+            "ewm_alpha": None,
+            "ewm_var_alpha": None,
+            "additional_lag_periods": None,
+            "abs_energy": False,
+            "rolling_autocorr_periods": None,
+            "nonzero_last_n": None,
+            "datepart_method": None,
+            "polynomial_degree": None,
+            "regression_type": None,
+            "holiday": False,
+            "scale_full_X": False,
+            "series_hash": True,
+            "frac_slice": None,
             "return_result_windows": True,
         },
         model_transform_dict={
-            'fillna': 'pchip',
-            'transformations': {
-                "0": "Slice",
-                "1": "DifferencedTransformer",
-                "2": "RollingMeanTransformer",
-                "3": "MaxAbsScaler",
+            "fillna": "akima",
+            "transformations": {
+                "0": "Log",
+                "1": "SinTrend",
+                "2": "ChangepointDetrend",
+                "3": "RobustScaler",
             },
-            'transformation_params': {
-                "0": {"method": 0.5},
+            "transformation_params": {
+                "0": {},
                 "1": {},
-                "2": {"fixed": False, "window": 7},
+                "2": {
+                    "model": "Linear",
+                    "changepoint_spacing": 5040,
+                    "changepoint_distance_end": 520,
+                    "datepart_method": "common_fourier",
+                },
                 "3": {},
             },
         },
@@ -465,7 +516,7 @@ class EventRiskForecast(object):
         """Handles all limit input styles and returns numpy array.
 
         Args:
-            limit: see class overview for input options
+            limit: see class overview for input options, also accepts pandas DataFrame
             target_shape (tuple): of (forecast_length, num_series)
             df_train (pd.DataFrame): training data
             direction (str): whether it is the "upper" or "lower" limit
@@ -473,15 +524,32 @@ class EventRiskForecast(object):
             forecast_length (int): needed only for historic of forecast algorithm defined limit
             eval_periods (int): only for historic forecast limit, only runs on the tail n (this) of data
         """
-        # handle a predefined array
-        if isinstance(limit, np.ndarray):
+        # handle a predefined array or dataframe
+        if isinstance(limit, pd.DataFrame):
+            limit_columns = getattr(limit, "columns", None)
+            if limit_columns is not None and list(limit_columns) != list(
+                df_train.columns
+            ):
+                try:
+                    limit = limit.reindex(columns=df_train.columns)
+                except Exception as exc:
+                    raise ValueError(
+                        f"Unable to align {direction}_limit DataFrame columns to training data"
+                    ) from exc
+            limit_array = np.asarray(limit)
+        elif isinstance(limit, np.ndarray):
+            limit_array = limit
+        else:
+            limit_array = None
+
+        if limit_array is not None:
             assert (
-                limit.ndim == 2
+                limit_array.ndim == 2
             ), f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
             assert (
-                limit.shape == target_shape
+                limit_array.shape == target_shape
             ), f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
-            return limit
+            return limit_array
         # handle a limit as a quantile defined by float
         elif isinstance(limit, float) or isinstance(limit, int):
             assert (
@@ -691,6 +759,7 @@ class EventRiskForecast(object):
     def plot(
         self,
         column_idx=0,
+        column=None,
         grays=[
             "#838996",
             "#c0c0c0",
@@ -728,8 +797,9 @@ class EventRiskForecast(object):
 
         Args:
             column_idx (int): positional index of series to sample for plot
+            column (str): optional column name to select instead of column_idx
             grays (list of str): list of hex codes for colors for the potential forecasts
-            up_low_colors (list of str): two hex code colors for lower and upper
+            up_low_colors (list of str): two hex code colors for upper and lower limits
             bar_color (str): hex color for bar graph
             bar_ylim (list): passed to ylim of plot, sets scale of axis of barplot
             figsize (tuple): passed to figsize of output figure
@@ -752,46 +822,83 @@ class EventRiskForecast(object):
             self.lower_risk_array if lower_risk_array is None else lower_risk_array
         )
 
-        column = self.outcome_columns[column_idx]
+        if column is not None:
+            if hasattr(self.outcome_columns, "get_loc"):
+                try:
+                    column_idx = self.outcome_columns.get_loc(column)
+                except KeyError as exc:
+                    raise ValueError(
+                        f"Column '{column}' is not present in outcome columns"
+                    ) from exc
+            else:
+                columns_list = list(self.outcome_columns)
+                if column not in columns_list:
+                    raise ValueError(
+                        f"Column '{column}' is not present in outcome columns"
+                    )
+                column_idx = columns_list.index(column)
+
+        column_name = self.outcome_columns[column_idx]
+        simulations = result_windows[:, :, column_idx]
+        horizon_length = simulations.shape[1]
+        horizon_index = self.outcome_index
+        if horizon_index is None:
+            horizon_index = np.arange(horizon_length)
         fig, (ax1, ax2) = plt.subplots(
             nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=figsize
         )
-        fig.suptitle(f'{column} Event Risk Forecasting')
-        # index=pd.date_range("2022-01-01", periods=result_windows.shape[1], freq="D")
-        plot_df = pd.DataFrame(result_windows[:, :, column_idx].T, self.outcome_index)
-        if lower_limit_2d is not None:
-            plot_df['lower_limit'] = lower_limit_2d[
-                :, column_idx
-            ]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
-        else:
-            plot_df['lower_limit'] = np.nan
+        fig.suptitle(f"{column_name} Event Risk Forecasting")
+        colors = random.choices(grays, k=simulations.shape[0])
+        for idx, series in enumerate(simulations):
+            ax1.plot(horizon_index, series, color=colors[idx], linewidth=1.2, alpha=0.9)
+
+        upper_color = up_low_color[0] if len(up_low_color) >= 1 else "#ff4500"
+        lower_color = up_low_color[1] if len(up_low_color) >= 2 else up_low_color[0]
         if upper_limit_2d is not None:
-            plot_df['upper_limt'] = upper_limit_2d[
-                :, column_idx
-            ]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
-        else:
-            plot_df['upper_limt'] = np.nan
-        colors = random.choices(grays, k=plot_df.shape[1] - 2) + up_low_color
-        plot_df.plot(color=colors, ax=ax1, legend=False)
+            ax1.plot(
+                horizon_index,
+                upper_limit_2d[:, column_idx],
+                color=upper_color,
+                linewidth=2,
+                linestyle="--",
+                label="Upper Limit",
+            )
+        if lower_limit_2d is not None:
+            ax1.plot(
+                horizon_index,
+                lower_limit_2d[:, column_idx],
+                color=lower_color,
+                linewidth=2,
+                linestyle="--",
+                label="Lower Limit",
+            )
+
+        ax1.set_ylabel("Value")
+        ax1.set_facecolor("#f7f7f7")
+        ax1.grid(axis="y", linestyle="--", alpha=0.25)
+        if upper_limit_2d is not None or lower_limit_2d is not None:
+            ax1.legend(loc="upper right", frameon=False)
+
         # handle one being None
         try:
-            up_risk = upper_risk_array[:, column_idx]
+            up_risk = np.asarray(upper_risk_array[:, column_idx])
         except Exception:
-            up_risk = 0
+            up_risk = np.zeros(horizon_length)
         try:
-            low_risk = lower_risk_array[:, column_idx]
+            low_risk = np.asarray(lower_risk_array[:, column_idx])
         except Exception:
-            low_risk = 0
-        plot_df["upper & lower risk"] = up_risk + low_risk
-        # #0095a4   #FA9632  # 3264C8   #6495ED
-        plot_df["upper & lower risk"].plot(
-            kind="bar",
-            xticks=[],
-            title="Combined Risk Score",
-            ax=ax2,
-            color=bar_color,
-            ylim=bar_ylim,
-        )
+            low_risk = np.zeros(horizon_length)
+        risk_total = up_risk + low_risk
+        ax2.bar(horizon_index, risk_total, color=bar_color, width=0.6)
+        ax2.set_ylim(bar_ylim)
+        ax2.set_ylabel("Combined Risk")
+        ax2.set_xlabel("Forecast Horizon")
+        ax2.set_title("Combined Risk Score")
+        ax2.set_facecolor("#f9f9f9")
+        ax2.grid(axis="y", linestyle=":", alpha=0.3)
+        if isinstance(horizon_index, pd.Index) and not horizon_index.is_numeric():
+            ax2.tick_params(axis="x", rotation=45)
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     def plot_eval(
         self,
