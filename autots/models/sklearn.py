@@ -340,6 +340,238 @@ def rolling_x_regressor_regressor(
     return X
 
 
+def augment_with_synthetic_bounds(
+    X: pd.DataFrame,
+    Y,
+    ratio: float,
+    random_seed: int = 0,
+    max_fraction: float = 0.25,
+):
+    """Prepend synthetic boundary samples to X/Y to anchor scaling.
+
+    Parameters
+    ----------
+    X : pandas.DataFrame
+        Feature matrix with datetime-based index.
+    Y : array-like
+        Response array aligned with X (1d or 2d).
+    ratio : float
+        Share of synthetic samples relative to len(X). Capped by ``max_fraction``.
+    random_seed : int, default 0
+        Base seed to make augmentation repeatable.
+    max_fraction : float, default 0.25
+        Maximum share of synthetic samples permitted.
+    """
+
+    if X is None or Y is None:
+        return X, Y
+
+    try:
+        ratio = float(ratio or 0.0)
+    except Exception:
+        ratio = 0.0
+    if ratio <= 0:
+        return X, Y
+
+    if not isinstance(X, pd.DataFrame):
+        X = pd.DataFrame(X)
+
+    orig_len = len(X)
+    if orig_len < 4:
+        return X, Y
+
+    synth_count = int(round(orig_len * ratio))
+    synth_cap = max(1, int(orig_len * max_fraction))
+    synth_count = max(0, min(synth_count, synth_cap))
+    if synth_count <= 0:
+        return X, Y
+
+    X_array = X.to_numpy(dtype=float)
+    Y_array = np.asarray(Y, dtype=float)
+    y_is_1d = Y_array.ndim == 1
+    if y_is_1d:
+        Y_array_2d = Y_array.reshape(-1, 1)
+    else:
+        Y_array_2d = Y_array
+    if Y_array_2d.shape[0] != orig_len:
+        return X, Y
+
+    if np.isnan(X_array).any():
+        col_means = np.nanmean(X_array, axis=0)
+        col_means = np.where(np.isnan(col_means), 0.0, col_means)
+        inds = np.where(np.isnan(X_array))
+        X_array[inds] = np.take(col_means, inds[1])
+    if np.isnan(Y_array_2d).any():
+        col_means = np.nanmean(Y_array_2d, axis=0)
+        col_means = np.where(np.isnan(col_means), 0.0, col_means)
+        inds = np.where(np.isnan(Y_array_2d))
+        Y_array_2d[inds] = np.take(col_means, inds[1])
+
+    X_min = X_array.min(axis=0)
+    X_max = X_array.max(axis=0)
+    X_mean = X_array.mean(axis=0)
+    X_std = X_array.std(axis=0)
+    X_range = np.maximum(X_max - X_min, 1e-9)
+    X_scale = np.maximum(np.maximum(X_range, X_std), 1e-6)
+
+    Y_min = Y_array_2d.min(axis=0)
+    Y_max = Y_array_2d.max(axis=0)
+    Y_mean = Y_array_2d.mean(axis=0)
+    Y_std = Y_array_2d.std(axis=0)
+    Y_range = np.maximum(Y_max - Y_min, 1e-9)
+    Y_scale = np.maximum(np.maximum(Y_range, Y_std), 1e-6)
+    Y_scale = np.where(Y_scale == 0, np.maximum(np.abs(Y_mean), 1.0), Y_scale)
+
+    rng_seed = (random_seed or 0) + orig_len + synth_count
+    rng = np.random.default_rng(rng_seed)
+
+    style_weights = np.array([0.5, 0.3, 0.2])
+    style_counts = np.floor(style_weights * synth_count).astype(int)
+    diff = synth_count - style_counts.sum()
+    for i in range(abs(diff)):
+        idx = i % len(style_counts)
+        if diff > 0:
+            style_counts[idx] += 1
+        elif diff < 0 and style_counts[idx] > 0:
+            style_counts[idx] -= 1
+
+    n_features = X_array.shape[1]
+    n_targets = Y_array_2d.shape[1]
+
+    synthetic_x_list = []
+    synthetic_y_list = []
+
+    # Style 1: push entire feature vector beyond observed bounds
+    count = style_counts[0]
+    if count > 0:
+        direction = rng.choice([-1.0, 1.0], size=(count, n_features))
+        scale_expand = np.broadcast_to(X_scale, (count, n_features))
+        base = np.where(direction < 0.0, X_min, X_max)
+        base = np.broadcast_to(base, (count, n_features))
+        offset = (0.15 + 0.45 * rng.random((count, n_features))) * scale_expand
+        synth_x = base + direction * offset
+        synth_x += rng.normal(0.0, 0.02, size=synth_x.shape) * scale_expand
+
+        y_direction = rng.choice([-1.0, 1.0], size=(count, n_targets))
+        y_base = np.where(y_direction < 0.0, Y_min, Y_max)
+        y_base = np.broadcast_to(y_base, (count, n_targets))
+        y_offset = (0.2 + 0.6 * rng.random((count, n_targets))) * np.broadcast_to(
+            Y_scale, (count, n_targets)
+        )
+        synth_y = y_base + y_direction * y_offset
+
+        synthetic_x_list.append(synth_x)
+        synthetic_y_list.append(synth_y)
+
+    # Style 2: selective mixing of mean-centered and extreme coordinates
+    count = style_counts[1]
+    if count > 0:
+        base = np.broadcast_to(X_mean, (count, n_features)).copy()
+        scale_expand = np.broadcast_to(X_scale, (count, n_features))
+        min_expand = np.broadcast_to(X_min, (count, n_features))
+        max_expand = np.broadcast_to(X_max, (count, n_features))
+        activation = rng.uniform(0.3, 0.6, size=(count, 1))
+        mask = rng.random((count, n_features)) < activation
+        ensure = np.where(mask.sum(axis=1) == 0)[0]
+        for idx in ensure:
+            mask[idx, rng.integers(0, n_features)] = True
+        direction = rng.choice([-1.0, 1.0], size=(count, n_features))
+        offset = (0.1 + 0.35 * rng.random((count, n_features))) * scale_expand
+        extreme_base = np.where(direction < 0.0, min_expand, max_expand)
+        synth_x = base
+        synth_x[mask] = (extreme_base + direction * offset)[mask]
+        synth_x += rng.normal(0.0, 0.01, size=synth_x.shape) * scale_expand
+
+        y_base = np.broadcast_to(Y_mean, (count, n_targets)).copy()
+        y_scale_expand = np.broadcast_to(Y_scale, (count, n_targets))
+        y_direction = rng.choice([-1.0, 1.0], size=(count, n_targets))
+        y_mask = rng.random((count, n_targets)) < 0.7
+        ensure_y = np.where(y_mask.sum(axis=1) == 0)[0]
+        for idx in ensure_y:
+            y_mask[idx, rng.integers(0, n_targets)] = True
+        y_extreme_base = np.where(y_direction < 0.0, Y_min, Y_max)
+        y_extreme_base = np.broadcast_to(y_extreme_base, (count, n_targets))
+        y_offset = (0.1 + 0.4 * rng.random((count, n_targets))) * y_scale_expand
+        synth_y = y_base
+        synth_y[y_mask] = (y_extreme_base + y_direction * y_offset)[y_mask]
+
+        synthetic_x_list.append(synth_x)
+        synthetic_y_list.append(synth_y)
+
+    # Style 3: uniform sample in expanded box with enforced boundary push
+    count = synth_count - sum([arr.shape[0] for arr in synthetic_x_list])
+    if count > 0:
+        scale_expand = np.broadcast_to(X_scale, (count, n_features))
+        min_expand = np.broadcast_to(X_min, (count, n_features))
+        max_expand = np.broadcast_to(X_max, (count, n_features))
+        low = min_expand - 0.5 * scale_expand
+        high = max_expand + 0.5 * scale_expand
+        synth_x = rng.uniform(low, high)
+        inside = (synth_x >= min_expand) & (synth_x <= max_expand)
+        if inside.any():
+            push_dir = np.where(synth_x >= X_mean, 1.0, -1.0)
+            push_dir = np.broadcast_to(push_dir, synth_x.shape)
+            synth_x[inside] = np.where(
+                push_dir[inside] > 0,
+                (max_expand + 0.05 * scale_expand)[inside],
+                (min_expand - 0.05 * scale_expand)[inside],
+            )
+        synth_x += rng.normal(0.0, 0.02, size=synth_x.shape) * scale_expand
+
+        y_scale_expand = np.broadcast_to(Y_scale, (count, n_targets))
+        y_low = np.broadcast_to(Y_min, (count, n_targets)) - 0.5 * y_scale_expand
+        y_high = np.broadcast_to(Y_max, (count, n_targets)) + 0.5 * y_scale_expand
+        synth_y = rng.uniform(y_low, y_high)
+        inside_y = (synth_y >= Y_min) & (synth_y <= Y_max)
+        if inside_y.any():
+            push_dir = np.where(synth_y >= Y_mean, 1.0, -1.0)
+            push_dir = np.broadcast_to(push_dir, synth_y.shape)
+            synth_y[inside_y] = np.where(
+                push_dir[inside_y] > 0,
+                (y_high + 0.05 * y_scale_expand)[inside_y],
+                (y_low - 0.05 * y_scale_expand)[inside_y],
+            )
+
+        synthetic_x_list.append(synth_x)
+        synthetic_y_list.append(synth_y)
+
+    if not synthetic_x_list:
+        return X, Y
+
+    synthetic_X = np.vstack(synthetic_x_list)
+    synthetic_Y = np.vstack(synthetic_y_list)
+
+    take_count = min(synthetic_X.shape[0], synth_count)
+    synthetic_X = synthetic_X[:take_count]
+    synthetic_Y = synthetic_Y[:take_count]
+
+    order = rng.permutation(take_count)
+    synthetic_X = synthetic_X[order]
+    synthetic_Y = synthetic_Y[order]
+
+    if y_is_1d:
+        synthetic_Y = synthetic_Y.reshape(-1)
+
+    orig_index = X.index
+    if isinstance(orig_index, pd.MultiIndex):
+        first_entry = orig_index[0]
+        synthetic_index = pd.MultiIndex.from_tuples(
+            [tuple(first_entry) for _ in range(take_count)], names=orig_index.names
+        )
+    else:
+        synthetic_index = pd.Index([orig_index[0]] * take_count, name=orig_index.name)
+
+    synthetic_df = pd.DataFrame(synthetic_X, columns=X.columns, index=synthetic_index)
+    aug_X = pd.concat([synthetic_df, X], axis=0)
+
+    if y_is_1d:
+        aug_Y = np.concatenate([synthetic_Y, Y_array], axis=0)
+    else:
+        aug_Y = np.concatenate([synthetic_Y, Y_array], axis=0)
+
+    return aug_X, aug_Y
+
+
 def retrieve_regressor(
     regression_model: dict = {
         "model": 'RandomForest',
@@ -3069,6 +3301,7 @@ class MultivariateRegression(ModelObject):
         transformation_dict: dict = None,
         discard_data: float = None,
         n_jobs: int = -1,
+        synthetic_boundary_ratio: float = 0.0,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -3116,6 +3349,9 @@ class MultivariateRegression(ModelObject):
         self.frac_slice = frac_slice
         self.transformation_dict = transformation_dict
         self.discard_data = discard_data
+        self.synthetic_boundary_ratio = max(
+            float(synthetic_boundary_ratio or 0.0), 0.0
+        )
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -3341,6 +3577,8 @@ class MultivariateRegression(ModelObject):
             self.multioutputgpr = self.regression_model['model'] == "MultioutputGPR"
             if self.scale_full_X:
                 self.X = self.scale_data(self.X)
+
+            self._augment_with_synthetic_bounds()
 
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
@@ -3683,6 +3921,10 @@ class MultivariateRegression(ModelObject):
             )[0],
             "discard_data": random.choices([None, 50, 90, 98], [0.7, 0.1, 0.1, 0.1])[0],
             "transformation_dict": transform_choice,
+            "synthetic_boundary_ratio": random.choices(
+                [0.0, 0.01, 0.02, 0.05],
+                [0.7, 0.1, 0.1, 0.1],
+            )[0],
         }
         return parameter_dict
 
@@ -3716,8 +3958,18 @@ class MultivariateRegression(ModelObject):
             "frac_slice": self.frac_slice,
             "discard_data": self.discard_data,
             "transformation_dict": self.transformation_dict,
+            "synthetic_boundary_ratio": self.synthetic_boundary_ratio,
         }
         return parameter_dict
+
+    def _augment_with_synthetic_bounds(self):
+        """Optionally prepend synthetic boundary samples to training data."""
+        self.X, self.Y = augment_with_synthetic_bounds(
+            self.X,
+            self.Y,
+            ratio=self.synthetic_boundary_ratio,
+            random_seed=self.random_seed,
+        )
 
 
 class VectorizedMultiOutputGPR:

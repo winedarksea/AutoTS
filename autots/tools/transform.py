@@ -23,6 +23,7 @@ from autots.models.sklearn import (
     retrieve_classifier,
     generate_classifier_params,
 )
+from autots.models.base import PredictionObject
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
     detect_anomalies,
@@ -7618,11 +7619,42 @@ class GeneralTransformer(object):
         """Undo the madness.
 
         Args:
-            df (pandas.DataFrame): Datetime Indexed
+            df (pandas.DataFrame or PredictionObject): Datetime Indexed data or
+                AutoTS prediction container
             trans_method (str): 'forecast' or 'original' passed through
             fillzero (bool): if inverse returns NaN, fill with zero
             bounds (bool): currently ignores AlignLastValue transform if True (also used in process_components of Cassandra)
         """
+        if isinstance(df, PredictionObject):
+            prediction = df
+            # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
+            # forecast inverse MUST come before upper and lower bounds inverse
+            if isinstance(prediction.forecast, pd.DataFrame):
+                prediction.forecast = self.inverse_transform(
+                    prediction.forecast.copy(),
+                    trans_method=trans_method,
+                    fillzero=fillzero,
+                    bounds=bounds,
+                    start=start,
+                )
+            if isinstance(prediction.lower_forecast, pd.DataFrame):
+                prediction.lower_forecast = self.inverse_transform(
+                    prediction.lower_forecast.copy(),
+                    trans_method=trans_method,
+                    fillzero=True,
+                    bounds=True,
+                    start=start,
+                )
+            if isinstance(prediction.upper_forecast, pd.DataFrame):
+                prediction.upper_forecast = self.inverse_transform(
+                    prediction.upper_forecast.copy(),
+                    trans_method=trans_method,
+                    fillzero=True,
+                    bounds=True,
+                    start=start,
+                )
+            return prediction
+
         self.df_index = df.index
         self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)

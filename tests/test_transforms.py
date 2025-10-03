@@ -7,6 +7,7 @@ from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
 from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer, MeanPercentSplitter
+from autots.models.base import PredictionObject
 
 class TestTransforms(unittest.TestCase):
     
@@ -106,6 +107,43 @@ class TestTransforms(unittest.TestCase):
         expected_pct_cols = [f"{col}_Xpercentage" for col in df.columns]
         expected_cols = expected_mean_cols + expected_pct_cols
         self.assertCountEqual(transformed.columns.tolist(), expected_cols)
+
+    def test_general_transformer_prediction_object_inverse(self):
+        """GeneralTransformer inverse_transform handles PredictionObject inputs."""
+        df = load_daily(long=False).iloc[:40].copy()
+
+        base_transformer = GeneralTransformer(transformations={0: "StandardScaler"})
+        base_transformer.fit(df)
+        transformed = base_transformer.transform(df)
+        forecast_df = transformed.iloc[-5:].copy()
+        lower_df = forecast_df - 1
+        upper_df = forecast_df + 1
+
+        expected_forecast = base_transformer.inverse_transform(forecast_df.copy())
+        expected_lower = base_transformer.inverse_transform(
+            lower_df.copy(), fillzero=True, bounds=True
+        )
+        expected_upper = base_transformer.inverse_transform(
+            upper_df.copy(), fillzero=True, bounds=True
+        )
+
+        prediction = PredictionObject(
+            forecast_length=forecast_df.shape[0],
+            forecast_index=forecast_df.index,
+            forecast_columns=forecast_df.columns,
+            forecast=forecast_df.copy(),
+            lower_forecast=lower_df.copy(),
+            upper_forecast=upper_df.copy(),
+        )
+
+        transformer = GeneralTransformer(transformations={0: "StandardScaler"})
+        transformer.fit(df)
+        result = transformer.inverse_transform(prediction)
+
+        self.assertIsInstance(result, PredictionObject)
+        pd.testing.assert_frame_equal(result.forecast, expected_forecast)
+        pd.testing.assert_frame_equal(result.lower_forecast, expected_lower)
+        pd.testing.assert_frame_equal(result.upper_forecast, expected_upper)
 
     def test_cointegration_transformer(self):
         from autots.tools.transform import CointegrationTransformer

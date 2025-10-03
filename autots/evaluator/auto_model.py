@@ -875,17 +875,8 @@ class ModelPrediction(ModelObject):
                 )
 
         transformationStartTime = datetime.datetime.now()
-        # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
-        # forecast inverse MUST come before upper and lower bounds inverse
-        df_forecast.forecast = self.transformer_object.inverse_transform(
-            df_forecast.forecast
-        )
-        df_forecast.lower_forecast = self.transformer_object.inverse_transform(
-            df_forecast.lower_forecast, fillzero=True, bounds=True
-        )
-        df_forecast.upper_forecast = self.transformer_object.inverse_transform(
-            df_forecast.upper_forecast, fillzero=True, bounds=True
-        )
+
+        df_forecast = self.transformer_object.inverse_transform(df_forecast)
 
         # CHECK Forecasts are proper length!
         if df_forecast.forecast.shape[0] < self.forecast_length:
