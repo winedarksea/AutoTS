@@ -47,7 +47,7 @@ def test_get_new_params_keys_present_in_get_params():
     for module_name, model_cls in _iter_model_classes():
         try:
             model = model_cls()
-        except (ModuleNotFoundError, ImportError, AttributeError) as exc:
+        except (ModuleNotFoundError, ImportError, AttributeError):
             # These models rely on optional dependencies that may not be
             # installed in the CI environment. Skip them gracefully.
             continue
