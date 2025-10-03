@@ -11,37 +11,74 @@ from autots.models.model_list import all_result_path, diff_window_motif_list
 
 
 def extract_result_windows(forecasts, model_name=None):
-    """standardize result windows from different models."""
-    result_windows = forecasts.model.result_windows
+    """Standardize result windows from different models into a 3d numpy array."""
+    model = getattr(forecasts, "model", None)
+    if model is None or getattr(model, "result_windows", None) is None:
+        raise ValueError(
+            "Model did not expose result windows. Ensure return_result_windows is enabled."
+        )
+    result_windows = model.result_windows
     if model_name is None:
         model_name = forecasts.model_name
-    if model_name in diff_window_motif_list:
-        result_windows = np.moveaxis(np.array(list(result_windows.values())), 0, -1)
+
+    if isinstance(result_windows, dict) or model_name in diff_window_motif_list:
+        result_windows = np.moveaxis(
+            np.array(list(result_windows.values())), 0, -1
+        )
+    else:
+        result_windows = np.asarray(result_windows)
+
     if result_windows.ndim == 4:
         result_windows = result_windows[0]
+
+    if result_windows.ndim != 3:
+        raise ValueError(
+            "Result windows must be three dimensional, received shape {}".format(
+                result_windows.shape
+            )
+        )
+
+    transformer = getattr(forecasts, "transformer", None)
+    combination_transformer = getattr(model, "combination_transformer", None)
+
+    need_inverse_transformer = False
+    if transformer is not None and hasattr(transformer, "inverse_transform"):
+        transformations = getattr(transformer, "transformations", None)
+        if transformations is None:
+            need_inverse_transformer = True
+        else:
+            need_inverse_transformer = bool(transformations)
+
+    need_inverse_combination = (
+        combination_transformer is not None
+        and hasattr(combination_transformer, "inverse_transform")
+    )
+
+    if not need_inverse_transformer and not need_inverse_combination:
+        return np.asarray(result_windows)
+
+    index = forecasts.forecast.index
+    columns = forecasts.forecast.columns
     transformed_array = []
     # bring these back to the original feature space, as they aren't already
     for samp in result_windows:
-        transformed_array.append(
-            forecasts.transformer.inverse_transform(
-                pd.DataFrame(
-                    samp,
-                    index=forecasts.forecast.index,
-                    columns=forecasts.forecast.columns,
-                )
-            )
-        )
-    return np.array(transformed_array)
+        inv_df = pd.DataFrame(samp, index=index, columns=columns)
+        if need_inverse_combination:
+            inv_df = combination_transformer.inverse_transform(inv_df)
+        if need_inverse_transformer:
+            inv_df = transformer.inverse_transform(inv_df)
+        if isinstance(inv_df, pd.DataFrame):
+            transformed_array.append(inv_df.to_numpy(copy=False))
+        else:
+            transformed_array.append(np.asarray(inv_df))
+    return np.stack(transformed_array, axis=0)
 
 
 def extract_window_index(forecasts):
-    model_name = forecasts.model_name
-    if model_name == "SectionalMotif":
-        return forecasts.model.windows
-    if model_name == "BallTreeMultivariateMotif":
-        return forecasts.model.windows
-    else:
+    windows = getattr(getattr(forecasts, "model", None), "windows", None)
+    if windows is None:
         raise ValueError("window indexes not supported by this model yet")
+    return windows
 
 
 def set_limit_forecast(
@@ -173,6 +210,7 @@ class EventRiskForecast(object):
     Attributes:
         result_windows, forecast_df, up_forecast_df, low_forecast_df
         lower_limit_2d, upper_limit_2d, upper_risk_array, lower_risk_array
+        window_index, prediction_object
     """
 
     def __init__(
@@ -233,6 +271,8 @@ class EventRiskForecast(object):
         self.outcome_columns = df_train.columns
         self.outcome_index = None
         self.result_windows = None
+        self.window_index = None
+        self.prediction_object = None
 
     def __repr__(self):
         """Print."""
@@ -405,6 +445,11 @@ class EventRiskForecast(object):
                 result_windows_list.append(forecasts.upper_forecast)
                 result_windows_list.append(forecasts.lower_forecast)
             result_windows = np.array(result_windows_list)
+        try:
+            self.window_index = extract_window_index(forecasts)
+        except ValueError:
+            self.window_index = None
+        self.prediction_object = forecasts
         return result_windows, forecasts.forecast, upper_forecast, lower_forecast
 
     @staticmethod
