@@ -71,9 +71,32 @@ date_part_methods = [
     "expanded_binarized",
     'common_fourier',
     'common_fourier_rw',
+    'anchored_warped_fourier:quarter_end',
+    'anchored_segment_fourier:quarter_end',
+    'anchored_warped_fourier:us_school',
+    'anchored_segment_fourier:us_school',
 ]
 
 origin_ts = "2030-01-01"
+
+
+ANCHOR_SCHEMES = {
+    'quarter_end': {
+        'type': 'static_month_day',
+        'dates': [(3, 31), (6, 30), (9, 30), (12, 31)],
+    },
+    'us_school': {
+        'type': 'holiday',
+        'country': 'US',
+        'holidays': [
+            ['Memorial Day'],
+            ['Labor Day'],
+            ['Thanksgiving Day'],
+            ['Christmas Day', 'Christmas Day (observed)'],
+        ],
+        'approximate_dayofyear': [145, 247, 329, 359],
+    },
+}
 
 
 def _is_seasonality_order_list(data):
@@ -175,6 +198,10 @@ def date_part(
         # this handles it already having been run recursively
         # remove duplicate columns if present
         date_part_df = date_part_df.loc[:, ~date_part_df.columns.duplicated()]
+    elif isinstance(method, str) and method.startswith('anchored_warped_fourier'):
+        date_part_df = anchored_warped_fourier_features(DTindex, method)
+    elif isinstance(method, str) and method.startswith('anchored_segment_fourier'):
+        date_part_df = anchored_segment_fourier_features(DTindex, method)
     elif method in datepart_components:
         date_part_df = create_datepart_components(DTindex, method)
     elif method == 'recurring':
@@ -503,6 +530,243 @@ def date_part(
     return date_part_df
 
 
+def _parse_anchor_method(method: str, default_order: int = 6):
+    parts = method.split(':')
+    if len(parts) < 2:
+        raise ValueError(f"Anchored method `{method}` is missing a scheme name.")
+    scheme_key = parts[1]
+    order = default_order
+    if len(parts) >= 3 and parts[2]:
+        try:
+            order = int(float(parts[2]))
+        except Exception:
+            pass
+    order = max(1, int(order))
+    return scheme_key, order
+
+
+def _resolve_anchor_scheme(scheme_key: str):
+    if scheme_key not in ANCHOR_SCHEMES:
+        raise ValueError(
+            f"Anchored scheme `{scheme_key}` not recognized. Available: {list(ANCHOR_SCHEMES.keys())}"
+        )
+    return ANCHOR_SCHEMES[scheme_key]
+
+
+def _align_timestamp_to_tz(ts, tz):
+    ts = pd.Timestamp(ts)
+    if tz is None:
+        if ts.tzinfo is not None:
+            return ts.tz_localize(None)
+        return ts
+    if ts.tzinfo is None:
+        return ts.tz_localize(tz)
+    if ts.tzinfo == tz:
+        return ts
+    return ts.tz_convert(tz)
+
+
+def _holiday_anchors_for_year(year, tz, scheme, holiday_cache):
+    holidays_list = scheme.get('holidays', [])
+    if not holidays_list:
+        return []
+    if year not in holiday_cache:
+        start = pd.Timestamp(year=year, month=1, day=1, tz=tz)
+        end = pd.Timestamp(year=year, month=12, day=31, tz=tz)
+        anchor_index = pd.date_range(start, end, freq='D')
+        holiday_cache[year] = holiday_flag(
+            anchor_index, country=[scheme.get('country', 'US')], encode_holiday_type=True
+        )
+    flags = holiday_cache[year]
+    approx = scheme.get('approximate_dayofyear', [])
+    start_year = pd.Timestamp(year=year, month=1, day=1, tz=tz)
+    anchors = []
+    for idx, names in enumerate(holidays_list):
+        if isinstance(names, str):
+            names = [names]
+        selected = None
+        for name in names:
+            if name in flags.columns:
+                hits = flags.index[flags[name] > 0]
+                if len(hits) > 0:
+                    selected = _align_timestamp_to_tz(hits[0], tz)
+                    break
+        if selected is None:
+            if idx < len(approx):
+                selected = start_year + pd.Timedelta(days=max(0, approx[idx] - 1))
+            else:
+                # spread evenly if approximation missing
+                span_days = (
+                    pd.Timestamp(year=year + 1, month=1, day=1, tz=tz)
+                    - start_year
+                ).days
+                frac = (idx + 1) / (len(holidays_list) + 1)
+                selected = start_year + pd.Timedelta(days=int(round(frac * span_days)))
+        anchors.append(_align_timestamp_to_tz(selected, tz))
+    return anchors
+
+
+def _anchor_year_boundaries(year, tz, scheme, holiday_cache):
+    start_year = pd.Timestamp(year=year, month=1, day=1, tz=tz)
+    next_year = pd.Timestamp(year=year + 1, month=1, day=1, tz=tz)
+    anchors = []
+    if scheme.get('type') == 'static_month_day':
+        for month, day in scheme.get('dates', []):
+            anchors.append(pd.Timestamp(year=year, month=month, day=day, tz=tz))
+    elif scheme.get('type') == 'holiday':
+        anchors.extend(_holiday_anchors_for_year(year, tz, scheme, holiday_cache))
+    else:
+        raise ValueError(f"Unsupported anchor scheme type `{scheme.get('type')}`.")
+    anchors = sorted(anchor for anchor in anchors if start_year <= anchor < next_year)
+    boundaries = [start_year]
+    for anchor in anchors:
+        if anchor > boundaries[-1]:
+            boundaries.append(anchor)
+    if boundaries[-1] != next_year:
+        boundaries.append(next_year)
+    return boundaries
+
+
+def _compute_anchor_positions(DTindex, scheme_key):
+    if len(DTindex) == 0:
+        return (
+            np.array([]),
+            np.array([], dtype=int),
+            np.array([]),
+            0,
+        )
+    scheme = _resolve_anchor_scheme(scheme_key)
+    tz = DTindex.tz
+    min_year = DTindex.min().year
+    max_year = DTindex.max().year
+    holiday_cache = {}
+    years = list(range(min_year - 1, max_year + 2))
+    boundary_map = {
+        year: _anchor_year_boundaries(year, tz, scheme, holiday_cache) for year in years
+    }
+    first_key = years[0]
+    base_length = len(boundary_map[first_key])
+    target_positions = np.linspace(0, 1, base_length)
+    warped = np.zeros(len(DTindex), dtype=float)
+    segment_idx = np.zeros(len(DTindex), dtype=int)
+    segment_frac = np.zeros(len(DTindex), dtype=float)
+    for i, dt in enumerate(DTindex):
+        year = dt.year
+        boundaries = boundary_map.get(year)
+        while boundaries and dt < boundaries[0]:
+            year -= 1
+            boundaries = boundary_map.get(year)
+        while boundaries and dt >= boundaries[-1]:
+            year += 1
+            boundaries = boundary_map.get(year)
+        if boundaries is None:
+            raise ValueError("Anchored boundaries not available for date: {}".format(dt))
+        if len(boundaries) != base_length:
+            raise ValueError("Inconsistent boundary count for anchored scheme.")
+        for seg in range(base_length - 1):
+            end = boundaries[seg + 1]
+            last_segment = seg == base_length - 2
+            if dt < end or (last_segment and dt <= end):
+                start = boundaries[seg]
+                duration = (end - start).total_seconds()
+                if duration <= 0:
+                    frac = 0.0
+                else:
+                    frac = (dt - start).total_seconds() / duration
+                frac = float(np.clip(frac, 0.0, 1.0))
+                segment_idx[i] = seg
+                segment_frac[i] = frac
+                warped[i] = target_positions[seg] + frac * (
+                    target_positions[seg + 1] - target_positions[seg]
+                )
+                break
+    return warped, segment_idx, segment_frac, base_length - 1
+
+
+def _fourier_column_names(prefix: str, order: int):
+    cos_cols = [f"{prefix}_cos{idx}" for idx in range(1, order + 1)]
+    sin_cols = [f"{prefix}_sin{idx}" for idx in range(1, order + 1)]
+    return cos_cols + sin_cols
+
+
+def anchored_warped_fourier_features(DTindex, method: str):
+    scheme_key, order = _parse_anchor_method(method, default_order=6)
+    warped, _, _, _ = _compute_anchor_positions(DTindex, scheme_key)
+    if warped.size == 0:
+        return pd.DataFrame()
+    data = fourier_series(warped, p=1.0, n=order)
+    columns = _fourier_column_names(
+        f"anchored_warped_{scheme_key}_fourier", order
+    )
+    return pd.DataFrame(data, columns=columns)
+
+
+def anchored_segment_fourier_features(DTindex, method: str):
+    scheme_key, order = _parse_anchor_method(method, default_order=4)
+    warped, segment_idx, segment_frac, n_segments = _compute_anchor_positions(
+        DTindex, scheme_key
+    )
+    if warped.size == 0 or n_segments <= 0:
+        return pd.DataFrame()
+    rows = len(DTindex)
+    feature_arrays = []
+    columns = []
+    # segment-specific fourier terms
+    fourier_data = np.zeros((rows, order * 2 * n_segments), dtype=float)
+    for seg in range(n_segments):
+        mask = segment_idx == seg
+        col_slice = slice(seg * order * 2, (seg + 1) * order * 2)
+        if mask.any():
+            fourier_data[mask, col_slice] = fourier_series(
+                segment_frac[mask], p=1.0, n=order
+            )
+        columns.extend(
+            _fourier_column_names(
+                f"anchored_segment_{scheme_key}_segment{seg}_fourier", order
+            )
+        )
+    feature_arrays.append(fourier_data)
+    # day-of-week gating
+    weekday = DTindex.weekday
+    dow_data = np.zeros((rows, n_segments * 7), dtype=float)
+    for seg in range(n_segments):
+        mask = segment_idx == seg
+        base = seg * 7
+        for day in range(7):
+            col_idx = base + day
+            if mask.any():
+                dow_data[mask, col_idx] = (weekday[mask] == day).astype(float)
+            columns.append(
+                f"anchored_segment_{scheme_key}_segment{seg}_dow_{day}"
+            )
+    feature_arrays.append(dow_data)
+    # hourly gating when grains are hourly or faster
+    include_hour = False
+    if len(DTindex) > 1:
+        diffs = np.diff(DTindex.asi8) / 1e9
+        if diffs.size > 0:
+            delta = float(np.median(np.abs(diffs)))
+            include_hour = delta <= 3600 + 1e-6
+    if include_hour:
+        hours = DTindex.hour
+        hour_data = np.zeros((rows, n_segments * 24), dtype=float)
+        for seg in range(n_segments):
+            mask = segment_idx == seg
+            base = seg * 24
+            for hour in range(24):
+                col_idx = base + hour
+                if mask.any():
+                    hour_data[mask, col_idx] = (hours[mask] == hour).astype(float)
+                columns.append(
+                    f"anchored_segment_{scheme_key}_segment{seg}_hour_{hour}"
+                )
+        feature_arrays.append(hour_data)
+    if not feature_arrays:
+        return pd.DataFrame()
+    assembled = np.column_stack(feature_arrays)
+    return pd.DataFrame(assembled, columns=columns)
+
+
 def fourier_series(t, p=365.25, n=10):
     # 2 pi n / p
     x = 2 * np.pi * np.arange(1, n + 1) / p
@@ -762,6 +1026,8 @@ base_seasonalities = [  # this needs to be a list
     "expanded_binarized",
     'common_fourier',
     'common_fourier_rw',
+    'anchored_warped_fourier:us_school',
+    'anchored_segment_fourier:us_school',
     "simple_poly",
     # it is critical for this to work with the fourier order option that the FLOAT COME second if the list is length 2
     [7, 365.25],
@@ -801,6 +1067,8 @@ def random_datepart(method='random'):
             0.35,
             0.45,
             0.2,
+            0.25,
+            0.25,
             0.1,
             0.1,
             0.05,

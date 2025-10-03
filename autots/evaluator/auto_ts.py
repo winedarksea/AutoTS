@@ -117,7 +117,7 @@ class AutoTS(object):
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
-        skip_slow_models_seconds (float): if not None, skip models from the initial round that took longer than this many seconds during validation. Does not apply to ensemble models. Defaults to None (no skipping).
+        skip_slow_models_seconds (float): if not None, skip models from the initial round that took longer than this many seconds during validation. Does not apply to ensemble models. Defaults to None (no skipping). If too small a number is chosen, can cause an error in validation when all models are too slow.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
