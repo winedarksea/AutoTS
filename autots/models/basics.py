@@ -3282,7 +3282,7 @@ class BallTreeMultivariateMotif(ModelObject):
             )
             Xa = x.reshape(-1, x.shape[-1])
             if self.sample_fraction is not None:
-                if 0 < self.sample_fration < 1:
+                if 0 < self.sample_fraction < 1:
                     sample_size = int(Xa.shape[0] * self.sample_fraction)
                 else:
                     sample_size = (

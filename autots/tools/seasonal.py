@@ -641,45 +641,77 @@ def _compute_anchor_positions(DTindex, scheme_key):
     max_year = DTindex.max().year
     holiday_cache = {}
     years = list(range(min_year - 1, max_year + 2))
-    boundary_map = {
-        year: _anchor_year_boundaries(year, tz, scheme, holiday_cache) for year in years
-    }
-    first_key = years[0]
-    base_length = len(boundary_map[first_key])
+    
+    all_boundaries = []
+    for year in years:
+        all_boundaries.extend(_anchor_year_boundaries(year, tz, scheme, holiday_cache))
+    
+    all_boundaries = pd.Series(all_boundaries).drop_duplicates().sort_values().to_list()
+    base_length = len(_anchor_year_boundaries(years[0], tz, scheme, holiday_cache))
+
+    if len(all_boundaries) < 2:
+        return (
+            np.zeros(len(DTindex), dtype=float),
+            np.zeros(len(DTindex), dtype=int),
+            np.zeros(len(DTindex), dtype=float),
+            0,
+        )
+
+    # Use pd.cut to find which segment each timestamp belongs to
+    segment_indices = pd.cut(
+        DTindex,
+        bins=all_boundaries,
+        right=False,
+        labels=False,
+        include_lowest=True,
+    )
+    # fill any NaNs from dates outside the boundary range
+    segment_indices = (
+        pd.Series(segment_indices, index=DTindex)
+        .bfill()
+        .ffill()
+        .to_numpy(dtype=float)
+    )
+    max_segment_index = len(all_boundaries) - 2
+    if max_segment_index < 0:
+        return (
+            np.zeros(len(DTindex), dtype=float),
+            np.zeros(len(DTindex), dtype=int),
+            np.zeros(len(DTindex), dtype=float),
+            0,
+        )
+    segment_indices = np.clip(segment_indices, 0, max_segment_index).astype(int)
+
+    start_int = np.fromiter(
+        (all_boundaries[i].value for i in segment_indices),
+        dtype=np.int64,
+        count=len(segment_indices),
+    )
+    end_int = np.fromiter(
+        (all_boundaries[i + 1].value for i in segment_indices),
+        dtype=np.int64,
+        count=len(segment_indices),
+    )
+
+    dt_int = DTindex.view('i8')
+    durations = end_int - start_int
+    time_from_start = dt_int - start_int
+
+    segment_frac = np.divide(
+        time_from_start,
+        durations,
+        out=np.zeros_like(time_from_start, dtype=float),
+        where=durations != 0,
+    )
+    segment_frac = np.clip(segment_frac, 0.0, 1.0)
+    
+    segment_idx = segment_indices % (base_length - 1)
+
     target_positions = np.linspace(0, 1, base_length)
-    warped = np.zeros(len(DTindex), dtype=float)
-    segment_idx = np.zeros(len(DTindex), dtype=int)
-    segment_frac = np.zeros(len(DTindex), dtype=float)
-    for i, dt in enumerate(DTindex):
-        year = dt.year
-        boundaries = boundary_map.get(year)
-        while boundaries and dt < boundaries[0]:
-            year -= 1
-            boundaries = boundary_map.get(year)
-        while boundaries and dt >= boundaries[-1]:
-            year += 1
-            boundaries = boundary_map.get(year)
-        if boundaries is None:
-            raise ValueError("Anchored boundaries not available for date: {}".format(dt))
-        if len(boundaries) != base_length:
-            raise ValueError("Inconsistent boundary count for anchored scheme.")
-        for seg in range(base_length - 1):
-            end = boundaries[seg + 1]
-            last_segment = seg == base_length - 2
-            if dt < end or (last_segment and dt <= end):
-                start = boundaries[seg]
-                duration = (end - start).total_seconds()
-                if duration <= 0:
-                    frac = 0.0
-                else:
-                    frac = (dt - start).total_seconds() / duration
-                frac = float(np.clip(frac, 0.0, 1.0))
-                segment_idx[i] = seg
-                segment_frac[i] = frac
-                warped[i] = target_positions[seg] + frac * (
-                    target_positions[seg + 1] - target_positions[seg]
-                )
-                break
+    warped = target_positions[segment_idx] + segment_frac * (
+        target_positions[segment_idx + 1] - target_positions[segment_idx]
+    )
+
     return warped, segment_idx, segment_frac, base_length - 1
 
 

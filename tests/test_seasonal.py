@@ -267,6 +267,29 @@ class TestSeasonal(unittest.TestCase):
             )
         )
 
+    def test_anchored_warped_fourier_weekly(self):
+        DTindex = pd.date_range('2020-01-01', '2022-12-31', freq='W-WED')
+        df = date_part(
+            DTindex,
+            method='anchored_warped_fourier:us_school:3',
+            set_index=True,
+        )
+
+        self.assertEqual(df.shape[0], DTindex.shape[0])
+        self.assertGreater(df.shape[1], 0)
+        self.assertEqual(df.isna().sum().sum(), 0)
+
+    def test_anchored_segment_fourier_weekly(self):
+        DTindex = pd.date_range('2020-01-01', '2022-12-31', freq='W-WED')
+        df = date_part(
+            DTindex,
+            method='anchored_segment_fourier:us_school:2',
+            set_index=True,
+        )
+
+        self.assertEqual(df.isna().sum().sum(), 0)
+        self.assertFalse(any('_hour_' in col for col in df.columns))
+
     def test_find_market_changepoints(self):
         """Test market changepoint detection."""
         from autots.tools.seasonal import find_market_changepoints_multivariate
