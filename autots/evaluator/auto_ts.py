@@ -220,7 +220,7 @@ class AutoTS(object):
         prefill_na: str = None,
         introduce_na: bool = None,
         preclean: dict = None,
-        model_interrupt: bool = True,
+        model_interrupt: bool = "stop",
         generation_timeout: int = None,
         current_model_file: str = None,
         force_gc: bool = False,
