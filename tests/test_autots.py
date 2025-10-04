@@ -6,6 +6,8 @@ import time
 import timeit
 import tempfile
 import os
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
 from autots.datasets import (
@@ -13,7 +15,13 @@ from autots.datasets import (
 )
 from autots import AutoTS, model_forecast, ModelPrediction, GeneralTransformer
 from autots.evaluator.auto_ts import fake_regressor
-from autots.evaluator.auto_model import ModelMonster
+from autots.evaluator.auto_model import (
+    ModelMonster,
+    TemplateEvalObject,
+    reset_interrupt_tracking,
+    _register_interrupt_press,
+    _normalize_interrupt_mode,
+)
 from autots.models.ensemble import full_ensemble_test_list
 from autots.models.model_list import default as default_model_list
 from autots.models.model_list import all_models
@@ -1123,6 +1131,91 @@ class ModelTest(unittest.TestCase):
         updated_forecast = model.predict()
         self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
         self.assertTrue(updated_forecast.forecast.index[0] > df.index[-1])
+
+    def test_interrupt_helpers(self):
+        reset_interrupt_tracking()
+        first_press = _register_interrupt_press(1.5)
+        self.assertFalse(first_press)
+        second_press = _register_interrupt_press(1.5)
+        self.assertTrue(second_press)
+        reset_interrupt_tracking()
+        mode, window = _normalize_interrupt_mode(
+            {"mode": "skip", "double_press_window": 1.2}
+        )
+        self.assertEqual(mode, "skip")
+        self.assertAlmostEqual(window, 1.2, places=4)
+        mode_stop, _ = _normalize_interrupt_mode("stop")
+        self.assertEqual(mode_stop, "run")
+
+    def test_run_interrupt_flags(self):
+        model = AutoTS(
+            forecast_length=1,
+            max_generations=0,
+            num_validations=0,
+            model_interrupt=True,
+            verbose=0,
+            model_list='superfast',
+        )
+        model.used_frequency = 'D'
+        template = pd.DataFrame(columns=model.template_cols)
+        idx = pd.date_range("2020-01-01", periods=2, freq='D')
+        df_train = pd.DataFrame({'a': [1.0]}, index=idx[:1])
+        df_test = pd.DataFrame({'a': [2.0]}, index=idx[1:])
+        fake_result = TemplateEvalObject()
+        fake_result.interrupted = True
+        fake_result.interrupt_details = {"level": "run", "timestamp": "now"}
+        with patch('autots.evaluator.auto_ts.TemplateWizard', return_value=fake_result):
+            model._run_template(
+                template,
+                df_train,
+                df_test,
+                future_regressor_train=None,
+                future_regressor_test=None,
+                current_weights={'a': 1},
+                validation_round=0,
+                max_generations="0",
+                model_count=0,
+                result_file=None,
+                return_template=True,
+            )
+        self.assertTrue(model._interrupt_run)
+        self.assertTrue(model.run_was_interrupted)
+        self.assertEqual(model.run_interrupt_details.get("level"), "run")
+
+    def test_generation_interrupt_flags(self):
+        model = AutoTS(
+            forecast_length=1,
+            max_generations=0,
+            num_validations=0,
+            model_interrupt="end_generation",
+            verbose=0,
+            model_list='superfast',
+        )
+        model.used_frequency = 'D'
+        template = pd.DataFrame(columns=model.template_cols)
+        idx = pd.date_range("2020-01-01", periods=2, freq='D')
+        df_train = pd.DataFrame({'a': [1.0]}, index=idx[:1])
+        df_test = pd.DataFrame({'a': [2.0]}, index=idx[1:])
+        fake_result = TemplateEvalObject()
+        fake_result.interrupted = True
+        fake_result.interrupt_details = {"level": "generation", "timestamp": "now"}
+        with patch('autots.evaluator.auto_ts.TemplateWizard', return_value=fake_result):
+            model._run_template(
+                template,
+                df_train,
+                df_test,
+                future_regressor_train=None,
+                future_regressor_test=None,
+                current_weights={'a': 1},
+                validation_round=0,
+                max_generations="0",
+                model_count=0,
+                result_file=None,
+                return_template=True,
+            )
+        self.assertFalse(model._interrupt_run)
+        self.assertFalse(model.run_was_interrupted)
+        self.assertEqual(model.run_interrupt_details.get("level"), "generation")
 
     def test_corecount(self):
         auto_count = cpu_count()

@@ -76,6 +76,64 @@ from autots.models.sklearn import (
 )
 from autots.models.composite import PreprocessingExperts
 from autots.models.deepssm import MambaSSM, pMLP
+from typing import Any, Dict, Tuple
+
+
+INTERRUPT_DOUBLE_PRESS_WINDOW = 1.5
+_INTERRUPT_STATE: Dict[str, Any] = {"last_press": None}
+
+
+def set_interrupt_double_press_window(seconds: float) -> None:
+    """Adjust global double-press window for Ctrl+C escalation."""
+    global INTERRUPT_DOUBLE_PRESS_WINDOW
+    try:
+        INTERRUPT_DOUBLE_PRESS_WINDOW = max(0.0, float(seconds))
+    except Exception:
+        INTERRUPT_DOUBLE_PRESS_WINDOW = 1.5
+
+
+def reset_interrupt_tracking() -> None:
+    """Clear interrupt tracking between runs."""
+    _INTERRUPT_STATE["last_press"] = None
+
+
+def _normalize_interrupt_mode(model_interrupt: Any) -> Tuple[str, float]:
+    """Return normalized interrupt mode and double press window."""
+    window = INTERRUPT_DOUBLE_PRESS_WINDOW
+    mode = model_interrupt
+    if isinstance(model_interrupt, dict):
+        mode = model_interrupt.get("mode", model_interrupt.get("value", True))
+        if "double_press_window" in model_interrupt:
+            try:
+                window = max(0.0, float(model_interrupt["double_press_window"]))
+            except Exception:
+                window = INTERRUPT_DOUBLE_PRESS_WINDOW
+    if mode in (False, None):
+        return "disabled", window
+    if isinstance(mode, str):
+        mode = mode.lower()
+        if mode in ("stop", "run"):
+            return "run", window
+        if mode in ("end_generation", "generation"):
+            return "generation", window
+        if mode in ("skip", "model"):
+            return "skip", window
+    if mode is True:
+        return "skip", window
+    return "skip", window
+
+
+def _register_interrupt_press(window: float) -> bool:
+    """Track Ctrl+C presses and return True if escalation threshold met."""
+    now = datetime.datetime.now()
+    last_press = _INTERRUPT_STATE.get("last_press")
+    if last_press is not None:
+        delta = (now - last_press).total_seconds()
+        if delta <= window:
+            _INTERRUPT_STATE["last_press"] = None
+            return True
+    _INTERRUPT_STATE["last_press"] = now
+    return False
 
 
 def create_model_id(
@@ -1047,6 +1105,8 @@ class TemplateEvalObject(object):
         self.full_mae_errors = []
         self.full_pl_errors = []
         self.squared_errors = []
+        self.interrupted = False
+        self.interrupt_details: Dict[str, Any] = {}
 
     def __repr__(self):
         """Print."""
@@ -1138,6 +1198,11 @@ class TemplateEvalObject(object):
         self.full_mae_ids.extend(another_eval.full_mae_ids)
         self.full_mae_vals.extend(another_eval.full_mae_vals)
         self.model_count = self.model_count + another_eval.model_count
+        if another_eval.interrupted and not self.interrupted:
+            self.interrupted = True
+            self.interrupt_details = another_eval.interrupt_details
+        elif another_eval.interrupted and self.interrupted and not self.interrupt_details:
+            self.interrupt_details = another_eval.interrupt_details
         return self
 
     def save(self, filename='initial_results.pickle'):
@@ -2123,6 +2188,7 @@ def TemplateWizard(
     diff_A = np.diff(np.concatenate([last_of_array, actuals]), axis=0)
 
     template_dict = template.to_dict('records')
+    interrupt_mode, interrupt_window = _normalize_interrupt_mode(model_interrupt)
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
@@ -2276,39 +2342,75 @@ def TemplateWizard(
                     )
 
         except KeyboardInterrupt:
-            if model_interrupt:
-                fit_runtime = datetime.datetime.now() - template_start_time
-                result = pd.DataFrame(
-                    {
-                        'ID': create_model_id(
-                            model_str, parameter_dict, transformation_dict
-                        ),
-                        'Model': model_str,
-                        'ModelParameters': json.dumps(parameter_dict),
-                        'TransformationParameters': json.dumps(transformation_dict),
-                        'Ensemble': ensemble_input,
-                        'TransformationRuntime': datetime.timedelta(0),
-                        'FitRuntime': fit_runtime,
-                        'PredictRuntime': datetime.timedelta(0),
-                        'TotalRuntime': fit_runtime,
-                        'Exceptions': "KeyboardInterrupt by user",
-                        'Runs': 1,
-                        'Generation': current_generation,
-                        'ValidationRound': validation_round,
-                    },
-                    index=[0],
-                )
-                template_result.model_results = pd.concat(
-                    [template_result.model_results, result],
-                    axis=0,
-                    ignore_index=True,
-                    sort=False,
-                ).reset_index(drop=True)
-                if model_interrupt == "end_generation" and current_generation > 0:
-                    break
-            else:
+            if interrupt_mode == "disabled":
                 sys.stdout.flush()
-                raise KeyboardInterrupt
+                raise
+            now = datetime.datetime.now()
+            escalate = False
+            if interrupt_mode == "run":
+                escalate = True
+            elif interrupt_mode in ("skip", "generation"):
+                escalate = _register_interrupt_press(interrupt_window)
+            if escalate:
+                if verbose >= 0:
+                    print(
+                        "KeyboardInterrupt received twice within {:.1f} seconds. Ending AutoTS run.".format(
+                            interrupt_window
+                        )
+                    )
+                template_result.interrupted = True
+                template_result.interrupt_details = {
+                    "level": "run",
+                    "timestamp": now.isoformat(),
+                    "reason": "KeyboardInterrupt",
+                }
+                reset_interrupt_tracking()
+                break
+            fit_runtime = datetime.datetime.now() - template_start_time
+            result = pd.DataFrame(
+                {
+                    'ID': create_model_id(
+                        model_str, parameter_dict, transformation_dict
+                    ),
+                    'Model': model_str,
+                    'ModelParameters': json.dumps(parameter_dict),
+                    'TransformationParameters': json.dumps(transformation_dict),
+                    'Ensemble': ensemble_input,
+                    'TransformationRuntime': datetime.timedelta(0),
+                    'FitRuntime': fit_runtime,
+                    'PredictRuntime': datetime.timedelta(0),
+                    'TotalRuntime': fit_runtime,
+                    'Exceptions': "KeyboardInterrupt by user",
+                    'Runs': 1,
+                    'Generation': current_generation,
+                    'ValidationRound': validation_round,
+                },
+                index=[0],
+            )
+            template_result.model_results = pd.concat(
+                [template_result.model_results, result],
+                axis=0,
+                ignore_index=True,
+                sort=False,
+            ).reset_index(drop=True)
+            if verbose >= 0:
+                if interrupt_mode == "generation" and current_generation > 0:
+                    print("KeyboardInterrupt caught. Ending current generation.")
+                else:
+                    print(
+                        "KeyboardInterrupt caught. Skipping current model. Press Ctrl+C again within {:.1f} seconds to end run.".format(
+                            interrupt_window
+                        )
+                    )
+            if interrupt_mode == "generation" and current_generation > 0:
+                template_result.interrupted = True
+                template_result.interrupt_details = {
+                    "level": "generation",
+                    "timestamp": now.isoformat(),
+                    "reason": "KeyboardInterrupt",
+                }
+                reset_interrupt_tracking()
+                break
         except Exception as e:
             if verbose >= 0:
                 if traceback:

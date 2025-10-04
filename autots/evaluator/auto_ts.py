@@ -38,6 +38,7 @@ from autots.evaluator.auto_model import (
     create_model_id,
     ModelPrediction,
     all_valid_weightings,
+    reset_interrupt_tracking,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -138,10 +139,12 @@ class AutoTS(object):
         preclean (dict): if not None, a dictionary of Transformer params to be applied to input data
             {"fillna": "median", "transformations": {}, "transformation_params": {}}
             This will change data used in model inputs for fit and predict, and for accuracy evaluation in cross validation!
-        model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
-            if True, KeyboardInterrupts attempt to only quit current model.
-            if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
-            if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
+        model_interrupt (bool | str | dict): configure how KeyboardInterrupts are handled.
+            False keeps default Python behaviour (immediate termination).
+            True or "skip" skips only the current model; press Ctrl+C twice within 1.5 seconds to stop the entire run.
+            "end_generation" skips the current model and ends the rest of the active generation; a second Ctrl+C within 1.5 seconds still stops the run.
+            "stop" or "run" ends the whole run on the first interrupt.
+            Provide a dict such as {"mode": "skip", "double_press_window": 1.2} to change the mode and double-press window.
         generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
             This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching. It is an overall cap for total generation search time, not per generation.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
@@ -269,6 +272,9 @@ class AutoTS(object):
         self.validate_import = None
         self.best_model_original = None
         self.best_model_original_id = None
+        self._interrupt_run = False
+        self.run_was_interrupted = False
+        self.run_interrupt_details = {}
         # do not add 'ID' to the below unless you want to refactor things.
         self.template_cols = [
             'Model',
@@ -1236,6 +1242,10 @@ class AutoTS(object):
         self.model = None
         self.grouping_ids = grouping_ids
         self.fitStart = pd.Timestamp.now()
+        reset_interrupt_tracking()
+        self._interrupt_run = False
+        self.run_was_interrupted = False
+        self.run_interrupt_details = {}
 
         # convert class variables to local variables (makes testing easier)
         if self.validation_method == "custom":
@@ -1371,6 +1381,8 @@ class AutoTS(object):
             current_generation=0,
             result_file=result_file,
         )
+        if self._interrupt_run:
+            return self._handle_interrupt_exit()
 
         # now run new generations, trying more models based on past successes.
         current_generation = 0
@@ -1442,6 +1454,8 @@ class AutoTS(object):
                 current_generation=current_generation,
                 result_file=result_file,
             )
+            if self._interrupt_run:
+                return self._handle_interrupt_exit()
 
             passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
 
@@ -1470,6 +1484,8 @@ class AutoTS(object):
                         current_generation=(current_generation + 1),
                         result_file=result_file,
                     )
+                    if self._interrupt_run:
+                        return self._handle_interrupt_exit()
                 elif "simple" in self.ensemble:
                     print("Simple ensemble missing, error unclear")
             except Exception as e:
@@ -1487,6 +1503,8 @@ class AutoTS(object):
                 validation_template=self.validation_template,
                 future_regressor=self.future_regressor_train,
             )
+            if self._interrupt_run:
+                return self._handle_interrupt_exit()
             # ensembles built on validation results
             if self.ensemble:
                 try:
@@ -1530,6 +1548,8 @@ class AutoTS(object):
                             current_generation=(current_generation + 2),
                             result_file=result_file,
                         )
+                        if self._interrupt_run:
+                            return self._handle_interrupt_exit()
                         self._run_validations(
                             df_wide_numeric=self.df_wide_numeric,
                             num_validations=self.num_validations,
@@ -1537,6 +1557,8 @@ class AutoTS(object):
                             future_regressor=self.future_regressor_train,
                             first_validation=False,
                         )
+                        if self._interrupt_run:
+                            return self._handle_interrupt_exit()
                 except Exception as e:
                     print(
                         f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
@@ -1598,6 +1620,8 @@ class AutoTS(object):
                         additional_msg=" horizontal ensemble validations",
                         shifted_starts=True,  # this is to try and reduce choice based on overfitting
                     )
+                    if self._interrupt_run:
+                        return self._handle_interrupt_exit()
                 else:
                     # test on initial test split to make sure they work
                     self._run_template(
@@ -1613,6 +1637,8 @@ class AutoTS(object):
                         current_generation=0,
                         result_file=result_file,
                     )
+                    if self._interrupt_run:
+                        return self._handle_interrupt_exit()
             except Exception as e:
                 if self.verbose >= 0:
                     print(
@@ -2040,6 +2066,13 @@ class AutoTS(object):
             additional_msg=additional_msg,
             custom_metric=self.custom_metric,
         )
+        if template_result.interrupted:
+            details = template_result.interrupt_details.copy()
+            if details:
+                self.run_interrupt_details = details
+            if details.get("level") == "run":
+                self.run_was_interrupted = True
+                self._interrupt_run = True
         if model_count == 0:
             self.model_count += template_result.model_count
         else:
@@ -2084,6 +2117,28 @@ class AutoTS(object):
         if result_file is not None:
             self.initial_results.save(result_file)
         return None
+
+    def _handle_interrupt_exit(self):
+        """Finalize state after a run-level interrupt."""
+        self.run_was_interrupted = True
+        if not self.run_interrupt_details:
+            self.run_interrupt_details = {
+                "level": "run",
+                "reason": "KeyboardInterrupt",
+            }
+        if self.validation_results is None:
+            self.validation_results = copy.copy(self.initial_results)
+        try:
+            self = self.validation_agg()
+        except Exception:
+            pass
+        try:
+            self._set_best_model()
+        except Exception:
+            pass
+        sys.stdout.flush()
+        self.fitRuntime = pd.Timestamp.now() - self.fitStart
+        return self
 
     def _run_validations(
         self,
@@ -2205,6 +2260,10 @@ class AutoTS(object):
                 return_template=return_template,
                 additional_msg=additional_msg,
             )
+            if self._interrupt_run:
+                if return_template:
+                    return result_overall
+                return None
             if return_template:
                 result_overall = result_overall.concat(result)
         if return_template:

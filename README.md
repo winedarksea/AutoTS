@@ -112,7 +112,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
 	* if using `subset`, passing `weights` for series will weight subset selection towards higher priority series.
 	* if limited by RAM, it can be distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
-* Set `model_interrupt=True` which passes over the current model when a `KeyboardInterrupt` ie `crtl+c` is pressed (although if the interrupt falls between generations it will stop the entire training).
+* Set `model_interrupt=True` to skip only the current model when you hit `Ctrl+C`. Tap `Ctrl+C` a second time within 1.5 seconds to end the entire run, or pass something like `model_interrupt={"mode": "skip", "double_press_window": 1.2}` to tighten/loosen the window.
 * Use the `result_file` method of `.fit()` which will save progress after each generation - helpful to save progress if a long training is being done. Use `import_results` to recover.
 * While Transformations are pretty fast, setting `transformer_max_depth` to a lower number (say, 2) will increase speed. Also utilize `transformer_list` == 'fast' or 'superfast'.
 * Check out [this example](https://github.com/winedarksea/AutoTS/discussions/76) of using AutoTS with pandas UDF.
