@@ -432,6 +432,7 @@ all_result_path = [
     "BallTreeRegressionMotif",
     "BallTreeMultivariateMotif",
     "PreprocessingExperts",
+    "Ensemble",  # BestN ensembles can provide result_windows
 ]
 # these are those that require a parameter, and return a dict
 diff_window_motif_list = [

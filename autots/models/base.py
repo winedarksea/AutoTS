@@ -418,6 +418,7 @@ class PredictionObject(object):
         full_mae_error=None,
         model=None,
         transformer=None,
+        result_windows=None,
     ):
         self.model_name = self.name = model_name
         self.model_parameters = model_parameters
@@ -442,6 +443,7 @@ class PredictionObject(object):
         self.model = model
         self.transformer = transformer
         self.runtime_dict = None
+        self.result_windows = result_windows
 
     def __repr__(self):
         """Print."""

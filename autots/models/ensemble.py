@@ -466,6 +466,14 @@ def BestNEnsemble(
     for x in forecasts_runtime.values():
         ens_runtime = ens_runtime + x
 
+    # Create result_windows for EventRiskForecast compatibility
+    # Each component model forecast becomes a potential outcome path
+    # Shape: (num_models, forecast_length, num_series)
+    aligned_forecasts_for_windows = [
+        forecasts[m].reindex(columns=columnz).values for m in forecast_keys
+    ]
+    result_windows = np.array(aligned_forecasts_for_windows)
+
     ens_result = PredictionObject(
         model_name="Ensemble",
         forecast_length=len(ens_df.index),
@@ -478,6 +486,7 @@ def BestNEnsemble(
         predict_runtime=datetime.datetime.now() - startTime,
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
+        result_windows=result_windows,
     )
     return ens_result
 

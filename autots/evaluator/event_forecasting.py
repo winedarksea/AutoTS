@@ -12,12 +12,17 @@ from autots.models.model_list import all_result_path, diff_window_motif_list
 
 def extract_result_windows(forecasts, model_name=None):
     """Standardize result windows from different models into a 3d numpy array."""
-    model = getattr(forecasts, "model", None)
-    if model is None or getattr(model, "result_windows", None) is None:
-        raise ValueError(
-            "Model did not expose result windows. Ensure return_result_windows is enabled."
-        )
-    result_windows = model.result_windows
+    # First check if result_windows is directly on the forecasts object (for ensembles)
+    result_windows = getattr(forecasts, "result_windows", None)
+    if result_windows is None:
+        # Otherwise, check the model attribute (for regular models)
+        model = getattr(forecasts, "model", None)
+        if model is None or getattr(model, "result_windows", None) is None:
+            raise ValueError(
+                "Model did not expose result windows. Ensure return_result_windows is enabled."
+            )
+        result_windows = model.result_windows
+    
     if model_name is None:
         model_name = forecasts.model_name
 
@@ -39,7 +44,8 @@ def extract_result_windows(forecasts, model_name=None):
         )
 
     transformer = getattr(forecasts, "transformer", None)
-    combination_transformer = getattr(model, "combination_transformer", None)
+    model = getattr(forecasts, "model", None)
+    combination_transformer = getattr(model, "combination_transformer", None) if model is not None else None
 
     need_inverse_transformer = False
     if transformer is not None and hasattr(transformer, "inverse_transform"):
@@ -167,6 +173,10 @@ def set_limit_forecast_historic(
 class EventRiskForecast(object):
     """Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.
 
+    Event risk was created for the use case of predicting the risk of an out of stock event (lower limit ~= 0), or a very high demand day, and similar issues.
+    It can also be used to identify "regressions", that is, cases where the real world data (run as a holdout) was unlikely, to raise an alert that something is amiss.
+    This is a capability somewhat unique to motif models, as most probabilistic models "fan out" rather than creating a mix of quality outcomes.
+
     Upper and lower limits can be one of four types, and may each be different.
     1. None (no risk score calculated for this direction)
     2. Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.
@@ -221,7 +231,7 @@ class EventRiskForecast(object):
         prediction_interval=0.9,
         lower_limit=0.05,
         upper_limit=0.95,
-        model_name="UnivariateMotif",
+        model_name="BallTreeRegressionMotif",
         model_param_dict={
             "window": 3,
             "point_method": "midhinge",
@@ -273,7 +283,6 @@ class EventRiskForecast(object):
             "scale_full_X": False,
             "series_hash": True,
             "frac_slice": None,
-            "return_result_windows": True,
         },
         model_transform_dict={
             "fillna": "akima",
