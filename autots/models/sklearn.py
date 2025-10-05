@@ -1399,7 +1399,7 @@ def generate_regressor_params(
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.2])[0]
             else:
                 n_estimators = random.choices(
-                    [4, 300, 100, 1000, 5000], [0.1, 0.4, 0.4, 0.2, 0.01]
+                    [4, 300, 100, 1000], [0.1, 0.4, 0.4, 0.2]
                 )[0]
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0]
             param_dict = {

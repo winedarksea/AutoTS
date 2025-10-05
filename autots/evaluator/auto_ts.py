@@ -469,6 +469,9 @@ class AutoTS(object):
         self.validation_test_indexes = []
         self.preclean_transformer = None
         self.score_per_series = None
+        self.startTimeStamps = None
+        self.h_ens_used = False
+        self.mosaic_used = False
         self.best_model_non_horizontal = None
         self.best_model_non_ensemble = None
         self.best_model_unpredictability_adjusted = None
@@ -2034,6 +2037,9 @@ class AutoTS(object):
             template["TransformationParameters"].replace("null", "{}").fillna('{}')
         )
         model_count = self.model_count if model_count is None else model_count
+        if self.startTimeStamps is None and isinstance(df_train, pd.DataFrame):
+            # minimal fallback for tests or edge cases that call _run_template before fit()
+            self.startTimeStamps = df_train.notna().idxmax()
         template_result = TemplateWizard(
             template,
             df_train=df_train,
