@@ -568,6 +568,17 @@ class MLEnsemble(ModelObject):
             "regression_model": self.regression_model,
         }
 
+
+"""
+from flaml import AutoML
+
+# Initialize an AutoML instance
+automl = AutoML()
+# Specify automl goal and constraint
+automl_settings = {
+    "time_budget": 120,  # 28800  # in seconds
+    "metric": 'mape',
+    "task": 'regression',
     "log_file_name": "",
     "early_stop": True,
     "verbose": 1,
@@ -579,5 +590,3 @@ class MLEnsemble(ModelObject):
 automl.fit(X_train=X, y_train=y, **automl_settings)
 print(automl.model.estimator)
 """
-
-# run models on latest data
