@@ -7603,7 +7603,9 @@ class GeneralTransformer(object):
             df = self.transformers[i].inverse_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-        elif self.c_trans_n in expanding_transformers:
+        if self.c_trans_n in expanding_transformers:
+            # Expanding transformers can alter index length/order, so keep references in sync
+            self.df_index = df.index
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)
         return df

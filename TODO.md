@@ -11,7 +11,6 @@
 * Series will largely be consistent in period, or at least up-sampled to regular intervals
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
-* trimmed_mean to AverageValueNaive
 
 # 0.6.22 🇺🇦 🇺🇦 🇺🇦
 * added ReconciliationTransformer
@@ -25,6 +24,7 @@
 * changes to HistoricValues which hopefully makes it more reliable
 * added pMLP and MambaSSM models
 * deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet. Unlikely you were using these, deprecated for a while
+* improvements to model_interrupt
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

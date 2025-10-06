@@ -53,8 +53,8 @@ class TestAnomalies(unittest.TestCase):
         ).fillna(0).replace(np.inf, 0)
 
     def test_anomaly_holiday_detectors(self):
-        print("Starting test_anomaly_holiday_detectors")
         """Combininng these to minimize live data download."""
+        print("Starting test_anomaly_holiday_detectors")
         tried = []
         while not all(x in tried for x in available_methods):
             params = AnomalyDetector.get_new_params(method="deep")
@@ -62,6 +62,7 @@ class TestAnomalies(unittest.TestCase):
             while 'Slice' in dict_loop(params).values():
                 params = AnomalyDetector.get_new_params(method="deep")
             with self.subTest(i=params['method']):
+                print(f"Starting subtest test_anomaly_holiday_detectors method={params['method']}")
                 tried.append(params['method'])
                 mod = AnomalyDetector(output='multivariate', **params)
                 num_cols = 2
@@ -86,6 +87,7 @@ class TestAnomalies(unittest.TestCase):
         while not all(x in tried for x in fast_methods):
             params = HolidayDetector.get_new_params(method="fast")
             with self.subTest(i=params["anomaly_detector_params"]['method']):
+                print(f"Starting subtest test_anomaly_holiday_detectors method={params['anomaly_detector_params']['method']}")
                 while 'Slice' in dict_loop(params).values():
                     params = HolidayDetector.get_new_params(method="fast")
                 tried.append(params['anomaly_detector_params']['method'])
@@ -139,11 +141,13 @@ class TestVAEAnomalies(unittest.TestCase):
     
     def test_vae_availability(self):
         """Test that VAEOutlier is available in the methods."""
+        print("Starting test_vae_availability")
         from autots.tools.anomaly_utils import available_methods
         self.assertIn("VAEOutlier", available_methods, "VAEOutlier not found in available methods")
-    
+
     def test_vae_parameter_generation(self):
         """Test parameter generation for VAEOutlier."""
+        print("Starting test_vae_parameter_generation")
         params = AnomalyDetector.get_new_params(method="VAEOutlier")
         self.assertEqual(params['method'], 'VAEOutlier', "Method should be VAEOutlier")
         self.assertIn('method_params', params, "method_params should be present")
@@ -157,6 +161,7 @@ class TestVAEAnomalies(unittest.TestCase):
     
     def test_vae_anomaly_detection(self):
         """Test VAE anomaly detection functionality."""
+        print("Starting test_vae_anomaly_detection")
         try:
             import torch
             torch_available = True
@@ -193,6 +198,7 @@ class TestVAEAnomalies(unittest.TestCase):
     
     def test_vae_univariate_detection(self):
         """Test VAE anomaly detection in univariate mode."""
+        print("Starting test_vae_univariate_detection")
         try:
             import torch
             torch_available = True
@@ -220,6 +226,7 @@ class TestVAEAnomalies(unittest.TestCase):
     
     def test_vae_error_handling(self):
         """Test VAE error handling when PyTorch is not available."""
+        print("Starting test_vae_error_handling")
         # Mock torch_available to False
         from autots.tools import anomaly_utils
         original_torch_available = anomaly_utils.torch_available
@@ -239,6 +246,7 @@ class TestVAEAnomalies(unittest.TestCase):
     
     def test_vae_different_loss_functions(self):
         """Test VAE with different loss functions."""
+        print("Starting test_vae_different_loss_functions")
         try:
             import torch
             torch_available = True
@@ -249,6 +257,7 @@ class TestVAEAnomalies(unittest.TestCase):
         
         for loss_func in loss_functions:
             with self.subTest(loss_function=loss_func):
+                print(f"Starting subtest test_vae_different_loss_functions loss_function={loss_func}")
                 detector = AnomalyDetector(
                     method="VAEOutlier",
                     method_params={
@@ -271,6 +280,7 @@ class TestVAEAnomalies(unittest.TestCase):
     
     def test_vae_depth_parameter(self):
         """Test VAE with different depth parameters."""
+        print("Starting test_vae_depth_parameter")
         try:
             import torch
             torch_available = True
@@ -279,6 +289,7 @@ class TestVAEAnomalies(unittest.TestCase):
         
         for depth in [1, 2]:
             with self.subTest(depth=depth):
+                print(f"Starting subtest test_vae_depth_parameter depth={depth}")
                 detector = AnomalyDetector(
                     method="VAEOutlier",
                     method_params={
@@ -299,6 +310,7 @@ class TestVAEAnomalies(unittest.TestCase):
 
     def test_vae_anomaly_removal_transformer(self):
         """Test AnomalyRemoval transformer with VAE method."""
+        print("Starting test_vae_anomaly_removal_transformer")
         try:
             import torch
             torch_available = True
