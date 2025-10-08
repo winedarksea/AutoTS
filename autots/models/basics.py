@@ -1570,8 +1570,9 @@ def predict_reservoir(
                 # do a prediction
                 x_int[0:d, j + 1] = x_int[0:d, j] + W_out @ out_test[:]
                 
-            # Extract forecast portion: skip initial seed + warmup, take testtime_pts-1 forecast steps
-            interval_list.append(x_int[:, 1:testtime_pts])
+            # Extract forecast portion: skip ns+1 warmup points from historical seed, then take forecast_length steps
+            # This accounts for the offset in starting position (warmtrain_pts - 2 - ns)
+            interval_list.append(x_int[:, (ns + 1):(ns + 1 + forecast_length)])
 
         interval_list = np.array(interval_list)
         

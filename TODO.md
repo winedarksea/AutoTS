@@ -25,6 +25,7 @@
 * added pMLP and MambaSSM models
 * deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet. Unlikely you were using these, deprecated for a while
 * improvements to model_interrupt
+* synthetic data generation and feature extractor new, very much in beta
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

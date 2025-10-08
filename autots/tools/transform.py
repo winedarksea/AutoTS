@@ -6595,10 +6595,12 @@ class ReconciliationTransformer(EmptyTransformer):
         group_size: int = 10,
         hierarchy_map=None,
         reconciliation_params=None,
+        max_memory = 16,  # in GB
     ):
         super().__init__(name="ReconciliationTransformer")
         self.group_size = group_size
         self.hierarchy_map = hierarchy_map
+        self.max_memory = max_memory
 
         # Default reconciliation params
         default_recon = {
@@ -6756,7 +6758,7 @@ class ReconciliationTransformer(EmptyTransformer):
         estimated_memory_gb = estimated_memory_mb / 1024
             
         # Hard limit for very large datasets
-        if estimated_memory_gb > 8:  # > 8GB
+        if estimated_memory_gb > self.max_memory:
             raise ValueError(
                 f"Dataset too large ({estimated_memory_gb:.1f}GB estimated memory). "
                 f"Reduce group_size (current: {self.group_size}) or number of series."

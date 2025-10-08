@@ -398,6 +398,52 @@ class NVARTest(unittest.TestCase):
                 # but should still be finite
                 self.assertFalse(np.isnan(forecast.values).any())
 
+    def test_predict_reservoir_seed_pts_interval_corruption(self):
+        """Test that seed_pts > 1 doesn't corrupt intervals with historical data.
+        
+        This test verifies the fix for the bug where interval_list slicing was
+        not accounting for the ns offset, causing historical points to be included
+        in the forecast distribution.
+        """
+        # Use deterministic data for reproducibility
+        np.random.seed(42)
+        df_array = self.df_simple.values.T
+        forecast_length = 5
+        
+        # Get predictions with seed_pts > 1
+        pred, pred_upper, pred_lower = predict_reservoir(
+            df_array,
+            forecast_length=forecast_length,
+            k=1,
+            warmup_pts=1,
+            seed_pts=10,  # Multiple seeds
+            ridge_param=2.5e-6,
+            prediction_interval=0.9
+        )
+        
+        # The intervals should be reasonable
+        # Upper should be >= lower
+        self.assertTrue(np.all(pred_upper >= pred_lower), 
+                       "Upper bound should be >= lower bound")
+        
+        # Prediction should generally be within bounds
+        # (allowing some tolerance for numerical issues)
+        within_bounds = np.logical_and(pred >= pred_lower - 1e-10, 
+                                       pred <= pred_upper + 1e-10)
+        self.assertTrue(np.all(within_bounds), 
+                       "Prediction should be within interval bounds")
+        
+        # The interval width should be relatively stable across forecast steps
+        # (not have sudden jumps due to historical data corruption)
+        interval_width = pred_upper - pred_lower
+        width_changes = np.abs(np.diff(interval_width, axis=1))
+        
+        # Check that changes aren't too extreme (this would indicate corruption)
+        # For well-behaved data, width changes should be gradual
+        max_relative_change = np.max(width_changes / (interval_width[:, :-1] + 1e-10))
+        self.assertLess(max_relative_change, 10.0, 
+                       "Interval width shouldn't have extreme jumps")
+
 
 class NVARPerformanceTest(unittest.TestCase):
     """Performance and stress tests for NVAR."""
