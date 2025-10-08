@@ -1503,59 +1503,12 @@ def predict_reservoir(
         idx += dlin - row
 
     # ridge regression: train W_out to map out_train to df[t] - df[t - 1]
-    # Use more stable solver instead of pinv
     y_train = x[0:d, warmup_pts:warmtrain_pts] - x[0:d, warmup_pts - 1 : warmtrain_pts - 1]
     A = out_train @ out_train.T + ridge_param * np.identity(dtot)
     b = y_train @ out_train.T
     
-    W_out = None
-    fallback_needed = False
-    
-    # Try stable solve first, fall back to pinv with error handling
-    try:
-        W_out = np.linalg.solve(A, b.T).T
-        # Check if result is valid
-        if np.any(np.isnan(W_out)) or np.any(np.isinf(W_out)):
-            W_out = None
-    except (np.linalg.LinAlgError, ValueError):
-        pass
-    
-    if W_out is None:
-        # If solve fails, try with increased regularization
-        try:
-            A_regularized = out_train @ out_train.T + (ridge_param * 1000) * np.identity(dtot)
-            W_out = np.linalg.solve(A_regularized, b.T).T
-            if np.any(np.isnan(W_out)) or np.any(np.isinf(W_out)):
-                W_out = None
-        except (np.linalg.LinAlgError, ValueError):
-            pass
-    
-    if W_out is None:
-        # Last resort: use pinv with error handling
-        try:
-            W_out = b @ np.linalg.pinv(A, rcond=1e-10)
-            if np.any(np.isnan(W_out)) or np.any(np.isinf(W_out)):
-                W_out = None
-        except (np.linalg.LinAlgError, ValueError):
-            pass
-    
-    if W_out is None:
-        # If all else fails, return simple last value forecast
-        # This prevents crashes on ill-conditioned data
-        fallback_needed = True
-        last_val = df[:, -1:]
-        pred = np.tile(last_val, forecast_length)
-        if prediction_interval is not None or seed_pts > 1:
-            # Return with some uncertainty based on recent variance
-            # Use nanstd to handle NaN values
-            recent_std = np.nanstd(df[:, -min(20, df.shape[1]):], axis=1, keepdims=True)
-            # Replace NaN std with 0 (for all-NaN series)
-            recent_std = np.where(np.isnan(recent_std), 0, recent_std)
-            pred_upper = pred + recent_std * 2
-            pred_lower = pred - recent_std * 2
-            return pred, pred_upper, pred_lower
-        else:
-            return pred
+    # Use stable solve for ridge regression
+    W_out = np.linalg.solve(A, b.T).T
 
 
     # create a place to store feature vectors for prediction
@@ -1583,20 +1536,8 @@ def predict_reservoir(
         x_test[d:dlin, j + 1] = x_test[0 : (dlin - d), j]
         # do a prediction
         x_test[0:d, j + 1] = x_test[0:d, j] + W_out @ out_test[:]
-        
-        # Check for numerical issues and break early if detected
-        if np.any(np.isnan(x_test[:, j + 1])) or np.any(np.isinf(x_test[:, j + 1])):
-            # Fall back to last valid prediction
-            x_test[:, j + 1:] = x_test[:, j:j+1]
-            break
     
     pred = x_test[0:d, 1:]
-    
-    # Validate prediction output
-    if np.any(np.isnan(pred)) or np.any(np.isinf(pred)):
-        # Fallback to simple forecast if numerical issues
-        last_val = df[:, -1:]
-        pred = np.tile(last_val, forecast_length)
 
 
     if prediction_interval is not None or seed_pts > 1:
@@ -1629,28 +1570,10 @@ def predict_reservoir(
                 # do a prediction
                 x_int[0:d, j + 1] = x_int[0:d, j] + W_out @ out_test[:]
                 
-                # Early stopping for numerical issues
-                if np.any(np.isnan(x_int[:, j + 1])) or np.any(np.isinf(x_int[:, j + 1])):
-                    x_int[:, j + 1:] = x_int[:, j:j+1]
-                    break
-            
-            start_slice = ns + 2
-            end_slice = start_slice + testtime_pts - 1
-            interval_list.append(x_int[:, start_slice:end_slice])
+            # Extract forecast portion: skip initial seed + warmup, take testtime_pts-1 forecast steps
+            interval_list.append(x_int[:, 1:testtime_pts])
 
         interval_list = np.array(interval_list)
-        
-        # Validate interval predictions
-        if np.any(np.isnan(interval_list)) or np.any(np.isinf(interval_list)):
-            # Fallback to simple forecast with variance-based intervals
-            last_val = df[:, -1:]
-            pred = np.tile(last_val, forecast_length)
-            recent_std = np.nanstd(df[:, -min(20, df.shape[1]):], axis=1, keepdims=True)
-            # Replace NaN std with 0 (for all-NaN series)
-            recent_std = np.where(np.isnan(recent_std), 0, recent_std)
-            pred_upper = pred + recent_std * 2
-            pred_lower = pred - recent_std * 2
-            return pred, pred_upper, pred_lower
         
         if seed_pts > 1:
             pred_int = np.concatenate(
@@ -1695,7 +1618,7 @@ class NVAR(ModelObject):
         ridge_param (float): standard lambda for ridge regression
         warmup_pts (int): in reality, passing 1 here (no warmup) is fine
         batch_size (int): nvar scales exponentially, to scale linearly, series are split into batches of size n
-        batch_method (str): method for collecting series to make batches
+        batch_method (str): method for collecting series to make batches ('input_order', 'med_sorted', 'std_sorted', 'max_sorted')
     """
 
     def __init__(
