@@ -10,6 +10,7 @@ import pandas as pd
 from autots.tools.anomaly_utils import available_methods, fast_methods
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.datasets import load_live_daily
+from autots.tools.transform import expanding_transformers
 
 
 def dict_loop(params):
@@ -53,13 +54,23 @@ class TestAnomalies(unittest.TestCase):
         ).fillna(0).replace(np.inf, 0)
 
     def test_anomaly_holiday_detectors(self):
-        """Combininng these to minimize live data download."""
+        """Combining these to minimize live data download."""
         print("Starting test_anomaly_holiday_detectors")
         tried = []
-        while not all(x in tried for x in available_methods):
+        # Check if PyTorch is available for VAEOutlier
+        try:
+            import torch
+            torch_available = True
+        except ImportError:
+            torch_available = False
+        
+        # Filter methods based on torch availability
+        test_methods = [m for m in available_methods if m != 'VAEOutlier' or torch_available]
+        
+        while not all(x in tried for x in test_methods):
             params = AnomalyDetector.get_new_params(method="deep")
             # remove 'Slice' as it messes up assertions
-            while 'Slice' in dict_loop(params).values():
+            while any(item in dict_loop(params).values() for item in expanding_transformers):
                 params = AnomalyDetector.get_new_params(method="deep")
             with self.subTest(i=params['method']):
                 print(f"Starting subtest test_anomaly_holiday_detectors method={params['method']}")
@@ -88,7 +99,7 @@ class TestAnomalies(unittest.TestCase):
             params = HolidayDetector.get_new_params(method="fast")
             with self.subTest(i=params["anomaly_detector_params"]['method']):
                 print(f"Starting subtest test_anomaly_holiday_detectors method={params['anomaly_detector_params']['method']}")
-                while 'Slice' in dict_loop(params).values():
+                while any(item in dict_loop(params).values() for item in expanding_transformers):
                     params = HolidayDetector.get_new_params(method="fast")
                 tried.append(params['anomaly_detector_params']['method'])
                 mod = HolidayDetector(**params)

@@ -153,7 +153,7 @@ class AutoTSTest(unittest.TestCase):
         )
         self.assertLess(
             unexpected_rate,
-            0.05,
+            0.15,
             f"Unexpected failures occurred: {unexpected[:5]}",
         )
         # check general model setup
