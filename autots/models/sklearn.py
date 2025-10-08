@@ -1863,6 +1863,53 @@ class RollingRegression(ModelObject):
             x_transformer = VarianceThreshold(threshold=0.0)
         return x_transformer
 
+    def _build_feature_frame(
+        self,
+        data,
+        regressor: pd.DataFrame = None,
+        last_only: bool = False,
+        fillna_reg: bool = False,
+        transform: bool = True,
+    ):
+        """Assemble the feature matrix used by the underlying regressor."""
+        features = rolling_x_regressor(
+            data,
+            mean_rolling_periods=self.mean_rolling_periods,
+            macd_periods=self.macd_periods,
+            std_rolling_periods=self.std_rolling_periods,
+            max_rolling_periods=self.max_rolling_periods,
+            min_rolling_periods=self.min_rolling_periods,
+            ewm_var_alpha=self.ewm_var_alpha,
+            quantile90_rolling_periods=self.quantile90_rolling_periods,
+            quantile10_rolling_periods=self.quantile10_rolling_periods,
+            additional_lag_periods=self.additional_lag_periods,
+            ewm_alpha=self.ewm_alpha,
+            abs_energy=self.abs_energy,
+            rolling_autocorr_periods=self.rolling_autocorr_periods,
+            nonzero_last_n=self.nonzero_last_n,
+            add_date_part=self.add_date_part,
+            holiday=self.holiday,
+            holiday_country=self.holiday_country,
+            polynomial_degree=self.polynomial_degree,
+            window=self.window,
+        )
+        if last_only:
+            features = features.tail(1)
+        if regressor is not None:
+            aligned_reg = regressor.reindex(features.index)
+            features = pd.concat([features, aligned_reg], axis=1)
+        if fillna_reg:
+            features = features.fillna(0)
+        if transform and self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
+            transformed = self.x_transformer.transform(features)
+            features = pd.DataFrame(transformed, index=features.index)
+            features = features.replace([np.inf, -np.inf], 0).fillna(0)
+        elif isinstance(features, pd.DataFrame):
+            features = features.replace([np.inf, -np.inf], 0)
+        if isinstance(features, pd.DataFrame):
+            features.columns = [str(col) for col in features.columns]
+        return features
+
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
@@ -1884,32 +1931,14 @@ class RollingRegression(ModelObject):
         # define X and Y
         self.sktraindata = self.df_train.dropna(how='all', axis=0)
         self.sktraindata = self.sktraindata.ffill().bfill()
-        self.Y = self.sktraindata.drop(self.sktraindata.head(2).index)
+        self.Y = self.sktraindata.iloc[2:].copy()
         self.Y.columns = [x for x in range(len(self.Y.columns))]
-        self.X = rolling_x_regressor(
+        reg_train = self.regressor_train if self.regression_type == 'User' else None
+        self.X = self._build_feature_frame(
             self.sktraindata,
-            mean_rolling_periods=self.mean_rolling_periods,
-            macd_periods=self.macd_periods,
-            std_rolling_periods=self.std_rolling_periods,
-            max_rolling_periods=self.max_rolling_periods,
-            min_rolling_periods=self.min_rolling_periods,
-            ewm_var_alpha=self.ewm_var_alpha,
-            quantile90_rolling_periods=self.quantile90_rolling_periods,
-            quantile10_rolling_periods=self.quantile10_rolling_periods,
-            additional_lag_periods=self.additional_lag_periods,
-            ewm_alpha=self.ewm_alpha,
-            abs_energy=self.abs_energy,
-            rolling_autocorr_periods=self.rolling_autocorr_periods,
-            nonzero_last_n=self.nonzero_last_n,
-            add_date_part=self.add_date_part,
-            holiday=self.holiday,
-            holiday_country=self.holiday_country,
-            polynomial_degree=self.polynomial_degree,
-            window=self.window,
+            regressor=reg_train,
+            transform=False,
         )
-        if self.regression_type == 'User':
-            self.X = pd.concat([self.X, self.regressor_train], axis=1)
-
         if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
             self.x_transformer = self._x_transformer()
             self.x_transformer = self.x_transformer.fit(self.X)
@@ -1920,7 +1949,7 @@ class RollingRegression(ModelObject):
         and the first one is dropped because it will least accurately represent
         rolling values
         """
-        self.X = self.X.drop(self.X.tail(1).index).drop(self.X.head(1).index)
+        self.X = self.X.iloc[1:-1].copy()
         if isinstance(self.X, pd.DataFrame):
             self.X.columns = [str(xc) for xc in self.X.columns]
 
@@ -1983,51 +2012,34 @@ class RollingRegression(ModelObject):
             complete_regressor = pd.concat(
                 [self.regressor_train, future_regressor], axis=0
             )
-
         combined_index = self.df_train.index.append(index)
-        forecast = pd.DataFrame()
-        self.sktraindata.columns = [x for x in range(len(self.sktraindata.columns))]
+        history = self.sktraindata.copy()
+        history.columns = [x for x in range(history.shape[1])]
+        forecasts = []
 
-        # forecast, 1 step ahead, then another, and so on
-        for x in range(forecast_length):
-            x_dat = rolling_x_regressor(
-                self.sktraindata,
-                mean_rolling_periods=self.mean_rolling_periods,
-                macd_periods=self.macd_periods,
-                std_rolling_periods=self.std_rolling_periods,
-                max_rolling_periods=self.max_rolling_periods,
-                min_rolling_periods=self.min_rolling_periods,
-                ewm_var_alpha=self.ewm_var_alpha,
-                quantile90_rolling_periods=self.quantile90_rolling_periods,
-                quantile10_rolling_periods=self.quantile10_rolling_periods,
-                additional_lag_periods=self.additional_lag_periods,
-                ewm_alpha=self.ewm_alpha,
-                abs_energy=self.abs_energy,
-                rolling_autocorr_periods=self.rolling_autocorr_periods,
-                nonzero_last_n=self.nonzero_last_n,
-                add_date_part=self.add_date_part,
-                holiday=self.holiday,
-                holiday_country=self.holiday_country,
-                polynomial_degree=self.polynomial_degree,
+        for forecast_idx in index:
+            regressor_source = (
+                complete_regressor if self.regression_type in ['User', 'user'] else None
             )
-            if self.regression_type == 'User':
-                x_dat = pd.concat(
-                    [x_dat, complete_regressor.head(x_dat.shape[0])], axis=1
-                ).fillna(0)
-            if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
-                x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
-                x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
-            if isinstance(x_dat, pd.DataFrame):
-                x_dat.columns = [str(xc) for xc in x_dat.columns]
-
-            rfPred = pd.DataFrame(self.model.predict(x_dat.tail(1).to_numpy()))
-
-            forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
-            self.sktraindata = pd.concat(
-                [self.sktraindata, rfPred], axis=0, ignore_index=True
+            feature_row = self._build_feature_frame(
+                history,
+                regressor=regressor_source,
+                last_only=True,
+                fillna_reg=self.regression_type in ['User', 'user'],
             )
-            self.sktraindata.index = combined_index[: len(self.sktraindata.index)]
+            predict_input = feature_row.to_numpy()
+            rf_pred = pd.DataFrame(
+                self.model.predict(predict_input),
+                index=[forecast_idx],
+                columns=history.columns,
+            )
+            forecasts.append(rf_pred.copy())
+            history = pd.concat([history, rf_pred], axis=0)
 
+        history.index = combined_index[: len(history.index)]
+        self.sktraindata = history
+
+        forecast = pd.concat(forecasts, axis=0)
         forecast.columns = self.column_names
         forecast.index = index
 
