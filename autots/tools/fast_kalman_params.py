@@ -259,6 +259,31 @@ def new_kalman_params(method=None, allow_auto=True):
             'observation_noise': 0.1,
         }
 
+    def make_ucm_random_walk_drift_ar1():
+        phi = random.uniform(0.2, 0.95)
+        level_noise = random.choice([0.001, 0.005, 0.01])
+        drift_noise = random.choice([1e-05, 5e-05, 0.0001])
+        ar_noise = random.choice([0.01, 0.05, 0.1])
+        observation_noise = random.choice([0.05, 0.1, 0.2])
+        return {
+            'model_name': 'ucm_random_walk_drift_ar1',
+            'state_transition': [
+                [1, 1, 0],
+                [0, 1, 0],
+                [0, 0, phi],
+            ],
+            'process_noise': [
+                [level_noise, 0, 0],
+                [0, drift_noise, 0],
+                [0, 0, ar_noise],
+            ],
+            'observation_model': [[1, 0, 1]],
+            'observation_noise': observation_noise,
+            'level': 'random walk with drift',
+            'cov_type': 'opg',
+            'autoregressive': 1,
+        }
+
     def make_x1_model():
         return {
             'model_name': 'X1',
@@ -488,6 +513,7 @@ def new_kalman_params(method=None, allow_auto=True):
         (0.1, make_ma_model),
         (0.1, make_ar2_model),
         (0.1, make_ucm_deterministic_trend),
+        (0.1, make_ucm_random_walk_drift_ar1),
         (0.1, make_x1_model),
         (0.1, make_hidden_state_seasonal_7),
         (0.1, make_factor_model),
