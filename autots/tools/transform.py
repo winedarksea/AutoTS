@@ -3578,13 +3578,13 @@ class HolidayTransformer(EmptyTransformer):
             df2 = FillNA(df2, method=self.fillna, window=10)
 
         if self.impact == "datepart_regression":
-            self.holidays = self.dates_to_holidays(df.index, style='flag')
+            self.holidays = self.dates_to_holidays(df2.index, style='flag')
             self.regression_model = DatepartRegression(**self.regression_params)
             return self.regression_model.fit_transform(
                 df2, regressor=self.holidays.astype(float)
             )
         if self.impact == "regression":
-            self.holidays = self.dates_to_holidays(df.index, style='flag').clip(upper=1)
+            self.holidays = self.dates_to_holidays(df2.index, style='flag').clip(upper=1)
             self.holidays['intercept'] = 1
             weights = (np.arange(df2.shape[0]) ** 0.6)[..., None]
             self.model_coef = np.linalg.lstsq(
@@ -3593,14 +3593,14 @@ class HolidayTransformer(EmptyTransformer):
             return df2 - np.dot(self.holidays.iloc[:, 0:-1], self.model_coef[0:-1])
         elif self.impact == "median_value":
             holidays = self.dates_to_holidays(
-                df.index, style='impact', holiday_impacts="value"
+                df2.index, style='impact', holiday_impacts="value"
             )
             self.medians = df2.median()
             holidays = holidays.where(holidays == 0, holidays - self.medians)
             return df2 - holidays
         elif self.impact == "anomaly_score":
             holidays = self.dates_to_holidays(
-                df.index, style='impact', holiday_impacts="anomaly_score"
+                df2.index, style='impact', holiday_impacts="anomaly_score"
             )
             self.medians = self.anomaly_model.scores.median().fillna(1)
             return df2 * (holidays / self.medians).replace(0.0, 1.0)

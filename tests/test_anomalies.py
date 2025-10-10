@@ -22,7 +22,7 @@ def dict_loop(params):
     elif 'anomaly_detector_params' in params.keys():
         x = params.get('anomaly_detector_params', {})
         if isinstance(x, dict):
-            x = params.get('transform_dict', {})
+            x = x.get('transform_dict', {})
             if isinstance(x, dict):
                 x = x.get('transformations', {})
                 return x
