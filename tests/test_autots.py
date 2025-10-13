@@ -530,7 +530,7 @@ class AutoTSTest(unittest.TestCase):
         new_param = json.loads(model.best_model.iloc[0]['ModelParameters'])
         diff_mods = [x for x in orig_param['models'].keys() if x not in new_param['models'].keys()]
         if diff_mods:
-            details = orig_param['models'][diff_mods]
+            details = orig_param['models'][diff_mods[0]]
         else:
             details = ""
         self.assertCountEqual(

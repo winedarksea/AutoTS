@@ -64,9 +64,16 @@ def sk_outliers(df, method, method_params={}):
         res = model.fit_predict(df)
         scores = model.negative_outlier_factor_ + 1.45
     elif method == "OneClassSVM":
-        model = OneClassSVM(**method_params)  # n_neighbors=5
-        res = model.fit_predict(df)
-        scores = model.decision_function(df)
+        # Always scale the data for OneClassSVM to prevent non-finite coefficient errors
+        scaler = MinMaxScaler()
+        df_scaled = pd.DataFrame(
+            scaler.fit_transform(df),
+            index=df.index,
+            columns=df.columns
+        )
+        model = OneClassSVM(**method_params)
+        res = model.fit_predict(df_scaled)
+        scores = model.decision_function(df_scaled)
     elif method == "EE":
         if method_params['contamination'] == "auto":
             method_params['contamination'] = 0.1
