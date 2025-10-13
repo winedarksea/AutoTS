@@ -108,7 +108,7 @@ model_classes = {
     "MambaSSM": "DL",
     "pMLP": "DL",
 }
-all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', "MambaSSM", "DynamicFactor"])))
+all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', "MambaSSM", "DynamicFactor", "DynamicFactorMQ", "TiDE"])))
 # downweight slower models
 default = {
     'ConstantNaive': 1,
@@ -257,7 +257,7 @@ probabilistic = [
     'Theta',
     'ARDL',
     'UnobservedComponents',
-    'DynamicFactorMQ',
+    # 'DynamicFactorMQ',  # not trusted
     'PytorchForecasting',
     # 'MultivariateRegression',
     'ARCH',
@@ -270,7 +270,7 @@ probabilistic = [
     "TVVAR",
     "BallTreeRegressionMotif",
     # "PreprocessingExperts",
-    "MambaSSM",
+    # "MambaSSM",  # insanely slow
     "pMLP",
 ]
 # models that use the shared information of multiple series to improve accuracy
