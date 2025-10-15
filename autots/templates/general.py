@@ -587,15 +587,13 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "rolling_mean_24", "transformations": {"0": "Log", "1": "AlignLastValue", "2": "LevelShiftTransformer", "3": "SinTrend", "4": "AlignLastValue"}, "transformation_params": {"0": {}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": 10, "threshold_method": "max"}, "2": {"window_size": 30, "alpha": 2.5, "grouping_forward_limit": 2, "max_level_shifts": 5, "alignment": "average"}, "3": {}, "4": {"rows": 4, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": null, "threshold_method": "max"}}}',
         'Ensemble': 0,
     },
+    "95": {
+        'Model': 'BallTreeRegressionMotif',
+        'ModelParameters': '{"window": 3, "point_method": "midhinge", "distance_metric": "canberra", "k": 100, "sample_fraction": 5000000, "comparison_transformation": {"fillna": "cubic", "transformations": {"0": "AlignLastDiff"}, "transformation_params": {"0": {"rows": 364, "displacement_rows": 1, "quantile": 1.0, "decay_span": null}}}, "combination_transformation": {"fillna": "time", "transformations": {"0": "AlignLastDiff"}, "transformation_params": {"0": {"rows": 7, "displacement_rows": 1, "quantile": 1.0, "decay_span": 2}}}, "extend_df": true, "mean_rolling_periods": 12, "macd_periods": 74, "std_rolling_periods": 30, "max_rolling_periods": 364, "min_rolling_periods": null, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": 10, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": null, "datepart_method": null, "polynomial_degree": null, "regression_type": null, "holiday": false, "scale_full_X": false, "series_hash": true, "frac_slice": null}',
+        'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "Log", "1": "SinTrend", "2": "ChangepointDetrend"}, "transformation_params": {"0": {}, "1": {}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
+        'Ensemble': 0,
+    },
 }
-"""
-"95": {  # load daily best on some
-    'Model': 'PreprocessingRegression',
-    'ModelParameters': '',
-    'TransformationParameters': '',
-    'Ensemble': 0,
-},
-"""
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
 
