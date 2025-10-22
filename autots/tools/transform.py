@@ -9,8 +9,8 @@ from autots.tools.seasonal import (
     date_part,
     seasonal_int,
     random_datepart,
-    half_yr_spacing,
 )
+from autots.tools.changepoints import half_yr_spacing
 from autots.tools.cointegration import btcd_decompose
 from autots.tools.constraint import (
     fit_constraint,

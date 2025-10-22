@@ -6,10 +6,12 @@ from autots.tools.seasonal import date_part
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.seasonal import (
     date_part,
+    random_datepart,
+)
+from autots.tools.changepoints import (
     create_changepoint_features,
     changepoint_fcst_from_last_row,
     half_yr_spacing,
-    random_datepart,
     generate_random_changepoint_params,
     find_market_changepoints_multivariate,
     ChangePointDetector,

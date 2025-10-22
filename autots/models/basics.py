@@ -15,9 +15,11 @@ from autots.tools.seasonal import (
     seasonal_independent_match,
     date_part,
     base_seasonalities,
+    random_datepart,
+)
+from autots.tools.changepoints import (
     create_changepoint_features,
     changepoint_fcst_from_last_row,
-    random_datepart,
     half_yr_spacing,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
