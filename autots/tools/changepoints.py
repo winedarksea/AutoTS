@@ -2,6 +2,7 @@ import random
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency
+from autots.tools.window_functions import chunk_reshape
 
 
 def _create_basic_changepoints(DTindex, changepoint_spacing, changepoint_distance_end):
@@ -315,18 +316,23 @@ def _prepare_autoencoder_windows(data, window_size):
     n = len(series)
     if n == 0:
         return np.empty((0, window_size)), np.array([], dtype=int)
-    
+
     window_size = max(1, min(int(window_size), n))
     if window_size == 1:
         return series.reshape(-1, 1), np.arange(n, dtype=int)
-    
-    windows = []
-    indices = []
-    for idx in range(window_size - 1, n):
-        windows.append(series[idx - window_size + 1: idx + 1])
-        indices.append(idx)
-    
-    return np.asarray(windows), np.asarray(indices, dtype=int)
+
+    windows = chunk_reshape(
+        series,
+        window_size=window_size,
+        chunk_size=max(1, min(128, series.shape[0])),
+        dtype=np.float64,
+    )
+
+    if windows.size == 0:
+        return np.empty((0, window_size)), np.array([], dtype=int)
+
+    indices = np.arange(window_size - 1, window_size - 1 + windows.shape[0], dtype=int)
+    return windows, indices
 
 
 def _detect_autoencoder_changepoints(

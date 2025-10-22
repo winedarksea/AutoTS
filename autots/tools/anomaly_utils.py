@@ -486,6 +486,7 @@ def detect_anomalies(
 
 
 available_methods = [
+    "IQR",
     "IsolationForest",  # (sklearn)
     "LOF",  # Local Outlier Factor (sklearn)
     "EE",  # Elliptical Envelope (sklearn)
@@ -497,18 +498,17 @@ available_methods = [
     "mad",
     "minmax",
     "prediction_interval",  # ridiculously slow
-    "IQR",
     "nonparametric",
     "med_diff",
     "max_diff",
     # "GaussianMixtureBase",
 ]
 fast_methods = [
+    "IQR",
     "zscore",
     "rolling_zscore",
     "mad",
     "minmax",
-    "IQR",
     "nonparametric",
     "med_diff",
     "max_diff",
@@ -519,11 +519,11 @@ def anomaly_new_params(method='random'):
     if method == "deep":
         method_choice = random.choices(
             available_methods,
-            [0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.05, 0.08, 0.08, 0.13, 0.08, 0.08, 0.08, 0.08, 0.08],
+            [0.2, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.05, 0.08, 0.08, 0.13, 0.08, 0.08, 0.08, 0.08],
         )[0]
     elif method == "fast":
         method_choice = random.choices(
-            fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1, 0.1]
+            fast_methods, [0.5, 0.2, 0.4, 0.2, 0.1, 0.05, 0.1, 0.1]
         )[0]
     elif method in available_methods:
         method_choice = method
@@ -536,7 +536,7 @@ def anomaly_new_params(method='random'):
                 "rolling_zscore",  # Matt likes this one best
                 "mad",
                 "minmax",
-                "IQR",
+                "IQR",  # consistently also very good
                 "nonparametric",
                 "IsolationForest",
                 # "OneClassSVM",  # seems too slow at times
@@ -544,7 +544,7 @@ def anomaly_new_params(method='random'):
                 "VAEOutlier",
                 # "GaussianMixtureBase",
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.25, 0.25, 0.1, 0.1, 0.15, 0.1, 0.05, 0.005, 0.05],
+            [0.05, 0.1, 0.15, 0.25, 0.1, 0.1, 0.25, 0.1, 0.05, 0.005, 0.05],
         )[0]
 
     if method_choice == "IsolationForest":
