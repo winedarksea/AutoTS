@@ -18,8 +18,8 @@ from autots.tools.seasonal import (
     seasonal_int,
     datepart_components,
     date_part_methods,
-    create_changepoint_features,
 )
+from autots.tools.changepoints import create_changepoint_features
 from autots.tools.fft import FFT
 from autots.tools.transform import (
     GeneralTransformer,

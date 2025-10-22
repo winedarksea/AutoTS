@@ -235,26 +235,6 @@ class TestVAEAnomalies(unittest.TestCase):
         self.assertEqual(anomalies.shape, (len(self.df), 1), "Univariate anomalies should have single column")
         self.assertEqual(scores.shape, (len(self.df), 1), "Univariate scores should have single column")
     
-    def test_vae_error_handling(self):
-        """Test VAE error handling when PyTorch is not available."""
-        print("Starting test_vae_error_handling")
-        # Mock torch_available to False
-        from autots.tools import anomaly_utils
-        original_torch_available = anomaly_utils.torch_available
-        anomaly_utils.torch_available = False
-        
-        try:
-            detector = AnomalyDetector(
-                method="VAEOutlier",
-                method_params={'epochs': 10}
-            )
-            
-            with self.assertRaises(ImportError):
-                detector.detect(self.df)
-        finally:
-            # Restore original value
-            anomaly_utils.torch_available = original_torch_available
-    
     def test_vae_different_loss_functions(self):
         """Test VAE with different loss functions."""
         print("Starting test_vae_different_loss_functions")

@@ -4,8 +4,8 @@ Profiling
 
 import numpy as np
 import pandas as pd
-from autots.tools.seasonal import (
-    date_part,
+from autots.tools.seasonal import date_part
+from autots.tools.changepoints import (
     create_changepoint_features,
     half_yr_spacing,
 )

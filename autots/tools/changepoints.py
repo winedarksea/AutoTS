@@ -189,6 +189,286 @@ def _simple_threshold_changepoints(data):
     return changepoints
 
 
+def _detect_cusum_changepoints(
+    data,
+    threshold=5.0,
+    drift=0.0,
+    min_distance=5,
+    normalize=True,
+):
+    """
+    Detect changepoints using a two-sided CUSUM procedure.
+
+    Parameters:
+    data (array-like): Time series values.
+    threshold (float): Threshold for the cumulative sum to trigger a changepoint.
+        Higher values = fewer, more significant changepoints. Recommended: 10-20 for
+        normalized data. If normalize=False, scale threshold to ~2-3x the expected
+        change magnitude.
+    drift (float): Drift parameter to control sensitivity. Higher drift = less sensitive
+        to small sustained changes. Recommended: 0.5 for normalized data, or ~10-20% of
+        expected change magnitude.
+    min_distance (int): Minimum distance between successive changepoints.
+        Prevents clustering of detections. Recommended: 5-10% of series length.
+    normalize (bool): Whether to z-score the data before applying CUSUM.
+        Recommended: True for comparing across different series.
+
+    Returns:
+    np.ndarray: Indices of detected changepoints.
+    """
+    data = np.asarray(data, dtype=float)
+    n = len(data)
+    if n == 0:
+        return np.array([])
+
+    # Calculate statistics for adaptive parameters
+    series = data.copy()
+    data_mean = np.mean(series)
+    series -= data_mean
+    
+    if normalize:
+        std = np.std(series)
+        if std > 1e-8:
+            series /= std
+        else:
+            # Constant data - no changepoints
+            return np.array([])
+    
+    # Adaptive drift: if drift is 0, use small default based on data
+    effective_drift = drift
+    if abs(drift) < 1e-10 and normalize:
+        # For normalized data, use a small drift to reduce false positives
+        effective_drift = 0.25  # Reduce sensitivity to noise
+    
+    # Adaptive min_distance: if very small, use percentage of data length
+    effective_min_distance = max(min_distance, int(n * 0.02))  # At least 2% of series length
+
+    g_pos = 0.0
+    g_neg = 0.0
+    changepoints = []
+    candidate_triggers = []  # Store potential changepoints for validation
+
+    for idx, value in enumerate(series):
+        g_pos = max(0.0, g_pos + value - effective_drift)
+        g_neg = min(0.0, g_neg + value + effective_drift)
+
+        trigger = None
+        if g_pos > threshold:
+            trigger = idx
+            candidate_triggers.append((idx, 'pos'))
+            g_pos = 0.0
+            g_neg = 0.0
+        elif g_neg < -threshold:
+            trigger = idx
+            candidate_triggers.append((idx, 'neg'))
+            g_pos = 0.0
+            g_neg = 0.0
+
+        if trigger is not None:
+            # Enforce minimum distance between changepoints
+            if len(changepoints) == 0 or (trigger - changepoints[-1]) >= effective_min_distance:
+                changepoints.append(trigger)
+
+    if len(changepoints) == 0:
+        return np.array([])
+    
+    # Post-processing: validate changepoints by checking for sustained level changes
+    # This helps reduce false positives from temporary spikes
+    validated_changepoints = []
+    for cp in changepoints:
+        # Check if there's a sustained change after this point
+        # Compare mean before and after (using windows to avoid edge effects)
+        window_size = min(30, effective_min_distance, cp, n - cp - 1)
+        if window_size < 3:
+            # Not enough data to validate, but keep it (edge case)
+            validated_changepoints.append(cp)
+            continue
+        
+        # Calculate means in windows before and after
+        before_window = series[max(0, cp - window_size):cp]
+        after_window = series[cp:min(n, cp + window_size)]
+        
+        if len(before_window) > 0 and len(after_window) > 0:
+            mean_diff = abs(np.mean(after_window) - np.mean(before_window))
+            # For normalized data, require at least 0.2 std change (less strict)
+            # The mean difference should be larger than noise level
+            std_before = np.std(before_window) if len(before_window) > 1 else 1.0
+            std_after = np.std(after_window) if len(after_window) > 1 else 1.0
+            avg_std = (std_before + std_after) / 2
+            
+            # The mean difference should be larger than the typical variation within segments
+            # Use max of 0.2 (for weak changes) or 0.3*avg_std (for noisy data)
+            threshold_val = max(0.2, 0.3 * avg_std)
+            if mean_diff > threshold_val:
+                validated_changepoints.append(cp)
+        else:
+            validated_changepoints.append(cp)
+    
+    if len(validated_changepoints) == 0:
+        return np.array([])
+    return np.array(sorted(set(validated_changepoints)))
+
+
+def _prepare_autoencoder_windows(data, window_size):
+    """Create overlapping windows for autoencoder training."""
+    series = np.asarray(data, dtype=float)
+    n = len(series)
+    if n == 0:
+        return np.empty((0, window_size)), np.array([], dtype=int)
+    
+    window_size = max(1, min(int(window_size), n))
+    if window_size == 1:
+        return series.reshape(-1, 1), np.arange(n, dtype=int)
+    
+    windows = []
+    indices = []
+    for idx in range(window_size - 1, n):
+        windows.append(series[idx - window_size + 1: idx + 1])
+        indices.append(idx)
+    
+    return np.asarray(windows), np.asarray(indices, dtype=int)
+
+
+def _detect_autoencoder_changepoints(
+    data,
+    method_params=None,
+    min_distance=5,
+):
+    """
+    Detect changepoints using an autoencoder-based anomaly signal.
+
+    Parameters:
+    data (array-like): Time series values.
+    method_params (dict): Parameters for autoencoder training and post-processing.
+        - window_size (int): Size of sliding windows for autoencoder input. 
+          Default: min(30, n//5). Larger windows capture more context but require more data.
+        - smoothing_window (int): Window size for smoothing anomaly scores. Default: 3.
+        - contamination (float): Expected proportion of anomalies. Default: 0.1.
+        - epochs (int): Training epochs for autoencoder. Default: 40.
+        - normalize_scores (bool): Whether to normalize scores. Default: True.
+        - use_anomaly_flags (bool): Use binary anomaly flags vs continuous scores. Default: True.
+        - score_threshold (float): Manual threshold for scores (overrides quantile). Default: None.
+        - score_quantile (float): Quantile for automatic threshold. Default: 0.95.
+    min_distance (int): Minimum separation between detected changepoints.
+
+    Returns:
+    tuple: (np.ndarray changepoints, np.ndarray anomaly_scores)
+    """
+    if method_params is None:
+        method_params = {}
+    
+    try:
+        from autots.tools.autoencoder import vae_outliers, torch_available
+    except ImportError as exc:
+        raise ImportError("Autoencoder changepoint detection requires the autoencoder tools.") from exc
+    
+    if not torch_available:
+        raise ImportError("PyTorch is required for autoencoder-based changepoint detection.")
+    
+    series = np.asarray(data, dtype=float)
+    n = len(series)
+    if n == 0:
+        return np.array([], dtype=int), np.array([], dtype=float)
+    
+    # Validate and set window size
+    window_size = method_params.get('window_size', max(3, min(30, n // 5 or 3)))
+    window_size = max(3, min(int(window_size), n))  # Ensure at least 3, at most n
+    
+    # Check if we have enough data
+    if n < window_size:
+        # Not enough data for autoencoder - return no changepoints
+        import warnings
+        warnings.warn(
+            f"Data length ({n}) is less than window_size ({window_size}). "
+            "Autoencoder changepoint detection requires more data.",
+            UserWarning
+        )
+        return np.array([], dtype=int), np.zeros(n, dtype=float)
+    
+    smoothing_window = int(method_params.get('smoothing_window', 3))
+    use_flags = method_params.get('use_anomaly_flags', True)
+    normalize_scores = method_params.get('normalize_scores', True)
+    score_threshold = method_params.get('score_threshold', None)
+    score_quantile = method_params.get('score_quantile', 0.95)
+    
+    windows, indices = _prepare_autoencoder_windows(series, window_size)
+    if windows.size == 0:
+        return np.array([], dtype=int), np.zeros(n, dtype=float)
+    
+    df_windows = pd.DataFrame(windows)
+    
+    detection_keys = {
+        'window_size',
+        'smoothing_window',
+        'use_anomaly_flags',
+        'normalize_scores',
+        'score_threshold',
+        'score_quantile',
+        'min_distance',
+    }
+    vae_params = {k: v for k, v in method_params.items() if k not in detection_keys}
+    if 'contamination' not in vae_params:
+        vae_params['contamination'] = method_params.get('contamination', 0.1)
+    
+    anomalies_df, scores_df = vae_outliers(df_windows, method_params=vae_params)
+    scores = scores_df.iloc[:, 0].values.astype(float)
+    
+    if smoothing_window > 1:
+        scores = pd.Series(scores).rolling(window=smoothing_window, min_periods=1, center=False).mean().values
+    
+    # Improved normalization with better numerical stability
+    if normalize_scores:
+        score_std = np.std(scores)
+        if score_std > 1e-6:  # Use larger threshold for stability
+            # Use robust statistics for better outlier handling
+            score_median = np.median(scores)
+            # MAD (Median Absolute Deviation) for robust scaling
+            mad = np.median(np.abs(scores - score_median))
+            if mad > 1e-6:
+                # Use MAD-based normalization (more robust to outliers)
+                scores = (scores - score_median) / (1.4826 * mad)  # 1.4826 makes MAD consistent with std for normal dist
+            else:
+                # Fall back to mean/std if MAD is too small
+                scores = (scores - np.mean(scores)) / (score_std + 1e-6)
+        else:
+            # Very low variance - likely constant or near-constant scores
+            # Keep original scores but centered
+            scores = scores - np.mean(scores)
+    
+    if use_flags and 'anomaly' in anomalies_df.columns:
+        anomaly_mask = anomalies_df.iloc[:, 0].values == -1
+    else:
+        if score_threshold is None:
+            score_threshold = np.quantile(scores, score_quantile)
+        anomaly_mask = scores >= score_threshold
+    
+    candidate_indices = indices[anomaly_mask]
+    candidate_scores = scores[anomaly_mask]
+    
+    min_distance = max(1, int(min_distance))
+    filtered = []
+    for idx, sc in zip(candidate_indices, candidate_scores):
+        if not filtered:
+            filtered.append((idx, sc))
+            continue
+        last_idx, last_sc = filtered[-1]
+        if idx - last_idx < min_distance:
+            if sc > last_sc:
+                filtered[-1] = (idx, sc)
+        else:
+            filtered.append((idx, sc))
+    
+    changepoints = np.array([idx for idx, _ in filtered], dtype=int) if filtered else np.array([], dtype=int)
+    
+    anomaly_scores = np.zeros(n, dtype=float)
+    if len(indices) > 0:
+        anomaly_scores[indices] = scores
+        first_fill = scores[0] if len(scores) > 0 else 0.0
+        anomaly_scores[:indices[0]] = first_fill
+    
+    return changepoints, anomaly_scores
+
+
 def create_changepoint_features(
     DTindex, 
     changepoint_spacing=60, 
@@ -204,7 +484,7 @@ def create_changepoint_features(
     DTindex (pd.DatetimeIndex): a datetimeindex
     changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
     changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation')
+    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'autoencoder')
     params (dict): Additional parameters for the chosen method
     data (array-like): Time series data (required for advanced methods)
 
@@ -231,6 +511,27 @@ def create_changepoint_features(
         lambda_reg = params.get('lambda_reg', 1.0)
         l1_method = 'fused_lasso' if method == 'l1_fused_lasso' else 'total_variation'
         return _create_l1_changepoint_features(DTindex, data, lambda_reg, l1_method)
+    
+    elif method == 'cusum':
+        if data is None:
+            raise ValueError("Data is required for CUSUM changepoint detection")
+        threshold = params.get('threshold', 5.0)
+        drift = params.get('drift', 0.0)
+        min_distance = params.get('min_distance', 5)
+        normalize = params.get('normalize', True)
+        return _create_cusum_changepoint_features(
+            DTindex,
+            data,
+            threshold=threshold,
+            drift=drift,
+            min_distance=min_distance,
+            normalize=normalize,
+        )
+    
+    elif method == 'autoencoder':
+        if data is None:
+            raise ValueError("Data is required for autoencoder changepoint detection")
+        return _create_autoencoder_changepoint_features(DTindex, data, params)
     
     else:
         raise ValueError(f"Unknown changepoint detection method: {method}")
@@ -283,6 +584,66 @@ def _create_l1_changepoint_features(DTindex, data, lambda_reg=1.0, method='fused
     res = []
     for i, cp in enumerate(changepoints):
         feature_name = f'l1_{method}_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+    
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
+def _create_cusum_changepoint_features(
+    DTindex,
+    data,
+    threshold=5.0,
+    drift=0.0,
+    min_distance=5,
+    normalize=True,
+):
+    """Create changepoint features using the CUSUM algorithm."""
+    changepoints = _detect_cusum_changepoints(
+        data,
+        threshold=threshold,
+        drift=drift,
+        min_distance=min_distance,
+        normalize=normalize,
+    )
+
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'cusum_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
+def _create_autoencoder_changepoint_features(
+    DTindex,
+    data,
+    params=None,
+):
+    """Create changepoint features using autoencoder-based detection."""
+    if params is None:
+        params = {}
+    min_distance = params.get('min_distance', 5)
+    changepoints, _ = _detect_autoencoder_changepoints(
+        data,
+        method_params=params,
+        min_distance=min_distance,
+    )
+    
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+    
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'autoencoder_changepoint_{i+1}'
         res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
     
     changepoint_features = pd.concat(res, axis=1)
@@ -392,7 +753,8 @@ class ChangePointDetector(object):
         Initialize ChangePointDetector.
         
         Args:
-            method (str): Changepoint detection method ('pelt', 'l1_fused_lasso', 'l1_total_variation', 'composite_fused_lasso')
+            method (str): Changepoint detection method ('basic', 'pelt', 'l1_fused_lasso',
+                'l1_total_variation', 'cusum', 'autoencoder', 'composite_fused_lasso')
             method_params (dict): Parameters specific to the chosen method
             aggregate_method (str): How to aggregate across series ('mean', 'median', 'individual')
             min_segment_length (int): Minimum length of segments between changepoints
@@ -452,6 +814,31 @@ class ChangePointDetector(object):
                     self.changepoints_[col] = changepoints
                     self.fitted_trends_[col] = fitted_trend
                     
+                elif self.method == 'cusum':
+                    threshold = self.method_params.get('threshold', 5.0)
+                    drift = self.method_params.get('drift', 0.0)
+                    normalize = self.method_params.get('normalize', True)
+                    min_distance = self.method_params.get('min_distance', self.min_segment_length)
+                    changepoints = _detect_cusum_changepoints(
+                        data,
+                        threshold=threshold,
+                        drift=drift,
+                        min_distance=min_distance,
+                        normalize=normalize,
+                    )
+                    self.changepoints_[col] = changepoints
+                    self.fitted_trends_[col] = data
+                    
+                elif self.method == 'autoencoder':
+                    min_distance = self.method_params.get('min_distance', self.min_segment_length)
+                    changepoints, scores = _detect_autoencoder_changepoints(
+                        data,
+                        method_params=self.method_params,
+                        min_distance=min_distance,
+                    )
+                    self.changepoints_[col] = changepoints
+                    self.fitted_trends_[col] = scores
+                    
                 elif self.method == 'composite_fused_lasso':
                     self.changepoints_[col], self.fitted_trends_[col] = self._detect_composite_fused_lasso(data)
                 
@@ -503,6 +890,28 @@ class ChangePointDetector(object):
                 l1_method = 'fused_lasso' if self.method == 'l1_fused_lasso' else 'total_variation'
                 self.changepoints_, self.fitted_trends_ = _detect_l1_trend_changepoints(
                     aggregated_data, lambda_reg, l1_method
+                )
+                
+            elif self.method == 'cusum':
+                threshold = self.method_params.get('threshold', 5.0)
+                drift = self.method_params.get('drift', 0.0)
+                normalize = self.method_params.get('normalize', True)
+                min_distance = self.method_params.get('min_distance', self.min_segment_length)
+                self.changepoints_ = _detect_cusum_changepoints(
+                    aggregated_data,
+                    threshold=threshold,
+                    drift=drift,
+                    min_distance=min_distance,
+                    normalize=normalize,
+                )
+                self.fitted_trends_ = aggregated_data
+            
+            elif self.method == 'autoencoder':
+                min_distance = self.method_params.get('min_distance', self.min_segment_length)
+                self.changepoints_, self.fitted_trends_ = _detect_autoencoder_changepoints(
+                    aggregated_data,
+                    method_params=self.method_params,
+                    min_distance=min_distance,
                 )
                 
             elif self.method == 'composite_fused_lasso':
@@ -913,7 +1322,7 @@ class ChangePointDetector(object):
     
     def get_new_params(self, method="random"):
         """Generate new random parameters for changepoint detection."""
-        method_options = ['pelt', 'l1_fused_lasso', 'l1_total_variation', 'composite_fused_lasso']
+        method_options = ['pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'autoencoder', 'composite_fused_lasso']
         
         new_method = random.choice(method_options)
         
@@ -930,6 +1339,21 @@ class ChangePointDetector(object):
             new_params = {
                 'lambda_level': random.choice([0.1, 0.5, 1.0, 2.0]),
                 'lambda_slope': random.choice([0.1, 0.5, 1.0, 2.0]),
+            }
+        elif new_method == 'cusum':
+            new_params = {
+                'threshold': random.choice([3.0, 5.0, 7.5, 10.0]),
+                'drift': random.choice([0.0, 0.05, 0.1]),
+                'normalize': random.choice([True, False]),
+            }
+        elif new_method == 'autoencoder':
+            new_params = {
+                'window_size': random.choice([5, 10, 20, 30]),
+                'smoothing_window': random.choice([1, 3, 5]),
+                'contamination': random.choice([0.05, 0.1, 0.2]),
+                'use_anomaly_flags': random.choice([True, False]),
+                'normalize_scores': random.choice([True, False]),
+                'epochs': random.choice([20, 40, 60]),
             }
         else:
             new_params = {}
@@ -961,8 +1385,8 @@ def generate_random_changepoint_params(method='random'):
     import random
     
     # Changepoint method options - balanced weights now that all methods work
-    changepoint_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation']
-    changepoint_method_weights = [0.5, 0.3, 0.1, 0.1]
+    changepoint_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'autoencoder']
+    changepoint_method_weights = [0.4, 0.2, 0.1, 0.1, 0.1, 0.1]
     
     # Select method
     selected_method = random.choices(changepoint_methods, weights=changepoint_method_weights, k=1)[0]
@@ -1004,6 +1428,48 @@ def generate_random_changepoint_params(method='random'):
         
         changepoint_params = {
             "lambda_reg": random.choices(lambda_options, weights=lambda_weights, k=1)[0],
+        }
+    
+    elif selected_method == "cusum":
+        # Updated with better default thresholds based on testing
+        threshold_options = [5.0, 10.0, 15.0, 20.0, 30.0]
+        threshold_weights = [0.1, 0.3, 0.3, 0.2, 0.1]
+        # Drift should generally be > 0 to reduce false positives
+        drift_options = [0.0, 0.25, 0.5, 1.0]
+        drift_weights = [0.2, 0.3, 0.3, 0.2]
+        normalize_options = [True, False]
+        normalize_weights = [0.8, 0.2]
+        min_distance_options = [5, 10, 15, 20]
+        min_distance_weights = [0.2, 0.4, 0.3, 0.1]
+        
+        changepoint_params = {
+            "threshold": random.choices(threshold_options, weights=threshold_weights, k=1)[0],
+            "drift": random.choices(drift_options, weights=drift_weights, k=1)[0],
+            "normalize": random.choices(normalize_options, weights=normalize_weights, k=1)[0],
+            "min_distance": random.choices(min_distance_options, weights=min_distance_weights, k=1)[0],
+        }
+    
+    elif selected_method == "autoencoder":
+        window_options = [5, 10, 20, 30]
+        window_weights = [0.2, 0.3, 0.3, 0.2]
+        smoothing_options = [1, 3, 5]
+        smoothing_weights = [0.3, 0.5, 0.2]
+        contamination_options = [0.05, 0.1, 0.15, 0.2]
+        contamination_weights = [0.25, 0.4, 0.2, 0.15]
+        epochs_options = [20, 40, 60]
+        epochs_weights = [0.4, 0.4, 0.2]
+        normalize_scores_options = [True, False]
+        normalize_scores_weights = [0.7, 0.3]
+        use_flags_options = [True, False]
+        use_flags_weights = [0.7, 0.3]
+        
+        changepoint_params = {
+            "window_size": random.choices(window_options, weights=window_weights, k=1)[0],
+            "smoothing_window": random.choices(smoothing_options, weights=smoothing_weights, k=1)[0],
+            "contamination": random.choices(contamination_options, weights=contamination_weights, k=1)[0],
+            "epochs": random.choices(epochs_options, weights=epochs_weights, k=1)[0],
+            "normalize_scores": random.choices(normalize_scores_options, weights=normalize_scores_weights, k=1)[0],
+            "use_anomaly_flags": random.choices(use_flags_options, weights=use_flags_weights, k=1)[0],
         }
     
     return selected_method, changepoint_params
