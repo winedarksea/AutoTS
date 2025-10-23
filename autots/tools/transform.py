@@ -7893,6 +7893,7 @@ def transformer_list_to_dict(transformer_list):
         del fast_transformer_dict["BTCD"]
         del fast_transformer_dict["LocalLinearTrend"]
         del fast_transformer_dict["KalmanSmoothing"]  # potential kernel/RAM issues
+        del fast_transformer_dict["ChangepointDetector"]  # some methods are slow, with tuning this might be fine eventually
 
     if transformer_list is None:
         transformer_list = "superfast"

@@ -11,7 +11,7 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from autots.tools.changepoints import (
-    ChangePointDetector,
+    ChangepointDetector,
     create_changepoint_features,
     find_market_changepoints_multivariate,
 )
@@ -84,6 +84,30 @@ class TestChangepointFeatures(unittest.TestCase):
             all("cusum_changepoint" in col for col in features.columns)
         )
 
+    def test_create_changepoint_features_ewma(self):
+        dt_index = pd.date_range("2021-01-01", periods=160, freq="D")
+        data = np.concatenate([np.ones(80) * 3, np.ones(80) * 8])
+
+        features = create_changepoint_features(
+            dt_index,
+            method="ewma",
+            params={
+                "lambda_param": 0.2,
+                "control_limit": 3.0,
+                "min_distance": 10,
+                "normalize": True,
+                "two_sided": True,
+                "adaptive": True,
+            },
+            data=data,
+        )
+
+        self.assertEqual(features.shape[0], len(dt_index))
+        self.assertGreater(features.shape[1], 0)
+        self.assertTrue(
+            all("ewma_changepoint" in col for col in features.columns)
+        )
+
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"
     )
@@ -117,8 +141,8 @@ class TestChangepointFeatures(unittest.TestCase):
         )
 
 
-class TestChangePointDetector(unittest.TestCase):
-    """Tests for the ChangePointDetector class."""
+class TestChangepointDetector(unittest.TestCase):
+    """Tests for the ChangepointDetector class."""
 
     def setUp(self):
         np.random.seed(42)
@@ -128,7 +152,7 @@ class TestChangePointDetector(unittest.TestCase):
         values = np.concatenate([np.ones(50) * 10, np.ones(50) * 15])
         df = pd.DataFrame({"series1": values}, index=dates)
 
-        detector = ChangePointDetector(method="pelt", aggregate_method="individual")
+        detector = ChangepointDetector(method="pelt", aggregate_method="individual")
         detector.detect(df)
 
         self.assertIsNotNone(detector.changepoints_)
@@ -145,7 +169,7 @@ class TestChangePointDetector(unittest.TestCase):
             index=dates,
         )
 
-        detector = ChangePointDetector(method="pelt", aggregate_method="individual")
+        detector = ChangepointDetector(method="pelt", aggregate_method="individual")
         detector.detect(df)
 
         features = detector.create_features(forecast_length=12)
@@ -157,7 +181,7 @@ class TestChangePointDetector(unittest.TestCase):
         values = np.concatenate([np.ones(70) * 4, np.ones(70) * 9])
         df = pd.DataFrame({"series1": values}, index=dates)
 
-        detector = ChangePointDetector(
+        detector = ChangepointDetector(
             method="cusum",
             aggregate_method="individual",
             method_params={"threshold": 3.0, "min_distance": 10, "normalize": True},
@@ -166,6 +190,34 @@ class TestChangePointDetector(unittest.TestCase):
 
         self.assertIn("series1", detector.changepoints_)
         self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
+
+    def test_changepoint_detector_ewma(self):
+        # Use the existing setUp random seed
+        dates = pd.date_range("2022-01-01", periods=200, freq="D")
+        # Create a clear level shift with realistic noise
+        segment1 = np.random.normal(5, 0.5, 100)
+        segment2 = np.random.normal(12, 0.5, 100)  # Much larger shift
+        values = np.concatenate([segment1, segment2])
+        df = pd.DataFrame({"series1": values}, index=dates)
+
+        detector = ChangepointDetector(
+            method="ewma",
+            aggregate_method="individual",
+            method_params={
+                "lambda_param": 0.3,  # Higher lambda for quicker response
+                "control_limit": 2.5,  # More sensitive
+                "min_distance": 10,
+                "normalize": True,
+                "two_sided": True,
+                "adaptive": True,
+            },
+        )
+        detector.detect(df)
+
+        self.assertIn("series1", detector.changepoints_)
+        self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
+        # EWMA should detect at least one changepoint for this clear level shift
+        self.assertGreater(len(detector.changepoints_["series1"]), 0)
 
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"
@@ -189,7 +241,7 @@ class TestChangePointDetector(unittest.TestCase):
             "use_anomaly_flags": True,
             "min_distance": 8,
         }
-        detector = ChangePointDetector(
+        detector = ChangepointDetector(
             method="autoencoder",
             aggregate_method="individual",
             method_params=params,

@@ -301,6 +301,204 @@ def _simple_threshold_changepoints(data):
     return changepoints
 
 
+def _detect_ewma_changepoints(
+    data,
+    lambda_param=0.2,
+    control_limit=3.0,
+    min_distance=5,
+    normalize=True,
+    two_sided=True,
+    adaptive=False,
+):
+    """
+    Detect changepoints using EWMA (Exponentially Weighted Moving Average) control charts.
+    
+    EWMA is effective at detecting small to moderate shifts in the process mean and
+    responds more quickly to process changes than standard Shewhart charts. This 
+    implementation includes several optimizations from the statistical process control
+    literature including adaptive control limits and fast-initial-response (FIR).
+    
+    Parameters:
+    data (array-like): Time series values.
+    lambda_param (float): Smoothing parameter (0 < lambda <= 1). 
+        Smaller values = more smoothing, better for detecting small persistent shifts.
+        Larger values = less smoothing, better for detecting larger sudden shifts.
+        Recommended: 0.2 for small shifts, 0.4-0.6 for moderate shifts.
+        Common industry standard: 0.2.
+    control_limit (float): Number of standard deviations for control limits.
+        Higher values = fewer, more significant changepoints.
+        Recommended: 2.5-3.5 for balance of sensitivity and specificity.
+        Common industry standard: 3.0.
+    min_distance (int): Minimum distance between successive changepoints.
+        Prevents clustering of detections. Recommended: 5-10% of series length.
+    normalize (bool): Whether to z-score the data before applying EWMA.
+        Recommended: True for comparing across different series.
+    two_sided (bool): Whether to detect both upward and downward shifts.
+        If False, only detects upward shifts.
+    adaptive (bool): Use adaptive control limits that tighten over time.
+        This implements Lucas & Saccucci (1990) fast initial response (FIR).
+        Recommended: True for better performance in initial periods.
+    
+    Returns:
+    np.ndarray: Indices of detected changepoints.
+    
+    References:
+    - Lucas & Saccucci (1990): Exponentially weighted moving average control schemes
+    - Roberts (1959): Control Chart Tests Based on Geometric Moving Averages
+    - Hunter (1986): The exponentially weighted moving average
+    """
+    data = np.asarray(data, dtype=float)
+    n = len(data)
+    if n == 0:
+        return np.array([])
+    
+    # Normalize if requested
+    series = data.copy()
+    data_mean = np.mean(series)
+    series -= data_mean
+    
+    if normalize:
+        std = np.std(series)
+        if std > 1e-8:
+            series /= std
+            sigma = 1.0  # Normalized standard deviation
+        else:
+            # Constant data - no changepoints
+            return np.array([])
+    else:
+        sigma = np.std(series)
+        if sigma < 1e-8:
+            return np.array([])
+    
+    # Validate parameters
+    if not (0 < lambda_param <= 1):
+        raise ValueError(f"lambda_param must be in (0, 1], got {lambda_param}")
+    
+    # Adaptive min_distance
+    effective_min_distance = max(min_distance, int(n * 0.02))
+    
+    # Initialize EWMA
+    z = np.zeros(n)
+    z[0] = series[0]  # Fast Initial Response (FIR): start at first observation
+    
+    # Calculate standard error of EWMA at each point
+    # Lucas & Saccucci (1990) formula for time-varying control limits
+    if adaptive:
+        # Adaptive control limits that asymptotically approach the steady-state
+        # This provides better detection in the initial periods
+        def ewma_std_error(t):
+            """Standard error of EWMA at time t."""
+            factor = (1 - (1 - lambda_param) ** (2 * (t + 1)))
+            return sigma * np.sqrt(lambda_param / (2 - lambda_param) * factor)
+    else:
+        # Constant control limits (steady-state approximation)
+        steady_state_std = sigma * np.sqrt(lambda_param / (2 - lambda_param))
+        def ewma_std_error(t):
+            return steady_state_std
+    
+    changepoints = []
+    in_signal_state = False
+    signal_start = None
+    
+    # Calculate EWMA recursively and track absolute deviations
+    abs_z = np.zeros(n)
+    
+    for t in range(1, n):
+        # EWMA update: z_t = λ * x_t + (1 - λ) * z_{t-1}
+        z[t] = lambda_param * series[t] + (1 - lambda_param) * z[t - 1]
+        
+        # Track absolute deviation for validation
+        abs_z[t] = abs(z[t])
+        
+        # Calculate control limits for this time point
+        ucl = control_limit * ewma_std_error(t)  # Upper control limit
+        lcl = -ucl if two_sided else -np.inf  # Lower control limit
+        
+        # Check for out-of-control signal
+        signal = False
+        if z[t] > ucl:
+            signal = True
+            direction = 'up'
+        elif two_sided and z[t] < lcl:
+            signal = True
+            direction = 'down'
+        
+        if signal:
+            if not in_signal_state:
+                # New signal detected
+                in_signal_state = True
+                signal_start = t
+            # Continue accumulating signal
+        else:
+            if in_signal_state:
+                # Signal ended - record changepoint at the start of the signal
+                # This is more accurate than using the midpoint for EWMA
+                changepoint_idx = signal_start
+                
+                # Enforce minimum distance
+                if len(changepoints) == 0 or (changepoint_idx - changepoints[-1]) >= effective_min_distance:
+                    changepoints.append(changepoint_idx)
+                
+                in_signal_state = False
+                signal_start = None
+    
+    # Handle case where signal persists to the end
+    if in_signal_state and signal_start is not None:
+        changepoint_idx = signal_start
+        if len(changepoints) == 0 or (changepoint_idx - changepoints[-1]) >= effective_min_distance:
+            changepoints.append(changepoint_idx)
+    
+    if len(changepoints) == 0:
+        return np.array([])
+    
+    # Post-processing: validate changepoints by checking for sustained changes
+    # in the original data (not just EWMA) to reduce false positives
+    validated_changepoints = []
+    window_size = min(30, effective_min_distance, n // 10)
+    
+    for cp in changepoints:
+        if window_size < 3:
+            validated_changepoints.append(cp)
+            continue
+        
+        # Check for sustained shift in the original data
+        before_start = max(0, cp - window_size)
+        before_window = series[before_start:cp]
+        after_end = min(n, cp + window_size)
+        after_window = series[cp:after_end]
+        
+        if len(before_window) > 0 and len(after_window) > 0:
+            # Calculate mean values before and after
+            mean_before = np.mean(before_window)
+            mean_after = np.mean(after_window)
+            
+            # For normalized data, require meaningful change
+            # Lower threshold than CUSUM since EWMA is already conservative
+            mean_diff = abs(mean_after - mean_before)
+            
+            # Use a more lenient threshold for EWMA validation
+            # EWMA already does smoothing, so we don't need as strict validation
+            std_before = np.std(before_window) if len(before_window) > 1 else 1.0
+            std_after = np.std(after_window) if len(after_window) > 1 else 1.0
+            avg_std = (std_before + std_after) / 2
+            
+            # Accept changepoint if:
+            # 1. Mean difference is substantial (> 0.15 for normalized data)
+            # 2. Or if EWMA signal was very strong (> control_limit * 0.6)
+            threshold_val = max(0.15, 0.2 * avg_std)
+            ewma_signal_strength = abs(z[cp]) if cp < len(z) else 0
+            
+            if mean_diff > threshold_val or ewma_signal_strength > control_limit * 0.6:
+                validated_changepoints.append(cp)
+        else:
+            validated_changepoints.append(cp)
+    
+    if len(validated_changepoints) == 0:
+        return np.array([])
+    
+    return np.array(sorted(set(validated_changepoints)))
+
+
 def _detect_cusum_changepoints(
     data,
     threshold=5.0,
@@ -601,7 +799,7 @@ def create_changepoint_features(
     DTindex (pd.DatetimeIndex): a datetimeindex
     changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
     changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'autoencoder')
+    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'ewma', 'autoencoder')
     params (dict): Additional parameters for the chosen method
     data (array-like): Time series data (required for advanced methods)
 
@@ -643,6 +841,26 @@ def create_changepoint_features(
             drift=drift,
             min_distance=min_distance,
             normalize=normalize,
+        )
+    
+    elif method == 'ewma':
+        if data is None:
+            raise ValueError("Data is required for EWMA changepoint detection")
+        lambda_param = params.get('lambda_param', 0.2)
+        control_limit = params.get('control_limit', 3.0)
+        min_distance = params.get('min_distance', 5)
+        normalize = params.get('normalize', True)
+        two_sided = params.get('two_sided', True)
+        adaptive = params.get('adaptive', False)
+        return _create_ewma_changepoint_features(
+            DTindex,
+            data,
+            lambda_param=lambda_param,
+            control_limit=control_limit,
+            min_distance=min_distance,
+            normalize=normalize,
+            two_sided=two_sided,
+            adaptive=adaptive,
         )
     
     elif method == 'autoencoder':
@@ -732,6 +950,41 @@ def _create_cusum_changepoint_features(
     res = []
     for i, cp in enumerate(changepoints):
         feature_name = f'cusum_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
+def _create_ewma_changepoint_features(
+    DTindex,
+    data,
+    lambda_param=0.2,
+    control_limit=3.0,
+    min_distance=5,
+    normalize=True,
+    two_sided=True,
+    adaptive=False,
+):
+    """Create changepoint features using the EWMA algorithm."""
+    changepoints = _detect_ewma_changepoints(
+        data,
+        lambda_param=lambda_param,
+        control_limit=control_limit,
+        min_distance=min_distance,
+        normalize=normalize,
+        two_sided=two_sided,
+        adaptive=adaptive,
+    )
+
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'ewma_changepoint_{i+1}'
         res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
 
     changepoint_features = pd.concat(res, axis=1)
@@ -871,7 +1124,7 @@ class ChangepointDetector(object):
         
         Args:
             method (str): Changepoint detection method ('basic', 'pelt', 'l1_fused_lasso',
-                'l1_total_variation', 'cusum', 'autoencoder', 'composite_fused_lasso')
+                'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'composite_fused_lasso')
             method_params (dict): Parameters specific to the chosen method
             aggregate_method (str): How to aggregate across series ('mean', 'median', 'individual')
             min_segment_length (int): Minimum length of segments between changepoints
@@ -951,6 +1204,25 @@ class ChangepointDetector(object):
                     self.changepoints_[col] = changepoints
                     self.fitted_trends_[col] = data
                     
+                elif self.method == 'ewma':
+                    lambda_param = self.method_params.get('lambda_param', 0.2)
+                    control_limit = self.method_params.get('control_limit', 3.0)
+                    normalize = self.method_params.get('normalize', True)
+                    two_sided = self.method_params.get('two_sided', True)
+                    adaptive = self.method_params.get('adaptive', False)
+                    min_distance = self.method_params.get('min_distance', self.min_segment_length)
+                    changepoints = _detect_ewma_changepoints(
+                        data,
+                        lambda_param=lambda_param,
+                        control_limit=control_limit,
+                        min_distance=min_distance,
+                        normalize=normalize,
+                        two_sided=two_sided,
+                        adaptive=adaptive,
+                    )
+                    self.changepoints_[col] = changepoints
+                    self.fitted_trends_[col] = data
+                    
                 elif self.method == 'autoencoder':
                     min_distance = self.method_params.get('min_distance', self.min_segment_length)
                     changepoints, scores = _detect_autoencoder_changepoints(
@@ -1025,6 +1297,24 @@ class ChangepointDetector(object):
                     drift=drift,
                     min_distance=min_distance,
                     normalize=normalize,
+                )
+                self.fitted_trends_ = aggregated_data
+            
+            elif self.method == 'ewma':
+                lambda_param = self.method_params.get('lambda_param', 0.2)
+                control_limit = self.method_params.get('control_limit', 3.0)
+                normalize = self.method_params.get('normalize', True)
+                two_sided = self.method_params.get('two_sided', True)
+                adaptive = self.method_params.get('adaptive', False)
+                min_distance = self.method_params.get('min_distance', self.min_segment_length)
+                self.changepoints_ = _detect_ewma_changepoints(
+                    aggregated_data,
+                    lambda_param=lambda_param,
+                    control_limit=control_limit,
+                    min_distance=min_distance,
+                    normalize=normalize,
+                    two_sided=two_sided,
+                    adaptive=adaptive,
                 )
                 self.fitted_trends_ = aggregated_data
             
@@ -1558,50 +1848,201 @@ class ChangepointDetector(object):
         
         return changepoint_features
     
-    def get_new_params(self, method="random"):
-        """Generate new random parameters for changepoint detection."""
-        method_options = ['pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'autoencoder', 'composite_fused_lasso']
+    @staticmethod
+    def get_new_params(method="random"):
+        """
+        Generate new random parameters for changepoint detection.
         
-        new_method = random.choice(method_options)
+        Args:
+            method (str): Method for parameter selection
+                - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
+                - Or specify a method name directly: 'basic', 'pelt', 'l1_fused_lasso', 
+                  'l1_total_variation', 'cusum', 'autoencoder', 'composite_fused_lasso'
         
-        if new_method == 'pelt':
+        Returns:
+            dict: Complete parameter dictionary for ChangepointDetector initialization
+        """
+        # List of all valid method names
+        valid_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 
+                        'cusum', 'ewma', 'autoencoder', 'composite_fused_lasso']
+
+        selection_mode = "fast"  # default to fast
+        if method in valid_methods:
+            new_method = method
+        elif method == "fast":
+            # Include all methods but will use fast parameters for potentially slow ones
+            method_options = ['basic', 'cusum', 'ewma', 'l1_fused_lasso', 'l1_total_variation', 'pelt', 'composite_fused_lasso', 'autoencoder']
+            method_weights = [0.3, 0.2, 0.2, 0.08, 0.08, 0.08, 0.03, 0.03]
+            new_method = random.choices(method_options, weights=method_weights, k=1)[0]
+        elif method in ["default", "random"]:
+            # Heavily weight basic method for compatibility, with EWMA and CUSUM as good alternatives
+            method_options = ['basic', 'cusum', 'ewma', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'autoencoder']
+            method_weights = [0.5, 0.15, 0.15, 0.08, 0.04, 0.04, 0.04]
+            new_method = random.choices(method_options, weights=method_weights, k=1)[0]
+            selection_mode = "random"
+        else:  # random
+            new_method = random.choices(valid_methods, k=1)[0]
+            selection_mode = "random"
+
+        # Generate method-specific parameters with weighted choices
+        if new_method == 'basic':
+            # Basic method parameters (legacy style)
+            spacing_options = [6, 28, 60, 90, 120, 180, 360, 5040]
+            spacing_weights = [0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.3]
+            distance_end_options = [6, 28, 60, 90, 180, 360, 520, 5040]
+            distance_end_weights = [0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.3]
+            
             new_params = {
-                'penalty': random.choice([1, 5, 10, 20, 50]),
-                'loss_function': random.choice(['l2', 'l1', 'huber']),
+                'changepoint_spacing': random.choices(spacing_options, weights=spacing_weights, k=1)[0],
+                'changepoint_distance_end': random.choices(distance_end_options, weights=distance_end_weights, k=1)[0],
             }
+            
+        elif new_method == 'pelt':
+            # PELT method parameters
+            if selection_mode == "fast":
+                # Fast mode: Use only fastest parameters
+                # Higher penalties = fewer changepoints = faster computation
+                # L2 loss is fastest
+                penalty_options = [20, 50, 100]
+                penalty_weights = [0.4, 0.4, 0.2]
+                loss_functions = ['l2']  # L2 is fastest
+                loss_weights = [1.0]
+                min_segment_options = [5, 10]  # Larger segments = faster
+                min_segment_weights = [0.6, 0.4]
+            else:
+                # Normal mode: Full range of parameters
+                penalty_options = [1, 5, 10, 20, 50, 100]
+                penalty_weights = [0.1, 0.2, 0.3, 0.2, 0.1, 0.1]
+                loss_functions = ['l1', 'l2', 'huber']
+                loss_weights = [0.3, 0.5, 0.2]
+                min_segment_options = [1, 2, 5, 10]
+                min_segment_weights = [0.4, 0.3, 0.2, 0.1]
+            
+            new_params = {
+                'penalty': random.choices(penalty_options, weights=penalty_weights, k=1)[0],
+                'loss_function': random.choices(loss_functions, weights=loss_weights, k=1)[0],
+                'min_segment_length': random.choices(min_segment_options, weights=min_segment_weights, k=1)[0],
+            }
+            
         elif new_method in ['l1_fused_lasso', 'l1_total_variation']:
+            # L1 trend filtering parameters
+            lambda_options = [0.01, 0.1, 1.0, 10.0, 100.0]
+            lambda_weights = [0.1, 0.2, 0.4, 0.2, 0.1]
+            
             new_params = {
-                'lambda_reg': random.choice([0.1, 0.5, 1.0, 2.0, 5.0]),
+                'lambda_reg': random.choices(lambda_options, weights=lambda_weights, k=1)[0],
             }
+            
         elif new_method == 'composite_fused_lasso':
+            # Composite fused lasso parameters
+            if selection_mode == "fast":
+                # Fast mode: Use smaller lambda values for faster convergence
+                # Smaller lambda = less regularization = faster optimization
+                lambda_level_options = [0.1, 0.5, 1.0]
+                lambda_level_weights = [0.4, 0.4, 0.2]
+                lambda_slope_options = [0.1, 0.5, 1.0]
+                lambda_slope_weights = [0.4, 0.4, 0.2]
+            else:
+                # Normal mode: Full range including higher lambda values
+                lambda_level_options = [0.1, 0.5, 1.0, 2.0, 5.0]
+                lambda_level_weights = [0.2, 0.3, 0.3, 0.15, 0.05]
+                lambda_slope_options = [0.1, 0.5, 1.0, 2.0, 5.0]
+                lambda_slope_weights = [0.2, 0.3, 0.3, 0.15, 0.05]
+            
             new_params = {
-                'lambda_level': random.choice([0.1, 0.5, 1.0, 2.0]),
-                'lambda_slope': random.choice([0.1, 0.5, 1.0, 2.0]),
+                'lambda_level': random.choices(lambda_level_options, weights=lambda_level_weights, k=1)[0],
+                'lambda_slope': random.choices(lambda_slope_options, weights=lambda_slope_weights, k=1)[0],
             }
+            
         elif new_method == 'cusum':
+            # CUSUM parameters - updated with better defaults
+            threshold_options = [5.0, 10.0, 15.0, 20.0, 30.0]
+            threshold_weights = [0.1, 0.3, 0.3, 0.2, 0.1]
+            drift_options = [0.0, 0.25, 0.5, 1.0]
+            drift_weights = [0.2, 0.3, 0.3, 0.2]
+            normalize_options = [True, False]
+            normalize_weights = [0.8, 0.2]
+            min_distance_options = [5, 10, 15, 20]
+            min_distance_weights = [0.2, 0.4, 0.3, 0.1]
+            
             new_params = {
-                'threshold': random.choice([3.0, 5.0, 7.5, 10.0]),
-                'drift': random.choice([0.0, 0.05, 0.1]),
-                'normalize': random.choice([True, False]),
+                'threshold': random.choices(threshold_options, weights=threshold_weights, k=1)[0],
+                'drift': random.choices(drift_options, weights=drift_weights, k=1)[0],
+                'normalize': random.choices(normalize_options, weights=normalize_weights, k=1)[0],
+                'min_distance': random.choices(min_distance_options, weights=min_distance_weights, k=1)[0],
             }
-        elif new_method == 'autoencoder':
+        
+        elif new_method == 'ewma':
+            # EWMA parameters with industry standard defaults
+            # Lambda: smaller = more smoothing, better for small persistent shifts
+            lambda_options = [0.1, 0.2, 0.3, 0.4, 0.6]
+            lambda_weights = [0.2, 0.35, 0.2, 0.15, 0.1]  # Favor standard 0.2
+            
+            # Control limits: standard is 3-sigma
+            control_limit_options = [2.5, 3.0, 3.5, 4.0]
+            control_limit_weights = [0.15, 0.5, 0.25, 0.1]  # Favor standard 3.0
+            
+            normalize_options = [True, False]
+            normalize_weights = [0.8, 0.2]
+            
+            two_sided_options = [True, False]
+            two_sided_weights = [0.8, 0.2]  # Usually want both directions
+            
+            adaptive_options = [True, False]
+            adaptive_weights = [0.6, 0.4]  # Adaptive (FIR) generally better
+            
+            min_distance_options = [5, 10, 15, 20]
+            min_distance_weights = [0.2, 0.4, 0.3, 0.1]
+            
             new_params = {
-                'window_size': random.choice([5, 10, 20, 30]),
-                'smoothing_window': random.choice([1, 3, 5]),
-                'contamination': random.choice([0.05, 0.1, 0.2]),
-                'use_anomaly_flags': random.choice([True, False]),
-                'normalize_scores': random.choice([True, False]),
-                'epochs': random.choice([20, 40, 60]),
+                'lambda_param': random.choices(lambda_options, weights=lambda_weights, k=1)[0],
+                'control_limit': random.choices(control_limit_options, weights=control_limit_weights, k=1)[0],
+                'normalize': random.choices(normalize_options, weights=normalize_weights, k=1)[0],
+                'two_sided': random.choices(two_sided_options, weights=two_sided_weights, k=1)[0],
+                'adaptive': random.choices(adaptive_options, weights=adaptive_weights, k=1)[0],
+                'min_distance': random.choices(min_distance_options, weights=min_distance_weights, k=1)[0],
+            }
+            
+        elif new_method == 'autoencoder':
+            # Autoencoder parameters
+            window_options = [5, 10, 20, 30]
+            window_weights = [0.2, 0.3, 0.3, 0.2]
+            smoothing_options = [1, 3, 5]
+            smoothing_weights = [0.3, 0.5, 0.2]
+            contamination_options = [0.05, 0.1, 0.15, 0.2]
+            contamination_weights = [0.25, 0.4, 0.2, 0.15]
+            epochs_options = [20, 40, 60]
+            epochs_weights = [0.4, 0.4, 0.2]
+            normalize_scores_options = [True, False]
+            normalize_scores_weights = [0.7, 0.3]
+            use_flags_options = [True, False]
+            use_flags_weights = [0.7, 0.3]
+            
+            new_params = {
+                'window_size': random.choices(window_options, weights=window_weights, k=1)[0],
+                'smoothing_window': random.choices(smoothing_options, weights=smoothing_weights, k=1)[0],
+                'contamination': random.choices(contamination_options, weights=contamination_weights, k=1)[0],
+                'epochs': random.choices(epochs_options, weights=epochs_weights, k=1)[0],
+                'normalize_scores': random.choices(normalize_scores_options, weights=normalize_scores_weights, k=1)[0],
+                'use_anomaly_flags': random.choices(use_flags_options, weights=use_flags_weights, k=1)[0],
             }
         else:
             new_params = {}
         
+        # Generate common parameters with weighted choices
+        aggregate_options = ['mean', 'median', 'individual']
+        aggregate_weights = [0.5, 0.3, 0.2]
+        min_segment_options = [3, 5, 10, 15]
+        min_segment_weights = [0.3, 0.4, 0.2, 0.1]
+        probabilistic_options = [True, False]
+        probabilistic_weights = [0.2, 0.8]
+        
         return {
             'method': new_method,
             'method_params': new_params,
-            'aggregate_method': random.choice(['mean', 'median', 'individual']),
-            'min_segment_length': random.choice([3, 5, 10, 15]),
-            'probabilistic_output': random.choice([True, False]),
+            'aggregate_method': random.choices(aggregate_options, weights=aggregate_weights, k=1)[0],
+            'min_segment_length': random.choices(min_segment_options, weights=min_segment_weights, k=1)[0],
+            'probabilistic_output': random.choices(probabilistic_options, weights=probabilistic_weights, k=1)[0],
         }
 
 
@@ -1612,105 +2053,25 @@ def generate_random_changepoint_params(method='random'):
     This function creates appropriately weighted random parameters for different
     changepoint detection algorithms, supporting the flexible method/params system.
     
+    DEPRECATED: This function now delegates to ChangepointDetector.get_new_params()
+    for consistency. Use ChangepointDetector.get_new_params() directly for new code.
+    
     Args:
-        method (str): Method for parameter selection (currently only 'random' supported)
+        method (str): Method for parameter selection
+            - 'random': All methods with balanced weights
+            - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
+            - 'default'/'basic_weighted': Basic method heavily weighted
         
     Returns:
         tuple: (changepoint_method, changepoint_params) where
             - changepoint_method (str): Selected method name
             - changepoint_params (dict): Method-specific parameters
     """
-    import random
+    # Delegate to the unified implementation
+    result = ChangepointDetector.get_new_params(method=method)
     
-    # Changepoint method options - balanced weights now that all methods work
-    changepoint_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'autoencoder']
-    changepoint_method_weights = [0.4, 0.2, 0.1, 0.1, 0.1, 0.1]
-    
-    # Select method
-    selected_method = random.choices(changepoint_methods, weights=changepoint_method_weights, k=1)[0]
-    
-    # Generate method-specific parameters
-    changepoint_params = {}
-    
-    if selected_method == "basic":
-        # Basic method parameters (legacy style)
-        spacing_options = [6, 28, 60, 90, 120, 180, 360, 5040]
-        spacing_weights = [0.05, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.3]
-        distance_end_options = [6, 28, 60, 90, 180, 360, 520, 5040]
-        distance_end_weights = [0.05, 0.1, 0.1, 0.1, 0.2, 0.1, 0.05, 0.3]
-        
-        changepoint_params = {
-            "changepoint_spacing": random.choices(spacing_options, weights=spacing_weights, k=1)[0],
-            "changepoint_distance_end": random.choices(distance_end_options, weights=distance_end_weights, k=1)[0],
-        }
-        
-    elif selected_method == "pelt":
-        # PELT method parameters
-        penalty_options = [1, 5, 10, 20, 50, 100]
-        penalty_weights = [0.1, 0.2, 0.3, 0.2, 0.1, 0.1]
-        loss_functions = ['l1', 'l2', 'huber']
-        loss_weights = [0.3, 0.5, 0.2]
-        min_segment_options = [1, 2, 5, 10]
-        min_segment_weights = [0.4, 0.3, 0.2, 0.1]
-        
-        changepoint_params = {
-            "penalty": random.choices(penalty_options, weights=penalty_weights, k=1)[0],
-            "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[0],
-            "min_segment_length": random.choices(min_segment_options, weights=min_segment_weights, k=1)[0],
-        }
-        
-    elif selected_method in ["l1_fused_lasso", "l1_total_variation"]:
-        # L1 trend filtering parameters
-        lambda_options = [0.01, 0.1, 1.0, 10.0, 100.0]
-        lambda_weights = [0.1, 0.2, 0.4, 0.2, 0.1]
-        
-        changepoint_params = {
-            "lambda_reg": random.choices(lambda_options, weights=lambda_weights, k=1)[0],
-        }
-    
-    elif selected_method == "cusum":
-        # Updated with better default thresholds based on testing
-        threshold_options = [5.0, 10.0, 15.0, 20.0, 30.0]
-        threshold_weights = [0.1, 0.3, 0.3, 0.2, 0.1]
-        # Drift should generally be > 0 to reduce false positives
-        drift_options = [0.0, 0.25, 0.5, 1.0]
-        drift_weights = [0.2, 0.3, 0.3, 0.2]
-        normalize_options = [True, False]
-        normalize_weights = [0.8, 0.2]
-        min_distance_options = [5, 10, 15, 20]
-        min_distance_weights = [0.2, 0.4, 0.3, 0.1]
-        
-        changepoint_params = {
-            "threshold": random.choices(threshold_options, weights=threshold_weights, k=1)[0],
-            "drift": random.choices(drift_options, weights=drift_weights, k=1)[0],
-            "normalize": random.choices(normalize_options, weights=normalize_weights, k=1)[0],
-            "min_distance": random.choices(min_distance_options, weights=min_distance_weights, k=1)[0],
-        }
-    
-    elif selected_method == "autoencoder":
-        window_options = [5, 10, 20, 30]
-        window_weights = [0.2, 0.3, 0.3, 0.2]
-        smoothing_options = [1, 3, 5]
-        smoothing_weights = [0.3, 0.5, 0.2]
-        contamination_options = [0.05, 0.1, 0.15, 0.2]
-        contamination_weights = [0.25, 0.4, 0.2, 0.15]
-        epochs_options = [20, 40, 60]
-        epochs_weights = [0.4, 0.4, 0.2]
-        normalize_scores_options = [True, False]
-        normalize_scores_weights = [0.7, 0.3]
-        use_flags_options = [True, False]
-        use_flags_weights = [0.7, 0.3]
-        
-        changepoint_params = {
-            "window_size": random.choices(window_options, weights=window_weights, k=1)[0],
-            "smoothing_window": random.choices(smoothing_options, weights=smoothing_weights, k=1)[0],
-            "contamination": random.choices(contamination_options, weights=contamination_weights, k=1)[0],
-            "epochs": random.choices(epochs_options, weights=epochs_weights, k=1)[0],
-            "normalize_scores": random.choices(normalize_scores_options, weights=normalize_scores_weights, k=1)[0],
-            "use_anomaly_flags": random.choices(use_flags_options, weights=use_flags_weights, k=1)[0],
-        }
-    
-    return selected_method, changepoint_params
+    # Return in the legacy format (method, params) instead of full dict
+    return result['method'], result['method_params']
 
 
 def find_market_changepoints_multivariate(
@@ -1740,7 +2101,7 @@ def find_market_changepoints_multivariate(
         clustering_params = {}
     
     # Detect changepoints for each series individually
-    detector = ChangePointDetector(**detector_params)
+    detector = ChangepointDetector(**detector_params)
     detector.detect(df)
     
     if clustering_method == 'agreement':
