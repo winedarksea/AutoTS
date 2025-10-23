@@ -364,6 +364,39 @@ def new_kalman_params(method=None, allow_auto=True):
             'autoregressive': 1,
         }
 
+    def make_ucm_random_walk_drift_ar1_weekly_fourier():
+        phi = random.uniform(0.2, 0.95)
+        level_noise = random.choice([0.001, 0.005, 0.01])
+        drift_noise = random.choice([1e-05, 5e-05, 0.0001])
+        ar_noise = random.choice([0.01, 0.05, 0.1])
+        sigma_fourier2 = random.choice([5e-3, 1e-2])
+        harmonics = random.choices([2, 3, 4], [0.4, 0.4, 0.2])[0]
+
+        trend_block = _trend_block(
+            trend_type='random_walk_drift',
+            level_var=level_noise,
+            slope_var=drift_noise,
+        )
+        ar_block = {'F': np.array([[phi]]), 'Q': np.array([[ar_noise]]), 'H': np.array([1.0])}
+        fourier_block = _fourier_state_block(
+            period=7, harmonics=harmonics, variance=sigma_fourier2, observation_phase=False
+        )
+
+        F_full, Q_block, H_full = _compose_state_space(
+            [trend_block, ar_block, fourier_block]
+        )
+
+        return {
+            'model_name': 'ucm_random_walk_drift_ar1_weekly_fourier',
+            'state_transition': F_full.tolist(),
+            'process_noise': Q_block.tolist(),
+            'observation_model': H_full.tolist(),
+            'observation_noise': random.choice([0.03, 0.05, 0.1, 'auto']),
+            'level': 'random walk with drift',
+            'cov_type': 'opg',
+            'autoregressive': 1,
+        }
+
     def make_x1_model():
         return {
             'model_name': 'X1',
@@ -600,6 +633,7 @@ def new_kalman_params(method=None, allow_auto=True):
         (0.1, make_ar2_model),
         (0.1, make_ucm_deterministic_trend),
         (0.1, make_ucm_random_walk_drift_ar1),
+        (0.05, make_ucm_random_walk_drift_ar1_weekly_fourier),
         (0.1, make_x1_model),
         (0.1, make_hidden_state_seasonal_7),
         (0.1, make_factor_model),

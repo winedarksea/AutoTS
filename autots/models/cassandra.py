@@ -38,6 +38,7 @@ from autots.tools.holiday import holiday_flag
 from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 from autots.models.model_list import model_list_to_dict
+from autots.tools.bayesian_regression import BayesianMultiOutputRegression
 
 # scipy is technically optional but most likely is present
 try:
@@ -2780,7 +2781,6 @@ def fit_linear_model(x, y, params=None):
             cost_function="l1_positive",
         )
     elif model_type == "bayesian_linear":
-        # this could support better probabilistic bounds but that is not yet done
         model = BayesianMultiOutputRegression(
             alpha=params.get("alpha", 1),
             gaussian_prior_mean=params.get("gaussian_prior_mean", 0),
@@ -2791,93 +2791,6 @@ def fit_linear_model(x, y, params=None):
         return model.params
     else:
         raise ValueError("linear model not recognized")
-
-
-class BayesianMultiOutputRegression:
-    """Bayesian Linear Regression, conjugate prior update.
-
-    Args:
-        gaussian_prior_mean (float): mean of prior, a small positive value can encourage positive coefs which make better component plots
-        alpha (float): prior scale of gaussian covariance, effectively a regularization term
-        wishart_dof_excess (int): Larger values make the prior more peaked around the scale matrix.
-        wishart_prior_scale (float): A larger value means a smaller prior variance on the noise covariance, while a smaller value means more prior uncertainty about it.
-    """
-
-    def __init__(
-        self,
-        gaussian_prior_mean=0,
-        alpha=1.0,
-        wishart_prior_scale=1.0,
-        wishart_dof_excess=0,
-    ):
-        self.gaussian_prior_mean = gaussian_prior_mean
-        self.alpha = alpha
-        self.wishart_prior_scale = wishart_prior_scale
-        self.wishart_dof_excess = wishart_dof_excess
-
-    def fit(self, X, Y):
-        n_samples, n_features = X.shape
-        n_outputs = Y.shape[1]
-
-        # Prior for the regression coefficients: Gaussian
-        # For Ridge regularization: Set the diagonal elements to alpha
-        self.m_0 = (
-            np.zeros((n_features, n_outputs)) + self.gaussian_prior_mean
-        )  # Prior mean
-        self.S_0 = self.alpha * np.eye(n_features)  # Prior covariance
-
-        # Prior for the precision matrix (inverse covariance): Wishart
-        self.nu_0 = n_features + self.wishart_dof_excess  # Degrees of freedom
-        self.W_0_inv = self.wishart_prior_scale * np.eye(
-            n_outputs
-        )  # Scale matrix (inverse)
-
-        # Posterior for the regression coefficients
-        S_0_inv = np.linalg.inv(self.S_0)
-        S_n_inv = S_0_inv + X.T @ X
-        S_n = np.linalg.inv(S_n_inv)
-        m_n = S_n @ (S_0_inv @ self.m_0 + X.T @ Y)
-
-        # Posterior for the precision matrix
-        nu_n = self.nu_0 + n_samples
-        W_n_inv = (
-            self.W_0_inv
-            + Y.T @ Y
-            + self.m_0.T @ S_0_inv @ self.m_0
-            - m_n.T @ S_n_inv @ m_n
-        )
-
-        self.m_n = self.params = m_n
-        self.S_n = S_n
-        self.nu_n = nu_n
-        self.W_n_inv = W_n_inv
-
-    def predict(self, X, return_std=False):
-        Y_pred = X @ self.m_n
-        if return_std:
-            # Average predictive variance for each output dimension
-            Y_var = (
-                np.einsum('ij,jk,ik->i', X, self.S_n, X)
-                + np.trace(np.linalg.inv(self.nu_n * self.W_n_inv))
-                / self.W_n_inv.shape[0]
-            )
-            return Y_pred, np.sqrt(Y_var)
-        return Y_pred
-
-    def sample_posterior(self, n_samples=1):
-        # from scipy.stats import wishart
-        # Sample from the posterior distribution of the coefficients
-        # beta_samples = np.random.multivariate_normal(self.m_n.ravel(), self.S_n, size=n_samples)
-        # Sample from the posterior distribution of the precision matrix
-        # precision_samples = wishart(df=self.nu_n, scale=np.linalg.inv(self.W_n_inv)).rvs(n_samples)
-        # return beta_samples, precision_samples
-
-        sampled_weights = np.zeros((n_samples, self.m_n.shape[0], self.m_n.shape[1]))
-        for i in range(self.m_n.shape[1]):
-            sampled_weights[:, :, i] = np.random.multivariate_normal(
-                self.m_n[:, i], self.S_n, n_samples
-            )
-        return sampled_weights
 
 
 # Seasonalities

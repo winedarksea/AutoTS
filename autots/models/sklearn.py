@@ -34,6 +34,7 @@ from autots.tools.window_functions import window_maker, last_window, sliding_win
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.tools.holiday import holiday_flag
 from autots.tools.shaping import infer_frequency
+from autots.tools.bayesian_regression import BayesianMultiOutputRegression
 
 # scipy is technically optional but most likely is present
 try:
@@ -629,6 +630,8 @@ def retrieve_regressor(
         else:
             regr = KNeighborsRegressor(**model_param_dict, n_jobs=n_jobs)
         return regr
+    elif model_class == 'BayesianMultiOutputRegression':
+        return BayesianMultiOutputRegression(**model_param_dict)
     elif model_class == 'HistGradientBoost':
         try:
             from sklearn.experimental import enable_hist_gradient_boosting  # noqa
