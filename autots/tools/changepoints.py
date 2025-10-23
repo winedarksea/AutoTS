@@ -1,4 +1,5 @@
 import random
+from functools import lru_cache
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency
@@ -185,7 +186,7 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
     Returns:
     np.array: Array of changepoint indices
     """
-    data = np.asarray(data)
+    data = np.asarray(data, dtype=float)
     n = len(data)
     if n < 2 * min_segment_length:
         return np.array([])
@@ -195,6 +196,27 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
     F[0] = -penalty
     cp = np.zeros(n + 1, dtype=int)
     
+    # Pre-compute fast segment cost helpers
+    if loss_function == 'l2':
+        prefix_sum = np.concatenate(([0.0], np.cumsum(data)))
+        prefix_sq_sum = np.concatenate(([0.0], np.cumsum(data ** 2)))
+
+        def segment_cost(start, end):
+            length = end - start
+            if length <= 0:
+                return 0.0
+            segment_sum = prefix_sum[end] - prefix_sum[start]
+            segment_sq_sum = prefix_sq_sum[end] - prefix_sq_sum[start]
+            return float(segment_sq_sum - (segment_sum ** 2) / length)
+
+    else:
+
+        @lru_cache(maxsize=None)
+        def segment_cost(start, end):
+            if end <= start:
+                return 0.0
+            return float(_calculate_segment_cost(data[start:end], loss_function))
+
     # PELT algorithm
     R = [0]  # Set of potential changepoints
     
@@ -202,19 +224,16 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
         candidates = []
         for s in R:
             if t - s >= min_segment_length:
-                cost = _calculate_segment_cost(data[s:t], loss_function)
+                cost = segment_cost(s, t)
                 total_cost = F[s] + cost + penalty
                 candidates.append((total_cost, s))
         
         if candidates:
-            F[t], cp[t] = min(candidates)
+            F[t], cp[t] = min(candidates, key=lambda x: x[0])
             
             # Pruning step - keep only competitive changepoints
-            R_new = []
-            for s in R:
-                # A changepoint s is kept if it could potentially be optimal for future t
-                if F[s] <= F[t]:  # Simplified pruning condition
-                    R_new.append(s)
+            threshold = F[t] + penalty
+            R_new = [s for s in R if F[s] + penalty <= threshold]
             R_new.append(t)
             R = R_new
     
@@ -619,6 +638,414 @@ def _detect_cusum_changepoints(
     return np.array(sorted(set(validated_changepoints)))
 
 
+def _build_series_matrix(series_list):
+    """Pad a list of 1D arrays into a 2D matrix with lengths."""
+    if not series_list:
+        return np.empty((0, 0), dtype=float), np.array([], dtype=int)
+    lengths = np.array([len(arr) for arr in series_list], dtype=int)
+    max_len = lengths.max(initial=0)
+    matrix = np.zeros((len(series_list), max_len), dtype=float)
+    for idx, arr in enumerate(series_list):
+        matrix[idx, : lengths[idx]] = arr
+    return matrix, lengths
+
+
+def _vectorized_cusum_changepoints(
+    series_list,
+    threshold,
+    drift,
+    min_distance,
+    normalize,
+    min_segment_length,
+):
+    """Vectorized CUSUM detection across multiple series."""
+    if not series_list:
+        return []
+
+    matrix, lengths = _build_series_matrix(series_list)
+    max_len = matrix.shape[1]
+    mask = np.arange(max_len)[None, :] < lengths[:, None]
+    # Center series
+    sums = (matrix * mask).sum(axis=1)
+    means = sums / np.maximum(lengths, 1)
+    series = matrix - means[:, None]
+    series *= mask
+
+    valid_mask = lengths >= 2 * np.maximum(min_segment_length, 1)
+
+    if normalize:
+        variances = (series ** 2).sum(axis=1) / np.maximum(lengths, 1)
+        stds = np.sqrt(variances)
+        safe = stds > 1e-8
+        normalized = np.zeros_like(series)
+        safe_idx = np.nonzero(safe)[0]
+        if safe_idx.size:
+            normalized[safe_idx] = series[safe_idx] / stds[safe_idx, None]
+        normalized *= mask
+        series = normalized
+        valid_mask &= safe
+    else:
+        stds = np.sqrt((series ** 2).sum(axis=1) / np.maximum(lengths, 1))
+        valid_mask &= stds > 1e-8
+
+    n_series = len(series_list)
+    g_pos = np.zeros(n_series, dtype=float)
+    g_neg = np.zeros(n_series, dtype=float)
+    effective_drift = drift if (abs(drift) >= 1e-10 or not normalize) else 0.25
+    effective_min_distance = np.maximum(
+        min_distance, np.maximum(1, (lengths * 0.02).astype(int))
+    )
+
+    last_cp = -effective_min_distance.astype(int)
+    changepoint_lists = [[] for _ in range(n_series)]
+
+    for idx in range(max_len):
+        active = (idx < lengths) & valid_mask
+        if not np.any(active):
+            continue
+        values = series[:, idx]
+        g_pos[active] = np.maximum(0.0, g_pos[active] + values[active] - effective_drift)
+        g_neg[active] = np.minimum(0.0, g_neg[active] + values[active] + effective_drift)
+
+        triggered_pos = (g_pos > threshold) & active
+        triggered_neg = (g_neg < -threshold) & active
+        triggered = triggered_pos | triggered_neg
+
+        if np.any(triggered):
+            eligible = triggered & ((idx - last_cp) >= effective_min_distance)
+            if np.any(eligible):
+                eligible_idx = np.nonzero(eligible)[0]
+                for series_idx in eligible_idx:
+                    changepoint_lists[series_idx].append(idx)
+                    last_cp[series_idx] = idx
+            g_pos[triggered] = 0.0
+            g_neg[triggered] = 0.0
+
+    results = []
+    for series_idx in range(n_series):
+        cps = changepoint_lists[series_idx]
+        if not cps:
+            results.append(np.array([], dtype=int))
+            continue
+
+        series_length = lengths[series_idx]
+        eff_min = effective_min_distance[series_idx]
+        series_values = series[series_idx, :series_length]
+        validated = []
+        for cp in cps:
+            window_size = min(30, eff_min, cp, series_length - cp - 1)
+            if window_size < 3:
+                validated.append(cp)
+                continue
+
+            before_window = series_values[max(0, cp - window_size):cp]
+            after_window = series_values[cp:min(series_length, cp + window_size)]
+
+            if before_window.size == 0 or after_window.size == 0:
+                validated.append(cp)
+                continue
+
+            mean_diff = abs(np.mean(after_window) - np.mean(before_window))
+            std_before = np.std(before_window) if before_window.size > 1 else 1.0
+            std_after = np.std(after_window) if after_window.size > 1 else 1.0
+            avg_std = (std_before + std_after) / 2
+            threshold_val = max(0.2, 0.3 * avg_std)
+
+            if mean_diff > threshold_val:
+                validated.append(cp)
+
+        if validated:
+            filtered = [validated[0]]
+            for cp in validated[1:]:
+                if cp - filtered[-1] >= eff_min:
+                    filtered.append(cp)
+            results.append(np.array(sorted(set(filtered)), dtype=int))
+        else:
+            results.append(np.array([], dtype=int))
+
+    return results
+
+
+def _vectorized_ewma_changepoints(
+    series_list,
+    lambda_param,
+    control_limit,
+    min_distance,
+    normalize,
+    two_sided,
+    adaptive,
+    min_segment_length,
+):
+    """Vectorized EWMA detection across multiple series."""
+    if not series_list:
+        return []
+
+    matrix, lengths = _build_series_matrix(series_list)
+    max_len = matrix.shape[1]
+    mask = np.arange(max_len)[None, :] < lengths[:, None]
+    centered = matrix - ((matrix * mask).sum(axis=1) / np.maximum(lengths, 1))[:, None]
+    centered *= mask
+
+    n_series = len(series_list)
+    sigma = np.sqrt((centered ** 2).sum(axis=1) / np.maximum(lengths, 1))
+    valid_mask = sigma > 1e-8
+
+    if normalize:
+        normalized = np.zeros_like(centered)
+        safe_idx = np.nonzero(valid_mask)[0]
+        if safe_idx.size:
+            normalized[safe_idx] = centered[safe_idx] / sigma[safe_idx, None]
+        normalized *= mask
+        centered = normalized
+        sigma[:] = 1.0
+        valid_mask = valid_mask
+    else:
+        valid_mask &= sigma > 1e-8
+
+    centered[~valid_mask, :] = 0.0
+    sigma[~valid_mask] = 1.0
+
+    eff_min_distance = np.maximum(
+        min_distance, np.maximum(1, (lengths * 0.02).astype(int))
+    )
+    last_cp = -eff_min_distance.astype(int)
+
+    t_index = np.arange(max_len)
+    if adaptive:
+        factor = 1 - (1 - lambda_param) ** (2 * (t_index + 1))
+        scale = np.sqrt(lambda_param / (2 - lambda_param))
+        std_errors = sigma[:, None] * scale * np.sqrt(factor)[None, :]
+    else:
+        steady_state = sigma * np.sqrt(lambda_param / (2 - lambda_param))
+        std_errors = np.broadcast_to(steady_state[:, None], (n_series, max_len))
+
+    z = np.zeros_like(centered)
+    if max_len > 0:
+        z[:, 0] = centered[:, 0]
+
+    in_signal = np.zeros(n_series, dtype=bool)
+    signal_start = np.full(n_series, -1, dtype=int)
+    changepoint_lists = [[] for _ in range(n_series)]
+
+    for t in range(1, max_len):
+        z[:, t] = lambda_param * centered[:, t] + (1 - lambda_param) * z[:, t - 1]
+        active = (t < lengths) & valid_mask
+        if not np.any(active):
+            continue
+
+        ucl = control_limit * std_errors[:, t]
+        if two_sided:
+            signal = ((z[:, t] > ucl) | (z[:, t] < -ucl)) & active
+        else:
+            signal = (z[:, t] > ucl) & active
+
+        prev_signal = in_signal.copy()
+        start_mask = signal & ~prev_signal
+        signal_start[start_mask] = t
+
+        end_mask = prev_signal & ~signal
+        if np.any(end_mask):
+            for idx in np.nonzero(end_mask)[0]:
+                cp_idx = signal_start[idx]
+                if cp_idx >= 0 and (cp_idx - last_cp[idx]) >= eff_min_distance[idx]:
+                    changepoint_lists[idx].append(cp_idx)
+                    last_cp[idx] = cp_idx
+                signal_start[idx] = -1
+
+        in_signal = signal
+
+    # Handle ongoing signals
+    if np.any(in_signal):
+        ongoing_idx = np.nonzero(in_signal)[0]
+        for idx in ongoing_idx:
+            cp_idx = signal_start[idx]
+            if cp_idx >= 0 and (cp_idx - last_cp[idx]) >= eff_min_distance[idx]:
+                changepoint_lists[idx].append(cp_idx)
+                last_cp[idx] = cp_idx
+
+    results = []
+    for idx in range(n_series):
+        cps = changepoint_lists[idx]
+        if not cps:
+            results.append(np.array([], dtype=int))
+            continue
+
+        n = lengths[idx]
+        eff_min = eff_min_distance[idx]
+        series_values = centered[idx, :n]
+        validated = []
+        window_size = min(30, eff_min, max(1, n // 10))
+
+        for cp in cps:
+            before_start = max(0, cp - window_size)
+            after_end = min(n, cp + window_size)
+
+            before_window = series_values[before_start:cp]
+            after_window = series_values[cp:after_end]
+
+            if before_window.size == 0 or after_window.size == 0:
+                validated.append(cp)
+                continue
+
+            mean_diff = abs(np.mean(after_window) - np.mean(before_window))
+            std_before = np.std(before_window) if before_window.size > 1 else 1.0
+            std_after = np.std(after_window) if after_window.size > 1 else 1.0
+            avg_std = (std_before + std_after) / 2
+            threshold_val = max(0.15, 0.2 * avg_std)
+            ewma_signal_strength = abs(z[idx, cp]) if cp < n else 0.0
+
+            if mean_diff > threshold_val or ewma_signal_strength > control_limit * 0.6:
+                validated.append(cp)
+
+        if validated:
+            filtered = [validated[0]]
+            for cp in validated[1:]:
+                if cp - filtered[-1] >= eff_min:
+                    filtered.append(cp)
+            results.append(np.array(sorted(set(filtered)), dtype=int))
+        else:
+            results.append(np.array([], dtype=int))
+
+    return results
+
+
+def _approximate_l1_trend_filter_batch(data_block, method, lambda_reg):
+    """Vectorized approximate L1 trend filtering for multiple series."""
+    batch_size, n = data_block.shape
+    if method == 'fused_lasso':
+        if n < 2:
+            return data_block.astype(float)
+        D = np.eye(n - 1, n, dtype=float) - np.eye(n - 1, n, k=1, dtype=float)
+    else:
+        if n < 3:
+            return data_block.astype(float)
+        D = (
+            np.eye(n - 2, n, dtype=float)
+            - 2 * np.eye(n - 2, n, k=1, dtype=float)
+            + np.eye(n - 2, n, k=2, dtype=float)
+        )
+
+    identity = np.eye(n, dtype=float)
+    results = np.empty_like(data_block, dtype=float)
+    m = D.shape[0]
+    max_elements = 4_000_000
+    chunk_size = max(1, max_elements // max(1, m * n))
+
+    for start in range(0, batch_size, chunk_size):
+        end = min(batch_size, start + chunk_size)
+        chunk = data_block[start:end].astype(float, copy=True)
+        x_chunk = chunk.copy()
+
+        for _ in range(3):
+            DX = x_chunk @ D.T
+            weights = 1.0 / (np.abs(DX) + 1e-6)
+            sqrt_weights = np.sqrt(lambda_reg * weights)
+            D_weighted = D[None, :, :] * sqrt_weights[:, :, None]
+            A = identity[None, :, :] + np.matmul(
+                np.transpose(D_weighted, (0, 2, 1)), D_weighted
+            )
+            try:
+                x_chunk = np.linalg.solve(A, chunk)
+            except np.linalg.LinAlgError:
+                x_chunk = np.array([_simple_smooth(row, lambda_reg) for row in chunk])
+                break
+
+        results[start:end] = x_chunk
+
+    return results
+
+
+def _extract_changepoints_from_trend_batch(fitted_trends, method, min_segment_length):
+    """Extract changepoints from fitted trends for multiple series."""
+    if fitted_trends.size == 0:
+        return []
+
+    n_series, n = fitted_trends.shape
+    if method == 'fused_lasso':
+        if n < 2:
+            return [np.array([], dtype=int) for _ in range(n_series)]
+        differences = np.abs(np.diff(fitted_trends, axis=1))
+        shift = 1
+    else:
+        if n < 3:
+            return [np.array([], dtype=int) for _ in range(n_series)]
+        differences = np.abs(np.diff(fitted_trends, n=2, axis=1))
+        shift = 2
+
+    mean_diff = differences.mean(axis=1)
+    std_diff = differences.std(axis=1)
+
+    results = []
+    for idx in range(n_series):
+        if differences.shape[1] == 0 or std_diff[idx] == 0:
+            results.append(np.array([], dtype=int))
+            continue
+
+        threshold = mean_diff[idx] + 1.5 * std_diff[idx]
+        candidates = np.where(differences[idx] > threshold)[0] + shift
+        candidates = candidates[(candidates > 2) & (candidates < n - 2)]
+
+        if candidates.size == 0:
+            results.append(np.array([], dtype=int))
+            continue
+
+        filtered = [candidates[0]]
+        for cp in candidates[1:]:
+            if cp - filtered[-1] >= min_segment_length:
+                filtered.append(cp)
+
+        results.append(np.array(sorted(set(filtered)), dtype=int))
+
+    return results
+
+
+def _vectorized_l1_detection(names, series_list, lambda_reg, method_key, min_segment_length):
+    """Vectorized L1 (fused lasso / total variation) detection across series."""
+    results = {}
+    if not series_list:
+        return results
+
+    method = 'fused_lasso' if method_key == 'l1_fused_lasso' else 'total_variation'
+    min_required = 4 if method == 'total_variation' else 3
+    groups = {}
+
+    for idx, arr in enumerate(series_list):
+        length = len(arr)
+        if length < min_required:
+            if length >= 3:
+                cp = _simple_threshold_changepoints(arr)
+            else:
+                cp = np.array([], dtype=int)
+            results[names[idx]] = {
+                'changepoints': cp,
+                'fitted': arr.astype(float, copy=False),
+            }
+            continue
+        groups.setdefault(length, []).append(idx)
+
+    for length, indices in groups.items():
+        data_block = np.vstack([series_list[i].astype(float, copy=False) for i in indices])
+        try:
+            fitted_block = _approximate_l1_trend_filter_batch(
+                data_block, method, lambda_reg
+            )
+        except Exception:
+            fitted_block = data_block.copy()
+
+        cp_lists = _extract_changepoints_from_trend_batch(
+            fitted_block, method, min_segment_length
+        )
+
+        for row, series_idx in enumerate(indices):
+            name = names[series_idx]
+            results[name] = {
+                'changepoints': cp_lists[row],
+                'fitted': fitted_block[row],
+            }
+
+    return results
+
+
 def _prepare_autoencoder_windows(data, window_size):
     """Create overlapping windows for autoencoder training."""
     series = np.asarray(data, dtype=float)
@@ -782,6 +1209,183 @@ def _detect_autoencoder_changepoints(
         anomaly_scores[:indices[0]] = first_fill
     
     return changepoints, anomaly_scores
+
+
+def _detect_autoencoder_changepoints_vectorized(
+    series_names,
+    series_list,
+    method_params,
+    fallback_min_distance,
+):
+    """Run autoencoder changepoint detection once for multiple series."""
+    results = {}
+    if method_params is None:
+        method_params = {}
+
+    try:
+        from autots.tools.autoencoder import vae_outliers, torch_available
+    except ImportError as exc:
+        raise ImportError("Autoencoder changepoint detection requires the autoencoder tools.") from exc
+
+    if not torch_available:
+        raise ImportError("PyTorch is required for autoencoder-based changepoint detection.")
+
+    lengths = [len(arr) for arr in series_list]
+    if not lengths:
+        return results
+
+    if 'window_size' in method_params:
+        window_size = int(method_params.get('window_size', 3))
+    else:
+        default_sizes = [
+            max(3, min(30, (length // 5) if (length // 5) > 0 else 3))
+            for length in lengths
+            if length > 0
+        ]
+        window_size = min(default_sizes) if default_sizes else 3
+    window_size = max(3, window_size)
+
+    smoothing_window = int(method_params.get('smoothing_window', 3))
+    use_flags = method_params.get('use_anomaly_flags', True)
+    normalize_scores = method_params.get('normalize_scores', True)
+    score_threshold = method_params.get('score_threshold', None)
+    score_quantile = method_params.get('score_quantile', 0.95)
+    min_distance = max(1, int(method_params.get('min_distance', fallback_min_distance)))
+
+    detection_keys = {
+        'window_size',
+        'smoothing_window',
+        'use_anomaly_flags',
+        'normalize_scores',
+        'score_threshold',
+        'score_quantile',
+        'min_distance',
+    }
+    vae_params = {k: v for k, v in method_params.items() if k not in detection_keys}
+    if 'contamination' not in vae_params:
+        vae_params['contamination'] = method_params.get('contamination', 0.1)
+
+    all_windows = []
+    series_window_indices = {}
+
+    for idx, arr in enumerate(series_list):
+        name = series_names[idx]
+        if len(arr) < window_size:
+            results[name] = {
+                'changepoints': np.array([], dtype=int),
+                'fitted': np.zeros(len(arr), dtype=float),
+            }
+            continue
+
+        windows, indices = _prepare_autoencoder_windows(arr, window_size)
+        if windows.size == 0 or indices.size == 0:
+            results[name] = {
+                'changepoints': np.array([], dtype=int),
+                'fitted': np.zeros(len(arr), dtype=float),
+            }
+            continue
+
+        all_windows.append(windows)
+        series_window_indices[idx] = indices
+
+    if not all_windows:
+        return results
+
+    window_matrix = np.vstack(all_windows)
+    df_windows = pd.DataFrame(window_matrix)
+
+    anomalies_df, scores_df = vae_outliers(df_windows, method_params=vae_params)
+    scores_array = scores_df.iloc[:, 0].values.astype(float)
+    if use_flags and 'anomaly' in anomalies_df.columns:
+        anomaly_flags = anomalies_df.iloc[:, 0].values
+    else:
+        anomaly_flags = None
+
+    offset = 0
+    for idx, arr in enumerate(series_list):
+        name = series_names[idx]
+        if idx not in series_window_indices:
+            # Already populated (insufficient data)
+            if name not in results:
+                results[name] = {
+                    'changepoints': np.array([], dtype=int),
+                    'fitted': arr.astype(float, copy=False),
+                }
+            continue
+
+        count = len(series_window_indices[idx])
+        series_scores = scores_array[offset:offset + count].astype(float, copy=True)
+        if anomaly_flags is not None:
+            series_flags = anomaly_flags[offset:offset + count]
+        else:
+            series_flags = None
+        offset += count
+
+        if smoothing_window > 1 and series_scores.size > 0:
+            series_scores = (
+                pd.Series(series_scores)
+                .rolling(window=smoothing_window, min_periods=1)
+                .mean()
+                .values
+            )
+
+        if normalize_scores and series_scores.size > 0:
+            score_std = np.std(series_scores)
+            if score_std > 1e-6:
+                score_median = np.median(series_scores)
+                mad = np.median(np.abs(series_scores - score_median))
+                if mad > 1e-6:
+                    series_scores = (series_scores - score_median) / (1.4826 * mad)
+                else:
+                    series_scores = (series_scores - np.mean(series_scores)) / (score_std + 1e-6)
+            else:
+                series_scores = series_scores - np.mean(series_scores)
+
+        if use_flags and series_flags is not None:
+            anomaly_mask = series_flags == -1
+        else:
+            if series_scores.size == 0:
+                anomaly_mask = np.array([], dtype=bool)
+            else:
+                threshold_value = (
+                    score_threshold
+                    if score_threshold is not None
+                    else np.quantile(series_scores, score_quantile)
+                )
+                anomaly_mask = series_scores >= threshold_value
+
+        indices = series_window_indices[idx]
+        candidate_indices = indices[anomaly_mask] if anomaly_mask.size else np.array([], dtype=int)
+        candidate_scores = series_scores[anomaly_mask] if anomaly_mask.size else np.array([], dtype=float)
+
+        filtered = []
+        for cp_idx, sc in zip(candidate_indices, candidate_scores):
+            if not filtered:
+                filtered.append((cp_idx, sc))
+                continue
+            last_idx, last_score = filtered[-1]
+            if cp_idx - last_idx < min_distance:
+                if sc > last_score:
+                    filtered[-1] = (cp_idx, sc)
+            else:
+                filtered.append((cp_idx, sc))
+
+        changepoints = (
+            np.array([item[0] for item in filtered], dtype=int) if filtered else np.array([], dtype=int)
+        )
+
+        anomaly_scores = np.zeros(len(arr), dtype=float)
+        if indices.size > 0:
+            anomaly_scores[indices] = series_scores
+            first_fill = series_scores[0]
+            anomaly_scores[: indices[0]] = first_fill
+
+        results[name] = {
+            'changepoints': changepoints,
+            'fitted': anomaly_scores,
+        }
+
+    return results
 
 
 def create_changepoint_features(
@@ -1149,6 +1753,249 @@ class ChangepointDetector(object):
         self.default_values_ = None
         self.trend_df_ = None
         
+    def _detect_series_individual(self, series_name, series):
+        """Helper to run detection for a single series when using individual aggregation."""
+        data = series.dropna().values
+        changepoints = np.array([], dtype=int)
+        fitted_trend = data
+        probabilities = None
+
+        if len(data) < 2 * self.min_segment_length:
+            return {
+                'name': series_name,
+                'changepoints': changepoints,
+                'fitted': fitted_trend,
+                'probabilities': probabilities,
+            }
+
+        method = self.method
+        params = self.method_params
+
+        if method == 'pelt':
+            penalty = params.get('penalty', 10)
+            loss_function = params.get('loss_function', 'l2')
+            changepoints = _detect_pelt_changepoints(
+                data, penalty, loss_function, self.min_segment_length
+            )
+            fitted_trend = data
+
+        elif method in ['l1_fused_lasso', 'l1_total_variation']:
+            lambda_reg = params.get('lambda_reg', 1.0)
+            l1_method = 'fused_lasso' if method == 'l1_fused_lasso' else 'total_variation'
+            changepoints, fitted_trend = _detect_l1_trend_changepoints(
+                data, lambda_reg, l1_method
+            )
+
+        elif method == 'cusum':
+            threshold = params.get('threshold', 5.0)
+            drift = params.get('drift', 0.0)
+            normalize = params.get('normalize', True)
+            min_distance = params.get('min_distance', self.min_segment_length)
+            changepoints = _detect_cusum_changepoints(
+                data,
+                threshold=threshold,
+                drift=drift,
+                min_distance=min_distance,
+                normalize=normalize,
+            )
+            fitted_trend = data
+
+        elif method == 'ewma':
+            lambda_param = params.get('lambda_param', 0.2)
+            control_limit = params.get('control_limit', 3.0)
+            normalize = params.get('normalize', True)
+            two_sided = params.get('two_sided', True)
+            adaptive = params.get('adaptive', False)
+            min_distance = params.get('min_distance', self.min_segment_length)
+            changepoints = _detect_ewma_changepoints(
+                data,
+                lambda_param=lambda_param,
+                control_limit=control_limit,
+                min_distance=min_distance,
+                normalize=normalize,
+                two_sided=two_sided,
+                adaptive=adaptive,
+            )
+            fitted_trend = data
+
+        elif method == 'autoencoder':
+            min_distance = params.get('min_distance', self.min_segment_length)
+            changepoints, fitted_trend = _detect_autoencoder_changepoints(
+                data,
+                method_params=params,
+                min_distance=min_distance,
+            )
+
+        elif method == 'composite_fused_lasso':
+            changepoints, fitted_trend = self._detect_composite_fused_lasso(data)
+
+        elif method == 'basic':
+            changepoint_spacing = params.get('changepoint_spacing', 60)
+            changepoint_distance_end = params.get('changepoint_distance_end', 120)
+            n = len(data)
+            changepoint_range_end = max(1, min(n - changepoint_distance_end, n - 1))
+            if changepoint_range_end <= 0:
+                changepoints = np.array([0])
+            else:
+                changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
+                changepoints = np.append(changepoints, changepoint_range_end)
+            fitted_trend = data
+
+        else:
+            raise ValueError(f"Unknown method: {method}")
+
+        if self.probabilistic_output:
+            prob_method = params.get('probabilistic_method', 'bootstrap')
+            probabilities, prob_cps = self._detect_probabilistic_changepoints(data, prob_method)
+            if params.get('use_probabilistic_changepoints', False):
+                changepoints = prob_cps
+
+        return {
+            'name': series_name,
+            'changepoints': changepoints,
+            'fitted': fitted_trend,
+            'probabilities': probabilities,
+        }
+
+    def _detect_individual_sequential(self, df):
+        """Fallback per-series detection path."""
+        self.changepoints_ = {}
+        self.fitted_trends_ = {}
+        prob_results = {} if self.probabilistic_output else None
+
+        for col in df.columns:
+            result = self._detect_series_individual(col, df[col])
+            self.changepoints_[col] = result['changepoints']
+            self.fitted_trends_[col] = result['fitted']
+            if self.probabilistic_output and result['probabilities'] is not None:
+                prob_results[col] = result['probabilities']
+
+        if self.probabilistic_output:
+            self.changepoint_probabilities_ = prob_results if prob_results is not None else {}
+
+    def _detect_individual_vectorized(self, df):
+        """Vectorized detection path for supported methods."""
+        series_names = list(df.columns)
+        series_arrays = [df[name].dropna().to_numpy(dtype=float) for name in series_names]
+
+        results = {}
+        method_params = self.method_params
+
+        if self.method == 'cusum':
+            threshold = method_params.get('threshold', 5.0)
+            drift = method_params.get('drift', 0.0)
+            normalize = method_params.get('normalize', True)
+            min_distance = method_params.get('min_distance', self.min_segment_length)
+
+            eligible_arrays = []
+            eligible_names = []
+            for name, arr in zip(series_names, series_arrays):
+                if len(arr) < max(1, 2 * self.min_segment_length):
+                    results[name] = {
+                        'changepoints': np.array([], dtype=int),
+                        'fitted': arr,
+                    }
+                else:
+                    eligible_names.append(name)
+                    eligible_arrays.append(arr)
+
+            if eligible_arrays:
+                cps_list = _vectorized_cusum_changepoints(
+                    eligible_arrays,
+                    threshold,
+                    drift,
+                    min_distance,
+                    normalize,
+                    self.min_segment_length,
+                )
+                for name, arr, cps in zip(eligible_names, eligible_arrays, cps_list):
+                    results[name] = {'changepoints': cps, 'fitted': arr}
+
+        elif self.method == 'ewma':
+            lambda_param = method_params.get('lambda_param', 0.2)
+            control_limit = method_params.get('control_limit', 3.0)
+            normalize = method_params.get('normalize', True)
+            two_sided = method_params.get('two_sided', True)
+            adaptive = method_params.get('adaptive', False)
+            min_distance = method_params.get('min_distance', self.min_segment_length)
+
+            eligible_arrays = []
+            eligible_names = []
+            for name, arr in zip(series_names, series_arrays):
+                if len(arr) < max(2, 2 * self.min_segment_length):
+                    results[name] = {
+                        'changepoints': np.array([], dtype=int),
+                        'fitted': arr,
+                    }
+                else:
+                    eligible_names.append(name)
+                    eligible_arrays.append(arr)
+
+            if eligible_arrays:
+                cps_list = _vectorized_ewma_changepoints(
+                    eligible_arrays,
+                    lambda_param,
+                    control_limit,
+                    min_distance,
+                    normalize,
+                    two_sided,
+                    adaptive,
+                    self.min_segment_length,
+                )
+                for name, arr, cps in zip(eligible_names, eligible_arrays, cps_list):
+                    results[name] = {'changepoints': cps, 'fitted': arr}
+
+        elif self.method in {'l1_fused_lasso', 'l1_total_variation'}:
+            lambda_reg = method_params.get('lambda_reg', 1.0)
+            l1_results = _vectorized_l1_detection(
+                series_names,
+                series_arrays,
+                lambda_reg,
+                self.method,
+                self.min_segment_length,
+            )
+            results.update(l1_results)
+
+        elif self.method == 'autoencoder':
+            auto_results = _detect_autoencoder_changepoints_vectorized(
+                series_names,
+                series_arrays,
+                method_params,
+                self.min_segment_length,
+            )
+            results.update(auto_results)
+
+        else:
+            raise ValueError(f"Vectorized detection not implemented for method: {self.method}")
+
+        self.changepoints_ = {}
+        self.fitted_trends_ = {}
+        prob_results = {} if self.probabilistic_output else None
+
+        for name, arr in zip(series_names, series_arrays):
+            outcome = results.get(name, None)
+            if outcome is None:
+                outcome = {
+                    'changepoints': np.array([], dtype=int),
+                    'fitted': arr,
+                }
+
+            changepoints = np.asarray(outcome['changepoints'], dtype=int)
+            fitted = np.asarray(outcome['fitted'], dtype=float)
+
+            self.changepoints_[name] = changepoints
+            self.fitted_trends_[name] = fitted
+
+            if self.probabilistic_output and len(arr) >= max(1, 2 * self.min_segment_length):
+                prob_method = method_params.get('probabilistic_method', 'bootstrap')
+                probabilities, prob_cps = self._detect_probabilistic_changepoints(arr, prob_method)
+                if method_params.get('use_probabilistic_changepoints', False):
+                    self.changepoints_[name] = prob_cps
+                prob_results[name] = probabilities
+
+        if self.probabilistic_output:
+            self.changepoint_probabilities_ = prob_results if prob_results is not None else {}
+
     def detect(self, df):
         """
         Run changepoint detection on wide-format time series data.
@@ -1158,109 +2005,13 @@ class ChangepointDetector(object):
         """
         self.df = df.copy()
         self.df_cols = df.columns
+        self.changepoint_probabilities_ = None
         
         if self.aggregate_method == 'individual':
-            # Detect changepoints for each series individually
-            self.changepoints_ = {}
-            self.fitted_trends_ = {}
-            
-            for col in df.columns:
-                data = df[col].dropna().values
-                if len(data) < 2 * self.min_segment_length:
-                    self.changepoints_[col] = np.array([])
-                    self.fitted_trends_[col] = data
-                    continue
-                    
-                if self.method == 'pelt':
-                    penalty = self.method_params.get('penalty', 10)
-                    loss_function = self.method_params.get('loss_function', 'l2')
-                    changepoints = _detect_pelt_changepoints(
-                        data, penalty, loss_function, self.min_segment_length
-                    )
-                    self.changepoints_[col] = changepoints
-                    self.fitted_trends_[col] = data  # Could fit segment means
-                    
-                elif self.method in ['l1_fused_lasso', 'l1_total_variation']:
-                    lambda_reg = self.method_params.get('lambda_reg', 1.0)
-                    l1_method = 'fused_lasso' if self.method == 'l1_fused_lasso' else 'total_variation'
-                    changepoints, fitted_trend = _detect_l1_trend_changepoints(
-                        data, lambda_reg, l1_method
-                    )
-                    self.changepoints_[col] = changepoints
-                    self.fitted_trends_[col] = fitted_trend
-                    
-                elif self.method == 'cusum':
-                    threshold = self.method_params.get('threshold', 5.0)
-                    drift = self.method_params.get('drift', 0.0)
-                    normalize = self.method_params.get('normalize', True)
-                    min_distance = self.method_params.get('min_distance', self.min_segment_length)
-                    changepoints = _detect_cusum_changepoints(
-                        data,
-                        threshold=threshold,
-                        drift=drift,
-                        min_distance=min_distance,
-                        normalize=normalize,
-                    )
-                    self.changepoints_[col] = changepoints
-                    self.fitted_trends_[col] = data
-                    
-                elif self.method == 'ewma':
-                    lambda_param = self.method_params.get('lambda_param', 0.2)
-                    control_limit = self.method_params.get('control_limit', 3.0)
-                    normalize = self.method_params.get('normalize', True)
-                    two_sided = self.method_params.get('two_sided', True)
-                    adaptive = self.method_params.get('adaptive', False)
-                    min_distance = self.method_params.get('min_distance', self.min_segment_length)
-                    changepoints = _detect_ewma_changepoints(
-                        data,
-                        lambda_param=lambda_param,
-                        control_limit=control_limit,
-                        min_distance=min_distance,
-                        normalize=normalize,
-                        two_sided=two_sided,
-                        adaptive=adaptive,
-                    )
-                    self.changepoints_[col] = changepoints
-                    self.fitted_trends_[col] = data
-                    
-                elif self.method == 'autoencoder':
-                    min_distance = self.method_params.get('min_distance', self.min_segment_length)
-                    changepoints, scores = _detect_autoencoder_changepoints(
-                        data,
-                        method_params=self.method_params,
-                        min_distance=min_distance,
-                    )
-                    self.changepoints_[col] = changepoints
-                    self.fitted_trends_[col] = scores
-                    
-                elif self.method == 'composite_fused_lasso':
-                    self.changepoints_[col], self.fitted_trends_[col] = self._detect_composite_fused_lasso(data)
-                
-                elif self.method == 'basic':
-                    # Basic evenly-spaced changepoints (legacy method)
-                    changepoint_spacing = self.method_params.get('changepoint_spacing', 60)
-                    changepoint_distance_end = self.method_params.get('changepoint_distance_end', 120)
-                    # Convert to changepoint indices
-                    n = len(data)
-                    changepoint_range_end = max(1, min(n - changepoint_distance_end, n - 1))
-                    if changepoint_range_end <= 0:
-                        changepoints = np.array([0])
-                    else:
-                        changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
-                        changepoints = np.append(changepoints, changepoint_range_end)
-                    self.changepoints_[col] = changepoints
-                    self.fitted_trends_[col] = data
-                
-                # Handle probabilistic output
-                if self.probabilistic_output:
-                    if self.changepoint_probabilities_ is None:
-                        self.changepoint_probabilities_ = {}
-                    prob_method = self.method_params.get('probabilistic_method', 'bootstrap')
-                    self.changepoint_probabilities_[col], prob_cps = self._detect_probabilistic_changepoints(data, prob_method)
-                    # Update changepoints with probabilistic results if requested
-                    if self.method_params.get('use_probabilistic_changepoints', False):
-                        self.changepoints_[col] = prob_cps
-                    
+            if self.method in {'cusum', 'ewma', 'l1_fused_lasso', 'l1_total_variation', 'autoencoder'}:
+                self._detect_individual_vectorized(df)
+            else:
+                self._detect_individual_sequential(df)
         else:
             # Aggregate data across series first
             if self.aggregate_method == 'mean':
@@ -1586,12 +2337,16 @@ class ChangepointDetector(object):
                 
         elif method == 'bootstrap':
             # Bootstrap-based uncertainty estimation
-            n_bootstrap = self.method_params.get('n_bootstrap', 100)
+            max_bootstrap = int(self.method_params.get('probabilistic_max_bootstrap', 30))
+            default_bootstrap = min(max_bootstrap, max(10, n // 2 if n // 2 > 0 else 10))
+            n_bootstrap = int(self.method_params.get('n_bootstrap', default_bootstrap))
+            n_bootstrap = max(1, n_bootstrap)
             bootstrap_changepoints = []
+            rng = np.random.default_rng()
             
             for _ in range(n_bootstrap):
                 # Resample data with replacement
-                bootstrap_indices = np.random.choice(n, size=n, replace=True)
+                bootstrap_indices = rng.choice(n, size=n, replace=True)
                 bootstrap_data = data[bootstrap_indices]
                 
                 # Detect changepoints on bootstrap sample
@@ -2030,12 +2785,24 @@ class ChangepointDetector(object):
             new_params = {}
         
         # Generate common parameters with weighted choices
-        aggregate_options = ['mean', 'median', 'individual']
-        aggregate_weights = [0.5, 0.3, 0.2]
-        min_segment_options = [3, 5, 10, 15]
-        min_segment_weights = [0.3, 0.4, 0.2, 0.1]
-        probabilistic_options = [True, False]
-        probabilistic_weights = [0.2, 0.8]
+        if selection_mode == "fast":
+            aggregate_options = ['mean', 'median', 'individual']
+            aggregate_weights = [0.45, 0.35, 0.20]
+            min_segment_options = [5, 10, 15]
+            min_segment_weights = [0.5, 0.3, 0.2]
+            probabilistic_options = [False, True]
+            probabilistic_weights = [0.9, 0.1]
+            # Encourage faster probability methods when they are requested
+            new_params.setdefault('probabilistic_method', 'bayesian_online')
+            new_params.setdefault('probabilistic_max_bootstrap', 20)
+            new_params.setdefault('n_bootstrap', 15)
+        else:
+            aggregate_options = ['mean', 'median', 'individual']
+            aggregate_weights = [0.45, 0.30, 0.25]
+            min_segment_options = [3, 5, 10, 15]
+            min_segment_weights = [0.25, 0.4, 0.25, 0.1]
+            probabilistic_options = [True, False]
+            probabilistic_weights = [0.15, 0.85]
         
         return {
             'method': new_method,
