@@ -5,6 +5,117 @@ from autots.tools.shaping import infer_frequency
 from autots.tools.window_functions import chunk_reshape
 
 
+def _compute_segment_statistics(series, changepoints):
+    """
+    Calculate segment boundaries and representative values for a series given changepoints.
+
+    Parameters:
+    series (pd.Series or array-like): Input data aligned to the training index.
+    changepoints (array-like): Indices of changepoints relative to the non-NaN values.
+
+    Returns:
+    tuple(pd.Index, np.ndarray): Segment boundary index values and segment means.
+    """
+    if isinstance(series, pd.Series):
+        index = series.index
+        values = series.to_numpy(dtype=float, copy=False)
+    else:
+        series = pd.Series(series)
+        index = series.index
+        values = series.to_numpy(dtype=float, copy=False)
+
+    if len(series) == 0:
+        return pd.Index([]), np.array([], dtype=float)
+
+    mask = np.isfinite(values)
+    if not mask.any():
+        # Default to zeros if no finite values are available
+        return pd.Index([index[0]]), np.array([0.0], dtype=float)
+
+    valid_positions = np.flatnonzero(mask)
+    filtered_values = values[mask]
+
+    changepoints = np.asarray(changepoints if changepoints is not None else [], dtype=int)
+    if changepoints.size > 0:
+        changepoints = changepoints[(changepoints > 0) & (changepoints < len(filtered_values))]
+        changepoints = np.unique(changepoints)
+    boundaries = np.concatenate(([0], changepoints, [len(filtered_values)]))
+
+    segment_breaks = []
+    segment_means = []
+    for idx in range(len(boundaries) - 1):
+        start = boundaries[idx]
+        end = boundaries[idx + 1]
+        segment_slice = filtered_values[start:end]
+        if segment_slice.size == 0:
+            if segment_means:
+                mean_val = segment_means[-1]
+            else:
+                mean_val = np.nanmean(filtered_values)
+        else:
+            mean_val = np.nanmean(segment_slice)
+        if np.isnan(mean_val):
+            mean_val = 0.0
+
+        if start < len(valid_positions):
+            start_position = valid_positions[start]
+        else:
+            start_position = valid_positions[-1]
+        segment_breaks.append(index[start_position])
+        segment_means.append(float(mean_val))
+
+    if segment_breaks:
+        segment_breaks[0] = index[0]
+    else:
+        segment_breaks = [index[0]]
+        segment_means = [float(np.nanmean(filtered_values))]
+
+    segment_breaks = pd.Index(segment_breaks)
+    segment_means = np.array(segment_means, dtype=float)
+
+    if segment_breaks.has_duplicates:
+        keep_mask = ~segment_breaks.duplicated()
+        segment_breaks = segment_breaks[keep_mask]
+        segment_means = segment_means[keep_mask.to_numpy()]
+
+    return segment_breaks, segment_means
+
+
+def _evaluate_segment_trend(index, segment_breaks, segment_values):
+    """
+    Evaluate segment-wise trend values for a given index based on pre-computed statistics.
+
+    Parameters:
+    index (pd.Index): Target index (training or inference) to evaluate against.
+    segment_breaks (pd.Index): Segment boundary points.
+    segment_values (np.ndarray): Representative values per segment.
+
+    Returns:
+    np.ndarray: Trend values aligned with the provided index.
+    """
+    if segment_values is None or len(segment_values) == 0:
+        return np.zeros(len(index), dtype=float)
+
+    if not isinstance(index, pd.Index):
+        index = pd.Index(index)
+    if not isinstance(segment_breaks, pd.Index):
+        segment_breaks = pd.Index(segment_breaks)
+
+    if len(segment_breaks) == 0:
+        return np.zeros(len(index), dtype=float)
+
+    segment_break_array = segment_breaks.values
+    segment_values = np.asarray(segment_values, dtype=float)
+    order = np.argsort(segment_break_array)
+    segment_break_array = segment_break_array[order]
+    segment_values = segment_values[order]
+
+    index_array = index.values
+    positions = np.searchsorted(segment_break_array, index_array, side='right') - 1
+    positions = np.clip(positions, 0, len(segment_values) - 1)
+    return segment_values[positions]
+
+
 def _create_basic_changepoints(DTindex, changepoint_spacing, changepoint_distance_end):
     """
     Utility function for creating basic evenly spaced changepoint features.
@@ -738,7 +849,7 @@ def _extract_changepoints_from_trend(fitted_trend, method):
     return changepoints
 
 
-class ChangePointDetector(object):
+class ChangepointDetector(object):
     """
     Advanced changepoint detection class for time series data.
     
@@ -779,6 +890,11 @@ class ChangePointDetector(object):
         self.changepoint_probabilities_ = None
         self.fitted_trends_ = None
         self.df = None
+        self.segment_breaks_ = None
+        self.segment_values_ = None
+        self.default_breaks_ = None
+        self.default_values_ = None
+        self.trend_df_ = None
         
     def detect(self, df):
         """
@@ -944,6 +1060,122 @@ class ChangePointDetector(object):
                 # Update changepoints with probabilistic results if requested
                 if self.method_params.get('use_probabilistic_changepoints', False):
                     self.changepoints_ = prob_cps
+        
+        # Prepare transformer-related data structures
+        self._prepare_transform_support()
+
+    def _aggregate_series(self, df):
+        """Aggregate wide-format data according to the configured method."""
+        if self.aggregate_method == 'mean':
+            return df.mean(axis=1)
+        elif self.aggregate_method == 'median':
+            return df.median(axis=1)
+        elif self.aggregate_method == 'individual':
+            raise ValueError("_aggregate_series should not be called with 'individual' method.")
+        else:
+            raise ValueError(f"Unknown aggregate_method: {self.aggregate_method}")
+
+    def _prepare_transform_support(self):
+        """Create segment metadata and cached trend for transformer operations."""
+        if self.df is None or self.changepoints_ is None:
+            self.segment_breaks_ = None
+            self.segment_values_ = None
+            self.trend_df_ = None
+            return
+
+        self.segment_breaks_ = {}
+        self.segment_values_ = {}
+
+        if self.aggregate_method == 'individual' and isinstance(self.changepoints_, dict):
+            for col in self.df.columns:
+                series = self.df[col]
+                changepoints = self.changepoints_.get(col, np.array([]))
+                breaks, values = _compute_segment_statistics(series, changepoints)
+                self.segment_breaks_[col] = breaks
+                self.segment_values_[col] = values
+        else:
+            aggregated_series = self._aggregate_series(self.df)
+            breaks, values = _compute_segment_statistics(
+                aggregated_series, self.changepoints_
+            )
+            for col in self.df.columns:
+                self.segment_breaks_[col] = breaks
+                self.segment_values_[col] = values
+
+        if self.segment_breaks_:
+            first_key = next(iter(self.segment_breaks_))
+            self.default_breaks_ = self.segment_breaks_[first_key]
+            self.default_values_ = self.segment_values_[first_key]
+        else:
+            self.default_breaks_ = pd.Index([])
+            self.default_values_ = np.array([], dtype=float)
+
+        self.trend_df_ = self._generate_trend_for_df(self.df)
+
+    def _generate_trend_for_df(self, df):
+        """Generate a trend DataFrame aligned to df using stored segment metadata."""
+        if self.segment_breaks_ is None or self.segment_values_ is None:
+            raise ValueError("Must call detect() or fit() before generating trends.")
+
+        trend_dict = {}
+        for col in df.columns:
+            breaks = self.segment_breaks_.get(col, self.default_breaks_)
+            values = self.segment_values_.get(col, self.default_values_)
+            trend_values = _evaluate_segment_trend(df.index, breaks, values)
+            trend_dict[col] = trend_values
+
+        return pd.DataFrame(trend_dict, index=df.index, dtype=float)
+
+    def fit(self, df):
+        """
+        Fit the changepoint detector and prepare transformer artifacts.
+
+        Args:
+            df (pd.DataFrame): Training data with DatetimeIndex.
+        """
+        self.detect(df)
+        return self
+
+    def fit_transform(self, df):
+        """
+        Fit the detector and immediately transform the input data.
+
+        Args:
+            df (pd.DataFrame): Training data with DatetimeIndex.
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    def transform(self, df):
+        """
+        Apply changepoint-based detrending to the provided data.
+
+        Args:
+            df (pd.DataFrame): Data to transform.
+        """
+        try:
+            df_numeric = df.astype(float)
+        except Exception as exc:
+            raise ValueError("Data Cannot Be Converted to Numeric Float") from exc
+
+        trend = self._generate_trend_for_df(df_numeric)
+        return df_numeric - trend
+
+    def inverse_transform(self, df, trans_method="forecast"):
+        """
+        Restore data to the original scale using stored changepoint trends.
+
+        Args:
+            df (pd.DataFrame): Data to inverse transform.
+            trans_method (str): Compatibility argument for transformer interface.
+        """
+        try:
+            df_numeric = df.astype(float)
+        except Exception as exc:
+            raise ValueError("Data Cannot Be Converted to Numeric Float") from exc
+
+        trend = self._generate_trend_for_df(df_numeric)
+        return df_numeric + trend
     
     def _detect_composite_fused_lasso(self, data):
         """

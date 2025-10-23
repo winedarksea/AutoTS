@@ -14,7 +14,7 @@ from autots.tools.changepoints import (
     half_yr_spacing,
     generate_random_changepoint_params,
     find_market_changepoints_multivariate,
-    ChangePointDetector,
+    ChangepointDetector,
 )
 from autots.tools.window_functions import window_maker, last_window, sliding_window_view
 from autots.tools.shaping import infer_frequency

@@ -16,7 +16,7 @@ from autots.tools.transform import (
     LevelShiftMagic,
 )
 from autots.evaluator.anomaly_detector import HolidayDetector
-from autots.tools.changepoints import ChangePointDetector
+from autots.tools.changepoints import ChangepointDetector
 from autots.tools.impute import FillNA
 from autots.tools.anomaly_utils import anomaly_new_params
 from sklearn.preprocessing import StandardScaler

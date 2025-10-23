@@ -333,5 +333,233 @@ class TestVAEAnomalies(unittest.TestCase):
             self.fail(f"AnomalyRemoval with VAE failed: {e}")
 
 
+class TestAnomalyRemoval(unittest.TestCase):
+    """Test AnomalyRemoval transformer functionality."""
+    
+    @classmethod
+    def setUpClass(cls):
+        """Set up test data once for all tests."""
+        np.random.seed(42)
+        dates = pd.date_range(start='2020-01-01', periods=200, freq='D')
+        
+        # Create normal data with patterns
+        data = {
+            'series_1': np.random.normal(100, 10, 200),
+            'series_2': np.random.normal(50, 5, 200) + 10 * np.sin(np.arange(200) * 2 * np.pi / 7),
+            'series_3': np.random.normal(75, 8, 200) + 5 * np.cos(np.arange(200) * 2 * np.pi / 30)
+        }
+        
+        # Add some anomalies
+        data['series_1'][50] = 200  # spike
+        data['series_1'][51] = 210  # spike
+        data['series_2'][100] = 0   # drop
+        data['series_3'][150] = 150 # spike
+        
+        cls.df = pd.DataFrame(data, index=dates)
+    
+    def test_anomaly_removal_basic(self):
+        """Test basic AnomalyRemoval functionality."""
+        print("Starting test_anomaly_removal_basic")
+        from autots.tools.transform import AnomalyRemoval
+        
+        transformer = AnomalyRemoval(
+            method="zscore",
+            method_params={"distribution": "norm", "alpha": 0.05}
+        )
+        
+        result = transformer.fit_transform(self.df)
+        
+        # Should have fewer or equal rows (anomalies removed)
+        self.assertLessEqual(len(result), len(self.df))
+        # Should have same number of columns
+        self.assertEqual(result.shape[1], self.df.shape[1])
+        # Should have anomalies and scores attributes
+        self.assertTrue(hasattr(transformer, 'anomalies'))
+        self.assertTrue(hasattr(transformer, 'scores'))
+    
+    def test_anomaly_removal_with_fillna(self):
+        """Test AnomalyRemoval with different fillna methods."""
+        print("Starting test_anomaly_removal_with_fillna")
+        from autots.tools.transform import AnomalyRemoval
+        
+        fillna_methods = ["ffill", "mean", "linear"]
+        
+        for fillna_method in fillna_methods:
+            with self.subTest(fillna=fillna_method):
+                print(f"Starting subtest test_anomaly_removal_with_fillna fillna={fillna_method}")
+                transformer = AnomalyRemoval(
+                    method="IQR",
+                    method_params={"iqr_threshold": 2.0},
+                    fillna=fillna_method
+                )
+                
+                result = transformer.fit_transform(self.df)
+                
+                # Should not have NaN values after fillna
+                self.assertFalse(result.isna().any().any(), f"NaN found with fillna={fillna_method}")
+                # Should have same shape or fewer rows
+                self.assertLessEqual(len(result), len(self.df))
+                self.assertEqual(result.shape[1], self.df.shape[1])
+    
+    def test_anomaly_removal_isolated_only(self):
+        """Test AnomalyRemoval with isolated_only parameter."""
+        print("Starting test_anomaly_removal_isolated_only")
+        from autots.tools.transform import AnomalyRemoval
+        
+        # Without isolated_only
+        transformer1 = AnomalyRemoval(
+            method="zscore",
+            method_params={"distribution": "norm", "alpha": 0.05},
+            isolated_only=False
+        )
+        result1 = transformer1.fit_transform(self.df)
+        
+        # With isolated_only
+        transformer2 = AnomalyRemoval(
+            method="zscore",
+            method_params={"distribution": "norm", "alpha": 0.05},
+            isolated_only=True
+        )
+        result2 = transformer2.fit_transform(self.df)
+        
+        # isolated_only should generally remove fewer anomalies
+        self.assertGreaterEqual(len(result2), len(result1))
+    
+    def test_anomaly_removal_multivariate_vs_univariate(self):
+        """Test AnomalyRemoval with multivariate and univariate output."""
+        print("Starting test_anomaly_removal_multivariate_vs_univariate")
+        from autots.tools.transform import AnomalyRemoval
+        
+        # Multivariate
+        transformer_multi = AnomalyRemoval(
+            output='multivariate',
+            method="IQR"
+        )
+        result_multi = transformer_multi.fit_transform(self.df)
+        
+        # Univariate
+        transformer_uni = AnomalyRemoval(
+            output='univariate',
+            method="IQR"
+        )
+        result_uni = transformer_uni.fit_transform(self.df)
+        
+        # Both should return valid results
+        self.assertLessEqual(len(result_multi), len(self.df))
+        self.assertLessEqual(len(result_uni), len(self.df))
+        self.assertEqual(result_multi.shape[1], self.df.shape[1])
+        self.assertEqual(result_uni.shape[1], self.df.shape[1])
+    
+    def test_anomaly_removal_inverse_transform(self):
+        """Test AnomalyRemoval inverse_transform."""
+        print("Starting test_anomaly_removal_inverse_transform")
+        from autots.tools.transform import AnomalyRemoval
+        
+        # Test with on_inverse=False (default)
+        transformer1 = AnomalyRemoval(
+            method="zscore",
+            on_inverse=False
+        )
+        transformer1.fit(self.df)
+        result1 = transformer1.inverse_transform(self.df)
+        
+        # Should return unchanged data
+        pd.testing.assert_frame_equal(result1, self.df)
+        
+        # Test with on_inverse=True
+        transformer2 = AnomalyRemoval(
+            method="zscore",
+            on_inverse=True
+        )
+        transformer2.fit(self.df)
+        result2 = transformer2.inverse_transform(self.df)
+        
+        # Should apply fit_transform on inverse
+        self.assertLessEqual(len(result2), len(self.df))
+    
+    def test_anomaly_removal_fit_anomaly_classifier(self):
+        """Test fit_anomaly_classifier and score_to_anomaly methods."""
+        print("Starting test_anomaly_removal_fit_anomaly_classifier")
+        from autots.tools.transform import AnomalyRemoval
+        
+        transformer = AnomalyRemoval(method="IQR")
+        transformer.fit(self.df)
+        
+        # Fit classifier
+        transformer.fit_anomaly_classifier()
+        
+        # Should have classifier and categories
+        self.assertIsNotNone(transformer.anomaly_classifier)
+        self.assertIsNotNone(transformer.score_categories)
+        
+        # Test score_to_anomaly
+        new_scores = transformer.scores.copy()
+        anomaly_pred = transformer.score_to_anomaly(new_scores)
+        
+        # Should return valid anomaly classifications
+        self.assertEqual(anomaly_pred.shape, new_scores.shape)
+        self.assertTrue(all(np.isin(anomaly_pred.values.flatten(), [-1, 1])))
+    
+    def test_anomaly_removal_get_new_params(self):
+        """Test get_new_params static method."""
+        print("Starting test_anomaly_removal_get_new_params")
+        from autots.tools.transform import AnomalyRemoval
+        
+        # Test different methods
+        for method in ["random", "fast"]:
+            with self.subTest(method=method):
+                print(f"Starting subtest test_anomaly_removal_get_new_params method={method}")
+                params = AnomalyRemoval.get_new_params(method=method)
+                
+                # Should have required keys
+                self.assertIn('method', params)
+                self.assertIn('method_params', params)
+                self.assertIn('fillna', params)
+                self.assertIn('isolated_only', params)
+                self.assertIn('on_inverse', params)
+    
+    def test_anomaly_removal_with_transform_dict(self):
+        """Test AnomalyRemoval with transform_dict preprocessing."""
+        print("Starting test_anomaly_removal_with_transform_dict")
+        from autots.tools.transform import AnomalyRemoval
+        
+        transformer = AnomalyRemoval(
+            method="zscore",
+            transform_dict={
+                "transformations": {0: "ClipOutliers"},
+                "transformation_params": {
+                    0: {"method": "clip", "std_threshold": 3}
+                }
+            }
+        )
+        
+        result = transformer.fit_transform(self.df)
+        
+        # Should complete without error
+        self.assertLessEqual(len(result), len(self.df))
+        self.assertEqual(result.shape[1], self.df.shape[1])
+    
+    def test_anomaly_removal_multiple_methods(self):
+        """Test AnomalyRemoval with different anomaly detection methods."""
+        print("Starting test_anomaly_removal_multiple_methods")
+        from autots.tools.transform import AnomalyRemoval
+        from autots.tools.anomaly_utils import fast_methods
+        
+        for method in fast_methods[:3]:  # Test first 3 fast methods
+            with self.subTest(method=method):
+                print(f"Starting subtest test_anomaly_removal_multiple_methods method={method}")
+                try:
+                    transformer = AnomalyRemoval(method=method)
+                    result = transformer.fit_transform(self.df)
+                    
+                    # Should complete without error
+                    self.assertLessEqual(len(result), len(self.df))
+                    self.assertEqual(result.shape[1], self.df.shape[1])
+                except Exception as e:
+                    # Some methods might fail on this small dataset, that's okay
+                    if "requires" not in str(e).lower():
+                        raise
+
+
 if __name__ == '__main__':
     unittest.main()

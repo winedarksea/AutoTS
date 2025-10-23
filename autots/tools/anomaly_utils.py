@@ -1473,3 +1473,68 @@ def gaussian_mixture(
     scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
 
     return anomalies, scores
+
+
+def fit_anomaly_classifier(anomalies, scores):
+    """Fit a DecisionTree model to predict if a score is an anomaly.
+    
+    This is a shared utility for both AnomalyDetector and AnomalyRemoval classes.
+    Using DecisionTree as it can handle nonparametric anomalies.
+    
+    Args:
+        anomalies (pd.DataFrame): DataFrame with -1 for anomalies, 1 for normal
+        scores (pd.DataFrame): DataFrame with anomaly scores
+    
+    Returns:
+        tuple: (classifier, score_categories) - trained classifier and categorical mapping
+    """
+    from sklearn.tree import DecisionTreeClassifier
+
+    scores_flat = scores.melt(var_name='series', value_name="value")
+    categor = pd.Categorical(scores_flat['series'])
+    score_categories = categor.categories
+    scores_flat['series'] = categor
+    scores_flat = pd.concat(
+        [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']],
+        axis=1,
+    )
+    anomalies_flat = anomalies.melt(var_name='series', value_name="value")
+    anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
+        scores_flat, anomalies_flat['value']
+    )
+    return anomaly_classifier, score_categories
+
+
+def score_to_anomaly(scores, classifier, score_categories):
+    """Convert anomaly scores to anomaly classifications using a trained classifier.
+    
+    This is a shared utility for both AnomalyDetector and AnomalyRemoval classes.
+    
+    Args:
+        scores (pd.DataFrame): DataFrame with anomaly scores
+        classifier: trained sklearn classifier
+        score_categories: categorical mapping from fit_anomaly_classifier
+    
+    Returns:
+        pd.DataFrame: Classifications (-1 = anomaly, 1 = normal)
+    """
+    scores.index.name = 'date'
+    scores_flat = scores.reset_index(drop=False).melt(
+        id_vars="date", var_name='series', value_name="value"
+    )
+    scores_flat['series'] = pd.Categorical(
+        scores_flat['series'], categories=score_categories
+    )
+    res = classifier.predict(
+        pd.concat(
+            [
+                pd.get_dummies(scores_flat['series'], dtype=float),
+                scores_flat['value'],
+            ],
+            axis=1,
+        )
+    )
+    res = pd.concat(
+        [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
+    ).pivot_table(index='date', columns='series', values="value")
+    return res[scores.columns]

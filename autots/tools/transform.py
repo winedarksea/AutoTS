@@ -10,7 +10,7 @@ from autots.tools.seasonal import (
     seasonal_int,
     random_datepart,
 )
-from autots.tools.changepoints import half_yr_spacing
+from autots.tools.changepoints import half_yr_spacing, ChangepointDetector
 from autots.tools.cointegration import btcd_decompose
 from autots.tools.constraint import (
     fit_constraint,
@@ -30,6 +30,8 @@ from autots.tools.anomaly_utils import (
     anomaly_df_to_holidays,
     holiday_new_params,
     dates_to_holidays,
+    fit_anomaly_classifier,
+    score_to_anomaly,
 )
 from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
 from autots.tools.fast_kalman import KalmanFilter
@@ -3374,47 +3376,15 @@ class AnomalyRemoval(EmptyTransformer):
 
     def fit_anomaly_classifier(self):
         """Fit a model to predict if a score is an anomaly."""
-        # Using DecisionTree as it should almost handle nonparametric anomalies
-        from sklearn.tree import DecisionTreeClassifier
-
-        scores_flat = self.scores.melt(var_name='series', value_name="value")
-        categor = pd.Categorical(scores_flat['series'])
-        self.score_categories = categor.categories
-        scores_flat['series'] = categor
-        scores_flat = pd.concat(
-            [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']],
-            axis=1,
+        self.anomaly_classifier, self.score_categories = fit_anomaly_classifier(
+            self.anomalies, self.scores
         )
-        anomalies_flat = self.anomalies.melt(var_name='series', value_name="value")
-        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
-            scores_flat, anomalies_flat['value']
-        )
-        # anomaly_classifier.score(scores_flat, anomalies_flat['value'])
 
     def score_to_anomaly(self, scores):
         """A DecisionTree model, used as models are nonstandard (and nonparametric)."""
         if self.anomaly_classifier is None:
             self.fit_anomaly_classifier()
-        scores.index.name = 'date'
-        scores_flat = scores.reset_index(drop=False).melt(
-            id_vars="date", var_name='series', value_name="value"
-        )
-        scores_flat['series'] = pd.Categorical(
-            scores_flat['series'], categories=self.score_categories
-        )
-        res = self.anomaly_classifier.predict(
-            pd.concat(
-                [
-                    pd.get_dummies(scores_flat['series'], dtype=float),
-                    scores_flat['value'],
-                ],
-                axis=1,
-            )
-        )
-        res = pd.concat(
-            [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
-        ).pivot_table(index='date', columns='series', values="value")
-        return res[scores.columns]
+        return score_to_anomaly(scores, self.anomaly_classifier, self.score_categories)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         if self.on_inverse:
@@ -7125,6 +7095,7 @@ have_params = {
     "Constraint": Constraint,
     "FIRFilter": FIRFilter,
     "ThetaTransformer": ThetaTransformer,
+    "ChangepointDetector": ChangepointDetector,
     "ChangepointDetrend": ChangepointDetrend,
     "MeanPercentSplitter": MeanPercentSplitter,
     "UpscaleDownscaleTransformer": UpscaleDownscaleTransformer,
@@ -7143,6 +7114,7 @@ shared_trans = [
     "RegressionFilter",
     "ReconciliationTransformer",
     "CointegrationTransformer",
+    "ChangepointDetector",  # only in some cases
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -7239,6 +7211,7 @@ class GeneralTransformer(object):
             "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
             "ThetaTransformer": decomposes into theta lines, then recombines
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
+            "ChangePointDetector": detect changepoints using advanced detector and remove associated trend
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
             "UpscaleDownscaleTransformer": upscales and downscales
             "ReconciliationTransformer": creates hierarchies then reconciles on the way back
@@ -7755,6 +7728,7 @@ transformer_dict = {
     "Constraint": 0.01,  # 52
     "FIRFilter": 0.01,
     "ThetaTransformer": 0.01,
+    "ChangePointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
     "UpscaleDownscaleTransformer": 0.01,
@@ -7844,6 +7818,7 @@ decompositions = {
     "IntermittentOccurrence": 0.005,
     "PCA": 0.005,
     "ThetaTransformer": 0.005,
+    "ChangePointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
 }
