@@ -119,6 +119,86 @@ def holt_winters_damped_matrices(M, alpha, beta, gamma, phi=1.0):
     return F, Q, H, R
 
 
+def _block_diag(matrices):
+    """Construct a block diagonal matrix from a list of square matrices."""
+    if not matrices:
+        raise ValueError("No matrices provided for block diagonal construction.")
+    total_dim = sum(mat.shape[0] for mat in matrices)
+    result = np.zeros((total_dim, total_dim))
+    offset = 0
+    for mat in matrices:
+        dim = mat.shape[0]
+        result[offset : offset + dim, offset : offset + dim] = mat
+        offset += dim
+    return result
+
+
+def _trend_block(trend_type, level_var, slope_var):
+    """Return trend block (transition, noise, observation) for a trend type."""
+    transition = np.array([[1.0, 1.0], [0.0, 1.0]])
+    process_noise = np.diag([level_var, slope_var])
+    observation = np.array([1.0, 0.0])
+
+    if trend_type not in {'local_linear', 'random_walk_drift'}:
+        raise ValueError(f"Unsupported trend_type '{trend_type}'")
+
+    return {'F': transition, 'Q': process_noise, 'H': observation}
+
+
+def _seasonal_dummy_block(season_length, variance):
+    """Create seasonal dummy block of length season_length."""
+    if season_length <= 1:
+        raise ValueError("season_length must be greater than 1.")
+
+    n_states = season_length - 1
+    transition = np.zeros((n_states, n_states))
+    if n_states > 1:
+        transition[:-1, 1:] = np.eye(n_states - 1)
+    transition[-1, :] = -1
+    process_noise = variance * np.eye(n_states)
+    observation = np.ones(n_states)
+
+    return {'F': transition, 'Q': process_noise, 'H': observation}
+
+
+def _fourier_state_block(period, harmonics, variance, observation_phase=True):
+    """Create a block for trigonometric seasonal components."""
+    if harmonics <= 0:
+        raise ValueError("harmonics must be a positive integer.")
+
+    rotations = []
+    obs_components = []
+    for k in range(1, harmonics + 1):
+        angle = 2 * np.pi * k / period
+        rotation = np.array(
+            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+        )
+        rotations.append(rotation)
+        if observation_phase:
+            obs_components.extend([np.cos(angle), np.sin(angle)])
+        else:
+            obs_components.extend([1.0, 0.0])
+
+    transition = _block_diag(rotations)
+    process_noise = variance * np.eye(2 * harmonics)
+    observation = np.array(obs_components)
+
+    return {'F': transition, 'Q': process_noise, 'H': observation}
+
+
+def _compose_state_space(blocks):
+    """Assemble state-space components from individual blocks."""
+    matrices = [block['F'] for block in blocks if block is not None]
+    noises = [block['Q'] for block in blocks if block is not None]
+    observations = [block['H'] for block in blocks if block is not None]
+
+    transition = _block_diag(matrices)
+    process_noise = _block_diag(noises)
+    observation_model = np.concatenate(observations, axis=0)
+
+    return transition, process_noise, observation_model[np.newaxis, ...]
+
+
 def new_kalman_params(method=None, allow_auto=True):
     if method in ['fast']:
         em_iter = random.choices([None, 5, 10], [0.8, 0.2, 0.1])[0]
@@ -390,69 +470,75 @@ def new_kalman_params(method=None, allow_auto=True):
         sigma_weekly2 = 1e-2
         sigma_fourier2 = 1e-2
 
-        Q_block = np.block(
-            [
-                [sigma_level2, 0, np.zeros((1, 6)), np.zeros((1, 2 * K_val))],
-                [0, sigma_slope2, np.zeros((1, 6)), np.zeros((1, 2 * K_val))],
-                [np.zeros((6, 2)), sigma_weekly2 * np.eye(6), np.zeros((6, 2 * K_val))],
-                [
-                    np.zeros((2 * K_val, 2)),
-                    np.zeros((2 * K_val, 6)),
-                    sigma_fourier2 * np.eye(2 * K_val),
-                ],
-            ]
+        trend_block = _trend_block(
+            trend_type='local_linear', level_var=sigma_level2, slope_var=sigma_slope2
+        )
+        weekly_block = _seasonal_dummy_block(season_length=7, variance=sigma_weekly2)
+        fourier_block = _fourier_state_block(
+            period=365.25, harmonics=K_val, variance=sigma_fourier2
         )
 
-        deterministic_trend = np.array([[1, 1], [0, 1]])
-        weekly = np.eye(6, k=1)
-        weekly[-1, 0] = -1
-
-        harmonics = []
-        for k in range(1, K_val + 1):
-            angle = 2 * np.pi * k / 365.25
-            harmonics.append(
-                np.array(
-                    [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
-                )
-            )
-        fourier_yearly = np.block([harmonics[i] for i in range(K_val)])
-
-        F_top = np.hstack(
-            [
-                deterministic_trend,
-                np.zeros((2, 6)),
-                np.zeros((2, 2 * K_val)),
-            ]
+        F_full, Q_block, H_full = _compose_state_space(
+            [trend_block, weekly_block, fourier_block]
         )
-        F_mid = np.hstack(
-            [
-                np.zeros((6, 2)),
-                weekly,
-                np.zeros((6, 2 * K_val)),
-            ]
-        )
-        F_bot = np.hstack(
-            [
-                np.zeros((2 * K_val, 2)),
-                np.zeros((2 * K_val, 6)),
-                fourier_yearly.T,
-                np.zeros((2 * K_val, K_val * 2 - 2)),
-            ]
-        )
-        F_full = np.vstack([F_top, F_mid, F_bot])
-
-        H_fourier = []
-        for k in range(1, K_val + 1):
-            H_fourier.extend(
-                [np.cos(2 * np.pi * k / 365.25), np.sin(2 * np.pi * k / 365.25)]
-            )
-        H_full = np.hstack(([1, 0], np.ones(6), H_fourier))
 
         return {
             'model_name': 'locallinear_weekly_fourier',
             'state_transition': F_full.tolist(),
             'process_noise': Q_block.tolist(),
-            'observation_model': H_full[np.newaxis, ...].tolist(),
+            'observation_model': H_full.tolist(),
+            'observation_noise': random.choice([0.01, 0.1, 'auto']),
+        }
+
+    def make_locallinear_daily_fourier():
+        K_val = random.choices([2, 4, 6, 8], [0.2, 0.4, 0.2, 0.2])[0]
+        sigma_level2 = random.choice([5e-3, 1e-2])
+        sigma_slope2 = random.choice([5e-4, 1e-3])
+        sigma_season2 = random.choice([5e-3, 1e-2])
+        sigma_fourier2 = random.choice([5e-3, 1e-2])
+
+        trend_block = _trend_block(
+            trend_type='local_linear', level_var=sigma_level2, slope_var=sigma_slope2
+        )
+        daily_block = _seasonal_dummy_block(season_length=24, variance=sigma_season2)
+        fourier_block = _fourier_state_block(
+            period=24, harmonics=K_val, variance=sigma_fourier2, observation_phase=False
+        )
+
+        F_full, Q_block, H_full = _compose_state_space(
+            [trend_block, daily_block, fourier_block]
+        )
+
+        return {
+            'model_name': 'locallinear_daily_fourier',
+            'state_transition': F_full.tolist(),
+            'process_noise': Q_block.tolist(),
+            'observation_model': H_full.tolist(),
+            'observation_noise': random.choice([0.01, 0.1, 'auto']),
+        }
+
+    def make_randomwalk_weekly_fourier():
+        K_val = random.choices([2, 3, 4], [0.3, 0.5, 0.2])[0]
+        sigma_level2 = random.choice([5e-3, 1e-2, 5e-2])
+        sigma_drift2 = random.choice([1e-4, 5e-4, 1e-3])
+        sigma_fourier2 = random.choice([5e-3, 1e-2])
+
+        trend_block = _trend_block(
+            trend_type='random_walk_drift',
+            level_var=sigma_level2,
+            slope_var=sigma_drift2,
+        )
+        fourier_block = _fourier_state_block(
+            period=7, harmonics=K_val, variance=sigma_fourier2, observation_phase=False
+        )
+
+        F_full, Q_block, H_full = _compose_state_space([trend_block, fourier_block])
+
+        return {
+            'model_name': 'randomwalk_weekly_fourier',
+            'state_transition': F_full.tolist(),
+            'process_noise': Q_block.tolist(),
+            'observation_model': H_full.tolist(),
             'observation_noise': random.choice([0.01, 0.1, 'auto']),
         }
 
@@ -520,6 +606,8 @@ def new_kalman_params(method=None, allow_auto=True):
         (0.1, make_ucm_deterministictrend_seasonal7),
         (0.1, make_spline_model),
         (0.1, make_locallinear_weekly_fourier),
+        (0.05, make_locallinear_daily_fourier),
+        (0.05, make_randomwalk_weekly_fourier),
         (0.1, make_holt_winters_damped),
         (0.1, lambda: make_seasonal_hidden_state(364)),
         (0.1, lambda: make_seasonal_hidden_state(12)),

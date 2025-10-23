@@ -40,30 +40,56 @@ def _compute_segment_statistics(series, changepoints):
     if changepoints.size > 0:
         changepoints = changepoints[(changepoints > 0) & (changepoints < len(filtered_values))]
         changepoints = np.unique(changepoints)
+        # Validate boundaries are monotonically increasing
+        if changepoints.size > 1 and not np.all(np.diff(changepoints) > 0):
+            changepoints = np.unique(changepoints)
     boundaries = np.concatenate(([0], changepoints, [len(filtered_values)]))
 
-    segment_breaks = []
-    segment_means = []
-    for idx in range(len(boundaries) - 1):
-        start = boundaries[idx]
-        end = boundaries[idx + 1]
-        segment_slice = filtered_values[start:end]
-        if segment_slice.size == 0:
-            if segment_means:
-                mean_val = segment_means[-1]
+    # Vectorized computation of segment means
+    segment_lengths = np.diff(boundaries)
+    if np.any(segment_lengths == 0):
+        # Handle edge case of zero-length segments
+        segment_breaks = []
+        segment_means = []
+        for idx in range(len(boundaries) - 1):
+            start = boundaries[idx]
+            end = boundaries[idx + 1]
+            segment_slice = filtered_values[start:end]
+            if segment_slice.size == 0:
+                if segment_means:
+                    mean_val = segment_means[-1]
+                else:
+                    mean_val = np.nanmean(filtered_values)
             else:
-                mean_val = np.nanmean(filtered_values)
-        else:
-            mean_val = np.nanmean(segment_slice)
-        if np.isnan(mean_val):
-            mean_val = 0.0
+                mean_val = np.nanmean(segment_slice)
+            if np.isnan(mean_val):
+                mean_val = 0.0
 
-        if start < len(valid_positions):
-            start_position = valid_positions[start]
-        else:
-            start_position = valid_positions[-1]
-        segment_breaks.append(index[start_position])
-        segment_means.append(float(mean_val))
+            if start < len(valid_positions):
+                start_position = valid_positions[start]
+            else:
+                start_position = valid_positions[-1]
+            segment_breaks.append(index[start_position])
+            segment_means.append(float(mean_val))
+    else:
+        # Vectorized path for normal case
+        segment_sums = np.add.reduceat(filtered_values, boundaries[:-1])
+        segment_means_arr = segment_sums / segment_lengths
+        
+        # Handle NaN values
+        nan_mask = np.isnan(segment_means_arr)
+        if np.any(nan_mask):
+            fallback_mean = np.nanmean(filtered_values) if np.any(np.isfinite(filtered_values)) else 0.0
+            segment_means_arr[nan_mask] = fallback_mean
+        
+        # Map boundary indices to original index positions
+        boundary_positions = boundaries[:-1]
+        valid_boundary_positions = np.minimum(boundary_positions, len(valid_positions) - 1)
+        segment_break_positions = valid_positions[valid_boundary_positions]
+        
+        segment_breaks = [index[pos] for pos in segment_break_positions]
+        segment_means = segment_means_arr.tolist()
+
 
     if segment_breaks:
         segment_breaks[0] = index[0]
@@ -211,7 +237,7 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
 
     else:
 
-        @lru_cache(maxsize=None)
+        @lru_cache(maxsize=10000)
         def segment_cost(start, end):
             if end <= start:
                 return 0.0
@@ -221,21 +247,39 @@ def _detect_pelt_changepoints(data, penalty=10, loss_function='l2', min_segment_
     R = [0]  # Set of potential changepoints
     
     for t in range(1, n + 1):
-        candidates = []
-        for s in R:
-            if t - s >= min_segment_length:
-                cost = segment_cost(s, t)
-                total_cost = F[s] + cost + penalty
-                candidates.append((total_cost, s))
-        
-        if candidates:
-            F[t], cp[t] = min(candidates, key=lambda x: x[0])
+        # Vectorize candidate evaluation when R is large
+        if len(R) > 10:
+            R_array = np.array(R, dtype=int)
+            valid_mask = (t - R_array) >= min_segment_length
+            if np.any(valid_mask):
+                valid_R = R_array[valid_mask]
+                costs = np.array([segment_cost(s, t) for s in valid_R], dtype=float)
+                total_costs = F[valid_R] + costs + penalty
+                best_idx = np.argmin(total_costs)
+                F[t] = total_costs[best_idx]
+                cp[t] = valid_R[best_idx]
+            else:
+                continue
+        else:
+            # Use list for small R (overhead of numpy not worth it)
+            candidates = []
+            for s in R:
+                if t - s >= min_segment_length:
+                    cost = segment_cost(s, t)
+                    total_cost = F[s] + cost + penalty
+                    candidates.append((total_cost, s))
             
-            # Pruning step - keep only competitive changepoints
-            threshold = F[t] + penalty
-            R_new = [s for s in R if F[s] + penalty <= threshold]
-            R_new.append(t)
-            R = R_new
+            if candidates:
+                F[t], cp[t] = min(candidates, key=lambda x: x[0])
+            else:
+                continue
+        
+        # Pruning step - keep only competitive changepoints
+        # PELT pruning: keep s if F[s] could be part of optimal solution
+        threshold = F[t]
+        R_new = [s for s in R if F[s] <= threshold]
+        R_new.append(t)
+        R = R_new
     
     # Backtrack to find changepoints
     changepoints = []
@@ -731,35 +775,47 @@ def _vectorized_cusum_changepoints(
         series_length = lengths[series_idx]
         eff_min = effective_min_distance[series_idx]
         series_values = series[series_idx, :series_length]
-        validated = []
-        for cp in cps:
-            window_size = min(30, eff_min, cp, series_length - cp - 1)
-            if window_size < 3:
-                validated.append(cp)
-                continue
+        
+        # Vectorized validation of changepoints
+        if len(cps) > 0:
+            cps_array = np.array(cps, dtype=int)
+            window_size = min(30, eff_min, series_length // 10) if series_length > 0 else 3
+            
+            validated = []
+            for cp in cps_array:
+                ws = min(window_size, cp, series_length - cp - 1)
+                if ws < 3:
+                    validated.append(cp)
+                    continue
 
-            before_window = series_values[max(0, cp - window_size):cp]
-            after_window = series_values[cp:min(series_length, cp + window_size)]
+                before_window = series_values[max(0, cp - ws):cp]
+                after_window = series_values[cp:min(series_length, cp + ws)]
 
-            if before_window.size == 0 or after_window.size == 0:
-                validated.append(cp)
-                continue
+                if before_window.size == 0 or after_window.size == 0:
+                    validated.append(cp)
+                    continue
 
-            mean_diff = abs(np.mean(after_window) - np.mean(before_window))
-            std_before = np.std(before_window) if before_window.size > 1 else 1.0
-            std_after = np.std(after_window) if after_window.size > 1 else 1.0
-            avg_std = (std_before + std_after) / 2
-            threshold_val = max(0.2, 0.3 * avg_std)
+                mean_diff = abs(np.mean(after_window) - np.mean(before_window))
+                std_before = np.std(before_window) if before_window.size > 1 else 1.0
+                std_after = np.std(after_window) if after_window.size > 1 else 1.0
+                avg_std = (std_before + std_after) / 2
+                threshold_val = max(0.2, 0.3 * avg_std)
 
-            if mean_diff > threshold_val:
-                validated.append(cp)
+                if mean_diff > threshold_val:
+                    validated.append(cp)
 
-        if validated:
-            filtered = [validated[0]]
-            for cp in validated[1:]:
-                if cp - filtered[-1] >= eff_min:
-                    filtered.append(cp)
-            results.append(np.array(sorted(set(filtered)), dtype=int))
+            if validated:
+                # Vectorized min_distance filtering
+                validated_array = np.array(validated, dtype=int)
+                if len(validated_array) > 1:
+                    diffs = np.diff(validated_array)
+                    keep_mask = np.concatenate([[True], diffs >= eff_min])
+                    filtered = validated_array[keep_mask]
+                else:
+                    filtered = validated_array
+                results.append(filtered)
+            else:
+                results.append(np.array([], dtype=int))
         else:
             results.append(np.array([], dtype=int))
 
@@ -873,36 +929,46 @@ def _vectorized_ewma_changepoints(
         n = lengths[idx]
         eff_min = eff_min_distance[idx]
         series_values = centered[idx, :n]
-        validated = []
-        window_size = min(30, eff_min, max(1, n // 10))
+        
+        # Vectorized validation
+        if len(cps) > 0:
+            cps_array = np.array(cps, dtype=int)
+            window_size = min(30, eff_min, max(1, n // 10))
 
-        for cp in cps:
-            before_start = max(0, cp - window_size)
-            after_end = min(n, cp + window_size)
+            validated = []
+            for cp in cps_array:
+                before_start = max(0, cp - window_size)
+                after_end = min(n, cp + window_size)
 
-            before_window = series_values[before_start:cp]
-            after_window = series_values[cp:after_end]
+                before_window = series_values[before_start:cp]
+                after_window = series_values[cp:after_end]
 
-            if before_window.size == 0 or after_window.size == 0:
-                validated.append(cp)
-                continue
+                if before_window.size == 0 or after_window.size == 0:
+                    validated.append(cp)
+                    continue
 
-            mean_diff = abs(np.mean(after_window) - np.mean(before_window))
-            std_before = np.std(before_window) if before_window.size > 1 else 1.0
-            std_after = np.std(after_window) if after_window.size > 1 else 1.0
-            avg_std = (std_before + std_after) / 2
-            threshold_val = max(0.15, 0.2 * avg_std)
-            ewma_signal_strength = abs(z[idx, cp]) if cp < n else 0.0
+                mean_diff = abs(np.mean(after_window) - np.mean(before_window))
+                std_before = np.std(before_window) if before_window.size > 1 else 1.0
+                std_after = np.std(after_window) if after_window.size > 1 else 1.0
+                avg_std = (std_before + std_after) / 2
+                threshold_val = max(0.15, 0.2 * avg_std)
+                ewma_signal_strength = abs(z[idx, cp]) if cp < n else 0.0
 
-            if mean_diff > threshold_val or ewma_signal_strength > control_limit * 0.6:
-                validated.append(cp)
+                if mean_diff > threshold_val or ewma_signal_strength > control_limit * 0.6:
+                    validated.append(cp)
 
-        if validated:
-            filtered = [validated[0]]
-            for cp in validated[1:]:
-                if cp - filtered[-1] >= eff_min:
-                    filtered.append(cp)
-            results.append(np.array(sorted(set(filtered)), dtype=int))
+            if validated:
+                # Vectorized min_distance filtering
+                validated_array = np.array(validated, dtype=int)
+                if len(validated_array) > 1:
+                    diffs = np.diff(validated_array)
+                    keep_mask = np.concatenate([[True], diffs >= eff_min])
+                    filtered = validated_array[keep_mask]
+                else:
+                    filtered = validated_array
+                results.append(filtered)
+            else:
+                results.append(np.array([], dtype=int))
         else:
             results.append(np.array([], dtype=int))
 
@@ -989,12 +1055,15 @@ def _extract_changepoints_from_trend_batch(fitted_trends, method, min_segment_le
             results.append(np.array([], dtype=int))
             continue
 
-        filtered = [candidates[0]]
-        for cp in candidates[1:]:
-            if cp - filtered[-1] >= min_segment_length:
-                filtered.append(cp)
+        # Vectorized min_distance filtering
+        if candidates.size > 1:
+            diffs = np.diff(candidates)
+            keep_mask = np.concatenate([[True], diffs >= min_segment_length])
+            filtered = candidates[keep_mask]
+        else:
+            filtered = candidates
 
-        results.append(np.array(sorted(set(filtered)), dtype=int))
+        results.append(np.array(sorted(set(filtered.tolist())), dtype=int))
 
     return results
 
@@ -1007,12 +1076,17 @@ def _vectorized_l1_detection(names, series_list, lambda_reg, method_key, min_seg
 
     method = 'fused_lasso' if method_key == 'l1_fused_lasso' else 'total_variation'
     min_required = 4 if method == 'total_variation' else 3
-    groups = {}
-
-    for idx, arr in enumerate(series_list):
-        length = len(arr)
-        if length < min_required:
-            if length >= 3:
+    
+    # Vectorized length calculation
+    lengths = np.array([len(arr) for arr in series_list], dtype=int)
+    
+    # Handle short series
+    short_mask = lengths < min_required
+    if np.any(short_mask):
+        short_indices = np.where(short_mask)[0]
+        for idx in short_indices:
+            arr = series_list[idx]
+            if len(arr) >= 3:
                 cp = _simple_threshold_changepoints(arr)
             else:
                 cp = np.array([], dtype=int)
@@ -1020,11 +1094,23 @@ def _vectorized_l1_detection(names, series_list, lambda_reg, method_key, min_seg
                 'changepoints': cp,
                 'fitted': arr.astype(float, copy=False),
             }
-            continue
-        groups.setdefault(length, []).append(idx)
-
-    for length, indices in groups.items():
-        data_block = np.vstack([series_list[i].astype(float, copy=False) for i in indices])
+    
+    # Group eligible series by length
+    eligible_mask = lengths >= min_required
+    if not np.any(eligible_mask):
+        return results
+        
+    eligible_indices = np.where(eligible_mask)[0]
+    eligible_lengths = lengths[eligible_indices]
+    
+    # Group by unique lengths
+    unique_lengths, inverse_indices = np.unique(eligible_lengths, return_inverse=True)
+    
+    for group_idx, length in enumerate(unique_lengths):
+        # Get all series indices with this length
+        indices_in_group = eligible_indices[inverse_indices == group_idx]
+        
+        data_block = np.vstack([series_list[i].astype(float, copy=False) for i in indices_in_group])
         try:
             fitted_block = _approximate_l1_trend_filter_batch(
                 data_block, method, lambda_reg
@@ -1036,7 +1122,7 @@ def _vectorized_l1_detection(names, series_list, lambda_reg, method_key, min_seg
             fitted_block, method, min_segment_length
         )
 
-        for row, series_idx in enumerate(indices):
+        for row, series_idx in enumerate(indices_in_group):
             name = names[series_idx]
             results[name] = {
                 'changepoints': cp_lists[row],
