@@ -590,14 +590,15 @@ def retrieve_regressor(
 ):
     """Convert a model param dict to model object for regression frameworks."""
     model_class = regression_model['model']
-    model_param_dict = regression_model.get("model_params", {})
+    model_param_dict = regression_model.get("model_params", {}).copy()
     if model_class == 'ElasticNet':
+        alpha = model_param_dict.pop('alpha', 1.0)
         if multioutput:
             regr = MultiTaskElasticNet(
-                alpha=1.0, random_state=random_seed, **model_param_dict
+                alpha=alpha, random_state=random_seed, **model_param_dict
             )
         else:
-            regr = ElasticNet(alpha=1.0, random_state=random_seed, **model_param_dict)
+            regr = ElasticNet(alpha=alpha, random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'DecisionTree':
         regr = DecisionTreeRegressor(random_state=random_seed, **model_param_dict)
