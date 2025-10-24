@@ -47,6 +47,12 @@ class SyntheticDailyGenerator:
     - Longer datasets use Poisson-based event counts
     - Level shifts are rare events, appropriately distributed
     
+    **Template Compatibility:**
+    - Template structure is compatible with TimeSeriesFeatureDetector
+    - Both use same JSON-friendly format for components and labels
+    - Templates can be saved/loaded and used for model evaluation
+
+    
     Parameters
     ----------
     start_date : str or pd.Timestamp
@@ -81,6 +87,9 @@ class SyntheticDailyGenerator:
     disable_holiday_splash : bool
         If True, holidays will only affect a single day with no splash or bridge effects (default False)
     """
+    
+    # Template version for compatibility tracking
+    TEMPLATE_VERSION = "1.0"
     
     # Human-readable descriptions for series types
     SERIES_TYPE_DESCRIPTIONS = {
@@ -186,12 +195,14 @@ class SyntheticDailyGenerator:
     def _generate(self):
         """Main generation pipeline that builds a template first, then renders data from it."""
         self.template = {
+            'version': self.TEMPLATE_VERSION,
             'meta': {
                 'start_date': self.date_index[0].isoformat(),
                 'end_date': self.date_index[-1].isoformat(),
                 'n_days': int(self.n_days),
                 'n_series': int(self.n_series),
                 'frequency': 'D',
+                'created_at': pd.Timestamp.now().isoformat(),
                 'random_seed': int(self.random_seed),
                 'series_type_descriptions': copy.deepcopy(self.SERIES_TYPE_DESCRIPTIONS),
                 'config': {

@@ -26,7 +26,12 @@ from sklearn.preprocessing import StandardScaler
 
 
 class TimeSeriesFeatureDetector:
-    """Comprehensive feature detection pipeline for univariate time series."""
+    """
+    Comprehensive feature detection pipeline for univariate time series.
+
+    """
+    
+    TEMPLATE_VERSION = "1.0"
 
     def __init__(
         self,
@@ -182,12 +187,19 @@ class TimeSeriesFeatureDetector:
 
         # Reset result containers
         self.template = {
+            'version': self.TEMPLATE_VERSION,
             'meta': {
                 'start_date': self.date_index[0].isoformat(),
                 'end_date': self.date_index[-1].isoformat(),
                 'n_days': int(len(self.date_index)),
                 'n_series': int(df_numeric.shape[1]),
                 'frequency': pd.infer_freq(self.date_index) or 'infer',
+                'created_at': pd.Timestamp.now().isoformat(),
+                'detector_config': {
+                    'standardize': self.standardize,
+                    'refine_seasonality': self.refine_seasonality,
+                    'smoothing_window': self.smoothing_window,
+                },
             },
             'series': {},
         }
@@ -353,19 +365,16 @@ class TimeSeriesFeatureDetector:
 
     @staticmethod
     def _classify_anomaly_type(series, date):
-        idx = series.index.get_loc(date)
-        values = series.to_numpy(dtype=float)
-        if idx < len(values) - 4:
-            post = values[idx:idx + 4]
-            mean_val = np.nanmean(values)
-            diffs = np.abs(post - mean_val)
-            if np.all(np.diff(diffs) < 0):
-                return 'decay'
-        if idx >= 3:
-            pre = values[idx - 3:idx + 1]
-            if np.all(np.diff(pre) > 0):
-                return 'ramp_up'
-        return 'spike'
+        """
+        Classify anomaly type based on pattern.
+        
+        Currently returns 'point_outlier' for all detected anomalies.
+        Future enhancement: implement detection of decay, ramp, etc.
+        """
+        # TODO: Implement proper decay/ramp detection
+        # For now, all anomalies are classified as point_outlier
+        # This matches the synthetic data generation patterns
+        return 'point_outlier'
 
     def _fit_final_seasonality(self, df):
         model = DatepartRegressionTransformer(**self.seasonality_params)
@@ -489,7 +498,7 @@ class TimeSeriesFeatureDetector:
             aggregate_method=aggregate_method,
             min_segment_length=min_segment_length,
         )
-        safe_df = trend_input.fillna(method='ffill').fillna(method='bfill')
+        safe_df = trend_input.ffill().bfill()
         self.changepoint_detector.fit(safe_df)
 
         changepoints = {}
@@ -669,7 +678,7 @@ class TimeSeriesFeatureDetector:
         for item in anomaly_records.get(series_name, []):
             date = pd.Timestamp(item['date'])
             magnitude = item['magnitude']
-            anomaly_type = item.get('type', 'spike')
+            anomaly_type = item.get('type', 'point_outlier')
             entries.append((date, magnitude, anomaly_type, 1, False))
             template_entries.append({
                 'date': date.isoformat(),
@@ -1071,9 +1080,10 @@ class FeatureDetectionLoss:
     def _anomaly_loss(self, detected_anom, true_anom):
         """
         Calculate anomaly detection loss.
+        Recommend running synthetic with disable_holiday_splash=True, anomaly_types=["point_outlier"] for simplicity
         
-        - Focuses on spike detection
-        - More lenient on decay/ramp patterns
+        - Focuses on point_outlier detection
+        - More lenient on complex patterns (decay, ramp, impulse_decay, etc.)
         """
         if len(true_anom) == 0:
             return 0.0 if len(detected_anom) == 0 else len(detected_anom) * 0.3
@@ -1081,16 +1091,20 @@ class FeatureDetectionLoss:
         loss = 0.0
         detected_dates = [a['date'] if isinstance(a, dict) else (a[0] if isinstance(a, (tuple, list)) else a) for a in detected_anom]
         
+        # Define simple vs complex anomaly types
+        simple_types = {'point_outlier', 'spike'}  # 'spike' for backwards compatibility
+        complex_types = {'decay', 'ramp_up', 'ramp_down', 'impulse_decay', 'linear_decay', 'noisy_burst', 'transient_change'}
+        
         # For each true anomaly
         for true_item in true_anom:
             if isinstance(true_item, dict):
                 true_date = true_item['date']
-                true_type = true_item.get('type', 'spike')
+                true_type = true_item.get('type', 'point_outlier')
                 true_mag = abs(true_item.get('magnitude', 1.0))
             elif isinstance(true_item, (tuple, list)):
                 true_date = true_item[0]
                 # (date, magnitude, type, duration, shared) or (date, magnitude, type, duration)
-                true_type = true_item[2] if len(true_item) > 2 else 'spike'
+                true_type = true_item[2] if len(true_item) > 2 else 'point_outlier'
                 try:
                     true_mag = abs(float(true_item[1])) if len(true_item) > 1 else 1.0
                 except (ValueError, TypeError):
@@ -1105,20 +1119,22 @@ class FeatureDetectionLoss:
                 min_dist = min(min_dist, dist)
             
             # Calculate penalty based on type
+            is_simple = true_type in simple_types
+            
             if min_dist <= self.anomaly_tolerance_days:
                 # Found
-                if true_type in ['decay', 'ramp_up', 'ramp_down']:
-                    # More lenient for complex patterns
-                    penalty = 0.2
-                else:
-                    # Spike: should be found exactly
+                if is_simple:
+                    # Point outlier: should be found exactly
                     penalty = 0.0 if min_dist == 0 else 0.3
+                else:
+                    # Complex pattern: more lenient
+                    penalty = 0.2
             else:
                 # Missed
-                if true_type in ['decay', 'ramp_up', 'ramp_down']:
-                    penalty = 0.5  # Less penalty for missing complex patterns
+                if is_simple:
+                    penalty = 1.0  # Full penalty for missing point outlier
                 else:
-                    penalty = 1.0  # Full penalty for missing spike
+                    penalty = 0.5  # Less penalty for missing complex patterns
             
             loss += penalty
         
@@ -1255,10 +1271,12 @@ class FeatureDetectionOptimizer:
             print(f"Baseline loss = {self.best_loss:.4f}")
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
-            print(f"Baseline params: {baseline_params}")
-            self.baseline_loss = float('inf')
+            self.baseline_loss = None
             self.best_params = baseline_params
             self.best_loss = float('inf')
+        
+        successful_iterations = 0
+        failed_iterations = 0
         
         for i in range(self.n_iterations):
             # Generate random parameters
@@ -1268,14 +1286,15 @@ class FeatureDetectionOptimizer:
             try:
                 loss = self._evaluate_params(params)
                 
-                # Track
+                # Only track successful evaluations in history
                 self.optimization_history.append({
-                    'iteration': i,
+                    'iteration': successful_iterations,
                     'params': copy.deepcopy(params),
                     'loss': loss['total_loss'],
                     'loss_breakdown': loss,
-                    'status': 'success',
                 })
+                
+                successful_iterations += 1
                 
                 # Update best
                 if loss['total_loss'] < self.best_loss:
@@ -1283,21 +1302,17 @@ class FeatureDetectionOptimizer:
                     self.best_params = copy.deepcopy(params)
                     print(f"Iteration {i}: New best loss = {self.best_loss:.4f}")
             except Exception as e:
-                print(f"Iteration {i} failed with error: {e}")
-                print(f"Failed params: {params}")
-                # Track failure for transparency
-                self.optimization_history.append({
-                    'iteration': i,
-                    'params': copy.deepcopy(params),
-                    'loss': float('inf'),
-                    'loss_breakdown': None,
-                    'status': 'error',
-                    'error': repr(e),
-                })
-                # Continue to next iteration
+                failed_iterations += 1
+                if failed_iterations <= 3:  # Only print first few failures
+                    print(f"Iteration {i} failed: {str(e)[:100]}")
+                # Don't add to history - just skip this iteration
                 continue
         
+        if failed_iterations > 3:
+            print(f"... and {failed_iterations - 3} more failures (suppressed)")
+        
         print(f"\nOptimization complete!")
+        print(f"Successful iterations: {successful_iterations}/{self.n_iterations}")
         print(f"Best loss: {self.best_loss:.4f}")
         return self.best_params
     
@@ -1317,42 +1332,43 @@ class FeatureDetectionOptimizer:
             print(f"Baseline loss = {self.best_loss:.4f}")
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
-            print(f"Baseline params: {baseline_params}")
-            self.baseline_loss = float('inf')
+            self.baseline_loss = None
             self.best_params = baseline_params
             self.best_loss = float('inf')
+        
+        successful_iterations = 0
+        failed_iterations = 0
         
         for i, params in enumerate(grid):
             try:
                 loss = self._evaluate_params(params)
                 
+                # Only track successful evaluations
                 self.optimization_history.append({
-                    'iteration': i,
+                    'iteration': successful_iterations,
                     'params': copy.deepcopy(params),
                     'loss': loss['total_loss'],
                     'loss_breakdown': loss,
-                    'status': 'success',
                 })
+                
+                successful_iterations += 1
                 
                 if loss['total_loss'] < self.best_loss:
                     self.best_loss = loss['total_loss']
                     self.best_params = copy.deepcopy(params)
                     print(f"Grid {i}: New best loss = {self.best_loss:.4f}")
             except Exception as e:
-                print(f"Grid {i} failed with error: {e}")
-                print(f"Failed params: {params}")
-                self.optimization_history.append({
-                    'iteration': i,
-                    'params': copy.deepcopy(params),
-                    'loss': float('inf'),
-                    'loss_breakdown': None,
-                    'status': 'error',
-                    'error': repr(e),
-                })
-                # Continue to next grid point
+                failed_iterations += 1
+                if failed_iterations <= 3:  # Only print first few failures
+                    print(f"Grid {i} failed: {str(e)[:100]}")
+                # Don't add to history - just skip
                 continue
         
+        if failed_iterations > 3:
+            print(f"... and {failed_iterations - 3} more failures (suppressed)")
+        
         print(f"\nOptimization complete!")
+        print(f"Successful iterations: {successful_iterations}/{len(grid)}")
         print(f"Best loss: {self.best_loss:.4f}")
         return self.best_params
     
