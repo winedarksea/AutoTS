@@ -2247,6 +2247,53 @@ class SyntheticDailyGenerator:
 
         return json.dumps(summary, indent=2) if as_json else summary
 
+    @classmethod
+    def render_template(cls, template, return_components=False):
+        """Render a template into time series using the generator's renderer."""
+        if template is None:
+            raise ValueError("Template cannot be None when rendering.")
+
+        template_copy = copy.deepcopy(template)
+        meta = template_copy.get('meta', {})
+        start_date = pd.Timestamp(meta.get('start_date', datetime.utcnow().date()))
+        n_days = int(meta.get('n_days', 0))
+        if n_days <= 0:
+            first_series = next(iter(template_copy.get('series', {}).values()), None)
+            if first_series:
+                trend = first_series.get('components', {}).get('trend', {}).get('values', [])
+                n_days = len(trend)
+        if n_days <= 0:
+            raise ValueError("Template must include a positive n_days or component values to infer length.")
+
+        frequency = meta.get('frequency', 'D') or 'D'
+        if frequency == 'infer':
+            frequency = 'D'
+        date_index = pd.date_range(start=start_date, periods=n_days, freq=frequency)
+
+        renderer = cls.__new__(cls)
+        renderer.n_days = n_days
+        renderer.n_series = meta.get('n_series', len(template_copy.get('series', {})))
+        renderer.date_index = date_index
+        renderer.template = template_copy
+        renderer.components = {}
+        renderer.data = None
+        renderer.include_regressors = template_copy.get('regressors') is not None
+        renderer.regressors = None
+
+        data_arrays = {}
+        for series_name, series_template in template_copy.get('series', {}).items():
+            series_template_copy = copy.deepcopy(series_template)
+            component_arrays, series_data = renderer._render_series_from_template(series_template_copy)
+            renderer.components[series_name] = component_arrays
+            data_arrays[series_name] = series_data
+            template_copy['series'][series_name] = series_template_copy
+
+        renderer.data = pd.DataFrame(data_arrays, index=date_index)
+
+        if return_components:
+            return renderer.data, renderer.components
+        return renderer.data
+
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
         """
         Plot a series with all its labeled components clearly marked.

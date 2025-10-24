@@ -42,7 +42,6 @@ class TestFeatureDetector(unittest.TestCase):
         detector = TimeSeriesFeatureDetector()
         self.assertIsNotNone(detector)
         self.assertTrue(detector.standardize)
-        self.assertTrue(detector.refine_seasonality)
         self.assertEqual(detector.detection_mode, 'multivariate')  # Default value
     
     def test_detection_mode_multivariate(self):
@@ -256,6 +255,8 @@ class TestFeatureDetectionLoss(unittest.TestCase):
         )
         cls.data = cls.generator.get_data()
         cls.labels = cls.generator.get_all_labels()
+        cls.components = cls.generator.get_components()
+        cls.date_index = cls.generator.date_index
     
     def test_loss_initialization(self):
         """Test loss calculator initialization."""
@@ -268,15 +269,20 @@ class TestFeatureDetectionLoss(unittest.TestCase):
         # Detect features
         detector = TimeSeriesFeatureDetector()
         detector.fit(self.data)
-        detected = detector.get_detected_features()
+        detected = detector.get_detected_features(include_components=True)
         
         # Calculate loss
         loss_calc = FeatureDetectionLoss()
-        loss = loss_calc.calculate_loss(detected, self.labels)
+        loss = loss_calc.calculate_loss(
+            detected,
+            self.labels,
+            true_components=self.components,
+            date_index=self.date_index,
+        )
         
         # Check loss structure
         self.assertIn('total_loss', loss)
-        self.assertIn('changepoint_loss', loss)
+        self.assertIn('trend_loss', loss)
         self.assertIn('anomaly_loss', loss)
         self.assertIsInstance(loss['total_loss'], (int, float))
         self.assertGreaterEqual(loss['total_loss'], 0)
@@ -285,11 +291,17 @@ class TestFeatureDetectionLoss(unittest.TestCase):
         """Test loss calculation for specific series."""
         detector = TimeSeriesFeatureDetector()
         detector.fit(self.data)
-        detected = detector.get_detected_features()
+        detected = detector.get_detected_features(include_components=True)
         
         loss_calc = FeatureDetectionLoss()
         series_name = self.data.columns[0]
-        loss = loss_calc.calculate_loss(detected, self.labels, series_name=series_name)
+        loss = loss_calc.calculate_loss(
+            detected,
+            self.labels,
+            series_name=series_name,
+            true_components=self.components,
+            date_index=self.date_index,
+        )
         
         self.assertIn('total_loss', loss)
         self.assertIsInstance(loss['total_loss'], (int, float))
@@ -391,13 +403,19 @@ class TestIntegration(unittest.TestCase):
         detector.fit(generator.get_data())
         
         # Get features
-        features = detector.get_detected_features()
+        features = detector.get_detected_features(include_components=True)
         self.assertIsNotNone(features)
         
         # Calculate loss
         loss_calc = FeatureDetectionLoss()
         labels = generator.get_all_labels()
-        loss = loss_calc.calculate_loss(features, labels)
+        components = generator.get_components()
+        loss = loss_calc.calculate_loss(
+            features,
+            labels,
+            true_components=components,
+            date_index=generator.date_index,
+        )
         
         print(f"\nDefault parameters loss: {loss['total_loss']:.4f}")
         self.assertGreater(loss['total_loss'], 0)
