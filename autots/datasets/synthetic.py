@@ -7,6 +7,7 @@ Synthetic Daily Data Generator with Labeled Changepoints, Anomalies, and Holiday
 Matching test file in tests/test_synthetic_data.py
 """
 
+import json
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -77,6 +78,12 @@ class SyntheticDailyGenerator:
         Actual per-series level will vary 0.5x-2.0x this value
     include_regressors : bool
         Whether to include regressor effects (default False)
+    anomaly_types : list of str or None
+        List of anomaly types to generate. Valid types are:
+        'point_outlier', 'noisy_burst', 'impulse_decay', 'linear_decay', 'transient_change'
+        If None (default), all types will be generated
+    disable_holiday_splash : bool
+        If True, holidays will only affect a single day with no splash or bridge effects (default False)
     """
     
     # Human-readable descriptions for series types
@@ -110,6 +117,8 @@ class SyntheticDailyGenerator:
         yearly_seasonality_strength=1.0,
         noise_level=0.1,
         include_regressors=False,
+        anomaly_types=None,
+        disable_holiday_splash=False,
     ):
         self.start_date = pd.Timestamp(start_date)
         self.n_days = n_days
@@ -124,6 +133,18 @@ class SyntheticDailyGenerator:
         self.yearly_seasonality_strength = yearly_seasonality_strength
         self.noise_level = noise_level
         self.include_regressors = include_regressors
+        self.disable_holiday_splash = disable_holiday_splash
+        
+        # Validate and set anomaly types
+        valid_anomaly_types = ['point_outlier', 'noisy_burst', 'impulse_decay', 'linear_decay', 'transient_change']
+        if anomaly_types is None:
+            self.anomaly_types = valid_anomaly_types
+        else:
+            # Validate that all provided types are valid
+            invalid_types = [t for t in anomaly_types if t not in valid_anomaly_types]
+            if invalid_types:
+                raise ValueError(f"Invalid anomaly types: {invalid_types}. Valid types are: {valid_anomaly_types}")
+            self.anomaly_types = list(anomaly_types)
         
         # Initialize random state
         self.rng = np.random.RandomState(random_seed)
@@ -700,34 +721,63 @@ class SyntheticDailyGenerator:
         
         # Determine splash/bridge configuration for each holiday type (consistent across years)
         if not self.holiday_config:
-            # Only ~50% of holidays get splash effects
-            self.holiday_config['christmas'] = {
-                'has_splash': self.rng.random() < 0.5,
-                'has_bridge': self.rng.random() < 0.5
-            }
-            self.holiday_config['custom_july'] = {
-                'has_splash': self.rng.random() < 0.5,
-                'has_bridge': self.rng.random() < 0.5
-            }
-            # Multi-day holidays use deterministic configs to better mimic reality
-            self.holiday_config['lunar_new_year'] = {
-                'has_splash': True,
-                'has_bridge': False
-            }
-            self.holiday_config['ramadan'] = {
-                'has_splash': False,
-                'has_bridge': False
-            }
-            for dom_holiday in self.random_dom_holidays:
-                self.holiday_config[dom_holiday['name']] = {
-                    'has_splash': dom_holiday['has_splash'],
-                    'has_bridge': dom_holiday['has_bridge']
+            if self.disable_holiday_splash:
+                # Disable all splash and bridge effects
+                self.holiday_config['christmas'] = {
+                    'has_splash': False,
+                    'has_bridge': False
                 }
-            for wkdom_holiday in self.random_wkdom_holidays:
-                self.holiday_config[wkdom_holiday['name']] = {
-                    'has_splash': wkdom_holiday['has_splash'],
-                    'has_bridge': wkdom_holiday['has_bridge']
+                self.holiday_config['custom_july'] = {
+                    'has_splash': False,
+                    'has_bridge': False
                 }
+                self.holiday_config['lunar_new_year'] = {
+                    'has_splash': False,
+                    'has_bridge': False
+                }
+                self.holiday_config['ramadan'] = {
+                    'has_splash': False,
+                    'has_bridge': False
+                }
+                for dom_holiday in self.random_dom_holidays:
+                    self.holiday_config[dom_holiday['name']] = {
+                        'has_splash': False,
+                        'has_bridge': False
+                    }
+                for wkdom_holiday in self.random_wkdom_holidays:
+                    self.holiday_config[wkdom_holiday['name']] = {
+                        'has_splash': False,
+                        'has_bridge': False
+                    }
+            else:
+                # Only ~50% of holidays get splash effects
+                self.holiday_config['christmas'] = {
+                    'has_splash': self.rng.random() < 0.5,
+                    'has_bridge': self.rng.random() < 0.5
+                }
+                self.holiday_config['custom_july'] = {
+                    'has_splash': self.rng.random() < 0.5,
+                    'has_bridge': self.rng.random() < 0.5
+                }
+                # Multi-day holidays use deterministic configs to better mimic reality
+                self.holiday_config['lunar_new_year'] = {
+                    'has_splash': True,
+                    'has_bridge': False
+                }
+                self.holiday_config['ramadan'] = {
+                    'has_splash': False,
+                    'has_bridge': False
+                }
+                for dom_holiday in self.random_dom_holidays:
+                    self.holiday_config[dom_holiday['name']] = {
+                        'has_splash': dom_holiday['has_splash'],
+                        'has_bridge': dom_holiday['has_bridge']
+                    }
+                for wkdom_holiday in self.random_wkdom_holidays:
+                    self.holiday_config[wkdom_holiday['name']] = {
+                        'has_splash': wkdom_holiday['has_splash'],
+                        'has_bridge': wkdom_holiday['has_bridge']
+                    }
         
         # Common holidays: December 25th (Christmas)
         self._add_yearly_holiday(holidays, holiday_impacts, holiday_splash_impacts, 
@@ -778,20 +828,28 @@ class SyntheticDailyGenerator:
                 cny_dates = self.date_index[cny_mask]
                 
                 for cny_date in cny_dates:
-                    festival_pattern = [
-                        (-3, 0.35),
-                        (-2, 0.65),
-                        (-1, 0.95),
-                        (0, -1.3),
-                        (1, -1.15),
-                        (2, -1.0),
-                        (3, -0.8),
-                        (4, -0.6),
-                        (5, -0.45),
-                        (6, -0.3),
-                        (7, 0.4),
-                        (8, 0.25),
-                    ]
+                    if self.disable_holiday_splash:
+                        # Single day effect only
+                        festival_pattern = [(0, -1.3)]
+                        core_offsets = {0}
+                    else:
+                        # Multi-day festival pattern
+                        festival_pattern = [
+                            (-3, 0.35),
+                            (-2, 0.65),
+                            (-1, 0.95),
+                            (0, -1.3),
+                            (1, -1.15),
+                            (2, -1.0),
+                            (3, -0.8),
+                            (4, -0.6),
+                            (5, -0.45),
+                            (6, -0.3),
+                            (7, 0.4),
+                            (8, 0.25),
+                        ]
+                        core_offsets = set(range(0, 7))
+                    
                     applied_dates = self._apply_holiday_pattern(
                         holidays,
                         holiday_impacts,
@@ -799,9 +857,9 @@ class SyntheticDailyGenerator:
                         cny_date,
                         base_scale=holiday_scale * 1.2,
                         pattern=festival_pattern,
-                        core_offsets=set(range(0, 7)),
+                        core_offsets=core_offsets,
                         holiday_name='lunar_new_year',
-                        include_weekend_boost=True,
+                        include_weekend_boost=not self.disable_holiday_splash,
                     )
                     for applied_date in applied_dates:
                         holiday_dates.add(applied_date)
@@ -818,16 +876,24 @@ class SyntheticDailyGenerator:
                 ramadan_dates = self.date_index[ramadan_mask]
                 
                 for ramadan_date in ramadan_dates:
-                    pre_ramadan = [(-3, 0.3), (-2, 0.55), (-1, 0.85)]
-                    core_length = 29
-                    early_decline = np.linspace(-0.45, -0.7, 10)
-                    deep_decline = np.linspace(-0.75, -0.95, 10)
-                    late_decline = np.linspace(-0.9, -0.5, core_length - 20)
-                    ramadan_profile = np.concatenate([early_decline, deep_decline, late_decline])
-                    post_festival = [(core_length, 0.9), (core_length + 1, 0.6), (core_length + 2, 0.35)]
-                    pattern = pre_ramadan + [
-                        (offset, weight) for offset, weight in enumerate(ramadan_profile)
-                    ] + post_festival
+                    if self.disable_holiday_splash:
+                        # Single day effect only (first day of Ramadan)
+                        pattern = [(0, -0.85)]
+                        core_offsets = {0}
+                    else:
+                        # Full month-long Ramadan pattern
+                        pre_ramadan = [(-3, 0.3), (-2, 0.55), (-1, 0.85)]
+                        core_length = 29
+                        early_decline = np.linspace(-0.45, -0.7, 10)
+                        deep_decline = np.linspace(-0.75, -0.95, 10)
+                        late_decline = np.linspace(-0.9, -0.5, core_length - 20)
+                        ramadan_profile = np.concatenate([early_decline, deep_decline, late_decline])
+                        post_festival = [(core_length, 0.9), (core_length + 1, 0.6), (core_length + 2, 0.35)]
+                        pattern = pre_ramadan + [
+                            (offset, weight) for offset, weight in enumerate(ramadan_profile)
+                        ] + post_festival
+                        core_offsets = set(range(0, core_length))
+                    
                     applied_dates = self._apply_holiday_pattern(
                         holidays,
                         holiday_impacts,
@@ -835,7 +901,7 @@ class SyntheticDailyGenerator:
                         ramadan_date,
                         base_scale=holiday_scale * 0.85,
                         pattern=pattern,
-                        core_offsets=set(range(0, core_length)),
+                        core_offsets=core_offsets,
                         holiday_name='ramadan',
                         include_weekend_boost=False,
                     )
@@ -1282,9 +1348,25 @@ class SyntheticDailyGenerator:
         for anomaly_day, is_shared in sorted(all_anomaly_days.items()):
             # Decide anomaly characteristics
             duration = self.rng.choice([1, 2, 3], p=[0.6, 0.3, 0.1])
-            anomaly_type = self.rng.choice([
-                'point_outlier', 'noisy_burst', 'impulse_decay', 'linear_decay', 'transient_change'
-            ], p=[0.4, 0.2, 0.15, 0.15, 0.1])
+            
+            # Select anomaly type from allowed types
+            if len(self.anomaly_types) == 1:
+                anomaly_type = self.anomaly_types[0]
+            else:
+                # Use proportional probabilities if multiple types are allowed
+                # Default probabilities: point_outlier=0.4, noisy_burst=0.2, impulse_decay=0.15, linear_decay=0.15, transient_change=0.1
+                default_probs = {
+                    'point_outlier': 0.4,
+                    'noisy_burst': 0.2,
+                    'impulse_decay': 0.15,
+                    'linear_decay': 0.15,
+                    'transient_change': 0.1
+                }
+                # Filter to allowed types and normalize
+                allowed_probs = [default_probs[t] for t in self.anomaly_types]
+                prob_sum = sum(allowed_probs)
+                normalized_probs = [p / prob_sum for p in allowed_probs]
+                anomaly_type = self.rng.choice(self.anomaly_types, p=normalized_probs)
             
             # Generate magnitude (clearly above noise threshold)
             if self.rng.random() < 0.5:
@@ -1734,7 +1816,7 @@ class SyntheticDailyGenerator:
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
         """
         Plot a series with all its labeled components clearly marked.
-        
+
         Parameters
         ----------
         series_name : str, optional

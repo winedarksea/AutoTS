@@ -9,6 +9,7 @@ Created on Mon Sep 30 2024
 import unittest
 import os
 import tempfile
+import json
 import numpy as np
 import pandas as pd
 from autots.datasets import SyntheticDailyGenerator, generate_synthetic_daily_data
@@ -505,6 +506,97 @@ class TestSyntheticDataGeneration(unittest.TestCase):
 
         shared_shift_found = any(len(series_list) > 1 for series_list in shift_dates.values())
         self.assertTrue(shared_shift_found, "Should find at least one shared level shift")
+    
+    def test_anomaly_types_parameter(self):
+        """Test that anomaly_types parameter filters anomaly generation."""
+        # Test with only point_outlier anomalies
+        gen = generate_synthetic_daily_data(
+            n_days=730,
+            n_series=5,
+            random_seed=42,
+            anomaly_freq=0.1,
+            anomaly_types=['point_outlier']
+        )
+        
+        all_anomalies = gen.get_anomalies()
+        anomaly_types_found = set()
+        for series_name, anomaly_list in all_anomalies.items():
+            for anomaly in anomaly_list:
+                anomaly_types_found.add(anomaly[2])  # Type is the 3rd element
+        
+        # Should only have point_outlier (or no anomalies if none were generated)
+        if len(anomaly_types_found) > 0:
+            self.assertEqual(anomaly_types_found, {'point_outlier'}, 
+                           "Should only generate point_outlier anomalies")
+        
+        # Test with multiple specific types
+        gen2 = generate_synthetic_daily_data(
+            n_days=730,
+            n_series=5,
+            random_seed=123,
+            anomaly_freq=0.15,
+            anomaly_types=['impulse_decay', 'linear_decay']
+        )
+        
+        all_anomalies2 = gen2.get_anomalies()
+        anomaly_types_found2 = set()
+        for series_name, anomaly_list in all_anomalies2.items():
+            for anomaly in anomaly_list:
+                anomaly_types_found2.add(anomaly[2])
+        
+        if len(anomaly_types_found2) > 0:
+            self.assertTrue(anomaly_types_found2.issubset({'impulse_decay', 'linear_decay'}),
+                          "Should only generate specified anomaly types")
+        
+        # Test invalid anomaly type raises error
+        with self.assertRaises(ValueError):
+            generate_synthetic_daily_data(
+                n_days=365,
+                n_series=3,
+                random_seed=42,
+                anomaly_types=['invalid_type']
+            )
+    
+    def test_disable_holiday_splash_parameter(self):
+        """Test that disable_holiday_splash parameter controls splash effects."""
+        # Test with splash disabled
+        gen_no_splash = generate_synthetic_daily_data(
+            n_days=730,
+            n_series=10,
+            random_seed=42,
+            disable_holiday_splash=True
+        )
+        
+        holiday_config = gen_no_splash.get_holiday_config()
+        
+        # All holidays should have splash and bridge disabled
+        for holiday_name, config in holiday_config.items():
+            self.assertFalse(config['has_splash'], 
+                           f"{holiday_name} should have splash disabled")
+            self.assertFalse(config['has_bridge'], 
+                           f"{holiday_name} should have bridge disabled")
+        
+        # Check that lunar holidays series has minimal splash impacts
+        if 'series_5' in gen_no_splash.series_types:
+            splash_impacts = gen_no_splash.get_holiday_splash_impacts('series_5')
+            self.assertEqual(len(splash_impacts), 0, 
+                           "Lunar holidays should have no splash impacts when disabled")
+        
+        # Test with splash enabled (default behavior)
+        gen_with_splash = generate_synthetic_daily_data(
+            n_days=730,
+            n_series=10,
+            random_seed=42,
+            disable_holiday_splash=False
+        )
+        
+        holiday_config2 = gen_with_splash.get_holiday_config()
+        
+        # At least some holidays should have splash or bridge enabled
+        some_enabled = any(config['has_splash'] or config['has_bridge'] 
+                          for config in holiday_config2.values())
+        self.assertTrue(some_enabled, 
+                       "When splash is enabled, some holidays should have splash/bridge effects")
 
 
 if __name__ == '__main__':
