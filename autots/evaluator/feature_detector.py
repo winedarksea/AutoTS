@@ -3,6 +3,8 @@
 Time Series Feature Detection and Optimization
 
 @author: Colin with Claude Sonnet v4.5
+
+Matching test file in tests/test_feature_detector.py
 """
 
 import numpy as np
@@ -30,6 +32,16 @@ from sklearn.preprocessing import StandardScaler
 class TimeSeriesFeatureDetector:
     """
     Comprehensive feature detection pipeline for time series.
+
+    TODO: Handle multiplicative seasonality
+    TODO: Handle time varying seasonality using fast_kalman
+    TODO: Improve holiday "splash" effect and weekend interactions
+    TODO: Support identifying anomaly types beyond just point_outlier
+    TODO: Support identifying regressor impacts and granger lag impacts
+    TODO: Support identifying variance regime changes
+    TODO: Build upon the JSON template so that it can be converted to a fixed size embedding (probably a 2d embedding). The fixed size may vary by parameters, but for a given parameter set should always be the same size. The embedding does not need to be capable of fully reconstructing the time series, just representing it.
+    TODO: Support for modeling the trend with a fast kalman state space approach, ideally aligned with changepoints in some way if possible.
+    TODO: Improved scaling and option to skip scaling
 
         Parameters
     ----------
@@ -181,6 +193,7 @@ class TimeSeriesFeatureDetector:
         self.anomalies = {}
         self.holiday_impacts = {}
         self.holiday_dates = {}
+        self.holiday_splash_impacts = {}
         self.holiday_coefficients = {}
         self.seasonality_components = {}
         self.seasonality_strength = {}
@@ -242,6 +255,55 @@ class TimeSeriesFeatureDetector:
         if not isinstance(df, pd.DataFrame):
             raise ValueError("Input data must be a pandas DataFrame.")
 
+        # Step 1: Prepare data and standardize if requested
+        df_work = self._prepare_data(df)
+        
+        # Reset all result containers
+        self._reset_results()
+        
+        # Step 2-4: Initial decomposition (seasonality, holidays, anomalies)
+        rough_residual, rough_seasonality = self._initial_decomposition(df_work)
+        
+        # Step 5: Final seasonality fit with holiday effects
+        final_residual, final_seasonality, seasonality_strength, holiday_component_scaled, holiday_coefficients, holiday_splash_impacts_scaled = self._final_seasonality_fit(
+            df_work, rough_residual, rough_seasonality
+        )
+        
+        # Step 6-7: Trend and level shift detection
+        trend_component_scaled, level_shift_component_scaled, validated_level_shifts, changepoints, slope_info = self._detect_trend_and_shifts(
+            final_residual
+        )
+        
+        # Step 8: Noise analysis
+        noise_component_scaled, anomaly_component_scaled = self._analyze_noise(
+            df_work, trend_component_scaled, level_shift_component_scaled, final_seasonality, holiday_component_scaled
+        )
+        
+        # Step 9: Convert all components to original scale
+        components_original = self._rescale_all_components(
+            trend_component_scaled,
+            level_shift_component_scaled,
+            final_seasonality,
+            holiday_component_scaled,
+            noise_component_scaled,
+            anomaly_component_scaled,
+        )
+        
+        # Step 10: Build template and validate reconstruction
+        self._build_template(
+            components_original,
+            validated_level_shifts,
+            slope_info,
+            changepoints,
+            holiday_coefficients,
+            holiday_splash_impacts_scaled,
+            seasonality_strength,
+        )
+        
+        return self
+    
+    def _prepare_data(self, df):
+        """Prepare and standardize input data."""
         df_numeric = df.astype(float).copy().sort_index()
         self.df_original = df_numeric
         self.date_index = df_numeric.index
@@ -257,15 +319,18 @@ class TimeSeriesFeatureDetector:
             df_work = df_numeric.copy()
             self.scale_series = pd.Series(1.0, index=df_numeric.columns)
             self.mean_series = pd.Series(0.0, index=df_numeric.columns)
-
-        # Reset result containers
+        
+        return df_work
+    
+    def _reset_results(self):
+        """Reset all result containers to empty state."""
         self.template = {
             'version': self.TEMPLATE_VERSION,
             'meta': {
                 'start_date': self.date_index[0].isoformat(),
                 'end_date': self.date_index[-1].isoformat(),
                 'n_days': int(len(self.date_index)),
-                'n_series': int(df_numeric.shape[1]),
+                'n_series': int(self.df_original.shape[1]),
                 'frequency': pd.infer_freq(self.date_index) or 'infer',
                 'created_at': pd.Timestamp.now().isoformat(),
                 'detector_config': {
@@ -284,6 +349,7 @@ class TimeSeriesFeatureDetector:
         self.anomalies = {}
         self.holiday_impacts = {}
         self.holiday_dates = {}
+        self.holiday_splash_impacts = {}
         self.holiday_coefficients = {}
         self.seasonality_components = {}
         self.seasonality_strength = {}
@@ -297,16 +363,59 @@ class TimeSeriesFeatureDetector:
         self.reconstructed_components = None
         self.reconstruction_error = None
         self.reconstruction_rmse = None
-
+    
+    def _initial_decomposition(self, df_work):
+        """
+        Perform initial decomposition: rough seasonality, holidays, and anomalies.
+        
+        Returns
+        -------
+        tuple
+            (rough_residual, rough_seasonality)
+        """
+        # Rough seasonality removal
         rough_residual, rough_seasonality, self.rough_seasonality_model = self._compute_rough_seasonality(df_work)
-        holiday_dates, holiday_regressors = self._detect_holidays(rough_residual)
+        
+        # Holiday detection
+        holiday_dates, holiday_splash_dates, holiday_regressors = self._detect_holidays(rough_residual)
+        self._holiday_dates_temp = holiday_dates
+        self._holiday_regressors_temp = holiday_regressors
+        
+        # Anomaly detection
+        residual_without_anomalies, anomaly_records = self._detect_anomalies(rough_residual)
+        self._anomaly_records_temp = anomaly_records
+        
+        return rough_residual, rough_seasonality
+    
+    def _final_seasonality_fit(self, df_work, rough_residual, rough_seasonality):
+        """
+        Fit final seasonality model including holiday effects.
+        
+        Returns
+        -------
+        tuple
+            (final_residual, final_seasonality, seasonality_strength, holiday_component, 
+             holiday_coefficients, holiday_splash_impacts)
+        """
         residual_without_anomalies, anomaly_records = self._detect_anomalies(rough_residual)
         df_without_anomalies = residual_without_anomalies + rough_seasonality
-        final_residual, final_seasonality, seasonality_strength, self.seasonality_model, holiday_component_scaled, holiday_coefficients = self._fit_final_seasonality(
-            df_without_anomalies, holiday_regressors
+        
+        final_residual, final_seasonality, seasonality_strength, self.seasonality_model, holiday_component_scaled, holiday_coefficients, holiday_splash_impacts_scaled = self._fit_final_seasonality(
+            df_without_anomalies, self._holiday_regressors_temp
         )
-        residual_after_holidays = final_residual.copy()
-
+        
+        return final_residual, final_seasonality, seasonality_strength, holiday_component_scaled, holiday_coefficients, holiday_splash_impacts_scaled
+    
+    def _detect_trend_and_shifts(self, residual_after_holidays):
+        """
+        Detect trend changepoints and level shifts.
+        
+        Returns
+        -------
+        tuple
+            (trend_component, level_shift_component, validated_shifts, changepoints, slope_info)
+        """
+        # Optionally apply transformations before trend detection
         residual_for_trend = residual_after_holidays.copy()
         self.general_transformer = None
         if self.general_transformer_params:
@@ -319,34 +428,106 @@ class TimeSeriesFeatureDetector:
                 min_periods=1,
             ).mean()
 
+        # Level shift detection
         level_shift_component_scaled, level_shift_candidates = self._detect_level_shifts(residual_for_trend)
         level_shift_component_valid_scaled, validated_level_shifts = self._validate_level_shifts(
             residual_for_trend, level_shift_component_scaled, level_shift_candidates
         )
 
+        # Trend changepoint detection
         trend_input = residual_for_trend - level_shift_component_valid_scaled
         changepoints, trend_component_scaled = self._detect_trend_changepoints(trend_input)
         slope_info = self._compute_trend_slopes(trend_component_scaled, changepoints)
-
-        noise_component_scaled = trend_input - trend_component_scaled
-        anomaly_component_scaled = df_work - df_without_anomalies
-
-        trend_component = self._convert_to_original_scale(trend_component_scaled, include_mean=True)
-        level_shift_component = self._convert_to_original_scale(level_shift_component_valid_scaled)
-        seasonality_component = self._convert_to_original_scale(final_seasonality)
-        holiday_component = self._convert_to_original_scale(holiday_component_scaled)
-        noise_component = self._convert_to_original_scale(noise_component_scaled)
-        anomaly_component = self._convert_to_original_scale(anomaly_component_scaled)
-
+        
+        return trend_component_scaled, level_shift_component_valid_scaled, validated_level_shifts, changepoints, slope_info
+    
+    def _analyze_noise(self, df_work, trend_scaled, level_shift_scaled, seasonality_scaled, holiday_scaled):
+        """
+        Analyze noise component and anomalies.
+        
+        Returns
+        -------
+        tuple
+            (noise_component, anomaly_component)
+        """
+        # Noise is what remains after removing trend, level shifts, seasonality, and holidays
+        df_without_anomalies_scaled = df_work.copy()
+        for col in df_work.columns:
+            if col in self._anomaly_records_temp and self._anomaly_records_temp[col]:
+                for anom in self._anomaly_records_temp[col]:
+                    date = anom['date']
+                    if date in df_work.index:
+                        # Remove anomaly effect (simple approach: use median of neighbors)
+                        try:
+                            idx = df_work.index.get_loc(date)
+                            neighbors = []
+                            if idx > 0:
+                                neighbors.append(df_work[col].iloc[idx-1])
+                            if idx < len(df_work) - 1:
+                                neighbors.append(df_work[col].iloc[idx+1])
+                            if neighbors:
+                                df_without_anomalies_scaled.loc[date, col] = np.nanmedian(neighbors)
+                        except:
+                            pass
+        
+        # Reconstruct signal without anomalies
+        reconstructed_scaled = trend_scaled + level_shift_scaled + seasonality_scaled + holiday_scaled
+        noise_component_scaled = df_without_anomalies_scaled - reconstructed_scaled
+        anomaly_component_scaled = df_work - df_without_anomalies_scaled
+        
+        return noise_component_scaled, anomaly_component_scaled
+    
+    def _rescale_all_components(self, trend_scaled, level_shift_scaled, seasonality_scaled, 
+                                 holiday_scaled, noise_scaled, anomaly_scaled):
+        """
+        Convert all components from standardized to original scale.
+        
+        Returns
+        -------
+        dict
+            Dictionary of component DataFrames in original scale
+        """
+        trend_component = self._convert_to_original_scale(trend_scaled, include_mean=True)
+        level_shift_component = self._convert_to_original_scale(level_shift_scaled)
+        seasonality_component = self._convert_to_original_scale(seasonality_scaled)
+        holiday_component = self._convert_to_original_scale(holiday_scaled)
+        noise_component = self._convert_to_original_scale(noise_scaled)
+        anomaly_component = self._convert_to_original_scale(anomaly_scaled)
+        
+        return {
+            'trend': trend_component,
+            'level_shift': level_shift_component,
+            'seasonality': seasonality_component,
+            'holidays': holiday_component,
+            'noise': noise_component,
+            'anomalies': anomaly_component,
+        }
+    
+    def _build_template(self, components_original, validated_level_shifts, slope_info, changepoints,
+                        holiday_coefficients, holiday_splash_impacts_scaled, seasonality_strength):
+        """
+        Build final template structure and validate reconstruction.
+        """
+        # Extract rescaled components
+        trend_component = components_original['trend']
+        level_shift_component = components_original['level_shift']
+        seasonality_component = components_original['seasonality']
+        holiday_component = components_original['holidays']
+        noise_component = components_original['noise']
+        anomaly_component = components_original['anomalies']
+        
+        # Rescale labels
         holiday_impacts = self._component_df_to_mapping(holiday_component)
+        holiday_splash_impacts = self._extract_splash_impacts(holiday_splash_impacts_scaled, self._holiday_dates_temp)
         holiday_coefficients = self._rescale_holiday_coefficients(holiday_coefficients)
         validated_level_shifts = self._rescale_level_shifts(validated_level_shifts)
         slope_info = self._rescale_slope_info(slope_info)
-        anomaly_records = self._rescale_anomalies(anomaly_records)
+        anomaly_records = self._rescale_anomalies(self._anomaly_records_temp)
 
         mark_shared = self.detection_mode == 'univariate'
 
-        for series_name in df_numeric.columns:
+        # Build series templates
+        for series_name in self.df_original.columns:
             components_dict = {
                 'trend': trend_component[series_name].to_numpy(copy=True),
                 'level_shift': level_shift_component[series_name].to_numpy(copy=True),
@@ -364,7 +545,7 @@ class TimeSeriesFeatureDetector:
             anomaly_entries, anomaly_template = self._build_anomaly_entries(
                 series_name, anomaly_records, shared=mark_shared
             )
-            holidays_list = holiday_dates.get(series_name, [])
+            holidays_list = self._holiday_dates_temp.get(series_name, [])
             holiday_template = holiday_impacts.get(series_name, {})
             holiday_coeff_template = holiday_coefficients.get(series_name, {})
 
@@ -374,10 +555,13 @@ class TimeSeriesFeatureDetector:
             self.anomalies[series_name] = anomaly_entries
             self.holiday_dates[series_name] = [pd.Timestamp(x) for x in holidays_list]
             self.holiday_impacts[series_name] = holiday_template
+            self.holiday_splash_impacts[series_name] = holiday_splash_impacts.get(series_name, {})
             self.holiday_coefficients[series_name] = holiday_coeff_template
             self.seasonality_components[series_name] = seasonality_component[series_name].to_numpy(copy=True)
             self.seasonality_strength[series_name] = seasonality_strength.get(series_name, 0.0)
             self.noise_changepoints[series_name] = []
+            
+            # Calculate noise metrics
             seasonality_series = seasonality_component[series_name]
             noise_series = noise_component[series_name]
             signal_series = trend_component[series_name] + level_shift_component[series_name]
@@ -389,7 +573,7 @@ class TimeSeriesFeatureDetector:
             series_scale = float(np.nanstd(original_series)) or 1e-9
             self.series_scales[series_name] = series_scale
 
-            # Normalize noise level against original series magnitude to estimate comparability with synthetic labels
+            # Normalize noise level against original series magnitude
             normalized_noise = numerator / (series_scale or 1e-9)
             self.series_noise_levels[series_name] = normalized_noise
 
@@ -414,6 +598,7 @@ class TimeSeriesFeatureDetector:
                     'holiday_impacts': holiday_template,
                     'holiday_coefficients': holiday_coeff_template,
                     'holiday_dates': self.holiday_dates[series_name],
+                    'holiday_splash_impacts': self.holiday_splash_impacts.get(series_name, {}),
                     'seasonality_changepoints': [],
                     'noise_changepoints': [],
                 },
@@ -421,8 +606,9 @@ class TimeSeriesFeatureDetector:
             )
             self.template['series'][series_name] = template_entry
 
-        if mark_shared and len(df_numeric.columns) > 0:
-            reference_series = df_numeric.columns[0]
+        # Handle shared events
+        if mark_shared and len(self.df_original.columns) > 0:
+            reference_series = self.df_original.columns[0]
             shared_anomalies = {
                 self._date_to_day_offset(entry[0]) for entry in self.anomalies.get(reference_series, [])
             }
@@ -437,9 +623,8 @@ class TimeSeriesFeatureDetector:
             self.shared_events = {'anomalies': [], 'level_shifts': []}
         self.template['shared_events'] = copy.deepcopy(self.shared_events)
 
+        # Validate reconstruction
         self._reconstruct_from_template()
-
-        return self
 
     def _compute_rough_seasonality(self, df):
         model = DatepartRegressionTransformer(**self.rough_seasonality_params)
@@ -448,7 +633,12 @@ class TimeSeriesFeatureDetector:
         return residual, seasonal, model
 
     def _detect_holidays(self, residual_df):
-        """Detect holidays using HolidayDetector."""
+        """
+        Detect holidays using HolidayDetector.
+        
+        Returns both core holiday dates and splash/bridge impacts in separate structures
+        to align with synthetic generator output.
+        """
         self.holiday_detector = HolidayDetector(**self.holiday_params)
         holiday_regressors = pd.DataFrame(index=residual_df.index)
         try:
@@ -465,6 +655,7 @@ class TimeSeriesFeatureDetector:
             holiday_regressors = pd.DataFrame(index=residual_df.index)
         
         holiday_dates = {}
+        holiday_splash_dates = {}  # For storing splash/bridge days separately
         
         # Handle both multivariate and univariate outputs
         if self.detection_mode == 'univariate':
@@ -476,17 +667,20 @@ class TimeSeriesFeatureDetector:
                 # In univariate mode, all series share the same holidays
                 for col in residual_df.columns:
                     holiday_dates[col] = holiday_list
+                    holiday_splash_dates[col] = []  # Will be populated during final seasonality fit
             else:
                 for col in residual_df.columns:
                     holiday_dates[col] = []
+                    holiday_splash_dates[col] = []
         else:
             # Multivariate mode: each series has its own holiday flags
             for col in residual_df.columns:
                 series_flags = holiday_flags[col] if col in holiday_flags else pd.Series(0, index=residual_df.index)
                 flagged = series_flags[series_flags > 0].index
                 holiday_dates[col] = [pd.Timestamp(ix) for ix in flagged]
+                holiday_splash_dates[col] = []  # Will be populated during final seasonality fit
         
-        return holiday_dates, holiday_regressors
+        return holiday_dates, holiday_splash_dates, holiday_regressors
 
     def _detect_anomalies(self, residual_df):
         """Detect anomalies using AnomalyRemoval."""
@@ -559,17 +753,97 @@ class TimeSeriesFeatureDetector:
     @staticmethod
     def _classify_anomaly_type(series, date):
         """
-        Classify anomaly type based on pattern.
+        Classify anomaly type based on pattern around the anomaly date.
+        TODO: Move this to AnomalyRemoval/AnomalyDetector and utilize anomaly scores properly.
         
-        Currently returns 'point_outlier' for all detected anomalies.
-        Future enhancement: implement detection of decay, ramp, etc.
+        Detects:
+        - point_outlier: Single point spike
+        - impulse_decay: Spike followed by exponential decay
+        - linear_decay: Spike followed by linear decay
+        - noisy_burst: Multiple consecutive outliers
+        - transient_change: Temporary level shift
+        
+        Parameters
+        ----------
+        series : pd.Series
+            The time series containing the anomaly
+        date : pd.Timestamp or similar
+            The date of the detected anomaly
+            
+        Returns
+        -------
+        str
+            Anomaly type classification
         """
-        # TODO: Implement proper decay/ramp detection
-        # For now, all anomalies are classified as point_outlier
-        # This matches the synthetic data generation patterns
+        try:
+            idx = series.index.get_loc(date)
+        except KeyError:
+            return 'point_outlier'
+        
+        # Get baseline (median before anomaly)
+        lookback = 14
+        start_idx = max(0, idx - lookback)
+        baseline_window = series.iloc[start_idx:idx]
+        if baseline_window.empty:
+            return 'point_outlier'
+        baseline = float(np.nanmedian(baseline_window))
+        
+        # Get anomaly magnitude
+        anomaly_value = float(series.iloc[idx])
+        anomaly_mag = abs(anomaly_value - baseline)
+        if anomaly_mag < 1e-9:
+            return 'point_outlier'
+        
+        # Check post-anomaly pattern
+        lookahead = 7
+        end_idx = min(len(series), idx + lookahead + 1)
+        post_window = series.iloc[idx+1:end_idx]
+        
+        if post_window.empty or len(post_window) < 2:
+            return 'point_outlier'
+        
+        # Analyze post-anomaly behavior
+        post_values = post_window.to_numpy(dtype=float)
+        post_deviations = np.abs(post_values - baseline)
+        
+        # Check for noisy burst (multiple consecutive outliers)
+        n_outliers = np.sum(post_deviations > anomaly_mag * 0.5)
+        if n_outliers >= 2:
+            return 'noisy_burst'
+        
+        # Check for decay patterns
+        if len(post_deviations) >= 3:
+            # Linear decay: check if deviations decrease linearly
+            first_dev = post_deviations[0]
+            last_dev = post_deviations[-1]
+            
+            # If first deviation is significant and it decreases
+            if first_dev > anomaly_mag * 0.3:
+                # Check for exponential decay (rapid drop)
+                mid_dev = post_deviations[len(post_deviations)//2]
+                if mid_dev < first_dev * 0.5 and last_dev < mid_dev * 0.5:
+                    return 'impulse_decay'
+                
+                # Check for linear decay (gradual drop)
+                if last_dev < first_dev * 0.5:
+                    return 'linear_decay'
+                
+                # Check for transient change (sustained then return)
+                if np.mean(post_deviations[:3]) > anomaly_mag * 0.3 and last_dev < anomaly_mag * 0.2:
+                    return 'transient_change'
+        
+        # Default: point outlier
         return 'point_outlier'
 
     def _fit_final_seasonality(self, df, holiday_regressors=None):
+        """
+        Fit final seasonality model and decompose holiday effects.
+        
+        Returns
+        -------
+        tuple
+            (residual, seasonal_component, strength, model, holiday_component, holiday_coefficients, holiday_splash_impacts)
+        """
         regressor = None
         if holiday_regressors is not None and not holiday_regressors.empty:
             regressor = holiday_regressors.reindex(df.index).fillna(0.0)
@@ -589,6 +863,7 @@ class TimeSeriesFeatureDetector:
         holiday_component = pd.DataFrame(0.0, index=df.index, columns=df.columns)
         seasonal_component = seasonal_total
         holiday_coefficients = {col: {} for col in df.columns}
+        holiday_splash_impacts = {col: {} for col in df.columns}
 
         if regressor is not None:
             zero_regressor = regressor.copy()
@@ -598,6 +873,18 @@ class TimeSeriesFeatureDetector:
                 baseline_pred = model.inverse_transform(zeros_df, regressor=zero_regressor)
                 seasonal_component = baseline_pred
                 holiday_component = seasonal_total - seasonal_component
+                
+                # Detect splash/bridge days: days with holiday impact but not in core holiday list
+                # Splash days are typically adjacent to core holidays with reduced impact
+                for col in df.columns:
+                    holiday_series = holiday_component[col]
+                    significant_impacts = holiday_series[abs(holiday_series) > 1e-9]
+                    for date, impact in significant_impacts.items():
+                        # This will be refined by checking against core holiday dates
+                        # For now, store all non-zero holiday impacts
+                        # The core vs. splash distinction will be made during template building
+                        holiday_splash_impacts[col][pd.Timestamp(date)] = float(impact)
+                        
             except Exception as exc:
                 warnings.warn(
                     f"Failed to isolate holiday contribution during seasonality fit: {exc}",
@@ -608,7 +895,7 @@ class TimeSeriesFeatureDetector:
             holiday_coefficients = self._solve_holiday_coefficients(regressor, holiday_component)
 
         strength = self._compute_seasonality_strength(df, residual, seasonal_component)
-        return residual, seasonal_component, strength, model, holiday_component, holiday_coefficients
+        return residual, seasonal_component, strength, model, holiday_component, holiday_coefficients, holiday_splash_impacts
 
     def _compute_seasonality_strength(self, original_df, residual_df, seasonal_df):
         strength = {}
@@ -740,6 +1027,29 @@ class TimeSeriesFeatureDetector:
                 converted[name] = float(value * scale)
             rescaled[series_name] = converted
         return rescaled
+    
+    def _extract_splash_impacts(self, holiday_splash_impacts_scaled, holiday_dates):
+        """
+        Extract splash/bridge day impacts by filtering out core holiday dates.
+        TODO: move this to HolidayDetector and use full functionality there.
+        
+        Splash days are days with holiday impacts that are NOT in the core holiday list.
+        This aligns with the synthetic generator's distinction between direct holidays
+        and their splash/bridge effects.
+        """
+        splash_impacts = {}
+        for series_name, impacts_dict in holiday_splash_impacts_scaled.items():
+            core_dates = set(holiday_dates.get(series_name, []))
+            splash_dict = {}
+            for date, impact in impacts_dict.items():
+                date_ts = pd.Timestamp(date)
+                # If this date has an impact but is NOT a core holiday, it's a splash day
+                if date_ts not in core_dates and abs(impact) > 1e-9:
+                    # Rescale to original scale
+                    scale = float(self.scale_series.get(series_name, 1.0))
+                    splash_dict[date_ts] = float(impact * scale)
+            splash_impacts[series_name] = splash_dict
+        return splash_impacts
 
     def _date_to_day_offset(self, date):
         base = self.date_index[0]
@@ -1124,10 +1434,27 @@ class TimeSeriesFeatureDetector:
         return serialized
 
     def _build_series_template(self, series_name, components, labels, metadata):
+        """
+        Build a series template that matches SyntheticDailyGenerator template structure.
+        
+        The template structure is designed to be compatible with both:
+        - SyntheticDailyGenerator.render_template() for reconstruction
+        - FeatureDetectionLoss for evaluation
+        """
         component_dict = {
             name: {'values': values.tolist()}
             for name, values in components.items()
         }
+        
+        # Extract seasonality profile for better alignment with synthetic generator
+        seasonality_profile = metadata.get('seasonality_profiles', {})
+        if not seasonality_profile:
+            seasonality_profile = {
+                'combined': metadata.get('seasonality_strength', 0.0),
+                'weekly': 0.0,
+                'yearly': 0.0,
+            }
+        
         label_dict = {
             'trend_changepoints': labels.get('trend_changepoints', []),
             'level_shifts': labels.get('level_shifts', []),
@@ -1135,19 +1462,23 @@ class TimeSeriesFeatureDetector:
             'holiday_impacts': self._serialize_datetime_mapping(labels.get('holiday_impacts', {})),
             'holiday_coefficients': labels.get('holiday_coefficients', {}),
             'holiday_dates': [pd.Timestamp(x).isoformat() for x in labels.get('holiday_dates', [])],
+            'holiday_splash_impacts': self._serialize_datetime_mapping(labels.get('holiday_splash_impacts', {})),
             'seasonality_changepoints': labels.get('seasonality_changepoints', []),
             'noise_changepoints': labels.get('noise_changepoints', []),
         }
+        
         return {
             'series_name': series_name,
             'series_type': 'detected',
-            'scale_factor': 1.0,
+            'scale_factor': metadata.get('series_scale', 1.0),
             'combination': 'additive',
             'components': component_dict,
             'labels': label_dict,
             'metadata': {
-                'seasonality_strengths': {'combined': metadata.get('seasonality_strength', 0.0)},
+                'seasonality_strengths': seasonality_profile,
                 'noise_to_signal_ratio': metadata.get('noise_to_signal_ratio'),
+                'noise_level': metadata.get('noise_level', 0.0),
+                'series_scale': metadata.get('series_scale', 1.0),
             },
         }
 
@@ -1236,6 +1567,15 @@ class TimeSeriesFeatureDetector:
         if self.template is None:
             return None
         return copy.deepcopy(self.template) if deep else self.template
+    
+    @classmethod
+    def render_template(cls, template, return_components=False):
+        """
+        Render a feature detection template back into time series data.
+        """
+        # Delegate to SyntheticDailyGenerator's render_template
+        # This ensures consistent rendering logic
+        return SyntheticDailyGenerator.render_template(template, return_components=return_components)
 
     def summary(self):
         if self.df_original is None:
