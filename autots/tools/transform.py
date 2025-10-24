@@ -5429,9 +5429,11 @@ class BKBandpassFilter(EmptyTransformer):
             return (df - cycles).ffill().bfill()
         else:
             # so the output is actually centered but using the tail axis for forecasting effectiveness
-            return pd.DataFrame(
+            # reindex to maintain same shape as input
+            cycles_df = pd.DataFrame(
                 cycles, columns=df.columns, index=df.index[-cycles.shape[0] :]
             )
+            return cycles_df.reindex(df.index, method='bfill')
 
     def transform(self, df):
         """Return changed data.

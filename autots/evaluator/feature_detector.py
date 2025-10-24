@@ -10,58 +10,117 @@ import pandas as pd
 import random
 import copy
 import warnings
+from datetime import datetime
 from autots.tools.transform import (
     DatepartRegressionTransformer,
     AnomalyRemoval,
     LevelShiftMagic,
+    GeneralTransformer,
 )
 from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.tools.changepoints import ChangepointDetector
-from autots.tools.impute import FillNA
 from autots.tools.anomaly_utils import anomaly_new_params
+from autots.tools.plotting import plot_feature_panels, HAS_MATPLOTLIB
 from sklearn.preprocessing import StandardScaler
 
-try:
-    import matplotlib.pyplot as plt
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
 
 
 class TimeSeriesFeatureDetector:
-    """
-    Detect time series features from unlabeled data.
-    
-    Identifies:
-    - Trend changepoints
-    - Level shifts
-    - Seasonality patterns
-    - Holiday effects
-    - Anomalies
-    
-    Can be optimized against synthetic labeled data to improve detection accuracy.
-    
-    Parameters
-    ----------
-    seasonality_params : dict
-        Parameters for DatepartRegressionTransformer
-    holiday_params : dict
-        Parameters for HolidayDetector
-    anomaly_params : dict
-        Parameters for AnomalyRemoval
-    changepoint_params : dict
-        Parameters for ChangePointDetector
-    level_shift_params : dict
-        Parameters for LevelShiftMagic
-    standardize : bool
-        Whether to standardize data before detection (default True)
-    smoothing_window : int
-        Window size for smoothing before changepoint detection (default None)
-    refine_seasonality : bool
-        Whether to refine seasonality after anomaly removal (default True)
-    """
-    
-    def _sanitize_holiday_params(self, holiday_params):
+    """Comprehensive feature detection pipeline for univariate time series."""
+
+    def __init__(
+        self,
+        seasonality_params=None,
+        holiday_params=None,
+        anomaly_params=None,
+        changepoint_params=None,
+        level_shift_params=None,
+        level_shift_validation=None,
+        general_transformer_params=None,
+        smoothing_window=None,
+        refine_seasonality=True,
+        standardize=True,
+    ):
+        self.rough_seasonality_params = {
+            'regression_model': {
+                'model': 'ElasticNet',
+                'model_params': {'l1_ratio': 0.2},
+            },
+            'datepart_method': 'simple_3',
+            'polynomial_degree': None,
+            'holiday_countries_used': False,
+        }
+        self.seasonality_params = seasonality_params or {
+            'regression_model': {
+                'model': 'BayesianMultiOutputRegression',
+                'model_params': {},
+            },
+            'datepart_method': 'common_fourier',
+            'polynomial_degree': None,
+            'holiday_countries_used': False,
+        }
+        self.holiday_params = self._sanitize_holiday_params(holiday_params)
+        self.anomaly_params = anomaly_params or {
+            'output': 'multivariate',
+            'method': 'zscore',
+            'method_params': {'distribution': 'norm', 'alpha': 0.01},
+            'transform_dict': None,
+            'fillna': 'ffill',
+        }
+        self.changepoint_params = changepoint_params or {
+            'method': 'pelt',
+            'method_params': {'penalty': 8, 'loss_function': 'l2'},
+            'aggregate_method': 'individual',
+            'min_segment_length': 14,
+        }
+        self.level_shift_params = level_shift_params or {
+            'window_size': 90,
+            'alpha': 2.5,
+            'grouping_forward_limit': 3,
+            'max_level_shifts': 20,
+            'alignment': 'average',
+        }
+        self.level_shift_validation = level_shift_validation or {
+            'window': 14,
+            'pad': 2,
+            'relative_threshold': 0.1,
+            'absolute_threshold': 0.5,
+        }
+        self.general_transformer_params = general_transformer_params
+        self.smoothing_window = smoothing_window
+        self.refine_seasonality = refine_seasonality
+        self.standardize = standardize
+
+        # Model artifacts
+        self.scaler = None
+        self.scale_series = None
+        self.mean_series = None
+        self.rough_seasonality_model = None
+        self.seasonality_model = None
+        self.holiday_detector = None
+        self.anomaly_detector = None
+        self.level_shift_detector = None
+        self.changepoint_detector = None
+
+        # Stored data and results
+        self.df_original = None
+        self.date_index = None
+        self.template = None
+        self.components = {}
+
+        self.trend_changepoints = {}
+        self.trend_slopes = {}
+        self.level_shifts = {}
+        self.anomalies = {}
+        self.holiday_impacts = {}
+        self.holiday_dates = {}
+        self.seasonality_components = {}
+        self.seasonality_strength = {}
+        self.noise_changepoints = {}
+        self.noise_to_signal_ratios = {}
+
+    @staticmethod
+    def _sanitize_holiday_params(holiday_params):
         """Return holiday detector parameters filtered to supported keys."""
         default_params = {
             'anomaly_detector_params': {},
@@ -101,648 +160,561 @@ class TimeSeriesFeatureDetector:
 
         return sanitized
 
-    def __init__(
-        self,
-        seasonality_params=None,
-        holiday_params=None,
-        anomaly_params=None,
-        changepoint_params=None,
-        level_shift_params=None,
-        standardize=True,
-        smoothing_window=None,
-        refine_seasonality=True,
-    ):
-        # Default parameters
-        self.seasonality_params = seasonality_params or {
-            'regression_model': {
-                'model': 'DecisionTree',
-                'model_params': {'max_depth': 5, 'min_samples_split': 2}
+    def fit(self, df):
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("Input data must be a pandas DataFrame.")
+
+        df_numeric = df.astype(float).copy().sort_index()
+        self.df_original = df_numeric
+        self.date_index = df_numeric.index
+
+        if self.standardize:
+            self.scaler = StandardScaler()
+            scaled = self.scaler.fit_transform(df_numeric)
+            df_work = pd.DataFrame(scaled, index=self.date_index, columns=df_numeric.columns)
+            self.scale_series = pd.Series(self.scaler.scale_, index=df_numeric.columns)
+            self.mean_series = pd.Series(self.scaler.mean_, index=df_numeric.columns)
+        else:
+            self.scaler = None
+            df_work = df_numeric.copy()
+            self.scale_series = pd.Series(1.0, index=df_numeric.columns)
+            self.mean_series = pd.Series(0.0, index=df_numeric.columns)
+
+        # Reset result containers
+        self.template = {
+            'meta': {
+                'start_date': self.date_index[0].isoformat(),
+                'end_date': self.date_index[-1].isoformat(),
+                'n_days': int(len(self.date_index)),
+                'n_series': int(df_numeric.shape[1]),
+                'frequency': pd.infer_freq(self.date_index) or 'infer',
             },
-            'datepart_method': 'common_fourier',
-            'polynomial_degree': None,
-            'holiday_countries_used': False,
+            'series': {},
         }
-        
-        self.holiday_params = self._sanitize_holiday_params(holiday_params)
-        
-        self.anomaly_params = anomaly_params or {
-            'output': 'multivariate',
-            'method': 'zscore',
-            'method_params': {'distribution': 'norm', 'alpha': 0.05},
-            'transform_dict': None,
-            'fillna': 'ffill',
-        }
-        
-        self.changepoint_params = changepoint_params or {
-            'method': 'pelt',
-            'method_params': {'penalty': 10},
-            'min_segment_length': 7,
-        }
-        
-        self.level_shift_params = level_shift_params or {
-            'window_size': 90,
-            'alpha': 2.5,
-            'grouping_forward_limit': 3,
-            'max_level_shifts': 20,
-        }
-        
-        self.standardize = standardize
-        self.smoothing_window = smoothing_window
-        self.refine_seasonality = refine_seasonality
-        
-        # Storage for detected features
+        self.components = {}
         self.trend_changepoints = {}
+        self.trend_slopes = {}
         self.level_shifts = {}
         self.anomalies = {}
         self.holiday_impacts = {}
         self.holiday_dates = {}
         self.seasonality_components = {}
         self.seasonality_strength = {}
-        
-        # Models and transformers
-        self.scaler = None
-        self.seasonality_model = None
-        self.refined_seasonality_model = None
-        self.holiday_detector = None
-        self.anomaly_detector = None
-        self.changepoint_detector = None
-        self.level_shift_detector = None
-        
-    def fit(self, df):
-        """
-        Detect all features in the time series.
-        
-        Parameters
-        ----------
-        df : pd.DataFrame
-            Time series data with DatetimeIndex
-            
-        Returns
-        -------
-        self
-        """
-        self.df_original = df.copy()
-        self.date_index = df.index
-        
-        # Step 1: Standardization (optional)
-        if self.standardize:
-            self.scaler = StandardScaler()
-            df_work = pd.DataFrame(
-                self.scaler.fit_transform(df),
-                index=df.index,
-                columns=df.columns
-            )
-        else:
-            df_work = df.copy()
-            
-        # Step 2: Detect and remove seasonality
-        self._detect_seasonality(df_work)
-        df_deseasonalized = self.seasonality_model.transform(df_work)
-        
-        # Step 3: Detect anomalies on deseasonalized data
-        self._detect_anomalies(df_deseasonalized)
-        df_no_anomalies = self.anomaly_detector.transform(df_deseasonalized)
-        
-        # Step 4: Optionally refine seasonality without anomalies
-        if self.refine_seasonality:
-            self._refine_seasonality(df_no_anomalies)
-            df_deseasonalized_refined = self.refined_seasonality_model.transform(df_work)
-        else:
-            df_deseasonalized_refined = df_deseasonalized
-            
-        # Step 5: Detect holidays (on deseasonalized, anomaly-removed data)
-        self._detect_holidays(df_deseasonalized_refined)
-        
-        # Step 6: Smooth data for changepoint detection (optional)
-        if self.smoothing_window is not None and self.smoothing_window > 1:
-            df_for_changepoints = df_deseasonalized_refined.rolling(
-                window=self.smoothing_window, 
-                center=True, 
-                min_periods=1
+        self.noise_changepoints = {}
+        self.noise_to_signal_ratios = {}
+
+        rough_residual, rough_seasonality, self.rough_seasonality_model = self._compute_rough_seasonality(df_work)
+        holiday_dates = self._detect_holidays(rough_residual)
+        residual_without_anomalies, anomaly_records = self._detect_anomalies(rough_residual)
+        df_without_anomalies = residual_without_anomalies + rough_seasonality
+        final_residual, final_seasonality, seasonality_strength, self.seasonality_model = self._fit_final_seasonality(df_without_anomalies)
+        holiday_component_scaled, holiday_impacts = self._estimate_holiday_impacts(final_residual, holiday_dates)
+        residual_after_holidays = final_residual - holiday_component_scaled
+
+        residual_for_trend = residual_after_holidays.copy()
+        self.general_transformer = None
+        if self.general_transformer_params:
+            self.general_transformer = GeneralTransformer(**self.general_transformer_params)
+            residual_for_trend = self.general_transformer.fit_transform(residual_after_holidays)
+        if self.smoothing_window and self.smoothing_window > 1:
+            residual_for_trend = residual_for_trend.rolling(
+                window=int(self.smoothing_window),
+                center=True,
+                min_periods=1,
             ).mean()
-        else:
-            df_for_changepoints = df_deseasonalized_refined
-            
-        # Step 7: Detect level shifts
-        self._detect_level_shifts(df_for_changepoints)
-        
-        # Step 8: Detect trend changepoints
-        self._detect_changepoints(df_for_changepoints)
-        
+
+        level_shift_component_scaled, level_shift_candidates = self._detect_level_shifts(residual_for_trend)
+        level_shift_component_valid_scaled, validated_level_shifts = self._validate_level_shifts(
+            residual_for_trend, level_shift_component_scaled, level_shift_candidates
+        )
+
+        trend_input = residual_for_trend - level_shift_component_valid_scaled
+        changepoints, trend_component_scaled = self._detect_trend_changepoints(trend_input)
+        slope_info = self._compute_trend_slopes(trend_component_scaled, changepoints)
+
+        noise_component_scaled = trend_input - trend_component_scaled
+        anomaly_component_scaled = df_work - df_without_anomalies
+
+        trend_component = self._convert_to_original_scale(trend_component_scaled, include_mean=True)
+        level_shift_component = self._convert_to_original_scale(level_shift_component_valid_scaled)
+        seasonality_component = self._convert_to_original_scale(final_seasonality)
+        holiday_component = self._convert_to_original_scale(holiday_component_scaled)
+        noise_component = self._convert_to_original_scale(noise_component_scaled)
+        anomaly_component = self._convert_to_original_scale(anomaly_component_scaled)
+
+        holiday_impacts = self._rescale_holiday_impacts(holiday_impacts)
+        validated_level_shifts = self._rescale_level_shifts(validated_level_shifts)
+        slope_info = self._rescale_slope_info(slope_info)
+        anomaly_records = self._rescale_anomalies(anomaly_records)
+
+        for series_name in df_numeric.columns:
+            components_dict = {
+                'trend': trend_component[series_name].to_numpy(copy=True),
+                'level_shift': level_shift_component[series_name].to_numpy(copy=True),
+                'seasonality': seasonality_component[series_name].to_numpy(copy=True),
+                'holidays': holiday_component[series_name].to_numpy(copy=True),
+                'anomalies': anomaly_component[series_name].to_numpy(copy=True),
+                'noise': noise_component[series_name].to_numpy(copy=True),
+            }
+            self.components[series_name] = components_dict
+
+            trend_cp_entries, trend_cp_template = self._build_trend_label_entries(series_name, changepoints, slope_info)
+            level_shift_entries, level_shift_template = self._build_level_shift_entries(series_name, validated_level_shifts)
+            anomaly_entries, anomaly_template = self._build_anomaly_entries(series_name, anomaly_records)
+            holidays_list = holiday_dates.get(series_name, [])
+            holiday_template = holiday_impacts.get(series_name, {})
+
+            self.trend_changepoints[series_name] = trend_cp_entries
+            self.trend_slopes[series_name] = slope_info.get(series_name, [])
+            self.level_shifts[series_name] = level_shift_entries
+            self.anomalies[series_name] = anomaly_entries
+            self.holiday_dates[series_name] = [pd.Timestamp(x) for x in holidays_list]
+            self.holiday_impacts[series_name] = holiday_template
+            self.seasonality_components[series_name] = seasonality_component[series_name].to_numpy(copy=True)
+            self.seasonality_strength[series_name] = seasonality_strength.get(series_name, 0.0)
+            self.noise_changepoints[series_name] = []
+
+            noise_series = noise_component[series_name]
+            signal_series = trend_component[series_name] + level_shift_component[series_name]
+            numerator = float(np.nanstd(noise_series))
+            denominator = float(np.nanstd(signal_series)) or 1e-9
+            self.noise_to_signal_ratios[series_name] = numerator / denominator
+
+            metadata = {
+                'seasonality_strength': self.seasonality_strength[series_name],
+                'noise_to_signal_ratio': self.noise_to_signal_ratios[series_name],
+            }
+            template_entry = self._build_series_template(
+                series_name,
+                components_dict,
+                {
+                    'trend_changepoints': trend_cp_template,
+                    'level_shifts': level_shift_template,
+                    'anomalies': anomaly_template,
+                    'holiday_impacts': holiday_template,
+                    'holiday_dates': self.holiday_dates[series_name],
+                    'seasonality_changepoints': [],
+                    'noise_changepoints': [],
+                },
+                metadata,
+            )
+            self.template['series'][series_name] = template_entry
+
         return self
-    
-    def _detect_seasonality(self, df):
-        """Detect and model seasonality."""
-        self.seasonality_model = DatepartRegressionTransformer(**self.seasonality_params)
-        self.seasonality_model.fit(df)
-        
-        # Get the deseasonalized (residual) data
-        df_deseasonalized = self.seasonality_model.transform(df)
-        
-        # Store seasonality strength using multiple metrics
-        for col in df.columns:
-            # Get predictions (seasonal component)
-            X_input = (
-                self.seasonality_model.X.fillna(0) if isinstance(self.seasonality_model.X, pd.DataFrame) 
-                else np.nan_to_num(self.seasonality_model.X)
-            )
-            seasonal_pred = self.seasonality_model.model.predict(X_input)
-            
-            # Handle multioutput vs single output
-            if seasonal_pred.ndim > 1 and seasonal_pred.shape[1] > 1:
-                col_idx = df.columns.get_loc(col)
-                seasonal_component = seasonal_pred[:, col_idx]
-            elif seasonal_pred.ndim > 1:
-                seasonal_component = seasonal_pred.ravel()
-            else:
-                seasonal_component = seasonal_pred
-            
-            # Ensure correct length
-            if len(seasonal_component) != len(df):
-                # This can happen with partial_nan_rows mode
-                # Use the deseasonalized data to calculate residuals
-                seasonal_component = (df[col].values - df_deseasonalized[col].values)
-            
-            # Get actual values and residuals
-            y_true = df[col].values
-            residuals = df_deseasonalized[col].values
-            
-            # Remove NaN values for proper calculation
-            valid_mask = ~(np.isnan(y_true) | np.isnan(residuals) | np.isnan(seasonal_component))
-            if not valid_mask.any():
-                self.seasonality_strength[col] = 0.0
-                self.seasonality_components[col] = np.zeros(len(df))
-                continue
-            
-            y_true_clean = y_true[valid_mask]
-            residuals_clean = residuals[valid_mask]
-            seasonal_clean = seasonal_component[valid_mask]
-            
-            # Metric 1: R-squared (coefficient of determination)
-            # R² = 1 - (SS_res / SS_tot)
-            # Measures how much variance is explained by the seasonal model
-            ss_tot = np.sum((y_true_clean - np.mean(y_true_clean)) ** 2)
-            ss_res = np.sum(residuals_clean ** 2)
-            
-            if ss_tot > 0:
-                r_squared = 1 - (ss_res / ss_tot)
-                # Clip to [0, 1] range (can be negative if model is worse than mean)
-                r_squared = max(0.0, min(1.0, r_squared))
-            else:
-                r_squared = 0.0
-            
-            # Metric 2: Correlation-based strength
-            # Measures how well the seasonal component correlates with original data
-            if len(seasonal_clean) > 1:
-                correlation = np.corrcoef(y_true_clean, seasonal_clean)[0, 1]
-                # Square correlation to get proportion of variance explained
-                correlation_strength = max(0.0, correlation ** 2)
-            else:
-                correlation_strength = 0.0
-            
-            # Metric 3: Variance ratio
-            # Compares variance of seasonal component to total variance
-            total_var = np.var(y_true_clean)
-            if total_var > 0:
-                seasonal_var = np.var(seasonal_clean)
-                variance_ratio = min(1.0, seasonal_var / total_var)
-            else:
-                variance_ratio = 0.0
-            
-            # Metric 4: Autocorrelation improvement
-            # Measures reduction in autocorrelation after deseasonalization
-            # Strong seasonality should reduce autocorrelation in residuals
-            acf_improvement = self._calculate_acf_improvement(y_true_clean, residuals_clean)
-            
-            # Metric 5: Periodicity strength
-            # Uses autocorrelation to detect if seasonal component has clear periodicity
-            periodicity_strength = self._calculate_periodicity_strength(seasonal_clean)
-            
-            # Combine metrics using a balanced approach
-            # Strategy: Use R² as the foundation, confirm/adjust with other metrics
-            
-            # Core strength from variance explained (most reliable metric)
-            core_strength = (
-                0.70 * r_squared +           # Primary: variance explained by model
-                0.30 * correlation_strength   # Confirmation: correlation with seasonal pattern
-            )
-            
-            # Adjustment factors based on pattern characteristics
-            # These should not dominate, but provide evidence for/against seasonality
-            
-            # Periodicity adjustment (0 to +0.2)
-            # Strong periodic patterns boost the score
-            periodicity_adj = 0.2 * periodicity_strength
-            
-            # ACF improvement adjustment (-0.2 to +0.1)
-            # Good ACF improvement = small boost
-            # Poor ACF improvement = stronger penalty (rejects random walks/trends)
-            if acf_improvement > 0.4:
-                acf_adj = 0.1 * acf_improvement
-            elif acf_improvement < 0.25:
-                # Penalize cases with poor ACF improvement more strongly
-                # This helps reject random walks which don't improve ACF
-                acf_adj = -0.2 * (1 - acf_improvement)
-            else:
-                # Moderate improvement, small positive adjustment
-                acf_adj = 0.05 * (acf_improvement - 0.2)
-            
-            # Variance ratio bonus (0 to +0.1)
-            # If seasonal component has substantial variance, small bonus
-            variance_bonus = 0.1 * variance_ratio
-            
-            # Combine all components
-            combined_strength = core_strength + periodicity_adj + acf_adj + variance_bonus
-            
-            # Final clipping to [0, 1] range
-            combined_strength = max(0.0, min(1.0, combined_strength))
-            
-            self.seasonality_strength[col] = combined_strength
-            self.seasonality_components[col] = seasonal_component
-    
-    def _calculate_acf_improvement(self, original, residuals, max_lag=30):
-        """
-        Calculate improvement in autocorrelation after deseasonalization.
-        
-        Returns a value in [0, 1] where higher means better improvement
-        (i.e., residuals have less autocorrelation than original).
-        """
-        if len(original) < max_lag + 1:
-            return 0.0
-        
+
+    def _compute_rough_seasonality(self, df):
+        model = DatepartRegressionTransformer(**self.rough_seasonality_params)
+        residual = model.fit_transform(df)
+        seasonal = df - residual
+        return residual, seasonal, model
+
+    def _detect_holidays(self, residual_df):
+        self.holiday_detector = HolidayDetector(**self.holiday_params)
         try:
-            # Calculate mean autocorrelation (excluding lag 0)
-            original_acf = self._calculate_acf(original, max_lag=max_lag)
-            residual_acf = self._calculate_acf(residuals, max_lag=max_lag)
-            
-            # Take mean absolute autocorrelation (excluding lag 0)
-            if len(original_acf) > 1 and len(residual_acf) > 1:
-                original_mean_acf = np.mean(np.abs(original_acf[1:]))
-                residual_mean_acf = np.mean(np.abs(residual_acf[1:]))
-                
-                # Calculate relative improvement
-                if original_mean_acf > 0:
-                    improvement = (original_mean_acf - residual_mean_acf) / original_mean_acf
-                    # Clip to reasonable range
-                    return max(0.0, min(1.0, improvement))
-            
-            return 0.0
+            self.holiday_detector.detect(residual_df)
+            holiday_flags = self.holiday_detector.dates_to_holidays(residual_df.index, style='series_flag')
         except Exception:
-            return 0.0
-    
-    def _calculate_acf(self, x, max_lag=30):
-        """
-        Calculate autocorrelation function up to max_lag.
-        
-        Returns array of autocorrelations for lags 0 to max_lag.
-        """
-        x = np.asarray(x)
-        x = x - np.mean(x)
-        
-        # Use numpy correlation for efficiency
-        c0 = np.dot(x, x) / len(x)
-        
-        if c0 == 0:
-            return np.zeros(max_lag + 1)
-        
-        acf = np.zeros(max_lag + 1)
-        acf[0] = 1.0
-        
-        for lag in range(1, min(max_lag + 1, len(x))):
-            c = np.dot(x[:-lag], x[lag:]) / len(x)
-            acf[lag] = c / c0
-        
-        return acf
-    
-    def _calculate_periodicity_strength(self, seasonal_component, common_periods=None):
-        """
-        Calculate how periodic/regular the seasonal component is.
-        
-        Uses autocorrelation to detect strong periodic patterns.
-        Returns value in [0, 1] where higher means more periodic.
-        """
-        if common_periods is None:
-            # Common periods for different time series frequencies
-            # For daily data: weekly (7), monthly (~30), quarterly (~90)
-            # For hourly: daily (24), weekly (168)
-            common_periods = [7, 14, 28, 30, 90, 365]
-        
-        if len(seasonal_component) < 14:
-            return 0.0
-        
-        try:
-            # Calculate autocorrelation
-            max_lag = min(365, len(seasonal_component) - 1)
-            acf = self._calculate_acf(seasonal_component, max_lag=max_lag)
-            
-            # Look for peaks at common periods
-            period_strength = 0.0
-            peaks_found = 0
-            
-            for period in common_periods:
-                if period < len(acf):
-                    # Check autocorrelation at this lag
-                    # Also check surrounding lags to account for slight misalignment
-                    window_start = max(1, period - 2)
-                    window_end = min(len(acf), period + 3)
-                    window_acf = acf[window_start:window_end]
-                    
-                    if len(window_acf) > 0:
-                        max_acf = np.max(np.abs(window_acf))
-                        period_strength += max_acf
-                        if max_acf > 0.3:  # Threshold for significant peak
-                            peaks_found += 1
-            
-            # Normalize by number of periods checked
-            if len(common_periods) > 0:
-                period_strength /= len(common_periods)
-            
-            # Bonus for finding multiple periods (indicates strong seasonality)
-            if peaks_found >= 2:
-                period_strength *= 1.2
-            
-            return min(1.0, period_strength)
-            
-        except Exception:
-            return 0.0
-    
-    def _calculate_stationarity_improvement(self, original, residuals):
-        """
-        Calculate improvement in stationarity after deseasonalization.
-        
-        Uses simple metrics:
-        - Reduction in trend strength (mean absolute difference)
-        - Reduction in variance of rolling mean
-        
-        Returns value in [0, 1] where higher means better stationarity improvement.
-        """
-        if len(original) < 30:
-            return 0.0
-        
-        try:
-            # Calculate trend strength using first-order differences
-            # More stationary series have differences closer to zero mean
-            original_diff = np.diff(original)
-            residual_diff = np.diff(residuals)
-            
-            # Measure 1: Variance of differences (should decrease for stationary)
-            original_diff_var = np.var(original_diff)
-            residual_diff_var = np.var(residual_diff)
-            
-            if original_diff_var > 0:
-                var_improvement = max(0, (original_diff_var - residual_diff_var) / original_diff_var)
-            else:
-                var_improvement = 0.0
-            
-            # Measure 2: Rolling mean stability (more stationary = more stable rolling mean)
-            window = min(30, len(original) // 10)
-            if window >= 3:
-                original_rolling_mean = pd.Series(original).rolling(window=window, center=True, min_periods=1).mean().values
-                residual_rolling_mean = pd.Series(residuals).rolling(window=window, center=True, min_periods=1).mean().values
-                
-                # Variance of rolling mean (should be lower for stationary)
-                original_rolling_var = np.var(original_rolling_mean)
-                residual_rolling_var = np.var(residual_rolling_mean)
-                
-                if original_rolling_var > 0:
-                    rolling_improvement = max(0, (original_rolling_var - residual_rolling_var) / original_rolling_var)
-                else:
-                    rolling_improvement = 0.0
-            else:
-                rolling_improvement = 0.0
-            
-            # Combine measures
-            stationarity_improvement = 0.5 * var_improvement + 0.5 * rolling_improvement
-            
-            return min(1.0, stationarity_improvement)
-            
-        except Exception:
-            return 0.0
-    
-    def _refine_seasonality(self, df_no_anomalies):
-        """Refine seasonality model after anomaly removal."""
-        self.refined_seasonality_model = DatepartRegressionTransformer(**self.seasonality_params)
-        self.refined_seasonality_model.fit(df_no_anomalies)
-    
-    def _detect_anomalies(self, df):
-        """Detect anomalies."""
+            holiday_flags = pd.DataFrame(0, index=residual_df.index, columns=residual_df.columns)
+        holiday_dates = {}
+        for col in residual_df.columns:
+            series_flags = holiday_flags[col] if col in holiday_flags else pd.Series(0, index=residual_df.index)
+            flagged = series_flags[series_flags > 0].index
+            holiday_dates[col] = [pd.Timestamp(ix) for ix in flagged]
+        return holiday_dates
+
+    def _detect_anomalies(self, residual_df):
         self.anomaly_detector = AnomalyRemoval(**self.anomaly_params)
-        self.anomaly_detector.fit(df)
-        
-        # Store anomalies per series
-        for col in df.columns:
-            anomaly_mask = self.anomaly_detector.anomalies[col] == -1
-            anomaly_dates = df.index[anomaly_mask].tolist()
-            
-            # Get magnitudes and types
-            anomalies_list = []
+        cleaned = self.anomaly_detector.fit_transform(residual_df)
+        anomalies = {}
+        for col in residual_df.columns:
+            mask = self.anomaly_detector.anomalies[col] == -1
+            if mask.sum() == 0:
+                anomalies[col] = []
+                continue
+            anomaly_dates = residual_df.index[mask].tolist()
+            records = []
             for date in anomaly_dates:
-                magnitude = df.loc[date, col]
-                score = self.anomaly_detector.scores.loc[date, col]
-                
-                # Determine type based on pattern
-                anomaly_type = self._classify_anomaly_type(df, col, date)
-                
-                anomalies_list.append({
-                    'date': date,
-                    'magnitude': magnitude,
+                magnitude = residual_df.at[date, col]
+                score = None
+                if hasattr(self.anomaly_detector, 'scores'):
+                    try:
+                        score = float(self.anomaly_detector.scores.loc[date, col])
+                    except Exception:
+                        score = None
+                anomaly_type = self._classify_anomaly_type(residual_df[col], date)
+                records.append({
+                    'date': pd.Timestamp(date),
+                    'magnitude': float(magnitude),
                     'score': score,
                     'type': anomaly_type,
                 })
-            
-            self.anomalies[col] = anomalies_list
-    
-    def _classify_anomaly_type(self, df, col, date):
-        """Classify anomaly type based on surrounding pattern."""
-        idx = df.index.get_loc(date)
-        
-        # Check for decay pattern (next few values trending back to normal)
-        if idx < len(df) - 3:
-            post_values = df[col].iloc[idx:idx+4].values
-            if len(post_values) >= 4:
-                # Simple decay detection: values monotonically approaching mean
-                mean_val = df[col].mean()
-                diffs_from_mean = np.abs(post_values - mean_val)
-                if np.all(np.diff(diffs_from_mean) < 0):
-                    return 'decay'
-        
-        # Check for ramp pattern
-        if idx > 2:
-            pre_values = df[col].iloc[idx-3:idx+1].values
-            if len(pre_values) >= 4:
-                # Check if ramping up to spike
-                if np.all(np.diff(pre_values) > 0):
-                    return 'ramp_up'
-                    
+            anomalies[col] = records
+        return cleaned, anomalies
+
+    @staticmethod
+    def _classify_anomaly_type(series, date):
+        idx = series.index.get_loc(date)
+        values = series.to_numpy(dtype=float)
+        if idx < len(values) - 4:
+            post = values[idx:idx + 4]
+            mean_val = np.nanmean(values)
+            diffs = np.abs(post - mean_val)
+            if np.all(np.diff(diffs) < 0):
+                return 'decay'
+        if idx >= 3:
+            pre = values[idx - 3:idx + 1]
+            if np.all(np.diff(pre) > 0):
+                return 'ramp_up'
         return 'spike'
-    
-    def _detect_holidays(self, df):
-        """Detect holiday effects."""
-        # HolidayDetector expects specific format
-        try:
-            self.holiday_detector = HolidayDetector(**self.holiday_params)
-            self.holiday_detector.detect(df)
-            
-            # Extract detected holidays
-            if hasattr(self.holiday_detector, 'dates_to_holidays'):
-                for col in df.columns:
-                    if col in self.holiday_detector.dates_to_holidays:
-                        self.holiday_dates[col] = list(
-                            self.holiday_detector.dates_to_holidays[col].keys()
-                        )
-                        self.holiday_impacts[col] = self.holiday_detector.dates_to_holidays[col]
-                    else:
-                        self.holiday_dates[col] = []
-                        self.holiday_impacts[col] = {}
-        except Exception as e:
-            # If holiday detection fails, continue without it
-            self.holiday_detector = None
-            for col in df.columns:
-                self.holiday_dates[col] = []
-                self.holiday_impacts[col] = {}
-    
-    def _detect_level_shifts(self, df):
-        """Detect level shifts."""
+
+    def _fit_final_seasonality(self, df):
+        model = DatepartRegressionTransformer(**self.seasonality_params)
+        residual = model.fit_transform(df)
+        seasonal = df - residual
+        strength = self._compute_seasonality_strength(df, residual, seasonal)
+        return residual, seasonal, strength, model
+
+    def _compute_seasonality_strength(self, original_df, residual_df, seasonal_df):
+        strength = {}
+        for col in original_df.columns:
+            y = original_df[col].to_numpy(dtype=float)
+            resid = residual_df[col].to_numpy(dtype=float)
+            seasonal = seasonal_df[col].to_numpy(dtype=float)
+            mask = ~(np.isnan(y) | np.isnan(resid) | np.isnan(seasonal))
+            if mask.sum() < 2:
+                strength[col] = 0.0
+                continue
+            y_clean = y[mask]
+            resid_clean = resid[mask]
+            seasonal_clean = seasonal[mask]
+            total_var = np.var(y_clean)
+            resid_var = np.var(resid_clean)
+            r_squared = 0.0 if total_var == 0 else max(0.0, min(1.0, 1 - resid_var / total_var))
+            if len(seasonal_clean) > 1:
+                corr = np.corrcoef(y_clean, seasonal_clean)[0, 1]
+                corr_strength = max(0.0, corr ** 2) if np.isfinite(corr) else 0.0
+            else:
+                corr_strength = 0.0
+            variance_ratio = 0.0 if total_var == 0 else min(1.0, np.var(seasonal_clean) / total_var)
+            combined = 0.6 * r_squared + 0.3 * corr_strength + 0.1 * variance_ratio
+            strength[col] = max(0.0, min(1.0, combined))
+        return strength
+
+    def _estimate_holiday_impacts(self, residual_df, holiday_dates):
+        holiday_component = pd.DataFrame(0.0, index=residual_df.index, columns=residual_df.columns)
+        holiday_impacts = {}
+        for col in residual_df.columns:
+            impacts = {}
+            for date in holiday_dates.get(col, []):
+                if date in residual_df.index:
+                    value = residual_df.at[date, col]
+                    holiday_component.at[date, col] = value
+                    impacts[pd.Timestamp(date)] = float(value)
+            holiday_impacts[col] = impacts
+        return holiday_component, holiday_impacts
+
+    def _detect_level_shifts(self, residual_df):
         self.level_shift_detector = LevelShiftMagic(**self.level_shift_params)
-        self.level_shift_detector.fit(df)
-        
-        # Extract level shift information
-        # LevelShiftMagic stores cumulative shifts in self.lvlshft (DataFrame)
-        # We need to find where the values change to identify shift dates
-        if hasattr(self.level_shift_detector, 'lvlshft'):
-            for col in df.columns:
-                series_shifts = []
-                lvlshft_series = self.level_shift_detector.lvlshft[col]
-                
-                # Find where the shift values change (indicating a new level shift)
-                # Use diff() to find changes, and filter out tiny floating point differences
-                shifts = lvlshft_series.diff().abs()
-                shift_threshold = 0.01  # Threshold for detecting meaningful changes
-                
-                shift_dates = shifts[shifts > shift_threshold].index.tolist()
-                shift_magnitudes = lvlshft_series.diff()[shifts > shift_threshold].tolist()
-                
-                for date, mag in zip(shift_dates, shift_magnitudes):
-                    series_shifts.append({
-                        'date': date,
-                        'magnitude': mag
-                    })
-                
-                self.level_shifts[col] = series_shifts
-        else:
-            for col in df.columns:
-                self.level_shifts[col] = []
-    
-    def _detect_changepoints(self, df):
-        """Detect trend changepoints."""
-        self.changepoint_detector = ChangePointDetector(**self.changepoint_params)
-        self.changepoint_detector.detect(df)
+        self.level_shift_detector.fit(residual_df)
+        lvlshft = self.level_shift_detector.lvlshft.reindex(residual_df.index).fillna(0.0)
+        diff = lvlshft.diff().fillna(0.0)
+        candidates = {}
+        for col in residual_df.columns:
+            col_diff = diff[col]
+            entries = []
+            for date, magnitude in col_diff[col_diff != 0].items():
+                entries.append({'date': pd.Timestamp(date), 'magnitude': float(magnitude)})
+            candidates[col] = entries
+        return lvlshft, candidates
 
-        raw_changepoints = getattr(self.changepoint_detector, 'changepoints_', None)
+    def _validate_level_shifts(self, residual_df, lvlshft, candidates):
+        params = self.level_shift_validation
+        window = int(params.get('window', 14))
+        pad = int(params.get('pad', 2))
+        rel_thresh = float(params.get('relative_threshold', 0.1))
+        abs_thresh = float(params.get('absolute_threshold', 0.5))
 
-        if isinstance(raw_changepoints, dict):
-            per_series_changepoints = raw_changepoints
-        elif raw_changepoints is not None:
-            shared_indices = self._sanitize_changepoint_indices(raw_changepoints, len(df))
-            per_series_changepoints = {col: shared_indices for col in df.columns}
-        else:
-            per_series_changepoints = {}
+        validated_component = lvlshft.copy()
+        validated = {}
 
-        for col in df.columns:
-            series = df[col].astype(float).values
-            cp_indices = self._sanitize_changepoint_indices(
-                per_series_changepoints.get(col, []), len(series)
-            )
+        for col in residual_df.columns:
+            series = residual_df[col]
+            entries = []
+            for candidate in candidates.get(col, []):
+                date = candidate['date']
+                magnitude = candidate['magnitude']
+                try:
+                    idx = series.index.get_loc(date)
+                except KeyError:
+                    continue
+                left_end = max(0, idx - pad)
+                left_start = max(0, left_end - window)
+                right_start = min(len(series), idx + pad + 1)
+                right_end = min(len(series), right_start + window)
 
-            changepoints_list = []
-            for cp_idx in cp_indices:
-                pre_window_start = max(0, cp_idx - 10)
-                post_window_end = min(len(series), cp_idx + 10)
-                if post_window_end <= cp_idx or cp_idx <= pre_window_start or cp_idx >= len(series) - 1:
+                left_window = series.iloc[left_start:left_end]
+                right_window = series.iloc[right_start:right_end]
+
+                if left_window.empty or right_window.empty:
+                    validated_component.loc[date:, col] -= magnitude
                     continue
 
-                date = df.index[cp_idx]
-                pre_slope = self._estimate_slope(series, pre_window_start, cp_idx)
-                post_slope = self._estimate_slope(series, cp_idx, post_window_end)
+                before = float(np.nanmedian(left_window))
+                after = float(np.nanmedian(right_window))
+                change = after - before
+                abs_change = abs(change)
+                rel_change = abs_change / max(abs(before), 1e-9)
 
-                changepoints_list.append({
-                    'date': date,
-                    'old_slope': pre_slope,
-                    'new_slope': post_slope,
-                    'magnitude': abs(post_slope - pre_slope),
-                })
+                if abs_change >= abs_thresh or rel_change >= rel_thresh:
+                    entries.append({
+                        'date': date,
+                        'magnitude': magnitude,
+                        'validated_change': change,
+                        'relative_change': rel_change,
+                    })
+                else:
+                    validated_component.loc[date:, col] -= magnitude
+            validated[col] = entries
+        return validated_component, validated
 
-            self.trend_changepoints[col] = changepoints_list
+    def _detect_trend_changepoints(self, trend_input):
+        detector_params = self.changepoint_params.copy()
+        aggregate_method = detector_params.pop('aggregate_method', 'individual')
+        method = detector_params.pop('method', 'pelt')
+        method_params = detector_params.pop('method_params', {})
+        min_segment_length = detector_params.pop('min_segment_length', 14)
+        self.changepoint_detector = ChangepointDetector(
+            method=method,
+            method_params=method_params,
+            aggregate_method=aggregate_method,
+            min_segment_length=min_segment_length,
+        )
+        safe_df = trend_input.fillna(method='ffill').fillna(method='bfill')
+        self.changepoint_detector.fit(safe_df)
 
-    def _sanitize_changepoint_indices(self, indices, series_length):
-        """Convert changepoint indices to sorted unique integer positions within bounds."""
-        if indices is None:
-            return []
-
-        if isinstance(indices, (np.ndarray, pd.Index)):
-            iterable = indices.tolist()
-        elif isinstance(indices, (list, tuple, set)):
-            iterable = list(indices)
+        changepoints = {}
+        if isinstance(self.changepoint_detector.changepoints_, dict):
+            for col, cp_indices in self.changepoint_detector.changepoints_.items():
+                cp_dates = []
+                for idx in cp_indices:
+                    if 0 <= idx < len(self.date_index):
+                        cp_dates.append(self.date_index[idx])
+                changepoints[col] = sorted(set(cp_dates))
         else:
-            iterable = [indices]
+            for col in trend_input.columns:
+                changepoints[col] = []
 
-        cleaned = []
-        seen = set()
-        for idx in iterable:
-            try:
-                idx_int = int(idx)
-            except (TypeError, ValueError):
-                continue
+        trend_component = pd.DataFrame(0.0, index=self.date_index, columns=trend_input.columns)
+        if isinstance(self.changepoint_detector.fitted_trends_, dict):
+            for col, fitted in self.changepoint_detector.fitted_trends_.items():
+                fitted_series = pd.Series(fitted, index=safe_df.index[:len(fitted)])
+                fitted_series = fitted_series.reindex(self.date_index).interpolate(method='linear').bfill().ffill()
+                trend_component[col] = fitted_series
+        else:
+            trend_component = safe_df.copy()
 
-            if 0 < idx_int < series_length and idx_int not in seen:
-                seen.add(idx_int)
-                cleaned.append(idx_int)
+        return changepoints, trend_component
 
-        cleaned.sort()
-        return cleaned
-    
-    def _estimate_slope(self, series, start_idx, end_idx):
-        """Estimate slope of a segment using linear regression."""
+    @staticmethod
+    def _segment_slope(values, start_idx, end_idx):
         if end_idx <= start_idx:
             return 0.0
-        
-        x = np.arange(start_idx, end_idx)
-        y = series[start_idx:end_idx]
-        
-        if len(x) < 2:
-            return 0.0
-        mask = ~np.isnan(y)
+        segment = values[start_idx:end_idx + 1]
+        x = np.arange(len(segment))
+        mask = ~np.isnan(segment)
         if mask.sum() < 2:
             return 0.0
         x = x[mask]
-        y = y[mask]
-        
-        # Simple linear regression
+        y = segment[mask]
         x_mean = x.mean()
         y_mean = y.mean()
-        
-        numerator = np.sum((x - x_mean) * (y - y_mean))
-        denominator = np.sum((x - x_mean) ** 2)
-        
-        if denominator == 0:
+        denom = np.sum((x - x_mean) ** 2)
+        if denom == 0:
             return 0.0
-        
-        return numerator / denominator
-    
+        return np.sum((x - x_mean) * (y - y_mean)) / denom
+
+    def _compute_trend_slopes(self, trend_component, changepoints):
+        slopes = {}
+        for col in trend_component.columns:
+            cp_dates = sorted(set(changepoints.get(col, [])))
+            if not cp_dates:
+                slope = self._segment_slope(trend_component[col].to_numpy(), 0, len(trend_component) - 1)
+                slopes[col] = [{
+                    'start_date': self.date_index[0],
+                    'end_date': self.date_index[-1],
+                    'slope': float(slope),
+                }]
+                continue
+            indices = [0] + [self.date_index.get_loc(date) for date in cp_dates if date in self.date_index]
+            indices = sorted(set(indices))
+            if indices[-1] != len(trend_component) - 1:
+                indices.append(len(trend_component) - 1)
+            segment_info = []
+            for start_idx, end_idx in zip(indices[:-1], indices[1:]):
+                if end_idx <= start_idx:
+                    continue
+                slope = self._segment_slope(trend_component[col].to_numpy(), start_idx, end_idx)
+                segment_info.append({
+                    'start_date': self.date_index[start_idx],
+                    'end_date': self.date_index[end_idx],
+                    'slope': float(slope),
+                })
+            slopes[col] = segment_info
+        return slopes
+
+    def _convert_to_original_scale(self, component_df, include_mean=False):
+        if component_df is None:
+            return None
+        if not self.standardize or self.scaler is None:
+            return component_df.copy()
+        scaled = component_df.multiply(self.scale_series, axis=1)
+        if include_mean:
+            scaled = scaled.add(self.mean_series, axis=1)
+        return scaled
+
+    def _to_original_value(self, value, series_name, include_mean=False):
+        scale = float(self.scale_series.get(series_name, 1.0))
+        mean = float(self.mean_series.get(series_name, 0.0))
+        result = float(value) * scale
+        if include_mean:
+            result += mean
+        return result
+
+    def _rescale_holiday_impacts(self, impacts):
+        rescaled = {}
+        for series_name, mapping in impacts.items():
+            converted = {}
+            for date, value in mapping.items():
+                converted[pd.Timestamp(date)] = self._to_original_value(value, series_name)
+            rescaled[series_name] = converted
+        return rescaled
+
+    def _rescale_level_shifts(self, level_shifts):
+        rescaled = {}
+        for series_name, entries in level_shifts.items():
+            converted = []
+            for entry in entries:
+                converted.append({
+                    'date': pd.Timestamp(entry['date']),
+                    'magnitude': self._to_original_value(entry['magnitude'], series_name),
+                    'validated_change': self._to_original_value(entry.get('validated_change', entry['magnitude']), series_name),
+                    'relative_change': float(entry.get('relative_change', 0.0)),
+                })
+            rescaled[series_name] = converted
+        return rescaled
+
+    def _rescale_slope_info(self, slope_info):
+        rescaled = {}
+        for series_name, entries in slope_info.items():
+            converted = []
+            for entry in entries:
+                converted.append({
+                    'start_date': pd.Timestamp(entry['start_date']),
+                    'end_date': pd.Timestamp(entry['end_date']),
+                    'slope': self._to_original_value(entry['slope'], series_name),
+                })
+            rescaled[series_name] = converted
+        return rescaled
+
+    def _rescale_anomalies(self, anomaly_records):
+        rescaled = {}
+        for series_name, entries in anomaly_records.items():
+            converted = []
+            for entry in entries:
+                converted.append({
+                    'date': pd.Timestamp(entry['date']),
+                    'magnitude': self._to_original_value(entry['magnitude'], series_name),
+                    'score': entry.get('score'),
+                    'type': entry.get('type', 'spike'),
+                })
+            rescaled[series_name] = converted
+        return rescaled
+
+    def _build_trend_label_entries(self, series_name, changepoints, slope_info):
+        slopes = slope_info.get(series_name, [])
+        if not slopes or len(slopes) < 2:
+            return [], []
+        entries = []
+        template_entries = []
+        for idx in range(1, len(slopes)):
+            cp_date = slopes[idx]['start_date']
+            prior_slope = slopes[idx - 1]['slope']
+            new_slope = slopes[idx]['slope']
+            entries.append((pd.Timestamp(cp_date), prior_slope, new_slope))
+            template_entries.append({
+                'date': pd.Timestamp(cp_date).isoformat(),
+                'prior_slope': prior_slope,
+                'new_slope': new_slope,
+            })
+        return entries, template_entries
+
+    def _build_level_shift_entries(self, series_name, validated_level_shifts):
+        entries = []
+        template_entries = []
+        for item in validated_level_shifts.get(series_name, []):
+            date = pd.Timestamp(item['date'])
+            magnitude = item['magnitude']
+            entries.append((date, magnitude, 'validated', False))
+            template_entries.append({
+                'date': date.isoformat(),
+                'magnitude': magnitude,
+                'shift_type': 'validated',
+                'shared': False,
+            })
+        return entries, template_entries
+
+    def _build_anomaly_entries(self, series_name, anomaly_records):
+        entries = []
+        template_entries = []
+        for item in anomaly_records.get(series_name, []):
+            date = pd.Timestamp(item['date'])
+            magnitude = item['magnitude']
+            anomaly_type = item.get('type', 'spike')
+            entries.append((date, magnitude, anomaly_type, 1, False))
+            template_entries.append({
+                'date': date.isoformat(),
+                'magnitude': magnitude,
+                'pattern': anomaly_type,
+                'duration': 1,
+                'shared': False,
+            })
+        return entries, template_entries
+
+    @staticmethod
+    def _serialize_datetime_mapping(mapping):
+        serialized = {}
+        for key, value in mapping.items():
+            serialized[pd.Timestamp(key).isoformat()] = value
+        return serialized
+
+    def _build_series_template(self, series_name, components, labels, metadata):
+        component_dict = {
+            name: {'values': values.tolist()}
+            for name, values in components.items()
+        }
+        label_dict = {
+            'trend_changepoints': labels.get('trend_changepoints', []),
+            'level_shifts': labels.get('level_shifts', []),
+            'anomalies': labels.get('anomalies', []),
+            'holiday_impacts': self._serialize_datetime_mapping(labels.get('holiday_impacts', {})),
+            'holiday_dates': [pd.Timestamp(x).isoformat() for x in labels.get('holiday_dates', [])],
+            'seasonality_changepoints': labels.get('seasonality_changepoints', []),
+            'noise_changepoints': labels.get('noise_changepoints', []),
+        }
+        return {
+            'series_name': series_name,
+            'series_type': 'detected',
+            'scale_factor': 1.0,
+            'combination': 'additive',
+            'components': component_dict,
+            'labels': label_dict,
+            'metadata': {
+                'seasonality_strengths': {'combined': metadata.get('seasonality_strength', 0.0)},
+                'noise_to_signal_ratio': metadata.get('noise_to_signal_ratio'),
+            },
+        }
+
     def get_detected_features(self, series_name=None):
-        """
-        Get all detected features for a series or all series.
-        
-        Parameters
-        ----------
-        series_name : str, optional
-            Name of series to get features for. If None, returns all.
-            
-        Returns
-        -------
-        dict
-            Dictionary of detected features
-        """
         if series_name is not None:
             return {
                 'trend_changepoints': self.trend_changepoints.get(series_name, []),
@@ -752,174 +724,95 @@ class TimeSeriesFeatureDetector:
                 'holiday_impacts': self.holiday_impacts.get(series_name, {}),
                 'seasonality_strength': self.seasonality_strength.get(series_name, 0.0),
             }
-        else:
-            return {
-                'trend_changepoints': self.trend_changepoints,
-                'level_shifts': self.level_shifts,
-                'anomalies': self.anomalies,
-                'holiday_dates': self.holiday_dates,
-                'holiday_impacts': self.holiday_impacts,
-                'seasonality_strength': self.seasonality_strength,
-            }
-    
+        return {
+            'trend_changepoints': self.trend_changepoints,
+            'level_shifts': self.level_shifts,
+            'anomalies': self.anomalies,
+            'holiday_dates': self.holiday_dates,
+            'holiday_impacts': self.holiday_impacts,
+            'seasonality_strength': self.seasonality_strength,
+        }
+
+    def get_template(self, deep=True):
+        if self.template is None:
+            return None
+        return copy.deepcopy(self.template) if deep else self.template
+
     def summary(self):
-        """Print summary of detected features."""
+        if self.df_original is None:
+            print("TimeSeriesFeatureDetector has not been fit.")
+            return
         print("=" * 80)
         print("TIME SERIES FEATURE DETECTION SUMMARY")
         print("=" * 80)
         print(f"Date Range: {self.date_index[0]} to {self.date_index[-1]}")
-        print(f"Number of Series: {len(self.df_original.columns)}")
-        print(f"Number of Observations: {len(self.df_original)}")
-        print()
-        
+        print(f"Number of Series: {self.df_original.shape[1]}")
+        print(f"Number of Observations: {self.df_original.shape[0]}")
         for series_name in self.df_original.columns:
-            print(f"\n{'-' * 80}")
+            print("\n" + "-" * 80)
             print(f"Series: {series_name}")
-            print(f"{'-' * 80}")
-            
-            # Seasonality
             strength = self.seasonality_strength.get(series_name, 0.0)
-            print(f"\nSeasonality Strength: {strength:.3f}")
-            
-            # Changepoints
-            changepoints = self.trend_changepoints.get(series_name, [])
-            print(f"\nTrend Changepoints: {len(changepoints)}")
-            for i, cp in enumerate(changepoints[:5]):  # Show first 5
-                print(f"  {i+1}. {cp['date']}: slope {cp['old_slope']:.3f} → {cp['new_slope']:.3f}")
-            if len(changepoints) > 5:
-                print(f"  ... and {len(changepoints) - 5} more")
-            
-            # Level Shifts
-            shifts = self.level_shifts.get(series_name, [])
-            print(f"\nLevel Shifts: {len(shifts)}")
-            for i, shift in enumerate(shifts[:5]):
-                print(f"  {i+1}. {shift['date']}: magnitude {shift['magnitude']:.3f}")
-            if len(shifts) > 5:
-                print(f"  ... and {len(shifts) - 5} more")
-            
-            # Anomalies
+            print(f"Seasonality Strength: {strength:.3f}")
+            cps = self.trend_changepoints.get(series_name, [])
+            print(f"Trend Changepoints: {len(cps)}")
+            for idx, cp in enumerate(cps[:5]):
+                date, prior_slope, new_slope = cp
+                print(f"  {idx + 1}. {date}: slope {prior_slope:.4f} → {new_slope:.4f}")
+            level_shifts = self.level_shifts.get(series_name, [])
+            print(f"Level Shifts: {len(level_shifts)}")
+            for idx, shift in enumerate(level_shifts[:5]):
+                date, magnitude, shift_type, _ = shift
+                print(f"  {idx + 1}. {date}: magnitude {magnitude:.4f}")
             anomalies = self.anomalies.get(series_name, [])
-            print(f"\nAnomalies: {len(anomalies)}")
-            for i, anom in enumerate(anomalies[:5]):
-                print(f"  {i+1}. {anom['date']}: {anom['type']}, magnitude {anom['magnitude']:.3f}")
-            if len(anomalies) > 5:
-                print(f"  ... and {len(anomalies) - 5} more")
-            
-            # Holidays
+            print(f"Anomalies: {len(anomalies)}")
+            for idx, anom in enumerate(anomalies[:5]):
+                date, magnitude, anomaly_type, _, _ = anom
+                print(f"  {idx + 1}. {date}: {anomaly_type}, magnitude {magnitude:.4f}")
             holidays = self.holiday_dates.get(series_name, [])
-            print(f"\nDetected Holidays: {len(holidays)}")
-            for i, hol in enumerate(holidays[:5]):
-                print(f"  {i+1}. {hol}")
-            if len(holidays) > 5:
-                print(f"  ... and {len(holidays) - 5} more")
-        
+            print(f"Holidays: {len(holidays)}")
+            for idx, hol in enumerate(holidays[:5]):
+                print(f"  {idx + 1}. {hol}")
         print("\n" + "=" * 80)
-    
+
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
-        """
-        Plot detected features.
-        
-        Parameters
-        ----------
-        series_name : str, optional
-            Name of series to plot. If None, plots first series.
-        figsize : tuple
-            Figure size
-        save_path : str, optional
-            Path to save figure
-        show : bool
-            Whether to show the plot
-        """
         if not HAS_MATPLOTLIB:
-            print("Matplotlib not available for plotting")
-            return
-        
+            raise ImportError("matplotlib is required for plotting.")
+        if self.df_original is None:
+            raise RuntimeError("Call fit() before plot().")
         if series_name is None:
             series_name = self.df_original.columns[0]
-        
-        series = self.df_original[series_name]
-        
-        fig, axes = plt.subplots(4, 1, figsize=figsize, sharex=True)
-        
-        # Plot 1: Original data with anomalies
-        ax = axes[0]
-        ax.plot(series.index, series.values, label='Original', alpha=0.7)
-        
-        # Mark anomalies
-        anomalies = self.anomalies.get(series_name, [])
-        for anom in anomalies:
-            color = 'red' if anom['type'] == 'spike' else 'orange'
-            ax.axvline(anom['date'], color=color, alpha=0.3, linestyle='--', linewidth=1)
-            ax.scatter(anom['date'], anom['magnitude'], color=color, s=50, zorder=5)
-        
-        ax.set_ylabel('Value')
-        ax.set_title(f'Series: {series_name} - Original Data with Anomalies')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        # Plot 2: Seasonality component
-        ax = axes[1]
-        if series_name in self.seasonality_components:
-            seasonal = self.seasonality_components[series_name]
-            ax.plot(series.index, seasonal, label='Seasonal Component', color='green')
-            strength = self.seasonality_strength.get(series_name, 0.0)
-            ax.set_title(f'Detected Seasonality (Strength: {strength:.3f})')
-        else:
-            ax.set_title('Seasonality (Not Available)')
-        ax.set_ylabel('Seasonal')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        # Plot 3: Changepoints and level shifts
-        ax = axes[2]
-        try:
-            deseasonalized = self.seasonality_model.transform(
-                pd.DataFrame(series).astype(float)
-            )[series_name]
-        except Exception:
-            # If transform fails, use original data
-            deseasonalized = series
-        ax.plot(series.index, deseasonalized.values, label='Deseasonalized', alpha=0.7)
-        
-        # Mark changepoints
-        changepoints = self.trend_changepoints.get(series_name, [])
-        for cp in changepoints:
-            ax.axvline(cp['date'], color='blue', alpha=0.5, linestyle='--', linewidth=2)
-        
-        # Mark level shifts
-        level_shifts = self.level_shifts.get(series_name, [])
-        for shift in level_shifts:
-            ax.axvline(shift['date'], color='purple', alpha=0.5, linestyle=':', linewidth=2)
-        
-        ax.set_ylabel('Value')
-        ax.set_title('Trend Changepoints (blue) and Level Shifts (purple)')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        # Plot 4: Holidays
-        ax = axes[3]
-        ax.plot(series.index, series.values, label='Original', alpha=0.5, color='gray')
-        
-        # Mark holidays
-        holidays = self.holiday_dates.get(series_name, [])
-        for hol in holidays:
-            ax.axvline(hol, color='magenta', alpha=0.4, linestyle='-.', linewidth=1.5)
-        
-        ax.set_ylabel('Value')
-        ax.set_xlabel('Date')
-        ax.set_title(f'Detected Holidays ({len(holidays)} found)')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        
-        if show:
-            plt.show()
-        else:
-            plt.close()
+        if series_name not in self.df_original.columns:
+            raise ValueError(f"Series '{series_name}' not found.")
+        components = self.components.get(series_name)
+        if components is None:
+            raise RuntimeError(f"No components stored for series '{series_name}'.")
+        labels = {
+            'trend_changepoints': self.trend_changepoints.get(series_name, []),
+            'level_shifts': self.level_shifts.get(series_name, []),
+            'anomalies': self.anomalies.get(series_name, []),
+            'holiday_impacts': self.holiday_impacts.get(series_name, {}),
+            'holiday_dates': self.holiday_dates.get(series_name, []),
+            'seasonality_changepoints': [],
+            'noise_changepoints': self.noise_changepoints.get(series_name, []),
+            'series_scale': 1.0,
+            'noise_to_signal_ratio': self.noise_to_signal_ratios.get(series_name, None),
+            'series_type': 'detected',
+        }
+        fig = plot_feature_panels(
+            series_name=series_name,
+            date_index=self.date_index,
+            series_data=self.df_original[series_name],
+            components=components,
+            labels=labels,
+            series_type_description='Detected Features',
+            scale=labels.get('series_scale'),
+            noise_to_signal=labels.get('noise_to_signal_ratio'),
+            figsize=figsize,
+            save_path=save_path,
+            show=show,
+            title_prefix='Feature Detection',
+        )
+        return fig
 
 
 class FeatureDetectionLoss:
@@ -1056,7 +949,11 @@ class FeatureDetectionLoss:
         
         loss = 0.0
         true_cp_dates = [cp['date'] if isinstance(cp, dict) else cp[0] for cp in true_cp]
-        detected_cp_dates = [cp['date'] if isinstance(cp, dict) else cp for cp in detected_cp]
+        detected_cp_dates = [
+            cp['date'] if isinstance(cp, dict)
+            else (cp[0] if isinstance(cp, (tuple, list)) else cp)
+            for cp in detected_cp
+        ]
         detected_ls_dates = [ls['date'] if isinstance(ls, dict) else (ls[0] if isinstance(ls, tuple) else ls) for ls in detected_ls]
         
         # For each true changepoint
@@ -1493,7 +1390,7 @@ class FeatureDetectionOptimizer:
         }
         
         # Changepoint params
-        changepoint_params = ChangePointDetector().get_new_params(method='random')
+        changepoint_params = ChangepointDetector().get_new_params(method='random')
         
         # Level shift params
         level_shift_params = LevelShiftMagic.get_new_params(method='random')

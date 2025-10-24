@@ -8,17 +8,13 @@ Matching test file in tests/test_synthetic_data.py
 """
 
 import json
+import copy
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from autots.tools.calendar import gregorian_to_chinese, gregorian_to_islamic
 
-try:
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
+from autots.tools.plotting import plot_feature_panels, HAS_MATPLOTLIB
 
 
 class SyntheticDailyGenerator:
@@ -173,9 +169,10 @@ class SyntheticDailyGenerator:
         self.effect_sizes = {}  # Detailed storage of all effect magnitudes
         self.regressor_impacts = {}  # {series_id: {date: {regressor_name: impact}}}
         self.lagged_influences = {}  # {series_id: {'source': source_series, 'lag': lag_days, 'coefficient': coef}}
-        
+
         # Component storage for analysis
         self.components = {}  # {series_id: {component_name: array}}
+        self.template = None  # JSON-friendly template describing generated data
 
         # Precompute custom holiday templates so all series share the same structure
         self.random_dom_holidays = self._init_random_dom_holidays()
@@ -187,18 +184,52 @@ class SyntheticDailyGenerator:
         self._generate()
     
     def _generate(self):
-        """Main generation pipeline."""
-        # Initialize data array
-        data_arrays = {}
-        
-        # Generate shared events first
+        """Main generation pipeline that builds a template first, then renders data from it."""
+        self.template = {
+            'meta': {
+                'start_date': self.date_index[0].isoformat(),
+                'end_date': self.date_index[-1].isoformat(),
+                'n_days': int(self.n_days),
+                'n_series': int(self.n_series),
+                'frequency': 'D',
+                'random_seed': int(self.random_seed),
+                'series_type_descriptions': copy.deepcopy(self.SERIES_TYPE_DESCRIPTIONS),
+                'config': {
+                    'trend_changepoint_freq': float(self.trend_changepoint_freq),
+                    'level_shift_freq': float(self.level_shift_freq),
+                    'anomaly_freq': float(self.anomaly_freq),
+                    'shared_anomaly_prob': float(self.shared_anomaly_prob),
+                    'shared_level_shift_prob': float(self.shared_level_shift_prob),
+                    'weekly_seasonality_strength': float(self.weekly_seasonality_strength),
+                    'yearly_seasonality_strength': float(self.yearly_seasonality_strength),
+                    'noise_level': float(self.noise_level),
+                    'include_regressors': bool(self.include_regressors),
+                    'disable_holiday_splash': bool(self.disable_holiday_splash),
+                },
+                'random_dom_holidays': copy.deepcopy(self.random_dom_holidays),
+                'random_wkdom_holidays': copy.deepcopy(self.random_wkdom_holidays),
+            },
+            'shared_events': {'anomalies': [], 'level_shifts': []},
+            'regressors': None,
+            'series': {}
+        }
+
+        # Generate shared events first so template captures them
         self._generate_shared_events()
-        
-        # Generate optional regressors first
+        self.template['shared_events'] = copy.deepcopy(self.shared_events)
+
+        # Generate optional regressors
         if self.include_regressors:
             self._generate_regressors()
-        
-        # Generate each series
+            self.template['regressors'] = {
+                column: self.regressors[column].tolist()
+                for column in self.regressors.columns
+            }
+        else:
+            self.template['regressors'] = None
+
+        data_arrays = {}
+
         # Map series index to type for cleaner assignment
         series_type_map = {
             0: 'business_day', 1: 'saturating_trend', 2: 'time_varying_seasonality',
@@ -206,24 +237,116 @@ class SyntheticDailyGenerator:
             6: 'ramadan_holidays', 7: 'variance_regimes', 8: 'autocorrelated_noise',
             9: 'multiplicative_seasonality', 10: 'granger_lagged'
         }
-        
+
         for i in range(self.n_series):
             series_name = f"series_{i}"
-            
-            # Determine series characteristics
             series_type = series_type_map.get(i, 'standard')
             self.series_types[series_name] = series_type
-            
+
             # Set scale for this series (every 3rd series is 10x larger)
             scale = 10.0 if i % 3 == 0 else 1.0
             self.series_scales[series_name] = scale
-            
-            # Generate series components
-            series_data = self._generate_series(series_name, series_type, scale)
+
+            # Build template for this series and then render it
+            series_template = self._build_series_template(series_name, series_type, scale)
+            self.template['series'][series_name] = series_template
+
+            component_arrays, series_data = self._render_series_from_template(series_template)
+            self.components[series_name] = component_arrays
             data_arrays[series_name] = series_data
-        
-        # Create DataFrame
+
+        self.template['meta']['holiday_config'] = copy.deepcopy(self.holiday_config)
+        self.template['meta']['anomaly_types'] = list(self.anomaly_types)
         self.data = pd.DataFrame(data_arrays, index=self.date_index)
+
+    def _render_series_from_template(self, series_template):
+        """Render component arrays and final series from a single series template."""
+        component_arrays = {}
+        for component_name, component_info in series_template['components'].items():
+            values = component_info.get('values')
+            if values is None:
+                continue
+            component_arrays[component_name] = np.array(values, dtype=float)
+
+        n = self.n_days
+        trend = component_arrays.get('trend', np.zeros(n))
+        level_shift = component_arrays.get('level_shift', np.zeros(n))
+        seasonality = component_arrays.get('seasonality', np.zeros(n))
+        holidays = component_arrays.get('holidays', np.zeros(n))
+        noise = component_arrays.get('noise', np.zeros(n))
+        anomalies = component_arrays.get('anomalies', np.zeros(n))
+        regressors = component_arrays.get('regressors', np.zeros(n))
+        lagged = component_arrays.get('lagged_influence') if 'lagged_influence' in component_arrays else None
+
+        if series_template.get('combination') == 'multiplicative':
+            base_signal = trend + level_shift
+            with np.errstate(invalid='ignore'):
+                min_signal = np.nanmin(base_signal)
+            if not np.isfinite(min_signal):
+                min_signal = 0.0
+            if min_signal <= 0:
+                base_signal = base_signal - min_signal + series_template.get('scale_factor', 1.0) * 10.0
+            safe_base_signal = np.where(base_signal == 0, 1.0, base_signal)
+            seasonality_factor = np.divide(
+                seasonality,
+                safe_base_signal,
+                out=np.zeros_like(seasonality),
+                where=safe_base_signal != 0,
+            )
+            series_data = (
+                base_signal * (1.0 + seasonality_factor)
+                + holidays
+                + noise
+                + anomalies
+                + regressors
+            )
+        else:
+            series_data = (
+                trend
+                + level_shift
+                + seasonality
+                + holidays
+                + noise
+                + anomalies
+                + regressors
+            )
+
+        if lagged is not None:
+            lagged_array = np.array(lagged, dtype=float)
+            component_arrays['lagged_influence'] = lagged_array
+            series_data = series_data + lagged_array
+
+        if series_template['series_type'] == 'business_day':
+            is_weekend = (self.date_index.dayofweek >= 5)
+            series_data = np.where(is_weekend, np.nan, series_data)
+
+        series_template['values'] = series_data.tolist()
+        return component_arrays, series_data
+
+    def _serialize_event_list(self, records, field_names):
+        """Convert list of tuples with datetimes to JSON-friendly dictionaries."""
+        serialized = []
+        for record in records:
+            item = {}
+            for key, value in zip(field_names, record):
+                if isinstance(value, (pd.Timestamp, datetime, np.datetime64)):
+                    value = pd.Timestamp(value).isoformat()
+                elif isinstance(value, np.generic):
+                    value = value.item()
+                item[key] = value
+            serialized.append(item)
+        return serialized
+
+    def _serialize_datetime_key_dict(self, mapping):
+        """Convert dictionary with datetime keys into JSON-friendly form."""
+        serialized = {}
+        for key, value in mapping.items():
+            if isinstance(key, (pd.Timestamp, datetime, np.datetime64)):
+                key = pd.Timestamp(key).isoformat()
+            if isinstance(value, np.generic):
+                value = value.item()
+            serialized[key] = value
+        return serialized
     
     def _generate_shared_events(self):
         """Generate anomalies and level shifts that are shared across multiple series."""
@@ -292,102 +415,175 @@ class SyntheticDailyGenerator:
             'precipitation': precip
         }, index=self.date_index)
     
-    def _generate_series(self, series_name, series_type, scale):
-        """Generate a single time series with all components."""
+    def _build_series_template(self, series_name, series_type, scale):
+        """Construct a JSON-friendly template describing a single synthetic series."""
         self.components[series_name] = {}
-        
+
         # Assign per-series noise level (varying around base noise_level)
-        # Range: 0.5x to 2.0x the base noise level
         noise_multiplier = self.rng.uniform(0.5, 2.0)
         series_noise_level = self.noise_level * noise_multiplier
         self.series_noise_levels[series_name] = series_noise_level
-        
+
         # Assign per-series seasonality strengths
-        # Weekly: range from 0.3x to 2.5x base strength (some very subtle, some very strong)
-        # Yearly: range from 0.2x to 2.0x base strength
         weekly_mult = self.rng.uniform(0.3, 2.5)
         yearly_mult = self.rng.uniform(0.2, 2.0)
         series_weekly_strength = self.weekly_seasonality_strength * weekly_mult
         series_yearly_strength = self.yearly_seasonality_strength * yearly_mult
         self.series_seasonality_strengths[series_name] = {
             'weekly': series_weekly_strength,
-            'yearly': series_yearly_strength
+            'yearly': series_yearly_strength,
         }
-        
+
+        series_template = {
+            'series_name': series_name,
+            'series_type': series_type,
+            'scale_factor': scale,
+            'combination': 'multiplicative' if series_type == 'multiplicative_seasonality' else 'additive',
+            'components': {},
+            'labels': {},
+            'metadata': {
+                'noise_level': float(series_noise_level),
+                'seasonality_strengths': {
+                    'weekly': float(series_weekly_strength),
+                    'yearly': float(series_yearly_strength),
+                },
+            },
+        }
+
         # 1. Generate trend
         trend = self._generate_trend(series_name, series_type, scale)
-        self.components[series_name]['trend'] = trend
-        
+        series_template['components']['trend'] = {
+            'values': trend.tolist(),
+            'mode': 'saturating' if series_type == 'saturating_trend' else 'piecewise_linear',
+        }
+        series_template['labels']['trend_changepoints'] = self._serialize_event_list(
+            self.trend_changepoints.get(series_name, []),
+            ['date', 'prior_slope', 'new_slope'],
+        )
+
         # 2. Generate level shifts
         if series_type != 'no_level_shifts':
             level_shift = self._generate_level_shifts(series_name, series_type, scale)
         else:
             level_shift = np.zeros(self.n_days)
             self.level_shifts[series_name] = []
-        self.components[series_name]['level_shift'] = level_shift
-        
+        series_template['components']['level_shift'] = {
+            'values': level_shift.tolist(),
+        }
+        series_template['labels']['level_shifts'] = self._serialize_event_list(
+            self.level_shifts.get(series_name, []),
+            ['date', 'magnitude', 'shift_type', 'shared'],
+        )
+
         # 3. Generate seasonality
         seasonality = self._generate_seasonality(series_name, series_type, scale)
-        self.components[series_name]['seasonality'] = seasonality
-        
+        if series_type == 'time_varying_seasonality':
+            seasonality_mode = 'time_varying'
+        elif series_type == 'seasonality_changepoints':
+            seasonality_mode = 'changepoints'
+        elif series_type == 'multiplicative_seasonality':
+            seasonality_mode = 'multiplicative'
+        else:
+            seasonality_mode = 'additive'
+        series_template['components']['seasonality'] = {
+            'values': seasonality.tolist(),
+            'mode': seasonality_mode,
+        }
+        series_template['labels']['seasonality_changepoints'] = self._serialize_event_list(
+            self.seasonality_changepoints.get(series_name, []),
+            ['date', 'description'],
+        )
+
         # 4. Generate holiday effects
         holidays = self._generate_holiday_effects(series_name, series_type, scale)
-        self.components[series_name]['holidays'] = holidays
-        
+        series_template['components']['holidays'] = {
+            'values': holidays.tolist(),
+        }
+        series_template['labels']['holiday_impacts'] = self._serialize_datetime_key_dict(
+            self.holiday_impacts.get(series_name, {})
+        )
+        series_template['labels']['holiday_splash_impacts'] = self._serialize_datetime_key_dict(
+            self.holiday_splash_impacts.get(series_name, {})
+        )
+        series_template['labels']['holiday_dates'] = [
+            pd.Timestamp(date).isoformat() for date in self.holiday_dates.get(series_name, [])
+        ]
+
         # 5. Generate noise
         noise = self._generate_noise(series_name, series_type, scale)
-        self.components[series_name]['noise'] = noise
-        
+        if series_type == 'variance_regimes':
+            noise_mode = 'garch'
+        elif series_type in ['autocorrelated_noise', 'multiplicative_seasonality']:
+            noise_mode = 'ar'
+        else:
+            noise_mode = 'standard'
+        series_template['components']['noise'] = {
+            'values': noise.tolist(),
+            'mode': noise_mode,
+        }
+        series_template['labels']['noise_changepoints'] = self._serialize_event_list(
+            self.noise_changepoints.get(series_name, []),
+            ['date', 'from_params', 'to_params'],
+        )
+
         # 6. Generate anomalies
         anomalies = self._generate_anomalies(series_name, series_type, scale)
-        self.components[series_name]['anomalies'] = anomalies
-        
+        series_template['components']['anomalies'] = {
+            'values': anomalies.tolist(),
+        }
+        series_template['labels']['anomalies'] = self._serialize_event_list(
+            self.anomalies.get(series_name, []),
+            ['date', 'magnitude', 'pattern', 'duration', 'shared'],
+        )
+
         # 7. Add regressor effects if available
         if self.include_regressors:
             regressor_effect = self._generate_regressor_effects(series_name, scale)
-            self.components[series_name]['regressors'] = regressor_effect
+            if np.isscalar(regressor_effect):
+                regressor_values = np.zeros(self.n_days).tolist()
+            else:
+                regressor_values = regressor_effect.tolist()
+            series_template['components']['regressors'] = {
+                'values': regressor_values,
+            }
+            regressor_info = self.regressor_impacts.get(series_name, {})
+            impacts_by_date = regressor_info.get('by_date', {})
+            coefficients = regressor_info.get('coefficients', {})
+            series_template['labels']['regressor_impacts'] = {
+                'by_date': {
+                    pd.Timestamp(event_date).isoformat(): {
+                        name: float(val) for name, val in impacts.items()
+                    }
+                    for event_date, impacts in sorted(impacts_by_date.items())
+                },
+                'coefficients': {
+                    name: float(val) for name, val in coefficients.items()
+                },
+            }
         else:
-            regressor_effect = 0
-        
-        # Combine all components
-        if series_type == 'multiplicative_seasonality':
-            # For multiplicative seasonality: (trend + level_shift) * (1 + seasonality_factor) + noise + anomalies + regressor
-            # Normalize seasonality to be a multiplicative factor (centered around 0)
-            base_signal = trend + level_shift
-            # Ensure base signal is positive for multiplication
-            min_signal = np.min(base_signal)
-            if min_signal <= 0:
-                base_signal = base_signal - min_signal + scale * 10
-            
-            # Convert additive seasonality to a multiplicative factor.
-            # The seasonality component should be a percentage of the base signal.
-            # Avoid division by zero for flat trend sections.
-            safe_base_signal = np.where(base_signal == 0, 1, base_signal)
-            seasonality_factor = seasonality / safe_base_signal
-            
-            series_data = (
-                base_signal * (1 + seasonality_factor) + 
-                holidays + noise + anomalies + regressor_effect
-            )
-        else:
-            # Standard additive combination
-            series_data = (
-                trend + level_shift + seasonality + holidays + 
-                noise + anomalies + regressor_effect
-            )
-        
-        # Apply Granger-style lagged influence if this series type requires it
+            series_template['labels']['regressor_impacts'] = {}
+
+        # 8. Optional Granger-style lagged influence
         if series_type == 'granger_lagged':
             lagged_influence = self._apply_lagged_influence(series_name, scale)
-            series_data = series_data + lagged_influence
-            self.components[series_name]['lagged_influence'] = lagged_influence
-        
-        # Apply business day mask if needed
-        if series_type == 'business_day':
-            is_weekend = (self.date_index.dayofweek >= 5)
-            series_data = np.where(is_weekend, np.nan, series_data)
-        
-        return series_data
+            series_template['components']['lagged_influence'] = {
+                'values': lagged_influence.tolist(),
+            }
+            series_template['labels']['lagged_influence'] = copy.deepcopy(
+                self.lagged_influences.get(series_name, {})
+            )
+        else:
+            series_template['labels']['lagged_influence'] = self.lagged_influences.get(series_name, {})
+
+        # Store noise-to-signal ratio (matches previous storage)
+        if series_name in self.noise_to_signal_ratios:
+            series_template['metadata']['noise_to_signal_ratio'] = float(
+                self.noise_to_signal_ratios[series_name]
+            )
+        else:
+            series_template['metadata']['noise_to_signal_ratio'] = float(series_noise_level)
+
+        return series_template
     
     def _generate_trend(self, series_name, series_type, scale):
         """Generate piecewise linear or nonlinear trends with changepoints."""
@@ -1679,6 +1875,19 @@ class SyntheticDailyGenerator:
         if series_name is None:
             return self.components
         return self.components.get(series_name, {})
+
+    def get_template(self, series_name=None, deep=True):
+        """Get the JSON-friendly template describing the generated data."""
+        if self.template is None:
+            return None
+        template = self.template if not deep else copy.deepcopy(self.template)
+        if series_name is None:
+            return template
+        if series_name not in template['series']:
+            raise KeyError(f"Series '{series_name}' not found in template.")
+        if deep:
+            return template['series'][series_name]
+        return self.template['series'][series_name]
     
     def get_all_labels(self, series_name=None):
         """
@@ -1812,7 +2021,221 @@ class SyntheticDailyGenerator:
                 print(f"  Weekday-of-month patterns: {wkdom_names}")
 
         print("\n" + "=" * 70)
-    
+
+    def machine_summary(
+        self,
+        series_name=None,
+        include_events=True,
+        include_regressors=True,
+        max_events_per_type=25,
+        round_decimals=6,
+        as_json=False,
+    ):
+        """Return a structured summary tailored for LLM or tool consumption."""
+
+        if self.template is None:
+            raise RuntimeError("Synthetic template has not been generated yet.")
+
+        if series_name is not None and series_name not in self.template['series']:
+            raise KeyError(f"Series '{series_name}' not found in generated data.")
+
+        template_copy = copy.deepcopy(self.template)
+        selected_series = [series_name] if series_name else list(template_copy['series'].keys())
+
+        def _normalize_scalar(value):
+            if isinstance(value, (np.integer,)):
+                return int(value)
+            if isinstance(value, (np.floating,)):
+                value = float(value)
+            if isinstance(value, float) and round_decimals is not None:
+                return round(value, round_decimals)
+            return value
+
+        def _normalize_datetime(value):
+            if isinstance(value, (pd.Timestamp, datetime)):
+                return value.isoformat()
+            if isinstance(value, np.datetime64):
+                return pd.Timestamp(value).isoformat()
+            return value
+
+        def _normalize(value):
+            if isinstance(value, dict):
+                normalized = {}
+                for key, val in value.items():
+                    if isinstance(key, (pd.Timestamp, datetime, np.datetime64)):
+                        key = _normalize_datetime(key)
+                    normalized[key] = _normalize(val)
+                return normalized
+            if isinstance(value, (list, tuple, set)):
+                return [_normalize(item) for item in value]
+            if isinstance(value, np.ndarray):
+                return [_normalize(item) for item in value.tolist()]
+            value = _normalize_datetime(value)
+            return _normalize_scalar(value)
+
+        def _limit(sequence):
+            if max_events_per_type is None or sequence is None:
+                return sequence
+            return sequence[:max_events_per_type]
+
+        def _sorted_items(mapping):
+            if not mapping:
+                return []
+            return sorted(mapping.items(), key=lambda item: item[0])
+
+        def _holiday_details(main_impacts, splash_impacts):
+            main_days = [
+                {
+                    'date': _normalize(date_str),
+                    'impact': _normalize(impact_value),
+                }
+                for date_str, impact_value in _sorted_items(main_impacts)
+            ]
+            splash_days = [
+                {
+                    'date': _normalize(date_str),
+                    'impact': _normalize(impact_value),
+                }
+                for date_str, impact_value in _sorted_items(splash_impacts)
+            ]
+            return {
+                'distinct_dates': _normalize(sorted(main_impacts.keys())),
+                'main_days': _limit(main_days),
+                'splash_days': _limit(splash_days),
+            }
+
+        summary_meta = copy.deepcopy(template_copy['meta'])
+        summary_meta['config'] = _normalize(summary_meta.get('config', {}))
+        summary_meta['random_seed'] = _normalize(summary_meta.get('random_seed'))
+        summary_meta['n_days'] = _normalize(summary_meta.get('n_days'))
+        summary_meta['n_series'] = _normalize(summary_meta.get('n_series'))
+        holiday_config = summary_meta.get('holiday_config', {})
+        summary_meta['synthetic_holiday_templates'] = {
+            'day_of_month': _normalize(summary_meta.pop('random_dom_holidays', [])),
+            'weekday_of_month': _normalize(summary_meta.pop('random_wkdom_holidays', [])),
+            'holiday_config': _normalize(holiday_config),
+        }
+        summary_meta.pop('holiday_config', None)
+        summary_meta['shared_event_days'] = _normalize(template_copy.get('shared_events', {}))
+
+        summary = {
+            'meta': summary_meta,
+            'series': [],
+        }
+
+        if include_regressors and self.include_regressors and template_copy.get('regressors') is not None:
+            summary['regressors'] = {
+                key: _normalize(values)
+                for key, values in template_copy['regressors'].items()
+            }
+
+        for name in selected_series:
+            template_entry = copy.deepcopy(template_copy['series'][name])
+            labels = copy.deepcopy(template_entry.get('labels', {}))
+            template_entry.pop('series_name', None)
+
+            series_info = {
+                'name': name,
+                'type': template_entry.get('series_type', 'standard'),
+                'scale_factor': _normalize(template_entry.get('scale_factor')),
+                'noise_to_signal_ratio': _normalize(
+                    template_entry.get('metadata', {}).get('noise_to_signal_ratio')
+                ),
+                'seasonality_strengths': _normalize(
+                    template_entry.get('metadata', {}).get('seasonality_strengths', {})
+                ),
+                'template': template_entry,
+            }
+
+            series_data = self.data[name]
+            non_null = int(series_data.notna().sum())
+            value_stats = {
+                'mean': _normalize(series_data.mean()),
+                'median': _normalize(series_data.median()),
+                'std': _normalize(series_data.std()),
+                'min': _normalize(series_data.min()),
+                'max': _normalize(series_data.max()),
+                'non_null_count': non_null,
+                'non_null_fraction': _normalize(non_null / len(series_data)),
+            }
+            series_info['value_stats'] = value_stats
+
+            component_arrays = self.components.get(name, {})
+            component_stats = {}
+            for component_name, component_values in component_arrays.items():
+                component_array = np.asarray(component_values, dtype=float)
+                component_stats[component_name] = {
+                    'mean': _normalize(np.nanmean(component_array)),
+                    'std': _normalize(np.nanstd(component_array)),
+                    'min': _normalize(np.nanmin(component_array)),
+                    'max': _normalize(np.nanmax(component_array)),
+                }
+            if component_stats:
+                series_info['component_stats'] = component_stats
+
+            holiday_impacts = labels.get('holiday_impacts', {})
+            holiday_splash = labels.get('holiday_splash_impacts', {})
+            holiday_dates = labels.get('holiday_dates', [])
+
+            event_counts = {
+                'trend_changepoints': len(labels.get('trend_changepoints', [])),
+                'level_shifts': len(labels.get('level_shifts', [])),
+                'anomalies': len(labels.get('anomalies', [])),
+                'holidays': len(holiday_dates),
+                'holiday_impact_days': len(holiday_impacts),
+                'holiday_splash_days': len(holiday_splash),
+                'seasonality_changepoints': len(labels.get('seasonality_changepoints', [])),
+                'noise_changepoints': len(labels.get('noise_changepoints', [])),
+            }
+            series_info['event_counts'] = event_counts
+
+            if include_events:
+                events = {
+                    'trend_changepoints': _limit(
+                        _normalize(labels.get('trend_changepoints', []))
+                    ),
+                    'level_shifts': _limit(
+                        _normalize(labels.get('level_shifts', []))
+                    ),
+                    'anomalies': _limit(
+                        _normalize(labels.get('anomalies', []))
+                    ),
+                    'seasonality_changepoints': _limit(
+                        _normalize(labels.get('seasonality_changepoints', []))
+                    ),
+                    'noise_changepoints': _limit(
+                        _normalize(labels.get('noise_changepoints', []))
+                    ),
+                }
+
+                events['holidays'] = _holiday_details(holiday_impacts, holiday_splash)
+                holiday_labels = [
+                    {'date': _normalize(date_str)}
+                    for date_str in sorted(holiday_dates)
+                ]
+                events['holiday_labels'] = _limit(holiday_labels)
+
+                series_info['events'] = events
+
+            if include_regressors and self.include_regressors:
+                regressor_info = labels.get('regressor_impacts', {})
+                regressor_mapping = regressor_info.get('by_date', {})
+                regressor_details = []
+                for date_str, impacts in sorted(regressor_mapping.items()):
+                    regressor_details.append({
+                        'date': _normalize(date_str),
+                        'impacts': _normalize(impacts),
+                    })
+                if regressor_details:
+                    series_info['regressor_impacts'] = _limit(regressor_details)
+                coefficients = regressor_info.get('coefficients', {})
+                if coefficients:
+                    series_info['regressor_coefficients'] = _normalize(coefficients)
+
+            summary['series'].append(series_info)
+
+        return json.dumps(summary, indent=2) if as_json else summary
+
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
         """
         Plot a series with all its labeled components clearly marked.
@@ -1843,236 +2266,36 @@ class SyntheticDailyGenerator:
                 "matplotlib is required for plotting. "
                 "Install it with: pip install matplotlib"
             )
-        
-        # Select series
+
         if series_name is None:
             series_name = self.rng.choice(list(self.data.columns))
             print(f"Randomly selected: {series_name}")
         elif series_name not in self.data.columns:
             raise ValueError(f"Series '{series_name}' not found in data")
-        
-        # Get data and labels
-        series_data = self.data[series_name]
+
         labels = self.get_all_labels(series_name)
         components = self.get_components(series_name)
-        
-        # Create figure with subplots
-        fig, axes = plt.subplots(4, 1, figsize=figsize)
-        
-        # Create title with series type using formatted description
         series_type = labels.get('series_type', 'standard')
-        type_description = self.SERIES_TYPE_DESCRIPTIONS.get(series_type, series_type)
-        
-        if series_type != 'standard':
-            title = f'Synthetic Data Analysis: {series_name} (type: {type_description})'
-        else:
-            title = f'Synthetic Data Analysis: {series_name}'
-        fig.suptitle(title, fontsize=16, fontweight='bold')
-        
-        #  Plot 1: Full series with all events marked 
-        ax = axes[0]
-        ax.plot(self.date_index, series_data, 'b-', alpha=0.7, linewidth=1, label='Full Series')
-        
-        # Mark anomalies
-        for date, magnitude, anom_type, duration, is_shared in labels['anomalies']:
-            ax.axvline(date, color='red', alpha=0.4, linestyle='--', linewidth=2)
-            # Add small marker at the top
-            y_pos = ax.get_ylim()[1] * 0.95
-            ax.plot(date, y_pos, 'rv', markersize=8, alpha=0.7)
-        
-        # Mark trend changepoints
-        for cp_data in labels['trend_changepoints']:
-            date = cp_data[0]
-            ax.axvline(date, color='green', alpha=0.5, linestyle='-', linewidth=2)
-            # Add small marker
-            y_pos = ax.get_ylim()[1] * 0.90
-            ax.plot(date, y_pos, 'g^', markersize=8, alpha=0.7)
-        
-        # Mark level shifts
-        for date, magnitude, shift_type, is_shared in labels['level_shifts']:
-            ax.axvline(date, color='purple', alpha=0.6, linestyle=':', linewidth=2.5)
-            # Add small marker
-            y_pos = ax.get_ylim()[1] * 0.85
-            ax.plot(date, y_pos, '*', color='purple', markersize=10, alpha=0.7)
-        
-        # Mark holidays (main holiday dates, not splash)
-        holiday_main_dates = set(labels.get('holiday_dates', []))
-        for date in holiday_main_dates:
-            ax.axvline(date, color='goldenrod', alpha=0.5, linestyle='-.', linewidth=1.5)
-            # Add small marker
-            y_pos = ax.get_ylim()[1] * 0.80
-            ax.plot(date, y_pos, 'D', color='goldenrod', markersize=6, alpha=0.7)
-        
-        # Mark seasonality changepoints
-        for date, description in labels['seasonality_changepoints']:
-            ax.axvline(date, color='darkcyan', alpha=0.4, linestyle='-.', linewidth=1.5)
-        
-        ax.set_title('Full Time Series with Labeled Events', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Value', fontsize=10)
-        ax.grid(True, alpha=0.3)
-        
-        # Custom legend
-        from matplotlib.lines import Line2D
-        legend_elements = [
-            Line2D([0], [0], color='b', linewidth=2, label='Data'),
-            Line2D([0], [0], color='red', linestyle='--', linewidth=2, label='Anomalies'),
-            Line2D([0], [0], color='green', linestyle='-', linewidth=2, label='Trend Changes'),
-            Line2D([0], [0], color='purple', linestyle=':', linewidth=2, label='Level Shifts'),
-            Line2D([0], [0], color='goldenrod', linestyle='-.', linewidth=2, label='Holidays'),
-            Line2D([0], [0], color='darkcyan', linestyle='-.', linewidth=2, label='Seasonality Shift'),
-        ]
-        ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
-        
-        #  Plot 2: Trend and Level Shifts 
-        ax = axes[1]
-        trend_component = components['trend']
-        level_shift_component = components['level_shift']
-        combined_trend = trend_component + level_shift_component
-        
-        ax.plot(self.date_index, trend_component, 'g-', linewidth=2, alpha=0.7, label='Trend')
-        ax.plot(self.date_index, combined_trend, 'k-', linewidth=2, alpha=0.8, label='Trend + Level Shifts')
-        
-        # Mark changepoints with vertical lines
-        for cp_data in labels['trend_changepoints']:
-            date = cp_data[0]
-            ax.axvline(date, color='green', alpha=0.3, linestyle='--', linewidth=1)
-        
-        for date, magnitude, shift_type, is_shared in labels['level_shifts']:
-            ax.axvline(date, color='purple', alpha=0.4, linestyle=':', linewidth=2)
-            # Annotate shift magnitude
-            idx = self.date_index.get_loc(date)
-            if idx < len(combined_trend):
-                ax.annotate(f'{magnitude:+.1f}', 
-                           xy=(date, combined_trend[idx]),
-                           xytext=(10, 10), textcoords='offset points',
-                           fontsize=8, color='purple',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
-        
-        ax.set_title('Trend Component with Changepoints and Level Shifts', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Value', fontsize=10)
-        ax.legend(loc='best', fontsize=9)
-        ax.grid(True, alpha=0.3)
-        
-        #  Plot 3: Seasonality and Holidays 
-        ax = axes[2]
-        seasonality_component = components['seasonality']
-        holiday_component = components['holidays']
-        
-        ax.plot(self.date_index, seasonality_component, 'c-', linewidth=1, alpha=0.6, label='Seasonality')
-        ax.plot(self.date_index, holiday_component, 'orange', linewidth=1.5, alpha=0.7, label='Holidays')
-        ax.plot(self.date_index, seasonality_component + holiday_component, 
-                'b-', linewidth=1, alpha=0.8, label='Combined')
-        
-        # Mark ALL core holiday dates with markers (not just top 5)
-        # This ensures multi-day patterns and random holidays are all visible
-        holiday_dates = sorted(labels['holiday_impacts'].keys())
-        if holiday_dates:
-            for date in holiday_dates:
-                ax.axvline(date, color='orange', alpha=0.2, linestyle='--', linewidth=1)
-                idx = self.date_index.get_loc(date)
-                if idx < len(holiday_component):
-                    ax.plot(date, holiday_component[idx], 'o', color='orange', markersize=4, alpha=0.6)
-            
-            # Group holidays by (month, day) or by pattern to find unique holiday types
-            # Then annotate ALL occurrences of the top holiday types
-            from collections import defaultdict
-            holiday_groups = defaultdict(list)
-            
-            for date in holiday_dates:
-                # Create key based on month/day for recurring holidays
-                key = (date.month, date.day)
-                holiday_groups[key].append((date, labels['holiday_impacts'][date]))
-            
-            # Find top holiday types by total impact across all occurrences
-            holiday_type_impacts = []
-            for key, occurrences in holiday_groups.items():
-                total_impact = sum(abs(impact) for _, impact in occurrences)
-                avg_impact = total_impact / len(occurrences)
-                holiday_type_impacts.append((key, occurrences, total_impact, avg_impact))
-            
-            # Sort by total impact to get most significant holiday types
-            holiday_type_impacts.sort(key=lambda x: x[2], reverse=True)
-            
-            # Annotate ALL occurrences of the top 3-5 holiday types
-            max_types = min(5, len(holiday_type_impacts))
-            annotated_count = 0
-            
-            for i, (key, occurrences, total_impact, avg_impact) in enumerate(holiday_type_impacts[:max_types]):
-                for date, impact in occurrences:
-                    idx = self.date_index.get_loc(date)
-                    if idx < len(holiday_component):
-                        # Add text annotation showing the impact value
-                        ax.annotate(f'{impact:+.0f}', 
-                                   xy=(date, holiday_component[idx]),
-                                   xytext=(0, 10), textcoords='offset points',
-                                   fontsize=7, color='darkorange', ha='center',
-                                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7, edgecolor='orange'))
-                        annotated_count += 1
-        
-        ax.set_title('Seasonality and Holiday Effects', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Value', fontsize=10)
-        ax.legend(loc='best', fontsize=9)
-        ax.grid(True, alpha=0.3)
-        
-        #  Plot 4: Noise and Anomalies 
-        ax = axes[3]
-        noise_component = components['noise']
-        anomaly_component = components['anomalies']
-        
-        ax.plot(self.date_index, noise_component, 'gray', linewidth=0.5, alpha=0.75, label='Noise')
-        ax.plot(self.date_index, anomaly_component, 'r-', linewidth=2, alpha=0.8, label='Anomalies')
-        
-        # Mark anomalies with details
-        for date, magnitude, anom_type, duration, is_shared in labels['anomalies']:
-            ax.axvline(date, color='red', alpha=0.2, linestyle='--', linewidth=1)
-            idx = self.date_index.get_loc(date)
-            if idx < len(anomaly_component):
-                # Annotate anomaly type and magnitude
-                ax.annotate(f'{anom_type}\n{magnitude:+.1f}', 
-                           xy=(date, anomaly_component[idx]),
-                           xytext=(10, 10), textcoords='offset points',
-                           fontsize=7, color='red',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
-                           arrowprops=dict(arrowstyle='->', color='red', alpha=0.5))
-        
-        # Mark noise changepoints
-        for date, old_params, new_params in labels['noise_changepoints']:
-            ax.axvline(date, color='gray', alpha=0.3, linestyle=':', linewidth=1.5)
-        
-        ax.set_title('Noise and Anomalies', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Date', fontsize=10)
-        ax.set_ylabel('Value', fontsize=10)
-        ax.legend(loc='best', fontsize=9)
-        ax.grid(True, alpha=0.3)
-        
-        # Format x-axis for all subplots
-        for ax in axes:
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=max(1, self.n_days // 365 // 2)))
-            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-        
-        # Add text box with summary statistics
-        stats_text = (
-            f"Scale: {labels['series_scale']:.1f}x | "
-            f"Noise/Signal: {labels['noise_to_signal_ratio']:.3f}\n"
-            f"Trend CPs: {len(labels['trend_changepoints'])} | "
-            f"Level Shifts: {len(labels['level_shifts'])} | "
-            f"Anomalies: {len(labels['anomalies'])} | "
-            f"Holidays: {len(labels['holiday_impacts'])}"
+        description = self.SERIES_TYPE_DESCRIPTIONS.get(series_type, series_type)
+
+        fig = plot_feature_panels(
+            series_name=series_name,
+            date_index=self.date_index,
+            series_data=self.data[series_name],
+            components=components,
+            labels=labels,
+            series_type_description=description if series_type != 'standard' else None,
+            scale=labels.get('series_scale'),
+            noise_to_signal=labels.get('noise_to_signal_ratio'),
+            figsize=figsize,
+            title_prefix='Synthetic Data Analysis',
+            save_path=save_path,
+            show=show,
         )
-        fig.text(0.5, 0.02, stats_text, ha='center', fontsize=10,
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-        
-        # Save or show
+
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
             print(f"Plot saved to: {save_path}")
-        
-        if show:
-            plt.show()
-        
+
         return fig
 
 

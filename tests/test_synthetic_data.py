@@ -423,7 +423,63 @@ class TestSyntheticDataGeneration(unittest.TestCase):
                     os.remove(temp_file)
         except ImportError:
             self.skipTest("matplotlib not available")
-    
+
+    def test_machine_summary_structure(self):
+        """Test machine-friendly summary structure and JSON serialization."""
+        original_mplconfig = os.environ.get('MPLCONFIGDIR')
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                os.environ['MPLCONFIGDIR'] = tmpdir
+                gen = generate_synthetic_daily_data(
+                    n_days=180,
+                    n_series=3,
+                    random_seed=99,
+                    include_regressors=True,
+                )
+
+                summary = gen.machine_summary(max_events_per_type=2)
+
+                self.assertIn('meta', summary, "Summary should include meta section")
+                self.assertIn('series', summary, "Summary should include per-series entries")
+                self.assertEqual(summary['meta']['n_series'], 3, "Metadata should reflect series count")
+                self.assertEqual(len(summary['series']), 3, "Should include all series details")
+
+                first_series = summary['series'][0]
+                expected_keys = {
+                    'name',
+                    'type',
+                    'scale_factor',
+                    'noise_to_signal_ratio',
+                    'seasonality_strengths',
+                    'value_stats',
+                    'event_counts',
+                }
+                self.assertTrue(expected_keys.issubset(first_series.keys()), "Missing expected series metadata")
+
+                events = first_series.get('events')
+                self.assertIsInstance(events, dict, "Events should be present when include_events=True")
+                self.assertIn('holidays', events, "Holiday details should be included in events")
+
+                # Ensure limiting works and counts align
+                trend_list = events.get('trend_changepoints', [])
+                count_reported = first_series['event_counts']['trend_changepoints']
+                expected_length = min(count_reported, 2)
+                self.assertEqual(len(trend_list), expected_length, "Trend list should respect max limit")
+
+                filtered = gen.machine_summary(series_name=first_series['name'], max_events_per_type=1)
+                self.assertEqual(len(filtered['series']), 1, "Filtered summary should only include requested series")
+                self.assertEqual(filtered['series'][0]['name'], first_series['name'], "Filtered summary should match series")
+
+                json_payload = gen.machine_summary(series_name=first_series['name'], max_events_per_type=1, as_json=True)
+                parsed = json.loads(json_payload)
+                self.assertIsInstance(parsed, dict, "JSON payload should parse into dict")
+                self.assertEqual(parsed['series'][0]['name'], first_series['name'], "JSON payload should contain requested series")
+        finally:
+            if original_mplconfig is None:
+                os.environ.pop('MPLCONFIGDIR', None)
+            else:
+                os.environ['MPLCONFIGDIR'] = original_mplconfig
+
     def test_slope_changes_are_meaningful(self):
         """Test that trend changepoints have meaningful slope changes."""
         gen = generate_synthetic_daily_data(
