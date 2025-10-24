@@ -4182,9 +4182,13 @@ class LevelShiftMagic(EmptyTransformer):
     """Detects and corrects for level shifts. May seriously alter trend.
 
     Args:
-        method (str): "clip" or "remove"
-        std_threshold (float): number of std devs from mean to call an outlier
-        fillna (str): fillna method to use per tools.impute.FillNA
+        window_size (int): size of rolling window for detection
+        alpha (float): threshold multiplier for standard deviation
+        grouping_forward_limit (int): number of periods to group nearby shifts
+        max_level_shifts (int): maximum number of level shifts to detect
+        alignment (str): method for aligning level shift magnitudes
+        output (str): 'multivariate' (default, each series independent) or 'univariate' 
+            (detect shared level shifts across series)
     """
 
     def __init__(
@@ -4194,7 +4198,7 @@ class LevelShiftMagic(EmptyTransformer):
         grouping_forward_limit: int = 3,
         max_level_shifts: int = 20,
         alignment: str = "average",
-        old_way: bool = False,
+        output: str = "multivariate",
         **kwargs,
     ):
         super().__init__(name="LevelShiftMagic")
@@ -4203,7 +4207,12 @@ class LevelShiftMagic(EmptyTransformer):
         self.grouping_forward_limit = grouping_forward_limit
         self.max_level_shifts = max_level_shifts
         self.alignment = alignment
-        self.old_way = old_way
+        self.output = output
+        
+        if output not in ['multivariate', 'univariate']:
+            raise ValueError(
+                f"output must be 'multivariate' or 'univariate', got '{output}'"
+            )
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -4232,6 +4241,9 @@ class LevelShiftMagic(EmptyTransformer):
                 ],
                 [0.5, 0.2, 0.15, 0.25, 0.05],
             )[0],
+            "output": random.choices(
+                ['multivariate', 'univariate'], [0.8, 0.2]
+            )[0],
         }
 
     def fit(self, df):
@@ -4240,6 +4252,14 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        if self.output == 'univariate':
+            self._fit_univariate(df)
+        else:
+            self._fit_multivariate(df)
+        return self
+    
+    def _fit_multivariate(self, df):
+        """Fit multivariate mode - each series analyzed independently."""
         rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
         # pandas 1.1.0 introduction, or thereabouts
         try:
@@ -4274,58 +4294,39 @@ class LevelShiftMagic(EmptyTransformer):
         )
         group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
         max_mask = diff_abs == maxes
-        if not self.old_way:
-            # new way is from  gpt o1-preview which thought that the old way was leading to
-            # errors when doing the mean of the group ids
-            # I am too sleepy to be convinced for sure
-            # but this is undeniably faster, and still passes the previous unittest
-            # yielding only some (more) level shifts on a few edge cases it seems
-            group_ids_np = group_ids.to_numpy()
-            diff_abs_np = diff_abs.to_numpy()
-            diff_mask_np = diff_mask.to_numpy()
-            max_mask_np = max_mask.to_numpy()
+        
+        # Progressively identify level shifts up to max_level_shifts
+        group_ids_np = group_ids.to_numpy()
+        diff_abs_np = diff_abs.to_numpy()
+        diff_mask_np = diff_mask.to_numpy()
+        max_mask_np = max_mask.to_numpy()
 
-            # Initialize curr_diff_np
-            used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+        # Initialize curr_diff_np
+        used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+        used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+        used_groups_unique = np.unique(used_groups_flat)
+        curr_diff_np = np.where(
+            (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
+            diff_abs_np,
+            np.nan,
+        )
+        curr_diff_sum = np.nansum(curr_diff_np)
+        count = 0
+
+        while curr_diff_sum != 0 and count < self.max_level_shifts:
+            curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
+            mask = curr_diff_np == curr_maxes_np
+            max_mask_np |= mask
+            used_groups_np = np.where(mask, group_ids_np, np.nan)
             used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
             used_groups_unique = np.unique(used_groups_flat)
-            curr_diff_np = np.where(
-                (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
-                diff_abs_np,
-                np.nan,
+            mask_to_update = (
+                np.isin(group_ids_np, used_groups_unique) & diff_mask_np
             )
-            curr_diff_sum = np.nansum(curr_diff_np)
-            count = 0
-
-            while curr_diff_sum != 0 and count < self.max_level_shifts:
-                curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
-                mask = curr_diff_np == curr_maxes_np
-                max_mask_np |= mask
-                used_groups_np = np.where(mask, group_ids_np, np.nan)
-                used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
-                used_groups_unique = np.unique(used_groups_flat)
-                mask_to_update = (
-                    np.isin(group_ids_np, used_groups_unique) & diff_mask_np
-                )
-                curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
-                curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
-                count += 1
-        else:
-            self.used_groups = group_ids[max_mask].mean()
-            curr_diff = diff_abs.where(
-                ((group_ids != self.used_groups) & diff_mask), np.nan
-            )
-            curr_diff_sum = np.nansum(curr_diff.to_numpy())
-            count = 0
-            while curr_diff_sum != 0 and count < self.max_level_shifts:
-                curr_maxes = curr_diff.max()
-                max_mask = max_mask | (curr_diff == curr_maxes)
-                used_groups = group_ids[curr_diff == curr_maxes].mean()
-                curr_diff = curr_diff.where(
-                    ((group_ids != used_groups) & diff_mask), np.nan
-                )
-                curr_diff_sum = np.sum(~curr_diff.isnull().to_numpy())
-                count += 1
+            curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
+            curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
+            count += 1
+        
         # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
         if self.alignment == "last_value":
             self.lvlshft = (
@@ -4376,6 +4377,158 @@ class LevelShiftMagic(EmptyTransformer):
             )
         else:
             self.lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+    
+    def _fit_univariate(self, df):
+        """Fit univariate mode - detect level shifts common across series.
+        
+        Strategy: Scale all series to comparable ranges, detect shifts on the
+        average signal, then apply shifts back to original scales.
+        """
+        from sklearn.preprocessing import StandardScaler
+        
+        # Store original data info for unscaling
+        self.series_mean_ = df.mean(axis=0)
+        self.series_std_ = df.std(axis=0).replace(0, 1)  # Avoid division by zero
+        
+        # Standardize each series to make them comparable
+        df_scaled = (df - self.series_mean_) / self.series_std_
+        
+        # Create aggregate signal (mean across all standardized series)
+        agg_signal = df_scaled.mean(axis=1)
+        
+        # Convert to DataFrame for rolling operations
+        agg_df = pd.DataFrame(agg_signal, columns=['aggregate'], index=df.index)
+        
+        # Detect level shifts on the aggregate signal
+        rolling = agg_df.rolling(self.window_size, center=False, min_periods=1).mean()
+        try:
+            indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                window_size=self.window_size
+            )
+            rolling_forward = agg_df.rolling(window=indexer, min_periods=1).mean()
+        except Exception:
+            rolling_forward = (
+                agg_df.loc[::-1]
+                .rolling(self.window_size, center=False, min_periods=1)
+                .mean()[::-1]
+            )
+        
+        diff = rolling - rolling_forward
+        threshold = diff.std() * self.alpha
+        diff_abs = diff.abs()
+        diff_mask_0 = diff_abs > threshold
+        
+        # Merge nearby groups
+        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
+            limit=self.grouping_forward_limit
+        )
+        diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+        
+        # Find max of each group
+        maxes = diff_abs.where(diff_mask, np.nan).max()
+        range_arr = pd.DataFrame(
+            np.arange(len(agg_df)),
+            index=agg_df.index,
+            columns=agg_df.columns,
+        )
+        group_ids = range_arr[~diff_mask].ffill()
+        max_mask = diff_abs == maxes
+        
+        # Progressively identify level shifts
+        max_mask_np = max_mask.to_numpy()
+        group_ids_np = group_ids.to_numpy()
+        diff_abs_np = diff_abs.to_numpy()
+        diff_mask_np = diff_mask.to_numpy()
+        
+        used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+        used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+        used_groups_unique = np.unique(used_groups_flat)
+        curr_diff_np = np.where(
+            (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
+            diff_abs_np,
+            np.nan,
+        )
+        curr_diff_sum = np.nansum(curr_diff_np)
+        count = 0
+        
+        while curr_diff_sum != 0 and count < self.max_level_shifts:
+            curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
+            mask = curr_diff_np == curr_maxes_np
+            max_mask_np |= mask
+            used_groups_np = np.where(mask, group_ids_np, np.nan)
+            used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+            used_groups_unique = np.unique(used_groups_flat)
+            mask_to_update = (
+                np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+            )
+            curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
+            curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
+            count += 1
+        
+        # Convert back to DataFrame mask
+        max_mask = pd.DataFrame(max_mask_np, index=agg_df.index, columns=agg_df.columns)
+        
+        # Calculate level shift magnitudes on aggregate
+        if self.alignment == "last_value":
+            agg_lvlshft = (
+                (agg_df[max_mask] - agg_df[max_mask.shift(1)].shift(-1))
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        elif self.alignment == "average":
+            lvlshft1 = (
+                (agg_df[max_mask] - agg_df[max_mask.shift(1)].shift(-1))
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+            lvlshft2 = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+            agg_lvlshft = (lvlshft1 + lvlshft2) / 2
+        elif self.alignment == "rolling_diff_3nn":
+            agg_lvlshft = (
+                (
+                    (
+                        diff[max_mask.shift(1)].shift(-1).fillna(0)
+                        + diff[max_mask]
+                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
+                    )
+                    / 3
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        elif self.alignment == "rolling_diff_5nn":
+            agg_lvlshft = (
+                (
+                    (
+                        diff[max_mask.shift(2)].shift(-2).fillna(0)
+                        + diff[max_mask.shift(1)].shift(-1).fillna(0)
+                        + diff[max_mask]
+                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
+                        + diff[max_mask.shift(-2)].shift(2).fillna(0)
+                    )
+                    / 5
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        else:
+            agg_lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+        
+        # Apply the same shift pattern to all series, scaled appropriately
+        # The shift magnitudes are in standardized units, convert back to original scale for each series
+        self.lvlshft = pd.DataFrame(
+            index=df.index,
+            columns=df.columns,
+            dtype=float
+        )
+        
+        for col in df.columns:
+            # Scale the aggregate shift by this series' std deviation
+            self.lvlshft[col] = agg_lvlshft['aggregate'] * self.series_std_[col]
 
         return self
 
