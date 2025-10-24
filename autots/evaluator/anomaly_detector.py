@@ -18,6 +18,7 @@ from autots.tools.anomaly_utils import (
     score_to_anomaly,
 )
 from autots.tools.transform import RandomTransform, GeneralTransformer
+from autots.tools.impute import FillNA
 from autots.evaluator.auto_model import random_model
 from autots.evaluator.auto_model import back_forecast
 
@@ -80,13 +81,7 @@ class AnomalyDetector(object):
         self.anomaly_classifier = None
 
     def detect(self, df):
-        """All will return -1 for anomalies.
-
-        Args:
-            df (pd.DataFrame): pandas wide-style data
-        Returns:
-            pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)
-        """
+        """Shared anomaly detection routine."""
         self.df = df.copy()
         self.df_anomaly = df.copy()
         if self.transform_dict is not None:
@@ -157,6 +152,23 @@ class AnomalyDetector(object):
             mask_replace = mask_minus_one & ~(mask_prev_one & mask_next_one)
             self.anomalies[mask_replace] = 1
         return self.anomalies, self.scores
+
+    def remove_anomalies(self, df=None, fillna=None):
+        """Detect and return a copy of the data with anomalies removed (set NaN or filled).
+
+        Args:
+            df (pd.DataFrame, optional): data to run detection on. If None, uses previous `detect` input.
+            fillna (str, optional): fill method passed to `autots.tools.impute.FillNA`.
+        """
+        if df is not None:
+            _, _ = self.detect(df)
+        elif not hasattr(self, "df"):
+            raise ValueError("Call `detect(df)` or provide `df` before removing anomalies.")
+        df_clean = self.df.copy()
+        df_clean = df_clean[self.anomalies != -1]
+        if fillna is not None:
+            df_clean = FillNA(df_clean, method=fillna, window=10)
+        return df_clean
 
     def plot(self, series_name=None, title=None, marker_size=None, plot_kwargs={}, start_date=None):
         import matplotlib.pyplot as plt

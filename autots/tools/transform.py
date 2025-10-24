@@ -7211,7 +7211,7 @@ class GeneralTransformer(object):
             "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
             "ThetaTransformer": decomposes into theta lines, then recombines
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
-            "ChangePointDetector": detect changepoints using advanced detector and remove associated trend
+            "ChangepointDetector": detect changepoints using advanced detector and remove associated trend
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
             "UpscaleDownscaleTransformer": upscales and downscales
             "ReconciliationTransformer": creates hierarchies then reconciles on the way back
@@ -7728,7 +7728,7 @@ transformer_dict = {
     "Constraint": 0.01,  # 52
     "FIRFilter": 0.01,
     "ThetaTransformer": 0.01,
-    "ChangePointDetector": 0.01,
+    "ChangepointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
     "UpscaleDownscaleTransformer": 0.01,
@@ -7818,7 +7818,7 @@ decompositions = {
     "IntermittentOccurrence": 0.005,
     "PCA": 0.005,
     "ThetaTransformer": 0.005,
-    "ChangePointDetector": 0.01,
+    "ChangepointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
 }
