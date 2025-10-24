@@ -6,7 +6,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer, MeanPercentSplitter
+from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer, MeanPercentSplitter, LevelShiftMagic
 from autots.models.base import PredictionObject
 
 class TestTransforms(unittest.TestCase):
@@ -561,3 +561,221 @@ class TestTransforms(unittest.TestCase):
         
         with self.assertRaises(ValueError):
             UpscaleDownscaleTransformer(factor=0)
+
+    def test_level_shift_magic_basic(self):
+        """Test LevelShiftMagic basic functionality."""
+        # Create test data with known level shifts
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=200, freq='D')
+        
+        # Series 1: level shift at index 100
+        series1 = np.concatenate([
+            np.random.randn(100) + 10,
+            np.random.randn(100) + 15  # shift up by 5
+        ])
+        
+        # Series 2: level shift at index 100 (same time)
+        series2 = np.concatenate([
+            np.random.randn(100) + 20,
+            np.random.randn(100) + 18  # shift down by 2
+        ])
+        
+        # Series 3: no level shift
+        series3 = np.random.randn(200) + 30
+        
+        df = pd.DataFrame({
+            'series1': series1,
+            'series2': series2,
+            'series3': series3
+        }, index=dates)
+        
+        # Test get_new_params
+        params = LevelShiftMagic.get_new_params()
+        self.assertTrue(params)
+        self.assertIsInstance(params, dict)
+        self.assertIn('window_size', params)
+        self.assertIn('alpha', params)
+        self.assertIn('output', params)
+        self.assertIn(params['output'], ['multivariate', 'univariate'])
+        
+        # Test basic fit/transform/inverse (multivariate mode)
+        transformer = LevelShiftMagic(
+            window_size=30,
+            alpha=2.5,
+            grouping_forward_limit=3,
+            max_level_shifts=20,
+            alignment='average',
+            output='multivariate'
+        )
+        
+        transformer.fit(df)
+        self.assertTrue(hasattr(transformer, 'lvlshft'))
+        self.assertEqual(transformer.lvlshft.shape, df.shape)
+        
+        transformed = transformer.transform(df)
+        self.assertIsInstance(transformed, pd.DataFrame)
+        self.assertEqual(transformed.shape, df.shape)
+        self.assertCountEqual(transformed.index.tolist(), df.index.tolist())
+        self.assertCountEqual(transformed.columns.tolist(), df.columns.tolist())
+        
+        # Test inverse transform
+        inverse_transformed = transformer.inverse_transform(transformed)
+        self.assertIsInstance(inverse_transformed, pd.DataFrame)
+        self.assertEqual(inverse_transformed.shape, df.shape)
+        
+        # Check that inverse recovers original data (within numerical precision)
+        max_diff = np.abs(df - inverse_transformed).max().max()
+        self.assertLess(max_diff, 1e-10, "Inverse transform should recover original data")
+        
+        # Test fit_transform
+        transformer2 = LevelShiftMagic(output='multivariate')
+        result = transformer2.fit_transform(df)
+        self.assertIsInstance(result, pd.DataFrame)
+        self.assertEqual(result.shape, df.shape)
+
+    def test_level_shift_magic_univariate(self):
+        """Test LevelShiftMagic univariate mode (shared level shifts)."""
+        # Create test data with shared level shifts
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=200, freq='D')
+        
+        # All series have shift at index 100
+        series1 = np.concatenate([
+            np.random.randn(100) + 10,
+            np.random.randn(100) + 15
+        ])
+        series2 = np.concatenate([
+            np.random.randn(100) + 20,
+            np.random.randn(100) + 25
+        ])
+        series3 = np.concatenate([
+            np.random.randn(100) + 30,
+            np.random.randn(100) + 35
+        ])
+        
+        df = pd.DataFrame({
+            'series1': series1,
+            'series2': series2,
+            'series3': series3
+        }, index=dates)
+        
+        # Test univariate mode
+        transformer = LevelShiftMagic(
+            window_size=30,
+            alpha=2.5,
+            output='univariate'
+        )
+        
+        transformer.fit(df)
+        self.assertTrue(hasattr(transformer, 'lvlshft'))
+        self.assertTrue(hasattr(transformer, 'series_mean_'))
+        self.assertTrue(hasattr(transformer, 'series_std_'))
+        self.assertEqual(transformer.lvlshft.shape, df.shape)
+        
+        transformed = transformer.transform(df)
+        inverse_transformed = transformer.inverse_transform(transformed)
+        
+        # Check that inverse recovers original data
+        max_diff = np.abs(df - inverse_transformed).max().max()
+        self.assertLess(max_diff, 1e-10, "Inverse transform should recover original data")
+
+    def test_level_shift_magic_parameter_validation(self):
+        """Test LevelShiftMagic parameter validation."""
+        # Test invalid output parameter
+        with self.assertRaises(ValueError) as context:
+            LevelShiftMagic(output='invalid_mode')
+        self.assertIn("multivariate", str(context.exception))
+        self.assertIn("univariate", str(context.exception))
+        
+        # Test valid parameters
+        try:
+            LevelShiftMagic(output='multivariate')
+            LevelShiftMagic(output='univariate')
+        except ValueError:
+            self.fail("Valid output parameters raised ValueError")
+
+    def test_level_shift_magic_alignment_methods(self):
+        """Test LevelShiftMagic with different alignment methods."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series1': np.concatenate([np.random.randn(50) + 10, np.random.randn(50) + 15]),
+            'series2': np.concatenate([np.random.randn(50) + 20, np.random.randn(50) + 25]),
+        }, index=dates)
+        
+        alignment_methods = ['average', 'last_value', 'rolling_diff', 'rolling_diff_3nn', 'rolling_diff_5nn']
+        
+        for alignment in alignment_methods:
+            transformer = LevelShiftMagic(
+                window_size=20,
+                alpha=2.5,
+                alignment=alignment,
+                output='multivariate'
+            )
+            
+            transformer.fit(df)
+            transformed = transformer.transform(df)
+            inverse_transformed = transformer.inverse_transform(transformed)
+            
+            # Check that inverse recovers original data
+            max_diff = np.abs(df - inverse_transformed).max().max()
+            self.assertLess(max_diff, 1e-10, f"Alignment '{alignment}' should allow perfect inverse")
+
+    def test_level_shift_magic_edge_cases(self):
+        """Test LevelShiftMagic edge cases."""
+        # Test with single series
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        single_df = pd.DataFrame({
+            'series1': np.concatenate([np.random.randn(50) + 10, np.random.randn(50) + 15])
+        }, index=dates)
+        
+        transformer = LevelShiftMagic(output='multivariate')
+        transformer.fit(single_df)
+        transformed = transformer.transform(single_df)
+        inverse_transformed = transformer.inverse_transform(transformed)
+        
+        max_diff = np.abs(single_df - inverse_transformed).max().max()
+        self.assertLess(max_diff, 1e-10)
+        
+        # Test with no level shifts (stationary data)
+        stationary_df = pd.DataFrame({
+            'series1': np.random.randn(100),
+            'series2': np.random.randn(100),
+        }, index=dates)
+        
+        transformer2 = LevelShiftMagic(output='multivariate')
+        transformer2.fit(stationary_df)
+        transformed2 = transformer2.transform(stationary_df)
+        inverse_transformed2 = transformer2.inverse_transform(transformed2)
+        
+        max_diff2 = np.abs(stationary_df - inverse_transformed2).max().max()
+        self.assertLess(max_diff2, 1e-10)
+
+    def test_level_shift_magic_forecast_inverse(self):
+        """Test LevelShiftMagic inverse transform on forecast data."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series1': np.concatenate([np.random.randn(50) + 10, np.random.randn(50) + 15]),
+            'series2': np.concatenate([np.random.randn(50) + 20, np.random.randn(50) + 25]),
+        }, index=dates)
+        
+        transformer = LevelShiftMagic(output='multivariate')
+        transformer.fit(df)
+        
+        # Create forecast data (future dates)
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=10, freq='D')
+        forecast_df = pd.DataFrame({
+            'series1': np.random.randn(10) + 15,
+            'series2': np.random.randn(10) + 25,
+        }, index=forecast_dates)
+        
+        # Inverse transform should work on forecast data
+        forecast_inverse = transformer.inverse_transform(forecast_df)
+        self.assertIsInstance(forecast_inverse, pd.DataFrame)
+        self.assertEqual(forecast_inverse.shape, forecast_df.shape)
+        self.assertCountEqual(forecast_inverse.index.tolist(), forecast_dates.tolist())
+        
+        # The forecast should have level shifts applied via bfill
+        self.assertTrue(np.isfinite(forecast_inverse.values).all())

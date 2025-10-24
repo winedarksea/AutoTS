@@ -29,6 +29,34 @@ class TimeSeriesFeatureDetector:
     """
     Comprehensive feature detection pipeline for univariate time series.
 
+        Parameters
+    ----------
+    seasonality_params : dict, optional
+        Parameters for DatepartRegressionTransformer used in final seasonality fit
+    holiday_params : dict, optional
+        Parameters for HolidayDetector
+    anomaly_params : dict, optional
+        Parameters for AnomalyRemoval
+    changepoint_params : dict, optional
+        Parameters for ChangepointDetector
+    level_shift_params : dict, optional
+        Parameters for LevelShiftMagic
+    level_shift_validation : dict, optional
+        Validation parameters for level shifts
+    general_transformer_params : dict, optional
+        Parameters for GeneralTransformer applied before trend detection
+    smoothing_window : int, optional
+        Window size for smoothing before trend detection
+    refine_seasonality : bool, default=True
+        Whether to refine seasonality after anomaly removal
+    standardize : bool, default=True
+        Whether to standardize series before processing
+    detection_mode : str, default='multivariate'
+        Controls whether detections are unique per series ('multivariate') or 
+        shared across all series ('univariate'). 
+        - 'multivariate': Each series gets unique anomalies, holidays, changepoints, and level shifts
+        - 'univariate': All series share common anomalies, holidays, changepoints, and level shifts
+          (level shifts are detected on aggregated signal and scaled appropriately per series)
     """
     
     TEMPLATE_VERSION = "1.0"
@@ -45,7 +73,17 @@ class TimeSeriesFeatureDetector:
         smoothing_window=None,
         refine_seasonality=True,
         standardize=True,
+        detection_mode='multivariate',
     ):
+        # Set detection_mode first so it can be used in other initializations
+        self.detection_mode = detection_mode
+        
+        # Validate detection_mode
+        if detection_mode not in ['multivariate', 'univariate']:
+            raise ValueError(
+                f"detection_mode must be 'multivariate' or 'univariate', got '{detection_mode}'"
+            )
+        
         self.rough_seasonality_params = {
             'regression_model': {
                 'model': 'ElasticNet',
@@ -65,26 +103,52 @@ class TimeSeriesFeatureDetector:
             'holiday_countries_used': False,
         }
         self.holiday_params = self._sanitize_holiday_params(holiday_params)
-        self.anomaly_params = anomaly_params or {
-            'output': 'multivariate',
-            'method': 'zscore',
-            'method_params': {'distribution': 'norm', 'alpha': 0.01},
-            'transform_dict': None,
-            'fillna': 'ffill',
-        }
-        self.changepoint_params = changepoint_params or {
-            'method': 'pelt',
-            'method_params': {'penalty': 8, 'loss_function': 'l2'},
-            'aggregate_method': 'individual',
-            'min_segment_length': 14,
-        }
-        self.level_shift_params = level_shift_params or {
-            'window_size': 90,
-            'alpha': 2.5,
-            'grouping_forward_limit': 3,
-            'max_level_shifts': 20,
-            'alignment': 'average',
-        }
+        # Ensure anomaly_params uses the correct output mode
+        if anomaly_params is None:
+            self.anomaly_params = {
+                'output': self.detection_mode,
+                'method': 'zscore',
+                'method_params': {'distribution': 'norm', 'alpha': 0.01},
+                'transform_dict': None,
+                'fillna': 'ffill',
+            }
+        else:
+            self.anomaly_params = anomaly_params.copy()
+            # Override output to match detection_mode
+            self.anomaly_params['output'] = self.detection_mode
+        # Ensure changepoint_params uses the correct aggregate_method
+        if changepoint_params is None:
+            # Map detection_mode to aggregate_method: 
+            # 'multivariate' -> 'individual' (each series separate)
+            # 'univariate' -> 'mean' or 'median' (aggregate across series)
+            aggregate_method = 'individual' if self.detection_mode == 'multivariate' else 'mean'
+            self.changepoint_params = {
+                'method': 'pelt',
+                'method_params': {'penalty': 8, 'loss_function': 'l2'},
+                'aggregate_method': aggregate_method,
+                'min_segment_length': 14,
+            }
+        else:
+            self.changepoint_params = changepoint_params.copy()
+            # Override aggregate_method to match detection_mode if not explicitly set
+            if 'aggregate_method' not in self.changepoint_params or self.changepoint_params['aggregate_method'] == 'auto':
+                aggregate_method = 'individual' if self.detection_mode == 'multivariate' else 'mean'
+                self.changepoint_params['aggregate_method'] = aggregate_method
+        
+        # Ensure level_shift_params uses the correct output mode
+        if level_shift_params is None:
+            self.level_shift_params = {
+                'window_size': 90,
+                'alpha': 2.5,
+                'grouping_forward_limit': 3,
+                'max_level_shifts': 20,
+                'alignment': 'average',
+                'output': self.detection_mode,
+            }
+        else:
+            self.level_shift_params = level_shift_params.copy()
+            # Override output to match detection_mode
+            self.level_shift_params['output'] = self.detection_mode
         self.level_shift_validation = level_shift_validation or {
             'window': 14,
             'pad': 2,
@@ -124,8 +188,7 @@ class TimeSeriesFeatureDetector:
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
 
-    @staticmethod
-    def _sanitize_holiday_params(holiday_params):
+    def _sanitize_holiday_params(self, holiday_params):
         """Return holiday detector parameters filtered to supported keys."""
         default_params = {
             'anomaly_detector_params': {},
@@ -140,7 +203,7 @@ class TimeSeriesFeatureDetector:
             'use_islamic_holidays': False,
             'use_hebrew_holidays': False,
             'use_hindu_holidays': False,
-            'output': 'multivariate',
+            'output': self.detection_mode,  # Use instance's detection_mode
             'n_jobs': 1,
         }
 
@@ -162,6 +225,9 @@ class TimeSeriesFeatureDetector:
                 f"Ignoring unsupported holiday_params keys: {sorted(set(unsupported))}",
                 RuntimeWarning,
             )
+        
+        # Override output to match detection_mode
+        sanitized['output'] = self.detection_mode
 
         return sanitized
 
@@ -199,6 +265,7 @@ class TimeSeriesFeatureDetector:
                     'standardize': self.standardize,
                     'refine_seasonality': self.refine_seasonality,
                     'smoothing_window': self.smoothing_window,
+                    'detection_mode': self.detection_mode,
                 },
             },
             'series': {},
@@ -321,46 +388,104 @@ class TimeSeriesFeatureDetector:
         return residual, seasonal, model
 
     def _detect_holidays(self, residual_df):
+        """Detect holidays using HolidayDetector."""
         self.holiday_detector = HolidayDetector(**self.holiday_params)
         try:
             self.holiday_detector.detect(residual_df)
             holiday_flags = self.holiday_detector.dates_to_holidays(residual_df.index, style='series_flag')
         except Exception:
             holiday_flags = pd.DataFrame(0, index=residual_df.index, columns=residual_df.columns)
+        
         holiday_dates = {}
-        for col in residual_df.columns:
-            series_flags = holiday_flags[col] if col in holiday_flags else pd.Series(0, index=residual_df.index)
-            flagged = series_flags[series_flags > 0].index
-            holiday_dates[col] = [pd.Timestamp(ix) for ix in flagged]
+        
+        # Handle both multivariate and univariate outputs
+        if self.detection_mode == 'univariate':
+            # Univariate mode: single column of holiday flags for all series
+            if holiday_flags.shape[1] > 0:
+                holiday_col = holiday_flags.iloc[:, 0]
+                flagged = holiday_col[holiday_col > 0].index
+                holiday_list = [pd.Timestamp(ix) for ix in flagged]
+                # In univariate mode, all series share the same holidays
+                for col in residual_df.columns:
+                    holiday_dates[col] = holiday_list
+            else:
+                for col in residual_df.columns:
+                    holiday_dates[col] = []
+        else:
+            # Multivariate mode: each series has its own holiday flags
+            for col in residual_df.columns:
+                series_flags = holiday_flags[col] if col in holiday_flags else pd.Series(0, index=residual_df.index)
+                flagged = series_flags[series_flags > 0].index
+                holiday_dates[col] = [pd.Timestamp(ix) for ix in flagged]
+        
         return holiday_dates
 
     def _detect_anomalies(self, residual_df):
+        """Detect anomalies using AnomalyRemoval."""
         self.anomaly_detector = AnomalyRemoval(**self.anomaly_params)
         cleaned = self.anomaly_detector.fit_transform(residual_df)
         anomalies = {}
-        for col in residual_df.columns:
-            mask = self.anomaly_detector.anomalies[col] == -1
-            if mask.sum() == 0:
-                anomalies[col] = []
-                continue
+        
+        # Handle both multivariate and univariate outputs
+        if self.detection_mode == 'univariate':
+            # Univariate mode: single column of anomaly flags for all series
+            # anomalies will be a single column, apply to all series
+            anomaly_col = self.anomaly_detector.anomalies.iloc[:, 0]
+            mask = anomaly_col == -1
             anomaly_dates = residual_df.index[mask].tolist()
+            
+            # Create records for each anomalous date
             records = []
             for date in anomaly_dates:
-                magnitude = residual_df.at[date, col]
+                # For univariate, we could use the max magnitude across series or mean
+                magnitudes = residual_df.loc[date, :].values
+                magnitude = float(np.nanmean(magnitudes))
                 score = None
-                if hasattr(self.anomaly_detector, 'scores'):
+                if hasattr(self.anomaly_detector, 'scores') and not self.anomaly_detector.scores.empty:
                     try:
-                        score = float(self.anomaly_detector.scores.loc[date, col])
+                        score = float(self.anomaly_detector.scores.loc[date].iloc[0])
                     except Exception:
                         score = None
-                anomaly_type = self._classify_anomaly_type(residual_df[col], date)
+                anomaly_type = 'point_outlier'  # Simplified for univariate
                 records.append({
                     'date': pd.Timestamp(date),
-                    'magnitude': float(magnitude),
+                    'magnitude': magnitude,
                     'score': score,
                     'type': anomaly_type,
                 })
-            anomalies[col] = records
+            # In univariate mode, all series share the same anomalies
+            for col in residual_df.columns:
+                anomalies[col] = records
+        else:
+            # Multivariate mode: each series has its own anomaly flags
+            for col in residual_df.columns:
+                if col not in self.anomaly_detector.anomalies.columns:
+                    anomalies[col] = []
+                    continue
+                    
+                mask = self.anomaly_detector.anomalies[col] == -1
+                if mask.sum() == 0:
+                    anomalies[col] = []
+                    continue
+                    
+                anomaly_dates = residual_df.index[mask].tolist()
+                records = []
+                for date in anomaly_dates:
+                    magnitude = residual_df.at[date, col]
+                    score = None
+                    if hasattr(self.anomaly_detector, 'scores') and not self.anomaly_detector.scores.empty:
+                        try:
+                            score = float(self.anomaly_detector.scores.loc[date, col])
+                        except Exception:
+                            score = None
+                    anomaly_type = self._classify_anomaly_type(residual_df[col], date)
+                    records.append({
+                        'date': pd.Timestamp(date),
+                        'magnitude': float(magnitude),
+                        'score': score,
+                        'type': anomaly_type,
+                    })
+                anomalies[col] = records
         return cleaned, anomalies
 
     @staticmethod

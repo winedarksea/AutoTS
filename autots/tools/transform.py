@@ -4384,8 +4384,6 @@ class LevelShiftMagic(EmptyTransformer):
         Strategy: Scale all series to comparable ranges, detect shifts on the
         average signal, then apply shifts back to original scales.
         """
-        from sklearn.preprocessing import StandardScaler
-        
         # Store original data info for unscaling
         self.series_mean_ = df.mean(axis=0)
         self.series_std_ = df.std(axis=0).replace(0, 1)  # Avoid division by zero
