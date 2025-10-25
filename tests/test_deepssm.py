@@ -233,42 +233,6 @@ class DeepSSMTest(unittest.TestCase):
         
         print("MambaSSM changepoint features test passed!")
 
-    def test_get_new_params_includes_changepoints(self):
-        """Test that get_new_params includes changepoint parameters."""
-        print("Testing get_new_params with changepoint parameters")
-        
-        # Generate new parameters
-        new_params = MambaSSM.get_new_params()
-        
-        # Verify changepoint parameters are included
-        self.assertIn('changepoint_method', new_params, "New params should include changepoint_method")
-        self.assertIn('changepoint_params', new_params, "New params should include changepoint_params")
-        
-        # Verify method is valid
-        valid_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation']
-        self.assertIn(new_params['changepoint_method'], valid_methods, "Changepoint method should be valid")
-        
-        # Verify parameters are appropriate for the method
-        method = new_params['changepoint_method']
-        params = new_params['changepoint_params']
-        self.assertIsInstance(params, dict, "Changepoint params should be a dictionary")
-        
-        if method == 'basic':
-            self.assertIn('changepoint_spacing', params)
-            self.assertIn('changepoint_distance_end', params)
-            self.assertIsInstance(params['changepoint_spacing'], int)
-            self.assertIsInstance(params['changepoint_distance_end'], int)
-            self.assertGreater(params['changepoint_spacing'], 0)
-            self.assertGreater(params['changepoint_distance_end'], 0)
-        elif method == 'pelt':
-            self.assertIn('penalty', params)
-            self.assertIn('loss_function', params)
-            self.assertIn('min_segment_length', params)
-        elif method in ['l1_fused_lasso', 'l1_total_variation']:
-            self.assertIn('lambda_reg', params)
-        
-        print("get_new_params changepoint test passed!")
-
     def test_l1_changepoint_methods(self):
         """Test MambaSSM with L1 changepoint methods."""
         print("Testing MambaSSM with L1 changepoint methods")

@@ -291,6 +291,8 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 
 `MADE` is *(Scaled) Mean Absolute Differential Error*. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to 'MAE' when forecast_length=1. It is better for optimization than contour.
 
+There are also shape and direction focused weightings such as `oda_weighting`, `dwae_weighting`, `ewmae_weighting`, `uwmse_weighting`, `smoothness_weighting`, `dwd_weighting`, `maxe_weighting`, `mqae_weighting`, `mate_weighting`, `matse_weighting`, and `wasserstein_weighting` that can be mixed in when those behaviors need emphasis.
+
 The contour and MADE metrics are useful as they encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.
 
 If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.
@@ -408,12 +410,11 @@ Linux may also require `sudo apt install build-essential` for some packages.
 You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
 
 ### Requirements:
-	Python >= 3.6
+	Python >= 3.9
 	numpy
 		>= 1.20 (Sliding Window in Motif and WindowRegression)
 	pandas
 		>= 1.1.0 (prediction.long_form_results())
-		gluonts incompatible with 1.1, 1.2, 1.3
 	sklearn
 		>= 0.23.0 (PoissonReg)
 		>= 0.24.0 (OrdinalEncoder handle_unknown)
@@ -431,7 +432,7 @@ Limited functionality should exist without scikit-learn.
 	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models, nan_euclidean distance
 Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
-Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.
+Prophet and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.
 
 `pip install autots['additional']`
 ### Optional Packages
@@ -446,81 +447,21 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 	xgboost
 	tensorflow-probability
 	fredapi
-	greykite
 	matplotlib
 	pytorch-forecasting
-	neuralprophet
 	scipy
 	arch
 	
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
 #### Safest bet for installation:
-venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/) with some more tips [here](https://syllepsis.live/2022/01/17/setting-up-and-optimizing-python-for-data-science-on-intel-amd-and-arm-including-apple-computers/).
+venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/) with some more tips.
 ```shell
-# create a conda or venv environment
-conda create -n timeseries python=3.9
+# create a mamba, conda, or venv environment
+mamba create -n timeseries python=3.12 scikit-learn statsmodels matplotlib tqdm prophet holidays lightgbm xgboost numexpr bottleneck seaborn autots pytorch torchvision torchaudio -c conda-forge -c pytorch
 conda activate timeseries
-
-python -m pip install numpy scipy scikit-learn statsmodels lightgbm xgboost numexpr bottleneck yfinance pytrends fredapi --exists-action i
-
-python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
-python -m pip install tensorflow
-python -m pip install mxnet --no-deps     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-python -m pip install gluonts arch
-python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
-# install pytorch
-python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
-
-python -m pip install autots --exists-action i
-```
-
-```shell
-mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests xgboost -c conda-forge
-pip install mxnet --no-deps
-pip install yfinance pytrends fredapi gluonts arch
-pip install intel-tensorflow scikit-learn-intelex
-mamba install spyder
-mamba install autots -c conda-forge
-```
-
-```shell
-conda install pytorch torchvision torchaudio cpuonly -c pytorch
-conda install pytorch-forecasting -c conda-forge
-pip install neuralprophet
-```
-GPU support, Linux only. CUDA versions will need to match package requirements. Mixed CUDA versions may cause crashes if run in same session.
-```shell
-nvidia-smi
-mamba activate base
-mamba install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 nccl  # install in conda base
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/  # NOT PERMANENT unless add to ./bashrc make sure is for base env, mine /home/colin/mambaforge/lib
-mamba create -n gpu python=3.8 scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
-mamba activate gpu
-pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
-pip install mxnet-cu112 --no-deps
-pip install gluonts tensorflow neuralprophet pytorch-lightning pytorch-forecasting
-mamba install spyder
-```
-`mamba` and `conda` commands are generally interchangeable. `conda env remove -n env_name`
-
-#### Intel conda channel installation (sometime faster, also, more prone to bugs)
-https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
-```shell
-# create the environment
-mamba create -n aikit37 python=3.7 intel-aikit-modin pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests tensorflow dpctl -c intel
-conda config --env --add channels conda-forge
-conda config --env --add channels intel
-conda config --env --get channels
-
-# install additional packages as desired
-python -m pip install mxnet --no-deps
-python -m pip install gluonts yfinance pytrends fredapi
-mamba update -c intel intel-aikit-modin
-
-python -m pip install autots
-
-# OMP_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
+python -m pip install tensorflow yfinance pytrends fredapi arch neuralforecast --exists-action i
+# OMP_NUM_THREADS
 ```
 
 ### Speed Benchmark

@@ -200,7 +200,12 @@ class AutoTSTest(unittest.TestCase):
         self.assertLessEqual(len(set(res)), 10)
         # check all mosaic and horizontal styles were created
         count_horz = len([x for x in ensemble if "horizontal" in x or "mosaic" in x])
-        self.assertEqual(len(initial_results[initial_results["Ensemble"] == 2]["ModelParameters"].unique()), count_horz)
+        actual_unique = initial_results[initial_results["Ensemble"] == 2]["ModelParameters"].unique()
+        self.assertEqual(
+            len(actual_unique), 
+            count_horz,
+            msg=f"Expected {count_horz} horizontal/mosaic ensembles but found {len(actual_unique)}. Expected ensemble types: {[x for x in ensemble if 'horizontal' in x or 'mosaic' in x]}"
+        )
         # check the mosaic details were equal
         self.assertTrue(len(model.initial_results.full_mae_errors) == len(model.initial_results.full_mae_ids) == len(model.initial_results.full_mae_vals))
         # check at least 1 'simple' ensemble worked

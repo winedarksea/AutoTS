@@ -5,6 +5,10 @@ import pandas as pd
 from autots.tools.shaping import infer_frequency
 from autots.tools.window_functions import chunk_reshape
 
+valid_changepoint_methods = [
+    'basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation',
+    'cusum', 'ewma', 'autoencoder', 'composite_fused_lasso',
+]
 
 def _compute_segment_statistics(series, changepoints):
     """
@@ -2718,11 +2722,9 @@ class ChangepointDetector(object):
             dict: Complete parameter dictionary for ChangepointDetector initialization
         """
         # List of all valid method names
-        valid_methods = ['basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 
-                        'cusum', 'ewma', 'autoencoder', 'composite_fused_lasso']
 
         selection_mode = "fast"  # default to fast
-        if method in valid_methods:
+        if method in valid_changepoint_methods:
             new_method = method
         elif method == "fast":
             # Include all methods but will use fast parameters for potentially slow ones
@@ -2737,7 +2739,7 @@ class ChangepointDetector(object):
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"
         else:  # random
-            new_method = random.choices(valid_methods, k=1)[0]
+            new_method = random.choices(valid_changepoint_methods, k=1)[0]
             selection_mode = "random"
 
         # Generate method-specific parameters with weighted choices
