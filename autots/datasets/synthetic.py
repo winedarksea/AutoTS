@@ -203,6 +203,7 @@ class SyntheticDailyGenerator:
                 'n_series': int(self.n_series),
                 'frequency': 'D',
                 'created_at': pd.Timestamp.now().isoformat(),
+                'source': 'SyntheticDailyGenerator',
                 'random_seed': int(self.random_seed),
                 'series_type_descriptions': copy.deepcopy(self.SERIES_TYPE_DESCRIPTIONS),
                 'config': {

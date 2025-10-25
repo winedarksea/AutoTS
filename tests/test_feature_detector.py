@@ -173,9 +173,14 @@ class TestFeatureDetector(unittest.TestCase):
             detector.fit(self.data)
             
             template = detector.get_template()
-            self.assertIn('detector_config', template['meta'])
-            self.assertIn('detection_mode', template['meta']['detector_config'])
-            self.assertEqual(template['meta']['detector_config']['detection_mode'], mode)
+            meta = template['meta']
+            self.assertEqual(meta.get('source'), 'TimeSeriesFeatureDetector')
+            self.assertIn('config', meta)
+            self.assertIn('detection_mode', meta['config'])
+            self.assertEqual(meta['config']['detection_mode'], mode)
+            # Backward compatible alias to config should remain.
+            self.assertIn('detector_config', meta)
+            self.assertEqual(meta['config'], meta['detector_config'])
     
     def test_level_shift_output_parameter(self):
         """Test that level_shift_params includes output parameter matching detection_mode."""

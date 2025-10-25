@@ -328,6 +328,11 @@ class TimeSeriesFeatureDetector:
     
     def _reset_results(self):
         """Reset all result containers to empty state."""
+        detector_config = {
+            'standardize': self.standardize,
+            'smoothing_window': self.smoothing_window,
+            'detection_mode': self.detection_mode,
+        }
         self.template = {
             'version': self.TEMPLATE_VERSION,
             'meta': {
@@ -337,12 +342,13 @@ class TimeSeriesFeatureDetector:
                 'n_series': int(self.df_original.shape[1]),
                 'frequency': pd.infer_freq(self.date_index) or 'infer',
                 'created_at': pd.Timestamp.now().isoformat(),
-                'detector_config': {
-                    'standardize': self.standardize,
-                    'smoothing_window': self.smoothing_window,
-                    'detection_mode': self.detection_mode,
-                },
+                'source': 'TimeSeriesFeatureDetector',
+                # Use shared config key to align with SyntheticDailyGenerator templates.
+                'config': detector_config,
+                # Backward compatibility alias; points to same dict as config.
+                'detector_config': detector_config,
             },
+            'regressors': None,
             'series': {},
             'shared_events': {'anomalies': [], 'level_shifts': []},
         }
@@ -1426,6 +1432,8 @@ class TimeSeriesFeatureDetector:
     def _serialize_datetime_mapping(mapping):
         serialized = {}
         for key, value in mapping.items():
+            if isinstance(value, (np.generic,)):
+                value = float(value)
             serialized[pd.Timestamp(key).isoformat()] = value
         return serialized
 
@@ -1445,10 +1453,20 @@ class TimeSeriesFeatureDetector:
         - SyntheticDailyGenerator.render_template() for reconstruction
         - FeatureDetectionLoss for evaluation
         """
-        component_dict = {
-            name: {'values': values.tolist()}
-            for name, values in components.items()
+        component_modes = {
+            'trend': 'detected_trend',
+            'level_shift': 'detected_level_shift',
+            'seasonality': 'detected_additive',
+            'holidays': 'detected_holiday',
+            'anomalies': 'detected_residual',
+            'noise': 'detected_noise',
         }
+        component_dict = {}
+        for name, values in components.items():
+            arr = np.asarray(values, dtype=float)
+            entry = {'values': arr.tolist()}
+            entry['mode'] = component_modes.get(name, 'detected')
+            component_dict[name] = entry
         
         # Extract seasonality profile for better alignment with synthetic generator
         seasonality_profile = metadata.get('seasonality_profiles', {})
@@ -2040,7 +2058,7 @@ class FeatureDetectionLoss:
         magnitude_floor = max(0.05, avg_true_magnitude * 0.25)
 
         loss = 0.0
-        score_threshold = 0.15
+        score_threshold = 0.15  # ~9 days of tolerance, higher for tighter tolerance
 
         for true_date, true_prior, true_post, true_mag in true_entries:
             best_idx = None
@@ -2541,12 +2559,19 @@ class FeatureDetectionOptimizer:
         detector_for_sampling = TimeSeriesFeatureDetector()
 
         baseline_params = self._default_detector_params()
+        baseline_history_entry = None
         try:
             baseline_loss = self._evaluate_params(baseline_params)
             self.baseline_loss = baseline_loss['total_loss']
             self.best_params = copy.deepcopy(baseline_params)
             self.best_loss = self.baseline_loss
             print(f"Baseline loss = {self.best_loss:.4f}")
+            baseline_history_entry = {
+                'iteration': 'baseline',
+                'params': copy.deepcopy(baseline_params),
+                'loss': self.baseline_loss,
+                'loss_breakdown': baseline_loss,
+            }
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
             self.baseline_loss = None
@@ -2585,6 +2610,10 @@ class FeatureDetectionOptimizer:
                     print(f"Iteration {i} failed: {str(e)[:100]}")
                 # Don't add to history - just skip this iteration
                 continue
+        
+        if not self.optimization_history and baseline_history_entry is not None:
+            # Record baseline so history is never empty when baseline succeeds.
+            self.optimization_history.append(baseline_history_entry)
         
         if failed_iterations > 3:
             print(f"... and {failed_iterations - 3} more failures (suppressed)")
