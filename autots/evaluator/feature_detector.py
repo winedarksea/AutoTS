@@ -2029,30 +2029,77 @@ class FeatureDetectionLoss:
     def _trend_loss(self, detected_cp, true_cp, detected_components, true_components):
         if not true_cp:
             return 0.25 * len(detected_cp)
+
         detected_entries = [self._parse_trend_event(event) for event in detected_cp]
         true_entries = [self._parse_trend_event(event) for event in true_cp]
         unmatched_detected = set(range(len(detected_entries)))
+
+        sigma_days = max(self.changepoint_tolerance_days, 1) / 1.5
+        true_magnitudes = [entry[3] for entry in true_entries if np.isfinite(entry[3])]
+        avg_true_magnitude = np.mean(true_magnitudes) if true_magnitudes else 0.0
+        magnitude_floor = max(0.05, avg_true_magnitude * 0.25)
+
         loss = 0.0
+        score_threshold = 0.15
+
         for true_date, true_prior, true_post, true_mag in true_entries:
             best_idx = None
-            best_dist = None
-            for idx, (det_date, det_prior, det_post, det_mag) in enumerate(detected_entries):
-                dist = abs((det_date - true_date).days)
-                if best_dist is None or dist < best_dist:
-                    best_dist = dist
+            best_score = -np.inf
+            best_metrics = None
+
+            for idx in unmatched_detected:
+                det_date, det_prior, det_post, det_mag = detected_entries[idx]
+                dist_days = abs((det_date - true_date).days)
+
+                distance_score = np.exp(-0.5 * (dist_days / (sigma_days + 1e-9)) ** 2)
+
+                slope_change_true = true_post - true_prior
+                slope_change_detected = det_post - det_prior
+                mag_denom = max(abs(true_mag), magnitude_floor, 1e-3)
+                slope_denom = max(abs(slope_change_true), magnitude_floor, 1e-3)
+
+                magnitude_score = np.exp(-0.5 * (abs(det_mag - true_mag) / mag_denom) ** 2)
+                slope_score = np.exp(-0.5 * (abs(slope_change_detected - slope_change_true) / slope_denom) ** 2)
+
+                match_score = 0.5 * distance_score + 0.3 * magnitude_score + 0.2 * slope_score
+
+                if match_score > best_score:
+                    best_score = match_score
                     best_idx = idx
-            if best_idx is not None and best_dist is not None and best_dist <= self.changepoint_tolerance_days:
-                det_date, det_prior, det_post, det_mag = detected_entries[best_idx]
-                distance_penalty = best_dist / (self.changepoint_tolerance_days + 1e-9)
-                magnitude_penalty = abs(det_mag - true_mag) / (abs(true_mag) + 1e-6)
-                slope_penalty = abs((det_post - det_prior) - (true_post - true_prior)) / (abs(true_post - true_prior) + 1e-6)
-                loss += 0.4 * distance_penalty + 0.4 * magnitude_penalty + 0.2 * slope_penalty
+                    best_metrics = (distance_score, magnitude_score, slope_score, dist_days)
+
+            if best_idx is not None and best_metrics is not None and best_score >= score_threshold:
+                distance_score, magnitude_score, slope_score, dist_days = best_metrics
                 unmatched_detected.discard(best_idx)
+
+                combined_penalty = (
+                    0.5 * (1.0 - distance_score)
+                    + 0.3 * (1.0 - magnitude_score)
+                    + 0.2 * (1.0 - slope_score)
+                )
+
+                if dist_days > self.changepoint_tolerance_days:
+                    overshoot = dist_days - self.changepoint_tolerance_days
+                    combined_penalty += min(overshoot / (self.changepoint_tolerance_days + 1e-6), 1.5) * 0.3
+
+                loss += combined_penalty * (1.0 + min(abs(true_mag), 2.0))
             else:
-                loss += 1.0 + abs(true_mag)
-        loss += 0.2 * len(unmatched_detected)
+                loss += 1.2 + abs(true_mag)
+
+        if true_entries:
+            for idx in unmatched_detected:
+                det_date, _, _, det_mag = detected_entries[idx]
+                nearest_distance = min(
+                    abs((det_date - true_date).days) for true_date, _, _, _ in true_entries
+                )
+                proximity_score = np.exp(-0.5 * (nearest_distance / (sigma_days + 1e-9)) ** 2)
+                loss += 0.15 + 0.25 * (1.0 - proximity_score) + 0.05 * min(det_mag, 2.0)
+        else:
+            loss += 0.25 * len(unmatched_detected)
+
         if 'trend' in detected_components and 'trend' in true_components:
             loss += self._component_rmse_penalty(detected_components['trend'], true_components['trend'])
+
         return loss
 
     def _level_shift_loss(self, detected_ls, true_ls, detected_cp):
@@ -2378,9 +2425,39 @@ class FeatureDetectionLoss:
             return 0.5
         detected_arr = detected_arr[mask]
         true_arr = true_arr[mask]
-        rmse = np.sqrt(np.nanmean((detected_arr - true_arr) ** 2))
-        denom = np.nanstd(true_arr) + 1e-6
-        return min(rmse / denom, 2.0)
+        if detected_arr.size < 2:
+            rmse = np.sqrt(np.nanmean((detected_arr - true_arr) ** 2))
+            scale = np.nanstd(true_arr)
+            if scale < 1e-6:
+                scale = np.nanmean(np.abs(true_arr)) + 1e-6
+            return min(rmse / (scale + 1e-6), 2.0)
+
+        spread = np.nanstd(true_arr)
+        if spread < 1e-6:
+            spread = np.nanmean(np.abs(true_arr - np.nanmean(true_arr))) + 1e-6
+
+        try:
+            design = np.vstack([np.ones_like(true_arr), true_arr]).T
+            coeffs, *_ = np.linalg.lstsq(design, detected_arr, rcond=None)
+            intercept, slope = coeffs
+        except np.linalg.LinAlgError:
+            intercept, slope = 0.0, 1.0
+
+        fitted = intercept + slope * true_arr
+        residual = detected_arr - fitted
+        residual_rmse = np.sqrt(np.nanmean(residual ** 2))
+
+        normalized_residual = residual_rmse / (spread + 1e-6)
+        slope_penalty = min(abs(slope - 1.0), 2.0)
+        intercept_scale = spread + abs(np.nanmean(true_arr)) + 1e-6
+        intercept_penalty = min(abs(intercept) / intercept_scale, 2.0)
+
+        combined_penalty = (
+            0.6 * normalized_residual
+            + 0.25 * slope_penalty
+            + 0.15 * intercept_penalty
+        )
+        return min(combined_penalty, 2.5)
 
     @staticmethod
     def _is_number(value):
