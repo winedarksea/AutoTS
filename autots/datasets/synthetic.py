@@ -641,45 +641,45 @@ class SyntheticDailyGenerator:
             
             # Generate slopes with validation for meaningful changes
             # Use a weighted distribution to favor stronger trends
-            # 40% chance of stronger slope, 60% chance of moderate slope
+            # 50% chance of stronger slope, 50% chance of moderate slope
             slopes = []
             prev_slope = None
-            min_change = 0.008 * scale  # Minimum detectable change threshold
+            min_change = 0.015 * scale  # Minimum detectable change threshold (increased from 0.008)
             
             for i in range(len(changepoint_days) - 1):
                 if prev_slope is None:
                     # First slope - favor stronger initial trends
-                    if self.rng.random() < 0.4:
-                        # Stronger trend: -0.03 to -0.015 or 0.02 to 0.05
+                    if self.rng.random() < 0.5:
+                        # Stronger trend: -0.05 to -0.02 or 0.025 to 0.07
                         if self.rng.random() < 0.5:
-                            new_slope = self.rng.uniform(-0.03, -0.015) * scale
+                            new_slope = self.rng.uniform(-0.05, -0.02) * scale
                         else:
-                            new_slope = self.rng.uniform(0.02, 0.05) * scale
+                            new_slope = self.rng.uniform(0.025, 0.07) * scale
                     else:
                         # Moderate trend
-                        new_slope = self.rng.uniform(-0.01, 0.03) * scale
+                        new_slope = self.rng.uniform(-0.015, 0.04) * scale
                 else:
                     # Ensure meaningful change: try up to 20 times, then force it
                     for attempt in range(20):
-                        # 40% chance of stronger slope
-                        if self.rng.random() < 0.4:
+                        # 50% chance of stronger slope
+                        if self.rng.random() < 0.5:
                             # Stronger trend
                             if self.rng.random() < 0.5:
-                                new_slope = self.rng.uniform(-0.03, -0.015) * scale
+                                new_slope = self.rng.uniform(-0.05, -0.02) * scale
                             else:
-                                new_slope = self.rng.uniform(0.02, 0.05) * scale
+                                new_slope = self.rng.uniform(0.025, 0.07) * scale
                         else:
                             # Moderate trend
-                            new_slope = self.rng.uniform(-0.01, 0.03) * scale
-                        # Accept if change is large enough (allow 20% to be subtler)
-                        threshold = min_change * (0.5 if self.rng.random() > 0.8 else 1.0)
+                            new_slope = self.rng.uniform(-0.015, 0.04) * scale
+                        # Accept if change is large enough (allow 10% to be subtler)
+                        threshold = min_change * (0.6 if self.rng.random() > 0.9 else 1.0)
                         if abs(new_slope - prev_slope) >= threshold:
                             break
                     else:
                         # Force a meaningful change if random sampling failed
                         sign = 1 if self.rng.random() > 0.5 else -1
-                        new_slope = np.clip(prev_slope + sign * min_change * 1.5, 
-                                          -0.03 * scale, 0.05 * scale)
+                        new_slope = np.clip(prev_slope + sign * min_change * 2.5, 
+                                          -0.05 * scale, 0.07 * scale)
                 
                 slopes.append(new_slope)
                 prev_slope = new_slope

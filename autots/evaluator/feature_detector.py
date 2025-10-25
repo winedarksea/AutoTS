@@ -33,6 +33,7 @@ class TimeSeriesFeatureDetector:
     """
     Comprehensive feature detection pipeline for time series.
 
+    TODO: upstream more of this code into the component classes (e.g., HolidayDetector, AnomalyRemoval, ChangepointDetector)
     TODO: Handle multiplicative seasonality
     TODO: Handle time varying seasonality using fast_kalman
     TODO: Improve holiday "splash" effect and weekend interactions
@@ -47,6 +48,8 @@ class TimeSeriesFeatureDetector:
     ----------
     seasonality_params : dict, optional
         Parameters for DatepartRegressionTransformer used in final seasonality fit
+    rough_seasonality_params : dict, optional
+        Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition
     holiday_params : dict, optional
         Parameters for HolidayDetector
     anomaly_params : dict, optional
@@ -76,6 +79,7 @@ class TimeSeriesFeatureDetector:
     def __init__(
         self,
         seasonality_params=None,
+        rough_seasonality_params=None,
         holiday_params=None,
         anomaly_params=None,
         changepoint_params=None,
@@ -95,7 +99,7 @@ class TimeSeriesFeatureDetector:
                 f"detection_mode must be 'multivariate' or 'univariate', got '{detection_mode}'"
             )
         
-        self.rough_seasonality_params = {
+        self.rough_seasonality_params = rough_seasonality_params or {
             'regression_model': {
                 'model': 'ElasticNet',
                 'model_params': {'l1_ratio': 0.2},
@@ -1653,6 +1657,59 @@ class TimeSeriesFeatureDetector:
         )
         return fig
 
+    @staticmethod
+    def get_new_params(method='random'):
+        """Sample random parameters for detector optimization."""
+        # Rough seasonality params (used for initial decomposition)
+        rough_seasonality_params = DatepartRegressionTransformer.get_new_params(
+            method=method, 
+            holiday_countries_used=False
+        )
+        
+        # Final seasonality params
+        seasonality_params = DatepartRegressionTransformer.get_new_params(
+            method=method, 
+            holiday_countries_used=False
+        )
+
+        # Holiday params
+        holiday_params = HolidayDetector.get_new_params(method=method)
+        holiday_params['output'] = 'multivariate'  # Ensure correct output mode
+        
+        # Anomaly params
+        method_choice, method_params, _ = anomaly_new_params(method=method)
+        anomaly_params = {
+            'output': 'multivariate',
+            'method': method_choice,
+            'method_params': method_params,
+            'fillna': 'ffill',
+        }
+        
+        # Changepoint params
+        changepoint_params = ChangepointDetector.get_new_params(method=method)
+
+        # Level shift params
+        level_shift_params = LevelShiftMagic.get_new_params(method=method)
+        level_shift_params['output'] = 'multivariate'  # Ensure correct output mode
+        
+        # General transformer params (for pre-trend processing)
+        general_transformer_params = GeneralTransformer.get_new_params(
+            method="filters",
+            allow_none=True,
+            transformer_max_depth=2
+        )
+        
+        return {
+            'rough_seasonality_params': rough_seasonality_params,
+            'seasonality_params': seasonality_params,
+            'holiday_params': holiday_params,
+            'anomaly_params': anomaly_params,
+            'changepoint_params': changepoint_params,
+            'level_shift_params': level_shift_params,
+            'general_transformer_params': general_transformer_params,
+            'standardize': random.choice([True, False]),
+            'smoothing_window': random.choice([None, 3, 5, 7]),
+        }
 
 
 class FeatureDetectionLoss:
@@ -2336,14 +2393,13 @@ class FeatureDetectionOptimizer:
     """
     Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.
     
-    Uses optimization to find parameters that minimize detection loss.
+    Uses random search to find parameters that minimize detection loss.
     """
     
     def __init__(
         self,
         synthetic_generator,
         loss_calculator=None,
-        optimization_method='grid_search',
         n_iterations=50,
         random_seed=42,
     ):
@@ -2354,19 +2410,15 @@ class FeatureDetectionOptimizer:
             Generator with labeled synthetic data
         loss_calculator : FeatureDetectionLoss, optional
             Custom loss calculator
-        optimization_method : str
-            'grid_search', 'random_search', or 'bayesian'
         n_iterations : int
-            Number of optimization iterations
+            Number of random search iterations
         random_seed : int
             Random seed for reproducibility
         """
         self.synthetic_generator = synthetic_generator
         self.loss_calculator = loss_calculator or FeatureDetectionLoss()
-        self.optimization_method = optimization_method
         self.n_iterations = n_iterations
         self.random_seed = random_seed
-        self.rng = np.random.RandomState(random_seed)
         
         self.best_params = None
         self.best_loss = float('inf')
@@ -2375,7 +2427,7 @@ class FeatureDetectionOptimizer:
     
     def optimize(self):
         """
-        Run optimization to find best detector parameters.
+        Run random search optimization to find best detector parameters.
         
         Returns
         -------
@@ -2387,22 +2439,19 @@ class FeatureDetectionOptimizer:
         self.optimization_history = []
         self.baseline_loss = None
 
-        if self.optimization_method == 'random_search':
-            return self._random_search()
-        elif self.optimization_method == 'grid_search':
-            return self._grid_search()
-        else:
-            raise ValueError(f"Unknown optimization method: {self.optimization_method}")
+        return self._random_search()
 
     def _default_detector_params(self):
         """Return a deep-copied set of default detector parameters."""
         detector = TimeSeriesFeatureDetector()
         return {
+            'rough_seasonality_params': copy.deepcopy(detector.rough_seasonality_params),
             'seasonality_params': copy.deepcopy(detector.seasonality_params),
             'holiday_params': copy.deepcopy(detector.holiday_params),
             'anomaly_params': copy.deepcopy(detector.anomaly_params),
             'changepoint_params': copy.deepcopy(detector.changepoint_params),
             'level_shift_params': copy.deepcopy(detector.level_shift_params),
+            'general_transformer_params': copy.deepcopy(detector.general_transformer_params),
             'standardize': detector.standardize,
             'smoothing_window': detector.smoothing_window,
         }
@@ -2410,6 +2459,9 @@ class FeatureDetectionOptimizer:
     def _random_search(self):
         """Random search optimization."""
         print(f"Starting random search optimization ({self.n_iterations} iterations)...")
+
+        # Create a detector instance for parameter sampling
+        detector_for_sampling = TimeSeriesFeatureDetector()
 
         baseline_params = self._default_detector_params()
         try:
@@ -2428,9 +2480,9 @@ class FeatureDetectionOptimizer:
         failed_iterations = 0
         
         for i in range(self.n_iterations):
-            # Generate random parameters
-            params = self._sample_random_params()
-            
+            # Generate random parameters using detector's method
+            params = detector_for_sampling.get_new_params(method='random')
+
             # Evaluate
             try:
                 loss = self._evaluate_params(params)
@@ -2465,62 +2517,6 @@ class FeatureDetectionOptimizer:
         print(f"Best loss: {self.best_loss:.4f}")
         return self.best_params
     
-    def _grid_search(self):
-        """Grid search over predefined parameter grid."""
-        # Define a coarse grid
-        grid = self._create_parameter_grid()
-        
-        print(f"Starting grid search optimization ({len(grid)} combinations)...")
-
-        baseline_params = self._default_detector_params()
-        try:
-            baseline_loss = self._evaluate_params(baseline_params)
-            self.baseline_loss = baseline_loss['total_loss']
-            self.best_params = copy.deepcopy(baseline_params)
-            self.best_loss = self.baseline_loss
-            print(f"Baseline loss = {self.best_loss:.4f}")
-        except Exception as e:
-            print(f"Warning: Baseline evaluation failed with error: {e}")
-            self.baseline_loss = None
-            self.best_params = baseline_params
-            self.best_loss = float('inf')
-        
-        successful_iterations = 0
-        failed_iterations = 0
-        
-        for i, params in enumerate(grid):
-            try:
-                loss = self._evaluate_params(params)
-                
-                # Only track successful evaluations
-                self.optimization_history.append({
-                    'iteration': successful_iterations,
-                    'params': copy.deepcopy(params),
-                    'loss': loss['total_loss'],
-                    'loss_breakdown': loss,
-                })
-                
-                successful_iterations += 1
-                
-                if loss['total_loss'] < self.best_loss:
-                    self.best_loss = loss['total_loss']
-                    self.best_params = copy.deepcopy(params)
-                    print(f"Grid {i}: New best loss = {self.best_loss:.4f}")
-            except Exception as e:
-                failed_iterations += 1
-                if failed_iterations <= 3:  # Only print first few failures
-                    print(f"Grid {i} failed: {str(e)[:100]}")
-                # Don't add to history - just skip
-                continue
-        
-        if failed_iterations > 3:
-            print(f"... and {failed_iterations - 3} more failures (suppressed)")
-        
-        print(f"\nOptimization complete!")
-        print(f"Successful iterations: {successful_iterations}/{len(grid)}")
-        print(f"Best loss: {self.best_loss:.4f}")
-        return self.best_params
-    
     def _evaluate_params(self, params):
         """Evaluate a parameter configuration."""
         # Create detector with these params
@@ -2545,102 +2541,23 @@ class FeatureDetectionOptimizer:
         )
         
         return loss
-    
-    def _sample_random_params(self):
-        """Sample random parameters."""
-        # Seasonality params
-        seasonality_params = DatepartRegressionTransformer.get_new_params(method='random', holiday_countries_used=False)
 
-        # Anomaly params
-        method_choice, method_params, _ = anomaly_new_params(method='random')
-        anomaly_params = {
-            'output': 'multivariate',
-            'method': method_choice,
-            'method_params': method_params,
-            'fillna': 'ffill',
-        }
-        
-        # Changepoint params
-        changepoint_params = ChangepointDetector().get_new_params(method='random')
-        
-        # Level shift params
-        level_shift_params = LevelShiftMagic.get_new_params(method='random')
-        
-        return {
-            'seasonality_params': seasonality_params,
-            'holiday_params': copy.deepcopy(self._default_detector_params()['holiday_params']),
-            'anomaly_params': anomaly_params,
-            'changepoint_params': changepoint_params,
-            'level_shift_params': level_shift_params,
-            'standardize': self.rng.choice([True, False]),
-            'smoothing_window': self.rng.choice([None, 3, 5, 7]),
-        }
-    
-    def _create_parameter_grid(self):
-        """Create a grid of parameter combinations."""
-        grid = []
-        
-        # Simplified grid for demonstration
-        for datepart in ['simple_2', 'common_fourier']:
-            for model in ['DecisionTree', 'ElasticNet']:
-                for penalty in [10, 20]:
-                    for alpha in [2.0, 2.5]:
-                        params = {
-                            'seasonality_params': {
-                                'regression_model': {'model': model, 'model_params': {}},
-                                'datepart_method': datepart,
-                                'polynomial_degree': None,
-                                'holiday_countries_used': False,
-                            },
-                            'anomaly_params': {
-                                'output': 'multivariate',
-                                'method': 'zscore',
-                                'method_params': {'alpha': 0.05},
-                                'fillna': 'ffill',
-                            },
-                            'changepoint_params': {
-                                'method': 'pelt',
-                                'method_params': {'penalty': penalty},
-                                'min_segment_length': 7,
-                            },
-                            'level_shift_params': {
-                                'window_size': 90,
-                                'alpha': alpha,
-                                'grouping_forward_limit': 3,
-                                'max_level_shifts': 20,
-                            },
-                            'standardize': True,
-                            'smoothing_window': None,
-                        }
-                        grid.append(params)
-        
-        return grid
-    
     def get_optimization_summary(self):
-        """Print summary of optimization results."""
-        print("=" * 80)
-        print("OPTIMIZATION SUMMARY")
-        print("=" * 80)
-        print(f"Method: {self.optimization_method}")
-        print(f"Iterations: {len(self.optimization_history)}")
-        print(f"Best Loss: {self.best_loss:.4f}")
-        if self.baseline_loss is not None:
-            print(f"Baseline Loss: {self.baseline_loss:.4f}")
-        print()
-        print("Best Parameters:")
-        print("-" * 80)
-        for key, value in self.best_params.items():
-            print(f"  {key}: {value}")
-        print()
+        """Return summary of optimization results."""
+        summary = {
+            'method': 'random_search',
+            'n_iterations': len(self.optimization_history),
+            'best_loss': self.best_loss,
+            'baseline_loss': self.baseline_loss,
+            'best_params': copy.deepcopy(self.best_params) if self.best_params else None,
+        }
         
         if self.optimization_history:
-            print("Loss History:")
-            print("-" * 80)
             losses = [h['loss'] for h in self.optimization_history]
-            print(f"  Initial: {losses[0]:.4f}")
-            print(f"  Final: {losses[-1]:.4f}")
-            print(f"  Best: {min(losses):.4f}")
-            print(f"  Mean: {np.mean(losses):.4f}")
-            print(f"  Std: {np.std(losses):.4f}")
-        else:
-            print("No optimization iterations were recorded.")
+            summary['initial_loss'] = losses[0]
+            summary['final_loss'] = losses[-1]
+            summary['worst_loss'] = max(losses)
+            summary['mean_loss'] = np.mean(losses)
+            summary['std_loss'] = np.std(losses)
+        
+        return summary
