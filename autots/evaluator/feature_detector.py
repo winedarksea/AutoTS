@@ -12,7 +12,6 @@ import pandas as pd
 import random
 import copy
 import warnings
-from datetime import datetime
 from autots.tools.transform import (
     DatepartRegressionTransformer,
     AnomalyRemoval,
@@ -256,6 +255,32 @@ class TimeSeriesFeatureDetector:
         return sanitized
 
     def fit(self, df):
+        """
+        Fit the feature detector to time series data.
+        
+        Decomposition follows this sequential removal strategy:
+        
+        1. INITIAL DECOMPOSITION (for detection only):
+           - Remove rough seasonality → rough_residual
+           - Detect holidays on rough_residual
+           - Detect anomalies on rough_residual
+        
+        2. FINAL SEASONALITY FIT:
+           - Fit on: original - anomalies
+           - Holidays fitted simultaneously as regressors
+           - Output: final_residual (has seasonality + holidays removed)
+        
+        3. LEVEL SHIFT DETECTION:
+           - Detect on: original - anomalies - seasonality - holidays
+           - (This is final_residual)
+        
+        4. TREND DETECTION:
+           - Detect on: original - anomalies - seasonality - holidays - level_shifts
+        
+        5. NOISE & ANOMALY COMPONENTS:
+           - Noise: original - trend - level_shifts - seasonality - holidays - anomalies
+           - Anomalies: difference between original and de-anomalied version
+        """
         if not isinstance(df, pd.DataFrame):
             raise ValueError("Input data must be a pandas DataFrame.")
 
@@ -274,8 +299,9 @@ class TimeSeriesFeatureDetector:
         )
         
         # Step 6-7: Trend and level shift detection
+        # Pass holiday component so we know holidays are already removed in final_residual
         trend_component_scaled, level_shift_component_scaled, validated_level_shifts, changepoints, slope_info = self._detect_trend_and_shifts(
-            final_residual
+            final_residual, holiday_component_scaled
         )
         
         # Step 8: Noise analysis
@@ -328,7 +354,7 @@ class TimeSeriesFeatureDetector:
     
     def _reset_results(self):
         """Reset all result containers to empty state."""
-        detector_config = {
+        config_metadata = {
             'standardize': self.standardize,
             'smoothing_window': self.smoothing_window,
             'detection_mode': self.detection_mode,
@@ -344,9 +370,7 @@ class TimeSeriesFeatureDetector:
                 'created_at': pd.Timestamp.now().isoformat(),
                 'source': 'TimeSeriesFeatureDetector',
                 # Use shared config key to align with SyntheticDailyGenerator templates.
-                'config': detector_config,
-                # Backward compatibility alias; points to same dict as config.
-                'detector_config': detector_config,
+                'config': config_metadata,
             },
             'regressors': None,
             'series': {},
@@ -401,51 +425,72 @@ class TimeSeriesFeatureDetector:
         """
         Fit final seasonality model including holiday effects.
         
+        Fits on original data (df_work) with only anomalies removed.
+        This ensures final seasonality captures the full seasonal pattern,
+        and holidays are fit simultaneously as regressors.
+        
         Returns
         -------
         tuple
             (final_residual, final_seasonality, seasonality_strength, holiday_component, 
              holiday_coefficients, holiday_splash_impacts)
         """
-        residual_without_anomalies, anomaly_records = self._detect_anomalies(rough_residual)
-        df_without_anomalies = residual_without_anomalies + rough_seasonality
+        # Reconstruct original data with anomalies removed
+        # df_work = original standardized data
+        # We need to remove anomalies from df_work, not from rough_residual
+        df_without_anomalies = self.anomaly_detector.transform(df_work)
         
+        # Fit final seasonality on original data (with anomalies removed)
+        # Holiday effects are captured as regressors during this fit
         final_residual, final_seasonality, seasonality_strength, self.seasonality_model, holiday_component_scaled, holiday_coefficients, holiday_splash_impacts_scaled = self._fit_final_seasonality(
             df_without_anomalies, self._holiday_regressors_temp
         )
         
         return final_residual, final_seasonality, seasonality_strength, holiday_component_scaled, holiday_coefficients, holiday_splash_impacts_scaled
     
-    def _detect_trend_and_shifts(self, residual_after_holidays):
+    def _detect_trend_and_shifts(self, final_residual, holiday_component_scaled):
         """
         Detect trend changepoints and level shifts.
+        
+        Level shifts are detected on data with: anomalies, final seasonality, and holidays removed.
+        Trend is detected on data with: anomalies, final seasonality, holidays, and level shifts removed.
+        
+        Parameters
+        ----------
+        final_residual : pd.DataFrame
+            Residual after final seasonality fit (has seasonality + holidays removed)
+        holiday_component_scaled : pd.DataFrame
+            Holiday effects in standardized scale
         
         Returns
         -------
         tuple
             (trend_component, level_shift_component, validated_shifts, changepoints, slope_info)
         """
+        # final_residual already has seasonality + holidays removed by DatepartRegressionTransformer
+        # We just need to ensure we're working with clean data
+        residual_for_level_shifts = final_residual.copy()
+        
         # Optionally apply transformations before trend detection
-        residual_for_trend = residual_after_holidays.copy()
         self.general_transformer = None
         if self.general_transformer_params:
             self.general_transformer = GeneralTransformer(**self.general_transformer_params)
-            residual_for_trend = self.general_transformer.fit_transform(residual_after_holidays)
+            residual_for_level_shifts = self.general_transformer.fit_transform(residual_for_level_shifts)
         if self.smoothing_window and self.smoothing_window > 1:
-            residual_for_trend = residual_for_trend.rolling(
+            residual_for_level_shifts = residual_for_level_shifts.rolling(
                 window=int(self.smoothing_window),
                 center=True,
                 min_periods=1,
             ).mean()
 
-        # Level shift detection
-        level_shift_component_scaled, level_shift_candidates = self._detect_level_shifts(residual_for_trend)
+        # Level shift detection on: original - anomalies - seasonality - holidays
+        level_shift_component_scaled, level_shift_candidates = self._detect_level_shifts(residual_for_level_shifts)
         level_shift_component_valid_scaled, validated_level_shifts = self._validate_level_shifts(
-            residual_for_trend, level_shift_component_scaled, level_shift_candidates
+            residual_for_level_shifts, level_shift_component_scaled, level_shift_candidates
         )
 
-        # Trend changepoint detection
-        trend_input = residual_for_trend - level_shift_component_valid_scaled
+        # Trend changepoint detection on: original - anomalies - seasonality - holidays - level_shifts
+        trend_input = residual_for_level_shifts - level_shift_component_valid_scaled
         changepoints, trend_component_scaled = self._detect_trend_changepoints(trend_input)
         slope_info = self._compute_trend_slopes(trend_component_scaled, changepoints)
         
@@ -1522,7 +1567,7 @@ class TimeSeriesFeatureDetector:
                 'holiday_dates': copy.deepcopy(self.holiday_dates.get(series_name, [])),
                 'holiday_impacts': copy.deepcopy(self.holiday_impacts.get(series_name, {})),
                 'holiday_coefficients': copy.deepcopy(self.holiday_coefficients.get(series_name, {})),
-                'holiday_splash_impacts': {},
+                'holiday_splash_impacts': copy.deepcopy(self.holiday_splash_impacts.get(series_name, {})),
                 'seasonality_changepoints': [],
                 'noise_changepoints': copy.deepcopy(self.noise_changepoints.get(series_name, [])),
                 'seasonality_strength': self.seasonality_strength.get(series_name, 0.0),
@@ -1547,7 +1592,10 @@ class TimeSeriesFeatureDetector:
         holiday_dates = {name: copy.deepcopy(self.holiday_dates.get(name, [])) for name in series_names}
         holiday_impacts = {name: copy.deepcopy(self.holiday_impacts.get(name, {})) for name in series_names}
         holiday_coefficients = {name: copy.deepcopy(self.holiday_coefficients.get(name, {})) for name in series_names}
-        holiday_splash = {name: {} for name in series_names}
+        holiday_splash = {
+            name: copy.deepcopy(self.holiday_splash_impacts.get(name, {}))
+            for name in series_names
+        }
         seasonality_changepoints = {name: [] for name in series_names}
         noise_changepoints = {name: copy.deepcopy(self.noise_changepoints.get(name, [])) for name in series_names}
         seasonality_strength = {name: self.seasonality_strength.get(name, 0.0) for name in series_names}
@@ -1783,14 +1831,13 @@ class FeatureDetectionLoss:
         self.seasonality_window = max(3, int(seasonality_window))
 
         raw_penalty_mode = (trend_component_penalty or 'component').lower()
-        valid_modes = {'component', 'complexity', 'hybrid', 'auto'}
+        valid_modes = {'component', 'complexity'}
         if raw_penalty_mode not in valid_modes:
             raise ValueError(
                 f"trend_component_penalty must be one of {sorted(valid_modes)}, "
                 f"got '{trend_component_penalty}'"
             )
-        # 'auto' only meaningful for reconstruction scenarios; treat as hybrid with fallback.
-        self.trend_component_penalty = 'hybrid' if raw_penalty_mode == 'auto' else raw_penalty_mode
+        self.trend_component_penalty = raw_penalty_mode
         if trend_complexity_window is None:
             trend_complexity_window = 7
         self.trend_complexity_window = max(3, int(trend_complexity_window))
@@ -2156,35 +2203,26 @@ class FeatureDetectionLoss:
         else:
             loss += 0.25 * len(unmatched_detected)
 
+        # Apply trend component or complexity penalty based on mode
         trend_detected_series = detected_components.get('trend')
-        component_available = (
-            trend_detected_series is not None
-            and 'trend' in true_components
-            and true_components.get('trend') is not None
-        )
-        penalty_mode = self._resolve_trend_penalty_mode(component_available)
-
-        if penalty_mode in ('component', 'hybrid') and component_available:
-            loss += self._component_rmse_penalty(
-                trend_detected_series,
-                true_components['trend'],
-            )
-
-        if (
-            penalty_mode in ('complexity', 'hybrid')
-            and trend_detected_series is not None
-            and self.trend_complexity_weight > 0
-        ):
-            complexity_penalty = self._trend_complexity_penalty(trend_detected_series)
-            loss += self.trend_complexity_weight * complexity_penalty
+        
+        if self.trend_component_penalty == 'component':
+            # Component mode: use RMSE when both detected and true components available
+            if (trend_detected_series is not None
+                and 'trend' in true_components
+                and true_components.get('trend') is not None):
+                loss += self._component_rmse_penalty(
+                    trend_detected_series,
+                    true_components['trend'],
+                )
+        elif self.trend_component_penalty == 'complexity':
+            # Complexity mode: penalize wiggly trends when weight > 0
+            if (trend_detected_series is not None
+                and self.trend_complexity_weight > 0):
+                complexity_penalty = self._trend_complexity_penalty(trend_detected_series)
+                loss += self.trend_complexity_weight * complexity_penalty
 
         return loss
-
-    def _resolve_trend_penalty_mode(self, component_available):
-        mode = self.trend_component_penalty
-        if mode == 'component' and not component_available:
-            return 'complexity' if self.trend_complexity_weight > 0 else 'component'
-        return mode
 
     def _trend_complexity_penalty(self, trend_values):
         if trend_values is None:

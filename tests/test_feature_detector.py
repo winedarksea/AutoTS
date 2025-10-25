@@ -179,9 +179,7 @@ class TestFeatureDetector(unittest.TestCase):
             self.assertIn('config', meta)
             self.assertIn('detection_mode', meta['config'])
             self.assertEqual(meta['config']['detection_mode'], mode)
-            # Backward compatible alias to config should remain.
-            self.assertIn('detector_config', meta)
-            self.assertEqual(meta['config'], meta['detector_config'])
+            self.assertNotIn('detector_config', meta)
     
     def test_level_shift_output_parameter(self):
         """Test that level_shift_params includes output parameter matching detection_mode."""
@@ -210,11 +208,16 @@ class TestFeatureDetector(unittest.TestCase):
         all_features = detector.get_detected_features()
         self.assertIn('trend_changepoints', all_features)
         self.assertIn('anomalies', all_features)
+        self.assertEqual(all_features['holiday_splash_impacts'], detector.holiday_splash_impacts)
         
         # Get features for specific series
         series_name = self.data.columns[0]
         series_features = detector.get_detected_features(series_name)
         self.assertIn('trend_changepoints', series_features)
+        self.assertEqual(
+            series_features['holiday_splash_impacts'],
+            detector.holiday_splash_impacts.get(series_name, {}),
+        )
     
     def test_summary(self):
         """Test summary generation."""
