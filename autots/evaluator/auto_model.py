@@ -1622,14 +1622,17 @@ def _eval_prediction_for_template(
         column_names=df_train.columns,
         custom_metric=custom_metric,
     )
+    total_runtime = datetime.datetime.now() - template_start_time
     if validation_round >= 1 and verbose > 0:
         round_smape = round(
             model_error.avg_metrics['smape'], 2
         )  # should work on both DF and single value
-        validation_accuracy_print = "{} - {} with avg smape {}: ".format(
+        
+        validation_accuracy_print = "{} - {} with avg smape {} in {:.2f}s: ".format(
             str(template_result.model_count),
             model_str,
             round_smape,
+            total_runtime.total_seconds(),
         )
         if round_smape < best_smape:
             best_smape = round_smape
@@ -1663,7 +1666,7 @@ def _eval_prediction_for_template(
             'TransformationRuntime': df_forecast.transformation_runtime,
             'FitRuntime': df_forecast.fit_runtime,
             'PredictRuntime': df_forecast.predict_runtime,
-            'TotalRuntime': datetime.datetime.now() - template_start_time,
+            'TotalRuntime': total_runtime,
             'Ensemble': ensemble_input,
             'Exceptions': np.nan,
             'Runs': 1,

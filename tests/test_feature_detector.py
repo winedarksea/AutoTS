@@ -12,6 +12,7 @@ from autots.datasets.synthetic import SyntheticDailyGenerator
 from autots.evaluator.feature_detector import (
     TimeSeriesFeatureDetector,
     FeatureDetectionLoss,
+    ReconstructionLoss,
     FeatureDetectionOptimizer,
 )
 
@@ -763,8 +764,92 @@ class TestScaling(unittest.TestCase):
                     if isinstance(anomaly, dict):
                         magnitude = anomaly.get('magnitude', 0)
                         # Should be reasonable for this series' scale
-                        self.assertGreater(abs(magnitude), original_std * 0.01,
-                                         f"Anomaly in {series_name} appears standardized")
+                        self.assertGreater(
+                            abs(magnitude),
+                            original_std * 0.01,
+                            f"Anomaly in {series_name} appears standardized",
+                        )
+
+
+class TestReconstructionLoss(unittest.TestCase):
+    """Tests for ReconstructionLoss on unlabeled data."""
+
+    def setUp(self):
+        periods = 90
+        index = pd.date_range('2021-01-01', periods=periods, freq='D')
+        trend = np.linspace(0, 3, periods)
+        weekly = 1.2 * np.sin(2 * np.pi * index.dayofweek / 7)
+        anomalies = np.zeros(periods)
+        anomalies[[12, 45, 70]] = [3.5, -2.8, 2.1]
+        level_shift = np.zeros(periods)
+        level_shift[index >= index[50]] = 1.0
+        noise = np.random.default_rng(123).normal(scale=0.2, size=periods)
+
+        series = trend + weekly + anomalies + level_shift + noise
+        self.df = pd.DataFrame({'series_1': series}, index=index)
+
+        zeros = np.zeros(periods)
+        self.components_balanced = {
+            'series_1': {
+                'trend': trend,
+                'level_shift': level_shift,
+                'seasonality': weekly,
+                'holidays': zeros,
+                'anomalies': anomalies,
+                'noise': noise,
+            }
+        }
+        self.components_overfit = {
+            'series_1': {
+                'trend': series,
+                'level_shift': zeros,
+                'seasonality': zeros,
+                'holidays': zeros,
+                'anomalies': zeros,
+                'noise': zeros,
+            }
+        }
+
+    def test_penalizes_trend_overfit(self):
+        loss_calc = ReconstructionLoss(
+            seasonality_lags=(7,),
+            seasonality_improvement_target=0.2,
+            anomaly_improvement_target=0.1,
+            trend_min_other_variance=0.0,
+        )
+
+        balanced_loss = loss_calc.calculate_loss(
+            observed_df=self.df,
+            detected_features={'components': self.components_balanced},
+        )
+        overfit_loss = loss_calc.calculate_loss(
+            observed_df=self.df,
+            detected_features={'components': self.components_overfit},
+        )
+
+        self.assertLess(
+            balanced_loss['total_loss'],
+            overfit_loss['total_loss'],
+            "Balanced decomposition should score lower total loss than overfit trend.",
+        )
+        self.assertGreater(
+            overfit_loss['trend_smoothness_loss'],
+            balanced_loss['trend_smoothness_loss'],
+            "Overfit trend should incur higher smoothness penalty.",
+        )
+        self.assertGreater(
+            overfit_loss['trend_dominance_loss'],
+            balanced_loss['trend_dominance_loss'],
+            "Overfit trend should have larger dominance penalty.",
+        )
+
+    def test_requires_components(self):
+        loss_calc = ReconstructionLoss()
+        with self.assertRaises(ValueError):
+            loss_calc.calculate_loss(
+                observed_df=self.df,
+                detected_features={'trend_changepoints': []},
+            )
 
 
 class TestIntegration(unittest.TestCase):
