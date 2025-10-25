@@ -3365,9 +3365,14 @@ class AnomalyRemoval(EmptyTransformer):
         return self
 
     def transform(self, df):
-        df2 = df[self.anomalies != -1]
         if self.fillna is not None:
+            # Set anomalies to NaN, then fill them
+            df2 = df.copy()
+            df2[self.anomalies == -1] = np.nan
             df2 = FillNA(df2, method=self.fillna, window=10)
+        else:
+            # Remove anomaly rows only if no fillna method specified
+            df2 = df[self.anomalies != -1]
         return df2
 
     def fit_transform(self, df):
@@ -3397,15 +3402,15 @@ class AnomalyRemoval(EmptyTransformer):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(
-                transformer_list="scalable", transformer_max_depth=2
+                transformer_list="scalable", transformer_max_depth=2, exclude_fillna=['fake_date']
             )
 
         return {
             "method": method_choice,
             "method_params": method_params,
             "fillna": random.choices(
-                [None, "ffill", "mean", "rolling_mean_24", "linear", "fake_date"],
-                [0.01, 0.39, 0.1, 0.3, 0.15, 0.05],
+                [None, "ffill", "mean", "rolling_mean_24", "linear"],
+                [0.01, 0.44, 0.1, 0.3, 0.15],
             )[0],
             "transform_dict": transform_dict,
             "isolated_only": random.choices([True, False], [0.2, 0.8])[0],
@@ -8105,10 +8110,14 @@ def RandomTransform(
     transformer_min_depth: int = 1,
     allow_none: bool = True,
     no_nan_fill: bool = False,
+    exclude_fillna: list = None,
 ):
     """Return a dict of randomly choosen transformation selections.
 
     BTCD is used as a signal that slow parameters are allowed.
+    
+    Args:
+        exclude_fillna (list): list of fillna methods to exclude from selection (e.g., ['fake_date'])
     """
     transformer_actual_list, transformer_prob = transformer_list_to_dict(
         transformer_list
@@ -8153,6 +8162,11 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
+    
+    # exclude specific fillna methods if requested
+    if exclude_fillna is not None:
+        for method in exclude_fillna:
+            throw_away = na_prob_dict.pop(method, None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
@@ -8324,6 +8338,6 @@ def random_cleaners():
     )[0]
     if transform_dict == "random":
         transform_dict = RandomTransform(
-            transformer_list="scalable", transformer_max_depth=2
+            transformer_list="scalable", transformer_max_depth=2, exclude_fillna=['fake_date']
         )
     return transform_dict

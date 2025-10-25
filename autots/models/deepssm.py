@@ -932,7 +932,7 @@ class MambaSSM(ModelObject):
         
         # Changepoint features
         if self.changepoint_method != "none":
-            self.changepoint_detector = ChangePointDetector(
+            self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
                 **kwargs,
@@ -1447,7 +1447,7 @@ class pMLP(ModelObject):
         
         # Changepoint features
         if self.changepoint_method != "none":
-            self.changepoint_detector = ChangePointDetector(
+            self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
                 **kwargs,
