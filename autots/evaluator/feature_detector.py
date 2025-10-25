@@ -2322,7 +2322,9 @@ class FeatureDetectionLoss:
             else:
                 loss += 1.2 if true_type in {'point_outlier', 'spike'} else 0.7
         false_positives = len(detected_entries) - len(used_detected)
-        loss += 0.2 * false_positives
+        if false_positives > 0:
+            fp_penalty = (0.08 * false_positives) + (0.12 * np.sqrt(false_positives))
+            loss += fp_penalty
         return loss
 
     def _holiday_event_loss(self, detected_holidays, true_holidays, detected_anomalies):
@@ -2345,7 +2347,9 @@ class FeatureDetectionLoss:
             1 for det in detected_dates
             if not any(abs(det - true_date) <= self._holiday_tolerance for true_date in true_dates)
         )
-        loss += 0.1 * false_positives
+        if false_positives > 0:
+            ratio = false_positives / max(len(true_dates), 1)
+            loss += 0.12 * false_positives + 0.4 * max(ratio - 0.5, 0.0)
         return loss
 
     def _holiday_impact_loss(self, detected_impacts, true_impacts):
@@ -2360,6 +2364,10 @@ class FeatureDetectionLoss:
                 loss += 0.6 + abs(true_value)
             else:
                 penalty = abs(det_value - true_value) / (abs(true_value) + 1e-6)
+                if abs(true_value) > 1e-6:
+                    relative_mag = abs(det_value) / (abs(true_value) + 1e-6)
+                    if relative_mag < 0.5:
+                        penalty *= 1.2
                 loss += min(penalty, 2.0)
         extras = len([date for date in detected if date not in true])
         loss += 0.1 * extras
