@@ -13,6 +13,7 @@ import random
 import copy
 import warnings
 import json
+import time
 from autots.tools.transform import (
     DatepartRegressionTransformer,
     AnomalyRemoval,
@@ -3032,13 +3033,17 @@ class FeatureDetectionOptimizer:
         evaluated_signatures = set()
         baseline_history_entry = None
         try:
+            start_time = time.time()
             baseline_loss = self._evaluate_params(baseline_params)
+            baseline_runtime = time.time() - start_time
+            
             self.baseline_loss = baseline_loss['total_loss']
             baseline_history_entry = {
                 'iteration': 'baseline',
                 'params': copy.deepcopy(baseline_params),
                 'loss': self.baseline_loss,
                 'loss_breakdown': baseline_loss,
+                'runtime': baseline_runtime,
             }
             self.optimization_history.append(baseline_history_entry)
             evaluated_signatures.add(self._param_signature(baseline_params))
@@ -3047,7 +3052,10 @@ class FeatureDetectionOptimizer:
             self.best_params = copy.deepcopy(baseline_params)
             self.best_loss = baseline_balanced
             self.best_total_loss = self.baseline_loss
-            print(f"Baseline loss = {self.baseline_loss:.4f} (balanced {baseline_balanced:.4f})")
+            print(
+                f"Baseline loss = {self.baseline_loss:.4f} "
+                f"(balanced {baseline_balanced:.4f}), runtime = {baseline_runtime:.2f}s"
+            )
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
             self.baseline_loss = None
@@ -3095,12 +3103,16 @@ class FeatureDetectionOptimizer:
                 continue
 
             try:
+                start_time = time.time()
                 loss = self._evaluate_params(params)
+                runtime = time.time() - start_time
+                
                 record = {
                     'iteration': successful_iterations,
                     'params': copy.deepcopy(params),
                     'loss': loss['total_loss'],
                     'loss_breakdown': loss,
+                    'runtime': runtime,
                 }
                 self.optimization_history.append(record)
                 evaluated_signatures.add(signature)
@@ -3108,6 +3120,15 @@ class FeatureDetectionOptimizer:
 
                 self._apply_balanced_scores(self.optimization_history)
                 current_balanced = record.get('balanced_loss', record['loss'])
+                
+                # Print progress for every iteration
+                if i % 20 == 0 or successful_iterations == 1:
+                    print(
+                        f"Iteration {i} ({successful_iterations} successful): "
+                        f"balanced loss = {current_balanced:.4f}, raw loss = {loss['total_loss']:.4f}, "
+                        f"runtime = {runtime:.2f}s"
+                    )
+
                 if current_balanced < self.best_loss:
                     self.best_loss = current_balanced
                     self.best_params = copy.deepcopy(params)
@@ -3126,11 +3147,28 @@ class FeatureDetectionOptimizer:
         if failed_iterations > 3:
             print(f"... and {failed_iterations - 3} more failures (suppressed)")
         
+        # Calculate runtime statistics
+        runtimes = [entry.get('runtime') for entry in self.optimization_history if entry.get('runtime') is not None]
+        if runtimes:
+            avg_runtime = np.mean(runtimes)
+            min_runtime = np.min(runtimes)
+            max_runtime = np.max(runtimes)
+            total_runtime = np.sum(runtimes)
+        
         print(f"\nOptimization complete!")
         print(f"Successful iterations: {successful_iterations}/{self.n_iterations}")
         if np.isfinite(self.best_total_loss):
             print(f"Best raw loss: {self.best_total_loss:.4f}")
         print(f"Best balanced loss: {self.best_loss:.4f}")
+        
+        # Print runtime statistics
+        if runtimes:
+            print(f"\nRuntime statistics:")
+            print(f"  Total runtime: {total_runtime:.2f}s")
+            print(f"  Average runtime per iteration: {avg_runtime:.2f}s")
+            print(f"  Min runtime: {min_runtime:.2f}s")
+            print(f"  Max runtime: {max_runtime:.2f}s")
+        
         return self.best_params
     
     def _evaluate_params(self, params):

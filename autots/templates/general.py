@@ -593,6 +593,18 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "Log", "1": "SinTrend", "2": "ChangepointDetrend"}, "transformation_params": {"0": {}, "1": {}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
         'Ensemble': 0,
     },
+    "96": {  # optimized on daily. Poorly (due to it being slow) but better than nothing
+        "Model": "pMLP",
+        "ModelParameters": '{"context_length": 30, "hidden_dims": [1024], "dropout_rate": 0.2, "use_batch_norm": true, "activation": "relu", "epochs": 15, "batch_size": 96, "lr": 0.001, "loss_function": "quantile", "nll_weight": 1.0, "wasserstein_weight": 0.15, "prediction_batch_size": 150, "datepart_method": "expanded", "holiday_countries_used": false, "changepoint_method": "basic", "changepoint_params": {"changepoint_spacing": 180, "changepoint_distance_end": 5040}, "regression_type": null}',
+        "TransformationParameters": '{"fillna": "linear", "transformations": {"0": "ClipOutliers", "1": "Detrend", "2": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3, "fillna": null}, "1": {"model": "Linear", "phi": 1, "window": null, "transform_dict": {"fillna": null, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 2}}}}, "2": {"method": "clip", "std_threshold": 1, "fillna": null}}}',
+        "Ensemble": 0
+    },
+    "97": {
+        "Model": "MambaSSM",
+        "ModelParameters": '{"context_length": 90, "d_model": 48, "n_layers": 2, "d_state": 8, "epochs": 15, "batch_size": 24, "lr": 0.001, "loss_function": "crps", "nll_weight": 0.5, "wasserstein_weight": 0.2, "prediction_batch_size": 90, "datepart_method": "expanded", "holiday_countries_used": true, "use_extra_gating": true, "changepoint_method": "l1_total_variation", "changepoint_params": {"lambda_reg": 0.1}, "regression_type": "User"}',
+        "TransformationParameters": '{"fillna": "ffill", "transformations": {"0": "ClipOutliers", "1": "Detrend", "2": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3, "fillna": null}, "1": {"model": "Linear", "phi": 1, "window": null, "transform_dict": {"fillna": null, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 2}}}}, "2": {"method": "clip", "std_threshold": 1, "fillna": null}}}',
+        "Ensemble": 0
+    },
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

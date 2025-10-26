@@ -281,7 +281,7 @@ def load_live_daily(
     eia_key: str = None,
     eia_respondents: list = ["MISO", "PJM", "TVA", "US48"],
     timeout: float = 300.05,
-    sleep_seconds: int = 2,
+    sleep_seconds: int = 10,
     **kwargs,
 ):
     """Generates a dataframe of data up to the present day. Requires active internet connection.
@@ -377,9 +377,8 @@ def load_live_daily(
                 print(f"yfinance data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%Y-%m-%d")
-    start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime(
-        "%Y-%m-%d"
-    )
+    weather_start_date = current_date - datetime.timedelta(days=360 * weather_years)
+    
     if weather_stations is not None:
         for wstation in weather_stations:
             try:
@@ -394,61 +393,73 @@ def load_live_daily(
                 wbase = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
                 headers = {'token': noaa_cdo_token}
                 
-                # API has a limit of 1000 records per request, so we need to paginate
-                # For multiple data types, we'll need multiple requests
+                # API requires date ranges to be less than 1 year, so we need to chunk requests
                 station_data = []
                 
                 for dtype in weather_data_types:
-                    # Collect all results with pagination
+                    # Split date range into chunks of less than 1 year (use 360 days to be safe)
+                    chunk_size_days = 360
                     all_results = []
-                    offset = 1  # API uses 1-based offset
-                    max_requests = 10  # Safety limit to prevent infinite loops
-                    request_count = 0
                     
-                    while request_count < max_requests:
-                        params = {
-                            'datasetid': 'GHCND',  # Global Historical Climatology Network - Daily
-                            'stationid': f'GHCND:{wstation}',  # v2 requires dataset prefix
-                            'datatypeid': dtype,
-                            'startdate': start_date,
-                            'enddate': str_end_time,
-                            'units': 'standard',
-                            'limit': 1000,
-                            'offset': offset,
-                        }
+                    current_chunk_start = weather_start_date
+                    while current_chunk_start < current_date:
+                        current_chunk_end = min(
+                            current_chunk_start + datetime.timedelta(days=chunk_size_days),
+                            current_date
+                        )
                         
-                        response = s.get(wbase, headers=headers, params=params, timeout=timeout)
+                        start_date_str = current_chunk_start.strftime("%Y-%m-%d")
+                        end_date_str = current_chunk_end.strftime("%Y-%m-%d")
                         
-                        if response.status_code != 200:
-                            if request_count == 0:  # Only print error on first request
-                                print(f"weather data failed for {wstation} ({dtype}): HTTP {response.status_code}")
-                            break
+                        # Paginate within each chunk if needed
+                        offset = 1
+                        max_requests_per_chunk = 10
+                        request_count = 0
                         
-                        try:
-                            data_json = response.json()
-                            if 'results' not in data_json or len(data_json['results']) == 0:
-                                # No more results
+                        while request_count < max_requests_per_chunk:
+                            params = {
+                                'datasetid': 'GHCND',  # Global Historical Climatology Network - Daily
+                                'stationid': f'GHCND:{wstation}',
+                                'datatypeid': dtype,
+                                'startdate': start_date_str,
+                                'enddate': end_date_str,
+                                'units': 'standard',
+                                'limit': 1000,
+                                'offset': offset,
+                            }
+                            
+                            response = s.get(wbase, headers=headers, params=params, timeout=timeout)
+                            
+                            if response.status_code != 200:
+                                if offset == 1:  # Only print error on first request for this chunk
+                                    print(f"weather data failed for {wstation} ({dtype}, {start_date_str} to {end_date_str}): HTTP {response.status_code}")
                                 break
                             
-                            results = data_json['results']
-                            all_results.extend(results)
-                            
-                            # Check if we've received all data
-                            metadata = data_json.get('metadata', {}).get('resultset', {})
-                            count = metadata.get('count', len(results))
-                            
-                            # If we got fewer than 1000 results, we've reached the end
-                            if len(results) < 1000:
+                            try:
+                                data_json = response.json()
+                                if 'results' not in data_json or len(data_json['results']) == 0:
+                                    # No more results for this chunk
+                                    break
+                                
+                                results = data_json['results']
+                                all_results.extend(results)
+                                
+                                # If we got fewer than 1000 results, we've reached the end of this chunk
+                                if len(results) < 1000:
+                                    break
+                                
+                                # Move to next page
+                                offset += len(results)
+                                request_count += 1
+                                time.sleep(sleep_seconds * 0.5)  # Shorter sleep within chunk pagination
+                                
+                            except Exception as parse_error:
+                                print(f"weather data parsing failed for {wstation} ({dtype}): {repr(parse_error)}")
                                 break
-                            
-                            # Move to next page
-                            offset += len(results)
-                            request_count += 1
-                            time.sleep(sleep_seconds)
-                            
-                        except Exception as parse_error:
-                            print(f"weather data parsing failed for {wstation} ({dtype}): {repr(parse_error)}")
-                            break
+                        
+                        # Move to next chunk
+                        current_chunk_start = current_chunk_end + datetime.timedelta(days=1)
+                        time.sleep(sleep_seconds)  # Respect rate limits between chunks
                     
                     # Convert all results to DataFrame
                     if len(all_results) > 0:
