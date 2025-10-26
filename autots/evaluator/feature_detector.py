@@ -1649,6 +1649,88 @@ class TimeSeriesFeatureDetector:
         # This ensures consistent rendering logic
         return SyntheticDailyGenerator.render_template(template, return_components=return_components)
 
+    def get_cleaned_data(self, series_name=None):
+        """
+        Return cleaned time series data with anomalies, noise, and level shifts removed.
+        
+        The cleaned data consists of:
+        - Trend (with mean included)
+        - Seasonality
+        - Holiday effects
+        
+        Level shifts are corrected by removing the cumulative shift effect, returning
+        the data to its baseline level. Anomalies and noise are excluded entirely.
+        
+        Parameters
+        ----------
+        series_name : str, optional
+            If provided, return cleaned data for only this series.
+            If None, return cleaned data for all series.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Cleaned time series data with the same index as the original data.
+            If series_name is specified, returns a DataFrame with a single column.
+        
+        Raises
+        ------
+        RuntimeError
+            If fit() has not been called yet.
+        ValueError
+            If series_name is provided but not found in the original data.
+        
+        Examples
+        --------
+        >>> detector = TimeSeriesFeatureDetector()
+        >>> detector.fit(df)
+        >>> cleaned = detector.get_cleaned_data()
+        >>> cleaned_single = detector.get_cleaned_data('series_1')
+        """
+        if self.df_original is None:
+            raise RuntimeError("Call fit() before get_cleaned_data().")
+        
+        if series_name is not None:
+            if series_name not in self.df_original.columns:
+                raise ValueError(f"Series '{series_name}' not found in original data.")
+            series_names = [series_name]
+        else:
+            series_names = list(self.df_original.columns)
+        
+        # Get components in original scale
+        cleaned_data = pd.DataFrame(index=self.date_index)
+        
+        for name in series_names:
+            components = self.components.get(name)
+            if components is None:
+                # If components not available, return the original series
+                cleaned_data[name] = self.df_original[name]
+                continue
+            
+            # Start with trend (which includes mean)
+            trend = components.get('trend')
+            if trend is None or not isinstance(trend, pd.Series):
+                trend = pd.Series(0.0, index=self.date_index)
+            
+            # Add seasonality
+            seasonality = components.get('seasonality')
+            if seasonality is None or not isinstance(seasonality, pd.Series):
+                seasonality = pd.Series(0.0, index=self.date_index)
+            
+            # Add holidays
+            holidays = components.get('holidays')
+            if holidays is None or not isinstance(holidays, pd.Series):
+                holidays = pd.Series(0.0, index=self.date_index)
+            
+            # Combine: trend + seasonality + holidays
+            # Note: level shifts are NOT included, effectively correcting for them
+            cleaned_series = trend + seasonality + holidays
+            
+            # Ensure alignment with original index
+            cleaned_data[name] = cleaned_series.reindex(self.date_index)
+        
+        return cleaned_data
+
     def summary(self):
         if self.df_original is None:
             print("TimeSeriesFeatureDetector has not been fit.")

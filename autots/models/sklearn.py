@@ -1151,30 +1151,116 @@ def generate_classifier_params(
     if model_dict is None:
         if method == "fast":
             model_dict = {
-                'xgboost': 0.5,  # also crashes sometimes
-                # 'ExtraTrees': 0.2,  # crashes sometimes
-                # 'RandomForest': 0.1,
-                'KNN': 1,
-                'SGD': 0.1,
+                'SGD': 1.0,
             }
         else:
             model_dict = {
-                'xgboost': 0.5,
-                'ExtraTrees': 0.2,
+                'SGD': 0.35,
+                'GaussianNB': 0.15,
+                'DecisionTree': 0.2,
+                'ExtraTrees': 0.1,
                 'RandomForest': 0.1,
-                'KNN': 1,
-                'SGD': 0.1,
+                'xgboost': 0.1,
             }
-    regr_params = generate_regressor_params(
-        model_dict=model_dict,
-        method=method,
-    )
-    if regr_params["model"] == 'xgboost':
-        if "objective" in regr_params['model_params'].keys():
-            regr_params['model_params'].pop('objective', None)
-    elif regr_params["model"] == 'ExtraTrees':
-        regr_params['model_params']['criterion'] = 'gini'
-    return regr_params
+    model_list = list(model_dict.keys())
+    weights = list(model_dict.values())
+    model_choice = random.choices(model_list, weights, k=1)[0]
+
+    if model_choice == 'SGD':
+        if method == "fast":
+            max_iter = random.choices([4, 5, 6], [0.4, 0.4, 0.2])[0]
+            params = {
+                "learning_rate": random.choice([0.05, 0.075, 0.1, 0.15]),
+                "max_iter": max_iter,
+                "l2": random.choice([0.0, 1e-4, 5e-4]),
+                "column_batch_size": random.choice([128, 256, 512]),
+                "probability_threshold": random.choice([0.45, 0.5, 0.55]),
+            }
+            return {
+                "model": 'SGD',
+                "model_params": params,
+                "vectorized": True,
+            }
+        else:
+            max_iter = random.choices([200, 400, 600], [0.6, 0.3, 0.1])[0]
+            params = {
+                "loss": random.choices(
+                    ['log_loss', 'modified_huber'],
+                    [0.7, 0.3],
+                )[0],
+                "penalty": random.choices(['l2', 'l1', 'elasticnet'], [0.6, 0.2, 0.2])[0],
+                "alpha": random.choice([1e-5, 1e-4, 1e-3]),
+                "max_iter": max_iter,
+                "tol": random.choice([1e-3, 5e-4]),
+            }
+            if params["penalty"] == 'elasticnet':
+                params["l1_ratio"] = random.choice([0.1, 0.5, 0.9])
+            return {
+                "model": 'SGD',
+                "model_params": params,
+            }
+    elif model_choice == 'GaussianNB':
+        return {
+            "model": 'GaussianNB',
+            "model_params": {
+                "var_smoothing": random.choice(
+                    [1e-9, 1e-8, 1e-7, 5e-7]
+                ),
+            },
+        }
+    elif model_choice == 'DecisionTree':
+        return {
+            "model": 'DecisionTree',
+            "model_params": {
+                "max_depth": random.choice([1, 2, 3, 4, None]),
+                "min_samples_split": random.choice([2, 4, 6]),
+                "min_samples_leaf": random.choice([1, 2, 3]),
+                "class_weight": random.choice(
+                    [None, "balanced"]
+                ),
+            },
+        }
+    elif model_choice == 'ExtraTrees':
+        return {
+            "model": 'ExtraTrees',
+            "model_params": {
+                "n_estimators": random.choice([25, 50, 75]),
+                "max_depth": random.choice([None, 6, 10]),
+                "min_samples_split": random.choice([2, 4]),
+                "min_samples_leaf": random.choice([1, 2]),
+                "max_features": random.choice(['sqrt', 'log2', None]),
+                "bootstrap": random.choice([False, True]),
+                "criterion": 'gini',
+            },
+        }
+    elif model_choice == 'RandomForest':
+        return {
+            "model": 'RandomForest',
+            "model_params": {
+                "n_estimators": random.choice([30, 60, 90]),
+                "max_depth": random.choice([None, 6, 10]),
+                "min_samples_split": random.choice([2, 4]),
+                "min_samples_leaf": random.choice([1, 2]),
+                "max_features": random.choice(['sqrt', 'log2']),
+                "bootstrap": random.choice([True, False]),
+            },
+        }
+    elif model_choice == 'xgboost':
+        return {
+            "model": 'xgboost',
+            "model_params": {
+                "objective": 'binary:logistic',
+                "n_estimators": random.choice([25, 50, 75, 100]),
+                "max_depth": random.choice([2, 3, 4]),
+                "learning_rate": random.choice([0.05, 0.1, 0.2]),
+                "reg_lambda": random.choice([0.0, 0.5, 1.0]),
+                "min_child_weight": random.choice([1.0, 1.5, 2.0]),
+                "subsample": random.choice([0.6, 0.8, 1.0]),
+                "colsample_bytree": random.choice([0.6, 0.8, 1.0]),
+            },
+        }
+    else:
+        raise ValueError(f"classifier {model_choice} not a recognized option.")
 
 
 def generate_regressor_params(

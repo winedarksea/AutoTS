@@ -4906,6 +4906,14 @@ class ReplaceConstant(EmptyTransformer):
         self.fillna = fillna
         self.reintroduction_model = reintroduction_model
         self.n_jobs = n_jobs
+        self.dominant_threshold = kwargs.pop("dominant_threshold", 0.98)
+        self._dominant_columns = None
+        self._vectorized = False
+        self._weight_matrix = None
+        self._model_columns = []
+        self._probability_threshold = 0.5
+        self._column_batch_size = None
+        self.model = None
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -4913,28 +4921,99 @@ class ReplaceConstant(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        self.model = None
+        self._vectorized = False
+        self._weight_matrix = None
+        self._model_columns = []
+        self._probability_threshold = 0.5
+        self._column_batch_size = None
+        self._dominant_columns = None
+        filler = FillNA(
+            df.replace(self.constant, np.nan), method=self.fillna, window=10
+        )
         if self.reintroduction_model is None:
-            return FillNA(
-                df.replace(self.constant, np.nan), method=self.fillna, window=10
-            )
-        else:
-            # goal is for y to be 0 for constant and 1 for everything else
-            y = 1 - np.where(df != self.constant, 0, 1)
-            X = date_part(
-                df.index,
-                method=self.reintroduction_model.get(
-                    "datepart_method", "simple_binarized"
-                ),
-            )
-            if y.ndim < 2:
-                multioutput = False
-            elif y.shape[1] < 2:
-                multioutput = False
-            else:
-                multioutput = True
+            return filler
 
+        const_mask = (df == self.constant)
+        const_ratio = const_mask.mean(axis=0)
+        # store which columns are overwhelmingly constant to avoid model training
+        self._dominant_columns = const_ratio >= self.dominant_threshold
+        candidate_columns = const_ratio[
+            (const_ratio > 0) & (const_ratio < self.dominant_threshold)
+        ].index
+        if len(candidate_columns) == 0:
+            return filler
+
+        X = date_part(
+            df.index,
+            method=self.reintroduction_model.get(
+                "datepart_method", "simple_binarized"
+            ),
+        )
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, index=df.index)
+        X = X.astype(np.float32, copy=False)
+        X_array = X.to_numpy(copy=False)
+
+        model_name = self.reintroduction_model.get("model", "SGD")
+        model_params = self.reintroduction_model.get("model_params", {}) or {}
+        vectorized_flag = self.reintroduction_model.get(
+            "vectorized",
+            self.reintroduction_model.get("method", "").lower() == "fast",
+        )
+        model_columns = list(candidate_columns)
+        if len(model_columns) == 0:
+            return filler
+
+        if model_name == "SGD" and vectorized_flag:
+            learning_rate = float(model_params.get("learning_rate", 0.1))
+            max_iter = int(model_params.get("max_iter", 5))
+            l2 = float(model_params.get("l2", 0.0))
+            self._probability_threshold = float(
+                model_params.get("probability_threshold", 0.5)
+            )
+            batch_size = int(model_params.get("column_batch_size", 256))
+            if batch_size <= 0:
+                batch_size = 256
+            self._column_batch_size = batch_size
+            self._vectorized = True
+            n_samples = X_array.shape[0]
+            bias = np.ones((n_samples, 1), dtype=np.float32)
+            X_aug = np.concatenate([X_array, bias], axis=1)
+            n_features_aug = X_aug.shape[1]
+            self._model_columns = model_columns
+            self._weight_matrix = np.zeros(
+                (n_features_aug, len(model_columns)), dtype=np.float32
+            )
+
+            for start in range(0, len(model_columns), batch_size):
+                stop = min(start + batch_size, len(model_columns))
+                cols = model_columns[start:stop]
+                target_raw = df[cols].to_numpy(copy=False)
+                target = np.not_equal(target_raw, self.constant).astype(
+                    np.float32, copy=False
+                )
+                weights = np.zeros((n_features_aug, len(cols)), dtype=np.float32)
+                for _ in range(max_iter):
+                    logits = X_aug @ weights
+                    np.clip(logits, -20, 20, out=logits)
+                    preds = 1.0 / (1.0 + np.exp(-logits))
+                    error = preds - target
+                    gradient = (X_aug.T @ error) / n_samples
+                    if l2:
+                        gradient += l2 * weights
+                    weights -= learning_rate * gradient
+                self._weight_matrix[:, start:stop] = weights
+        else:
+            y = (df[model_columns] != self.constant).astype(int)
+            if y.shape[1] == 0:
+                return filler
+            multioutput = y.shape[1] > 1
             self.model = retrieve_classifier(
-                regression_model=self.reintroduction_model,
+                regression_model={
+                    "model": model_name,
+                    "model_params": dict(model_params),
+                },
                 verbose=0,
                 verbose_bool=False,
                 random_seed=2023,
@@ -4942,11 +5021,8 @@ class ReplaceConstant(EmptyTransformer):
                 n_jobs=self.n_jobs,
             )
             self.model.fit(X, y)
-            if False:
-                print(self.model.score(X, y))
-            return FillNA(
-                df.replace(self.constant, np.nan), method=self.fillna, window=10
-            )
+            self._model_columns = list(y.columns)
+        return filler
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -4973,20 +5049,61 @@ class ReplaceConstant(EmptyTransformer):
         """
         if self.reintroduction_model is None:
             return df
-        else:
-            X = date_part(
-                df.index,
-                method=self.reintroduction_model.get(
-                    "datepart_method", "simple_binarized"
-                ),
-            )
-            pred = pd.DataFrame(
-                self.model.predict(X), index=df.index, columns=df.columns
-            )
-            if self.constant == 0:
-                return df * pred
+        dominant = self._dominant_columns
+        has_vectorized_model = self._vectorized and self._weight_matrix is not None
+        has_sklearn_model = self.model is not None
+        if (not has_vectorized_model and not has_sklearn_model) and (
+            dominant is None or not dominant.any()
+        ):
+            return df
+
+        X = date_part(
+            df.index,
+            method=self.reintroduction_model.get(
+                "datepart_method", "simple_binarized"
+            ),
+        )
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, index=df.index)
+        X = X.astype(np.float32, copy=False)
+        X_array = X.to_numpy(copy=False)
+
+        pred = pd.DataFrame(
+            1,
+            index=df.index,
+            columns=df.columns,
+            dtype=np.int8,
+        )
+        if dominant is not None:
+            for column in dominant[dominant].index:
+                pred[column] = 0
+        if has_vectorized_model:
+            bias = np.ones((X_array.shape[0], 1), dtype=np.float32)
+            X_aug = np.concatenate([X_array, bias], axis=1)
+            batch_size = self._column_batch_size or len(self._model_columns)
+            threshold = self._probability_threshold
+            for start in range(0, len(self._model_columns), batch_size):
+                stop = min(start + batch_size, len(self._model_columns))
+                cols = self._model_columns[start:stop]
+                weights = self._weight_matrix[:, start:stop]
+                logits = X_aug @ weights
+                np.clip(logits, -20, 20, out=logits)
+                probs = 1.0 / (1.0 + np.exp(-logits))
+                pred_matrix = (probs > threshold).astype(np.int8, copy=False)
+                pred.loc[:, cols] = pred_matrix
+        elif has_sklearn_model:
+            model_pred = self.model.predict(X)
+            if isinstance(model_pred, pd.DataFrame):
+                pred.loc[:, self._model_columns] = model_pred.astype(np.int8)
             else:
-                return df.where(pred != 0, self.constant)
+                pred_values = np.asarray(model_pred, dtype=np.int8)
+                if pred_values.ndim == 1:
+                    pred_values = pred_values.reshape(-1, 1)
+                pred.loc[:, self._model_columns] = pred_values
+        if self.constant == 0:
+            return df * pred
+        else:
+            return df.where(pred != 0, self.constant)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
