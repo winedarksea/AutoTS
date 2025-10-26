@@ -589,8 +589,17 @@ class PredictionObject(object):
 
         plot_kwargs = kwargs.copy()
         ax_param = plot_kwargs.pop('ax', None)
-        user_color = plot_kwargs.get('color')
-        band_color = colors.get('low_forecast') if colors else "#A5ADAF"
+        user_color = plot_kwargs.pop('color', None)
+        
+        # Determine band color with proper fallback
+        if colors and 'low_forecast' in colors:
+            band_color = colors['low_forecast']
+        else:
+            band_color = "#A5ADAF"
+        
+        # Determine which colors to pass: either the colors dict or None if user provided color kwarg
+        colors_to_use = None if user_color else colors
+        
         ax = plot_forecast_with_intervals(
             plot_df,
             actual_col='actuals' if 'actuals' in plot_df.columns else None,
@@ -598,12 +607,13 @@ class PredictionObject(object):
             lower_col='low_forecast',
             upper_col='up_forecast',
             title=title,
-            colors=colors if user_color is None else None,
+            colors=colors_to_use,
             include_bounds=include_bounds,
             alpha=alpha,
             band_color=band_color,
             interval_label="Prediction Interval",
             ax=ax_param,
+            color=user_color,
             **plot_kwargs,
         )
         if vline is not None:

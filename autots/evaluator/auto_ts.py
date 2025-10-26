@@ -3905,11 +3905,9 @@ class AutoTS(object):
                     color_subset['actuals'] = colors['actuals']
                 if 'chosen' in colors:
                     color_subset['forecast'] = colors['chosen']
-            band_color = (
-                colors.get('chosen_lower')
-                if colors is not None and 'chosen_lower' in colors
-                else "#A5ADAF"
-            )
+            band_color = "#A5ADAF"
+            if colors is not None and 'chosen_lower' in colors:
+                band_color = colors['chosen_lower']
             plot_forecast_with_intervals(
                 shading_df,
                 actual_col='actuals' if 'actuals' in shading_df.columns else None,

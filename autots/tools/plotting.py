@@ -55,7 +55,6 @@ colors_list = [
     '#B8860B',
     '#DAA520',
     '#BC8F8F',
-    '#A9A9A9',
     '#CD5C5C',
     '#6A5ACD',
     '#FA8072',
@@ -73,7 +72,6 @@ colors_list = [
     '#FF8C00',
     '#FFB6C1',
     '#8A2BE2',
-    '#D8BFD8',
 ]
 
 # colors you might see in a mosaic or fresco
@@ -271,10 +269,14 @@ def plot_forecast_with_intervals(
         if colors is not None:
             color_mapping = {col: color for col, color in colors.items() if col in columns_to_plot}
             if color_mapping:
-                plot_kwargs = dict(plot_kwargs)
-                plot_kwargs['color'] = color_mapping
-
-        plot_df[columns_to_plot].plot(ax=ax, title=title, **plot_kwargs)
+                # Create a copy and update with color mapping
+                plot_kwargs_copy = dict(plot_kwargs)
+                plot_kwargs_copy['color'] = color_mapping
+                plot_df[columns_to_plot].plot(ax=ax, title=title, **plot_kwargs_copy)
+            else:
+                plot_df[columns_to_plot].plot(ax=ax, title=title, **plot_kwargs)
+        else:
+            plot_df[columns_to_plot].plot(ax=ax, title=title, **plot_kwargs)
     elif title is not None:
         ax.set_title(title)
 
