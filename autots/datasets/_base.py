@@ -546,6 +546,7 @@ def load_live_daily(
                 raise ValueError("Unable to resolve observation window for NASA DONKI request.")
             nasa_start_str = nasa_start_dt.strftime("%Y-%m-%d")
             nasa_end_str = nasa_end_dt.strftime("%Y-%m-%d")
+            nasa_end_day = nasa_end_dt.normalize()
 
             def _extract_datetime(record, candidate_keys):
                 """Return first valid timestamp from record using candidate keys."""
@@ -561,6 +562,21 @@ def load_live_daily(
                     if isinstance(ts, pd.Timestamp):
                         return ts.tz_localize(None)
                 return None
+
+            def _fill_after_first_valid(series, end_day, fill_value=0):
+                """Fill missing values to zero once data starts, leaving leading NaNs."""
+                if series is None or series.empty:
+                    return series
+                first_valid = series.first_valid_index()
+                if first_valid is None:
+                    return series
+                end_day = pd.Timestamp(end_day).normalize()
+                if first_valid > end_day:
+                    return series
+                new_index = pd.date_range(first_valid, end_day, freq="D")
+                filled = series.reindex(new_index).fillna(fill_value)
+                filled.index.name = series.index.name
+                return filled
 
             base_url = "https://api.nasa.gov/DONKI/"
             common_params = {
@@ -592,6 +608,9 @@ def load_live_daily(
                             .groupby(level=0)
                             .sum()
                             .rename("nasa_solar_flare_count")
+                        )
+                        flare_series = _fill_after_first_valid(
+                            flare_series, nasa_end_day, fill_value=0
                         )
                         dataset_lists.append(flare_series.to_frame())
             else:
@@ -640,6 +659,9 @@ def load_live_daily(
                             .max()
                             .rename("nasa_geomagnetic_kp_max")
                         )
+                        kp_series = _fill_after_first_valid(
+                            kp_series, nasa_end_day, fill_value=0
+                        )
                         dataset_lists.append(kp_series.to_frame())
             else:
                 print(
@@ -677,6 +699,9 @@ def load_live_daily(
                             .groupby(level=0)
                             .sum()
                             .rename("nasa_coronal_mass_ejection_count")
+                        )
+                        cme_series = _fill_after_first_valid(
+                            cme_series, nasa_end_day, fill_value=0
                         )
                         dataset_lists.append(cme_series.to_frame())
             else:

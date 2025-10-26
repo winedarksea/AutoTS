@@ -4906,7 +4906,7 @@ class ReplaceConstant(EmptyTransformer):
         self.fillna = fillna
         self.reintroduction_model = reintroduction_model
         self.n_jobs = n_jobs
-        self.dominant_threshold = kwargs.pop("dominant_threshold", 0.98)
+        self.dominant_threshold = kwargs.pop("dominant_threshold", 0.99)
         self._dominant_columns = None
         self._vectorized = False
         self._weight_matrix = None
