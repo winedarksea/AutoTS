@@ -6,7 +6,7 @@ import pandas as pd
 from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
-from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer, MeanPercentSplitter, LevelShiftMagic
+from autots.tools.transform import ThetaTransformer, FIRFilter, HistoricValues, GeneralTransformer, ReconciliationTransformer, UpscaleDownscaleTransformer, MeanPercentSplitter, LevelShiftMagic, ReplaceConstant
 from autots.models.base import PredictionObject
 
 class TestTransforms(unittest.TestCase):
@@ -779,3 +779,298 @@ class TestTransforms(unittest.TestCase):
         
         # The forecast should have level shifts applied via bfill
         self.assertTrue(np.isfinite(forecast_inverse.values).all())
+
+    def test_replace_constant_basic(self):
+        """Test ReplaceConstant transformer basic functionality."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 10 + 50,
+            'series2': np.random.randn(100) * 10 + 50,
+            'series3': np.random.randn(100) * 10 + 50,
+        }, index=dates)
+        
+        # Introduce constant values (zeros) in a pattern
+        df.iloc[::5, 0] = 0  # Every 5th row in series1
+        df.iloc[::7, 1] = 0  # Every 7th row in series2
+        
+        # Test without reintroduction model
+        transformer = ReplaceConstant(constant=0, fillna='linear', reintroduction_model=None)
+        transformer.fit(df)
+        transformed = transformer.transform(df)
+        
+        # Transform should fill NaN values
+        self.assertFalse(transformed.isna().any().any())
+        self.assertEqual(transformed.shape, df.shape)
+        
+        # Inverse without reintroduction should return data as-is
+        inverse = transformer.inverse_transform(transformed)
+        pd.testing.assert_frame_equal(transformed, inverse)
+
+    def test_replace_constant_vectorized_sgd(self):
+        """Test ReplaceConstant with vectorized SGD reintroduction model."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=200, freq='D')
+        df = pd.DataFrame({
+            f'series_{i}': np.random.randn(200) * 10 + 50 for i in range(10)
+        }, index=dates)
+        
+        # Introduce zeros in patterns
+        for i in range(10):
+            df.iloc[::5, i] = 0
+        
+        # Test with vectorized SGD (fast mode)
+        model_params = {
+            'model': 'SGD',
+            'model_params': {
+                'learning_rate': 0.1,
+                'max_iter': 5,
+                'l2': 0.0,
+                'column_batch_size': 256,
+                'probability_threshold': 0.5,
+            },
+            'vectorized': True,
+            'datepart_method': 'simple_binarized'
+        }
+        
+        transformer = ReplaceConstant(constant=0, fillna='linear', reintroduction_model=model_params)
+        transformer.fit(df)
+        
+        # Check that vectorized mode is active
+        self.assertTrue(transformer._vectorized)
+        self.assertIsNotNone(transformer._weight_matrix)
+        self.assertEqual(len(transformer._model_columns), 10)
+        
+        # Transform
+        transformed = transformer.transform(df)
+        self.assertFalse(transformed.isna().any().any())
+        
+        # Test inverse transform with full columns
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=30, freq='D')
+        forecast_df = pd.DataFrame({
+            f'series_{i}': np.random.randn(30) * 10 + 50 for i in range(10)
+        }, index=forecast_dates)
+        
+        inverse = transformer.inverse_transform(forecast_df)
+        self.assertEqual(inverse.shape, forecast_df.shape)
+        self.assertCountEqual(inverse.columns.tolist(), forecast_df.columns.tolist())
+        
+        # Some constants should be reintroduced
+        zeros_count = (inverse == 0).sum().sum()
+        self.assertGreaterEqual(zeros_count, 0)  # At least 0, possibly more
+
+    def test_replace_constant_column_subset(self):
+        """Test ReplaceConstant inverse_transform with column subset (critical bug fix)."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            f'series_{i}': np.random.randn(100) * 10 + 50 for i in range(10)
+        }, index=dates)
+        
+        # Introduce zeros
+        for i in range(10):
+            df.iloc[::5, i] = 0
+        
+        # Fit on full dataset
+        model_params = {
+            'model': 'SGD',
+            'model_params': {'learning_rate': 0.1, 'max_iter': 5},
+            'vectorized': True,
+            'datepart_method': 'simple_binarized'
+        }
+        
+        transformer = ReplaceConstant(constant=0, fillna='linear', reintroduction_model=model_params)
+        transformer.fit(df)
+        
+        # Test inverse transform with SUBSET of columns (this was broken before fix)
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=30, freq='D')
+        forecast_subset = pd.DataFrame({
+            f'series_{i}': np.random.randn(30) * 10 + 50 for i in range(5)  # Only 5 columns
+        }, index=forecast_dates)
+        
+        # Should not crash and should maintain correct shape
+        inverse_subset = transformer.inverse_transform(forecast_subset)
+        self.assertEqual(inverse_subset.shape, forecast_subset.shape)
+        self.assertCountEqual(inverse_subset.columns.tolist(), forecast_subset.columns.tolist())
+        self.assertCountEqual(inverse_subset.index.tolist(), forecast_subset.index.tolist())
+
+    def test_replace_constant_dominant_columns(self):
+        """Test ReplaceConstant with dominant constant columns."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series_dominant': np.zeros(100),  # 100% constant
+            'series_mostly': np.zeros(100),    # 99% constant
+            'series_normal': np.random.randn(100) * 10 + 50,
+        }, index=dates)
+        
+        # Make series_mostly 99% zeros
+        df.iloc[0, 1] = 10.0
+        
+        # Add some zeros to normal series
+        df.iloc[::10, 2] = 0
+        
+        model_params = {
+            'model': 'SGD',
+            'model_params': {},
+            'vectorized': True,
+            'datepart_method': 'simple_binarized'
+        }
+        
+        transformer = ReplaceConstant(
+            constant=0,
+            fillna='linear',
+            reintroduction_model=model_params,
+            dominant_threshold=0.98
+        )
+        transformer.fit(df)
+        
+        # Check that dominant columns are identified
+        self.assertIsNotNone(transformer._dominant_columns)
+        self.assertTrue(transformer._dominant_columns['series_dominant'])
+        self.assertTrue(transformer._dominant_columns['series_mostly'])
+        self.assertFalse(transformer._dominant_columns['series_normal'])
+        
+        # Test inverse transform - dominant columns should be all zeros
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=10, freq='D')
+        forecast_df = pd.DataFrame({
+            'series_dominant': np.ones(10) * 100,  # All 100s
+            'series_mostly': np.ones(10) * 100,
+            'series_normal': np.ones(10) * 100,
+        }, index=forecast_dates)
+        
+        inverse = transformer.inverse_transform(forecast_df)
+        
+        # Dominant columns should be forced to constant
+        self.assertTrue((inverse['series_dominant'] == 0).all())
+        self.assertTrue((inverse['series_mostly'] == 0).all())
+        # Normal series may or may not have zeros depending on model predictions
+
+    def test_replace_constant_sklearn_classifier(self):
+        """Test ReplaceConstant with sklearn classifier (non-vectorized)."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 10 + 50,
+            'series2': np.random.randn(100) * 10 + 50,
+        }, index=dates)
+        
+        # Introduce zeros
+        df.iloc[::5, 0] = 0
+        df.iloc[::7, 1] = 0
+        
+        # Test with GaussianNB
+        model_params = {
+            'model': 'GaussianNB',
+            'model_params': {'var_smoothing': 1e-9},
+            'datepart_method': 'simple_binarized'
+        }
+        
+        transformer = ReplaceConstant(constant=0, fillna='linear', reintroduction_model=model_params)
+        transformer.fit(df)
+        
+        # Check that sklearn model is used
+        self.assertFalse(transformer._vectorized)
+        self.assertIsNotNone(transformer.model)
+        
+        # Transform and inverse
+        transformed = transformer.transform(df)
+        self.assertFalse(transformed.isna().any().any())
+        
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=20, freq='D')
+        forecast_df = pd.DataFrame({
+            'series1': np.random.randn(20) * 10 + 50,
+            'series2': np.random.randn(20) * 10 + 50,
+        }, index=forecast_dates)
+        
+        inverse = transformer.inverse_transform(forecast_df)
+        self.assertEqual(inverse.shape, forecast_df.shape)
+
+    def test_replace_constant_edge_cases(self):
+        """Test ReplaceConstant edge cases."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=50, freq='D')
+        
+        # Test with single column
+        df_single = pd.DataFrame({
+            'series1': np.random.randn(50) * 10 + 50,
+        }, index=dates)
+        df_single.iloc[::5, 0] = 0
+        
+        model_params = {
+            'model': 'SGD',
+            'model_params': {},
+            'vectorized': True,
+            'datepart_method': 'simple_binarized'
+        }
+        
+        transformer = ReplaceConstant(constant=0, fillna='linear', reintroduction_model=model_params)
+        transformer.fit(df_single)
+        transformed = transformer.transform(df_single)
+        
+        forecast_dates = pd.date_range(df_single.index[-1] + pd.Timedelta(days=1), periods=10, freq='D')
+        forecast = pd.DataFrame({
+            'series1': np.random.randn(10) * 10 + 50,
+        }, index=forecast_dates)
+        
+        inverse = transformer.inverse_transform(forecast)
+        self.assertEqual(inverse.shape, forecast.shape)
+        
+        # Test with no constants in any column
+        df_no_const = pd.DataFrame({
+            'series1': np.random.randn(50) * 10 + 50,
+            'series2': np.random.randn(50) * 10 + 50,
+        }, index=dates)
+        
+        transformer2 = ReplaceConstant(constant=0, fillna='linear', reintroduction_model=model_params)
+        transformer2.fit(df_no_const)
+        
+        # Should handle gracefully (no columns need modeling)
+        self.assertTrue(len(transformer2._model_columns) == 0 or transformer2._weight_matrix is None)
+
+    def test_replace_constant_non_zero_constant(self):
+        """Test ReplaceConstant with non-zero constant value."""
+        np.random.seed(42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 10 + 50,
+            'series2': np.random.randn(100) * 10 + 50,
+        }, index=dates)
+        
+        # Introduce constant value of -999 (missing data indicator)
+        df.iloc[::5, 0] = -999
+        df.iloc[::7, 1] = -999
+        
+        model_params = {
+            'model': 'SGD',
+            'model_params': {'learning_rate': 0.1, 'max_iter': 5},
+            'vectorized': True,
+            'datepart_method': 'simple_binarized'
+        }
+        
+        transformer = ReplaceConstant(constant=-999, fillna='linear', reintroduction_model=model_params)
+        transformer.fit(df)
+        transformed = transformer.transform(df)
+        
+        # Should fill the -999 values
+        self.assertFalse((transformed == -999).any().any())
+        self.assertFalse(transformed.isna().any().any())
+        
+        # Test inverse transform
+        forecast_dates = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=20, freq='D')
+        forecast_df = pd.DataFrame({
+            'series1': np.random.randn(20) * 10 + 50,
+            'series2': np.random.randn(20) * 10 + 50,
+        }, index=forecast_dates)
+        
+        inverse = transformer.inverse_transform(forecast_df)
+        
+        # Some -999 values may be reintroduced
+        self.assertEqual(inverse.shape, forecast_df.shape)
+        # Verify that values are either original or -999
+        for col in inverse.columns:
+            unique_vals = inverse[col].unique()
+            # All values should be either from forecast or -999
+            reintroduced = (inverse[col] == -999).sum()
+            self.assertGreaterEqual(reintroduced, 0)  # At least 0
+

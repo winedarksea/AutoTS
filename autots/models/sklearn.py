@@ -891,6 +891,8 @@ def retrieve_classifier(
             n_jobs=n_jobs, random_state=random_seed, **model_param_dict
         )
     elif model_class == 'DecisionTree':
+        from sklearn.tree import DecisionTreeClassifier
+
         return DecisionTreeClassifier(random_state=random_seed, **model_param_dict)
     elif model_class in ['xgboost', 'XGBClassifier']:
         import xgboost as xgb
@@ -934,6 +936,7 @@ def retrieve_classifier(
             )
     elif model_class == "GaussianNB":
         from sklearn.naive_bayes import GaussianNB
+        from sklearn.multioutput import MultiOutputClassifier
 
         if multioutput:
             return MultiOutputClassifier(GaussianNB(**model_param_dict))
@@ -1151,7 +1154,9 @@ def generate_classifier_params(
     if model_dict is None:
         if method == "fast":
             model_dict = {
-                'SGD': 1.0,
+                'SGD': 0.7,
+                'DecisionTree': 0.25,
+                'GaussianNB': 0.05,
             }
         else:
             model_dict = {
@@ -1162,10 +1167,11 @@ def generate_classifier_params(
                 'RandomForest': 0.1,
                 'xgboost': 0.1,
             }
+
     model_list = list(model_dict.keys())
     weights = list(model_dict.values())
     model_choice = random.choices(model_list, weights, k=1)[0]
-
+    
     if model_choice == 'SGD':
         if method == "fast":
             max_iter = random.choices([4, 5, 6], [0.4, 0.4, 0.2])[0]

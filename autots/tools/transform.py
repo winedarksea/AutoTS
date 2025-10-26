@@ -4935,7 +4935,7 @@ class ReplaceConstant(EmptyTransformer):
             return filler
 
         const_mask = (df == self.constant)
-        const_ratio = const_mask.mean(axis=0)
+        const_ratio = const_mask.sum(axis=0) / len(df)  # More efficient than mean
         # store which columns are overwhelmingly constant to avoid model training
         self._dominant_columns = const_ratio >= self.dominant_threshold
         candidate_columns = const_ratio[
@@ -4986,6 +4986,9 @@ class ReplaceConstant(EmptyTransformer):
                 (n_features_aug, len(model_columns)), dtype=np.float32
             )
 
+            # Pre-compute X_aug.T once
+            X_aug_T = X_aug.T
+            
             for start in range(0, len(model_columns), batch_size):
                 stop = min(start + batch_size, len(model_columns))
                 cols = model_columns[start:stop]
@@ -4999,8 +5002,8 @@ class ReplaceConstant(EmptyTransformer):
                     np.clip(logits, -20, 20, out=logits)
                     preds = 1.0 / (1.0 + np.exp(-logits))
                     error = preds - target
-                    gradient = (X_aug.T @ error) / n_samples
-                    if l2:
+                    gradient = (X_aug_T @ error) / n_samples
+                    if l2 > 0:
                         gradient += l2 * weights
                     weights -= learning_rate * gradient
                 self._weight_matrix[:, start:stop] = weights
@@ -5068,42 +5071,67 @@ class ReplaceConstant(EmptyTransformer):
         X = X.astype(np.float32, copy=False)
         X_array = X.to_numpy(copy=False)
 
-        pred = pd.DataFrame(
-            1,
-            index=df.index,
-            columns=df.columns,
-            dtype=np.int8,
-        )
-        if dominant is not None:
-            for column in dominant[dominant].index:
-                pred[column] = 0
+        # Start with original data, will modify in place
+        result = df.copy()
+        
+        # Handle dominant columns (overwhelmingly constant)
+        if dominant is not None and dominant.any():
+            dominant_cols = dominant[dominant].index
+            # Only process columns that exist in the current dataframe
+            dominant_cols = [col for col in dominant_cols if col in df.columns]
+            if dominant_cols:
+                result[dominant_cols] = self.constant
+        
+        # Handle model-predicted columns
         if has_vectorized_model:
-            bias = np.ones((X_array.shape[0], 1), dtype=np.float32)
-            X_aug = np.concatenate([X_array, bias], axis=1)
-            batch_size = self._column_batch_size or len(self._model_columns)
-            threshold = self._probability_threshold
-            for start in range(0, len(self._model_columns), batch_size):
-                stop = min(start + batch_size, len(self._model_columns))
-                cols = self._model_columns[start:stop]
-                weights = self._weight_matrix[:, start:stop]
-                logits = X_aug @ weights
-                np.clip(logits, -20, 20, out=logits)
-                probs = 1.0 / (1.0 + np.exp(-logits))
-                pred_matrix = (probs > threshold).astype(np.int8, copy=False)
-                pred.loc[:, cols] = pred_matrix
+            # Filter to only columns that exist in df
+            model_cols = [col for col in self._model_columns if col in df.columns]
+            if model_cols:
+                bias = np.ones((X_array.shape[0], 1), dtype=np.float32)
+                X_aug = np.concatenate([X_array, bias], axis=1)
+                batch_size = self._column_batch_size or len(model_cols)
+                threshold = self._probability_threshold
+                
+                # Build mapping from model column name to index in weight matrix
+                col_to_idx = {col: idx for idx, col in enumerate(self._model_columns)}
+                
+                for start in range(0, len(model_cols), batch_size):
+                    stop = min(start + batch_size, len(model_cols))
+                    cols = model_cols[start:stop]
+                    # Get the correct weight indices
+                    weight_indices = [col_to_idx[col] for col in cols]
+                    weights = self._weight_matrix[:, weight_indices]
+                    logits = X_aug @ weights
+                    np.clip(logits, -20, 20, out=logits)
+                    probs = 1.0 / (1.0 + np.exp(-logits))
+                    # pred == 0 means reintroduce constant, pred == 1 means keep value
+                    pred_matrix = (probs > threshold).astype(bool, copy=False)
+                    # Apply: where pred is False (< threshold), set to constant
+                    for i, col in enumerate(cols):
+                        result.loc[~pred_matrix[:, i], col] = self.constant
+                        
         elif has_sklearn_model:
-            model_pred = self.model.predict(X)
-            if isinstance(model_pred, pd.DataFrame):
-                pred.loc[:, self._model_columns] = model_pred.astype(np.int8)
-            else:
-                pred_values = np.asarray(model_pred, dtype=np.int8)
-                if pred_values.ndim == 1:
-                    pred_values = pred_values.reshape(-1, 1)
-                pred.loc[:, self._model_columns] = pred_values
-        if self.constant == 0:
-            return df * pred
-        else:
-            return df.where(pred != 0, self.constant)
+            # Filter to only columns that exist in df
+            model_cols = [col for col in self._model_columns if col in df.columns]
+            if model_cols:
+                model_pred = self.model.predict(X)
+                if isinstance(model_pred, pd.DataFrame):
+                    pred_values = model_pred[model_cols].to_numpy(copy=False)
+                else:
+                    pred_values = np.asarray(model_pred, dtype=bool)
+                    if pred_values.ndim == 1:
+                        pred_values = pred_values.reshape(-1, 1)
+                    # If model was trained on more columns, subset
+                    if len(self._model_columns) != len(model_cols):
+                        col_to_idx = {col: idx for idx, col in enumerate(self._model_columns)}
+                        indices = [col_to_idx[col] for col in model_cols]
+                        pred_values = pred_values[:, indices]
+                
+                # pred == 0 means reintroduce constant, pred == 1 means keep value
+                for i, col in enumerate(model_cols):
+                    result.loc[~pred_values[:, i].astype(bool), col] = self.constant
+        
+        return result
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.

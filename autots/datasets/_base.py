@@ -272,6 +272,7 @@ def load_live_daily(
     earthquake_days: int = 180,
     earthquake_min_magnitude: int = 5,
     gsa_key: str = None,  # https://open.gsa.gov/api/dap/
+    nasa_api_key: str = "DEMO_KEY",
     gov_domain_list=['nasa.gov'],
     gov_domain_limit: int = 600,
     wikipedia_pages: list = ['Microsoft_Office', "List_of_highest-grossing_films"],
@@ -305,6 +306,7 @@ def load_live_daily(
         london_species (str): what measurement to pull from London Air. Not all stations have all metrics.
         earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.
         gsa_key (str): api key from https://open.gsa.gov/api/dap/
+        nasa_api_key (str): API key for https://api.nasa.gov/. Set to None to skip NASA DONKI data.
         gov_domain_list (list): dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
             some examples: ['usps.com', 'ncbi.nlm.nih.gov', 'cdc.gov', 'weather.gov', 'irs.gov', "usajobs.gov", "studentaid.gov", 'nasa.gov', "uk.usembassy.gov", "tsunami.gov"]
         gov_domain_limit (int): max number of records. Smaller will be faster. Max is currently 10000.
@@ -314,6 +316,7 @@ def load_live_daily(
         timeout (float): used by some queries
         sleep_seconds (int): increasing this may reduce probability of server download failures
     """
+    # TODO: add a proper unittest for this, minimal for each just to test that each API is not broken
     assert sleep_seconds >= 0.5, "sleep_seconds must be >=0.5"
 
     dataset_lists = []
@@ -532,6 +535,157 @@ def load_live_daily(
             dataset_lists.append(global_earthquakes)
         except Exception as e:
             print(f"earthquake data failed: {repr(e)}")
+
+    if nasa_api_key is not None:
+        try:
+            nasa_key = nasa_api_key if nasa_api_key else "DEMO_KEY"
+            # convert observation window to NASA-compatible YYYY-MM-DD strings
+            nasa_start_dt = pd.to_datetime(observation_start, errors="coerce")
+            nasa_end_dt = pd.to_datetime(current_date, errors="coerce")
+            if pd.isna(nasa_start_dt) or pd.isna(nasa_end_dt):
+                raise ValueError("Unable to resolve observation window for NASA DONKI request.")
+            nasa_start_str = nasa_start_dt.strftime("%Y-%m-%d")
+            nasa_end_str = nasa_end_dt.strftime("%Y-%m-%d")
+
+            def _extract_datetime(record, candidate_keys):
+                """Return first valid timestamp from record using candidate keys."""
+                if not isinstance(record, dict):
+                    return None
+                for key in candidate_keys:
+                    value = record.get(key)
+                    if not value:
+                        continue
+                    ts = pd.to_datetime(value, errors="coerce")
+                    if pd.isna(ts):
+                        continue
+                    if isinstance(ts, pd.Timestamp):
+                        return ts.tz_localize(None)
+                return None
+
+            base_url = "https://api.nasa.gov/DONKI/"
+            common_params = {
+                "startDate": nasa_start_str,
+                "endDate": nasa_end_str,
+                "api_key": nasa_key,
+            }
+
+            # Daily Solar Flare Count
+            response = s.get(base_url + "FLR", params=common_params, timeout=timeout)
+            if response.status_code == 200:
+                flare_json = response.json()
+                flare_dates = []
+                if isinstance(flare_json, list):
+                    for item in flare_json:
+                        flare_dt = _extract_datetime(
+                            item, ["beginTime", "peakTime", "endTime"]
+                        )
+                        if flare_dt is not None:
+                            flare_dates.append(flare_dt.normalize())
+                    if flare_dates:
+                        flare_series = (
+                            pd.Series(
+                                1,
+                                index=pd.DatetimeIndex(
+                                    flare_dates, name="datetime"
+                                ),
+                            )
+                            .groupby(level=0)
+                            .sum()
+                            .rename("nasa_solar_flare_count")
+                        )
+                        dataset_lists.append(flare_series.to_frame())
+            else:
+                print(
+                    f"NASA FLR request failed with status {response.status_code}"
+                )
+            time.sleep(sleep_seconds)
+
+            # Daily Geomagnetic Storm Maximum Intensity (Kp Index)
+            response = s.get(base_url + "GST", params=common_params, timeout=timeout)
+            if response.status_code == 200:
+                gst_json = response.json()
+                kp_records = []
+                if isinstance(gst_json, list):
+                    for item in gst_json:
+                        kp_entries = item.get("allKpIndex") or []
+                        if not isinstance(kp_entries, list):
+                            kp_entries = []
+                        if not kp_entries and item.get("kpIndex") is not None:
+                            kp_entries = [
+                                {
+                                    "kpIndex": item.get("kpIndex"),
+                                    "observedTime": item.get("startTime"),
+                                }
+                            ]
+                        for kp_entry in kp_entries:
+                            kp_val = kp_entry.get("kpIndex")
+                            obs_time = kp_entry.get("observedTime") or kp_entry.get(
+                                "sourceTime"
+                            ) or item.get("startTime")
+                            if kp_val is None or obs_time is None:
+                                continue
+                            try:
+                                kp_float = float(kp_val)
+                            except Exception:
+                                continue
+                            obs_dt = pd.to_datetime(obs_time, errors="coerce")
+                            if pd.isna(obs_dt):
+                                continue
+                            obs_dt = obs_dt.tz_localize(None).normalize()
+                            kp_records.append((obs_dt, kp_float))
+                    if kp_records:
+                        kp_df = pd.DataFrame(kp_records, columns=["datetime", "kp"])
+                        kp_series = (
+                            kp_df.groupby("datetime")["kp"]
+                            .max()
+                            .rename("nasa_geomagnetic_kp_max")
+                        )
+                        dataset_lists.append(kp_series.to_frame())
+            else:
+                print(
+                    f"NASA GST request failed with status {response.status_code}"
+                )
+            time.sleep(sleep_seconds)
+
+            # Daily Coronal Mass Ejection Count
+            response = s.get(base_url + "CME", params=common_params, timeout=timeout)
+            if response.status_code == 200:
+                cme_json = response.json()
+                cme_dates = []
+                if isinstance(cme_json, list):
+                    for item in cme_json:
+                        cme_dt = _extract_datetime(item, ["startTime"])
+                        if cme_dt is None:
+                            analyses = item.get("cmeAnalyses") or []
+                            if isinstance(analyses, list):
+                                for analysis in analyses:
+                                    cme_dt = _extract_datetime(
+                                        analysis, ["time21_5", "time18_5"]
+                                    )
+                                    if cme_dt is not None:
+                                        break
+                        if cme_dt is not None:
+                            cme_dates.append(cme_dt.normalize())
+                    if cme_dates:
+                        cme_series = (
+                            pd.Series(
+                                1,
+                                index=pd.DatetimeIndex(
+                                    cme_dates, name="datetime"
+                                ),
+                            )
+                            .groupby(level=0)
+                            .sum()
+                            .rename("nasa_coronal_mass_ejection_count")
+                        )
+                        dataset_lists.append(cme_series.to_frame())
+            else:
+                print(
+                    f"NASA CME request failed with status {response.status_code}"
+                )
+            time.sleep(sleep_seconds)
+        except Exception as e:
+            print(f"NASA DONKI download failed with error {repr(e)}")
 
     if gov_domain_list is not None:
         try:
