@@ -12,6 +12,7 @@ import pandas as pd
 import random
 import copy
 import warnings
+import json
 from autots.tools.transform import (
     DatepartRegressionTransformer,
     AnomalyRemoval,
@@ -1796,9 +1797,9 @@ class FeatureDetectionLoss:
     DEFAULT_WEIGHTS = {
         'trend_loss': 1.0,
         'level_shift_loss': 0.9,
-        'anomaly_loss': 1.1,
-        'holiday_event_loss': 0.8,
-        'holiday_impact_loss': 0.6,
+        'anomaly_loss': 1.3,  # Increased from 1.1 - prioritize anomaly detection
+        'holiday_event_loss': 1.2,  # Increased from 0.8 - penalize false holiday detections more
+        'holiday_impact_loss': 0.9,  # Increased from 0.6 - ensure holiday impacts are strong enough
         'holiday_splash_loss': 0.5,
         'seasonality_strength_loss': 0.8,
         'seasonality_pattern_loss': 1.0,
@@ -2296,7 +2297,7 @@ class FeatureDetectionLoss:
 
     def _anomaly_loss(self, detected_anom, true_anom):
         if not true_anom:
-            return 0.1 * len(detected_anom)
+            return 0.15 * len(detected_anom)  # Slightly increased penalty for false positives when no true anomalies
         detected_entries = [self._parse_anomaly_event(event) for event in detected_anom]
         true_entries = [self._parse_anomaly_event(event) for event in true_anom]
         used_detected = set()
@@ -2320,16 +2321,19 @@ class FeatureDetectionLoss:
                 loss += 0.5 * mag_pen + 0.3 * type_pen + 0.2 * min(duration_pen, 2.0)
                 used_detected.add(best_idx)
             else:
-                loss += 1.2 if true_type in {'point_outlier', 'spike'} else 0.7
+                # Increased penalty for missing anomalies - encourages detection
+                loss += 1.5 if true_type in {'point_outlier', 'spike'} else 0.9
         false_positives = len(detected_entries) - len(used_detected)
         if false_positives > 0:
-            fp_penalty = (0.08 * false_positives) + (0.12 * np.sqrt(false_positives))
+            # Reduced false positive penalty - softer on wrong predictions
+            fp_penalty = (0.04 * false_positives) + (0.08 * np.sqrt(false_positives))
             loss += fp_penalty
         return loss
 
     def _holiday_event_loss(self, detected_holidays, true_holidays, detected_anomalies):
         if not true_holidays:
-            return 0.05 * len(detected_holidays)
+            # Significantly increased penalty for false positive holidays
+            return 0.25 * len(detected_holidays)
         detected_dates = [pd.Timestamp(dt) for dt in detected_holidays]
         true_dates = [pd.Timestamp(dt) for dt in true_holidays]
         anomaly_dates = [self._parse_anomaly_event(event)[0] for event in detected_anomalies]
@@ -2349,28 +2353,40 @@ class FeatureDetectionLoss:
         )
         if false_positives > 0:
             ratio = false_positives / max(len(true_dates), 1)
-            loss += 0.12 * false_positives + 0.4 * max(ratio - 0.5, 0.0)
+            # Significantly increased false positive penalty for holidays
+            # Linear component: 0.35 per FP (was 0.12)
+            # Ratio penalty: 1.2x when FP ratio > 0.5 (was 0.4x)
+            # This heavily discourages over-detection
+            loss += 0.35 * false_positives + 1.2 * max(ratio - 0.5, 0.0)
         return loss
 
     def _holiday_impact_loss(self, detected_impacts, true_impacts):
         if not true_impacts:
-            return 0.05 * len(detected_impacts)
+            return 0.1 * len(detected_impacts)  # Slight increase for FP penalty
         detected = self._normalize_holiday_dict(detected_impacts)
         true = self._normalize_holiday_dict(true_impacts)
         loss = 0.0
         for date, true_value in true.items():
             det_value = detected.get(date, None)
             if det_value is None:
-                loss += 0.6 + abs(true_value)
+                # Missing impact - strong penalty
+                loss += 0.8 + abs(true_value) * 0.5
             else:
                 penalty = abs(det_value - true_value) / (abs(true_value) + 1e-6)
                 if abs(true_value) > 1e-6:
                     relative_mag = abs(det_value) / (abs(true_value) + 1e-6)
-                    if relative_mag < 0.5:
-                        penalty *= 1.2
-                loss += min(penalty, 2.0)
+                    # Significantly increased penalty when detected impact is too weak
+                    # This encourages stronger holiday impact detection
+                    if relative_mag < 0.3:
+                        penalty *= 2.0  # Very weak detection gets 2x penalty
+                    elif relative_mag < 0.5:
+                        penalty *= 1.5  # Somewhat weak detection gets 1.5x penalty
+                    elif relative_mag < 0.7:
+                        penalty *= 1.2  # Slightly weak detection gets 1.2x penalty
+                loss += min(penalty, 2.5)
         extras = len([date for date in detected if date not in true])
-        loss += 0.1 * extras
+        # Increased FP penalty for holiday impacts
+        loss += 0.15 * extras
         return loss
 
     def _holiday_splash_loss(self, detected_impacts, detected_anomalies, true_splash):
@@ -2940,7 +2956,7 @@ class FeatureDetectionOptimizer:
     """
     Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.
     
-    Uses random search to find parameters that minimize detection loss.
+    Uses a genetic-style search with balanced scoring to minimize detection loss.
     """
     
     def __init__(
@@ -2969,12 +2985,13 @@ class FeatureDetectionOptimizer:
         
         self.best_params = None
         self.best_loss = float('inf')
+        self.best_total_loss = float('inf')
         self.optimization_history = []
         self.baseline_loss = None
     
     def optimize(self):
         """
-        Run random search optimization to find best detector parameters.
+        Run genetic-style optimization to find best detector parameters.
         
         Returns
         -------
@@ -2983,6 +3000,7 @@ class FeatureDetectionOptimizer:
         """
         self.best_params = None
         self.best_loss = float('inf')
+        self.best_total_loss = float('inf')
         self.optimization_history = []
         self.baseline_loss = None
 
@@ -3004,75 +3022,115 @@ class FeatureDetectionOptimizer:
         }
     
     def _random_search(self):
-        """Random search optimization."""
-        print(f"Starting random search optimization ({self.n_iterations} iterations)...")
+        """Genetic-style optimization with balanced scoring."""
+        rng = random.Random(self.random_seed)
+        print(f"Starting genetic optimization ({self.n_iterations} iterations)...")
 
-        # Create a detector instance for parameter sampling
         detector_for_sampling = TimeSeriesFeatureDetector()
 
         baseline_params = self._default_detector_params()
+        evaluated_signatures = set()
         baseline_history_entry = None
         try:
             baseline_loss = self._evaluate_params(baseline_params)
             self.baseline_loss = baseline_loss['total_loss']
-            self.best_params = copy.deepcopy(baseline_params)
-            self.best_loss = self.baseline_loss
-            print(f"Baseline loss = {self.best_loss:.4f}")
             baseline_history_entry = {
                 'iteration': 'baseline',
                 'params': copy.deepcopy(baseline_params),
                 'loss': self.baseline_loss,
                 'loss_breakdown': baseline_loss,
             }
+            self.optimization_history.append(baseline_history_entry)
+            evaluated_signatures.add(self._param_signature(baseline_params))
+            self._apply_balanced_scores(self.optimization_history)
+            baseline_balanced = baseline_history_entry.get('balanced_loss', self.baseline_loss)
+            self.best_params = copy.deepcopy(baseline_params)
+            self.best_loss = baseline_balanced
+            self.best_total_loss = self.baseline_loss
+            print(f"Baseline loss = {self.baseline_loss:.4f} (balanced {baseline_balanced:.4f})")
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
             self.baseline_loss = None
             self.best_params = baseline_params
             self.best_loss = float('inf')
+            self.best_total_loss = float('inf')  # Bug fix: ensure consistency
         
         successful_iterations = 0
         failed_iterations = 0
         
         for i in range(self.n_iterations):
-            # Generate random parameters using detector's method
-            params = detector_for_sampling.get_new_params(method='random')
+            params = None
+            attempts = 0
+            parent_pool = sorted(
+                self.optimization_history,
+                key=lambda x: x.get('balanced_loss', x.get('loss', float('inf'))),
+            )
+            parent_pool = parent_pool[: max(2, min(6, len(parent_pool)))] if parent_pool else []
+            
+            # Generate new parameters, avoiding duplicates
+            while params is None or self._param_signature(params) in evaluated_signatures:
+                attempts += 1
+                if parent_pool and rng.random() < 0.7:
+                    if len(parent_pool) >= 2:
+                        chosen = rng.sample(parent_pool, 2)
+                        params = self._crossover_params(chosen[0]['params'], chosen[1]['params'], rng)
+                    else:
+                        params = copy.deepcopy(parent_pool[0]['params'])
+                    if rng.random() < 0.6:
+                        params = self._mutate_params(params, detector_for_sampling, rng)
+                else:
+                    params = detector_for_sampling.get_new_params(method='random')
+                if attempts > 8:
+                    # Bug fix: ensure we have valid params even if duplicates persist
+                    # Force a fresh random sample as last resort
+                    params = detector_for_sampling.get_new_params(method='random')
+                    break
+            
+            if params is None:
+                continue
+            
+            # Double-check signature (may still be duplicate if max attempts reached)
+            signature = self._param_signature(params)
+            if signature in evaluated_signatures:
+                continue
 
-            # Evaluate
             try:
                 loss = self._evaluate_params(params)
-                
-                # Only track successful evaluations in history
-                self.optimization_history.append({
+                record = {
                     'iteration': successful_iterations,
                     'params': copy.deepcopy(params),
                     'loss': loss['total_loss'],
                     'loss_breakdown': loss,
-                })
-                
+                }
+                self.optimization_history.append(record)
+                evaluated_signatures.add(signature)
                 successful_iterations += 1
-                
-                # Update best
-                if loss['total_loss'] < self.best_loss:
-                    self.best_loss = loss['total_loss']
+
+                self._apply_balanced_scores(self.optimization_history)
+                current_balanced = record.get('balanced_loss', record['loss'])
+                if current_balanced < self.best_loss:
+                    self.best_loss = current_balanced
                     self.best_params = copy.deepcopy(params)
-                    print(f"Iteration {i}: New best loss = {self.best_loss:.4f}")
+                    print(
+                        f"Iteration {i}: New best balanced loss = "
+                        f"{current_balanced:.4f} (raw {loss['total_loss']:.4f})"
+                    )
+                if loss['total_loss'] < self.best_total_loss:
+                    self.best_total_loss = loss['total_loss']
             except Exception as e:
                 failed_iterations += 1
-                if failed_iterations <= 3:  # Only print first few failures
+                if failed_iterations <= 3:
                     print(f"Iteration {i} failed: {str(e)[:100]}")
-                # Don't add to history - just skip this iteration
                 continue
-        
-        if not self.optimization_history and baseline_history_entry is not None:
-            # Record baseline so history is never empty when baseline succeeds.
-            self.optimization_history.append(baseline_history_entry)
         
         if failed_iterations > 3:
             print(f"... and {failed_iterations - 3} more failures (suppressed)")
         
         print(f"\nOptimization complete!")
         print(f"Successful iterations: {successful_iterations}/{self.n_iterations}")
-        print(f"Best loss: {self.best_loss:.4f}")
+        if np.isfinite(self.best_total_loss):
+            print(f"Best raw loss: {self.best_total_loss:.4f}")
+        print(f"Best balanced loss: {self.best_loss:.4f}")
         return self.best_params
     
     def _evaluate_params(self, params):
@@ -3099,19 +3157,102 @@ class FeatureDetectionOptimizer:
         )
         
         return loss
+    
+    def _apply_balanced_scores(self, history):
+        """Normalize component losses to mimic AutoTS scoring balance."""
+        if not history:
+            return
+        weight_keys = list(self.loss_calculator.weights.keys())
+        rows = []
+        for entry in history:
+            breakdown = entry.get('loss_breakdown', {})
+            rows.append(
+                {
+                    key: float(breakdown.get(key, np.nan))
+                    if breakdown.get(key) is not None
+                    else np.nan
+                    for key in weight_keys
+                }
+            )
+        metrics_df = pd.DataFrame(rows)
+        scalers = {}
+        for key in weight_keys:
+            col = metrics_df[key].replace([np.inf, -np.inf], np.nan)
+            positive = col[col > 0].dropna()
+            if positive.empty:
+                scalers[key] = 1.0
+            else:
+                scale = float(positive.min())
+                # Bug fix: ensure scale is not too small to avoid extreme divisions
+                if np.isfinite(scale) and scale > 1e-6:
+                    scalers[key] = scale
+                else:
+                    scalers[key] = 1.0
+        for entry in history:
+            balanced = 0.0
+            for key, weight in self.loss_calculator.weights.items():
+                value = entry.get('loss_breakdown', {}).get(key)
+                if value is None:
+                    continue
+                try:
+                    value = float(value)
+                except Exception:
+                    continue
+                if not np.isfinite(value):
+                    continue
+                balanced += weight * (value / scalers.get(key, 1.0))
+            entry['balanced_loss'] = balanced
+
+    @staticmethod
+    def _param_signature(params):
+        """Create a hashable signature for parameter configurations."""
+        try:
+            return json.dumps(params, sort_keys=True)
+        except (TypeError, ValueError):
+            # Fallback for non-JSON-serializable objects
+            try:
+                if isinstance(params, dict):
+                    return repr(sorted(params.items()))
+                else:
+                    return repr(params)
+            except Exception:
+                # Last resort: use id (not ideal but prevents crashes)
+                return str(id(params))
+
+    def _crossover_params(self, parent_a, parent_b, rng):
+        child = copy.deepcopy(parent_a)
+        for key in child.keys():
+            if key in parent_b and rng.random() < 0.5:
+                child[key] = copy.deepcopy(parent_b[key])
+        return child
+
+    def _mutate_params(self, params, sampler, rng):
+        mutated = copy.deepcopy(params)
+        fresh = sampler.get_new_params(method='random')
+        keys = list(mutated.keys())
+        if not keys:
+            return mutated
+        count = max(1, min(len(keys), 2))
+        for key in rng.sample(keys, count):
+            mutated[key] = copy.deepcopy(fresh[key])
+        return mutated
 
     def get_optimization_summary(self):
         """Return summary of optimization results."""
         summary = {
-            'method': 'random_search',
+            'method': 'genetic_search',
             'n_iterations': len(self.optimization_history),
             'best_loss': self.best_loss,
             'baseline_loss': self.baseline_loss,
+            'best_total_loss': self.best_total_loss,
             'best_params': copy.deepcopy(self.best_params) if self.best_params else None,
         }
         
         if self.optimization_history:
-            losses = [h['loss'] for h in self.optimization_history]
+            losses = [
+                h.get('balanced_loss', h.get('loss', float('inf')))
+                for h in self.optimization_history
+            ]
             summary['initial_loss'] = losses[0]
             summary['final_loss'] = losses[-1]
             summary['worst_loss'] = max(losses)

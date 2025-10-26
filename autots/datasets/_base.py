@@ -265,6 +265,7 @@ def load_live_daily(
     weather_data_types: list = ["AWND", "WSF2", "TAVG", "PRCP"],
     weather_stations: list = ["USW00094846", "USW00014925", "USW00014771"],
     weather_years: int = 5,
+    noaa_cdo_token: str = None,  # https://www.ncdc.noaa.gov/cdo-web/token
     london_air_stations: list = ['CT3', 'SK8'],
     london_air_species: str = "PM25",
     london_air_days: int = 180,
@@ -299,6 +300,7 @@ def load_live_daily(
         weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
             PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
         weather_stations (list): from NCEI NOAA api station ids. Pass empty list to skip.
+        noaa_cdo_token (str): API token from https://www.ncdc.noaa.gov/cdo-web/token (free, required for weather data)
         london_air_stations (list): londonair.org.uk source station IDs. Pass empty list to skip.
         london_species (str): what measurement to pull from London Air. Not all stations have all metrics.
         earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.
@@ -381,22 +383,93 @@ def load_live_daily(
     if weather_stations is not None:
         for wstation in weather_stations:
             try:
-                wbase = "https://www.ncei.noaa.gov/access/services/data/v1/?dataset=daily-summaries"
-                wargs = f"&dataTypes={','.join(weather_data_types)}&stations={wstation}"
-                wargs = (
-                    wargs
-                    + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
-                )
-                wdf = pd.read_csv(
-                    io.StringIO(s.get(wbase + wargs, timeout=timeout).text)
-                )
-                wdf['DATE'] = pd.to_datetime(wdf['DATE'])
-                wdf = wdf.set_index('DATE').drop(columns=['STATION'])
-                wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
-                dataset_lists.append(wdf)
-                time.sleep(sleep_seconds)
+                # NOAA CDO Web Services v2 API
+                # Documentation: https://www.ncdc.noaa.gov/cdo-web/webservices/v2
+                # Request token: https://www.ncdc.noaa.gov/cdo-web/token
+                if noaa_cdo_token is None:
+                    print(f"weather data skipped for {wstation}: noaa_cdo_token required. Get free token at https://www.ncdc.noaa.gov/cdo-web/token")
+                    continue
+                
+                # Use v2 API endpoint
+                wbase = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+                headers = {'token': noaa_cdo_token}
+                
+                # API has a limit of 1000 records per request, so we need to paginate
+                # For multiple data types, we'll need multiple requests
+                station_data = []
+                
+                for dtype in weather_data_types:
+                    # Collect all results with pagination
+                    all_results = []
+                    offset = 1  # API uses 1-based offset
+                    max_requests = 10  # Safety limit to prevent infinite loops
+                    request_count = 0
+                    
+                    while request_count < max_requests:
+                        params = {
+                            'datasetid': 'GHCND',  # Global Historical Climatology Network - Daily
+                            'stationid': f'GHCND:{wstation}',  # v2 requires dataset prefix
+                            'datatypeid': dtype,
+                            'startdate': start_date,
+                            'enddate': str_end_time,
+                            'units': 'standard',
+                            'limit': 1000,
+                            'offset': offset,
+                        }
+                        
+                        response = s.get(wbase, headers=headers, params=params, timeout=timeout)
+                        
+                        if response.status_code != 200:
+                            if request_count == 0:  # Only print error on first request
+                                print(f"weather data failed for {wstation} ({dtype}): HTTP {response.status_code}")
+                            break
+                        
+                        try:
+                            data_json = response.json()
+                            if 'results' not in data_json or len(data_json['results']) == 0:
+                                # No more results
+                                break
+                            
+                            results = data_json['results']
+                            all_results.extend(results)
+                            
+                            # Check if we've received all data
+                            metadata = data_json.get('metadata', {}).get('resultset', {})
+                            count = metadata.get('count', len(results))
+                            
+                            # If we got fewer than 1000 results, we've reached the end
+                            if len(results) < 1000:
+                                break
+                            
+                            # Move to next page
+                            offset += len(results)
+                            request_count += 1
+                            time.sleep(sleep_seconds)
+                            
+                        except Exception as parse_error:
+                            print(f"weather data parsing failed for {wstation} ({dtype}): {repr(parse_error)}")
+                            break
+                    
+                    # Convert all results to DataFrame
+                    if len(all_results) > 0:
+                        dtype_df = pd.DataFrame(all_results)
+                        dtype_df['date'] = pd.to_datetime(dtype_df['date'])
+                        dtype_df = dtype_df.set_index('date')[['value']].rename(
+                            columns={'value': f'{wstation}_{dtype}'}
+                        )
+                        station_data.append(dtype_df)
+                
+                # Combine all data types for this station
+                if len(station_data) > 0:
+                    from functools import reduce
+                    wdf = reduce(
+                        lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"),
+                        station_data,
+                    )
+                    dataset_lists.append(wdf)
+                    
             except Exception as e:
-                print(f"weather data failed: {repr(e)}")
+                print(f"weather data failed for {wstation}: {repr(e)}")
 
     str_end_time = current_date.strftime("%d-%b-%Y")
     start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime(
