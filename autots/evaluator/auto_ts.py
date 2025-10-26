@@ -62,6 +62,11 @@ from autots.evaluator.validation import (
 )
 from autots.tools.constraint import constraint_new_params
 from autots.tools.profile import profile_time_series
+from autots.tools.plotting import (
+    plot_forecast_with_intervals,
+    colors_list,
+    ancient_roman,
+)
 
 
 class AutoTS(object):
@@ -3547,29 +3552,39 @@ class AutoTS(object):
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         plot_df = remove_leading_zeros(plot_df)
+        interval_label = f"{self.prediction_interval * 100}% upper/lower forecast"
+        if plot_df.shape[1] < 4:
+            return plot_df.plot(title=title, **kwargs)
+        renamed_df = plot_df.rename(
+            columns={
+                plot_df.columns[0]: 'actuals',
+                plot_df.columns[1]: 'forecast',
+                plot_df.columns[2]: 'up_forecast',
+                plot_df.columns[3]: 'low_forecast',
+            }
+        )
         try:
-            import matplotlib.pyplot as plt
-
-            ax = plt.subplot()
-            ax.set_title(title)
-            ax.fill_between(
-                plot_df.index,
-                plot_df.iloc[:, 3],
-                plot_df.iloc[:, 2],
-                facecolor=facecolor,
+            ax = plot_forecast_with_intervals(
+                renamed_df,
+                actual_col='actuals',
+                forecast_col='forecast',
+                lower_col='low_forecast',
+                upper_col='up_forecast',
+                title=title,
+                include_bounds=True,
                 alpha=alpha,
-                interpolate=True,
-                label=f"{self.prediction_interval * 100}% upper/lower forecast",
+                band_color=facecolor,
+                interval_label=interval_label,
+                band_kwargs={'interpolate': True},
+                **kwargs,
             )
-            ax.plot(plot_df.index, plot_df.iloc[:, 1], label="forecast", **kwargs)
-            ax.plot(plot_df.index, plot_df.iloc[:, 0], label="actuals")
             ax.legend(loc=loc)
             for label in ax.get_xticklabels():
                 label.set_ha("right")
                 label.set_rotation(45)
             return ax
         except Exception:
-            plot_df.plot(title=title, **kwargs)
+            return plot_df.plot(title=title, **kwargs)
 
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
@@ -3833,26 +3848,83 @@ class AutoTS(object):
                 title = f"Validation Forecasts for {series}"
         # actual plotting section
         colb = [x for x in plot_df.columns if "_lower" not in x and "_upper" not in x]
+        plot_kwargs = kwargs.copy()
+        ax_param = plot_kwargs.pop('ax', None)
+        user_color = plot_kwargs.pop('color', None)
+
         if colors is not None:
-            # this will need to change if users are allowed to input colors
             new_colors = {x: random.choice(colors_list) for x in colb}
             colors = {**new_colors, **colors}
-            ax = plot_df[colb].plot(title=title, color=colors, **kwargs)
-            if include_bounds:
-                ax.fill_between(
-                    plot_df.index,
-                    plot_df['chosen_upper'],
-                    plot_df['chosen_lower'],
-                    alpha=alpha,
-                    color="#A5ADAF",
+            color_mapping = {col: colors[col] for col in colb if col in colors}
+            if color_mapping:
+                ax = plot_df[colb].plot(
+                    title=title, color=color_mapping, ax=ax_param, **plot_kwargs
                 )
+            elif user_color is not None:
+                ax = plot_df[colb].plot(
+                    title=title, color=user_color, ax=ax_param, **plot_kwargs
+                )
+            else:
+                ax = plot_df[colb].plot(title=title, ax=ax_param, **plot_kwargs)
         else:
-            # path currently active in the compare_horizontal case
             if not include_bounds:
                 renaming = {x: x[:8] for x in colb}
-                ax = plot_df[colb].rename(columns=renaming).plot(title=title, **kwargs)
+                renamed = plot_df[colb].rename(columns=renaming)
+                if user_color is not None:
+                    ax = renamed.plot(
+                        title=title, color=user_color, ax=ax_param, **plot_kwargs
+                    )
+                else:
+                    ax = renamed.plot(title=title, ax=ax_param, **plot_kwargs)
             else:
-                ax = plot_df.plot(title=title, **kwargs)
+                if user_color is not None:
+                    ax = plot_df.plot(
+                        title=title, color=user_color, ax=ax_param, **plot_kwargs
+                    )
+                else:
+                    ax = plot_df.plot(title=title, ax=ax_param, **plot_kwargs)
+
+        if (
+            include_bounds
+            and {'chosen_upper', 'chosen_lower', 'chosen'}.issubset(plot_df.columns)
+        ):
+            shading_cols = ['chosen', 'chosen_lower', 'chosen_upper']
+            if 'actuals' in plot_df.columns:
+                shading_cols.insert(0, 'actuals')
+            shading_df = plot_df[shading_cols].rename(
+                columns={
+                    'chosen': 'forecast',
+                    'chosen_lower': 'low_forecast',
+                    'chosen_upper': 'up_forecast',
+                }
+            )
+            color_subset = None
+            if colors is not None:
+                color_subset = {}
+                if 'actuals' in shading_df.columns and 'actuals' in colors:
+                    color_subset['actuals'] = colors['actuals']
+                if 'chosen' in colors:
+                    color_subset['forecast'] = colors['chosen']
+            band_color = (
+                colors.get('chosen_lower')
+                if colors is not None and 'chosen_lower' in colors
+                else "#A5ADAF"
+            )
+            plot_forecast_with_intervals(
+                shading_df,
+                actual_col='actuals' if 'actuals' in shading_df.columns else None,
+                forecast_col='forecast',
+                lower_col='low_forecast',
+                upper_col='up_forecast',
+                title=None,
+                colors=color_subset,
+                include_bounds=True,
+                alpha=alpha,
+                band_color=band_color,
+                interval_label=f"{self.prediction_interval * 100}% upper/lower forecast",
+                plot_lines=False,
+                ax=ax,
+            )
         if end_color is not None:
             ax.vlines(
                 x=self.validation_forecast_cuts_ends,
@@ -5147,125 +5219,6 @@ class AutoTS(object):
             lasso2.fit(shap_X if preprocess else X_train_scaled, y)
             param_impact['elastic_value'] = lasso2.coef_.flatten()
         return param_impact.copy().rename(columns=lambda x: f"{target}_" + str(x))
-
-
-colors_list = [
-    '#FF00FF',
-    '#7FFFD4',
-    '#00FFFF',
-    '#F5DEB3',
-    '#FF6347',
-    '#8B008B',
-    '#696969',
-    '#FFC0CB',
-    '#C71585',
-    '#008080',
-    '#663399',
-    '#32CD32',
-    '#66CDAA',
-    '#A9A9A9',
-    '#2F4F4F',
-    '#FFDEAD',
-    '#800000',
-    '#FFDAB9',
-    '#D3D3D3',
-    '#98FB98',
-    '#87CEEB',
-    '#A52A2A',
-    '#FFA07A',
-    '#7FFF00',
-    '#E9967A',
-    '#1E90FF',
-    '#FF69B4',
-    '#ADD8E6',
-    '#008B8B',
-    '#FF7F50',
-    '#00FA9A',
-    '#9370DB',
-    '#4682B4',
-    '#006400',
-    '#AFEEEE',
-    '#CD853F',
-    '#9400D3',
-    '#EE82EE',
-    '#00008B',
-    '#4B0082',
-    '#0403A7',
-    '#000000',
-    '#B0C4DE',
-    '#5F9EA0',
-    '#708090',
-    '#556B2F',
-    '#FF4500',
-    '#FA8072',
-    '#FFD700',
-    '#DA70D6',
-    '#DC143C',
-    '#B22222',
-    '#00CED1',
-    '#40E0D0',
-    '#FF1493',
-    '#483D8B',
-    '#2E8B57',
-    '#D2691E',
-    '#8FBC8F',
-    '#FF8C00',
-    '#FFB6C1',
-    '#8A2BE2',
-    '#D8BFD8',
-]
-
-# colors you might see in a mosaic or fresco, llm based and only partially accurate but want to do more depth on this later
-ancient_roman = [
-    '#66023C',  # Tyrian Purple (Murex snail secretion - corrected to a more authentic red-purple)
-    '#D4AF37',  # Gold (Gold leaf or gold powder)
-    '#B55A30',  # Terracotta (Clay-based pigments)
-    '#5E503F',  # Taupe (Earthy brown pigments)
-    '#DC143C',  # Crimson (Kermes red, extracted from scale insects)
-    '#D8C3A5',  # Pale Sand (Limestone-based pigments)
-    '#BAA378',  # Olive Tan (Natural ochre)
-    '#3A5F3F',  # Dark Green Serpentine (stone)
-    '#2E4057',  # Deep Slate Blue (Copper)
-    '#6A7B76',  # Muted Teal (Malachite or copper-based pigments)
-    '#965D62',  # Burnt Rose (Red ochre or iron oxide)
-    '#7F9B9B',  # Grayish Blue (Indigo or woad mixed with white)
-    '#7C0A02',  # Cinnabar Red (Mercury sulfide, known as vermilion)
-    '#8A3324',  # Burnt Umber (Natural iron oxide)
-    '#4682B4',  # Steel Blue (Egyptian Blue - a silicate of copper and calcium)
-    '#CD5C5C',  # Indian Red (Red ochre)
-    '#B8860B',  # Dark Goldenrod (Orpiment, arsenic trisulfide)
-    '#6B8E23',  # Olive Drab (Plant-based green pigments like verdigris)
-    '#2E8B57',  # Sea Green (Verdigris or malachite)
-    '#9932CC',  # Dark Orchid (Could represent a more intense version of murex purple)
-    '#9400D3',  # Dark Violet (A possible representation of Tyrian purple)
-    '#4B0082',  # Indigo (Indigo plant dye)
-    '#6A5ACD',  # Slate Blue (Cobalt blue mixed with white)
-    '#483D8B',  # Dark Slate Blue (Natural mineral blue)
-    '#DA70D6',  # Orchid (Similar to a diluted murex purple)
-    '#1C1C1C',  # Obsidian Black (stone)
-    '#D8BFD8',  # Thistle (Light violet)
-    '#FF2400',  # Cinnabar Red (Mercury sulfide)
-    '#1F75FE',  # Egyptian Blue (Silicate of copper and calcium)
-    '#FFD700',  # Bright Gold (Orpiment or actual gold leaf)
-    '#32CD32',  # Bright Verdigris Green (Copper acetate-based)
-    '#FFA07A',  # Light Coral (Madder Lake - derived from madder plant)
-    '#FF4500',  # Bright Orange (Ochre or plant-based)
-    '#ADD8E6',  # Light Blue (Sky blue fresco made with calcium-based pigments)
-    '#FFFFE0',  # Light Yellow (Lead-tin yellow)
-    '#00FA9A',  # Medium Spring Green (Copper-based greens)
-    '#F4A460',  # Sandy Brown (Saffron)
-    '#FFFACD',  # Lemon Chiffon (Lighter ochre)
-    '#E9967A',  # Dark Salmon (in accents for walls)
-    '#8B0000',  # Dark Red (Alizarin, a plant dye)
-    '#2B2B2B',  # Basalt Gray (stone)
-    '#FF6347',  # Tomato (Bright red accent, also achievable with madder dye)
-    '#FF8C00',  # Dark Orange (Bright ochre)
-    '#40E0D0',  # Turquoise (Copper-based turquoise pigment)
-    '#FA8072',  # Salmon (Warm pinks used in fresco detailing)
-    '#D5C3AA',  # Travertine Beige (stone)
-    '#EAE6DA',  # Carrara White Marble (stone)
-]
-
 
 def fake_regressor(
     df,

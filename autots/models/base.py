@@ -13,6 +13,7 @@ import pandas as pd
 from autots.tools.constraint import apply_constraint_single
 from autots.tools.shaping import infer_frequency, clean_weights
 from autots.evaluator.metrics import full_metric_evaluation
+from autots.tools.plotting import plot_distributions, plot_forecast_with_intervals
 
 
 def create_forecast_index(frequency, forecast_length, train_last_date, last_date=None):
@@ -271,110 +272,6 @@ def extract_single_transformer(
                 return "None"
         else:
             return "None"
-
-
-def create_seaborn_palette_from_cmap(cmap_name="gist_rainbow", n=10):
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    # Get the colormap from matplotlib
-    cm = plt.get_cmap(cmap_name)
-
-    # Create a range of colors from the colormap
-    colors = cm(np.linspace(0, 1, n))
-
-    # Convert to a seaborn palette
-    palette = sns.color_palette(colors)
-
-    return palette
-
-
-# Function to calculate the peak density of each model's distribution
-def calculate_peak_density(model, data, group_col='Model', y_col='TotalRuntimeSeconds'):
-    from scipy.stats import gaussian_kde
-
-    model_data = data[data[group_col] == model][y_col]
-    kde = gaussian_kde(model_data)
-    return np.max(kde(model_data))
-
-
-def plot_distributions(
-    runtimes_data,
-    group_col='Model',
-    y_col='TotalRuntimeSeconds',
-    xlim=None,
-    xlim_right=None,
-    title_suffix="",
-):
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    single_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) == 1)
-    multi_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) > 1)
-
-    # Calculate the average peak density across all models with multiple observations
-    average_peak_density = np.mean(
-        [
-            calculate_peak_density(model, multi_obs_models, group_col, y_col)
-            for model in multi_obs_models[group_col].unique()
-        ]
-    )
-
-    # Correcting the color palette to match the number of unique models
-    unique_models = runtimes_data[group_col].nunique()
-    # palette = sns.color_palette("tab10", n_colors=unique_models)
-    palette = create_seaborn_palette_from_cmap("gist_rainbow", n=unique_models)
-    sorted_models = runtimes_data[group_col].value_counts().index.tolist()
-    # sorted_models = runtimes_data[group_col].unique()
-    zip_palette = dict(zip(sorted_models, palette))
-
-    # Create a new figure for the plot
-    fig = plt.figure(figsize=(12, 8))
-
-    # Plot the density plots for multi-observation models
-    density_plot = sns.kdeplot(  # noqa
-        data=multi_obs_models,
-        x=y_col,
-        hue=group_col,
-        fill=True,
-        common_norm=False,
-        palette=zip_palette,
-        alpha=0.5,
-    )
-
-    # Plot the points for single-observation models at the average peak density
-    if not single_obs_models.empty:
-        point_plot = sns.scatterplot(  # noqa
-            data=single_obs_models,
-            x=y_col,
-            y=[average_peak_density] * len(single_obs_models),
-            hue=group_col,
-            palette=zip_palette,
-            legend=False,
-            marker='o',  # s=10
-        )
-    # Adjusting legend - Manually combining elements
-    handles, labels = [], []
-    for model, color in zip_palette.items():
-        handles.append(plt.Line2D([0], [0], linestyle="none", c=color, marker='o'))
-        labels.append(model)
-
-    # Create the combined legend
-    plt.legend(handles, labels, title=group_col)  # , bbox_to_anchor=(1.05, 1), loc=2
-
-    # Adding titles and labels
-    plt.title(f'Distribution of {y_col} by {group_col}{title_suffix}', fontsize=16)
-    plt.xlabel(f'{y_col}', fontsize=14)
-    plt.ylabel('Density', fontsize=14)
-
-    # Adjust layout
-    plt.tight_layout()
-    if xlim is not None:
-        plt.xlim(left=xlim)
-    if xlim_right is not None:
-        plt.xlim(right=runtimes_data[y_col].quantile(xlim_right))
-
-    return fig
 
 
 class PredictionObject(object):
@@ -690,16 +587,25 @@ class PredictionObject(object):
             else:
                 title = f"{title_substring} with model {title_prelim}"
 
-        ax = plot_df[['actuals', 'forecast']].plot(title=title, color=colors, **kwargs)
-        if include_bounds:
-            ax.fill_between(
-                plot_df.index,
-                plot_df['up_forecast'],
-                plot_df['low_forecast'],
-                alpha=alpha,
-                color="#A5ADAF",
-                label="Prediction Interval",
-            )
+        plot_kwargs = kwargs.copy()
+        ax_param = plot_kwargs.pop('ax', None)
+        user_color = plot_kwargs.get('color')
+        band_color = colors.get('low_forecast') if colors else "#A5ADAF"
+        ax = plot_forecast_with_intervals(
+            plot_df,
+            actual_col='actuals' if 'actuals' in plot_df.columns else None,
+            forecast_col='forecast',
+            lower_col='low_forecast',
+            upper_col='up_forecast',
+            title=title,
+            colors=colors if user_color is None else None,
+            include_bounds=include_bounds,
+            alpha=alpha,
+            band_color=band_color,
+            interval_label="Prediction Interval",
+            ax=ax_param,
+            **plot_kwargs,
+        )
         if vline is not None:
             ax.vlines(
                 x=vline,

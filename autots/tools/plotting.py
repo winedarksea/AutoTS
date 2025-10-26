@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, Iterable, Mapping, Sequence
+from typing import Any, Dict, Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,288 @@ try:  # pragma: no-cover - optional dependency
     HAS_MATPLOTLIB = True
 except ImportError:  # pragma: no-cover
     HAS_MATPLOTLIB = False
+
+
+colors_list = [
+    '#FF00FF',
+    '#7FFFD4',
+    '#00FFFF',
+    '#F5DEB3',
+    '#FF6347',
+    '#8B008B',
+    '#696969',
+    '#FFC0CB',
+    '#C71585',
+    '#008080',
+    '#663399',
+    '#32CD32',
+    '#66CDAA',
+    '#A9A9A9',
+    '#2F4F4F',
+    '#FFDEAD',
+    '#800000',
+    '#FFDAB9',
+    '#D3D3D3',
+    '#98FB98',
+    '#87CEEB',
+    '#A52A2A',
+    '#FFA07A',
+    '#7FFF00',
+    '#E9967A',
+    '#1E90FF',
+    '#FF69B4',
+    '#ADD8E6',
+    '#20B2AA',
+    '#708090',
+    '#B0C4DE',
+    '#D8BFD8',
+    '#556B2F',
+    '#B8860B',
+    '#DAA520',
+    '#BC8F8F',
+    '#A9A9A9',
+    '#CD5C5C',
+    '#6A5ACD',
+    '#FA8072',
+    '#FFD700',
+    '#DA70D6',
+    '#DC143C',
+    '#B22222',
+    '#00CED1',
+    '#40E0D0',
+    '#FF1493',
+    '#483D8B',
+    '#2E8B57',
+    '#D2691E',
+    '#8FBC8F',
+    '#FF8C00',
+    '#FFB6C1',
+    '#8A2BE2',
+    '#D8BFD8',
+]
+
+# colors you might see in a mosaic or fresco
+ancient_roman = [
+    '#66023C',  # Tyrian Purple
+    '#D4AF37',  # Gold
+    '#B55A30',  # Terracotta
+    '#5E503F',  # Taupe
+    '#DC143C',  # Crimson
+    '#D8C3A5',  # Pale Sand
+    '#BAA378',  # Olive Tan
+    '#3A5F3F',  # Dark Green Serpentine
+    '#2E4057',  # Deep Slate Blue
+    '#6A7B76',  # Muted Teal
+    '#965D62',  # Burnt Rose
+    '#7F9B9B',  # Grayish Blue
+    '#7C0A02',  # Cinnabar Red
+    '#8A3324',  # Burnt Umber
+    '#4682B4',  # Steel Blue
+    '#CD5C5C',  # Indian Red
+    '#B8860B',  # Dark Goldenrod
+    '#6B8E23',  # Olive Drab
+    '#2E8B57',  # Sea Green
+    '#9932CC',  # Dark Orchid
+    '#9400D3',  # Dark Violet
+    '#4B0082',  # Indigo
+    '#6A5ACD',  # Slate Blue
+    '#483D8B',  # Dark Slate Blue
+    '#DA70D6',  # Orchid
+    '#1C1C1C',  # Obsidian Black
+    '#D8BFD8',  # Thistle
+    '#FF2400',  # Cinnabar Red
+    '#1F75FE',  # Egyptian Blue
+    '#FFD700',  # Bright Gold
+    '#32CD32',  # Bright Verdigris Green
+    '#FFA07A',  # Light Coral
+    '#FF4500',  # Bright Orange
+    '#ADD8E6',  # Light Blue
+    '#FFFFE0',  # Light Yellow
+    '#00FA9A',  # Medium Spring Green
+    '#F4A460',  # Sandy Brown
+    '#FFFACD',  # Lemon Chiffon
+    '#E9967A',  # Dark Salmon
+    '#8B0000',  # Dark Red
+    '#2B2B2B',  # Basalt Gray
+    '#FF6347',  # Tomato
+    '#FF8C00',  # Dark Orange
+    '#40E0D0',  # Turquoise
+    '#FA8072',  # Salmon
+    '#D5C3AA',  # Travertine Beige
+    '#EAE6DA',  # Carrara White Marble
+]
+
+
+def create_seaborn_palette_from_cmap(cmap_name: str = "gist_rainbow", n: int = 10):
+    """Return seaborn palette sampling the given matplotlib cmap."""
+    if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
+        raise ImportError("matplotlib is required for plotting")
+    try:
+        import seaborn as sns
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError("seaborn is required for create_seaborn_palette_from_cmap") from exc
+
+    cm = plt.get_cmap(cmap_name)
+    colors = cm(np.linspace(0, 1, n))
+    return sns.color_palette(colors)
+
+
+def calculate_peak_density(
+    model: str,
+    data: pd.DataFrame,
+    group_col: str = 'Model',
+    y_col: str = 'TotalRuntimeSeconds',
+):
+    """Maximum KDE value for the given model's distribution."""
+    try:
+        from scipy.stats import gaussian_kde
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError("scipy is required for calculate_peak_density") from exc
+
+    model_data = data[data[group_col] == model][y_col]
+    kde = gaussian_kde(model_data)
+    return np.max(kde(model_data))
+
+
+def plot_distributions(
+    runtimes_data: pd.DataFrame,
+    group_col: str = 'Model',
+    y_col: str = 'TotalRuntimeSeconds',
+    xlim: float | None = None,
+    xlim_right: float | None = None,
+    title_suffix: str = "",
+):
+    """Plot runtime density per group with custom palette."""
+    if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
+        raise ImportError("matplotlib is required for plotting")
+    try:
+        import seaborn as sns
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError("seaborn is required for plot_distributions") from exc
+
+    single_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) == 1)
+    multi_obs_models = runtimes_data.groupby(group_col).filter(lambda x: len(x) > 1)
+
+    if not multi_obs_models.empty:
+        average_peak_density = np.mean(
+            [
+                calculate_peak_density(model, multi_obs_models, group_col, y_col)
+                for model in multi_obs_models[group_col].unique()
+            ]
+        )
+    else:
+        average_peak_density = 0.0
+
+    unique_models = runtimes_data[group_col].nunique()
+    palette = create_seaborn_palette_from_cmap("gist_rainbow", n=unique_models)
+    sorted_models = runtimes_data[group_col].value_counts().index.tolist()
+    zip_palette = dict(zip(sorted_models, palette))
+
+    fig = plt.figure(figsize=(12, 8))
+
+    sns.kdeplot(
+        data=multi_obs_models,
+        x=y_col,
+        hue=group_col,
+        fill=True,
+        common_norm=False,
+        palette=zip_palette,
+        alpha=0.5,
+    )
+
+    if not single_obs_models.empty and average_peak_density:
+        sns.scatterplot(
+            data=single_obs_models,
+            x=y_col,
+            y=[average_peak_density] * len(single_obs_models),
+            hue=group_col,
+            palette=zip_palette,
+            legend=False,
+            marker='o',
+        )
+
+    handles, labels = [], []
+    for model, color in zip_palette.items():
+        handles.append(Line2D([0], [0], linestyle="none", c=color, marker='o'))
+        labels.append(model)
+
+    plt.legend(handles, labels, title=group_col)
+    plt.title(f'Distribution of {y_col} by {group_col}{title_suffix}', fontsize=16)
+    plt.xlabel(f'{y_col}', fontsize=14)
+    plt.ylabel('Density', fontsize=14)
+    plt.tight_layout()
+    if xlim is not None:
+        plt.xlim(left=xlim)
+    if xlim_right is not None:
+        plt.xlim(right=runtimes_data[y_col].quantile(xlim_right))
+
+    return fig
+
+
+def plot_forecast_with_intervals(
+    plot_df: pd.DataFrame,
+    actual_col: str | None = 'actuals',
+    forecast_col: str = 'forecast',
+    lower_col: str = 'low_forecast',
+    upper_col: str = 'up_forecast',
+    title: str | None = None,
+    colors: Mapping[str, str] | None = None,
+    include_bounds: bool = True,
+    alpha: float = 0.3,
+    band_color: str | None = None,
+    interval_label: str | None = "Prediction Interval",
+    band_kwargs: Mapping[str, Any] | None = None,
+    plot_lines: bool = True,
+    ax=None,
+    **plot_kwargs,
+):
+    """Plot forecast (and optionally actuals) with confidence bounds."""
+    if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
+        raise ImportError("matplotlib is required for plotting")
+
+    if ax is None:
+        _, ax = plt.subplots()
+
+    if plot_lines:
+        columns_to_plot: list[str] = []
+        if actual_col and actual_col in plot_df.columns:
+            columns_to_plot.append(actual_col)
+        if forecast_col and forecast_col in plot_df.columns:
+            columns_to_plot.append(forecast_col)
+        if not columns_to_plot:
+            raise ValueError("plot_df must contain at least one of actual_col or forecast_col.")
+
+        color_mapping = None
+        if colors is not None:
+            color_mapping = {col: color for col, color in colors.items() if col in columns_to_plot}
+            if color_mapping:
+                plot_kwargs = dict(plot_kwargs)
+                plot_kwargs['color'] = color_mapping
+
+        plot_df[columns_to_plot].plot(ax=ax, title=title, **plot_kwargs)
+    elif title is not None:
+        ax.set_title(title)
+
+    if include_bounds and lower_col in plot_df.columns and upper_col in plot_df.columns:
+        fill_kwargs = dict(alpha=alpha)
+        if band_color is not None:
+            fill_kwargs['color'] = band_color
+        elif colors is not None:
+            fill_color = colors.get(lower_col) or colors.get(upper_col)
+            if fill_color is not None:
+                fill_kwargs['color'] = fill_color
+        if interval_label is not None:
+            fill_kwargs['label'] = interval_label
+        if band_kwargs:
+            fill_kwargs.update(band_kwargs)
+        ax.fill_between(
+            plot_df.index,
+            plot_df[upper_col],
+            plot_df[lower_col],
+            **fill_kwargs,
+        )
+
+    return ax
 
 
 def _to_timestamp(value):
@@ -284,4 +566,13 @@ def plot_feature_panels(
     return fig
 
 
-__all__ = ['plot_feature_panels', 'HAS_MATPLOTLIB']
+__all__ = [
+    'plot_feature_panels',
+    'plot_distributions',
+    'plot_forecast_with_intervals',
+    'create_seaborn_palette_from_cmap',
+    'calculate_peak_density',
+    'colors_list',
+    'ancient_roman',
+    'HAS_MATPLOTLIB',
+]
