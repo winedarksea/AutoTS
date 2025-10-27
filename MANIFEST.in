@@ -1,2 +1,8 @@
 include autots/datasets/data/*.zip
 include README.md LICENSE
+include extended_tutorial.md
+include production_example.py
+include docs/metric_weighting_guide.md
+include docs/catlin_m6_paper.tex
+include autots/mcp/mosaic_profile_template.json
+include autots/mcp/README.md
