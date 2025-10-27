@@ -353,9 +353,15 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         self.assertIsNotNone(best_params)
         self.assertIn('seasonality_params', best_params)
         self.assertIsNotNone(optimizer.best_loss)
-        # History only includes successful iterations (failed ones are excluded)
-        self.assertGreater(len(optimizer.optimization_history), 0)
-        self.assertLessEqual(len(optimizer.optimization_history), 3)
+        
+        # History includes baseline + successful iterations (failed ones are excluded)
+        # With n_iterations=3, we expect baseline (1) + up to 3 regular iterations = up to 4 entries
+        history_len = len(optimizer.optimization_history)
+        self.assertGreater(history_len, 0, 
+                          "Optimization history should contain at least the baseline")
+        self.assertLessEqual(history_len, 4,
+                           f"With n_iterations=3, expected at most 4 entries (1 baseline + 3 iterations), "
+                           f"but got {history_len}. History may include duplicate parameter configurations.")
     
     def test_grid_search(self):
         """Test grid search optimization."""

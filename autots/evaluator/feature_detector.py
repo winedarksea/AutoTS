@@ -26,7 +26,11 @@ from autots.tools.anomaly_utils import anomaly_new_params
 from autots.tools.plotting import plot_feature_panels, HAS_MATPLOTLIB
 from autots.tools.seasonal import date_part
 from autots.datasets.synthetic import SyntheticDailyGenerator
-from sklearn.preprocessing import StandardScaler
+
+try:
+    from sklearn.preprocessing import StandardScaler
+except Exception:
+    from autots.tools.mocks import StandardScaler
 
 
 

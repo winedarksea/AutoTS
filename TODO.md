@@ -17,16 +17,18 @@
 * updated cointegration code, replaced Cointegration with CointegrationTransformer
 * added mocks for dependency fallbacks
 * added variational autoencoder anomaly detection method
-* added experimental deep state space model
 * some fixes for breaking changes in dependencies
 * adjustment to how custom_metric is scaled so it can work with negatives
 * improvements to the calendars, Hindu calendar should be working now
 * changes to HistoricValues which hopefully makes it more reliable
-* added pMLP and MambaSSM models
+* added pMLP and MambaSSM models (painfully slow)
 * deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet. Unlikely you were using these, deprecated for a while
 * improvements to model_interrupt
 * synthetic data generation and feature extractor new, very much in beta
-* updated weather data to CDO v2
+* updated weather data to CDO v2 (requires API key)
+* added NASA solar data to load_live_daily
+* created an MCP server for AutoTS
+* many bug fixes, tweaks, and added unittests
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

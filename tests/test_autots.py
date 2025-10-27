@@ -852,7 +852,7 @@ class ModelTest(unittest.TestCase):
                         res_l = True
                     self.assertTrue(
                         res,
-                        f"Model '{x}' forecasts diverged from sample forecasts."
+                        f"Model '{x}' forecasts diverged from sample forecasts."  # note that the same code in different environments may give slightly different results, WindowRegression, MultivariateRegression, BallTreeMultivariateMotif, NVAR known to have this issue
                     )
                     self.assertTrue(
                         res_u,

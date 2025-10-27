@@ -67,6 +67,10 @@ from autots.tools.plotting import (
     colors_list,
     ancient_roman,
 )
+try:
+    from sklearn.preprocessing import StandardScaler
+except Exception:
+    from autots.tools.mocks import StandardScaler
 
 
 class AutoTS(object):
@@ -4976,7 +4980,6 @@ class AutoTS(object):
 
         from autots.tools.transform import transformer_dict
         from sklearn.linear_model import Lasso, ElasticNet
-        from sklearn.preprocessing import StandardScaler
 
         initial_results = self.results()
         all_trans = list(transformer_dict.keys())

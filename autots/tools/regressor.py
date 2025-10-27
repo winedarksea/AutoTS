@@ -8,6 +8,10 @@ from autots.tools.cointegration import coint_johansen
 from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.tools.transform import GeneralTransformer
 from autots.tools.fft import FFT
+try:
+    from sklearn.preprocessing import StandardScaler
+except Exception:
+    from autots.tools.mocks import StandardScaler
 
 
 def create_fft_features(
@@ -368,8 +372,6 @@ def create_lagged_regressor(
     df_inner = df.copy()
 
     if scale:
-        from sklearn.preprocessing import StandardScaler
-
         scaler = StandardScaler()
         df_inner = pd.DataFrame(
             scaler.fit_transform(df_inner), index=dates, columns=df_cols
