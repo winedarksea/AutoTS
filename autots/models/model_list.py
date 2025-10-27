@@ -108,7 +108,7 @@ model_classes = {
     "MambaSSM": "DL",
     "pMLP": "DL",
 }
-all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', "MambaSSM", "DynamicFactor", "DynamicFactorMQ", "TiDE"])))
+all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', "MambaSSM", "DynamicFactor", "DynamicFactorMQ", "TiDE", "PytorchForecasting"])))
 # downweight slower models
 default = {
     'ConstantNaive': 1,
