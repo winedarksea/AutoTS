@@ -10,10 +10,12 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
+from collections import OrderedDict
 from autots.tools.constraint import apply_constraint_single
 from autots.tools.shaping import infer_frequency, clean_weights
 from autots.evaluator.metrics import full_metric_evaluation
 from autots.tools.plotting import plot_distributions, plot_forecast_with_intervals
+import matplotlib.pyplot as plt
 
 
 def create_forecast_index(frequency, forecast_length, train_last_date, last_date=None):
@@ -316,6 +318,7 @@ class PredictionObject(object):
         model=None,
         transformer=None,
         result_windows=None,
+        components=None,
     ):
         self.model_name = self.name = model_name
         self.model_parameters = model_parameters
@@ -341,6 +344,7 @@ class PredictionObject(object):
         self.transformer = transformer
         self.runtime_dict = None
         self.result_windows = result_windows
+        self.components = components
 
     def __repr__(self):
         """Print."""
@@ -632,6 +636,31 @@ class PredictionObject(object):
         # ax.legend(loc=loc)
         return ax
 
+    def plot_components(
+        self,
+        series: str = None,
+        start_date=None,
+        kind: str = 'line',
+        title: str = None,
+        **kwargs,
+    ):
+        """Plot stored component contributions for a single series."""
+        if self.components is None or not isinstance(self.components, pd.DataFrame):
+            raise ValueError("No component data available on this PredictionObject.")
+        if series is None:
+            series = random.choice(self.components.columns.get_level_values(0).unique())
+        if series not in self.components.columns.get_level_values(0):
+            raise ValueError(f"Series '{series}' not found in stored components.")
+        comp_df = self.components[series]
+        if start_date is not None:
+            comp_df = comp_df[comp_df.index >= start_date]
+        if comp_df.empty:
+            raise ValueError("No component data remains after applying start_date filter.")
+        if title is None:
+            title = f"Component Breakdown for {series}"
+        ax = comp_df.plot(kind=kind, title=title, **kwargs)
+        return ax
+
     def plot_grid(
         self,
         df_wide=None,
@@ -912,3 +941,32 @@ class PredictionObject(object):
             bounds=bounds,
         )
         return self
+
+
+def stack_component_frames(component_frames):
+    """Convert dict of component DataFrames into a unified MultiIndex DataFrame."""
+    frames = []
+    for name, df in component_frames.items():
+        if df is None:
+            continue
+        comp_df = df.copy()
+        comp_df.columns = pd.MultiIndex.from_product(
+            [comp_df.columns, [name]]
+        )
+        frames.append(comp_df)
+    if not frames:
+        return None
+    result = pd.concat(frames, axis=1)
+    # Ensure columns are grouped by series
+    result = result.sort_index(axis=1, level=0)
+    return result
+
+
+def sum_component_frames(component_frames):
+    """Helper to sum matching component DataFrames."""
+    total = None
+    for df in component_frames.values():
+        if df is None:
+            continue
+        total = df if total is None else total.add(df, fill_value=0.0)
+    return total

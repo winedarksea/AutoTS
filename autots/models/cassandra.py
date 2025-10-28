@@ -9,6 +9,7 @@ import json
 from operator import itemgetter
 from itertools import groupby
 import random
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
@@ -32,7 +33,11 @@ from autots.tools.transform import (
     StandardScaler,
 )
 from autots.tools import cpu_count
-from autots.models.base import ModelObject, PredictionObject
+from autots.models.base import (
+    ModelObject,
+    PredictionObject,
+    stack_component_frames,
+)
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
 from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
@@ -1275,6 +1280,71 @@ class Cassandra(ModelObject):
             comp_list.append(comp_df)
         return pd.pivot(pd.concat(comp_list, axis=0), columns='csmod_component')
 
+    def _aggregate_component_frames(self, raw_components, category_func):
+        """Aggregate detailed component DataFrame into high-level categories."""
+        idx = raw_components.index
+        frames = OrderedDict()
+        for series in self.column_names:
+            series_df = raw_components[series]
+            for feature in series_df.columns:
+                category = category_func(feature)
+                if category not in frames:
+                    frames[category] = pd.DataFrame(
+                        0.0, index=idx, columns=self.column_names
+                    )
+                frames[category][series] = frames[category][series] + series_df[feature]
+        ordered = OrderedDict()
+        order = [
+            'trend_linear',
+            'seasonality',
+            'holiday',
+            'regressors',
+            'lags',
+            'impacts_linear',
+            'bias',
+            'linear',
+        ]
+        for cat in order:
+            if cat in frames:
+                ordered[cat] = frames.pop(cat)
+        ordered.update(frames)
+        return ordered
+
+    def _build_component_output(self, trend_component, dates):
+        """Create standardized component DataFrame for forecast horizon."""
+        component_frames = OrderedDict()
+        trend_df = trend_component.forecast.reindex(dates)
+        component_frames['trend'] = trend_df
+        try:
+            linear_components = self.process_components(to_origin_space=True)
+            linear_components = linear_components.reindex(dates)
+
+            def category_func(name):
+                lower = str(name).lower()
+                if 'trend' in lower:
+                    return 'trend_linear'
+                if any(term in lower for term in ['fourier', 'season', 'sin', 'cos', 'datepart']):
+                    return 'seasonality'
+                if 'holiday' in lower:
+                    return 'holiday'
+                if 'regress' in lower:
+                    return 'regressors'
+                if 'impact' in lower:
+                    return 'impacts_linear'
+                if any(term in lower for term in ['lag', 'randomwalk', 'ar', 'rolling']):
+                    return 'lags'
+                if any(term in lower for term in ['intercept', 'bias']):
+                    return 'bias'
+                return 'linear'
+
+            linear_frames = self._aggregate_component_frames(
+                linear_components, category_func
+            )
+            component_frames.update(linear_frames)
+        except Exception:
+            pass
+        return stack_component_frames(component_frames)
+
     def _predict_step(
         self,
         dates,
@@ -1332,6 +1402,10 @@ class Cassandra(ModelObject):
             prediction_interval=self.prediction_interval,
             fit_runtime=self.fit_runtime,
             model_parameters=self.get_params(),
+            components=self._build_component_output(
+                trend_component=trend_component,
+                dates=dates,
+            ),
         )
         return df_forecast
 

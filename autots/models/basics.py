@@ -6,9 +6,15 @@ from math import ceil
 import warnings
 import random
 import datetime
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
-from autots.models.base import ModelObject, PredictionObject
+from autots.models.base import (
+    ModelObject,
+    PredictionObject,
+    stack_component_frames,
+    sum_component_frames,
+)
 from autots.tools.seasonal import (
     seasonal_int,
     seasonal_window_match,
@@ -3804,34 +3810,63 @@ class BasicLinearModel(ModelObject):
         X_values = X.to_numpy().astype(float)
         self.X = X
 
-        if self.trend_phi is None or self.trend_phi == 1 or len(test_index) < 2:
+        beta_df = pd.DataFrame(self.beta, index=self.X.columns, columns=self.column_names)
+        component_frames = OrderedDict()
+
+        # Seasonal contributions
+        seasonal_cols = [col for col in self.seasonal_columns if col in X.columns]
+        if seasonal_cols:
+            season_matrix = X[seasonal_cols].to_numpy().astype(float)
+            season_beta = beta_df.loc[seasonal_cols].to_numpy()
+            season_contrib = season_matrix @ season_beta
+            component_frames['seasonality'] = pd.DataFrame(
+                season_contrib, index=test_index, columns=self.column_names
+            )
+
+        # Trend contributions with optional phi dampening
+        trend_cols = [col for col in self.trend_columns if col in X.columns]
+        if trend_cols:
+            trend_matrix = X[trend_cols].to_numpy().astype(float)
+            trend_beta = beta_df.loc[trend_cols].to_numpy()
+            trend_contrib = trend_matrix @ trend_beta
+            if self.trend_phi is not None and self.trend_phi != 1 and len(test_index) >= 2:
+                req_len = len(test_index) - 1
+                phi_series = pd.Series(
+                    [self.trend_phi] * req_len,
+                    index=test_index[1:],
+                ).pow(range(req_len))
+                diff_array = np.diff(trend_contrib, axis=0)
+                diff_scaled_array = diff_array * phi_series.to_numpy()[:, np.newaxis]
+                first_row = trend_contrib[0:1, :]
+                combined_array = np.vstack([first_row, diff_scaled_array])
+                trend_contrib = np.cumsum(combined_array, axis=0)
+            component_frames['trend'] = pd.DataFrame(
+                trend_contrib, index=test_index, columns=self.column_names
+            )
+
+        # Regressor contributions
+        reg_cols = [col for col in self.regressor_columns if col in X.columns]
+        if reg_cols:
+            reg_matrix = X[reg_cols].to_numpy().astype(float)
+            reg_beta = beta_df.loc[reg_cols].to_numpy()
+            reg_contrib = reg_matrix @ reg_beta
+            component_frames['regressors'] = pd.DataFrame(
+                reg_contrib, index=test_index, columns=self.column_names
+            )
+
+        # Constant contribution
+        if "constant" in X.columns:
+            const_matrix = X[["constant"]].to_numpy().astype(float)
+            const_beta = beta_df.loc[["constant"]].to_numpy()
+            const_contrib = const_matrix @ const_beta
+            component_frames['constant'] = pd.DataFrame(
+                const_contrib, index=test_index, columns=self.column_names
+            )
+
+        forecast = sum_component_frames(component_frames)
+        if forecast is None:
             forecast = pd.DataFrame(
-                X_values @ self.beta, columns=self.column_names, index=test_index
-            )
-        else:
-            components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
-            trend_x_start = x_s.shape[1]
-            trend_x_end = x_s.shape[1] + x_t.shape[1]
-            trend_components = components[:, trend_x_start:trend_x_end, :]
-
-            req_len = len(test_index) - 1
-            phi_series = pd.Series(
-                [self.trend_phi] * req_len,
-                index=test_index[1:],
-            ).pow(range(req_len))
-
-            diff_array = np.diff(trend_components, axis=0)
-            diff_scaled_array = (
-                diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
-            )
-            first_row = trend_components[0:1, :]
-            combined_array = np.vstack([first_row, diff_scaled_array])
-            components[:, trend_x_start:trend_x_end, :] = np.cumsum(
-                combined_array, axis=0
-            )
-
-            forecast = pd.DataFrame(
-                components.sum(axis=1), columns=self.column_names, index=test_index
+                0.0, index=test_index, columns=self.column_names
             )
 
         if just_point_forecast:
@@ -3856,6 +3891,7 @@ class BasicLinearModel(ModelObject):
             lower_forecast = forecast - margin_of_error
 
             predict_runtime = datetime.datetime.now() - predictStartTime
+            components_df = stack_component_frames(component_frames)
             prediction = PredictionObject(
                 model_name=self.name,
                 forecast_length=forecast_length,
@@ -3869,6 +3905,7 @@ class BasicLinearModel(ModelObject):
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
                 model_parameters=self.get_params(),
+                components=components_df,
             )
 
             return prediction
@@ -4444,6 +4481,32 @@ class TVVAR(BasicLinearModel):
             upper_forecast = forecast + margin_of_error
             lower_forecast = forecast - margin_of_error
             predict_runtime = datetime.datetime.now() - predictStartTime
+            components_df = None
+            try:
+                raw_components = self.process_components()
+                raw_components = raw_components.reindex(forecast.index)
+                component_features = raw_components.columns.get_level_values(1)
+                category_map = {}
+                for col in self.trend_columns:
+                    if col in component_features:
+                        category_map[col] = 'trend'
+                for col in self.seasonal_columns:
+                    if col in component_features:
+                        category_map[col] = 'seasonality'
+                if str(self.regression_type).lower() == "user":
+                    for col in self.regressor_columns:
+                        if col in component_features:
+                            category_map[col] = 'regressors'
+                if 'constant' in component_features:
+                    category_map['constant'] = 'constant'
+                if 'intercept' in component_features:
+                    category_map['intercept'] = 'constant'
+                component_frames = self._assemble_component_frames(
+                    raw_components, category_map, default_label='var'
+                )
+                components_df = stack_component_frames(component_frames)
+            except Exception:
+                components_df = None
             prediction = PredictionObject(
                 model_name=self.name,
                 forecast_length=forecast_length,
@@ -4456,6 +4519,7 @@ class TVVAR(BasicLinearModel):
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
                 model_parameters=self.get_params(),
+                components=components_df,
             )
             return prediction
 
@@ -4547,6 +4611,26 @@ class TVVAR(BasicLinearModel):
             result[target_col] = df
         components_df_final = pd.concat(result.values(), axis=1)
         return components_df_final
+
+    def _assemble_component_frames(self, raw_components, category_map, default_label='var'):
+        """Aggregate raw component dataframe into category DataFrames."""
+        idx = raw_components.index
+        frames = OrderedDict()
+        for series in self.column_names:
+            series_df = raw_components[series]
+            for feature in series_df.columns:
+                category = category_map.get(feature, default_label)
+                if category not in frames:
+                    frames[category] = pd.DataFrame(
+                        0.0, index=idx, columns=self.column_names
+                    )
+                frames[category][series] = frames[category][series] + series_df[feature]
+        ordered_frames = OrderedDict()
+        for cat in ['trend', 'seasonality', 'regressors', 'var', 'constant', 'other']:
+            if cat in frames:
+                ordered_frames[cat] = frames.pop(cat)
+        ordered_frames.update(frames)
+        return ordered_frames
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
