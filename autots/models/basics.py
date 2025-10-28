@@ -3805,13 +3805,48 @@ class BasicLinearModel(ModelObject):
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X = pd.concat([X, future_regressor.reindex(test_index)], axis=1)
+            X = pd.concat([X, future_regressor.reindex(test_index).rename(
+                columns=lambda x: "regr_" + str(x)
+            )], axis=1)
         X["constant"] = 1
         X_values = X.to_numpy().astype(float)
         self.X = X
 
+        # ORIGINAL FORECAST CALCULATION (not reconstructed from components)
+        if self.trend_phi is None or self.trend_phi == 1 or len(test_index) < 2:
+            forecast = pd.DataFrame(
+                X_values @ self.beta, columns=self.column_names, index=test_index
+            )
+        else:
+            components = np.einsum('ij,jk->ijk', self.X.to_numpy(), self.beta)
+            trend_x_start = x_s.shape[1]
+            trend_x_end = x_s.shape[1] + x_t.shape[1]
+            trend_components = components[:, trend_x_start:trend_x_end, :]
+
+            req_len = len(test_index) - 1
+            phi_series = pd.Series(
+                [self.trend_phi] * req_len,
+                index=test_index[1:],
+            ).pow(range(req_len))
+
+            diff_array = np.diff(trend_components, axis=0)
+            diff_scaled_array = (
+                diff_array * phi_series.to_numpy()[:, np.newaxis, np.newaxis]
+            )
+            first_row = trend_components[0:1, :]
+            combined_array = np.vstack([first_row, diff_scaled_array])
+            components[:, trend_x_start:trend_x_end, :] = np.cumsum(
+                combined_array, axis=0
+            )
+
+            forecast = pd.DataFrame(
+                components.sum(axis=1), columns=self.column_names, index=test_index
+            )
+
+        # COMPONENT EXTRACTION (for analysis, not used in forecast)
         beta_df = pd.DataFrame(self.beta, index=self.X.columns, columns=self.column_names)
         component_frames = OrderedDict()
+        categorized_cols = set()
 
         # Seasonal contributions
         seasonal_cols = [col for col in self.seasonal_columns if col in X.columns]
@@ -3822,6 +3857,7 @@ class BasicLinearModel(ModelObject):
             component_frames['seasonality'] = pd.DataFrame(
                 season_contrib, index=test_index, columns=self.column_names
             )
+            categorized_cols.update(seasonal_cols)
 
         # Trend contributions with optional phi dampening
         trend_cols = [col for col in self.trend_columns if col in X.columns]
@@ -3843,6 +3879,7 @@ class BasicLinearModel(ModelObject):
             component_frames['trend'] = pd.DataFrame(
                 trend_contrib, index=test_index, columns=self.column_names
             )
+            categorized_cols.update(trend_cols)
 
         # Regressor contributions
         reg_cols = [col for col in self.regressor_columns if col in X.columns]
@@ -3853,6 +3890,7 @@ class BasicLinearModel(ModelObject):
             component_frames['regressors'] = pd.DataFrame(
                 reg_contrib, index=test_index, columns=self.column_names
             )
+            categorized_cols.update(reg_cols)
 
         # Constant contribution
         if "constant" in X.columns:
@@ -3862,11 +3900,16 @@ class BasicLinearModel(ModelObject):
             component_frames['constant'] = pd.DataFrame(
                 const_contrib, index=test_index, columns=self.column_names
             )
+            categorized_cols.add("constant")
 
-        forecast = sum_component_frames(component_frames)
-        if forecast is None:
-            forecast = pd.DataFrame(
-                0.0, index=test_index, columns=self.column_names
+        # Other (uncategorized) contributions
+        other_cols = [col for col in X.columns if col not in categorized_cols]
+        if other_cols:
+            other_matrix = X[other_cols].to_numpy().astype(float)
+            other_beta = beta_df.loc[other_cols].to_numpy()
+            other_contrib = other_matrix @ other_beta
+            component_frames['other'] = pd.DataFrame(
+                other_contrib, index=test_index, columns=self.column_names
             )
 
         if just_point_forecast:
@@ -4348,7 +4391,9 @@ class TVVAR(BasicLinearModel):
         x_t.index = test_index
         X_ext = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index)], axis=1)
+            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index).rename(
+                columns=lambda x: "regr_" + str(x)
+            )], axis=1)
         X_ext["constant"] = 1
 
         predictions = pd.DataFrame(
