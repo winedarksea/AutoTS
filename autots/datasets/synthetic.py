@@ -16,6 +16,13 @@ from autots.tools.calendar import gregorian_to_chinese, gregorian_to_islamic
 
 from autots.tools.plotting import plot_feature_panels, HAS_MATPLOTLIB
 
+# Optional imports for tuning functionality
+try:
+    from scipy.optimize import differential_evolution
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+
 
 class SyntheticDailyGenerator:
     """
@@ -51,6 +58,11 @@ class SyntheticDailyGenerator:
     - Template structure is compatible with TimeSeriesFeatureDetector
     - Both use same JSON-friendly format for components and labels
     - Templates can be saved/loaded and used for model evaluation
+    
+    **Parameter Tuning:**
+    - Use tune_to_data() to optimize parameters to match real-world data
+    - Tuning adjusts frequency and strength parameters based on statistical properties
+    - See TUNING_GUIDE.md for detailed usage examples
 
     
     Parameters
@@ -86,6 +98,28 @@ class SyntheticDailyGenerator:
         If None (default), all types will be generated
     disable_holiday_splash : bool
         If True, holidays will only affect a single day with no splash or bridge effects (default False)
+    
+    Examples
+    --------
+    Basic usage:
+    
+    >>> from autots.datasets import generate_synthetic_daily_data
+    >>> gen = generate_synthetic_daily_data(n_days=365, n_series=5)
+    >>> data = gen.get_data()
+    >>> labels = gen.get_all_labels()
+    
+    Tuning to real-world data:
+    
+    >>> import pandas as pd
+    >>> real_data = pd.read_csv('real_data.csv', index_col=0, parse_dates=True)
+    >>> gen = generate_synthetic_daily_data(
+    ...     start_date=real_data.index[0],
+    ...     n_days=len(real_data),
+    ...     n_series=len(real_data.columns),
+    ... )
+    >>> results = gen.tune_to_data(real_data, n_iterations=20, verbose=True)
+    >>> gen._generate()  # Regenerate with tuned parameters
+    >>> tuned_data = gen.get_data()
     """
     
     # Template version for compatibility tracking
@@ -106,7 +140,7 @@ class SyntheticDailyGenerator:
         'granger_lagged': 'Granger Lagged (7-day lag from Lunar Holidays)',
         'standard': 'Standard',
     }
-    
+
     def __init__(
         self,
         start_date='2015-01-01',
@@ -182,6 +216,7 @@ class SyntheticDailyGenerator:
         # Component storage for analysis
         self.components = {}  # {series_id: {component_name: array}}
         self.template = None  # JSON-friendly template describing generated data
+        self.tuning_results = None  # Results from tune_to_data() method
 
         # Precompute custom holiday templates so all series share the same structure
         self.random_dom_holidays = self._init_random_dom_holidays()
@@ -2294,6 +2329,371 @@ class SyntheticDailyGenerator:
         if return_components:
             return renderer.data, renderer.components
         return renderer.data
+
+    @staticmethod
+    def _extract_data_statistics(df):
+        """
+        Extract key statistics from real-world time series data.
+        
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Time series data with DatetimeIndex
+            
+        Returns
+        -------
+        dict
+            Dictionary of statistics useful for tuning
+        """
+        stats = {}
+        
+        # Basic properties
+        stats['n_days'] = len(df)
+        stats['n_series'] = len(df.columns)
+        
+        # Value statistics
+        stats['mean_value'] = float(df.mean().mean())
+        stats['std_value'] = float(df.std().mean())
+        stats['scale'] = float(df.abs().max().max())
+        
+        # Simple trend estimation (linear slope per series)
+        from sklearn.linear_model import LinearRegression
+        X = np.arange(len(df)).reshape(-1, 1)
+        slopes = []
+        for col in df.columns:
+            y = df[col].ffill().bfill().values
+            if len(y) > 0 and not np.all(np.isnan(y)):
+                lr = LinearRegression()
+                lr.fit(X, y)
+                slopes.append(abs(lr.coef_[0]))
+        stats['mean_trend_slope'] = float(np.mean(slopes)) if slopes else 0.0
+        
+        # Estimate seasonality strength (simple weekly and yearly patterns)
+        weekly_strength = []
+        yearly_strength = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 0:
+                # Weekly: compare variance within week vs across weeks
+                if len(series) >= 14:
+                    dow = series.index.dayofweek
+                    weekly_means = series.groupby(dow).mean()
+                    weekly_var = weekly_means.var() if len(weekly_means) > 1 else 0
+                    total_var = series.var()
+                    weekly_strength.append(float(weekly_var / (total_var + 1e-9)))
+                
+                # Yearly: compare variance within day-of-year vs across years
+                if len(series) >= 365:
+                    doy = series.index.dayofyear
+                    yearly_means = series.groupby(doy).mean()
+                    yearly_var = yearly_means.var() if len(yearly_means) > 1 else 0
+                    total_var = series.var()
+                    yearly_strength.append(float(yearly_var / (total_var + 1e-9)))
+        
+        stats['weekly_seasonality'] = float(np.median(weekly_strength)) if weekly_strength else 0.1
+        stats['yearly_seasonality'] = float(np.median(yearly_strength)) if yearly_strength else 0.1
+        
+        # Noise estimation (first differences std)
+        diff_std = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 1:
+                diff = series.diff().dropna()
+                if len(diff) > 0:
+                    diff_std.append(diff.std())
+        stats['noise_std'] = float(np.median(diff_std)) if diff_std else 0.1
+        stats['noise_to_signal'] = float(stats['noise_std'] / (stats['std_value'] + 1e-9))
+        
+        # Event frequency estimation (rough changepoint detection)
+        changepoint_freq = []
+        anomaly_freq = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 30:
+                # Detect outliers as proxy for anomalies
+                z_scores = np.abs((series - series.mean()) / (series.std() + 1e-9))
+                n_outliers = np.sum(z_scores > 3)
+                anomaly_freq.append(n_outliers / (len(series) / 7))  # per week
+                
+                # Detect abrupt changes as proxy for changepoints
+                diffs = series.diff().abs()
+                threshold = diffs.quantile(0.95)
+                n_changes = np.sum(diffs > threshold * 2)
+                changepoint_freq.append(n_changes / (len(series) / 365.25))  # per year
+        
+        stats['anomaly_per_week'] = float(np.median(anomaly_freq)) if anomaly_freq else 0.05
+        stats['changepoint_per_year'] = float(np.median(changepoint_freq)) if changepoint_freq else 0.5
+        
+        return stats
+
+    def tune_to_data(
+        self,
+        target_df,
+        n_iterations=20,
+        n_standard_series=None,
+        metric='mse',
+        verbose=True,
+        random_seed=None,
+    ):
+        """
+        Tune generator parameters to match real-world time series data.
+        
+        This method optimizes the generator's parameters to minimize the difference
+        between synthetic data and real-world data based on distributional statistics.
+        Special series types are not tuned but will still be generated with optimized
+        base parameters.
+
+        TODO: this is a fairly basic implementation, and won't tune many aspects of real world data
+
+        Parameters
+        ----------
+        target_df : pd.DataFrame
+            Real-world time series data to match (DatetimeIndex, numeric columns)
+        n_iterations : int, optional
+            Number of optimization iterations (default 20)
+        n_standard_series : int, optional
+            Number of standard series to generate for comparison during tuning.
+            If None, uses min(target_df.shape[1], 5) series.
+        metric : str, optional
+            Distance metric to minimize: 'mse', 'mae', 'wasserstein' (default 'mse')
+        verbose : bool, optional
+            Whether to print progress (default True)
+        random_seed : int, optional
+            Random seed for tuning process (default None, uses current random_seed)
+            
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - 'best_params': Optimized parameter dictionary
+            - 'best_score': Best score achieved
+            - 'target_stats': Statistics from target data
+            - 'synthetic_stats': Statistics from best synthetic data (scaled)
+            - 'scale_multiplier': Factor to multiply synthetic data by to match target magnitude
+            
+        Notes
+        -----
+        Updates self with best parameters found. After calling this method,
+        new data generation will use the tuned parameters.
+        
+        **Important**: The synthetic data is generated on a base scale (~50), which may
+        differ from your real-world data scale. The returned 'scale_multiplier' should
+        be applied to generated data to match the magnitude of the target data:
+        
+        >>> gen._generate()  # Regenerate with tuned parameters
+        >>> scaled_data = gen.data * gen.tuning_results['scale_multiplier']
+        
+        The scale multiplier matches the mean of absolute means between target and
+        synthetic data, ensuring the overall magnitude is similar.
+        
+        Raises
+        ------
+        ImportError
+            If scipy is not installed (required for optimization)
+        ValueError
+            If target_df is invalid
+        """
+        if not HAS_SCIPY:
+            raise ImportError(
+                "scipy is required for tuning. Install it with: pip install scipy"
+            )
+        
+        if not isinstance(target_df, pd.DataFrame):
+            raise ValueError("target_df must be a pandas DataFrame")
+        
+        if not isinstance(target_df.index, pd.DatetimeIndex):
+            raise ValueError("target_df must have a DatetimeIndex")
+        
+        # Extract target statistics
+        target_stats = self._extract_data_statistics(target_df)
+        
+        if verbose:
+            print("=" * 80)
+            print("TUNING SYNTHETIC DATA GENERATOR TO REAL-WORLD DATA")
+            print("=" * 80)
+            print(f"Target data shape: {target_df.shape}")
+            print(f"Date range: {target_df.index[0]} to {target_df.index[-1]}")
+            print(f"\nTarget statistics:")
+            for key, value in target_stats.items():
+                if isinstance(value, float):
+                    print(f"  {key}: {value:.6f}")
+                else:
+                    print(f"  {key}: {value}")
+        
+        # Determine number of standard series for tuning
+        if n_standard_series is None:
+            n_standard_series = min(target_df.shape[1], 5)
+        
+        # Set up optimization
+        tune_seed = random_seed if random_seed is not None else self.random_seed
+        
+        # Calculate scale adjustment to match target data magnitude
+        # Synthetic data has base magnitude of ~50 (for scale=1.0), so we need to scale it
+        # Use mean of absolute means to handle series with different scales robustly
+        target_scale_measure = target_df.abs().mean().mean()
+        base_synthetic_magnitude = 50.0  # Base signal strength in synthetic generator
+        scale_multiplier = target_scale_measure / base_synthetic_magnitude if target_scale_measure > 0 else 1.0
+        
+        if verbose:
+            print(f"\nScale adjustment:")
+            print(f"  Target mean of absolute means: {target_scale_measure:.2f}")
+            print(f"  Synthetic base magnitude: {base_synthetic_magnitude:.2f}")
+            print(f"  Scale multiplier: {scale_multiplier:.2f}")
+        
+        # Define parameter bounds for optimization
+        # [trend_cp_freq, level_shift_freq, anomaly_freq, weekly_str, yearly_str, noise_level]
+        bounds = [
+            (0.0, 3.0),   # trend_changepoint_freq
+            (0.0, 1.0),   # level_shift_freq
+            (0.0, 0.5),   # anomaly_freq
+            (0.1, 3.0),   # weekly_seasonality_strength
+            (0.1, 3.0),   # yearly_seasonality_strength
+            (0.01, 0.5),  # noise_level
+        ]
+        
+        # Objective function to minimize
+        def objective(params):
+            """Generate synthetic data with given params and compute distance to target."""
+            trend_cp, level_shift, anomaly, weekly, yearly, noise = params
+            
+            # Create temporary generator with these parameters
+            # Only generate standard series for comparison
+            temp_gen = SyntheticDailyGenerator(
+                start_date=target_df.index[0],
+                n_days=len(target_df),
+                n_series=n_standard_series,
+                random_seed=tune_seed,
+                trend_changepoint_freq=trend_cp,
+                level_shift_freq=level_shift,
+                anomaly_freq=anomaly,
+                weekly_seasonality_strength=weekly,
+                yearly_seasonality_strength=yearly,
+                noise_level=noise,
+                include_regressors=False,
+                disable_holiday_splash=self.disable_holiday_splash,
+            )
+            
+            # Scale synthetic data to match target data magnitude
+            scaled_data = temp_gen.data * scale_multiplier
+            
+            # Extract statistics from scaled synthetic data
+            synth_stats = self._extract_data_statistics(scaled_data)
+            
+            # Compute distance between target and synthetic statistics
+            # Focus on key distributional properties
+            if metric == 'mse':
+                distance = (
+                    ((synth_stats['weekly_seasonality'] - target_stats['weekly_seasonality']) ** 2) +
+                    ((synth_stats['yearly_seasonality'] - target_stats['yearly_seasonality']) ** 2) +
+                    ((synth_stats['noise_to_signal'] - target_stats['noise_to_signal']) ** 2) +
+                    ((synth_stats['anomaly_per_week'] - target_stats['anomaly_per_week']) ** 2) +
+                    ((synth_stats['changepoint_per_year'] - target_stats['changepoint_per_year']) ** 2) * 0.5 +
+                    ((synth_stats['mean_trend_slope'] - target_stats['mean_trend_slope']) / (target_stats['scale'] + 1e-9)) ** 2
+                )
+            elif metric == 'mae':
+                distance = (
+                    abs(synth_stats['weekly_seasonality'] - target_stats['weekly_seasonality']) +
+                    abs(synth_stats['yearly_seasonality'] - target_stats['yearly_seasonality']) +
+                    abs(synth_stats['noise_to_signal'] - target_stats['noise_to_signal']) +
+                    abs(synth_stats['anomaly_per_week'] - target_stats['anomaly_per_week']) +
+                    abs(synth_stats['changepoint_per_year'] - target_stats['changepoint_per_year']) * 0.5 +
+                    abs(synth_stats['mean_trend_slope'] - target_stats['mean_trend_slope']) / (target_stats['scale'] + 1e-9)
+                )
+            else:  # wasserstein or other
+                # Simple L1 distance for simplicity
+                distance = sum(
+                    abs(synth_stats.get(k, 0) - target_stats.get(k, 0))
+                    for k in ['weekly_seasonality', 'yearly_seasonality', 'noise_to_signal', 
+                             'anomaly_per_week', 'changepoint_per_year']
+                )
+            
+            return distance
+        
+        # Run optimization
+        if verbose:
+            print(f"\nRunning optimization with {n_iterations} iterations...")
+            print(f"Generating {n_standard_series} standard series per iteration")
+        
+        result = differential_evolution(
+            objective,
+            bounds,
+            maxiter=n_iterations,
+            seed=tune_seed,
+            workers=1,
+            updating='deferred',
+            disp=verbose,
+        )
+        
+        # Extract best parameters
+        best_params = {
+            'trend_changepoint_freq': float(result.x[0]),
+            'level_shift_freq': float(result.x[1]),
+            'anomaly_freq': float(result.x[2]),
+            'weekly_seasonality_strength': float(result.x[3]),
+            'yearly_seasonality_strength': float(result.x[4]),
+            'noise_level': float(result.x[5]),
+        }
+        
+        # Generate final synthetic data with best parameters for validation
+        final_gen = SyntheticDailyGenerator(
+            start_date=target_df.index[0],
+            n_days=len(target_df),
+            n_series=n_standard_series,
+            random_seed=tune_seed,
+            **best_params,
+            include_regressors=self.include_regressors,
+            disable_holiday_splash=self.disable_holiday_splash,
+        )
+        # Scale the final synthetic data to match target magnitude
+        scaled_final_data = final_gen.data * scale_multiplier
+        final_stats = self._extract_data_statistics(scaled_final_data)
+        
+        if verbose:
+            print("\n" + "=" * 80)
+            print("TUNING COMPLETE")
+            print("=" * 80)
+            print(f"Best score: {result.fun:.6f}")
+            print("\nOptimized parameters:")
+            for key, value in best_params.items():
+                print(f"  {key}: {value:.6f}")
+            print("\nComparison of statistics:")
+            print(f"{'Statistic':<30} {'Target':<15} {'Synthetic':<15} {'Diff':<15}")
+            print("-" * 75)
+            key_stats = ['weekly_seasonality', 'yearly_seasonality', 'noise_to_signal', 
+                        'anomaly_per_week', 'changepoint_per_year', 'mean_trend_slope']
+            for stat in key_stats:
+                target_val = target_stats.get(stat, 0)
+                synth_val = final_stats.get(stat, 0)
+                diff = synth_val - target_val
+                print(f"{stat:<30} {target_val:<15.6f} {synth_val:<15.6f} {diff:<15.6f}")
+        
+        # Update self with best parameters
+        self.trend_changepoint_freq = best_params['trend_changepoint_freq']
+        self.level_shift_freq = best_params['level_shift_freq']
+        self.anomaly_freq = best_params['anomaly_freq']
+        self.weekly_seasonality_strength = best_params['weekly_seasonality_strength']
+        self.yearly_seasonality_strength = best_params['yearly_seasonality_strength']
+        self.noise_level = best_params['noise_level']
+        
+        # Store tuning results including scale multiplier
+        self.tuning_results = {
+            'best_params': best_params,
+            'best_score': float(result.fun),
+            'target_stats': target_stats,
+            'synthetic_stats': final_stats,
+            'scale_multiplier': float(scale_multiplier),
+            'n_iterations': n_iterations,
+            'metric': metric,
+        }
+        
+        if verbose:
+            print(f"\nScale multiplier: {scale_multiplier:.2f}")
+            print("  (Multiply generated data by this value to match target data magnitude)")
+            print("\nGenerator parameters have been updated with tuned values.")
+            print("Regenerate data to use new parameters.")
+            print("Then multiply by scale_multiplier to match target data magnitude.")
+        
+        return self.tuning_results
 
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
         """

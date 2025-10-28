@@ -4649,7 +4649,14 @@ class TVVAR(BasicLinearModel):
         for target_col in final_components:
             df = final_components[target_col]
             # Scale back to original feature space
-            df = df * self.scaler_std[target_col]  # + self.scaler_mean[target_col]
+            df = df * self.scaler_std[target_col]
+            # Add the mean to the constant term only (so components sum correctly)
+            if 'constant' in df.columns:
+                df['constant'] = df['constant'] + self.scaler_mean[target_col]
+            elif len(df.columns) > 0:
+                # If no constant, add mean to first component to ensure sum is correct
+                first_col = df.columns[0]
+                df[first_col] = df[first_col] + self.scaler_mean[target_col]
             if self.mode == 'multiplicative':
                 df = np.exp(df)
             df.columns = pd.MultiIndex.from_product([[target_col], df.columns])

@@ -125,6 +125,19 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * Set `runtime_weighting` in `metric_weighting` to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy. 
 * Memory shortage is the most common cause of random process/kernel crashes. Try testing a data subset and using a different model list if issues occur. Please also report crashes if found to be linked to a specific set of model parameters (not AutoTS parameters but the underlying forecasting model params). Also crashes vary significantly by setup such as underlying linpack/blas so seeing crash differences between environments can be expected. 
 
+## MCP Server
+See the README.md in ./autots/mcp
+```json
+{
+  "mcpServers": {
+    "autots": {
+      "command": "autots-mcp"
+    }
+  }
+}
+```
+mcp-name: io.github.winedarksea/AutoTS
+
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing
 * Use AutoTS and...
@@ -175,6 +188,5 @@ Adaptive forecasting in dynamic markets: An evaluation of AutoTS within the M6 c
 International Journal of Forecasting,
 Volume 41, Issue 4, 2025, Pages 1485-1493, ISSN 0169-2070,
 https://doi.org/10.1016/j.ijforecast.2025.08.004.
-
 
 *Also known as Project CATS (Catlin's Automated Time Series) hence the logo.*

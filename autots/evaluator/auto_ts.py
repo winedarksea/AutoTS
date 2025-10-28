@@ -5221,91 +5221,152 @@ class AutoTS(object):
             param_impact['elastic_value'] = lasso2.coef_.flatten()
         return param_impact.copy().rename(columns=lambda x: f"{target}_" + str(x))
 
+    def diagnose_params_new(self, target='runtime', min_occurrences: int = 3):
+        """Summarize which parameter choices are linked to slow runtimes or errors.
 
-def error_correlations(all_result, result: str = 'corr'):
-    """
-    Onehot encode AutoTS result df and return df or correlation with errors.
+        Args:
+            target (str): one of runtime, smape, mae, oda, exception, or a column in
+                the results DataFrame.
+            min_occurrences (int): minimum number of rows a parameter/value pair must
+                appear in to be included.
 
-    Args:
-        all_results (pandas.DataFrame): AutoTS model_results df
-        result (str): whether to return 'df', 'corr', 'poly corr' with errors
-    """
-    import json
-    from sklearn.preprocessing import OneHotEncoder
+        Returns:
+            pandas.DataFrame: aggregated statistics per parameter/value pair.
+        """
 
-    all_results = all_result.copy()
-    all_results = all_results.drop_duplicates()
-    all_results['ExceptionFlag'] = (~all_results['Exceptions'].isna()).astype(int)
-    all_results = all_results[all_results['ExceptionFlag'] > 0]
-    all_results = all_results.reset_index(drop=True)
+        results = self.results()
+        if results.empty:
+            raise ValueError("No results available to diagnose.")
 
-    trans_df = all_results['TransformationParameters'].apply(json.loads)
-    try:
-        trans_df = pd.json_normalize(trans_df)  # .fillna(value='NaN')
-    except Exception:
-        trans_df = pd.io.json.json_normalize(trans_df)
-    trans_cols1 = trans_df.columns
-    trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
-    trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
-    trans_df = pd.DataFrame(trans_transformer.transform(trans_df))
-    trans_cols = np.array(
-        [x1 + x2 for x1, x2 in zip(trans_cols1, trans_transformer.categories_)]
-    )
-    trans_cols = [item for sublist in trans_cols for item in sublist]
-    trans_df.columns = trans_cols
+        metric_lookup = {
+            'runtime': 'TotalRuntimeSeconds',
+            'smape': 'smape',
+            'mae': 'mae',
+            'oda': 'oda',
+            'exception': 'exception',
+        }
 
-    model_df = all_results['ModelParameters'].apply(json.loads)
-    try:
-        model_df = pd.json_normalize(model_df)  # .fillna(value='NaN')
-    except Exception:
-        model_df = pd.io.json.json_normalize(model_df)
-    model_cols1 = model_df.columns
-    model_df = model_df.astype(str).replace('nan', 'NaNZ')
-    model_transformer = OneHotEncoder(sparse=False).fit(model_df)
-    model_df = pd.DataFrame(model_transformer.transform(model_df))
-    model_cols = np.array(
-        [x1 + x2 for x1, x2 in zip(model_cols1, model_transformer.categories_)]
-    )
-    model_cols = [item for sublist in model_cols for item in sublist]
-    model_df.columns = model_cols
+        if target not in metric_lookup and target not in results.columns:
+            raise ValueError(
+                f"Target '{target}' not found. "
+                f"Valid options: {list(metric_lookup.keys())} or a results column."
+            )
 
-    modelstr_df = all_results['Model']
-    modelstr_transformer = OneHotEncoder(sparse=False).fit(
-        modelstr_df.values.reshape(-1, 1)
-    )
-    modelstr_df = pd.DataFrame(
-        modelstr_transformer.transform(modelstr_df.values.reshape(-1, 1))
-    )
-    modelstr_df.columns = modelstr_transformer.categories_[0]
+        if target == 'exception':
+            metric_series = results['Exceptions'].notna().astype(int)
+        else:
+            metric_col = metric_lookup.get(target, target)
+            if metric_col not in results.columns:
+                raise ValueError(
+                    f"Column '{metric_col}' not available in results for target '{target}'."
+                )
+            metric_series = pd.to_numeric(results[metric_col], errors='coerce')
 
-    except_df = all_results['Exceptions'].copy()
-    except_df = except_df.where(except_df.duplicated(), 'UniqueError')
-    except_transformer = OneHotEncoder(sparse=False).fit(
-        except_df.values.reshape(-1, 1)
-    )
-    except_df = pd.DataFrame(
-        except_transformer.transform(except_df.values.reshape(-1, 1))
-    )
-    except_df.columns = except_transformer.categories_[0]
+        mask = metric_series.notna() & (results['Model'] != 'Ensemble')
+        results = results.loc[mask].copy()
+        metric_series = metric_series.loc[results.index]
 
-    test = pd.concat(
-        [except_df, all_results[['ExceptionFlag']], modelstr_df, model_df, trans_df],
-        axis=1,
-    )
+        if results.empty:
+            raise ValueError(
+                "No usable rows left after filtering; nothing to diagnose."
+            )
 
-    if result == 'corr':
-        test_corr = test.corr()[except_df.columns]
-        return test_corr
-    if result == 'poly corr':
-        from sklearn.preprocessing import PolynomialFeatures
+        overall_mean = float(metric_series.mean())
 
-        poly = PolynomialFeatures(interaction_only=True, include_bias=False)
-        poly = poly.fit(test)
-        col_names = poly.get_feature_names(input_features=test.columns)
-        test = pd.DataFrame(poly.transform(test), columns=col_names)
-        test_corr = test.corr()[except_df.columns]
-        return test_corr
-    elif result == 'df':
-        return test
-    else:
-        raise ValueError("arg 'result' not recognized")
+        def _flatten_dict(prefix, data, container):
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    nested_key = f"{prefix}.{key}" if prefix else str(key)
+                    _flatten_dict(nested_key, value, container)
+            else:
+                container[prefix] = data
+
+        def _stringify(value):
+            if isinstance(value, (list, tuple, set)):
+                return ', '.join(map(str, value))
+            if isinstance(value, dict):
+                try:
+                    return json.dumps(value, sort_keys=True)
+                except TypeError:
+                    return str(value)
+            if value is None:
+                return 'None'
+            if isinstance(value, (float, int)) and pd.isna(value):
+                return 'None'
+            return str(value)
+
+        impact = {}
+
+        for idx, row in results.iterrows():
+            metric_value = float(metric_series.loc[idx])
+            entries = [('model_name', _stringify(row['Model']))]
+
+            try:
+                model_params_raw = row.get('ModelParameters', '{}')
+                model_params = json.loads(model_params_raw or '{}')
+            except (TypeError, json.JSONDecodeError):
+                model_params = {}
+
+            flat_params = {}
+            _flatten_dict('', model_params, flat_params)
+            for key, value in flat_params.items():
+                if not key:
+                    continue
+                entries.append((f"model.{key}", _stringify(value)))
+
+            try:
+                transform_params_raw = row.get('TransformationParameters', '{}')
+                transform_dict = json.loads(transform_params_raw or '{}')
+            except (TypeError, json.JSONDecodeError):
+                transform_dict = {}
+
+            fillna_value = transform_dict.get('fillna', None)
+            if fillna_value is not None:
+                entries.append(('transform.fillna', _stringify(fillna_value)))
+
+            transforms = transform_dict.get('transformations', {}) or {}
+            for transform in transforms.values():
+                if transform is not None:
+                    entries.append(('transformer', _stringify(transform)))
+
+            for name, value in entries:
+                impact.setdefault(name, {}).setdefault(value, []).append(metric_value)
+
+        rows = []
+        min_occurrences = max(1, int(min_occurrences))
+        for name, value_map in impact.items():
+            for value, values in value_map.items():
+                count = len(values)
+                if count < min_occurrences:
+                    continue
+                metrics_arr = np.array(values, dtype=float)
+                mean_value = float(metrics_arr.mean())
+                rows.append(
+                    {
+                        'parameter': name,
+                        'value': value,
+                        'count': count,
+                        'metric_mean': mean_value,
+                        'metric_median': float(np.median(metrics_arr)),
+                        'metric_std': float(np.std(metrics_arr, ddof=0)),
+                        'relative_change': mean_value - overall_mean,
+                    }
+                )
+
+        summary = pd.DataFrame(rows)
+        if summary.empty:
+            return summary
+
+        summary = summary.sort_values(
+            'relative_change', ascending=False
+        ).reset_index(drop=True)
+
+        metric_name = (
+            'failure rate' if target == 'exception' else metric_lookup.get(target, target)
+        )
+        print(f"Overall {metric_name}: {overall_mean:.4f}")
+        print(
+            "Positive relative_change values suggest the parameter is associated with worse outcomes."
+        )
+
+        return summary

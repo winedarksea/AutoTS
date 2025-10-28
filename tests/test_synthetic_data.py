@@ -613,6 +613,128 @@ class TestSyntheticDataGeneration(unittest.TestCase):
                 anomaly_types=['invalid_type']
             )
     
+    def test_tune_to_data(self):
+        """Test tuning generator to match real-world data using load_daily."""
+        try:
+            from scipy.optimize import differential_evolution
+        except ImportError:
+            self.skipTest("scipy not available for tuning")
+        
+        # Load real-world data from AutoTS datasets
+        from autots.datasets import load_daily
+        real_data = load_daily(long=False)
+        
+        # Use a subset of the data for faster testing (last 365 days, first 5 series)
+        real_data = real_data.iloc[-365:, :5]
+        
+        # Create a new generator with default parameters
+        tuning_gen = generate_synthetic_daily_data(
+            start_date=real_data.index[0],
+            n_days=len(real_data),
+            n_series=len(real_data.columns),
+            random_seed=456,
+        )
+        
+        # Store original parameters
+        orig_params = {
+            'trend_changepoint_freq': tuning_gen.trend_changepoint_freq,
+            'level_shift_freq': tuning_gen.level_shift_freq,
+            'anomaly_freq': tuning_gen.anomaly_freq,
+            'weekly_seasonality_strength': tuning_gen.weekly_seasonality_strength,
+            'yearly_seasonality_strength': tuning_gen.yearly_seasonality_strength,
+            'noise_level': tuning_gen.noise_level,
+        }
+        
+        # Tune to the real data
+        results = tuning_gen.tune_to_data(
+            real_data,
+            n_iterations=5,  # Small number for quick test
+            n_standard_series=5,
+            verbose=False,
+        )
+        
+        # Check that results are returned
+        self.assertIn('best_params', results)
+        self.assertIn('best_score', results)
+        self.assertIn('target_stats', results)
+        self.assertIn('synthetic_stats', results)
+        
+        # Check that parameters were updated
+        new_params = {
+            'trend_changepoint_freq': tuning_gen.trend_changepoint_freq,
+            'level_shift_freq': tuning_gen.level_shift_freq,
+            'anomaly_freq': tuning_gen.anomaly_freq,
+            'weekly_seasonality_strength': tuning_gen.weekly_seasonality_strength,
+            'yearly_seasonality_strength': tuning_gen.yearly_seasonality_strength,
+            'noise_level': tuning_gen.noise_level,
+        }
+        
+        # At least some parameters should have changed
+        params_changed = sum(
+            abs(new_params[k] - orig_params[k]) > 0.01
+            for k in orig_params.keys()
+        )
+        self.assertGreater(params_changed, 0, "At least some parameters should change during tuning")
+        
+        # Check that tuning_results attribute was set
+        self.assertIsNotNone(tuning_gen.tuning_results)
+        self.assertEqual(tuning_gen.tuning_results['n_iterations'], 5)
+        
+        # Verify best_params match updated instance attributes
+        for key, value in results['best_params'].items():
+            self.assertAlmostEqual(
+                getattr(tuning_gen, key),
+                value,
+                places=6,
+                msg=f"Instance attribute {key} should match best_params"
+            )
+        
+        # Verify the tuned parameters are reasonable (not at boundary values)
+        # This checks that tuning actually found meaningful parameter values
+        self.assertGreater(results['best_params']['trend_changepoint_freq'], 0.0)
+        self.assertLess(results['best_params']['trend_changepoint_freq'], 3.0)
+        self.assertGreaterEqual(results['best_params']['noise_level'], 0.01)
+        self.assertLessEqual(results['best_params']['noise_level'], 0.5)
+    
+    def test_tune_to_data_error_handling(self):
+        """Test error handling in tune_to_data method."""
+        gen = generate_synthetic_daily_data(n_days=100, n_series=3, random_seed=42)
+        
+        # Test with invalid input type
+        with self.assertRaises(ValueError):
+            gen.tune_to_data([1, 2, 3])
+        
+        # Test with non-datetime index
+        invalid_df = pd.DataFrame({'A': [1, 2, 3]})
+        with self.assertRaises(ValueError):
+            gen.tune_to_data(invalid_df)
+    
+    def test_extract_data_statistics(self):
+        """Test the _extract_data_statistics static method."""
+        # Create simple test data
+        dates = pd.date_range('2020-01-01', periods=365, freq='D')
+        df = pd.DataFrame({
+            'A': np.arange(365) * 0.1 + np.random.normal(0, 1, 365),
+            'B': np.sin(np.arange(365) * 2 * np.pi / 7) * 5 + 50,
+        }, index=dates)
+        
+        stats = SyntheticDailyGenerator._extract_data_statistics(df)
+        
+        # Check that all expected keys are present
+        expected_keys = [
+            'n_days', 'n_series', 'mean_value', 'std_value', 'scale',
+            'mean_trend_slope', 'weekly_seasonality', 'yearly_seasonality',
+            'noise_std', 'noise_to_signal', 'anomaly_per_week', 'changepoint_per_year'
+        ]
+        for key in expected_keys:
+            self.assertIn(key, stats, f"Missing statistic: {key}")
+        
+        # Basic sanity checks
+        self.assertEqual(stats['n_days'], 365)
+        self.assertEqual(stats['n_series'], 2)
+        self.assertGreater(stats['scale'], 0)
+        self.assertGreater(stats['noise_to_signal'], 0)
+    
     def test_disable_holiday_splash_parameter(self):
         """Test that disable_holiday_splash parameter controls splash effects."""
         # Test with splash disabled
