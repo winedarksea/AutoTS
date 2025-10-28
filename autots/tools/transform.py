@@ -4201,6 +4201,10 @@ class LevelShiftMagic(EmptyTransformer):
         remove_at_shift (bool): if True, remove data points at detected level shifts and fill gaps
         shift_remove_window (int): number of points to remove on each side of shift point (0, 1, or 2)
         shift_fillna (str): fillna method to use for gaps created by shift removal
+        window_method (bool): if True, backward and forward windows exclude the current point,
+            separated by a gap of 1 point. If False (default), both windows include the current point
+            (1 point overlap). Exclusive mode: backward=[i-N to i-1], forward=[i+1 to i+N].
+            Overlap mode: backward=[i-N+1 to i], forward=[i to i+N-1].
     """
 
     def __init__(
@@ -4214,6 +4218,7 @@ class LevelShiftMagic(EmptyTransformer):
         remove_at_shift: bool = False,
         shift_remove_window: int = 0,
         shift_fillna: str = "linear",
+        window_method: str = "overlap",
         **kwargs,
     ):
         super().__init__(name="LevelShiftMagic")
@@ -4226,6 +4231,7 @@ class LevelShiftMagic(EmptyTransformer):
         self.remove_at_shift = remove_at_shift
         self.shift_remove_window = shift_remove_window
         self.shift_fillna = shift_fillna
+        self.window_method = window_method
         
         if output not in ['multivariate', 'univariate']:
             raise ValueError(
@@ -4274,6 +4280,9 @@ class LevelShiftMagic(EmptyTransformer):
                 ['linear', 'ffill', 'mean', 'cubic', 'quadratic'],
                 [0.4, 0.2, 0.1, 0.2, 0.1]
             )[0],
+            "window_method": random.choices(
+                ["exclusive", "overlap"], [0.2, 0.8]
+            )[0],
         }
 
     def fit(self, df):
@@ -4290,19 +4299,37 @@ class LevelShiftMagic(EmptyTransformer):
     
     def _fit_multivariate(self, df):
         """Fit multivariate mode - each series analyzed independently."""
-        rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
-        # pandas 1.1.0 introduction, or thereabouts
-        try:
-            indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                window_size=self.window_size
-            )
-            rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
-        except Exception:
-            rolling_forward = (
-                df.loc[::-1]
-                .rolling(self.window_size, center=False, min_periods=1)
-                .mean()[::-1]
-            )
+        if self.window_method == "exclusive":
+            # Exclusive mode: backward window ends at i-1, forward starts at i+1
+            # backward window: [i-N to i-1], forward window: [i+1 to i+N]
+            rolling = df.shift(1).rolling(self.window_size, center=False, min_periods=1).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = df.shift(-1).rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    df.shift(-1).loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+        elif self.window_method == "overlap":
+            # Overlap mode (default): both windows include current point i
+            # backward window: [i-N+1 to i], forward window: [i to i+N-1]
+            rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
+            # pandas 1.1.0 introduction, or thereabouts
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    df.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
         # compare rolling forward and backwards diffs
         diff = rolling - rolling_forward
         threshold = diff.std() * self.alpha
@@ -4457,18 +4484,34 @@ class LevelShiftMagic(EmptyTransformer):
         agg_df = pd.DataFrame(agg_signal, columns=['aggregate'], index=df.index)
         
         # Detect level shifts on the aggregate signal
-        rolling = agg_df.rolling(self.window_size, center=False, min_periods=1).mean()
-        try:
-            indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                window_size=self.window_size
-            )
-            rolling_forward = agg_df.rolling(window=indexer, min_periods=1).mean()
-        except Exception:
-            rolling_forward = (
-                agg_df.loc[::-1]
-                .rolling(self.window_size, center=False, min_periods=1)
-                .mean()[::-1]
-            )
+        if self.window_method == "exclusive":
+            # Exclusive mode: backward window ends at i-1, forward starts at i+1
+            rolling = agg_df.shift(1).rolling(self.window_size, center=False, min_periods=1).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = agg_df.shift(-1).rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    agg_df.shift(-1).loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+        elif self.window_method == "overlap":
+            # Overlap mode (default): both windows include current point
+            rolling = agg_df.rolling(self.window_size, center=False, min_periods=1).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = agg_df.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    agg_df.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
         
         diff = rolling - rolling_forward
         threshold = diff.std() * self.alpha
