@@ -4201,10 +4201,14 @@ class LevelShiftMagic(EmptyTransformer):
         remove_at_shift (bool): if True, remove data points at detected level shifts and fill gaps
         shift_remove_window (int): number of points to remove on each side of shift point (0, 1, or 2)
         shift_fillna (str): fillna method to use for gaps created by shift removal
-        window_method (bool): if True, backward and forward windows exclude the current point,
-            separated by a gap of 1 point. If False (default), both windows include the current point
-            (1 point overlap). Exclusive mode: backward=[i-N to i-1], forward=[i+1 to i+N].
-            Overlap mode: backward=[i-N+1 to i], forward=[i to i+N-1].
+        window_method (str): method for comparing forward and backward rolling windows
+            - "overlap" (default): both windows include current point i, then subtract means
+              backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward
+            - "exclusive": windows exclude current point with 1-point gap, then subtract means
+              backward=[i-N to i-1], forward=[i+1 to i+N], compare: rolling - rolling_forward
+            - "diff_overlap": diff data first, then overlapping windows, detect when BOTH exceed threshold
+              Apply diff first, then backward=[i-N+1 to i], forward=[i to i+N-1]
+              Point i is a shift if BOTH rolling and rolling_forward independently exceed threshold in same direction
     """
 
     def __init__(
@@ -4241,13 +4245,17 @@ class LevelShiftMagic(EmptyTransformer):
             raise ValueError(
                 f"shift_remove_window must be 0, 1, or 2, got {shift_remove_window}"
             )
+        if window_method not in ['overlap', 'exclusive', 'diff_overlap']:
+            raise ValueError(
+                f"window_method must be 'overlap', 'exclusive', or 'diff_overlap', got '{window_method}'"
+            )
 
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
             "window_size": random.choices(
-                [4, 7, 14, 30, 70, 90, 120, 364],
-                [0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1],
+                [3, 4, 7, 14, 30, 70, 90, 120, 364],
+                [0.03, 0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1],
                 k=1,
             )[0],
             "alpha": random.choices(
@@ -4281,7 +4289,7 @@ class LevelShiftMagic(EmptyTransformer):
                 [0.4, 0.2, 0.1, 0.2, 0.1]
             )[0],
             "window_method": random.choices(
-                ["exclusive", "overlap"], [0.2, 0.8]
+                ["overlap", "exclusive", "diff_overlap"], [0.6, 0.2, 0.2]
             )[0],
         }
 
@@ -4299,7 +4307,42 @@ class LevelShiftMagic(EmptyTransformer):
     
     def _fit_multivariate(self, df):
         """Fit multivariate mode - each series analyzed independently."""
-        if self.window_method == "exclusive":
+        if self.window_method == "diff_overlap":
+            # Diff overlap mode: diff data first, then check if BOTH rolling windows exceed threshold
+            # the idea is that average of diffs over a window will exclude short anomalies (up and down cancel out) leaving level shifts, shorter windows generally here
+            # works best on level shifts that occur suddenly on a single period, and after anomaly removal
+            df_diff = df.diff()
+            # Overlap windows on the diffed data: both include current point i
+            rolling = df_diff.rolling(self.window_size, center=False, min_periods=1).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = df_diff.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    df_diff.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            # Calculate thresholds for both rolling windows independently
+            # could consider adjusting this with degrees of freedom accounting for the window size
+            threshold_back = rolling.std() * self.alpha
+            threshold_fwd = rolling_forward.std() * self.alpha
+
+            # Check if both exceed threshold in the same direction (both positive or both negative)
+            back_exceeds_pos = rolling > threshold_back
+            fwd_exceeds_pos = rolling_forward > threshold_fwd
+            back_exceeds_neg = rolling < -threshold_back
+            fwd_exceeds_neg = rolling_forward < -threshold_fwd
+            
+            # Point is a shift if BOTH windows exceed threshold in same direction
+            diff_mask_0 = (back_exceeds_pos & fwd_exceeds_pos) | (back_exceeds_neg & fwd_exceeds_neg)
+            
+            # For alignment calculation later, use the average of the two rolling means
+            diff = (rolling + rolling_forward) / 2
+            diff_abs = diff.abs()
+        elif self.window_method == "exclusive":
             # Exclusive mode: backward window ends at i-1, forward starts at i+1
             # backward window: [i-N to i-1], forward window: [i+1 to i+N]
             rolling = df.shift(1).rolling(self.window_size, center=False, min_periods=1).mean()
@@ -4314,8 +4357,13 @@ class LevelShiftMagic(EmptyTransformer):
                     .rolling(self.window_size, center=False, min_periods=1)
                     .mean()[::-1]
                 )
-        elif self.window_method == "overlap":
-            # Overlap mode (default): both windows include current point i
+            # compare rolling forward and backwards diffs
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
+        else:  # "overlap" (default)
+            # Overlap mode: both windows include current point i
             # backward window: [i-N+1 to i], forward window: [i to i+N-1]
             rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
             # pandas 1.1.0 introduction, or thereabouts
@@ -4330,16 +4378,21 @@ class LevelShiftMagic(EmptyTransformer):
                     .rolling(self.window_size, center=False, min_periods=1)
                     .mean()[::-1]
                 )
-        # compare rolling forward and backwards diffs
-        diff = rolling - rolling_forward
-        threshold = diff.std() * self.alpha
-        diff_abs = diff.abs()
-        diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
+            # compare rolling forward and backwards diffs
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
+        
         # merge nearby groups
         diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
             limit=self.grouping_forward_limit
         )
-        diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+        # For diff_overlap, we use the mask directly; for others, apply threshold to smoothed values
+        if self.window_method == "diff_overlap":
+            diff_mask = diff_mask_0  # Already a boolean mask
+        else:
+            diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
         # the max of each changepoint group is the chosen changepoint of the level shift
         # doesn't handle identical maxes although that is unlikely with these floating point averages
         maxes = diff_abs.where(diff_mask, np.nan).max()
@@ -4484,7 +4537,39 @@ class LevelShiftMagic(EmptyTransformer):
         agg_df = pd.DataFrame(agg_signal, columns=['aggregate'], index=df.index)
         
         # Detect level shifts on the aggregate signal
-        if self.window_method == "exclusive":
+        if self.window_method == "diff_overlap":
+            # Diff overlap mode: diff data first, then check if BOTH rolling windows exceed threshold
+            agg_df_diff = agg_df.diff()
+            # Overlap windows on the diffed data
+            rolling = agg_df_diff.rolling(self.window_size, center=False, min_periods=1).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = agg_df_diff.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    agg_df_diff.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            # Calculate thresholds for both rolling windows independently
+            threshold_back = rolling.std() * self.alpha
+            threshold_fwd = rolling_forward.std() * self.alpha
+            
+            # Check if both exceed threshold in the same direction
+            back_exceeds_pos = rolling > threshold_back
+            fwd_exceeds_pos = rolling_forward > threshold_fwd
+            back_exceeds_neg = rolling < -threshold_back
+            fwd_exceeds_neg = rolling_forward < -threshold_fwd
+            
+            # Point is a shift if BOTH windows exceed threshold in same direction
+            diff_mask_0 = (back_exceeds_pos & fwd_exceeds_pos) | (back_exceeds_neg & fwd_exceeds_neg)
+            
+            # For alignment calculation later, use the average of the two rolling means
+            diff = (rolling + rolling_forward) / 2
+            diff_abs = diff.abs()
+        elif self.window_method == "exclusive":
             # Exclusive mode: backward window ends at i-1, forward starts at i+1
             rolling = agg_df.shift(1).rolling(self.window_size, center=False, min_periods=1).mean()
             try:
@@ -4498,8 +4583,12 @@ class LevelShiftMagic(EmptyTransformer):
                     .rolling(self.window_size, center=False, min_periods=1)
                     .mean()[::-1]
                 )
-        elif self.window_method == "overlap":
-            # Overlap mode (default): both windows include current point
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold
+        else:  # "overlap" (default)
+            # Overlap mode: both windows include current point
             rolling = agg_df.rolling(self.window_size, center=False, min_periods=1).mean()
             try:
                 indexer = pd.api.indexers.FixedForwardWindowIndexer(
@@ -4512,17 +4601,20 @@ class LevelShiftMagic(EmptyTransformer):
                     .rolling(self.window_size, center=False, min_periods=1)
                     .mean()[::-1]
                 )
-        
-        diff = rolling - rolling_forward
-        threshold = diff.std() * self.alpha
-        diff_abs = diff.abs()
-        diff_mask_0 = diff_abs > threshold
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold
         
         # Merge nearby groups
         diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
             limit=self.grouping_forward_limit
         )
-        diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+        # For diff_overlap, we use the mask directly; for others, apply threshold to smoothed values
+        if self.window_method == "diff_overlap":
+            diff_mask = diff_mask_0  # Already a boolean mask
+        else:
+            diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
         
         # Find max of each group
         maxes = diff_abs.where(diff_mask, np.nan).max()
