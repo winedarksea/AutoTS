@@ -514,7 +514,7 @@ To prevent forecast accuracy for considering these additional series too heavily
 *an example of regressors:*
 ```python
 from autots.datasets import load_monthly
-from autots.evaluator.auto_ts import fake_regressor
+from autots.tools.regressor import fake_regressor
 from autots import AutoTS
 
 long = False
@@ -564,7 +564,7 @@ To enforce the use of future_regressor for simulation forecasting, a few paramet
 
 ```python
 from autots.datasets import load_monthly
-from autots.evaluator.auto_ts import fake_regressor
+from autots.tools.regressor import fake_regressor
 from autots import AutoTS
 
 df = load_monthly(long=False)

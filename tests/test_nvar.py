@@ -484,5 +484,416 @@ class NVARPerformanceTest(unittest.TestCase):
         self.assertEqual(forecast.shape, (30, 2))
 
 
+class NVARStabilityTest(unittest.TestCase):
+    """Tests for sorting stability and numeric precision improvements."""
+
+    def setUp(self):
+        """Set up stability test fixtures."""
+        np.random.seed(2024)
+        self.dates = pd.date_range(start='2020-01-01', periods=100, freq='D')
+
+    def test_batch_sorting_deterministic_with_ties(self):
+        """Test that batch sorting is deterministic when columns have identical statistics.
+        
+        This tests the fix for sorting stability across platforms when columns
+        have identical median/std/max values.
+        """
+        # Create data where multiple columns have identical statistics
+        base_series = np.sin(np.linspace(0, 10, 100)) + 0.1 * np.random.randn(100)
+        
+        # Create 5 series with identical median, std, and max
+        df = pd.DataFrame({
+            'col_a': base_series.copy(),
+            'col_b': base_series.copy(),
+            'col_c': base_series.copy(),
+            'col_d': base_series.copy() * 1.5,  # Different scale
+            'col_e': base_series.copy(),
+        }, index=self.dates)
+        
+        # Test each batch method
+        for batch_method in ['med_sorted', 'std_sorted', 'max_sorted']:
+            with self.subTest(batch_method=batch_method):
+                # Fit model multiple times
+                results = []
+                for _ in range(5):
+                    model = NVAR(k=1, batch_size=3, batch_method=batch_method)
+                    model.fit(df.copy())
+                    forecast = model.predict(forecast_length=5, just_point_forecast=True)
+                    results.append(forecast)
+                
+                # All results should be identical (deterministic)
+                for i in range(1, len(results)):
+                    pd.testing.assert_frame_equal(
+                        results[0], results[i],
+                        check_exact=False,
+                        rtol=1e-10,
+                        atol=1e-10,
+                        obj=f"Forecast {i} differs from first forecast with {batch_method}"
+                    )
+
+    def test_batch_sorting_column_order(self):
+        """Test that columns with identical statistics are sorted by name."""
+        # Create data with intentionally identical statistics
+        value = np.ones(100)
+        df = pd.DataFrame({
+            'z_col': value.copy(),
+            'a_col': value.copy(),
+            'm_col': value.copy(),
+        }, index=self.dates)
+        
+        for batch_method in ['med_sorted', 'std_sorted', 'max_sorted']:
+            with self.subTest(batch_method=batch_method):
+                model = NVAR(k=1, batch_size=3, batch_method=batch_method)
+                model.fit(df)
+                
+                # When all statistics are equal, should sort by column name
+                # Expected order: 'z_col', 'm_col', 'a_col' (descending by stat, then ascending by name)
+                # But since all stats are equal, should be: 'a_col', 'm_col', 'z_col' (ascending by name)
+                expected_order = ['a_col', 'm_col', 'z_col']
+                actual_order = list(model.new_col_names)
+                
+                self.assertEqual(actual_order, expected_order,
+                               f"Column order incorrect for {batch_method}")
+
+    def test_ridge_regression_numeric_stability(self):
+        """Test that ridge regression handles ill-conditioned matrices well."""
+        # Create data that could lead to ill-conditioned matrices
+        np.random.seed(42)
+        
+        # Test with very small ridge parameter (more ill-conditioned)
+        df_array = np.random.randn(3, 50)
+        
+        # Should not raise errors or produce NaN/Inf even with small ridge param
+        pred = predict_reservoir(
+            df_array,
+            forecast_length=10,
+            k=1,
+            warmup_pts=1,
+            seed_pts=1,
+            ridge_param=1e-10,  # Very small ridge parameter
+            prediction_interval=None
+        )
+        
+        self.assertFalse(np.isnan(pred).any(), "Prediction contains NaN")
+        self.assertFalse(np.isinf(pred).any(), "Prediction contains Inf")
+
+    def test_ridge_regression_different_scales(self):
+        """Test ridge regression with data at very different scales."""
+        np.random.seed(42)
+        
+        # Create data with very different scales
+        df_array = np.array([
+            np.random.randn(50) * 1e6,   # Very large scale
+            np.random.randn(50) * 1e-6,  # Very small scale
+            np.random.randn(50),         # Normal scale
+        ])
+        
+        # Should handle different scales without numerical issues
+        pred = predict_reservoir(
+            df_array,
+            forecast_length=5,
+            k=1,
+            warmup_pts=1,
+            seed_pts=1,
+            ridge_param=2.5e-6,
+            prediction_interval=None
+        )
+        
+        self.assertEqual(pred.shape, (3, 5))
+        self.assertFalse(np.isnan(pred).any(), "Prediction contains NaN")
+        self.assertFalse(np.isinf(pred).any(), "Prediction contains Inf")
+
+    def test_ridge_regression_reproducibility(self):
+        """Test that ridge regression produces identical results on repeated calls."""
+        np.random.seed(42)
+        df_array = np.random.randn(3, 50)
+        
+        results = []
+        for _ in range(5):
+            pred = predict_reservoir(
+                df_array.copy(),
+                forecast_length=10,
+                k=2,
+                warmup_pts=1,
+                seed_pts=1,
+                ridge_param=2.5e-6,
+                prediction_interval=None
+            )
+            results.append(pred)
+        
+        # All results should be numerically identical
+        for i in range(1, len(results)):
+            np.testing.assert_array_almost_equal(
+                results[0], results[i],
+                decimal=12,
+                err_msg=f"Result {i} differs from first result"
+            )
+
+    def test_ridge_regression_with_near_singular_matrix(self):
+        """Test ridge regression with nearly singular input matrices."""
+        np.random.seed(42)
+        
+        # Create data with high collinearity (nearly singular)
+        base = np.random.randn(50)
+        df_array = np.array([
+            base,
+            base + 1e-8 * np.random.randn(50),  # Nearly identical to first
+            base * 2 + 1e-8 * np.random.randn(50),  # Nearly linear combination
+        ])
+        
+        # Ridge regression should still work due to regularization
+        pred = predict_reservoir(
+            df_array,
+            forecast_length=5,
+            k=1,
+            warmup_pts=1,
+            seed_pts=1,
+            ridge_param=1e-5,  # Regularization helps here
+            prediction_interval=None
+        )
+        
+        self.assertEqual(pred.shape, (3, 5))
+        self.assertFalse(np.isnan(pred).any())
+        self.assertFalse(np.isinf(pred).any())
+
+    def test_nvar_consistency_across_batch_sizes(self):
+        """Test that batch_size produces valid results across different sizes.
+        
+        Note: batch_size can affect results because series are processed in batches,
+        but all results should be valid (no NaN/Inf) and have the same shape.
+        """
+        np.random.seed(2024)
+        df = pd.DataFrame({
+            f'series_{i}': np.random.randn(50) for i in range(10)
+        }, index=pd.date_range('2020-01-01', periods=50, freq='D'))
+        
+        # Test with different batch sizes on same data
+        for batch_size in [2, 5, 10]:
+            with self.subTest(batch_size=batch_size):
+                model = NVAR(k=1, batch_size=batch_size, batch_method='input_order')
+                model.fit(df.copy())
+                forecast = model.predict(
+                    forecast_length=5,
+                    just_point_forecast=True
+                )
+                
+                # All forecasts should have same shape and be valid
+                self.assertEqual(forecast.shape, (5, 10))
+                self.assertFalse(forecast.isna().any().any())
+                self.assertFalse(np.isinf(forecast.values).any())
+
+
+    def test_ridge_regression_extreme_ridge_params(self):
+        """Test ridge regression with extreme ridge parameter values."""
+        np.random.seed(42)
+        df_array = np.random.randn(3, 50)
+        
+        # Test with very small ridge parameter
+        pred_small = predict_reservoir(
+            df_array.copy(),
+            forecast_length=5,
+            k=1,
+            warmup_pts=1,
+            seed_pts=1,
+            ridge_param=1e-12,
+            prediction_interval=None
+        )
+        self.assertFalse(np.isnan(pred_small).any())
+        self.assertFalse(np.isinf(pred_small).any())
+        
+        # Test with large ridge parameter
+        pred_large = predict_reservoir(
+            df_array.copy(),
+            forecast_length=5,
+            k=1,
+            warmup_pts=1,
+            seed_pts=1,
+            ridge_param=1e3,
+            prediction_interval=None
+        )
+        self.assertFalse(np.isnan(pred_large).any())
+        self.assertFalse(np.isinf(pred_large).any())
+        
+        # Predictions should differ (different regularization)
+        # But both should be valid
+        self.assertFalse(np.allclose(pred_small, pred_large))
+
+
+class NVAREarlyStoppingTest(unittest.TestCase):
+    """Test suite for early stopping functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        np.random.seed(2024)
+        self.dates = pd.date_range(start='2020-01-01', periods=100, freq='D')
+
+    def test_early_stopping_prevents_inf(self):
+        """Test that early stopping prevents Inf values in forecasts."""
+        # Create data that tends to diverge with small ridge parameter
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 100,
+            'series2': np.random.randn(100) * 100,
+            'series3': np.random.randn(100) * 100,
+        }, index=self.dates)
+        
+        model = NVAR(k=1, ridge_param=1e-8, batch_size=3)
+        model.fit(df)
+        
+        # Long forecast that might diverge
+        forecast = model.predict(forecast_length=30, just_point_forecast=True)
+        
+        # Should not have Inf values (early stopping should prevent this)
+        self.assertFalse(np.isinf(forecast.values).any(), 
+                        "Early stopping should prevent Inf values")
+
+    def test_early_stopping_does_not_stop_on_good_data(self):
+        """Test that early stopping doesn't activate on well-behaved data."""
+        # Create stable sinusoidal data
+        t = np.linspace(0, 10, 100)
+        df = pd.DataFrame({
+            'series1': np.sin(t) + 0.1 * np.random.randn(100),
+            'series2': np.cos(t) + 0.1 * np.random.randn(100),
+            'series3': np.sin(2*t) + 0.1 * np.random.randn(100),
+        }, index=self.dates)
+        
+        model = NVAR(k=1, ridge_param=2.5e-6, batch_size=3)
+        model.fit(df)
+        
+        # Forecast should complete without early stopping
+        forecast = model.predict(forecast_length=20, just_point_forecast=True)
+        
+        # Check forecasts are valid and within reasonable range
+        self.assertEqual(forecast.shape, (20, 3))
+        self.assertFalse(forecast.isna().any().any())
+        self.assertFalse(np.isinf(forecast.values).any())
+        
+        # Forecasts should vary (not constant from early stopping)
+        for col in forecast.columns:
+            # Check that forecast values vary (std > 0)
+            self.assertGreater(forecast[col].std(), 0.01,
+                             f"Forecast for {col} appears constant (early stopping may have activated incorrectly)")
+
+    def test_early_stopping_with_large_values(self):
+        """Test that early stopping uses appropriate thresholds for large-scale data."""
+        # Create data with large values
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 1e6,
+            'series2': np.random.randn(100) * 1e6,
+        }, index=self.dates)
+        
+        model = NVAR(k=1, ridge_param=2.5e-6, batch_size=2)
+        model.fit(df)
+        
+        # Should handle large-scale data without premature stopping
+        forecast = model.predict(forecast_length=10, just_point_forecast=True)
+        
+        self.assertEqual(forecast.shape, (10, 2))
+        self.assertFalse(forecast.isna().any().any())
+        self.assertFalse(np.isinf(forecast.values).any())
+        
+        # Forecasts should be on similar scale to training data
+        train_scale = np.abs(df.values).max()
+        forecast_scale = np.abs(forecast.values).max()
+        
+        # Allow forecasts up to 100x training scale (threshold from implementation)
+        self.assertLess(forecast_scale, train_scale * 100,
+                       "Forecast scale unreasonably large")
+
+    def test_early_stopping_with_small_values(self):
+        """Test that early stopping works with very small-scale data."""
+        # Create data with very small values
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 1e-6,
+            'series2': np.random.randn(100) * 1e-6,
+        }, index=self.dates)
+        
+        model = NVAR(k=1, ridge_param=2.5e-6, batch_size=2)
+        model.fit(df)
+        
+        forecast = model.predict(forecast_length=10, just_point_forecast=True)
+        
+        self.assertEqual(forecast.shape, (10, 2))
+        self.assertFalse(forecast.isna().any().any())
+        self.assertFalse(np.isinf(forecast.values).any())
+
+    def test_early_stopping_with_intervals(self):
+        """Test that early stopping works correctly with prediction intervals."""
+        # Create data that might diverge
+        df = pd.DataFrame({
+            'series1': np.random.randn(100) * 10,
+            'series2': np.random.randn(100) * 10,
+        }, index=self.dates)
+        
+        model = NVAR(k=1, ridge_param=1e-7, batch_size=2, seed_pts=5, prediction_interval=0.9)
+        model.fit(df)
+        
+        prediction = model.predict(forecast_length=20, just_point_forecast=False)
+        
+        # Check all predictions are valid (no Inf/NaN)
+        self.assertFalse(np.isinf(prediction.forecast.values).any())
+        self.assertFalse(np.isinf(prediction.upper_forecast.values).any())
+        self.assertFalse(np.isinf(prediction.lower_forecast.values).any())
+        self.assertFalse(prediction.forecast.isna().any().any())
+        
+        # Intervals should be properly ordered
+        self.assertTrue((prediction.upper_forecast.values >= prediction.forecast.values).all())
+        self.assertTrue((prediction.forecast.values >= prediction.lower_forecast.values).all())
+
+    def test_early_stopping_growth_data(self):
+        """Test that early stopping allows reasonable growth trends."""
+        # Create data with growth trend
+        t = np.arange(100)
+        df = pd.DataFrame({
+            'series1': 100 + 0.5 * t + np.random.randn(100),
+            'series2': 50 + 0.3 * t + np.random.randn(100),
+        }, index=self.dates)
+        
+        model = NVAR(k=1, ridge_param=2.5e-6, batch_size=2)
+        model.fit(df)
+        
+        forecast = model.predict(forecast_length=10, just_point_forecast=True)
+        
+        # Should allow forecasts to continue trend
+        self.assertEqual(forecast.shape, (10, 2))
+        self.assertFalse(forecast.isna().any().any())
+        self.assertFalse(np.isinf(forecast.values).any())
+        
+        # Forecasts should show some variation (not constant from early stop)
+        self.assertGreater(forecast['series1'].std(), 0.01)
+        self.assertGreater(forecast['series2'].std(), 0.01)
+
+    def test_early_stopping_threshold_calculation(self):
+        """Test that divergence thresholds are calculated appropriately."""
+        # Create data with known statistics
+        df_array = np.array([
+            [10, 20, 30, 40, 50] * 20,  # Max = 50
+            [1, 2, 3, 4, 5] * 20,        # Max = 5
+        ])
+        
+        # The threshold should be at least 100x the max training value
+        # For series 1: threshold >= 100 * 50 = 5000
+        # For series 2: threshold >= 100 * 5 = 500
+        
+        pred = predict_reservoir(
+            df_array,
+            forecast_length=10,
+            k=1,
+            warmup_pts=1,
+            seed_pts=1,
+            ridge_param=2.5e-6,
+            prediction_interval=None
+        )
+        
+        # Predictions should be valid
+        self.assertFalse(np.isnan(pred).any())
+        self.assertFalse(np.isinf(pred).any())
+        
+        # Predictions should be well below threshold
+        # (for well-behaved data, shouldn't approach threshold)
+        self.assertLess(np.abs(pred[0]).max(), 5000)
+        self.assertLess(np.abs(pred[1]).max(), 500)
+
+
 if __name__ == '__main__':
     unittest.main()
+

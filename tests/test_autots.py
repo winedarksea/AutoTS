@@ -14,7 +14,7 @@ from autots.datasets import (
     load_daily, load_monthly, load_artificial, load_sine
 )
 from autots import AutoTS, model_forecast, ModelPrediction, GeneralTransformer
-from autots.evaluator.auto_ts import fake_regressor
+from autots.tools.regressor import fake_regressor
 from autots.evaluator.auto_model import (
     ModelMonster,
     TemplateEvalObject,

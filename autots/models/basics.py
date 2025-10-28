@@ -1506,11 +1506,44 @@ def predict_reservoir(
 
     # ridge regression: train W_out to map out_train to df[t] - df[t - 1]
     y_train = x[0:d, warmup_pts:warmtrain_pts] - x[0:d, warmup_pts - 1 : warmtrain_pts - 1]
-    A = out_train @ out_train.T + ridge_param * np.identity(dtot)
-    b = y_train @ out_train.T
     
-    # Use stable solve for ridge regression
-    W_out = np.linalg.solve(A, b.T).T
+    # Use more numerically stable ridge regression computation
+    # Instead of: W_out = (A^T A + λI)^-1 A^T b
+    # We use Cholesky decomposition for better numerical stability
+    # A = out_train @ out_train.T + ridge_param * I
+    # Can be factored as A = L @ L.T where L is lower triangular
+    # Then solve: L @ L.T @ W_out.T = b.T
+    # First solve: L @ y = b.T  (forward substitution)
+    # Then solve: L.T @ W_out.T = y  (backward substitution)
+    
+    try:
+        # Compute the Gram matrix with ridge regularization
+        A = out_train @ out_train.T
+        # Add ridge parameter to diagonal for regularization
+        # Use np.eye instead of np.identity for better precision control
+        A.flat[::dtot + 1] += ridge_param
+        
+        # Compute right-hand side
+        b = y_train @ out_train.T
+        
+        # Use Cholesky decomposition for more stable solve
+        # This is more numerically stable than direct solve for symmetric positive definite matrices
+        try:
+            L = np.linalg.cholesky(A)
+            # Solve L @ y = b.T
+            y_temp = np.linalg.solve(L, b.T)
+            # Solve L.T @ W_out.T = y_temp
+            W_out = np.linalg.solve(L.T, y_temp).T
+        except np.linalg.LinAlgError:
+            # If Cholesky fails (matrix not positive definite), fall back to lstsq
+            # This can happen with very small ridge_param or ill-conditioned data
+            W_out = np.linalg.lstsq(A, b.T, rcond=None)[0].T
+    except Exception:
+        # Final fallback: use lstsq which is most robust but slower
+        A = out_train @ out_train.T + ridge_param * np.eye(dtot)
+        b = y_train @ out_train.T
+        W_out = np.linalg.lstsq(A, b.T, rcond=None)[0].T
+
 
 
     # create a place to store feature vectors for prediction
@@ -1519,6 +1552,19 @@ def predict_reservoir(
 
     # copy over initial linear feature vector
     x_test[:, 0] = x[:, warmtrain_pts - 1]
+
+    # Calculate divergence thresholds based on training data statistics
+    # Use training data range to set reasonable bounds
+    train_range = np.max(np.abs(df), axis=1)  # Max absolute value per series
+    train_std = np.std(df, axis=1)
+    # Threshold: allow values up to 100x the max training range or 1000x std
+    # This is generous enough for legitimate growth but catches exponential divergence
+    divergence_threshold = np.maximum(100 * train_range, 1000 * train_std)
+    # Also set an absolute threshold to catch extreme cases
+    absolute_threshold = 1e12
+    
+    # Track if we've stopped early
+    stopped_early = False
 
     # do prediction with vectorized polynomial feature creation
     for j in range(testtime_pts - 1):
@@ -1538,6 +1584,21 @@ def predict_reservoir(
         x_test[d:dlin, j + 1] = x_test[0 : (dlin - d), j]
         # do a prediction
         x_test[0:d, j + 1] = x_test[0:d, j] + W_out @ out_test[:]
+        
+        # Early stopping: check for divergence
+        # Only check after first few steps to allow initial adjustment
+        if j >= 2:
+            current_values = x_test[0:d, j + 1]
+            # Check if any value exceeds threshold or is NaN/Inf
+            if (np.any(np.abs(current_values) > divergence_threshold) or 
+                np.any(np.abs(current_values) > absolute_threshold) or
+                np.any(~np.isfinite(current_values))):
+                # Forecast is diverging - use last stable value for remaining steps
+                # This prevents wasted computation and Inf/NaN propagation
+                for remaining_j in range(j + 2, testtime_pts):
+                    x_test[:, remaining_j] = x_test[:, j]
+                stopped_early = True
+                break
     
     pred = x_test[0:d, 1:]
 
@@ -1553,6 +1614,8 @@ def predict_reservoir(
             x_int = np.zeros((dlin, testtime_pts + n_samples))  # linear part
             # copy over initial linear feature vector
             x_int[:, 0] = x[:, warmtrain_pts - 2 - ns]
+            # Track early stopping for this interval sample
+            interval_stopped_early = False
             # do prediction
             for j in range(testtime_pts - 1 + n_samples):
                 # copy linear part into whole feature vector
@@ -1571,6 +1634,18 @@ def predict_reservoir(
                 x_int[d:dlin, j + 1] = x_int[0 : (dlin - d), j]
                 # do a prediction
                 x_int[0:d, j + 1] = x_int[0:d, j] + W_out @ out_test[:]
+                
+                # Early stopping for interval predictions (same logic as main prediction)
+                if j >= 2:
+                    current_values = x_int[0:d, j + 1]
+                    if (np.any(np.abs(current_values) > divergence_threshold) or 
+                        np.any(np.abs(current_values) > absolute_threshold) or
+                        np.any(~np.isfinite(current_values))):
+                        # Use last stable value for remaining steps
+                        for remaining_j in range(j + 2, testtime_pts + n_samples):
+                            x_int[:, remaining_j] = x_int[:, j]
+                        interval_stopped_early = True
+                        break
                 
             # Extract forecast portion: skip ns+1 warmup points from historical seed, then take forecast_length steps
             # This accounts for the offset in starting position (warmtrain_pts - 2 - ns)
@@ -1666,11 +1741,34 @@ class NVAR(ModelObject):
         """
         self.basic_profile(df)
         if self.batch_method == "med_sorted":
-            df = df.loc[:, df.median().sort_values(ascending=False).index]
+            # Use stable sort with column names as secondary key for deterministic ordering
+            stats = df.median()
+            # Create a DataFrame to enable multi-key sorting
+            sort_df = pd.DataFrame({
+                'stat': stats,
+                'col': stats.index
+            })
+            # Sort by statistic descending, then by column name ascending for stability
+            sort_df = sort_df.sort_values(by=['stat', 'col'], ascending=[False, True], kind='stable')
+            df = df.loc[:, sort_df['col']]
         elif self.batch_method == "std_sorted":
-            df = df.loc[:, df.std().sort_values(ascending=False).index]
+            # Use stable sort with column names as secondary key for deterministic ordering
+            stats = df.std()
+            sort_df = pd.DataFrame({
+                'stat': stats,
+                'col': stats.index
+            })
+            sort_df = sort_df.sort_values(by=['stat', 'col'], ascending=[False, True], kind='stable')
+            df = df.loc[:, sort_df['col']]
         elif self.batch_method == "max_sorted":
-            df = df.loc[:, df.max().sort_values(ascending=False).index]
+            # Use stable sort with column names as secondary key for deterministic ordering
+            stats = df.max()
+            sort_df = pd.DataFrame({
+                'stat': stats,
+                'col': stats.index
+            })
+            sort_df = sort_df.sort_values(by=['stat', 'col'], ascending=[False, True], kind='stable')
+            df = df.loc[:, sort_df['col']]
         # else: input_order - no sorting needed
         
         self.new_col_names = df.columns

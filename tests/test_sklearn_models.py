@@ -15,6 +15,7 @@ os.environ.setdefault("MPLCONFIGDIR", tempfile.gettempdir())
 from autots.models.sklearn import (  # noqa: E402
     RollingRegression,
     MultivariateRegression,
+    WindowRegression,
     generate_regressor_params,
     retrieve_classifier,
     retrieve_regressor,
@@ -252,6 +253,96 @@ class TestMultivariateRegression(unittest.TestCase):
         
         # Check that sktraindata was updated
         self.assertEqual(len(model.sktraindata), min(model.min_threshold, len(df_new)))
+
+
+class TestWindowRegression(unittest.TestCase):
+    def setUp(self):
+        idx = pd.date_range("2021-01-01", periods=60, freq="D")
+        values = np.arange(60, dtype=float)
+        self.training_df = pd.DataFrame({"y": values}, index=idx)
+
+    def test_basic_forecast_length_output(self):
+        model = WindowRegression(
+            window_size=8,
+            forecast_length=4,
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            input_dim="univariate",
+            output_dim="forecast_length",
+            shuffle=False,
+            scale=True,
+            random_seed=1,
+        )
+        model.fit(self.training_df)
+        forecast = model.predict(just_point_forecast=True)
+
+        self.assertEqual(forecast.shape, (4, 1))
+        self.assertEqual(list(forecast.columns), ["y"])
+        self.assertTrue(np.all(np.isfinite(forecast.values)))
+        self.assertEqual(
+            forecast.index[0], self.training_df.index[-1] + pd.Timedelta(days=1)
+        )
+        self.assertTrue(hasattr(model, "scaler"))
+
+    def test_requires_future_regressor_for_user_type(self):
+        model = WindowRegression(
+            window_size=6,
+            forecast_length=2,
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            regression_type="User",
+        )
+
+        with self.assertRaises(ValueError):
+            model.fit(self.training_df)
+
+    def test_user_regressor_with_future_values(self):
+        model = WindowRegression(
+            window_size=6,
+            forecast_length=3,
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            regression_type="User",
+            random_seed=2,
+        )
+        future_reg_train = pd.DataFrame(
+            {"reg": np.linspace(0.0, 1.0, len(self.training_df))},
+            index=self.training_df.index,
+        )
+        model.fit(self.training_df, future_regressor=future_reg_train)
+
+        future_index = pd.date_range(
+            self.training_df.index[-1] + pd.Timedelta(days=1),
+            periods=3,
+            freq="D",
+        )
+        future_reg_future = pd.DataFrame({"reg": [1.1, 1.2, 1.3]}, index=future_index)
+        forecast = model.predict(
+            future_regressor=future_reg_future, just_point_forecast=True
+        )
+
+        self.assertEqual(forecast.shape, (3, 1))
+        self.assertEqual(list(forecast.columns), ["y"])
+        self.assertTrue(np.all(np.isfinite(forecast.values)))
+        self.assertEqual(forecast.index[0], future_index[0])
+
+    def test_one_step_prediction_updates_window(self):
+        model = WindowRegression(
+            window_size=5,
+            forecast_length=3,
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            output_dim="1step",
+            random_seed=3,
+        )
+        model.fit(self.training_df)
+        forecast = model.predict(just_point_forecast=True)
+
+        self.assertEqual(forecast.shape, (3, 1))
+        self.assertEqual(list(forecast.columns), ["y"])
+        self.assertEqual(
+            forecast.index[-1], self.training_df.index[-1] + pd.Timedelta(days=3)
+        )
+        self.assertTrue(np.all(np.isfinite(forecast.values)))
+        self.assertEqual(
+            model.last_window.shape[0], model.window_size + model.forecast_length
+        )
 
 
 if __name__ == "__main__":

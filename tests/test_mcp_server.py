@@ -7,6 +7,11 @@ Tests cover:
 - Forecasting (mosaic profile, search, custom)
 - Feature detection and cleaning
 - Event risk forecasting
+- Prediction caching (new functionality)
+  * Cache/retrieve predictions
+  * List/clear cache
+  * Constraint application workflow
+  * Integration with forecasting tools
 
 """
 
@@ -23,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from autots.mcp.server import (
     json_to_dataframe, dataframe_to_json,
+    cache_prediction, get_cached_prediction, list_cached_predictions, clear_prediction_cache,
     MCP_AVAILABLE
 )
 from autots import load_daily, load_weekly, load_hourly
@@ -674,6 +680,434 @@ class TestMCPToolChaining(unittest.TestCase):
         self.assertEqual(forecast_reloaded['datetime'], forecast_json['datetime'])
 
 
+class TestMCPPredictionCaching(unittest.TestCase):
+    """Test the new prediction caching functionality."""
+    
+    def setUp(self):
+        """Set up test data and clear cache before each test."""
+        # Clear any existing cache
+        clear_prediction_cache()
+        
+        # Create sample data and forecast
+        from autots import load_daily, AutoTS
+        self.df = load_daily(long=False).iloc[:150, :2]
+        
+        # Create a simple forecast for testing
+        self.model = AutoTS(
+            forecast_length=14,
+            frequency='infer',
+            max_generations=1,
+            num_validations=1,
+            model_list='superfast'
+        )
+        self.model = self.model.fit(self.df)
+        self.prediction = self.model.predict()
+    
+    def tearDown(self):
+        """Clean up cache after each test."""
+        clear_prediction_cache()
+    
+    def test_cache_prediction_basic(self):
+        """Test caching a prediction and retrieving it."""
+        # Cache the prediction
+        prediction_id = cache_prediction(
+            prediction_obj=self.prediction,
+            model_obj=self.model,
+            metadata={'test': 'basic'}
+        )
+        
+        # Verify ID is a string (UUID)
+        self.assertIsInstance(prediction_id, str)
+        self.assertGreater(len(prediction_id), 10)  # UUID should be long
+        
+        # Retrieve the cached prediction
+        cached = get_cached_prediction(prediction_id)
+        
+        # Verify structure
+        self.assertIn('prediction', cached)
+        self.assertIn('model', cached)
+        self.assertIn('metadata', cached)
+        self.assertIn('created_at', cached)
+        
+        # Verify it's the same prediction
+        self.assertEqual(cached['metadata']['test'], 'basic')
+    
+    def test_cache_prediction_metadata(self):
+        """Test that metadata is stored correctly."""
+        metadata = {
+            'method': 'test',
+            'forecast_length': 14,
+            'model_name': 'TestModel',
+            'series_count': 2
+        }
+        
+        prediction_id = cache_prediction(
+            prediction_obj=self.prediction,
+            metadata=metadata
+        )
+        
+        cached = get_cached_prediction(prediction_id)
+        
+        # Verify all metadata fields
+        for key, value in metadata.items():
+            self.assertEqual(cached['metadata'][key], value)
+    
+    def test_list_cached_predictions(self):
+        """Test listing all cached predictions."""
+        # Initially should be empty
+        predictions_list = list_cached_predictions()
+        self.assertEqual(len(predictions_list), 0)
+        
+        # Cache multiple predictions
+        id1 = cache_prediction(self.prediction, metadata={'name': 'pred1'})
+        id2 = cache_prediction(self.prediction, metadata={'name': 'pred2'})
+        id3 = cache_prediction(self.prediction, metadata={'name': 'pred3'})
+        
+        # List should now have 3 items
+        predictions_list = list_cached_predictions()
+        self.assertEqual(len(predictions_list), 3)
+        
+        # Verify structure of list items
+        ids = {p['id'] for p in predictions_list}
+        self.assertEqual(ids, {id1, id2, id3})
+        
+        # Verify each has created_at and metadata
+        for pred_info in predictions_list:
+            self.assertIn('id', pred_info)
+            self.assertIn('created_at', pred_info)
+            self.assertIn('metadata', pred_info)
+    
+    def test_clear_specific_prediction(self):
+        """Test clearing a specific prediction from cache."""
+        # Cache multiple predictions
+        id1 = cache_prediction(self.prediction, metadata={'name': 'pred1'})
+        id2 = cache_prediction(self.prediction, metadata={'name': 'pred2'})
+        
+        # Verify both exist
+        self.assertEqual(len(list_cached_predictions()), 2)
+        
+        # Clear one prediction
+        clear_prediction_cache(id1)
+        
+        # Verify only one remains
+        predictions_list = list_cached_predictions()
+        self.assertEqual(len(predictions_list), 1)
+        self.assertEqual(predictions_list[0]['id'], id2)
+        
+        # Verify the cleared one is gone
+        with self.assertRaises(ValueError):
+            get_cached_prediction(id1)
+    
+    def test_clear_all_predictions(self):
+        """Test clearing all predictions from cache."""
+        # Cache multiple predictions
+        cache_prediction(self.prediction, metadata={'name': 'pred1'})
+        cache_prediction(self.prediction, metadata={'name': 'pred2'})
+        cache_prediction(self.prediction, metadata={'name': 'pred3'})
+        
+        # Verify they exist
+        self.assertEqual(len(list_cached_predictions()), 3)
+        
+        # Clear all
+        clear_prediction_cache()
+        
+        # Verify cache is empty
+        self.assertEqual(len(list_cached_predictions()), 0)
+    
+    def test_get_nonexistent_prediction(self):
+        """Test that retrieving non-existent prediction raises error."""
+        with self.assertRaises(ValueError) as context:
+            get_cached_prediction("nonexistent-id-12345")
+        
+        self.assertIn("not found in cache", str(context.exception))
+    
+    def test_cache_multiple_predictions_unique_ids(self):
+        """Test that each cached prediction gets a unique ID."""
+        # Cache the same prediction multiple times
+        ids = set()
+        for i in range(10):
+            prediction_id = cache_prediction(
+                self.prediction,
+                metadata={'iteration': i}
+            )
+            ids.add(prediction_id)
+        
+        # All IDs should be unique
+        self.assertEqual(len(ids), 10)
+    
+    def test_cached_prediction_persistence(self):
+        """Test that cached predictions persist across multiple retrievals."""
+        prediction_id = cache_prediction(
+            self.prediction,
+            model_obj=self.model,
+            metadata={'test': 'persistence'}
+        )
+        
+        # Retrieve multiple times
+        cached1 = get_cached_prediction(prediction_id)
+        cached2 = get_cached_prediction(prediction_id)
+        cached3 = get_cached_prediction(prediction_id)
+        
+        # All should have the same data
+        self.assertEqual(cached1['metadata'], cached2['metadata'])
+        self.assertEqual(cached2['metadata'], cached3['metadata'])
+        
+        # Verify the prediction object itself is accessible
+        self.assertIsNotNone(cached1['prediction'])
+        self.assertEqual(len(cached1['prediction'].forecast), 14)
+    
+    def test_cache_without_model(self):
+        """Test caching prediction without model object."""
+        prediction_id = cache_prediction(
+            prediction_obj=self.prediction,
+            model_obj=None,
+            metadata={'has_model': False}
+        )
+        
+        cached = get_cached_prediction(prediction_id)
+        
+        # Prediction should be there
+        self.assertIsNotNone(cached['prediction'])
+        
+        # Model should be None
+        self.assertIsNone(cached['model'])
+    
+    def test_cache_without_metadata(self):
+        """Test caching prediction without metadata."""
+        prediction_id = cache_prediction(
+            prediction_obj=self.prediction,
+            model_obj=self.model
+        )
+        
+        cached = get_cached_prediction(prediction_id)
+        
+        # Should have empty metadata dict
+        self.assertIsInstance(cached['metadata'], dict)
+        self.assertEqual(len(cached['metadata']), 0)
+    
+    def test_cached_prediction_forecast_access(self):
+        """Test accessing forecast data from cached prediction."""
+        prediction_id = cache_prediction(
+            self.prediction,
+            metadata={'forecast_length': 14}
+        )
+        
+        cached = get_cached_prediction(prediction_id)
+        prediction_obj = cached['prediction']
+        
+        # Verify we can access the forecast
+        forecast_df = prediction_obj.forecast
+        self.assertIsInstance(forecast_df, pd.DataFrame)
+        self.assertEqual(len(forecast_df), 14)
+        
+        # Verify we can access upper/lower forecasts if available
+        if prediction_obj.upper_forecast is not None:
+            self.assertIsInstance(prediction_obj.upper_forecast, pd.DataFrame)
+            self.assertEqual(len(prediction_obj.upper_forecast), 14)
+    
+    def test_cached_prediction_to_json_conversion(self):
+        """Test converting cached prediction forecast to JSON."""
+        prediction_id = cache_prediction(self.prediction)
+        
+        cached = get_cached_prediction(prediction_id)
+        forecast_df = cached['prediction'].forecast
+        
+        # Convert to JSON
+        forecast_json = dataframe_to_json(forecast_df, data_format='wide')
+        
+        # Verify JSON structure
+        self.assertIn('datetime', forecast_json)
+        self.assertEqual(len(forecast_json['datetime']), 14)
+        
+        # Verify it can be converted back
+        forecast_reconstructed = json_to_dataframe(forecast_json, data_format='wide')
+        self.assertEqual(len(forecast_reconstructed), 14)
+    
+    def test_prediction_caching_workflow(self):
+        """Test complete workflow: cache → list → retrieve → clear."""
+        # Step 1: Cache prediction
+        metadata = {
+            'method': 'test_workflow',
+            'forecast_length': 14,
+            'model_name': self.prediction.model_name
+        }
+        prediction_id = cache_prediction(
+            self.prediction,
+            self.model,
+            metadata
+        )
+        
+        # Step 2: List predictions
+        predictions = list_cached_predictions()
+        self.assertEqual(len(predictions), 1)
+        self.assertEqual(predictions[0]['id'], prediction_id)
+        
+        # Step 3: Retrieve and use prediction
+        cached = get_cached_prediction(prediction_id)
+        forecast_json = dataframe_to_json(
+            cached['prediction'].forecast,
+            data_format='wide'
+        )
+        self.assertIn('datetime', forecast_json)
+        
+        # Step 4: Clear cache
+        clear_prediction_cache(prediction_id)
+        self.assertEqual(len(list_cached_predictions()), 0)
+    
+    def test_cache_constrained_prediction(self):
+        """Test caching a constrained/modified prediction."""
+        # Original prediction
+        original_id = cache_prediction(
+            self.prediction,
+            metadata={'type': 'original'}
+        )
+        
+        # Create a "constrained" version (simulate applying constraints)
+        forecast_df = self.prediction.forecast.copy()
+        forecast_df = forecast_df * 0.9  # Dampen by 10%
+        
+        # Create a simple constrained prediction object
+        class ConstrainedPrediction:
+            def __init__(self, forecast, original_pred):
+                self.forecast = forecast
+                self.upper_forecast = original_pred.upper_forecast
+                self.lower_forecast = original_pred.lower_forecast
+                self.model_name = f"{original_pred.model_name} (constrained)"
+                self.model_parameters = original_pred.model_parameters
+                self.transformation_parameters = original_pred.transformation_parameters
+        
+        constrained_pred = ConstrainedPrediction(forecast_df, self.prediction)
+        
+        # Cache the constrained prediction
+        constrained_id = cache_prediction(
+            constrained_pred,
+            metadata={
+                'type': 'constrained',
+                'constraint_method': 'dampen',
+                'original_prediction_id': original_id
+            }
+        )
+        
+        # Verify both are in cache
+        self.assertEqual(len(list_cached_predictions()), 2)
+        
+        # Retrieve constrained prediction
+        cached = get_cached_prediction(constrained_id)
+        self.assertEqual(cached['metadata']['type'], 'constrained')
+        self.assertEqual(cached['metadata']['original_prediction_id'], original_id)
+        
+        # Verify constraint was applied (values should be different)
+        original_cached = get_cached_prediction(original_id)
+        original_values = original_cached['prediction'].forecast.values
+        constrained_values = cached['prediction'].forecast.values
+        
+        # Values should be different (constrained is 90% of original)
+        self.assertFalse(np.array_equal(original_values, constrained_values))
+
+
+class TestMCPPredictionCachingIntegration(unittest.TestCase):
+    """Integration tests for prediction caching with full workflows."""
+    
+    def setUp(self):
+        """Clear cache before each test."""
+        clear_prediction_cache()
+    
+    def tearDown(self):
+        """Clean up cache after each test."""
+        clear_prediction_cache()
+    
+    def test_multiple_forecast_methods_caching(self):
+        """Test caching predictions from different forecast methods."""
+        from autots import load_daily, AutoTS
+        df = load_daily(long=False).iloc[:150, :2]
+        
+        # Method 1: Fast model
+        model1 = AutoTS(
+            forecast_length=10,
+            frequency='infer',
+            max_generations=1,
+            model_list='superfast'
+        )
+        model1.fit(df)
+        pred1 = model1.predict()
+        id1 = cache_prediction(pred1, model1, metadata={'method': 'superfast'})
+        
+        # Method 2: Different model
+        model2 = AutoTS(
+            forecast_length=10,
+            frequency='infer',
+            ensemble=None,
+            model_list=['Cassandra'],
+            max_generations=1
+        )
+        model2.fit(df)
+        pred2 = model2.predict()
+        id2 = cache_prediction(pred2, model2, metadata={'method': 'cassandra'})
+        
+        # Verify both are cached
+        predictions = list_cached_predictions()
+        self.assertEqual(len(predictions), 2)
+        
+        # Verify each can be retrieved correctly
+        cached1 = get_cached_prediction(id1)
+        cached2 = get_cached_prediction(id2)
+        
+        self.assertEqual(cached1['metadata']['method'], 'superfast')
+        self.assertEqual(cached2['metadata']['method'], 'cassandra')
+    
+    def test_end_to_end_forecast_to_json_workflow(self):
+        """Test complete workflow from data → forecast → cache → JSON."""
+        from autots import load_daily, AutoTS
+        
+        # Step 1: Get data
+        df = load_daily(long=False).iloc[:100, :2]
+        
+        # Step 2: Create forecast
+        model = AutoTS(
+            forecast_length=14,
+            frequency='infer',
+            max_generations=1,
+            num_validations=1,
+            model_list='superfast'
+        )
+        model.fit(df)
+        prediction = model.predict()
+        
+        # Step 3: Cache prediction
+        prediction_id = cache_prediction(
+            prediction,
+            model,
+            metadata={
+                'method': 'end_to_end_test',
+                'forecast_length': 14,
+                'series_count': len(df.columns)
+            }
+        )
+        
+        # Step 4: Retrieve and convert to JSON
+        cached = get_cached_prediction(prediction_id)
+        forecast_json = dataframe_to_json(
+            cached['prediction'].forecast,
+            data_format='wide'
+        )
+        
+        # Verify complete JSON structure
+        self.assertIn('datetime', forecast_json)
+        self.assertEqual(len(forecast_json['datetime']), 14)
+        for col in df.columns:
+            self.assertIn(col, forecast_json)
+            self.assertEqual(len(forecast_json[col]), 14)
+        
+        # Verify JSON is serializable
+        json_str = json.dumps(forecast_json)
+        self.assertIsInstance(json_str, str)
+        
+        # Verify can be deserialized and used
+        reloaded = json.loads(json_str)
+        df_from_json = json_to_dataframe(reloaded, data_format='wide')
+        self.assertEqual(len(df_from_json), 14)
+
+
 def run_tests():
     """Run all tests."""
     # Create test suite
@@ -690,6 +1124,8 @@ def run_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestMCPServerIntegration))
     suite.addTests(loader.loadTestsFromTestCase(TestMCPSecurity))
     suite.addTests(loader.loadTestsFromTestCase(TestMCPToolChaining))
+    suite.addTests(loader.loadTestsFromTestCase(TestMCPPredictionCaching))
+    suite.addTests(loader.loadTestsFromTestCase(TestMCPPredictionCachingIntegration))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)

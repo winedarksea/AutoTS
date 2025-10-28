@@ -106,30 +106,53 @@ class TimeSeriesFeatureDetector:
         
         self.rough_seasonality_params = rough_seasonality_params or {
             'regression_model': {
-                'model': 'ElasticNet',
-                'model_params': {'l1_ratio': 0.2},
+                'model': 'RandomForest',
+                'model_params': {
+                    'n_estimators': 100,
+                    'min_samples_leaf': 4,
+                    'bootstrap': True
+                },
             },
-            'datepart_method': 'simple_3',
-            'polynomial_degree': None,
+            'datepart_method': 'simple',
+            'polynomial_degree': 2,
+            'transform_dict': {
+                'fillna': None,
+                'transformations': {'0': 'EWMAFilter'},
+                'transformation_params': {'0': {'span': 2}}
+            },
             'holiday_countries_used': False,
+            'lags': None,
+            'forward_lags': None,
         }
         self.seasonality_params = seasonality_params or {
             'regression_model': {
-                'model': 'BayesianMultiOutputRegression',
-                'model_params': {},
+                'model': 'SVM',
+                'model_params': {
+                    'C': 1.0,
+                    'tol': 0.0001,
+                    'loss': 'squared_epsilon_insensitive',
+                    'max_iter': 500
+                },
             },
             'datepart_method': 'common_fourier',
             'polynomial_degree': None,
+            'transform_dict': None,
             'holiday_countries_used': False,
+            'lags': None,
+            'forward_lags': None,
         }
         self.holiday_params = self._sanitize_holiday_params(holiday_params)
         # Ensure anomaly_params uses the correct output mode
         if anomaly_params is None:
             self.anomaly_params = {
                 'output': self.detection_mode,
-                'method': 'zscore',
-                'method_params': {'distribution': 'norm', 'alpha': 0.01},
-                'transform_dict': None,
+                'method': 'rolling_zscore',
+                'method_params': {
+                    'distribution': 'norm',
+                    'alpha': 0.05,
+                    'rolling_periods': 200,
+                    'center': False
+                },
                 'fillna': 'ffill',
             }
         else:
@@ -160,9 +183,9 @@ class TimeSeriesFeatureDetector:
             self.level_shift_params = {
                 'window_size': 90,
                 'alpha': 2.5,
-                'grouping_forward_limit': 3,
-                'max_level_shifts': 20,
-                'alignment': 'average',
+                'grouping_forward_limit': 5,
+                'max_level_shifts': 5,
+                'alignment': 'rolling_diff',
                 'output': self.detection_mode,
             }
         else:
@@ -175,7 +198,27 @@ class TimeSeriesFeatureDetector:
             'relative_threshold': 0.1,
             'absolute_threshold': 0.5,
         }
-        self.general_transformer_params = general_transformer_params
+        self.general_transformer_params = general_transformer_params or {
+            'fillna': 'ffill_mean_biased',
+            'transformations': {0: 'ClipOutliers', 1: 'ScipyFilter'},
+            'transformation_params': {
+                0: {
+                    'method': 'clip',
+                    'std_threshold': 3.5,
+                    'fillna': None
+                },
+                1: {
+                    'method': 'butter',
+                    'method_args': {
+                        'N': 3,
+                        'btype': 'lowpass',
+                        'analog': False,
+                        'output': 'sos',
+                        'Wn': 0.5
+                    }
+                }
+            }
+        }
         self.smoothing_window = smoothing_window
         self.standardize = standardize
 
@@ -220,16 +263,21 @@ class TimeSeriesFeatureDetector:
     def _sanitize_holiday_params(self, holiday_params):
         """Return holiday detector parameters filtered to supported keys."""
         default_params = {
-            'anomaly_detector_params': {},
+            'anomaly_detector_params': {
+                'method': 'mad',
+                'transform_dict': None,
+                'forecast_params': None,
+                'method_params': {'distribution': 'uniform', 'alpha': 0.05}
+            },
             'threshold': 0.8,
             'min_occurrences': 2,
-            'splash_threshold': 0.65,
+            'splash_threshold': None,
             'use_dayofmonth_holidays': True,
             'use_wkdom_holidays': True,
-            'use_wkdeom_holidays': True,
-            'use_lunar_holidays': True,
+            'use_wkdeom_holidays': False,
+            'use_lunar_holidays': False,
             'use_lunar_weekday': False,
-            'use_islamic_holidays': False,
+            'use_islamic_holidays': True,
             'use_hebrew_holidays': False,
             'use_hindu_holidays': False,
             'output': self.detection_mode,  # Use instance's detection_mode
@@ -3075,6 +3123,7 @@ class FeatureDetectionOptimizer:
         self.best_total_loss = float('inf')
         self.optimization_history = []
         self.baseline_loss = None
+        self.history_df = None
     
     def optimize(self):
         """
@@ -3111,13 +3160,11 @@ class FeatureDetectionOptimizer:
     def _random_search(self):
         """Genetic-style optimization with balanced scoring."""
         rng = random.Random(self.random_seed)
-        print(f"Starting genetic optimization ({self.n_iterations} iterations)...")
 
         detector_for_sampling = TimeSeriesFeatureDetector()
 
         baseline_params = self._default_detector_params()
         evaluated_signatures = set()
-        baseline_history_entry = None
         try:
             start_time = time.time()
             baseline_loss = self._evaluate_params(baseline_params)
@@ -3133,21 +3180,12 @@ class FeatureDetectionOptimizer:
             }
             self.optimization_history.append(baseline_history_entry)
             evaluated_signatures.add(self._param_signature(baseline_params))
-            self._apply_balanced_scores(self.optimization_history)
-            baseline_balanced = baseline_history_entry.get('balanced_loss', self.baseline_loss)
-            self.best_params = copy.deepcopy(baseline_params)
-            self.best_loss = baseline_balanced
-            self.best_total_loss = self.baseline_loss
             print(
-                f"Baseline loss = {self.baseline_loss:.4f} "
-                f"(balanced {baseline_balanced:.4f}), runtime = {baseline_runtime:.2f}s"
+                f"Baseline loss = {self.baseline_loss:.4f}, runtime = {baseline_runtime:.2f}s"
             )
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
             self.baseline_loss = None
-            self.best_params = baseline_params
-            self.best_loss = float('inf')
-            self.best_total_loss = float('inf')  # Bug fix: ensure consistency
         
         successful_iterations = 0
         failed_iterations = 0
@@ -3203,27 +3241,13 @@ class FeatureDetectionOptimizer:
                 self.optimization_history.append(record)
                 evaluated_signatures.add(signature)
                 successful_iterations += 1
-
-                self._apply_balanced_scores(self.optimization_history)
-                current_balanced = record.get('balanced_loss', record['loss'])
                 
                 # Print progress for every iteration
                 if i % 20 == 0 or successful_iterations == 1:
                     print(
                         f"Iteration {i} ({successful_iterations} successful): "
-                        f"balanced loss = {current_balanced:.4f}, raw loss = {loss['total_loss']:.4f}, "
-                        f"runtime = {runtime:.2f}s"
+                        f"raw loss = {loss['total_loss']:.4f}, runtime = {runtime:.2f}s"
                     )
-
-                if current_balanced < self.best_loss:
-                    self.best_loss = current_balanced
-                    self.best_params = copy.deepcopy(params)
-                    print(
-                        f"Iteration {i}: New best balanced loss = "
-                        f"{current_balanced:.4f} (raw {loss['total_loss']:.4f})"
-                    )
-                if loss['total_loss'] < self.best_total_loss:
-                    self.best_total_loss = loss['total_loss']
             except Exception as e:
                 failed_iterations += 1
                 if failed_iterations <= 3:
@@ -3241,11 +3265,8 @@ class FeatureDetectionOptimizer:
             max_runtime = np.max(runtimes)
             total_runtime = np.sum(runtimes)
         
-        print(f"\nOptimization complete!")
+        print(f"\nOptimization iterations complete!")
         print(f"Successful iterations: {successful_iterations}/{self.n_iterations}")
-        if np.isfinite(self.best_total_loss):
-            print(f"Best raw loss: {self.best_total_loss:.4f}")
-        print(f"Best balanced loss: {self.best_loss:.4f}")
         
         # Print runtime statistics
         if runtimes:
@@ -3255,7 +3276,11 @@ class FeatureDetectionOptimizer:
             print(f"  Min runtime: {min_runtime:.2f}s")
             print(f"  Max runtime: {max_runtime:.2f}s")
         
-        return self.best_params
+        # Now select best model based on properly calculated balanced scores
+        print(f"\nCalculating balanced scores and selecting best model...")
+        best_params = self._select_best_from_history()
+        
+        return best_params
     
     def _evaluate_params(self, params):
         """Evaluate a parameter configuration."""
@@ -3281,51 +3306,6 @@ class FeatureDetectionOptimizer:
         )
         
         return loss
-    
-    def _apply_balanced_scores(self, history):
-        """Normalize component losses to mimic AutoTS scoring balance."""
-        if not history:
-            return
-        weight_keys = list(self.loss_calculator.weights.keys())
-        rows = []
-        for entry in history:
-            breakdown = entry.get('loss_breakdown', {})
-            rows.append(
-                {
-                    key: float(breakdown.get(key, np.nan))
-                    if breakdown.get(key) is not None
-                    else np.nan
-                    for key in weight_keys
-                }
-            )
-        metrics_df = pd.DataFrame(rows)
-        scalers = {}
-        for key in weight_keys:
-            col = metrics_df[key].replace([np.inf, -np.inf], np.nan)
-            positive = col[col > 0].dropna()
-            if positive.empty:
-                scalers[key] = 1.0
-            else:
-                scale = float(positive.min())
-                # Bug fix: ensure scale is not too small to avoid extreme divisions
-                if np.isfinite(scale) and scale > 1e-6:
-                    scalers[key] = scale
-                else:
-                    scalers[key] = 1.0
-        for entry in history:
-            balanced = 0.0
-            for key, weight in self.loss_calculator.weights.items():
-                value = entry.get('loss_breakdown', {}).get(key)
-                if value is None:
-                    continue
-                try:
-                    value = float(value)
-                except Exception:
-                    continue
-                if not np.isfinite(value):
-                    continue
-                balanced += weight * (value / scalers.get(key, 1.0))
-            entry['balanced_loss'] = balanced
 
     @staticmethod
     def _param_signature(params):
@@ -3360,6 +3340,97 @@ class FeatureDetectionOptimizer:
         for key in rng.sample(keys, count):
             mutated[key] = copy.deepcopy(fresh[key])
         return mutated
+
+    def _select_best_from_history(self):
+        """
+        Post-process optimization history to select best model based on balanced scores.
+        
+        Converts history to DataFrame, calculates balanced scores with fixed scalers,
+        and selects the model with the best balanced loss.
+        
+        Returns
+        -------
+        dict
+            Best parameters based on balanced scoring
+        """
+        if not self.optimization_history:
+            return None
+        
+        # Build DataFrame from history
+        rows = []
+        for entry in self.optimization_history:
+            row = {
+                'iteration': entry.get('iteration'),
+                'loss': entry.get('loss'),
+                'runtime': entry.get('runtime'),
+            }
+            # Add all loss breakdown components
+            breakdown = entry.get('loss_breakdown', {})
+            for key in self.loss_calculator.weights.keys():
+                row[key] = breakdown.get(key, np.nan)
+            rows.append(row)
+        
+        self.history_df = pd.DataFrame(rows)
+        
+        # Calculate scalers based on entire history (minimum positive value per metric)
+        scalers = {}
+        for key in self.loss_calculator.weights.keys():
+            col = self.history_df[key].replace([np.inf, -np.inf], np.nan)
+            positive = col[col > 0].dropna()
+            if positive.empty:
+                scalers[key] = 1.0
+            else:
+                scale = float(positive.min())
+                if np.isfinite(scale) and scale > 1e-6:
+                    scalers[key] = scale
+                else:
+                    scalers[key] = 1.0
+        
+        # Calculate balanced loss for each entry
+        balanced_losses = []
+        for idx, entry in enumerate(self.optimization_history):
+            balanced = 0.0
+            breakdown = entry.get('loss_breakdown', {})
+            for key, weight in self.loss_calculator.weights.items():
+                value = breakdown.get(key)
+                if value is None or not np.isfinite(value):
+                    continue
+                balanced += weight * (value / scalers.get(key, 1.0))
+            balanced_losses.append(balanced)
+            # Store balanced loss back in history entry
+            entry['balanced_loss'] = balanced
+        
+        self.history_df['balanced_loss'] = balanced_losses
+        
+        # Find best model based on balanced loss
+        best_idx = np.argmin(balanced_losses)
+        best_entry = self.optimization_history[best_idx]
+        
+        self.best_params = copy.deepcopy(best_entry['params'])
+        self.best_loss = best_entry['balanced_loss']
+        self.best_total_loss = best_entry['loss']
+        
+        # Find baseline entry for comparison
+        baseline_entry = None
+        for entry in self.optimization_history:
+            if entry.get('iteration') == 'baseline':
+                baseline_entry = entry
+                break
+        
+        if baseline_entry:
+            baseline_balanced = baseline_entry.get('balanced_loss', baseline_entry['loss'])
+            improvement = baseline_balanced - self.best_loss
+            improvement_pct = (improvement / baseline_balanced * 100) if baseline_balanced != 0 else 0
+            
+            print(f"\n{'='*80}")
+            print(f"OPTIMIZATION RESULTS")
+            print(f"{'='*80}")
+            print(f"Baseline balanced loss: {baseline_balanced:.4f} (raw: {baseline_entry['loss']:.4f})")
+            print(f"Best balanced loss:     {self.best_loss:.4f} (raw: {self.best_total_loss:.4f})")
+            print(f"Improvement:            {improvement:.4f} ({improvement_pct:.2f}%)")
+            print(f"Best found at iteration: {best_entry.get('iteration')}")
+        
+        return self.best_params
 
     def get_optimization_summary(self):
         """Return summary of optimization results."""

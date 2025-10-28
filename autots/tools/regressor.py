@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA
-from autots.tools.shaping import infer_frequency
+from autots.tools.shaping import infer_frequency, long_to_wide, df_cleanup
 from autots.tools.seasonal import date_part
 from autots.tools.holiday import holiday_flag
 from autots.tools.cointegration import coint_johansen
@@ -476,3 +476,68 @@ def create_lagged_regressor(
             [add_on, regressor_train.tail(df_inner.shape[0] - forecast_length)]
         )
     return regressor_train, regressor_forecast
+
+
+def fake_regressor(
+    df,
+    forecast_length: int = 14,
+    date_col: str = None,
+    value_col: str = None,
+    id_col: str = None,
+    frequency: str = 'infer',
+    aggfunc: str = 'first',
+    drop_most_recent: int = 0,
+    na_tolerance: float = 0.95,
+    drop_data_older_than_periods: int = 100000,
+    dimensions: int = 1,
+    verbose: int = 0,
+):
+    """Create a fake regressor of random numbers for testing purposes."""
+
+    if date_col is None and value_col is None:
+        df_wide = pd.DataFrame(df)
+        assert (
+            type(df_wide.index) is pd.DatetimeIndex
+        ), "df index is not pd.DatetimeIndex"
+    else:
+        df_wide = long_to_wide(
+            df,
+            date_col=date_col,
+            value_col=value_col,
+            id_col=id_col,
+            aggfunc=aggfunc,
+        )
+
+    df_wide = df_cleanup(
+        df_wide,
+        frequency=frequency,
+        na_tolerance=na_tolerance,
+        drop_data_older_than_periods=drop_data_older_than_periods,
+        aggfunc=aggfunc,
+        drop_most_recent=drop_most_recent,
+        verbose=verbose,
+    )
+    if frequency == 'infer':
+        frequency = infer_frequency(df_wide)
+
+    forecast_index = pd.date_range(
+        freq=frequency, start=df_wide.index[-1], periods=forecast_length + 1
+    )[1:]
+
+    if dimensions <= 1:
+        future_regressor_train = pd.Series(
+            np.random.randint(0, 100, size=len(df_wide.index)), index=df_wide.index
+        )
+        future_regressor_forecast = pd.Series(
+            np.random.randint(0, 100, size=(forecast_length)), index=forecast_index
+        )
+    else:
+        future_regressor_train = pd.DataFrame(
+            np.random.randint(0, 100, size=(len(df_wide.index), dimensions)),
+            index=df_wide.index,
+        )
+        future_regressor_forecast = pd.DataFrame(
+            np.random.randint(0, 100, size=(forecast_length, dimensions)),
+            index=forecast_index,
+        )
+    return future_regressor_train, future_regressor_forecast
