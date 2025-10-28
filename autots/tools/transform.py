@@ -3411,8 +3411,8 @@ class AnomalyRemoval(EmptyTransformer):
             "method": method_choice,
             "method_params": method_params,
             "fillna": random.choices(
-                [None, "ffill", "mean", "rolling_mean_24", "linear"],
-                [0.01, 0.44, 0.1, 0.3, 0.15],
+                [None, "ffill", "mean", "rolling_mean_24", "linear", "seasonal_linear_window_3"],
+                [0.01, 0.44, 0.1, 0.3, 0.15, 0.01],
             )[0],
             "transform_dict": transform_dict,
             "isolated_only": random.choices([True, False], [0.2, 0.8])[0],
@@ -4188,7 +4188,7 @@ class RegressionFilter(EmptyTransformer):
 class LevelShiftMagic(EmptyTransformer):
     """Detects and corrects for level shifts. May seriously skew trend.
 
-    May look small, but based on impact and filling a unsolved need, one of my most important contributions to time series tooling - Colin
+    May look small, but is probably one of my most important contributions to time series tooling (so say I, Colin)
 
     Args:
         window_size (int): size of rolling window for detection
@@ -4285,8 +4285,8 @@ class LevelShiftMagic(EmptyTransformer):
             )[0],
             "shift_remove_window": random.choice([0, 1, 2]),
             "shift_fillna": random.choices(
-                ['linear', 'ffill', 'mean', 'cubic', 'quadratic'],
-                [0.4, 0.2, 0.1, 0.2, 0.1]
+                ['linear', 'ffill', 'mean', 'cubic', 'quadratic', "seasonal_linear"],
+                [0.4, 0.2, 0.1, 0.2, 0.1, 0.01]
             )[0],
             "window_method": random.choices(
                 ["overlap", "exclusive", "diff_overlap"], [0.6, 0.2, 0.2]
@@ -5096,6 +5096,7 @@ class FFTDecomposition(EmptyTransformer):
         self.df_columns = df.columns
         self.df_index = df.index
         self.freq = infer_frequency(df)
+        # TODO: consider adding changepoint detrend to fft_class
         self.fft = fft_class(n_harm=self.n_harmonics, detrend=self.detrend)
         self.fft.fit(df.to_numpy())
         self.start_forecast_len = df.shape[0]
@@ -5439,9 +5440,11 @@ class ReplaceConstant(EmptyTransformer):
                     'akima',
                     'mean',
                     'ffill',
+                    "seasonal_linear",
+                    "seasonal_linear_window_3",
                     # "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.01, 0.01],
             )[0],
         }
 
@@ -8409,6 +8412,8 @@ na_probs = {
     "SeasonalityMotifImputerLinMix": 0.005,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputer1K": 0.005,  # apparently this is too memory hungry at scale
     "DatepartRegressionImputer": 0.01,  # also slow
+    "seasonal_linear_window_3": 0.01,  # seems fine, but low probability because not well tested yet
+    "seasonal_linear": 0.01,
 }
 
 
