@@ -4,6 +4,7 @@ import unittest
 import pandas as pd
 import numpy as np
 from autots.models.deepssm import MambaSSM, pMLP
+from autots.tools.changepoints import ChangepointDetector
 
 
 class DeepSSMTest(unittest.TestCase):
@@ -534,6 +535,136 @@ class DeepSSMTest(unittest.TestCase):
         self.assertLess(mamba_total, 60, "MambaSSM should complete within reasonable time")
         
         print("pMLP vs MambaSSM comparison test passed!")
+
+    def test_changepoint_detector_individual_features(self):
+        """Ensure individual aggregation retains per-series features without fallbacks."""
+        dates = pd.date_range(start='2023-01-01', periods=12, freq='D')
+        df = pd.DataFrame(
+            {
+                'series_a': np.linspace(0, 1, 12),
+                'series_b': np.linspace(1, 0, 12),
+            },
+            index=dates,
+        )
+
+        detector = ChangepointDetector(method='basic', aggregate_method='individual')
+        detector.df = df
+        detector.changepoints_ = {
+            'series_a': np.array([4, 8]),
+            'series_b': np.array([3]),
+        }
+
+        features = detector.create_features()
+        self.assertIn('series_a_basic_changepoint_1', features.columns)
+        self.assertIn('series_a_basic_changepoint_2', features.columns)
+        self.assertIn('series_b_basic_changepoint_1', features.columns)
+        self.assertEqual(len(features), len(df))
+
+        detector.changepoints_ = np.array([], dtype=int)
+        empty_features = detector.create_features()
+        self.assertEqual(list(empty_features.columns), [])
+        self.assertEqual(len(empty_features), len(df))
+
+    def test_models_without_changepoints(self):
+        """Verify models operate when changepoint detection is disabled."""
+        n_timesteps = 40
+        n_series = 2
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+
+        np.random.seed(123)
+        data = np.random.randn(n_timesteps, n_series).astype(np.float32)
+        df = pd.DataFrame(data, index=dates, columns=['series_a', 'series_b'])
+        forecast_length = 5
+
+        mamba = MambaSSM(
+            context_length=15,
+            epochs=1,
+            batch_size=8,
+            d_model=8,
+            n_layers=1,
+            d_state=2,
+            verbose=0,
+            random_seed=0,
+            changepoint_method=None,
+        )
+        mamba.fit(df)
+        self.assertIsNone(
+            mamba.changepoint_detector,
+            "Changepoint detector should be None when disabled",
+        )
+        self.assertTrue(
+            mamba.changepoint_features.empty,
+            "Stored changepoint features should be empty when disabled",
+        )
+        self.assertIn(
+            'naive_last_series_a',
+            mamba.feature_columns,
+            "Naive last value feature should be present for series_a",
+        )
+        prediction_mamba = mamba.predict(forecast_length=forecast_length)
+        self.assertEqual(prediction_mamba.forecast.shape, (forecast_length, n_series))
+
+        mamba_no_naive = MambaSSM(
+            context_length=15,
+            epochs=1,
+            batch_size=8,
+            d_model=8,
+            n_layers=1,
+            d_state=2,
+            verbose=0,
+            random_seed=0,
+            changepoint_method=None,
+            use_naive_feature=False,
+        )
+        mamba_no_naive.fit(df)
+        self.assertNotIn(
+            'naive_last_series_a',
+            mamba_no_naive.feature_columns,
+            "Naive last value feature should be absent when disabled",
+        )
+
+        mlp = pMLP(
+            context_length=10,
+            hidden_dims=[32],
+            epochs=1,
+            batch_size=8,
+            verbose=0,
+            random_seed=0,
+            changepoint_method=None,
+        )
+        mlp.fit(df)
+        self.assertIsNone(
+            mlp.changepoint_detector,
+            "Changepoint detector should be None when disabled",
+        )
+        self.assertTrue(
+            mlp.changepoint_features.empty,
+            "Stored changepoint features should be empty when disabled",
+        )
+        self.assertIn(
+            'naive_last_series_b',
+            mlp.feature_columns,
+            "Naive last value feature should be present for series_b",
+        )
+        prediction_mlp = mlp.predict(forecast_length=forecast_length)
+        self.assertEqual(prediction_mlp.forecast.shape, (forecast_length, n_series))
+
+        mlp_no_naive = pMLP(
+            context_length=10,
+            hidden_dims=[32],
+            epochs=1,
+            batch_size=8,
+            verbose=0,
+            random_seed=0,
+            changepoint_method=None,
+            use_naive_feature=False,
+        )
+        mlp_no_naive.fit(df)
+        self.assertNotIn(
+            'naive_last_series_b',
+            mlp_no_naive.feature_columns,
+            "Naive last value feature should be absent when disabled",
+        )
 
 
 if __name__ == '__main__':

@@ -2635,76 +2635,97 @@ class ChangepointDetector(object):
             freq = infer_frequency(self.df.index)
             try:
                 future_index = pd.date_range(
-                    start=self.df.index[-1] + pd.Timedelta(freq), 
-                    periods=forecast_length, 
-                    freq=freq
+                    start=self.df.index[-1] + pd.Timedelta(freq),
+                    periods=forecast_length,
+                    freq=freq,
                 )
             except (ValueError, TypeError):
-                # Fallback: use the median time difference
                 time_diff = pd.Series(self.df.index).diff().dropna().median()
                 future_index = pd.date_range(
                     start=self.df.index[-1] + time_diff,
                     periods=forecast_length,
-                    freq=time_diff
+                    freq=time_diff,
                 )
             extended_index = self.df.index.append(future_index)
-        
-        if isinstance(self.changepoints_, dict):
-            # Use market changepoints or the first series' changepoints
-            try:
-                changepoints = self.get_market_changepoints()
-            except:
-                changepoints = list(self.changepoints_.values())[0]
-        else:
-            changepoints = self.changepoints_
-        
-        if len(changepoints) == 0:
-            changepoints = np.array([len(self.df) // 2])  # Default middle changepoint
-        
-        # Convert changepoint indices to actual timestamps
-        changepoint_dates = []
-        for cp in changepoints:
-            if cp < len(self.df):
-                changepoint_dates.append(self.df.index[int(cp)])
-            else:
-                # Handle edge case where changepoint is beyond training data
-                changepoint_dates.append(self.df.index[-1])
-        
-        # Create time-based features
-        res = []
-        for i, cp_date in enumerate(changepoint_dates):
-            feature_name = f'{self.method}_changepoint_{i+1}'
-            
-            # Calculate time-based differences
-            if isinstance(extended_index, pd.DatetimeIndex):
-                # For datetime index, calculate differences in periods
-                time_diffs = (extended_index - cp_date).total_seconds()
-                
-                # Infer the time unit from the data frequency
+
+        if isinstance(self.df.index, pd.DatetimeIndex):
+            freq_seconds = None
+            freq_str = infer_frequency(self.df.index)
+            if freq_str:
                 try:
-                    freq_str = infer_frequency(self.df.index)
-                    if freq_str:
-                        freq_seconds = pd.Timedelta(freq_str).total_seconds()
-                    else:
-                        # Fallback: use median time difference
-                        freq_seconds = pd.Series(self.df.index).diff().dropna().median().total_seconds()
+                    freq_seconds = pd.Timedelta(freq_str).total_seconds()
                 except (ValueError, TypeError):
-                    # Fallback: use median time difference
-                    freq_seconds = pd.Series(self.df.index).diff().dropna().median().total_seconds()
-                
-                time_periods = time_diffs / freq_seconds
-                
-                # Create feature as "periods since changepoint"
-                feature_values = np.maximum(0, time_periods)
-            else:
-                # Fallback for non-datetime indices (shouldn't happen in practice)
-                feature_values = np.maximum(0, np.arange(len(extended_index)) - changepoints[i])
-            
-            res.append(pd.Series(feature_values, name=feature_name))
-        
-        changepoint_features = pd.concat(res, axis=1)
+                    freq_seconds = None
+            if freq_seconds is None:
+                diffs = pd.Series(self.df.index).diff().dropna()
+                if not diffs.empty:
+                    freq_seconds = diffs.median().total_seconds()
+            if not freq_seconds or freq_seconds <= 0:
+                freq_seconds = 1.0
+        else:
+            freq_seconds = 1.0
+
+        base_index = self.df.index
+
+        def _features_from_changepoints(changepoints, series_key=None):
+            cp_array = np.asarray(
+                changepoints if changepoints is not None else [], dtype=int
+            )
+            if cp_array.size == 0:
+                return None
+            cp_array = cp_array[(cp_array >= 0)]
+            if cp_array.size == 0:
+                return None
+            cp_array = np.unique(cp_array)
+
+            if len(base_index) == 0:
+                return None
+            capped_positions = np.clip(cp_array, 0, len(base_index) - 1)
+            cp_dates = [base_index[pos] for pos in capped_positions]
+
+            safe_prefix = f"{self.method}_changepoint"
+            if series_key is not None:
+                safe_key = str(series_key).replace(" ", "_")
+                safe_prefix = f"{safe_key}_{safe_prefix}"
+
+            feature_columns = []
+            for idx, cp_date in enumerate(cp_dates):
+                feature_name = f"{safe_prefix}_{idx + 1}"
+                if isinstance(extended_index, pd.DatetimeIndex):
+                    time_diffs = (extended_index - cp_date).total_seconds()
+                    periods_since_cp = time_diffs / freq_seconds
+                    feature_values = np.maximum(0, periods_since_cp)
+                else:
+                    feature_values = np.maximum(
+                        0, np.arange(len(extended_index)) - capped_positions[idx]
+                    )
+                feature_columns.append(
+                    pd.Series(feature_values, index=extended_index, name=feature_name)
+                )
+
+            if not feature_columns:
+                return None
+            return pd.concat(feature_columns, axis=1)
+
+        feature_frames = []
+
+        if isinstance(self.changepoints_, dict):
+            for series_key in sorted(self.changepoints_.keys()):
+                series_features = _features_from_changepoints(
+                    self.changepoints_[series_key], series_key=series_key
+                )
+                if series_features is not None:
+                    feature_frames.append(series_features)
+        else:
+            feature_frame = _features_from_changepoints(self.changepoints_)
+            if feature_frame is not None:
+                feature_frames.append(feature_frame)
+
+        if not feature_frames:
+            return pd.DataFrame(index=extended_index)
+
+        changepoint_features = pd.concat(feature_frames, axis=1)
         changepoint_features.index = extended_index
-        
         return changepoint_features
     
     @staticmethod
@@ -2723,24 +2744,59 @@ class ChangepointDetector(object):
         """
         # List of all valid method names
 
+        if method in {None, 'none'}:
+            return {
+                'method': 'none',
+                'method_params': {},
+                'aggregate_method': 'mean',
+            }
+
         selection_mode = "fast"  # default to fast
         if method in valid_changepoint_methods:
             new_method = method
         elif method == "fast":
             # Include all methods but will use fast parameters for potentially slow ones
-            method_options = ['basic', 'cusum', 'ewma', 'l1_fused_lasso', 'l1_total_variation', 'pelt', 'composite_fused_lasso', 'autoencoder']
-            method_weights = [0.30, 0.25, 0.25, 0.08, 0.06, 0.03, 0.02, 0.01]
+            method_options = [
+                'basic',
+                'cusum',
+                'ewma',
+                'l1_fused_lasso',
+                'l1_total_variation',
+                'pelt',
+                'composite_fused_lasso',
+                'autoencoder',
+                'none',
+            ]
+            method_weights = [0.28, 0.24, 0.24, 0.08, 0.06, 0.03, 0.02, 0.01, 0.04]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
         elif method in ["default", "random"]:
             # Heavily weight basic method for compatibility, with EWMA and CUSUM as good alternatives
             # PELT downweighted due to poor runtime scaling (can take minutes/hours on large datasets)
-            method_options = ['basic', 'cusum', 'ewma', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'autoencoder']
-            method_weights = [0.45, 0.20, 0.20, 0.05, 0.04, 0.03, 0.03]
+            method_options = [
+                'basic',
+                'cusum',
+                'ewma',
+                'pelt',
+                'l1_fused_lasso',
+                'l1_total_variation',
+                'autoencoder',
+                'none',
+            ]
+            method_weights = [0.42, 0.19, 0.19, 0.05, 0.04, 0.03, 0.03, 0.05]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"
         else:  # random
-            new_method = random.choices(valid_changepoint_methods, k=1)[0]
+            extended_options = valid_changepoint_methods + ['none']
+            extended_weights = [1.0] * len(valid_changepoint_methods) + [0.5]
+            new_method = random.choices(extended_options, weights=extended_weights, k=1)[0]
             selection_mode = "random"
+
+        if new_method in {None, 'none'}:
+            return {
+                'method': 'none',
+                'method_params': {},
+                'aggregate_method': 'mean',
+            }
 
         # Generate method-specific parameters with weighted choices
         if new_method == 'basic':

@@ -820,6 +820,7 @@ class MambaSSM(ModelObject):
         datepart_method: str = "expanded",
         holiday_countries_used: bool = False,
         use_extra_gating: bool = False,
+        use_naive_feature: bool = True,
         changepoint_method: str = "basic",
         changepoint_params: dict = None,
         regression_type: str = None,
@@ -839,7 +840,10 @@ class MambaSSM(ModelObject):
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
         self.use_extra_gating = use_extra_gating
-        self.changepoint_method = changepoint_method
+        normalized_method = changepoint_method if changepoint_method is not None else "none"
+        if isinstance(normalized_method, str):
+            normalized_method = normalized_method.lower()
+        self.changepoint_method = normalized_method
         self.changepoint_params = changepoint_params if changepoint_params is not None else {}
         self.context_length = context_length
         self.d_model = d_model
@@ -848,6 +852,7 @@ class MambaSSM(ModelObject):
         self.epochs = epochs
         self.batch_size = batch_size
         self.lr = lr
+        self.use_naive_feature = use_naive_feature
 
         # Loss function parameters
         self.loss_function = loss_function
@@ -861,6 +866,16 @@ class MambaSSM(ModelObject):
             self.device = "mps"  # Added for MacOS users
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
+        self.changepoint_features = None
+        self.changepoint_features_columns = pd.Index([])
+        self.naive_feature_columns = pd.Index([])
+        self.naive_feature_values = None
+        self.changepoint_features_columns = pd.Index([])
+        self.naive_feature_columns = pd.Index([])
+        self.naive_feature_values = None
+        self.changepoint_features_columns = pd.Index([])
+        self.naive_feature_columns = pd.Index([])
+        self.naive_feature_values = None
 
     def _get_loss_function(self):
         """Create the appropriate loss function based on the loss_function parameter."""
@@ -922,8 +937,14 @@ class MambaSSM(ModelObject):
             holiday_countries_used=self.holiday_countries_used,
         )
         
+        use_changepoints = self.changepoint_method not in {None, "none"}
+
         # Set default changepoint parameters for basic method if not provided
-        if self.changepoint_method == 'basic' and not self.changepoint_params:
+        if (
+            use_changepoints
+            and self.changepoint_method == 'basic'
+            and not self.changepoint_params
+        ):
             half_yr_space = half_yr_spacing(df)
             self.changepoint_params = {
                 'changepoint_spacing': int(half_yr_space),
@@ -931,7 +952,7 @@ class MambaSSM(ModelObject):
             }
         
         # Changepoint features
-        if self.changepoint_method != "none":
+        if use_changepoints:
             self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
@@ -941,13 +962,35 @@ class MambaSSM(ModelObject):
             changepoint_features = self.changepoint_detector.create_features(
                 forecast_length=0
             )
-            self.changepoint_features_columns = changepoint_features.columns
         else:
             self.changepoint_detector = None
             changepoint_features = pd.DataFrame(index=df.index)
+
+        self.changepoint_features = changepoint_features
+        self.changepoint_features_columns = changepoint_features.columns
+
+        # Last value naive features (constant per series)
+        if self.use_naive_feature:
+            last_values = df.ffill().iloc[-1].fillna(0.0).astype(np.float32)
+            naive_feature_mapping = {
+                f"naive_last_{col}": float(last_values[col]) for col in df.columns
+            }
+            naive_features = pd.DataFrame(
+                naive_feature_mapping,
+                index=df.index,
+                dtype=np.float32,
+            )
+            self.naive_feature_columns = naive_features.columns
+            self.naive_feature_values = last_values
+        else:
+            naive_features = None
+            self.naive_feature_columns = pd.Index([])
+            self.naive_feature_values = None
         
         # Combine all features
         feature_list = [date_feats_train, changepoint_features]
+        if naive_features is not None:
+            feature_list.append(naive_features)
         if future_regressor is not None:
             feature_list.append(future_regressor)
             
@@ -1060,18 +1103,44 @@ class MambaSSM(ModelObject):
             holiday_countries_used=self.holiday_countries_used,
         )
         
-        # Create future changepoint features
-        if self.changepoint_detector is not None:
-            # Generate features for training + forecast, then extract forecast portion
-            all_changepoint_features = self.changepoint_detector.create_features(
-                forecast_length=forecast_length
+        # Create future changepoint features without re-fitting detector
+        if (
+            getattr(self, "changepoint_features", None) is not None
+            and not self.changepoint_features.empty
+        ):
+            future_changepoint_feats = changepoint_fcst_from_last_row(
+                self.changepoint_features.iloc[-1], n_forecast=forecast_length
             )
-            future_changepoint_feats = all_changepoint_features.tail(forecast_length)
+            future_changepoint_feats.index = forecast_index
+            future_changepoint_feats = future_changepoint_feats.reindex(
+                columns=self.changepoint_features_columns
+            )
         else:
-            future_changepoint_feats = pd.DataFrame(index=forecast_index)
+            future_changepoint_feats = pd.DataFrame(
+                index=forecast_index,
+                columns=getattr(self, "changepoint_features_columns", []),
+            )
+
+        # Naive last value features extended as constant
+        if self.use_naive_feature and self.naive_feature_values is not None:
+            naive_future_feats = pd.DataFrame(
+                {
+                    f"naive_last_{col}": float(self.naive_feature_values[col])
+                    for col in self.df_train.columns
+                },
+                index=forecast_index,
+                dtype=np.float32,
+            )
+            naive_future_feats = naive_future_feats.reindex(
+                columns=self.naive_feature_columns
+            )
+        else:
+            naive_future_feats = None
         
         # Combine all future features
         feature_list = [future_date_feats, future_changepoint_feats]
+        if naive_future_feats is not None:
+            feature_list.append(naive_future_feats)
         if future_regressor is not None:
             feature_list.append(future_regressor)
             
@@ -1188,6 +1257,7 @@ class MambaSSM(ModelObject):
             "datepart_method": self.datepart_method,
             "holiday_countries_used": self.holiday_countries_used,
             "use_extra_gating": self.use_extra_gating,
+            "use_naive_feature": self.use_naive_feature,
             "changepoint_method": self.changepoint_method,
             "changepoint_params": self.changepoint_params,
             "regression_type": self.regression_type,
@@ -1269,6 +1339,9 @@ class MambaSSM(ModelObject):
         extra_gating_options = [True, False]  
         gating_weights = [0.25, 0.75]  # Prefer False for stability
         
+        naive_feature_options = [True, False]
+        naive_feature_weights = [0.75, 0.25]  # Default to using naive features
+
         # Generate changepoint method and parameters using dedicated function
         changepoint_method, changepoint_params = generate_random_changepoint_params()
 
@@ -1293,6 +1366,7 @@ class MambaSSM(ModelObject):
             "datepart_method": random_datepart(),
             "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
             "use_extra_gating": random.choices(extra_gating_options, weights=gating_weights, k=1)[0],
+            "use_naive_feature": random.choices(naive_feature_options, weights=naive_feature_weights, k=1)[0],
             "changepoint_method": changepoint_method,
             "changepoint_params": changepoint_params,
             "regression_type": regression_choice,
@@ -1330,6 +1404,7 @@ class pMLP(ModelObject):
         prediction_batch_size: int = 100,  # Larger for efficiency
         datepart_method: str = "expanded",
         holiday_countries_used: bool = False,
+        use_naive_feature: bool = True,
         changepoint_method: str = "basic",
         changepoint_params: dict = None,
         regression_type: str = None,
@@ -1348,7 +1423,10 @@ class pMLP(ModelObject):
         self.regression_type = regression_type
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
-        self.changepoint_method = changepoint_method
+        normalized_method = changepoint_method if changepoint_method is not None else "none"
+        if isinstance(normalized_method, str):
+            normalized_method = normalized_method.lower()
+        self.changepoint_method = normalized_method
         self.changepoint_params = changepoint_params if changepoint_params is not None else {}
         self.context_length = context_length
         
@@ -1363,6 +1441,7 @@ class pMLP(ModelObject):
         self.epochs = epochs
         self.batch_size = batch_size
         self.lr = lr
+        self.use_naive_feature = use_naive_feature
 
         # Loss function parameters
         self.loss_function = loss_function
@@ -1376,6 +1455,7 @@ class pMLP(ModelObject):
             self.device = "mps"  # Added for MacOS users
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
+        self.changepoint_features = None
 
     def _get_loss_function(self):
         """Create the appropriate loss function based on the loss_function parameter."""
@@ -1437,8 +1517,14 @@ class pMLP(ModelObject):
             holiday_countries_used=self.holiday_countries_used,
         )
         
+        use_changepoints = self.changepoint_method not in {None, "none"}
+
         # Set default changepoint parameters for basic method if not provided
-        if self.changepoint_method == 'basic' and not self.changepoint_params:
+        if (
+            use_changepoints
+            and self.changepoint_method == 'basic'
+            and not self.changepoint_params
+        ):
             half_yr_space = half_yr_spacing(df)
             self.changepoint_params = {
                 'changepoint_spacing': int(half_yr_space),
@@ -1446,7 +1532,7 @@ class pMLP(ModelObject):
             }
         
         # Changepoint features
-        if self.changepoint_method != "none":
+        if use_changepoints:
             self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
@@ -1456,13 +1542,34 @@ class pMLP(ModelObject):
             changepoint_features = self.changepoint_detector.create_features(
                 forecast_length=0
             )
-            self.changepoint_features_columns = changepoint_features.columns
         else:
             self.changepoint_detector = None
             changepoint_features = pd.DataFrame(index=df.index)
+
+        self.changepoint_features = changepoint_features
+        self.changepoint_features_columns = changepoint_features.columns
+
+        if self.use_naive_feature:
+            last_values = df.ffill().iloc[-1].fillna(0.0).astype(np.float32)
+            naive_feature_mapping = {
+                f"naive_last_{col}": float(last_values[col]) for col in df.columns
+            }
+            naive_features = pd.DataFrame(
+                naive_feature_mapping,
+                index=df.index,
+                dtype=np.float32,
+            )
+            self.naive_feature_columns = naive_features.columns
+            self.naive_feature_values = last_values
+        else:
+            naive_features = None
+            self.naive_feature_columns = pd.Index([])
+            self.naive_feature_values = None
         
         # Combine all features
         feature_list = [date_feats_train, changepoint_features]
+        if naive_features is not None:
+            feature_list.append(naive_features)
         if future_regressor is not None:
             feature_list.append(future_regressor)
             
@@ -1586,18 +1693,43 @@ class pMLP(ModelObject):
             holiday_countries_used=self.holiday_countries_used,
         )
         
-        # Create future changepoint features
-        if self.changepoint_detector is not None:
-            # Generate features for training + forecast, then extract forecast portion
-            all_changepoint_features = self.changepoint_detector.create_features(
-                forecast_length=forecast_length
+        # Create future changepoint features without re-fitting detector
+        if (
+            getattr(self, "changepoint_features", None) is not None
+            and not self.changepoint_features.empty
+        ):
+            future_changepoint_feats = changepoint_fcst_from_last_row(
+                self.changepoint_features.iloc[-1], n_forecast=forecast_length
             )
-            future_changepoint_feats = all_changepoint_features.tail(forecast_length)
+            future_changepoint_feats.index = forecast_index
+            future_changepoint_feats = future_changepoint_feats.reindex(
+                columns=self.changepoint_features_columns
+            )
         else:
-            future_changepoint_feats = pd.DataFrame(index=forecast_index)
+            future_changepoint_feats = pd.DataFrame(
+                index=forecast_index,
+                columns=getattr(self, "changepoint_features_columns", []),
+            )
+
+        if self.use_naive_feature and self.naive_feature_values is not None:
+            naive_future_feats = pd.DataFrame(
+                {
+                    f"naive_last_{col}": float(self.naive_feature_values[col])
+                    for col in self.df_train.columns
+                },
+                index=forecast_index,
+                dtype=np.float32,
+            )
+            naive_future_feats = naive_future_feats.reindex(
+                columns=self.naive_feature_columns
+            )
+        else:
+            naive_future_feats = None
         
         # Combine all future features
         feature_list = [future_date_feats, future_changepoint_feats]
+        if naive_future_feats is not None:
+            feature_list.append(naive_future_feats)
         if future_regressor is not None:
             feature_list.append(future_regressor)
             
@@ -1715,6 +1847,7 @@ class pMLP(ModelObject):
             "prediction_batch_size": self.prediction_batch_size,
             "datepart_method": self.datepart_method,
             "holiday_countries_used": self.holiday_countries_used,
+            "use_naive_feature": self.use_naive_feature,
             "changepoint_method": self.changepoint_method,
             "changepoint_params": self.changepoint_params,
             "regression_type": self.regression_type,
@@ -1812,6 +1945,9 @@ class pMLP(ModelObject):
         holiday_used_options = [True, False]
         holiday_weights = [0.3, 0.7]
         
+        naive_feature_options = [True, False]
+        naive_feature_weights = [0.75, 0.25]
+        
         # Generate changepoint method and parameters
         changepoint_method, changepoint_params = generate_random_changepoint_params()
 
@@ -1830,6 +1966,7 @@ class pMLP(ModelObject):
             "wasserstein_weight": random.choices(wasserstein_weights, weights=wasserstein_weight_probs, k=1)[0],
             "datepart_method": datepart_method,
             "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
+            "use_naive_feature": random.choices(naive_feature_options, weights=naive_feature_weights, k=1)[0],
             "changepoint_method": changepoint_method,
             "changepoint_params": changepoint_params,
             "regression_type": regression_choice,
