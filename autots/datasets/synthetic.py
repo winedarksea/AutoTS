@@ -79,6 +79,10 @@ class SyntheticDailyGenerator:
         Probability per year of a trend changepoint (default 0.5)
     level_shift_freq : float
         Probability per year of a level shift (default 0.1)
+    level_shift_strength : float
+        Controls the magnitude of level shifts as a percentage of the series baseline.
+        Shifts will be sampled from 10% to this value (skewed toward 10%), but always 
+        at least 5x the noise standard deviation for detectability (default 0.4 = 40%)
     anomaly_freq : float
         Probability per week of an anomaly (default 0.05)
     weekly_seasonality_strength : float
@@ -149,6 +153,7 @@ class SyntheticDailyGenerator:
         random_seed=42,
         trend_changepoint_freq=0.5,
         level_shift_freq=0.1,
+        level_shift_strength=0.4,
         anomaly_freq=0.05,
         shared_anomaly_prob=0.2,
         shared_level_shift_prob=0.2,
@@ -165,6 +170,7 @@ class SyntheticDailyGenerator:
         self.random_seed = random_seed
         self.trend_changepoint_freq = trend_changepoint_freq
         self.level_shift_freq = level_shift_freq
+        self.level_shift_strength = level_shift_strength
         self.anomaly_freq = anomaly_freq
         self.shared_anomaly_prob = shared_anomaly_prob
         self.shared_level_shift_prob = shared_level_shift_prob
@@ -244,6 +250,7 @@ class SyntheticDailyGenerator:
                 'config': {
                     'trend_changepoint_freq': float(self.trend_changepoint_freq),
                     'level_shift_freq': float(self.level_shift_freq),
+                    'level_shift_strength': float(self.level_shift_strength),
                     'anomaly_freq': float(self.anomaly_freq),
                     'shared_anomaly_prob': float(self.shared_anomaly_prob),
                     'shared_level_shift_prob': float(self.shared_level_shift_prob),
@@ -809,15 +816,43 @@ class SyntheticDailyGenerator:
                 p=[0.6, 0.2, 0.2]
             )
             
-            # Determine magnitude - should be clearly detectable above noise
-            # Use series-specific noise level to ensure detectability
+            # Determine magnitude using series baseline percentage approach
+            # Calculate baseline value at the shift point (trend + seasonality baseline)
             series_noise_level = self.series_noise_levels[series_name]
             signal_strength = scale * 50
-            noise_std = series_noise_level * signal_strength
+            baseline_value = abs(signal_strength)  # Baseline signal magnitude
             
-            # Level shifts should be 3-8x the noise std for clear detectability
-            shift_multiplier = self.rng.uniform(3, 8)
-            magnitude = self.rng.choice([-1, 1]) * shift_multiplier * noise_std
+            # Generate shift magnitude as percentage of baseline
+            # Skewed distribution toward 12%, ranging up to level_shift_strength
+            # Using beta distribution with alpha=2, beta=5 gives right-skewed distribution
+            level_shift_minimum_shift = 0.12  # Minimum 12% shift
+            percent_range = self.level_shift_strength - level_shift_minimum_shift
+            shift_percent = level_shift_minimum_shift + self.rng.beta(2, 5) * percent_range
+
+            # Calculate magnitude as percentage of baseline
+            magnitude_from_baseline = shift_percent * baseline_value
+            
+            # Ensure minimum detectability: at least 5x noise std
+            # If below minimum, scale the percentage-based value up proportionally
+            # This preserves the relative variation from the beta distribution
+            noise_std = series_noise_level * signal_strength
+            min_magnitude = 5.0 * noise_std
+            
+            if magnitude_from_baseline < min_magnitude:
+                # Scale up proportionally: maintain the ratio within the 10% to strength range
+                # but ensure final value is at least min_magnitude
+                # Use a simple approach: shift_percent is preserved as metadata,
+                # but actual magnitude is boosted to minimum
+                magnitude = min_magnitude
+                # Store the original intended percentage for metadata/analysis
+                actual_percent_used = magnitude / baseline_value
+            else:
+                # Use percentage-based magnitude directly
+                magnitude = magnitude_from_baseline
+                actual_percent_used = shift_percent
+            
+            # Apply random sign
+            magnitude = self.rng.choice([-1, 1]) * magnitude
             
             # Apply shift
             if shift_type == 'instant':

@@ -4186,7 +4186,9 @@ class RegressionFilter(EmptyTransformer):
 
 
 class LevelShiftMagic(EmptyTransformer):
-    """Detects and corrects for level shifts. May seriously alter trend.
+    """Detects and corrects for level shifts. May seriously skew trend.
+
+    May look small, but based on impact and filling a unsolved need, one of my most important contributions to time series tooling - Colin
 
     Args:
         window_size (int): size of rolling window for detection
@@ -4196,6 +4198,9 @@ class LevelShiftMagic(EmptyTransformer):
         alignment (str): method for aligning level shift magnitudes
         output (str): 'multivariate' (default, each series independent) or 'univariate' 
             (detect shared level shifts across series)
+        remove_at_shift (bool): if True, remove data points at detected level shifts and fill gaps
+        shift_remove_window (int): number of points to remove on each side of shift point (0, 1, or 2)
+        shift_fillna (str): fillna method to use for gaps created by shift removal
     """
 
     def __init__(
@@ -4206,6 +4211,9 @@ class LevelShiftMagic(EmptyTransformer):
         max_level_shifts: int = 20,
         alignment: str = "average",
         output: str = "multivariate",
+        remove_at_shift: bool = False,
+        shift_remove_window: int = 0,
+        shift_fillna: str = "linear",
         **kwargs,
     ):
         super().__init__(name="LevelShiftMagic")
@@ -4215,10 +4223,17 @@ class LevelShiftMagic(EmptyTransformer):
         self.max_level_shifts = max_level_shifts
         self.alignment = alignment
         self.output = output
+        self.remove_at_shift = remove_at_shift
+        self.shift_remove_window = shift_remove_window
+        self.shift_fillna = shift_fillna
         
         if output not in ['multivariate', 'univariate']:
             raise ValueError(
                 f"output must be 'multivariate' or 'univariate', got '{output}'"
+            )
+        if shift_remove_window not in [0, 1, 2]:
+            raise ValueError(
+                f"shift_remove_window must be 0, 1, or 2, got {shift_remove_window}"
             )
 
     @staticmethod
@@ -4250,6 +4265,14 @@ class LevelShiftMagic(EmptyTransformer):
             )[0],
             "output": random.choices(
                 ['multivariate', 'univariate'], [0.8, 0.2]
+            )[0],
+            "remove_at_shift": random.choices(
+                [True, False], [0.4, 0.6]
+            )[0],
+            "shift_remove_window": random.choice([0, 1, 2]),
+            "shift_fillna": random.choices(
+                ['linear', 'ffill', 'mean', 'cubic', 'quadratic'],
+                [0.4, 0.2, 0.1, 0.2, 0.1]
             )[0],
         }
 
@@ -4334,10 +4357,39 @@ class LevelShiftMagic(EmptyTransformer):
             curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
             count += 1
         
+        # Convert back to DataFrame for shift mask storage
+        max_mask = pd.DataFrame(max_mask_np, index=df.index, columns=df.columns)
+        
+        # Store the shift mask for later use in transform
+        self.shift_mask_ = max_mask.copy()
+        
+        # If remove_at_shift is enabled, create an expanded mask and apply fillna
+        if self.remove_at_shift:
+            # Expand the mask to include neighboring points
+            expanded_mask = max_mask.copy()
+            if self.shift_remove_window >= 1:
+                expanded_mask = expanded_mask | max_mask.shift(1).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | max_mask.shift(-1).fillna(False).astype(bool)
+            if self.shift_remove_window >= 2:
+                expanded_mask = expanded_mask | max_mask.shift(2).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | max_mask.shift(-2).fillna(False).astype(bool)
+            
+            # Create a copy of df with NaN at shift points
+            df_with_gaps = df.copy()
+            df_with_gaps[expanded_mask] = np.nan
+            
+            # Fill the gaps using FillNA
+            df_filled = FillNA(df_with_gaps, method=self.shift_fillna, window=10)
+            
+            # Use the filled data for alignment calculation
+            df_for_alignment = df_filled
+        else:
+            df_for_alignment = df
+        
         # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
         if self.alignment == "last_value":
             self.lvlshft = (
-                (df[max_mask] - df[max_mask.shift(1)].shift(-1))
+                (df_for_alignment[max_mask] - df_for_alignment[max_mask.shift(1)].shift(-1))
                 .fillna(0)
                 .loc[::-1]
                 .cumsum()[::-1]
@@ -4345,7 +4397,7 @@ class LevelShiftMagic(EmptyTransformer):
         elif self.alignment == "average":
             # average the two other approaches
             lvlshft1 = (
-                (df[max_mask] - df[max_mask.shift(1)].shift(-1))
+                (df_for_alignment[max_mask] - df_for_alignment[max_mask.shift(1)].shift(-1))
                 .fillna(0)
                 .loc[::-1]
                 .cumsum()[::-1]
@@ -4473,17 +4525,47 @@ class LevelShiftMagic(EmptyTransformer):
         # Convert back to DataFrame mask
         max_mask = pd.DataFrame(max_mask_np, index=agg_df.index, columns=agg_df.columns)
         
+        # Store the shift mask - broadcast to all series in univariate mode
+        self.shift_mask_ = pd.DataFrame(
+            np.broadcast_to(max_mask.values, (len(df), len(df.columns))),
+            index=df.index,
+            columns=df.columns
+        )
+        
+        # If remove_at_shift is enabled, create an expanded mask and apply fillna
+        if self.remove_at_shift:
+            # Expand the mask to include neighboring points
+            expanded_mask = max_mask.copy()
+            if self.shift_remove_window >= 1:
+                expanded_mask = expanded_mask | max_mask.shift(1).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | max_mask.shift(-1).fillna(False).astype(bool)
+            if self.shift_remove_window >= 2:
+                expanded_mask = expanded_mask | max_mask.shift(2).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | max_mask.shift(-2).fillna(False).astype(bool)
+            
+            # Create a copy of agg_df with NaN at shift points
+            agg_df_with_gaps = agg_df.copy()
+            agg_df_with_gaps[expanded_mask] = np.nan
+            
+            # Fill the gaps using FillNA
+            agg_df_filled = FillNA(agg_df_with_gaps, method=self.shift_fillna, window=10)
+            
+            # Use the filled data for alignment calculation
+            agg_df_for_alignment = agg_df_filled
+        else:
+            agg_df_for_alignment = agg_df
+        
         # Calculate level shift magnitudes on aggregate
         if self.alignment == "last_value":
             agg_lvlshft = (
-                (agg_df[max_mask] - agg_df[max_mask.shift(1)].shift(-1))
+                (agg_df_for_alignment[max_mask] - agg_df_for_alignment[max_mask.shift(1)].shift(-1))
                 .fillna(0)
                 .loc[::-1]
                 .cumsum()[::-1]
             )
         elif self.alignment == "average":
             lvlshft1 = (
-                (agg_df[max_mask] - agg_df[max_mask.shift(1)].shift(-1))
+                (agg_df_for_alignment[max_mask] - agg_df_for_alignment[max_mask.shift(1)].shift(-1))
                 .fillna(0)
                 .loc[::-1]
                 .cumsum()[::-1]
@@ -4543,6 +4625,24 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        # Apply shift removal and filling if enabled
+        if self.remove_at_shift and hasattr(self, 'shift_mask_'):
+            # Expand the mask to include neighboring points
+            expanded_mask = self.shift_mask_.reindex(index=df.index, columns=df.columns).fillna(False).astype(bool)
+            if self.shift_remove_window >= 1:
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(index=df.index, columns=df.columns).shift(1).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(index=df.index, columns=df.columns).shift(-1).fillna(False).astype(bool)
+            if self.shift_remove_window >= 2:
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(index=df.index, columns=df.columns).shift(2).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(index=df.index, columns=df.columns).shift(-2).fillna(False).astype(bool)
+            
+            # Create a copy of df with NaN at shift points
+            df_with_gaps = df.copy()
+            df_with_gaps[expanded_mask] = np.nan
+            
+            # Fill the gaps using FillNA
+            df = FillNA(df_with_gaps, method=self.shift_fillna, window=10)
+        
         return df - self.lvlshft.reindex(
             index=df.index, columns=df.columns
         ).bfill().fillna(0)
@@ -4565,6 +4665,49 @@ class LevelShiftMagic(EmptyTransformer):
         """
         self.fit(df)
         return self.transform(df)
+    
+    def extract_level_shift_dates(self, df=None):
+        """Extract detected level shift dates and magnitudes.
+        
+        This utility method extracts the exact dates and magnitudes of detected
+        level shifts from the fitted lvlshft component by finding where the
+        cumulative shift changes (via diff).
+        
+        Args:
+            df (pandas.DataFrame, optional): DataFrame with same index/columns as fitted data.
+                If None, uses the index from lvlshft.
+        
+        Returns:
+            dict: Dictionary mapping column names to lists of dicts with keys:
+                - 'date': pd.Timestamp of the level shift
+                - 'magnitude': float magnitude of the shift
+        
+        Example:
+            >>> lsm = LevelShiftMagic()
+            >>> lsm.fit(df)
+            >>> shifts = lsm.extract_level_shift_dates()
+            >>> shifts['series1']
+            [{'date': Timestamp('2020-01-15'), 'magnitude': 2.5}, ...]
+        """
+        if not hasattr(self, 'lvlshft'):
+            raise ValueError("Model must be fitted before extracting level shift dates")
+        
+        lvlshft = self.lvlshft
+        if df is not None:
+            lvlshft = lvlshft.reindex(df.index, columns=df.columns).fillna(0.0)
+        
+        # Find where the cumulative shift changes (these are the actual shift points)
+        diff = lvlshft.diff().fillna(0.0)
+        
+        candidates = {}
+        for col in lvlshft.columns:
+            col_diff = diff[col]
+            entries = []
+            for date, magnitude in col_diff[col_diff != 0].items():
+                entries.append({'date': pd.Timestamp(date), 'magnitude': float(magnitude)})
+            candidates[col] = entries
+        
+        return candidates
 
 
 LevelShiftTransformer = LevelShiftMagic

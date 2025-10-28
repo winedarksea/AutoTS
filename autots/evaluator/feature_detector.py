@@ -1190,14 +1190,8 @@ class TimeSeriesFeatureDetector:
         self.level_shift_detector = LevelShiftMagic(**self.level_shift_params)
         self.level_shift_detector.fit(residual_df)
         lvlshft = self.level_shift_detector.lvlshft.reindex(residual_df.index).fillna(0.0)
-        diff = lvlshft.diff().fillna(0.0)
-        candidates = {}
-        for col in residual_df.columns:
-            col_diff = diff[col]
-            entries = []
-            for date, magnitude in col_diff[col_diff != 0].items():
-                entries.append({'date': pd.Timestamp(date), 'magnitude': float(magnitude)})
-            candidates[col] = entries
+        # Use the new utility method to extract level shift dates and magnitudes
+        candidates = self.level_shift_detector.extract_level_shift_dates(residual_df)
         return lvlshft, candidates
 
     def _validate_level_shifts(self, residual_df, lvlshft, candidates):
