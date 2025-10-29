@@ -555,6 +555,19 @@ def plot_feature_panels(
         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
     )
 
+    # Add AutoTS watermark in bottom right
+    fig.text(
+        0.98,
+        0.01,
+        "AutoTS",
+        ha='right',
+        va='bottom',
+        fontsize=8,
+        alpha=0.4,
+        style='italic',
+        color='gray',
+    )
+
     plt.tight_layout(rect=[0, 0.04, 1, 0.97])
 
     if save_path:

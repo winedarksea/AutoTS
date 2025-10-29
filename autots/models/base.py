@@ -531,6 +531,8 @@ class PredictionObject(object):
         vline=None,
         colors=None,
         include_bounds=True,
+        plot_grid=False,  # if part of plot_grid
+        dpi=None,  # allow override
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -548,6 +550,7 @@ class PredictionObject(object):
             title (str): title
             title_substring (str): additional title details to pass to existing, moves series name to axis
             include_bounds (bool): if True, shows region of upper and lower forecasts
+            dpi (int): dots per inch for figure resolution (default: 100 for display, 150+ for publication)
             **kwargs passed to pd.DataFrame.plot()
         """
         if start_date == "auto":
@@ -578,7 +581,7 @@ class PredictionObject(object):
                 'low_forecast': '#A5ADAF',
                 'up_forecast': '#A5ADAF',
                 'forecast': '#003399',  # '#4D4DFF',
-                'actuals': '#AFDBF5',
+                'actuals': '#1E88E5',  # Improved contrast from #AFDBF5
             }
         if title is None:
             title_prelim = extract_single_series_from_horz(
@@ -595,6 +598,10 @@ class PredictionObject(object):
         ax_param = plot_kwargs.pop('ax', None)
         user_color = plot_kwargs.pop('color', None)
         
+        # Set default linewidth for better visibility if not specified
+        if 'linewidth' not in plot_kwargs and 'lw' not in plot_kwargs:
+            plot_kwargs['linewidth'] = 1.5
+        
         # Determine band color with proper fallback
         if colors and 'low_forecast' in colors:
             band_color = colors['low_forecast']
@@ -603,6 +610,12 @@ class PredictionObject(object):
         
         # Determine which colors to pass: either the colors dict or None if user provided color kwarg
         colors_to_use = None if user_color else colors
+        
+        # Create new figure with DPI if ax not provided
+        if ax_param is None and not plot_grid:
+            fig_dpi = dpi if dpi is not None else 100
+            fig = plt.figure(dpi=fig_dpi)
+            ax_param = fig.add_subplot(111)
         
         ax = plot_forecast_with_intervals(
             plot_df,
@@ -620,20 +633,48 @@ class PredictionObject(object):
             color=user_color,
             **plot_kwargs,
         )
+        
+        # Professional styling improvements
+        ax.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.3, zorder=0)
+        ax.set_axisbelow(True)  # Grid behind data
+        
+        # Improve spine appearance
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.8)
+            spine.set_color('#333333')
+        
+        # Better tick formatting
+        ax.tick_params(axis='both', which='major', labelsize=9, length=4, width=0.8)
+        
         if vline is not None:
             ax.vlines(
                 x=vline,
                 ls='--',
-                lw=1,
+                lw=1.2,
                 colors='darkred',
                 ymin=plot_df.min().min(),
                 ymax=plot_df.max().max(),
+                alpha=0.7,
             )
             # ax.text(vline, plot_df.max().max(), "Event", color='darkred', verticalalignment='top')
         if title_substring is not None:
-            ax.set_ylabel(series)
-        # ax.grid(True, which="both", ls="--", linewidth=0.5)
-        # ax.legend(loc=loc)
+            ax.set_ylabel(series, fontsize=10)
+        
+        # Add AutoTS watermark if not part of plot_grid
+        if not plot_grid:
+            ax.text(
+                0.98,
+                0.02,
+                "AutoTS",
+                transform=ax.transAxes,
+                ha='right',
+                va='bottom',
+                fontsize=7,
+                alpha=0.08,
+                style='italic',
+                color='gray',
+            )
+        
         return ax
 
     def plot_components(
@@ -785,8 +826,13 @@ class PredictionObject(object):
         series=None,  # alias for above
         colors=None,
         include_bounds=True,
+        dpi=100,  # default DPI for grid plots
     ):
-        """Plots multiple series in a grid, if present. Mostly identical args to the single plot function."""
+        """Plots multiple series in a grid, if present. Mostly identical args to the single plot function.
+        
+        Args:
+            dpi (int): dots per inch for figure resolution (default: 100)
+        """
         import matplotlib.pyplot as plt
 
         if series is not None and cols is None:
@@ -804,7 +850,7 @@ class PredictionObject(object):
         else:
             nrow = 1
             ncol = 2
-        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, constrained_layout=True)
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, dpi=dpi, constrained_layout=True)
         fig.suptitle(title, fontsize='xx-large')
         count = 0
         if len(cols) != num_cols:
@@ -829,6 +875,7 @@ class PredictionObject(object):
                         start_date=start_date,
                         colors=colors,
                         include_bounds=include_bounds,
+                        plot_grid=True,
                         ax=ax,
                     )
                     count += 1
