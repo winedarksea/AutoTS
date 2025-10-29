@@ -5950,11 +5950,22 @@ def bkfilter_st(x, low=6, high=32, K=12, lanczos_factor=False):
 
 
 class BKBandpassFilter(EmptyTransformer):
-    """More complete implentation of Baxter King Bandpass Filter
+    """More complete implementation of Baxter King Bandpass Filter
     based off the successful but somewhat confusing statmodelsfilter transformer.
+    
+    The filter extracts cyclical components in the frequency band [low, high].
+    Requires minimum data length of 2*K+1 to operate.
 
     Args:
-        window (int): or None, the most recent n history to use for alignment
+        low (int): Lower bound of the frequency band (in periods). Must be > 0 and < high.
+        high (int): Upper bound of the frequency band (in periods). Must be > low.
+        K (int): Number of filter coefficients on each side (window size = 2*K+1).
+                 Larger K provides better frequency resolution but requires more data.
+        lanczos_factor (bool): Whether to apply Lanczos sigma factors for improved filter characteristics.
+        return_diff (bool): If True, returns the detrended series (original - cycles).
+                           If False, returns only the cyclical component.
+        on_transform (bool): Whether to apply filtering during transform().
+        on_inverse (bool): Whether to apply filtering during inverse_transform().
     """
 
     def __init__(
@@ -5962,8 +5973,8 @@ class BKBandpassFilter(EmptyTransformer):
         low: int = 6,
         high: int = 32,
         K: int = 1,
-        lanczos_factor: int = False,
-        return_diff: int = True,
+        lanczos_factor: bool = False,
+        return_diff: bool = True,
         on_transform: bool = True,
         on_inverse: bool = False,
         **kwargs,
@@ -5996,6 +6007,26 @@ class BKBandpassFilter(EmptyTransformer):
         return self
 
     def filter(self, df):
+        """Apply the Baxter-King bandpass filter.
+        
+        Args:
+            df (pandas.DataFrame): Input dataframe
+            
+        Returns:
+            pandas.DataFrame: Filtered dataframe
+            
+        Raises:
+            ValueError: If parameters are invalid or data is too short
+        """
+        # Validate parameters
+        if self.low <= 0:
+            raise ValueError(f"Parameter 'low' must be positive, got {self.low}")
+        if self.high <= self.low:
+            raise ValueError(f"Parameter 'high' ({self.high}) must be greater than 'low' ({self.low})")
+        if self.K < 1:
+            raise ValueError(f"Parameter 'K' must be at least 1, got {self.K}")
+
+        # Apply the filter
         cycles = bkfilter_st(
             np.asarray(df),
             low=self.low,

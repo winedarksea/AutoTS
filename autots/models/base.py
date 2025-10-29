@@ -1101,6 +1101,140 @@ class PredictionObject(object):
         )
         return self
 
+    def query_forecast(
+        self,
+        dates=None,
+        series=None,
+        include_bounds=False,
+        include_components=False,
+        return_json=False,
+    ):
+        """Query a specific slice of forecast results with minimal token usage.
+        
+        Designed for LLM-friendly output with compact representation.
+        
+        Args:
+            dates (str, datetime, list, slice): Date(s) to query.
+                - Single date: "2024-01-15" or datetime object
+                - Date range: slice("2024-01-01", "2024-01-31")
+                - List of dates: ["2024-01-15", "2024-01-20"]
+                - None: all dates
+            series (str, list): Series name(s) to query.
+                - Single series: "sales"
+                - Multiple series: ["sales", "revenue"]
+                - None: all series
+            include_bounds (bool): Include upper/lower forecast bounds
+            include_components (bool): Include component breakdown if available
+            return_json (bool): Return JSON string instead of dict
+            
+        Returns:
+            dict or str: Compact forecast data
+            
+        Examples:
+            >>> # Single series, single date
+            >>> pred.query_forecast(dates="2024-01-15", series="sales")
+            {'forecast': {'sales': {'2024-01-15': 123.45}}}
+            
+            >>> # Multiple series, date range with bounds
+            >>> pred.query_forecast(
+            ...     dates=slice("2024-01-01", "2024-01-07"),
+            ...     series=["sales", "revenue"],
+            ...     include_bounds=True
+            ... )
+        """
+        if not isinstance(self.forecast, pd.DataFrame):
+            raise ValueError("No forecast data available")
+        
+        # Handle series selection
+        if series is None:
+            selected_series = self.forecast.columns.tolist()
+        elif isinstance(series, str):
+            selected_series = [series]
+        else:
+            selected_series = list(series)
+        
+        # Validate series exist
+        missing = set(selected_series) - set(self.forecast.columns)
+        if missing:
+            raise ValueError(f"Series not found in forecast: {missing}")
+        
+        # Handle date selection
+        if dates is None:
+            date_slice = self.forecast.index
+        elif isinstance(dates, slice):
+            date_slice = self.forecast.loc[dates.start:dates.stop].index
+        elif isinstance(dates, (list, pd.Index)):
+            date_slice = pd.DatetimeIndex(dates)
+        else:
+            # Single date
+            date_slice = pd.DatetimeIndex([pd.to_datetime(dates)])
+        
+        # Build result dictionary
+        result = {
+            'model': self.model_name,
+            'prediction_interval': self.prediction_interval,
+        }
+        
+        # Extract forecast values
+        forecast_data = {}
+        for col in selected_series:
+            col_data = {}
+            for dt in date_slice:
+                if dt in self.forecast.index:
+                    val = self.forecast.loc[dt, col]
+                    # Convert to native Python type for JSON serialization
+                    col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+            forecast_data[col] = col_data
+        result['forecast'] = forecast_data
+        
+        # Add bounds if requested
+        if include_bounds:
+            if isinstance(self.upper_forecast, pd.DataFrame):
+                upper_data = {}
+                for col in selected_series:
+                    col_data = {}
+                    for dt in date_slice:
+                        if dt in self.upper_forecast.index:
+                            val = self.upper_forecast.loc[dt, col]
+                            col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                    upper_data[col] = col_data
+                result['upper_forecast'] = upper_data
+            
+            if isinstance(self.lower_forecast, pd.DataFrame):
+                lower_data = {}
+                for col in selected_series:
+                    col_data = {}
+                    for dt in date_slice:
+                        if dt in self.lower_forecast.index:
+                            val = self.lower_forecast.loc[dt, col]
+                            col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                    lower_data[col] = col_data
+                result['lower_forecast'] = lower_data
+        
+        # Add components if requested and available
+        if include_components and self.components is not None:
+            if isinstance(self.components, pd.DataFrame):
+                components_data = {}
+                for col in selected_series:
+                    if col in self.components.columns.get_level_values(0):
+                        col_components = {}
+                        comp_names = self.components[col].columns.tolist()
+                        for comp_name in comp_names:
+                            comp_data = {}
+                            for dt in date_slice:
+                                if dt in self.components.index:
+                                    val = self.components.loc[dt, (col, comp_name)]
+                                    comp_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                            col_components[comp_name] = comp_data
+                        components_data[col] = col_components
+                result['components'] = components_data
+        
+        if return_json:
+            import json
+            return json.dumps(result, indent=2)
+        
+        return result
+
 
 def stack_component_frames(component_frames):
     """Convert dict of component DataFrames into a unified MultiIndex DataFrame."""

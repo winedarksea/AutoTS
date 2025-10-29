@@ -125,6 +125,30 @@ ancient_roman = [
     '#EAE6DA',  # Carrara White Marble
 ]
 
+# grayscale palette useful for overlaying multiple simulation paths
+grays = [
+    "#838996",
+    "#c0c0c0",
+    "#dcdcdc",
+    "#a9a9a9",
+    "#808080",
+    "#989898",
+    "#757575",
+    "#696969",
+    "#c9c0bb",
+    "#c8c8c8",
+    "#323232",
+    "#e5e4e2",
+    "#778899",
+    "#4f666a",
+    "#848482",
+    "#414a4c",
+    "#8a7f80",
+    "#c4c3d0",
+    "#bebebe",
+    "#dbd7d2",
+]
+
 
 def create_seaborn_palette_from_cmap(cmap_name: str = "gist_rainbow", n: int = 10):
     """Return seaborn palette sampling the given matplotlib cmap."""
@@ -563,7 +587,7 @@ def plot_feature_panels(
         ha='right',
         va='bottom',
         fontsize=8,
-        alpha=0.4,
+        alpha=0.3,
         style='italic',
         color='gray',
     )
@@ -581,13 +605,145 @@ def plot_feature_panels(
     return fig
 
 
+def plot_risk_score_bar(
+    risk_data: pd.Series | np.ndarray,
+    index=None,
+    bar_color: str = "#6495ED",
+    bar_ylim: tuple | list | None = None,
+    title: str = "Risk Score",
+    ylabel: str = "Risk",
+    xlabel: str = "Forecast Horizon",
+    ax=None,
+    **bar_kwargs,
+):
+    """Plot risk scores as a bar chart.
+    
+    Utility function for plotting event risk or similar probability scores.
+    
+    Args:
+        risk_data: Series or array of risk scores to plot
+        index: x-axis values; if None, uses range or Series index
+        bar_color: color for bars
+        bar_ylim: y-axis limits as (min, max) or [min, max]
+        title: chart title
+        ylabel: y-axis label
+        xlabel: x-axis label
+        ax: matplotlib axis to plot on; if None, creates new subplot
+        **bar_kwargs: additional arguments passed to ax.bar()
+        
+    Returns:
+        matplotlib axis
+    """
+    if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
+        raise ImportError("matplotlib is required for plotting")
+    
+    if ax is None:
+        _, ax = plt.subplots()
+    
+    if isinstance(risk_data, pd.Series):
+        if index is None:
+            index = risk_data.index
+        values = risk_data.values
+    else:
+        values = np.asarray(risk_data)
+        if index is None:
+            index = np.arange(len(values))
+    
+    bar_kwargs_copy = dict(bar_kwargs)
+    if 'color' not in bar_kwargs_copy:
+        bar_kwargs_copy['color'] = bar_color
+    if 'width' not in bar_kwargs_copy:
+        bar_kwargs_copy['width'] = 0.6
+    
+    ax.bar(index, values, **bar_kwargs_copy)
+    
+    if bar_ylim is not None:
+        ax.set_ylim(bar_ylim)
+    
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    ax.set_title(title)
+    ax.set_facecolor("#f9f9f9")
+    ax.grid(axis="y", linestyle=":", alpha=0.3)
+    
+    # Rotate x-axis labels if they're datetime-like
+    if isinstance(index, pd.Index) and not index.is_numeric():
+        ax.tick_params(axis="x", rotation=45)
+    
+    return ax
+
+
+def plot_simulation_paths(
+    simulations: np.ndarray,
+    index=None,
+    colors: list | None = None,
+    alpha: float = 0.9,
+    linewidth: float = 1.2,
+    ax=None,
+    **plot_kwargs,
+):
+    """Plot multiple simulation/forecast paths.
+    
+    Utility for plotting Monte Carlo simulations, motif neighbors, or ensemble members.
+    
+    Args:
+        simulations: 2D array of shape (n_simulations, n_timesteps)
+        index: x-axis values; if None, uses range
+        colors: list of color strings for each path; if None, uses random grays
+        alpha: transparency for lines
+        linewidth: width of lines
+        ax: matplotlib axis to plot on; if None, creates new subplot
+        **plot_kwargs: additional arguments passed to ax.plot()
+        
+    Returns:
+        matplotlib axis
+    """
+    if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
+        raise ImportError("matplotlib is required for plotting")
+    
+    if ax is None:
+        _, ax = plt.subplots()
+    
+    simulations = np.asarray(simulations)
+    if simulations.ndim != 2:
+        raise ValueError(f"simulations must be 2D, got shape {simulations.shape}")
+    
+    n_sims, n_steps = simulations.shape
+    
+    if index is None:
+        index = np.arange(n_steps)
+    
+    if colors is None:
+        # Use random gray shades for simulation paths
+        import random
+        colors = random.choices(grays, k=n_sims)
+    
+    plot_kwargs_copy = dict(plot_kwargs)
+    if 'alpha' not in plot_kwargs_copy:
+        plot_kwargs_copy['alpha'] = alpha
+    if 'linewidth' not in plot_kwargs_copy:
+        plot_kwargs_copy['linewidth'] = linewidth
+    
+    for idx, series in enumerate(simulations):
+        color = colors[idx] if idx < len(colors) else colors[0]
+        ax.plot(index, series, color=color, **plot_kwargs_copy)
+    
+    ax.set_facecolor("#f7f7f7")
+    ax.grid(axis="y", linestyle="--", alpha=0.25)
+    
+    return ax
+
+
 __all__ = [
     'plot_feature_panels',
     'plot_distributions',
     'plot_forecast_with_intervals',
+    'plot_risk_score_bar',
+    'plot_simulation_paths',
     'create_seaborn_palette_from_cmap',
     'calculate_peak_density',
     'colors_list',
     'ancient_roman',
+    'grays',
     'HAS_MATPLOTLIB',
 ]

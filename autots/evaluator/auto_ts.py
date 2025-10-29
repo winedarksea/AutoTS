@@ -1007,21 +1007,33 @@ class AutoTS(object):
             "horizontal_ensemble_validation": horizontal_ensemble_validation,
         }
 
+    def best_model_str_val_results(self):
+        """Generate a readable string of validation results for the best model.
+        
+        Returns:
+            str: Formatted string containing validation results for key metrics (SMAPE, MAE, SPL)
+        """
+        try:
+            base_res = self.initial_results.model_results[
+                self.initial_results.model_results['ID'] == self.best_model_id
+            ]
+            res = ", ".join(base_res['smape'].astype(str).tolist())
+            res2 = ", ".join(base_res['mae'].astype(str).tolist())
+            res3 = ", ".join(base_res['spl'].astype(str).tolist())
+            len_list = list(range(base_res.shape[0]))
+            res_len = ", ".join([str(x) for x in len_list])
+            return f"Validation: {res_len}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
+        except Exception:
+            return "Validation results unavailable"
+
     def __repr__(self):
         """Print."""
         if self.best_model.empty:
             return "Uninitiated AutoTS object"
         else:
             try:
-                base_res = self.initial_results.model_results[
-                    self.initial_results.model_results['ID'] == self.best_model_id
-                ]
-                res = ", ".join(base_res['smape'].astype(str).tolist())
-                res2 = ", ".join(base_res['mae'].astype(str).tolist())
-                res3 = ", ".join(base_res['spl'].astype(str).tolist())
-                len_list = list(range(base_res.shape[0]))
-                res_len = ", ".join([str(x) for x in len_list])
-                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nValidation: {res_len}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
+                val_results = self.best_model_str_val_results()
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\n{val_results}"
             except Exception:
                 return "Initiated AutoTS object"
 
@@ -4467,6 +4479,20 @@ class AutoTS(object):
             ax2.tick_params(axis='y', labelcolor='red')
 
             plt.title(f'{col} Unpredictability Score')
+
+            # subtle watermark
+            ax2.text(
+                0.98,
+                0.02,
+                "AutoTS",
+                transform=ax2.transAxes,
+                ha='left',
+                va='bottom',
+                fontsize=7,
+                alpha=0.08,
+                style='italic',
+                color='gray',
+            )
 
             fig.legend(loc="upper right", bbox_to_anchor=(0.9, 0.9))
 

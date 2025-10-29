@@ -178,14 +178,8 @@ def dataframe_to_json(df: pd.DataFrame, data_format: str = "wide") -> dict:
 # ============================================================================
 # MCP Server Implementation
 # ============================================================================
-# TODO: expand constraint tools with more options (rolling constraints, conditional constraints)
 # TODO: add a forecast adjustment tool for specific date ranges (e.g., "increase growth by 2% for Q3 2026")
 # TODO: enhance component extraction for more model types (currently limited to Cassandra/TVVAR)
-# TODO: add prediction comparison tool (side-by-side comparison of multiple cached predictions)
-# TODO: add export tool (CSV, Excel, JSON file exports of predictions)
-# TODO: implement persistent cache (save predictions to disk across server restarts)
-# DONE: expose constraint tools via apply_constraints
-# DONE: make prediction objects available while keeping JSON flexibility via caching pattern
 
 if MCP_AVAILABLE:
     app = Server("autots")

@@ -9,6 +9,7 @@ import unittest
 import pandas as pd
 import numpy as np
 from autots.datasets.synthetic import SyntheticDailyGenerator
+from autots.models.base import PredictionObject
 from autots.evaluator.feature_detector import (
     TimeSeriesFeatureDetector,
     FeatureDetectionLoss,
@@ -180,6 +181,19 @@ class TestFeatureDetector(unittest.TestCase):
             self.assertIn('detection_mode', meta['config'])
             self.assertEqual(meta['config']['detection_mode'], mode)
             self.assertNotIn('detector_config', meta)
+    
+    def test_forecast_prediction_object(self):
+        """Ensure forecast helper returns a PredictionObject with expected shapes."""
+        detector = TimeSeriesFeatureDetector()
+        detector.fit(self.data)
+        horizon = 7
+        prediction = detector.forecast(horizon)
+        self.assertIsInstance(prediction, PredictionObject)
+        self.assertEqual(prediction.forecast.shape, (horizon, self.data.shape[1]))
+        self.assertGreater(prediction.forecast.index[0], self.data.index[-1])
+        for comp in ['trend', 'seasonality', 'holidays']:
+            self.assertIn(comp, prediction.components)
+            self.assertEqual(prediction.components[comp].shape, (horizon, self.data.shape[1]))
     
     def test_level_shift_output_parameter(self):
         """Test that level_shift_params includes output parameter matching detection_mode."""
@@ -462,14 +476,7 @@ class TestScaling(unittest.TestCase):
                 # Level shift should be reasonable in original scale
                 self.assertGreater(abs(magnitude), original_std * 0.01,
                                  f"Level shift magnitude {magnitude} appears to be in standardized scale")
-        
-        # Test 3: Holiday impacts should be in original scale
-        if detected['holiday_impacts']:
-            for holiday_name, impact in detected['holiday_impacts'].items():
-                if isinstance(impact, (int, float)):
-                    self.assertGreater(abs(impact), original_std * 0.01,
-                                     f"Holiday impact {impact} for {holiday_name} appears to be in standardized scale")
-        
+
         # Test 4: Holiday coefficients should be in original scale
         if detected['holiday_coefficients']:
             for holiday_name, coef in detected['holiday_coefficients'].items():

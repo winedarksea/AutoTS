@@ -8,6 +8,12 @@ import pandas as pd
 from autots.evaluator.auto_model import model_forecast, back_forecast
 from autots.evaluator.auto_ts import AutoTS
 from autots.models.model_list import all_result_path, diff_window_motif_list
+from autots.tools.plotting import (
+    plot_forecast_with_intervals,
+    plot_risk_score_bar,
+    plot_simulation_paths,
+    grays,
+)
 
 
 def extract_result_windows(forecasts, model_name=None):
@@ -765,33 +771,212 @@ class EventRiskForecast(object):
             index=train_df.index,
         )
 
+    def query_risk(
+        self,
+        dates=None,
+        series=None,
+        include_limits=True,
+        include_forecast=False,
+        historic=False,
+        return_json=False,
+    ):
+        """Query a specific slice of risk forecast results with minimal token usage.
+        
+        Designed for LLM-friendly output with compact representation.
+        
+        Args:
+            dates (str, datetime, list, slice): Date(s) to query.
+                - Single date: "2024-01-15" or datetime object
+                - Date range: slice("2024-01-01", "2024-01-31")
+                - List of dates: ["2024-01-15", "2024-01-20"]
+                - None: all dates
+            series (str, list): Series name(s) to query.
+                - Single series: "sales"
+                - Multiple series: ["sales", "revenue"]
+                - None: all series
+            include_limits (bool): Include the limit thresholds used
+            include_forecast (bool): Include the underlying forecast values
+            historic (bool): Query historic risk (from predict_historic) instead of forecast risk
+            return_json (bool): Return JSON string instead of dict
+            
+        Returns:
+            dict or str: Compact risk data
+            
+        Examples:
+            >>> # Single series, single date
+            >>> risk.query_risk(dates="2024-01-15", series="sales")
+            {'upper_risk': {'sales': {'2024-01-15': 0.05}}, 'lower_risk': {...}}
+            
+            >>> # Include limits and forecast
+            >>> risk.query_risk(
+            ...     dates=slice("2024-01-01", "2024-01-07"),
+            ...     series=["sales"],
+            ...     include_limits=True,
+            ...     include_forecast=True
+            ... )
+        """
+        # Determine which arrays to use
+        if historic:
+            upper_risk_df = pd.DataFrame(
+                self.historic_upper_risk_array,
+                columns=self.outcome_columns,
+                index=self.df_train.tail(
+                    self.historic_upper_risk_array.shape[0] if self.historic_upper_risk_array is not None else 0
+                ).index if self.historic_upper_risk_array is not None else None
+            ) if hasattr(self, 'historic_upper_risk_array') and self.historic_upper_risk_array is not None else None
+            
+            lower_risk_df = pd.DataFrame(
+                self.historic_lower_risk_array,
+                columns=self.outcome_columns,
+                index=self.df_train.tail(
+                    self.historic_lower_risk_array.shape[0] if self.historic_lower_risk_array is not None else 0
+                ).index if self.historic_lower_risk_array is not None else None
+            ) if hasattr(self, 'historic_lower_risk_array') and self.historic_lower_risk_array is not None else None
+            
+            upper_limit_df = pd.DataFrame(
+                self.historic_upper_limit_2d,
+                columns=self.outcome_columns,
+                index=upper_risk_df.index
+            ) if hasattr(self, 'historic_upper_limit_2d') and self.historic_upper_limit_2d is not None and upper_risk_df is not None else None
+            
+            lower_limit_df = pd.DataFrame(
+                self.historic_lower_limit_2d,
+                columns=self.outcome_columns,
+                index=lower_risk_df.index
+            ) if hasattr(self, 'historic_lower_limit_2d') and self.historic_lower_limit_2d is not None and lower_risk_df is not None else None
+        else:
+            upper_risk_df = pd.DataFrame(
+                self.upper_risk_array,
+                columns=self.outcome_columns,
+                index=self.outcome_index
+            ) if hasattr(self, 'upper_risk_array') and self.upper_risk_array is not None else None
+            
+            lower_risk_df = pd.DataFrame(
+                self.lower_risk_array,
+                columns=self.outcome_columns,
+                index=self.outcome_index
+            ) if hasattr(self, 'lower_risk_array') and self.lower_risk_array is not None else None
+            
+            upper_limit_df = pd.DataFrame(
+                self.upper_limit_2d,
+                columns=self.outcome_columns,
+                index=self.outcome_index
+            ) if hasattr(self, 'upper_limit_2d') and self.upper_limit_2d is not None else None
+            
+            lower_limit_df = pd.DataFrame(
+                self.lower_limit_2d,
+                columns=self.outcome_columns,
+                index=self.outcome_index
+            ) if hasattr(self, 'lower_limit_2d') and self.lower_limit_2d is not None else None
+        
+        # Validate we have some data
+        if upper_risk_df is None and lower_risk_df is None:
+            raise ValueError("No risk data available. Run predict() or predict_historic() first.")
+        
+        # Use first available for index reference
+        ref_df = upper_risk_df if upper_risk_df is not None else lower_risk_df
+        
+        # Handle series selection
+        if series is None:
+            selected_series = self.outcome_columns.tolist()
+        elif isinstance(series, str):
+            selected_series = [series]
+        else:
+            selected_series = list(series)
+        
+        # Validate series exist
+        missing = set(selected_series) - set(self.outcome_columns)
+        if missing:
+            raise ValueError(f"Series not found: {missing}")
+        
+        # Handle date selection
+        if dates is None:
+            date_slice = ref_df.index
+        elif isinstance(dates, slice):
+            date_slice = ref_df.loc[dates.start:dates.stop].index
+        elif isinstance(dates, (list, pd.Index)):
+            date_slice = pd.DatetimeIndex(dates)
+        else:
+            # Single date
+            date_slice = pd.DatetimeIndex([pd.to_datetime(dates)])
+        
+        # Build result dictionary
+        result = {
+            'model': self.model_name,
+            'type': 'historic_risk' if historic else 'forecast_risk',
+        }
+        
+        # Extract upper risk values
+        if upper_risk_df is not None:
+            upper_risk_data = {}
+            for col in selected_series:
+                col_data = {}
+                for dt in date_slice:
+                    if dt in upper_risk_df.index:
+                        val = upper_risk_df.loc[dt, col]
+                        col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                upper_risk_data[col] = col_data
+            result['upper_risk'] = upper_risk_data
+        
+        # Extract lower risk values
+        if lower_risk_df is not None:
+            lower_risk_data = {}
+            for col in selected_series:
+                col_data = {}
+                for dt in date_slice:
+                    if dt in lower_risk_df.index:
+                        val = lower_risk_df.loc[dt, col]
+                        col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                lower_risk_data[col] = col_data
+            result['lower_risk'] = lower_risk_data
+        
+        # Add limits if requested
+        if include_limits:
+            if upper_limit_df is not None:
+                upper_limit_data = {}
+                for col in selected_series:
+                    col_data = {}
+                    for dt in date_slice:
+                        if dt in upper_limit_df.index:
+                            val = upper_limit_df.loc[dt, col]
+                            col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                    upper_limit_data[col] = col_data
+                result['upper_limit'] = upper_limit_data
+            
+            if lower_limit_df is not None:
+                lower_limit_data = {}
+                for col in selected_series:
+                    col_data = {}
+                    for dt in date_slice:
+                        if dt in lower_limit_df.index:
+                            val = lower_limit_df.loc[dt, col]
+                            col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                    lower_limit_data[col] = col_data
+                result['lower_limit'] = lower_limit_data
+        
+        # Add forecast if requested
+        if include_forecast and hasattr(self, 'forecast_df') and self.forecast_df is not None:
+            forecast_data = {}
+            for col in selected_series:
+                col_data = {}
+                for dt in date_slice:
+                    if dt in self.forecast_df.index:
+                        val = self.forecast_df.loc[dt, col]
+                        col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                forecast_data[col] = col_data
+            result['forecast'] = forecast_data
+        
+        if return_json:
+            import json
+            return json.dumps(result, indent=2)
+        
+        return result
+
     def plot(
         self,
         column_idx=0,
         column=None,
-        grays=[
-            "#838996",
-            "#c0c0c0",
-            "#dcdcdc",
-            "#a9a9a9",
-            "#808080",
-            "#989898",
-            "#808080",
-            "#757575",
-            "#696969",
-            "#c9c0bb",
-            "#c8c8c8",
-            "#323232",
-            "#e5e4e2",
-            "#778899",
-            "#4f666a",
-            "#848482",
-            "#414a4c",
-            "#8a7f80",
-            "#c4c3d0",
-            "#bebebe",
-            "#dbd7d2",
-        ],
+        grays=grays,
         up_low_color=["#ff4500", "#ff5349"],
         bar_color="#6495ED",
         bar_ylim=[0.0, 0.5],
@@ -857,9 +1042,17 @@ class EventRiskForecast(object):
             nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=figsize
         )
         fig.suptitle(f"{column_name} Event Risk Forecasting")
+        
+        # Plot simulation paths using utility function
         colors = random.choices(grays, k=simulations.shape[0])
-        for idx, series in enumerate(simulations):
-            ax1.plot(horizon_index, series, color=colors[idx], linewidth=1.2, alpha=0.9)
+        plot_simulation_paths(
+            simulations, 
+            index=horizon_index, 
+            colors=colors, 
+            alpha=0.9, 
+            linewidth=1.2, 
+            ax=ax1
+        )
 
         upper_color = up_low_color[0] if len(up_low_color) >= 1 else "#ff4500"
         lower_color = up_low_color[1] if len(up_low_color) >= 2 else up_low_color[0]
@@ -898,15 +1091,19 @@ class EventRiskForecast(object):
         except Exception:
             low_risk = np.zeros(horizon_length)
         risk_total = up_risk + low_risk
-        ax2.bar(horizon_index, risk_total, color=bar_color, width=0.6)
-        ax2.set_ylim(bar_ylim)
-        ax2.set_ylabel("Combined Risk")
-        ax2.set_xlabel("Forecast Horizon")
-        ax2.set_title("Combined Risk Score")
-        ax2.set_facecolor("#f9f9f9")
-        ax2.grid(axis="y", linestyle=":", alpha=0.3)
-        if isinstance(horizon_index, pd.Index) and not horizon_index.is_numeric():
-            ax2.tick_params(axis="x", rotation=45)
+        
+        # Plot risk score using utility function
+        plot_risk_score_bar(
+            risk_total,
+            index=horizon_index,
+            bar_color=bar_color,
+            bar_ylim=bar_ylim,
+            title="Combined Risk Score",
+            ylabel="Combined Risk",
+            xlabel="Forecast Horizon",
+            ax=ax2,
+        )
+        
         fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     def plot_eval(
@@ -949,26 +1146,42 @@ class EventRiskForecast(object):
             self.lower_risk_array if lower_risk_array is None else lower_risk_array
         )
         col = self.outcome_columns[column_idx]
-        plot_df = df_test[col].to_frame()
+        
         fig, (ax1, ax2) = plt.subplots(
             nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=figsize
         )
         fig.suptitle(f'{col} Event Risk Forecasting Evaluation')
-        # index=pd.date_range("2022-01-01", periods=result_windows.shape[1], freq="D")
+        
+        # Prepare data for plotting
+        plot_df = df_test[col].to_frame()
         if lower_limit_2d is not None:
-            plot_df['lower_limit'] = lower_limit_2d[
-                :, column_idx
-            ]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
-        else:
-            plot_df['lower_limit'] = np.nan
+            plot_df['lower_limit'] = lower_limit_2d[:, column_idx]
         if upper_limit_2d is not None:
-            plot_df['upper_limt'] = upper_limit_2d[
-                :, column_idx
-            ]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
-        else:
-            plot_df['upper_limt'] = np.nan
-        colors = actuals_color + up_low_color
-        plot_df.plot(color=colors, ax=ax1, legend=False)
+            plot_df['upper_limit'] = upper_limit_2d[:, column_idx]
+        
+        # Use plot_forecast_with_intervals for the top panel
+        # Map colors: actuals get first color, limits get up_low_color
+        color_map = {col: actuals_color[0] if actuals_color else '#00BFFF'}
+        lower_color = up_low_color[1] if len(up_low_color) >= 2 else up_low_color[0]
+        upper_color = up_low_color[0] if len(up_low_color) >= 1 else "#ff4500"
+        
+        if 'lower_limit' in plot_df.columns:
+            color_map['lower_limit'] = lower_color
+        if 'upper_limit' in plot_df.columns:
+            color_map['upper_limit'] = upper_color
+        
+        plot_forecast_with_intervals(
+            plot_df,
+            actual_col=col,
+            forecast_col=None,  # No forecast, just actuals
+            lower_col='lower_limit' if 'lower_limit' in plot_df.columns else None,
+            upper_col='upper_limit' if 'upper_limit' in plot_df.columns else None,
+            title=None,  # Title set on fig
+            colors=color_map,
+            include_bounds=False,  # We'll plot limits as lines, not bands
+            ax=ax1,
+        )
+        
         # handle one being None
         try:
             up_risk = upper_risk_array[:, column_idx]
@@ -978,12 +1191,18 @@ class EventRiskForecast(object):
             low_risk = lower_risk_array[:, column_idx]
         except Exception:
             low_risk = 0
-        plot_df["upper & lower risk"] = up_risk + low_risk
-        plot_df["upper & lower risk"].plot(
-            kind="bar",
-            xticks=[],
+        
+        risk_total = up_risk + low_risk
+        plot_risk_score_bar(
+            risk_total,
+            index=plot_df.index,
+            bar_color=bar_color,
+            bar_ylim=bar_ylim,
             title="Risk Score",
+            ylabel="upper & lower risk",
+            xlabel="",
             ax=ax2,
-            color=bar_color,
-            ylim=bar_ylim,
         )
+        # Remove x-tick labels for consistency with original
+        ax2.set_xticks([])
+
