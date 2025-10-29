@@ -42,22 +42,89 @@ except Exception:
 # Custom Loss Functions Only - Dataset creation now uses window_maker
 
 
+def build_series_feature_mapping(feature_columns, series_names, changepoint_features_cols):
+    """
+    Build a mapping from series index to their corresponding feature column indices.
+    
+    This handles per-series changepoint features where each series has its own set
+    of changepoint features (e.g., 'SeriesA_basic_changepoint_1', 'SeriesB_basic_changepoint_1').
+    
+    Args:
+        feature_columns: All feature column names
+        series_names: List of series names in order
+        changepoint_features_cols: Changepoint feature column names
+        
+    Returns:
+        tuple: (series_feat_mapping, has_per_series_features)
+            - series_feat_mapping: dict mapping series_idx -> list of feature column indices
+            - has_per_series_features: bool indicating if per-series features were detected
+    """
+    if len(changepoint_features_cols) == 0:
+        return None, False
+    
+    # Check if we have per-series changepoint features
+    # Per-series features have pattern: {series_name}_{method}_changepoint_{num}
+    has_per_series = any(
+        any(str(col).startswith(f"{series_name}_") for series_name in series_names)
+        for col in changepoint_features_cols
+    )
+    
+    if not has_per_series:
+        return None, False
+    
+    # Build the mapping
+    series_feat_mapping = {}
+    feature_columns_list = list(feature_columns)
+    
+    for series_idx, series_name in enumerate(series_names):
+        # Find all feature columns for this series
+        # Includes: date features (shared), series-specific changepoint features, series-specific naive features
+        series_feature_indices = []
+        
+        for feat_idx, feat_col in enumerate(feature_columns_list):
+            feat_col_str = str(feat_col)
+            
+            # Include if it's a shared feature (doesn't start with any series name)
+            is_shared = not any(
+                feat_col_str.startswith(f"{sname}_") 
+                for sname in series_names
+            )
+            
+            # Or if it's specific to this series
+            is_series_specific = feat_col_str.startswith(f"{series_name}_")
+            
+            # Include naive features for this series
+            is_naive_for_series = feat_col_str == f"naive_last_{series_name}"
+            
+            if is_shared or is_series_specific or is_naive_for_series:
+                series_feature_indices.append(feat_idx)
+        
+        series_feat_mapping[series_idx] = series_feature_indices
+    
+    return series_feat_mapping, True
+
+
 def create_training_windows(
     y_train_scaled, 
     train_feats_scaled, 
     context_length, 
     max_windows=50000, 
-    random_seed=2023
+    random_seed=2023,
+    series_feat_mapping=None,
+    series_names=None
 ):
     """
     Efficient shared function to create training windows for both MambaSSM and pMLP.
     
     Args:
         y_train_scaled: Scaled time series data (n_timesteps, n_series)
-        train_feats_scaled: Scaled feature data (n_timesteps, n_features)  
+        train_feats_scaled: Scaled feature data (n_timesteps, n_features) or 
+                           dict mapping series names to (n_timesteps, n_features_per_series)
         context_length: Length of context window
         max_windows: Maximum number of windows to generate
         random_seed: Random seed for sampling
+        series_feat_mapping: Optional dict mapping series index to feature column indices
+        series_names: Optional list of series names (for per-series features)
         
     Returns:
         tuple: (X_data, Y_data) where X_data has shape (n_windows, context_length, 1+n_features)
@@ -69,43 +136,104 @@ def create_training_windows(
     
     # Use numpy for efficient window generation via stride tricks
     y_windows = sliding_window_view(y_train_scaled, context_length + 1, axis=0)
-    feat_windows = sliding_window_view(train_feats_scaled, context_length, axis=0) 
     
-    # Flatten across all series and time windows
-    num_windows_per_series = y_windows.shape[0]
-    total_windows = num_windows_per_series * y_train_scaled.shape[1]
-    
-    # Sample windows if we exceed max_windows
-    if total_windows > max_windows:
-        rng = np.random.default_rng(random_seed)
-        selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
-    else:
-        selected_indices = np.arange(total_windows)
+    # Handle per-series features
+    if series_feat_mapping is not None and series_names is not None:
+        # Per-series features: each series has its own set of feature columns
+        num_windows_per_series = y_windows.shape[0]
+        total_windows = num_windows_per_series * y_train_scaled.shape[1]
         
-    # Generate training samples efficiently using vectorized operations
-    num_features = train_feats_scaled.shape[1]
-    
-    # Vectorized index calculations (much faster than Python loop)
-    series_indices = selected_indices % y_train_scaled.shape[1]
-    window_indices = selected_indices // y_train_scaled.shape[1]
-    
-    # Pre-allocate output arrays
-    X_data = np.empty((len(selected_indices), context_length, 1 + num_features), dtype=np.float32)
-    Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
-    
-    # Vectorized data extraction using advanced indexing
-    # Time series values: y_windows[window_indices, series_indices, :context_length]
-    X_data[:, :, 0] = y_windows[window_indices, series_indices, :context_length]
-    
-    # Feature values: broadcast feat_windows across all selected samples
-    # feat_windows[window_indices] has shape (n_samples, n_features, context_length)
-    # We need (n_samples, context_length, n_features) so transpose the last two dimensions
-    X_data[:, :, 1:] = feat_windows[window_indices].transpose(0, 2, 1)
-    
-    # Target values: y_windows[window_indices, series_indices, context_length]
-    Y_data[:, 0] = y_windows[window_indices, series_indices, context_length]
+        # Sample windows if needed
+        if total_windows > max_windows:
+            rng = np.random.default_rng(random_seed)
+            selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
+        else:
+            selected_indices = np.arange(total_windows)
+        
+        # Calculate series and window indices
+        series_indices = selected_indices % y_train_scaled.shape[1]
+        window_indices = selected_indices // y_train_scaled.shape[1]
+        
+        # Determine max features across all series
+        max_feats = max(len(feat_cols) for feat_cols in series_feat_mapping.values())
 
-    return X_data, Y_data
+        # Pre-allocate output arrays
+        X_data = np.zeros((len(selected_indices), context_length, 1 + max_feats), dtype=np.float32)
+        Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
+
+        # Cache feature windows once; avoid recomputing per series
+        feat_windows_all = (
+            sliding_window_view(train_feats_scaled, context_length, axis=0)
+            if train_feats_scaled.shape[1] > 0
+            else None
+        )
+
+        # Process each unique series to minimize feature extraction overhead
+        for series_idx in range(y_train_scaled.shape[1]):
+            # Find all samples for this series
+            mask = series_indices == series_idx
+            if not np.any(mask):
+                continue
+                
+            series_window_indices = window_indices[mask]
+            
+            # Extract y values for this series
+            X_data[mask, :, 0] = y_windows[series_window_indices, series_idx, :context_length]
+            Y_data[mask, 0] = y_windows[series_window_indices, series_idx, context_length]
+            
+            # Extract series-specific features
+            series_name = series_names[series_idx]
+            feat_cols = series_feat_mapping.get(series_idx, [])
+            
+            if len(feat_cols) > 0:
+                if feat_windows_all is None:
+                    continue
+                # Assign to X_data (features start at index 1)
+                # feat_windows_all shape: (n_windows, n_features, context_length)
+                # We need: (n_windows, context_length, n_features)
+                series_feat_windows = feat_windows_all[series_window_indices][:, feat_cols, :]
+                X_data[mask, :, 1:1+len(feat_cols)] = series_feat_windows.transpose(0, 2, 1)
+        
+        return X_data, Y_data
+    else:
+        # Original path: shared features across all series
+        feat_windows = sliding_window_view(train_feats_scaled, context_length, axis=0) 
+        
+        # Flatten across all series and time windows
+        num_windows_per_series = y_windows.shape[0]
+        total_windows = num_windows_per_series * y_train_scaled.shape[1]
+        
+        # Sample windows if we exceed max_windows
+        if total_windows > max_windows:
+            rng = np.random.default_rng(random_seed)
+            selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
+        else:
+            selected_indices = np.arange(total_windows)
+            
+        # Generate training samples efficiently using vectorized operations
+        num_features = train_feats_scaled.shape[1]
+        
+        # Vectorized index calculations (much faster than Python loop)
+        series_indices = selected_indices % y_train_scaled.shape[1]
+        window_indices = selected_indices // y_train_scaled.shape[1]
+        
+        # Pre-allocate output arrays
+        X_data = np.empty((len(selected_indices), context_length, 1 + num_features), dtype=np.float32)
+        Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
+        
+        # Vectorized data extraction using advanced indexing
+        # Time series values: y_windows[window_indices, series_indices, :context_length]
+        X_data[:, :, 0] = y_windows[window_indices, series_indices, :context_length]
+        
+        # Feature values: broadcast feat_windows across all selected samples
+        # feat_windows[window_indices] has shape (n_samples, n_features, context_length)
+        # We need (n_samples, context_length, n_features) so transpose the last two dimensions
+        X_data[:, :, 1:] = feat_windows[window_indices].transpose(0, 2, 1)
+        
+        # Target values: y_windows[window_indices, series_indices, context_length]
+        Y_data[:, 0] = y_windows[window_indices, series_indices, context_length]
+
+        return X_data, Y_data
 
 
 class CombinedNLLWassersteinLoss(Module):
@@ -166,16 +294,17 @@ class QuantileLoss(Module):
         """
         # Convert Gaussian params to quantiles
         sigma = torch.clamp(sigma, min=1e-6)
-        losses = []
-        q_tensor = torch.tensor(self.quantiles, device=mu.device, dtype=mu.dtype)
-        for q in self.quantiles:
-            # Convert quantile to standard normal quantile
-            z_q = torch.erfinv(torch.tensor(2 * q - 1, device=mu.device, dtype=mu.dtype)) * np.sqrt(2)
-            q_pred = mu + sigma * z_q
-            error = y_true - q_pred
-            loss_q = torch.max(torch.tensor(q, device=mu.device, dtype=mu.dtype) * error, (torch.tensor(q, device=mu.device, dtype=mu.dtype) - 1) * error)
-            losses.append(loss_q)
-        return torch.stack(losses).mean()
+        q_tensor = torch.as_tensor(self.quantiles, device=mu.device, dtype=mu.dtype)
+        z_tensor = torch.erfinv(q_tensor.mul(2).sub(1)) * np.sqrt(2)
+
+        mu_expanded = mu.unsqueeze(-1)
+        sigma_expanded = sigma.unsqueeze(-1)
+        y_expanded = y_true.unsqueeze(-1)
+
+        q_pred = mu_expanded + sigma_expanded * z_tensor
+        error = y_expanded - q_pred
+        losses = torch.maximum(q_tensor * error, (q_tensor - 1) * error)
+        return losses.mean()
 
 
 class CRPSLoss(Module):
@@ -241,27 +370,25 @@ class EnergyScore(Module):
         eps = torch.randn(self.n_samples, *mu.shape, device=mu.device, dtype=mu.dtype)
         samples = mu.unsqueeze(0) + sigma.unsqueeze(0) * eps
 
+        # Flatten samples/targets for distance computations
+        samples_flat = samples.reshape(self.n_samples, -1)
+        target_flat = y_true.reshape(1, -1)
+
         # Energy score: E[||X - y||^β] - 0.5 * E[||X - X'||^β]
-        # where X, X' are independent samples from predicted distribution
+        distances = torch.norm(samples_flat - target_flat, dim=1)
+        if self.beta != 1.0:
+            distances = distances.pow(self.beta)
+        term1 = distances.mean()
 
-        # Term 1: Expected distance between samples and observations
-        if self.beta == 1.0:
-            term1 = torch.norm(samples - y_true.unsqueeze(0), dim=-1).mean(0)
+        pairwise_distances = torch.pdist(samples_flat, p=2)
+        if pairwise_distances.numel() == 0:
+            term2 = torch.tensor(0.0, device=mu.device, dtype=mu.dtype)
         else:
-            term1 = (
-                torch.norm(samples - y_true.unsqueeze(0), dim=-1).pow(self.beta).mean(0)
-            )
+            if self.beta != 1.0:
+                pairwise_distances = pairwise_distances.pow(self.beta)
+            term2 = 0.5 * pairwise_distances.mean()
 
-        # Term 2: Expected distance between sample pairs
-        if self.beta == 1.0:
-            # More efficient computation for β=1
-            pairwise_diffs = samples.unsqueeze(0) - samples.unsqueeze(1)
-            term2 = 0.5 * torch.norm(pairwise_diffs, dim=-1).mean()
-        else:
-            pairwise_diffs = samples.unsqueeze(0) - samples.unsqueeze(1)
-            term2 = 0.5 * torch.norm(pairwise_diffs, dim=-1).pow(self.beta).mean()
-
-        return (term1 - term2).mean()
+        return term1 - term2
 
 
 class RegularizedGaussianNLL(Module):
@@ -870,12 +997,6 @@ class MambaSSM(ModelObject):
         self.changepoint_features_columns = pd.Index([])
         self.naive_feature_columns = pd.Index([])
         self.naive_feature_values = None
-        self.changepoint_features_columns = pd.Index([])
-        self.naive_feature_columns = pd.Index([])
-        self.naive_feature_values = None
-        self.changepoint_features_columns = pd.Index([])
-        self.naive_feature_columns = pd.Index([])
-        self.naive_feature_values = None
 
     def _get_loss_function(self):
         """Create the appropriate loss function based on the loss_function parameter."""
@@ -1011,17 +1132,34 @@ class MambaSSM(ModelObject):
         self.feature_scaler = StandardScaler()
         train_feats_scaled = self.feature_scaler.fit_transform(feat_df_train.values)
 
-        # 4. Create training windows using shared efficient function
+        # 4. Build per-series feature mapping if needed
+        series_names = list(df.columns)
+        series_feat_mapping, has_per_series = build_series_feature_mapping(
+            self.feature_columns, 
+            series_names,
+            self.changepoint_features_columns
+        )
+        self.series_feat_mapping = series_feat_mapping
+        self.has_per_series_features = has_per_series
+        
+        # 4b. Create training windows using shared efficient function
         X_data, Y_data = create_training_windows(
             y_train_scaled, 
             train_feats_scaled, 
             self.context_length, 
             max_windows=50000,
-            random_seed=self.random_seed
+            random_seed=self.random_seed,
+            series_feat_mapping=series_feat_mapping,
+            series_names=series_names if has_per_series else None
         )
 
         # 5. Torch plumbing
-        num_features = train_feats_scaled.shape[1]
+        # Account for potentially different feature dimensions per series
+        if has_per_series:
+            # Use max features across all series
+            num_features = X_data.shape[2] - 1  # Subtract 1 for the y value
+        else:
+            num_features = train_feats_scaled.shape[1]
         input_dim = 1 + num_features
         self.model = MambaCore(
             input_dim,
@@ -1178,35 +1316,93 @@ class MambaSSM(ModelObject):
             (forecast_length, num_series), dtype=np.float32
         )
 
-        # 4. Roll forward
+        # 4. Roll forward with per-series feature support
         with torch.no_grad():
-            # Pre-allocate broadcast tensor shape to avoid repeated allocations
-            feat_broadcast_shape = (num_series, self.context_length, ctx_feat.shape[1])
+            if getattr(self, 'has_per_series_features', False):
+                # Per-series features: process each series individually
+                series_names = list(self.df_train.columns)
+                
+                # Determine the max feature dimension used during training
+                # This should match what was used in create_training_windows
+                max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
+                
+                for series_idx in range(num_series):
+                    if self.verbose and series_idx % 10 == 0:
+                        print(f"Predicting series {series_idx+1}/{num_series}")
+                    
+                    # Get feature indices for this series
+                    feat_indices = self.series_feat_mapping.get(series_idx, [])
+                    
+                    # Initialize context for this series
+                    series_ctx_ts = ctx_ts[:, series_idx].unsqueeze(1)  # (context_length, 1)
+                    
+                    # Extract features for this series from the full feature array
+                    series_ctx_feat_full = ctx_feat_np[:, feat_indices]  # (context_length, n_feats_for_series)
+                    
+                    # Pad to match model input dimension if needed
+                    if len(feat_indices) < max_feats_from_mapping:
+                        pad_size = max_feats_from_mapping - len(feat_indices)
+                        padding = np.zeros((self.context_length, pad_size), dtype=np.float32)
+                        series_ctx_feat_full = np.concatenate([series_ctx_feat_full, padding], axis=1)
+                    
+                    series_ctx_feat = torch.tensor(series_ctx_feat_full, device=self.device, dtype=torch.float32)
+                    
+                    for step in range(forecast_length):
+                        # Build model input for this series
+                        model_in = torch.cat([series_ctx_ts, series_ctx_feat], dim=-1).unsqueeze(0)
+                        mu, sigma = self.model(model_in)
+                        
+                        # Extract prediction
+                        mu_next = mu[0, -1, 0]
+                        sigma_next = sigma[0, -1, 0]
+                        
+                        # Store predictions
+                        forecast_mu_scaled[step, series_idx] = mu_next.cpu().numpy()
+                        forecast_sigma_scaled[step, series_idx] = sigma_next.cpu().numpy()
+                        
+                        # Update context
+                        series_ctx_ts = torch.cat([series_ctx_ts[1:], mu_next.unsqueeze(0).unsqueeze(1)], dim=0)
+                        
+                        # Update features for next step
+                        next_feat_full = future_feats_scaled[step, feat_indices]
+                        
+                        # Pad if needed
+                        if len(feat_indices) < max_feats_from_mapping:
+                            pad_size = max_feats_from_mapping - len(feat_indices)
+                            padding = np.zeros(pad_size, dtype=np.float32)
+                            next_feat_full = np.concatenate([next_feat_full, padding])
+                        
+                        next_feat_tensor = torch.tensor(next_feat_full, device=self.device, dtype=torch.float32)
+                        series_ctx_feat = torch.cat([series_ctx_feat[1:], next_feat_tensor.unsqueeze(0)], dim=0)
+            else:
+                # Original path: shared features across all series
+                # Pre-allocate broadcast tensor shape to avoid repeated allocations
+                feat_broadcast_shape = (num_series, self.context_length, ctx_feat.shape[1])
 
-            for step in range(forecast_length):
-                if self.verbose and step % self.prediction_batch_size == 0:
-                    print(f"Predicting step {step+1}/{forecast_length}")
+                for step in range(forecast_length):
+                    if self.verbose and step % self.prediction_batch_size == 0:
+                        print(f"Predicting step {step+1}/{forecast_length}")
 
-                # More efficient broadcasting without repeat()
-                feat_broadcast = ctx_feat.unsqueeze(0).expand(feat_broadcast_shape)
-                model_in = torch.cat([ctx_ts.T.unsqueeze(-1), feat_broadcast], dim=-1)
-                mu, sigma = self.model(model_in)
+                    # More efficient broadcasting without repeat()
+                    feat_broadcast = ctx_feat.unsqueeze(0).expand(feat_broadcast_shape)
+                    model_in = torch.cat([ctx_ts.T.unsqueeze(-1), feat_broadcast], dim=-1)
+                    mu, sigma = self.model(model_in)
 
-                # Extract next predictions (already on correct device)
-                mu_next = mu[:, -1, 0]  # Remove unnecessary squeeze operations
-                sigma_next = sigma[:, -1, 0]
+                    # Extract next predictions (already on correct device)
+                    mu_next = mu[:, -1, 0]  # Remove unnecessary squeeze operations
+                    sigma_next = sigma[:, -1, 0]
 
-                # Store predictions (convert to numpy once)
-                forecast_mu_scaled[step] = mu_next.cpu().numpy()
-                forecast_sigma_scaled[step] = sigma_next.cpu().numpy()
+                    # Store predictions (convert to numpy once)
+                    forecast_mu_scaled[step] = mu_next.cpu().numpy()
+                    forecast_sigma_scaled[step] = sigma_next.cpu().numpy()
 
-                # Update context more efficiently
-                ctx_ts = torch.cat([ctx_ts[1:], mu_next.unsqueeze(0)], dim=0)
-                # Update features by shifting and replacing last element
-                ctx_feat[:-1] = ctx_feat[1:]
-                ctx_feat[-1] = torch.tensor(
-                    future_feats_scaled[step], device=self.device, dtype=ctx_feat.dtype
-                )
+                    # Update context more efficiently
+                    ctx_ts = torch.cat([ctx_ts[1:], mu_next.unsqueeze(0)], dim=0)
+                    # Update features by shifting and replacing last element
+                    ctx_feat[:-1] = ctx_feat[1:]
+                    ctx_feat[-1] = torch.tensor(
+                        future_feats_scaled[step], device=self.device, dtype=ctx_feat.dtype
+                    )
 
         # 5. Un-scale & wrap
         mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means
@@ -1340,7 +1536,7 @@ class MambaSSM(ModelObject):
         gating_weights = [0.25, 0.75]  # Prefer False for stability
         
         naive_feature_options = [True, False]
-        naive_feature_weights = [0.75, 0.25]  # Default to using naive features
+        naive_feature_weights = [0.5, 0.5]  # Default to using naive features
 
         # Generate changepoint method and parameters using dedicated function
         changepoint_method, changepoint_params = generate_random_changepoint_params()
@@ -1590,17 +1786,34 @@ class pMLP(ModelObject):
         self.feature_scaler = StandardScaler()
         train_feats_scaled = self.feature_scaler.fit_transform(feat_df_train.values)
 
-        # 4. Create training windows using shared efficient function
+        # 4. Build per-series feature mapping if needed
+        series_names = list(df.columns)
+        series_feat_mapping, has_per_series = build_series_feature_mapping(
+            self.feature_columns, 
+            series_names,
+            self.changepoint_features_columns
+        )
+        self.series_feat_mapping = series_feat_mapping
+        self.has_per_series_features = has_per_series
+        
+        # 4b. Create training windows using shared efficient function
         X_data, Y_data = create_training_windows(
             y_train_scaled, 
             train_feats_scaled, 
             self.context_length, 
             max_windows=100000,  # More windows for MLP efficiency
-            random_seed=self.random_seed
+            random_seed=self.random_seed,
+            series_feat_mapping=series_feat_mapping,
+            series_names=series_names if has_per_series else None
         )
 
         # 5. Torch setup - optimized for MLP
-        num_features = train_feats_scaled.shape[1]
+        # Account for potentially different feature dimensions per series
+        if has_per_series:
+            # Use max features across all series
+            num_features = X_data.shape[2] - 1  # Subtract 1 for the y value
+        else:
+            num_features = train_feats_scaled.shape[1]
         input_dim = 1 + num_features
         self.model = MLPCore(
             input_dim * self.context_length,  # Flatten the input for MLP
@@ -1760,43 +1973,102 @@ class pMLP(ModelObject):
         forecast_mu_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
         forecast_sigma_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
 
-        # 4. Roll forward prediction - optimized for MLP
+        # 4. Roll forward prediction with per-series feature support
         with torch.no_grad():
-            for step in range(forecast_length):
-                if self.verbose and step % self.prediction_batch_size == 0:
-                    print(f"Predicting step {step+1}/{forecast_length}")
-
-                # Prepare input for all series at once
-                batch_inputs = []
+            if getattr(self, 'has_per_series_features', False):
+                # Per-series features: process each series individually
+                series_names = list(self.df_train.columns)
+                
+                # Determine the max feature dimension used during training
+                max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
+                
                 for series_idx in range(num_series):
-                    # Combine time series values with features
-                    ts_values = ctx_ts[:, series_idx:series_idx+1]  # Shape: (context_length, 1)
-                    features = ctx_feat_np  # Shape: (context_length, n_features)
-                    combined = np.concatenate([ts_values, features], axis=1)  # Shape: (context_length, 1+n_features)
-                    flattened = combined.flatten()  # Flatten for MLP
-                    batch_inputs.append(flattened)
-                
-                # Convert to tensor and predict
-                input_tensor = torch.tensor(
-                    np.array(batch_inputs), 
-                    device=self.device, 
-                    dtype=torch.float32
-                )
-                
-                mu, sigma = self.model(input_tensor)
-                
-                # Store predictions
-                forecast_mu_scaled[step] = mu.cpu().numpy().flatten()
-                forecast_sigma_scaled[step] = sigma.cpu().numpy().flatten()
+                    if self.verbose and series_idx % 10 == 0:
+                        print(f"Predicting series {series_idx+1}/{num_series}")
+                    
+                    # Get feature indices for this series
+                    feat_indices = self.series_feat_mapping.get(series_idx, [])
+                    
+                    # Initialize context for this series
+                    series_ctx_ts = ctx_ts[:, series_idx:series_idx+1]  # (context_length, 1)
+                    series_ctx_feat = ctx_feat_np[:, feat_indices]  # (context_length, n_feats_for_series)
+                    
+                    # Pad to match model input dimension if needed
+                    if len(feat_indices) < max_feats_from_mapping:
+                        pad_size = max_feats_from_mapping - len(feat_indices)
+                        padding = np.zeros((self.context_length, pad_size), dtype=np.float32)
+                        series_ctx_feat = np.concatenate([series_ctx_feat, padding], axis=1)
+                    
+                    for step in range(forecast_length):
+                        # Combine and flatten for MLP
+                        combined = np.concatenate([series_ctx_ts, series_ctx_feat], axis=1)
+                        flattened = combined.flatten()
+                        
+                        # Predict
+                        input_tensor = torch.tensor(
+                            flattened, 
+                            device=self.device, 
+                            dtype=torch.float32
+                        ).unsqueeze(0)
+                        
+                        mu, sigma = self.model(input_tensor)
+                        
+                        # Store predictions
+                        forecast_mu_scaled[step, series_idx] = mu.cpu().numpy().flatten()[0]
+                        forecast_sigma_scaled[step, series_idx] = sigma.cpu().numpy().flatten()[0]
+                        
+                        # Update context
+                        new_value = mu.cpu().numpy().flatten()[0]
+                        series_ctx_ts = np.concatenate([series_ctx_ts[1:], [[new_value]]], axis=0)
+                        
+                        # Update features for next step
+                        if step < len(future_feats_scaled):
+                            next_feat_full = future_feats_scaled[step, feat_indices]
+                            
+                            # Pad if needed
+                            if len(feat_indices) < max_feats_from_mapping:
+                                pad_size = max_feats_from_mapping - len(feat_indices)
+                                padding = np.zeros(pad_size, dtype=np.float32)
+                                next_feat_full = np.concatenate([next_feat_full, padding])
+                            
+                            series_ctx_feat = np.concatenate([series_ctx_feat[1:], [next_feat_full]], axis=0)
+            else:
+                # Original path: shared features across all series
+                for step in range(forecast_length):
+                    if self.verbose and step % self.prediction_batch_size == 0:
+                        print(f"Predicting step {step+1}/{forecast_length}")
 
-                # Update context for next step
-                new_values = mu.cpu().numpy().flatten()
-                ctx_ts = np.concatenate([ctx_ts[1:], new_values.reshape(1, -1)], axis=0)
-                
-                # Update features
-                if step < len(future_feats_scaled):
-                    new_feat = future_feats_scaled[step].reshape(1, -1)
-                    ctx_feat_np = np.concatenate([ctx_feat_np[1:], new_feat], axis=0)
+                    # Prepare input for all series at once
+                    batch_inputs = []
+                    for series_idx in range(num_series):
+                        # Combine time series values with features
+                        ts_values = ctx_ts[:, series_idx:series_idx+1]  # Shape: (context_length, 1)
+                        features = ctx_feat_np  # Shape: (context_length, n_features)
+                        combined = np.concatenate([ts_values, features], axis=1)  # Shape: (context_length, 1+n_features)
+                        flattened = combined.flatten()  # Flatten for MLP
+                        batch_inputs.append(flattened)
+                    
+                    # Convert to tensor and predict
+                    input_tensor = torch.tensor(
+                        np.array(batch_inputs), 
+                        device=self.device, 
+                        dtype=torch.float32
+                    )
+                    
+                    mu, sigma = self.model(input_tensor)
+                    
+                    # Store predictions
+                    forecast_mu_scaled[step] = mu.cpu().numpy().flatten()
+                    forecast_sigma_scaled[step] = sigma.cpu().numpy().flatten()
+
+                    # Update context for next step
+                    new_values = mu.cpu().numpy().flatten()
+                    ctx_ts = np.concatenate([ctx_ts[1:], new_values.reshape(1, -1)], axis=0)
+                    
+                    # Update features
+                    if step < len(future_feats_scaled):
+                        new_feat = future_feats_scaled[step].reshape(1, -1)
+                        ctx_feat_np = np.concatenate([ctx_feat_np[1:], new_feat], axis=0)
 
         # 5. Un-scale & wrap
         mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means

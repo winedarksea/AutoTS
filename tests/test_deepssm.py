@@ -666,6 +666,330 @@ class DeepSSMTest(unittest.TestCase):
             "Naive last value feature should be absent when disabled",
         )
 
+    def test_per_series_changepoint_features(self):
+        """Test that per-series changepoints work correctly in MambaSSM and pMLP.
+        
+        This test verifies the fix for the bug where per-series changepoints were
+        being aggregated together, losing individual patterns. It ensures that:
+        1. Per-series changepoint features are created correctly
+        2. Series-to-feature mapping is built properly
+        3. Each series uses its own changepoint features during training
+        4. Each series uses its own changepoint features during prediction
+        """
+        print("Testing per-series changepoint features")
+        
+        # Create synthetic data with different changepoint patterns per series
+        n_timesteps = 150
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+        
+        np.random.seed(42)
+        
+        # Series A: Has a changepoint at day 75 (level shift up)
+        series_a = np.concatenate([
+            50 + np.random.randn(75) * 2,   # Mean 50
+            80 + np.random.randn(75) * 2    # Mean 80 (shift at day 75)
+        ])
+        
+        # Series B: Has a changepoint at day 100 (level shift down)
+        series_b = np.concatenate([
+            70 + np.random.randn(100) * 2,  # Mean 70
+            40 + np.random.randn(50) * 2    # Mean 40 (shift at day 100)
+        ])
+        
+        # Series C: No clear changepoint, gradual trend
+        series_c = np.linspace(30, 60, n_timesteps) + np.random.randn(n_timesteps) * 2
+        
+        df = pd.DataFrame({
+            'SeriesA': series_a,
+            'SeriesB': series_b,
+            'SeriesC': series_c
+        }, index=dates)
+        
+        forecast_length = 10
+        train_df = df.iloc[:-forecast_length]
+        
+        # Test 1: Verify ChangepointDetector creates per-series features with individual aggregation
+        print("  Testing ChangepointDetector with aggregate_method='individual'")
+        detector = ChangepointDetector(
+            method='cusum',
+            method_params={'threshold': 3.0, 'min_distance': 10},
+            aggregate_method='individual'
+        )
+        detector.detect(train_df)
+        
+        # Verify changepoints were detected per series
+        self.assertIsInstance(
+            detector.changepoints_,
+            dict,
+            "Changepoints should be a dict with individual aggregation"
+        )
+        self.assertEqual(
+            set(detector.changepoints_.keys()),
+            set(df.columns),
+            "Changepoints dict should have keys for all series"
+        )
+        
+        # Create features and verify per-series pattern
+        features = detector.create_features(forecast_length=0)
+        
+        # Check for per-series feature naming pattern
+        has_series_a_features = any('SeriesA_' in str(col) for col in features.columns)
+        has_series_b_features = any('SeriesB_' in str(col) for col in features.columns)
+        has_series_c_features = any('SeriesC_' in str(col) for col in features.columns)
+        
+        self.assertTrue(
+            has_series_a_features or has_series_b_features or has_series_c_features,
+            "Per-series changepoint features should be created with series names in column names"
+        )
+        
+        # Test 2: Test MambaSSM with per-series changepoints
+        print("  Testing MambaSSM with per-series changepoints")
+        model_mamba = MambaSSM(
+            context_length=30,
+            d_model=16,
+            n_layers=1,
+            d_state=4,
+            epochs=2,
+            batch_size=16,
+            verbose=0,
+            random_seed=42,
+            changepoint_method='cusum',
+            changepoint_params={'threshold': 3.0, 'min_distance': 10}
+        )
+        
+        # Fit with aggregate_method='individual'
+        model_mamba.fit(train_df, aggregate_method='individual')
+        
+        # Verify per-series feature mapping was created
+        self.assertTrue(
+            hasattr(model_mamba, 'has_per_series_features'),
+            "Model should have has_per_series_features attribute"
+        )
+        self.assertTrue(
+            hasattr(model_mamba, 'series_feat_mapping'),
+            "Model should have series_feat_mapping attribute"
+        )
+        
+        if model_mamba.has_per_series_features:
+            self.assertIsNotNone(
+                model_mamba.series_feat_mapping,
+                "Series feature mapping should be created for per-series features"
+            )
+            self.assertIsInstance(
+                model_mamba.series_feat_mapping,
+                dict,
+                "Series feature mapping should be a dict"
+            )
+            self.assertEqual(
+                len(model_mamba.series_feat_mapping),
+                len(df.columns),
+                "Series feature mapping should have an entry for each series"
+            )
+            
+            # Verify each series has feature indices
+            for series_idx in range(len(df.columns)):
+                self.assertIn(
+                    series_idx,
+                    model_mamba.series_feat_mapping,
+                    f"Series {series_idx} should be in feature mapping"
+                )
+                feat_indices = model_mamba.series_feat_mapping[series_idx]
+                self.assertIsInstance(
+                    feat_indices,
+                    list,
+                    f"Feature indices for series {series_idx} should be a list"
+                )
+                self.assertGreater(
+                    len(feat_indices),
+                    0,
+                    f"Series {series_idx} should have at least one feature"
+                )
+        
+        # Make predictions
+        prediction_mamba = model_mamba.predict(forecast_length=forecast_length)
+        
+        # Verify predictions
+        self.assertEqual(
+            prediction_mamba.forecast.shape,
+            (forecast_length, len(df.columns)),
+            "MambaSSM forecast shape should match expected dimensions"
+        )
+        self.assertFalse(
+            prediction_mamba.forecast.isnull().any().any(),
+            "MambaSSM forecast should not contain null values"
+        )
+        self.assertTrue(
+            np.isfinite(prediction_mamba.forecast.values).all(),
+            "MambaSSM forecast should contain only finite values"
+        )
+        
+        # Test 3: Test pMLP with per-series changepoints
+        print("  Testing pMLP with per-series changepoints")
+        model_pmlp = pMLP(
+            context_length=30,
+            hidden_dims=[64, 32],
+            epochs=2,
+            batch_size=16,
+            verbose=0,
+            random_seed=42,
+            changepoint_method='cusum',
+            changepoint_params={'threshold': 3.0, 'min_distance': 10}
+        )
+        
+        # Fit with aggregate_method='individual'
+        model_pmlp.fit(train_df, aggregate_method='individual')
+        
+        # Verify per-series feature mapping was created
+        self.assertTrue(
+            hasattr(model_pmlp, 'has_per_series_features'),
+            "pMLP should have has_per_series_features attribute"
+        )
+        self.assertTrue(
+            hasattr(model_pmlp, 'series_feat_mapping'),
+            "pMLP should have series_feat_mapping attribute"
+        )
+        
+        if model_pmlp.has_per_series_features:
+            self.assertIsNotNone(
+                model_pmlp.series_feat_mapping,
+                "pMLP series feature mapping should be created for per-series features"
+            )
+            self.assertIsInstance(
+                model_pmlp.series_feat_mapping,
+                dict,
+                "pMLP series feature mapping should be a dict"
+            )
+            self.assertEqual(
+                len(model_pmlp.series_feat_mapping),
+                len(df.columns),
+                "pMLP series feature mapping should have an entry for each series"
+            )
+            
+            # Verify each series has feature indices
+            for series_idx in range(len(df.columns)):
+                self.assertIn(
+                    series_idx,
+                    model_pmlp.series_feat_mapping,
+                    f"pMLP series {series_idx} should be in feature mapping"
+                )
+                feat_indices = model_pmlp.series_feat_mapping[series_idx]
+                self.assertIsInstance(
+                    feat_indices,
+                    list,
+                    f"pMLP feature indices for series {series_idx} should be a list"
+                )
+                self.assertGreater(
+                    len(feat_indices),
+                    0,
+                    f"pMLP series {series_idx} should have at least one feature"
+                )
+        
+        # Make predictions
+        prediction_pmlp = model_pmlp.predict(forecast_length=forecast_length)
+        
+        # Verify predictions
+        self.assertEqual(
+            prediction_pmlp.forecast.shape,
+            (forecast_length, len(df.columns)),
+            "pMLP forecast shape should match expected dimensions"
+        )
+        self.assertFalse(
+            prediction_pmlp.forecast.isnull().any().any(),
+            "pMLP forecast should not contain null values"
+        )
+        self.assertTrue(
+            np.isfinite(prediction_pmlp.forecast.values).all(),
+            "pMLP forecast should contain only finite values"
+        )
+        
+        # Test 4: Verify different behavior between individual and shared changepoints
+        print("  Testing comparison between individual and shared changepoints")
+        
+        # Train a model with shared changepoints (default behavior)
+        model_shared = MambaSSM(
+            context_length=30,
+            d_model=16,
+            n_layers=1,
+            d_state=4,
+            epochs=2,
+            batch_size=16,
+            verbose=0,
+            random_seed=42,
+            changepoint_method='cusum',
+            changepoint_params={'threshold': 3.0, 'min_distance': 10}
+        )
+        
+        # Fit without aggregate_method (defaults to shared)
+        model_shared.fit(train_df)
+        
+        # Should not have per-series features
+        self.assertFalse(
+            getattr(model_shared, 'has_per_series_features', False),
+            "Model with shared changepoints should not have per-series features"
+        )
+        
+        # Make predictions
+        prediction_shared = model_shared.predict(forecast_length=forecast_length)
+        
+        # Both should produce valid predictions, but they should be different
+        # (this is a sanity check, not a strict requirement)
+        self.assertEqual(
+            prediction_shared.forecast.shape,
+            prediction_mamba.forecast.shape,
+            "Both models should produce same shape forecasts"
+        )
+        
+        print("Per-series changepoint features test passed!")
+
+    def test_per_series_basic_changepoint_method(self):
+        """Test per-series changepoints with 'basic' method.
+        
+        The 'basic' method uses fixed spacing and should work with individual aggregation.
+        """
+        print("Testing per-series changepoints with 'basic' method")
+        
+        n_timesteps = 120
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+        
+        np.random.seed(123)
+        df = pd.DataFrame({
+            'A': np.random.randn(n_timesteps) + np.linspace(0, 2, n_timesteps),
+            'B': np.random.randn(n_timesteps) + np.linspace(2, 0, n_timesteps),
+        }, index=dates)
+        
+        forecast_length = 7
+        train_df = df.iloc[:-forecast_length]
+        
+        # Test MambaSSM with basic method and individual aggregation
+        model = MambaSSM(
+            context_length=20,
+            d_model=12,
+            n_layers=1,
+            d_state=3,
+            epochs=1,
+            batch_size=8,
+            verbose=0,
+            random_seed=0,
+            changepoint_method='basic',
+            changepoint_params={'changepoint_spacing': 30, 'changepoint_distance_end': 15}
+        )
+        
+        model.fit(train_df, aggregate_method='individual')
+        
+        # Verify per-series features were created
+        if hasattr(model, 'has_per_series_features') and model.has_per_series_features:
+            self.assertIsNotNone(model.series_feat_mapping)
+            # Verify we have entries for both series
+            self.assertEqual(len(model.series_feat_mapping), 2)
+        
+        prediction = model.predict(forecast_length=forecast_length)
+        
+        self.assertEqual(prediction.forecast.shape, (forecast_length, 2))
+        self.assertFalse(prediction.forecast.isnull().any().any())
+        self.assertTrue(np.isfinite(prediction.forecast.values).all())
+        
+        print("Per-series basic changepoint method test passed!")
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -27,6 +27,7 @@
 * synthetic data generation and feature extractor new, very much in beta
 * updated weather data to CDO v2 (requires API key)
 * added NASA solar data to load_live_daily
+* created the seasonal_linear interpolation which is quite promisiing for seasonal data
 * created an MCP server for AutoTS
 * many bug fixes, tweaks, and added unittests
 

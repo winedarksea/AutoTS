@@ -640,26 +640,138 @@ class PredictionObject(object):
         self,
         series: str = None,
         start_date=None,
-        kind: str = 'line',
+        df_wide=None,
         title: str = None,
+        figsize=None,
+        include_forecast=True,
+        sharex=True,
         **kwargs,
     ):
-        """Plot stored component contributions for a single series."""
+        """Plot stored component contributions for a single series with Prophet-style subplots.
+        
+        Args:
+            series (str): Series name to plot. Random if None.
+            start_date: Filter data from this date onward.
+            df_wide (pd.DataFrame): Historical actuals for plotting alongside forecast.
+            title (str): Overall figure title.
+            figsize (tuple): Figure size. Auto-calculated if None.
+            include_forecast (bool): If True, adds top subplot with forecast and actuals.
+            sharex (bool): Whether subplots share x-axis.
+            **kwargs: Additional arguments passed to matplotlib plot.
+            
+        Returns:
+            fig: matplotlib Figure object
+        """
         if self.components is None or not isinstance(self.components, pd.DataFrame):
             raise ValueError("No component data available on this PredictionObject.")
         if series is None:
             series = random.choice(self.components.columns.get_level_values(0).unique())
         if series not in self.components.columns.get_level_values(0):
             raise ValueError(f"Series '{series}' not found in stored components.")
-        comp_df = self.components[series]
+        
+        comp_df = self.components[series].copy()
+        
+        # Filter by start_date if provided
         if start_date is not None:
             comp_df = comp_df[comp_df.index >= start_date]
-        if comp_df.empty:
-            raise ValueError("No component data remains after applying start_date filter.")
+            if comp_df.empty:
+                raise ValueError("No component data remains after applying start_date filter.")
+        
+        # Determine number of subplots
+        component_names = comp_df.columns.tolist()
+        n_components = len(component_names)
+        n_plots = n_components + 1 if include_forecast else n_components
+        
+        # Auto-calculate figsize if not provided
+        if figsize is None:
+            figsize = (12, 3 * n_plots)
+        
+        # Create subplots
+        fig, axes = plt.subplots(n_plots, 1, figsize=figsize, sharex=sharex)
+        if n_plots == 1:
+            axes = [axes]
+        
+        # Overall title
         if title is None:
-            title = f"Component Breakdown for {series}"
-        ax = comp_df.plot(kind=kind, title=title, **kwargs)
-        return ax
+            model_name = extract_single_series_from_horz(
+                series,
+                model_name=self.model_name,
+                model_parameters=self.model_parameters,
+            )
+            title = f"Component Breakdown: {series}\nModel: {model_name}"
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+        
+        plot_idx = 0
+        
+        # Plot forecast + actuals if requested
+        if include_forecast:
+            ax = axes[plot_idx]
+            forecast_data = self.forecast[series]
+            if start_date is not None:
+                forecast_data = forecast_data[forecast_data.index >= start_date]
+            
+            # Plot actuals if available
+            if df_wide is not None and series in df_wide.columns:
+                actuals = df_wide[series]
+                if start_date is not None:
+                    actuals = actuals[actuals.index >= start_date]
+                ax.plot(actuals.index, actuals.values, 'o', 
+                       markersize=2, label='Actual', color='#AFDBF5', alpha=0.7)
+            
+            # Plot forecast
+            ax.plot(forecast_data.index, forecast_data.values, 
+                   label='Forecast', color='#003399', linewidth=2)
+            
+            # Plot prediction intervals
+            upper = self.upper_forecast[series]
+            lower = self.lower_forecast[series]
+            if start_date is not None:
+                upper = upper[upper.index >= start_date]
+                lower = lower[lower.index >= start_date]
+            ax.fill_between(forecast_data.index, lower.values, upper.values,
+                           alpha=0.2, color='#A5ADAF', label='Prediction Interval')
+            
+            ax.set_ylabel('Value', fontweight='bold')
+            ax.legend(loc='best', frameon=True, fancybox=True)
+            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+            ax.set_title('Forecast', fontsize=11, loc='left', fontweight='bold')
+            plot_idx += 1
+        
+        # Plot each component
+        for component in component_names:
+            ax = axes[plot_idx]
+            comp_values = comp_df[component]
+            
+            ax.plot(comp_values.index, comp_values.values, 
+                   linewidth=1.5, color='#2C7BB6', **kwargs)
+            ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
+            ax.set_ylabel('Effect', fontweight='bold')
+            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+            ax.set_title(component, fontsize=11, loc='left', fontweight='bold')
+            
+            # Improve y-axis scaling
+            y_values = comp_values.values
+            if len(y_values) > 0 and not np.all(np.isnan(y_values)):
+                y_min, y_max = np.nanmin(y_values), np.nanmax(y_values)
+                y_range = y_max - y_min
+                if y_range > 0:
+                    # Add 10% margin on each side
+                    margin = y_range * 0.1
+                    ax.set_ylim(y_min - margin, y_max + margin)
+                elif y_max == y_min and y_max != 0:
+                    # Constant non-zero value
+                    ax.set_ylim(y_max * 0.9, y_max * 1.1)
+                else:
+                    # All zeros or single value at zero
+                    ax.set_ylim(-0.5, 0.5)
+            
+            plot_idx += 1
+        
+        # Set x-label on bottom plot only
+        axes[-1].set_xlabel('Date', fontweight='bold')
+        
+        plt.tight_layout()
+        return fig
 
     def plot_grid(
         self,
