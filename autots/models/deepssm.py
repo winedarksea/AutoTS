@@ -1291,9 +1291,8 @@ class MambaSSM(ModelObject):
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=2 if self.device == "cpu" else 0,  # Parallel loading for CPU
+            num_workers=0,
             pin_memory=(self.device == "cuda"),
-            persistent_workers=(self.device == "cpu" and True),  # Reuse workers
         )
 
         if self.verbose:
@@ -1304,41 +1303,29 @@ class MambaSSM(ModelObject):
         np.random.seed(self.random_seed)
         self.model.train()
         
-        # Use gradient accumulation for better throughput with smaller batches
-        accumulation_steps = max(1, 32 // self.batch_size)  # Effective batch size of ~32
-        
         for epoch in range(self.epochs):
             running_loss = 0.0
-            num_batches = 0
-            optimizer.zero_grad(set_to_none=True)
             
-            for batch_idx, (x_batch, y_batch) in enumerate(tqdm(
+            for x_batch, y_batch in tqdm(
                 dataloader,
                 desc=f"Epoch {epoch+1}/{self.epochs}",
                 disable=(self.verbose == 0),
-                mininterval=1.0,  # Update progress bar less frequently
-            )):
-                x_batch, y_batch = x_batch.to(self.device, non_blocking=True), y_batch.to(self.device, non_blocking=True)
+            ):
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
                 
+                optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
                 
                 # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
                 # y_batch has shape (batch_size, prediction_batch_size, 1)
                 # Calculate loss across all timesteps in the batch
                 loss = criterion(mu, sigma, y_batch)
-                loss = loss / accumulation_steps  # Scale loss for accumulation
                 loss.backward()
-                
-                # Update weights every accumulation_steps batches
-                if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
-                    optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
-                
-                running_loss += loss.item() * accumulation_steps  # Unscale for reporting
-                num_batches += 1
+                optimizer.step()
+                running_loss += loss.item()
             if self.verbose:
                 print(
-                    f"Epoch {epoch+1}  avg-loss: {running_loss / num_batches:.4f}"
+                    f"Epoch {epoch+1}  avg-loss: {running_loss / len(dataloader):.4f}"
                 )
 
         self.fit_runtime = datetime.datetime.now() - fit_start_time
@@ -1981,9 +1968,8 @@ class pMLP(ModelObject):
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=2 if self.device == "cpu" else 0,  # Parallel loading for CPU
+            num_workers=0,
             pin_memory=(self.device == "cuda"),
-            persistent_workers=(self.device == "cpu" and True),  # Reuse workers
         )
 
         if self.verbose:
@@ -1997,39 +1983,32 @@ class pMLP(ModelObject):
         # Learning rate scheduler for better convergence
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
         
-        # Use gradient accumulation for better throughput
-        accumulation_steps = max(1, 64 // self.batch_size)  # Effective batch size of ~64
-        
         for epoch in range(self.epochs):
             running_loss = 0.0
             num_batches = 0
-            optimizer.zero_grad(set_to_none=True)
             
-            for batch_idx, (x_batch, y_batch) in enumerate(tqdm(
+            for x_batch, y_batch in tqdm(
                 dataloader,
                 desc=f"Epoch {epoch+1}/{self.epochs}",
                 disable=(self.verbose == 0),
-                mininterval=1.0,  # Update progress bar less frequently
-            )):
-                x_batch, y_batch = x_batch.to(self.device, non_blocking=True), y_batch.to(self.device, non_blocking=True)
+            ):
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
                 
+                optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
                 
                 # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
                 # y_batch has shape (batch_size, prediction_batch_size, 1)
                 # Calculate loss across all timesteps in the batch
                 loss = criterion(mu, sigma, y_batch)
-                loss = loss / accumulation_steps  # Scale loss for accumulation
                 loss.backward()
                 
-                # Update weights every accumulation_steps batches
-                if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
-                    # Gradient clipping for stability
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                    optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
+                # Gradient clipping for stability
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 
-                running_loss += loss.item() * accumulation_steps  # Unscale for reporting
+                optimizer.step()
+                
+                running_loss += loss.item()
                 num_batches += 1
             
             avg_loss = running_loss / num_batches
