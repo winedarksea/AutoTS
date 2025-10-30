@@ -957,18 +957,18 @@ sklearn_model_dict = {
     'SVM': 0.02,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
-    'KerasRNN': 0.001,  # slow at scale
-    'Transformer': 0.001,
+    # 'KerasRNN': 0.001,  # slow at scale
+    # 'Transformer': 0.001,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.1,
-    'LightGBMRegressorChain': 0.03,
+    # 'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.01,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    'GaussianProcessRegressor': 0.000000001,  # slow
-    "ElasticNetwork": 0.01,
+    # 'GaussianProcessRegressor': 0.000000001,  # slow
+    # "ElasticNetwork": 0.01,
     # 'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
@@ -984,7 +984,7 @@ multivariate_model_dict = {
     # 'KerasRNN': 0.01,  # too slow on big data
     'HistGradientBoost': 0.03,
     'LightGBM': 0.09,
-    'LightGBMRegressorChain': 0.03,
+    # 'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
@@ -1016,7 +1016,7 @@ rolling_regression_dict = {
     'KNN': 0.05,
     'Adaboost': 0.03,
     'SVM': 0.02,
-    'KerasRNN': 0.02,
+    # 'KerasRNN': 0.02,
     'LightGBM': 0.09,
     'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
@@ -1042,10 +1042,10 @@ datepart_model_dict: dict = {
     'DecisionTree': 0.03,
     'Adaboost': 0.05,
     'SVM': 0.0001,
-    'KerasRNN': 0.01,
+    # 'KerasRNN': 0.01,
     # 'Transformer': 0.02,  # slow, kernel failed
     'RadiusNeighbors': 0.03,  # vulnerable on short data to returning NaN but effective sometimes
-    "ElasticNetwork": 0.05,
+    # "ElasticNetwork": 0.05,
 }
 datepart_model_dict_deep = {
     'RandomForest': 0.05,  # crashes sometimes at scale for unclear reasons
@@ -1056,7 +1056,7 @@ datepart_model_dict_deep = {
     'Adaboost': 0.05,
     'SVM': 0.01,
     'KerasRNN': 0.02,
-    'Transformer': 0.02,  # slow
+    'Transformer': 0.001,  # slow
     'ExtraTrees': 0.01,  # some params cause RAM crash?
     'RadiusNeighbors': 0.1,
     'MultioutputGPR': 0.001,
@@ -4097,6 +4097,7 @@ class VectorizedMultiOutputGPR:
         lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as lambda_.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
+    # TODO: benchmark that this is sufficiently efficient with memory at very large scale and that runtime is reasonable. Fix or remove if not.
 
     def __init__(self, kernel='rbf', noise_var=10, gamma=0.1, lambda_prime=0.1, p=7):
         self.kernel = kernel

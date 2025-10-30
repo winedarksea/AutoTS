@@ -39,18 +39,6 @@ general_template_dict = {
         "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"RollingMeanTransformer\", \"2\": \"Detrend\", \"3\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3.5, \"fillna\": null}, \"1\": {\"fixed\": true, \"window\": 10}, \"2\": {\"model\": \"Linear\"}, \"3\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
         "Ensemble": 0,
     },
-    "8": {
-        "Model": "DatepartRegression",
-        "ModelParameters": "{\"regression_model\": {\"model\": \"MLP\", \"model_params\": {\"hidden_layer_sizes\": [25, 15, 25], \"max_iter\": 1000, \"activation\": \"tanh\", \"solver\": \"lbfgs\", \"early_stopping\": false, \"learning_rate_init\": 0.001}}, \"datepart_method\": \"recurring\", \"regression_type\": null}",
-        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
-        "Ensemble": 0,
-    },
-    "9": {
-        "Model": "DatepartRegression",
-        "ModelParameters": "{\"regression_model\": {\"model\": \"KerasRNN\", \"model_params\": {\"kernel_initializer\": \"glorot_uniform\", \"epochs\": 50, \"batch_size\": 32, \"optimizer\": \"adam\", \"loss\": \"Huber\", \"hidden_layer_sizes\": [32, 32, 32], \"rnn_type\": \"GRU\"}}, \"datepart_method\": \"recurring\", \"regression_type\": null}",
-        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"Round\", \"1\": \"QuantileTransformer\", \"2\": \"QuantileTransformer\", \"3\": \"QuantileTransformer\", \"4\": \"PowerTransformer\"}, \"transformation_params\": {\"0\": {\"model\": \"middle\", \"decimals\": 1, \"on_transform\": true, \"on_inverse\": false}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 20}, \"3\": {\"output_distribution\": \"normal\", \"n_quantiles\": 1000}, \"4\": {}}}",
-        "Ensemble": 0,
-    },
     "10": {
         "Model": "ETS",
         "ModelParameters": "{\"damped_trend\": false, \"trend\": \"additive\", \"seasonal\": null, \"seasonal_periods\": null}",
@@ -58,6 +46,7 @@ general_template_dict = {
         "Ensemble": 0,
     },
     "11": {
+
         "Model": "ETS",
         "ModelParameters": "{\"damped_trend\": false, \"trend\": null, \"seasonal\": \"additive\", \"seasonal_periods\": 7}",
         "TransformationParameters": "{\"fillna\": \"rolling_mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"Round\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"model\": \"middle\", \"decimals\": 0, \"on_transform\": false, \"on_inverse\": true}, \"2\": {\"model\": \"GLS\"}}}",
@@ -199,12 +188,6 @@ general_template_dict = {
         "Model": "VECM",
         "ModelParameters": "{\"deterministic\": \"li\", \"k_ar_diff\": 3, \"regression_type\": null}",
         "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"model\": \"Linear\"}}}",
-        "Ensemble": 0,
-    },
-    "35": {
-        "Model": "WindowRegression",
-        "ModelParameters": "{\"window_size\": 10, \"regression_model\": {\"model\": \"MLP\", \"model_params\": {\"hidden_layer_sizes\": [72, 36, 72], \"max_iter\": 250, \"activation\": \"relu\", \"solver\": \"lbfgs\", \"early_stopping\": false, \"learning_rate_init\": 0.001}}, \"input_dim\": \"univariate\", \"output_dim\": \"forecast_length\", \"normalize_window\": false, \"shuffle\": true, \"max_windows\": 5000}",
-        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"QuantileTransformer\", \"1\": \"MinMaxScaler\", \"2\": \"RobustScaler\"}, \"transformation_params\": {\"0\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 100}, \"1\": {}, \"2\": {}}}",
         "Ensemble": 0,
     },
     "36": {
@@ -599,12 +582,13 @@ general_template_dict = {
         "TransformationParameters": '{"fillna": "linear", "transformations": {"0": "ClipOutliers", "1": "Detrend", "2": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3, "fillna": null}, "1": {"model": "Linear", "phi": 1, "window": null, "transform_dict": {"fillna": null, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 2}}}}, "2": {"method": "clip", "std_threshold": 1, "fillna": null}}}',
         "Ensemble": 0
     },
-    "97": {
+    "97": {  # optimized on daily. Poorly (due to it being slow) but better than nothing
         "Model": "MambaSSM",
         "ModelParameters": '{"context_length": 90, "d_model": 48, "n_layers": 2, "d_state": 8, "epochs": 15, "batch_size": 24, "lr": 0.001, "loss_function": "crps", "nll_weight": 0.5, "wasserstein_weight": 0.2, "prediction_batch_size": 90, "datepart_method": "expanded", "holiday_countries_used": true, "use_extra_gating": true, "changepoint_method": "l1_total_variation", "changepoint_params": {"lambda_reg": 0.1}, "regression_type": "User"}',
         "TransformationParameters": '{"fillna": "ffill", "transformations": {"0": "ClipOutliers", "1": "Detrend", "2": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 3, "fillna": null}, "1": {"model": "Linear", "phi": 1, "window": null, "transform_dict": {"fillna": null, "transformations": {"0": "EWMAFilter"}, "transformation_params": {"0": {"span": 2}}}}, "2": {"method": "clip", "std_threshold": 1, "fillna": null}}}',
         "Ensemble": 0
     },
+    # Add a WindowRegression, cleanup UnobservedComponents
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

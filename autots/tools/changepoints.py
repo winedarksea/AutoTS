@@ -2819,18 +2819,16 @@ class ChangepointDetector(object):
             
         elif new_method == 'pelt':
             # PELT method parameters
-            # WARNING: PELT has O(n^2) worst-case complexity and can be EXTREMELY slow
             if selection_mode == "fast":
-                # Fast mode: Use only fastest parameters
                 # Higher penalties = fewer changepoints = faster computation
                 # L2 loss is 10-20x faster than L1/Huber (benchmark: 60s vs 770s for 10×2000 points)
                 # Aggressive pruning (pruning_factor > 1.0) further speeds up by pruning search space earlier
-                penalty_options = [50, 100, 200]  # Higher penalties prune search space more aggressively
-                penalty_weights = [0.3, 0.5, 0.2]
+                penalty_options = [8, 50, 100, 200]  # Higher penalties prune search space more aggressively
+                penalty_weights = [0.02, 0.3, 0.5, 0.2]
                 loss_functions = ['l2']  # ONLY L2 - L1/Huber are prohibitively slow
                 loss_weights = [1.0]
-                min_segment_options = [10, 20]  # Larger segments = faster (fewer breakpoints to evaluate)
-                min_segment_weights = [0.7, 0.3]
+                min_segment_options = [10, 14, 20]  # Larger segments = faster (fewer breakpoints to evaluate)
+                min_segment_weights = [0.7, 0.1, 0.3]
                 # Aggressive pruning factors for fast mode (2.0-3.5 range)
                 # Higher values = more pruning = faster but potentially miss some changepoints
                 # Benchmark: pruning_factor=2.0 gives 16x speedup, 3.0 gives 48x speedup
