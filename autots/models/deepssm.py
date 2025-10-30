@@ -1463,8 +1463,9 @@ class MambaSSM(ModelObject):
                         mu, sigma = self.model(model_in)
                         
                         # Store predictions: (actual_batch_size, 1)
-                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :, 0].cpu().numpy()
-                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :, 0].cpu().numpy()
+                        # Take only actual_batch_size elements in case model outputs more
+                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :actual_batch_size, 0].cpu().numpy()
+                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :actual_batch_size, 0].cpu().numpy()
                 else:
                     # Shared features: broadcast for all series
                     # batch_feats_scaled shape: (actual_batch_size, n_features)
@@ -1480,8 +1481,9 @@ class MambaSSM(ModelObject):
                     mu, sigma = self.model(model_in)
                     
                     # Store predictions: (num_series, actual_batch_size, 1)
-                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :, 0].T.cpu().numpy()
-                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :, 0].T.cpu().numpy()
+                    # Take only actual_batch_size elements in case model outputs more
+                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :actual_batch_size, 0].T.cpu().numpy()
+                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :actual_batch_size, 0].T.cpu().numpy()
                 
                 # Update naive window with predictions from this batch for next batch
                 if current_naive_windows is not None:
@@ -1682,7 +1684,6 @@ class pMLP(ModelObject):
         holiday_country: str = "US",
         random_seed: int = 2023,
         verbose: int = 1,
-        context_length: int = 60,  # Shorter default for MLP efficiency
         hidden_dims: list = None,  # Will default to wide, shallow architecture
         dropout_rate: float = 0.2,
         use_batch_norm: bool = True,
@@ -1720,7 +1721,6 @@ class pMLP(ModelObject):
             normalized_method = normalized_method.lower()
         self.changepoint_method = normalized_method
         self.changepoint_params = changepoint_params if changepoint_params is not None else {}
-        self.context_length = context_length
         
         # Default to wide, shallow architecture if not specified
         if hidden_dims is None:
@@ -2158,8 +2158,9 @@ class pMLP(ModelObject):
                         mu, sigma = self.model(model_in)
                         
                         # Store predictions: (actual_batch_size, 1)
-                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :, 0].cpu().numpy()
-                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :, 0].cpu().numpy()
+                        # Take only actual_batch_size elements in case model outputs more
+                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :actual_batch_size, 0].cpu().numpy()
+                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :actual_batch_size, 0].cpu().numpy()
                 else:
                     # Shared features: broadcast for all series
                     # batch_feats_scaled shape: (actual_batch_size, n_features)
@@ -2175,8 +2176,9 @@ class pMLP(ModelObject):
                     mu, sigma = self.model(model_in)
                     
                     # Store predictions: (num_series, actual_batch_size, 1)
-                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :, 0].T.cpu().numpy()
-                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :, 0].T.cpu().numpy()
+                    # Take only actual_batch_size elements in case model outputs more
+                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :actual_batch_size, 0].T.cpu().numpy()
+                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :actual_batch_size, 0].T.cpu().numpy()
                 
                 # Update naive window with predictions from this batch for next batch - pMLP version
                 if current_naive_windows is not None:
@@ -2230,7 +2232,6 @@ class pMLP(ModelObject):
 
     def get_params(self):
         return {
-            "context_length": self.context_length,
             "hidden_dims": self.hidden_dims,
             "dropout_rate": self.dropout_rate,
             "use_batch_norm": self.use_batch_norm,
@@ -2270,10 +2271,6 @@ class pMLP(ModelObject):
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
 
-        # Context length options - shorter for MLP efficiency
-        context_lengths = [20, 30, 45, 60, 90, 120]
-        context_weights = [0.15, 0.25, 0.25, 0.2, 0.1, 0.05]  # Prefer shorter contexts
-        
         # Hidden dimensions - focus on wide, shallow architectures
         hidden_dim_options = [
             [512],              # Single wide layer
@@ -2350,7 +2347,6 @@ class pMLP(ModelObject):
 
         # Generate random selections
         selected_params = {
-            "context_length": random.choices(context_lengths, weights=context_weights, k=1)[0],
             "hidden_dims": random.choices(hidden_dim_options, weights=hidden_weights, k=1)[0],
             "dropout_rate": random.choices(dropout_rates, weights=dropout_weights, k=1)[0],
             "use_batch_norm": random.choices(batch_norm_options, weights=batch_norm_weights, k=1)[0],
