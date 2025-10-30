@@ -1170,7 +1170,7 @@ class MambaSSM(ModelObject):
             for col in df.columns:
                 feature_name = f"naive_last_{col}"
                 # Initialize with shifted values (will be replaced during batch creation with proper windows)
-                shifted_values = df[col].shift(1).fillna(method='bfill').fillna(0.0).astype(np.float32)
+                shifted_values = df[col].shift(1).bfill().fillna(0.0).astype(np.float32)
                 naive_feature_data[feature_name] = shifted_values
             
             naive_features = pd.DataFrame(naive_feature_data, index=df.index, dtype=np.float32)
@@ -1838,7 +1838,7 @@ class pMLP(ModelObject):
             for col in df.columns:
                 feature_name = f"naive_last_{col}"
                 # Initialize with shifted values (will be replaced during batch creation with proper windows)
-                shifted_values = df[col].shift(1).fillna(method='bfill').fillna(0.0).astype(np.float32)
+                shifted_values = df[col].shift(1).bfill().fillna(0.0).astype(np.float32)
                 naive_feature_data[feature_name] = shifted_values
             
             naive_features = pd.DataFrame(naive_feature_data, index=df.index, dtype=np.float32)

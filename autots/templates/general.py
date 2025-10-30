@@ -347,12 +347,6 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "MaxAbsScaler"}, "transformation_params": {"0": {}}}',
         'Ensemble': 0,
     },
-    "62": {
-        'Model': 'UnivariateRegression',
-        'ModelParameters': '{"regression_model": {"model": "DecisionTree", "model_params": {"max_depth": null, "min_samples_split": 1.0}}, "holiday": false, "mean_rolling_periods": null, "macd_periods": null, "std_rolling_periods": null, "max_rolling_periods": 12, "min_rolling_periods": 58, "ewm_var_alpha": null, "ewm_alpha": 0.5, "additional_lag_periods": 363, "abs_energy": false, "rolling_autocorr_periods": null, "add_date_part": "simple_2_poly", "polynomial_degree": null, "x_transform": null, "regression_type": null, "window": null}',
-        'TransformationParameters': '{"fillna": "rolling_mean", "transformations": {"0": "MaxAbsScaler", "1": "SeasonalDifference", "2": "Round"}, "transformation_params": {"0": {}, "1": {"lag_1": 7, "method": "LastValue"}, "2": {"decimals": -2, "on_transform": false, "on_inverse": true}}}',
-        'Ensemble': 0,
-    },
     "63": {
         'Model': 'MotifSimulation',
         'ModelParameters': '{"phrase_len": 10, "comparison": "magnitude_pct_change_sign", "shared": false, "distance_metric": "sokalmichener", "max_motifs": 0.2, "recency_weighting": 0.01, "cutoff_minimum": 20, "point_method": "median"}',

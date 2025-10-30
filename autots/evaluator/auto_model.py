@@ -71,7 +71,6 @@ from autots.models.sklearn import (
     WindowRegression,
     MultivariateRegression,
     DatepartRegression,
-    UnivariateRegression,
     PreprocessingRegression,
 )
 from autots.models.composite import PreprocessingExperts
@@ -268,18 +267,6 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
-            **parameters,
-        )
-        return model
-    elif model == 'UnivariateRegression':
-        model = UnivariateRegression(
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            n_jobs=n_jobs,
-            forecast_length=forecast_length,
             **parameters,
         )
         return model

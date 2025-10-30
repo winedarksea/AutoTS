@@ -476,7 +476,6 @@ bench.results
 
 ### Mysterious crashes
 Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded. 
-`UnivariateRegression` is usually the most prone to these issues, removing it from the model_list may help (by default it is not included in most lists for this reason). 
 
 Try setting `n_jobs=1` or an otherwise low number, which should reduce the load. Also test the 'superfast' naive models, which are generally low resource consumption. 
 GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used. 
@@ -855,15 +854,14 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 ```
 
 ### Note on ~Regression Models
-The Regression models are WindowRegression, RollingRegression, UnivariateRegression, MultivariateRegression, and DatepartRegression. 
+The Regression models are WindowRegression, RollingRegression, MultivariateRegression, and DatepartRegression. 
 They are all different ways of reshaping the time series into X and Y for traditional ML and Deep Learning approaches. 
 All draw from the same potential pool of models, mostly sklearn and tensorflow models. 
 
 * DatepartRegression is where X is simply the date features, and Y are the time series values for that date. 
 * WindowRegression takes an `n` preceeding data points as X to predict the future value or values of the series. 
 * RollingRegression takes all time series and summarized rolling values of those series in one massive dataframe as X. Works well for a small number of series but scales poorly. 
-* MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series. This model is now often called by the community a "global forecasting ML model".
-* UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series. 
+* MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series. This model is now often called by the community a "global forecasting ML model". 
 
 Currently `MultivariateRegression` has the (slower) option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.
 
@@ -893,7 +891,6 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  MultivariateRegression | sklearn      | lightgbm, tensorflow    |    True       |     sklearn     | some  | True         |              | True          |
-|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  PreprocessingRegression | sklearn     |                         |    False      |                 |       |              |              | True          |
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |

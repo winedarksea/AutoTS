@@ -793,7 +793,7 @@ class TiDE(ModelObject):
 
     def __init__(
         self,
-        name: str = "UnivariateRegression",
+        name: str = "TiDE",
         random_seed=42,
         frequency="D",
         learning_rate=0.0009999,
