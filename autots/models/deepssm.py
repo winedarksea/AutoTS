@@ -815,34 +815,23 @@ class MambaMinimalBlock(Module):
         bc = self.x_proj(x)
         B_val, C_val = torch.split(bc, self.d_state, dim=-1)
 
-        # Preallocate with dtype to avoid conversion overhead
         h = torch.zeros(B, d_inner, self.d_state, device=x.device, dtype=x.dtype)
         y = torch.zeros(B, L, d_inner, device=x.device, dtype=x.dtype)
 
-        # Pre-extract slices to reduce indexing overhead
-        delta_slices = delta.unbind(dim=1)  # List of L tensors, each (B, d_inner)
-        B_slices = B_val.unbind(dim=1)  # List of L tensors, each (B, d_state)
-        C_slices = C_val.unbind(dim=1)  # List of L tensors, each (B, d_state)
-        x_slices = x.unbind(dim=1)  # List of L tensors, each (B, d_inner)
-        
-        if self.use_extra_gating:
-            gate_slices = gate.unbind(dim=1)
-
-        # Optimized loop with reduced indexing
         for i in range(L):
-            delta_i = delta_slices[i].unsqueeze(-1)  # (B, d_inner, 1)
+            delta_i = delta[:, i, :].unsqueeze(-1)
             A_bar = torch.exp(delta_i * A)
-            B_bar = delta_i * B_slices[i].unsqueeze(1)  # (B, 1, d_state) -> broadcast
-            x_i = x_slices[i].unsqueeze(-1)  # (B, d_inner, 1)
+            B_bar = delta_i * B_val[:, i, :].unsqueeze(1)
 
             if self.use_extra_gating:
-                gate_i = gate_slices[i].unsqueeze(-1)
-                h = (gate_i * A_bar) * h + B_bar * x_i
+                # Additional gating on state transition
+                gate_i = gate[:, i, :].unsqueeze(-1)
+                h = (gate_i * A_bar) * h + B_bar * x[:, i, :].unsqueeze(-1)
             else:
-                h = A_bar * h + B_bar * x_i
+                # Standard Mamba SSM update (already has implicit gating via delta/A_bar)
+                h = A_bar * h + B_bar * x[:, i, :].unsqueeze(-1)
 
-            # Use einsum for potentially faster matrix mult
-            y[:, i, :] = torch.einsum('bds,bs->bd', h, C_slices[i])
+            y[:, i, :] = torch.sum(h * C_val[:, i, :].unsqueeze(1), dim=-1)
 
         y = y + x * self.D
         return y
@@ -1066,13 +1055,21 @@ class MambaSSM(ModelObject):
 
         self.prediction_batch_size = prediction_batch_size
         self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if torch.backends.mps.is_available():
-            self.device = "mps"  # Added for MacOS users
         
-        # Enable optimizations
-        if self.device == "cuda":
+        # Device selection: CUDA > MPS > CPU
+        # Check CUDA first (highest priority for performance)
+        if torch.cuda.is_available():
+            self.device = "cuda"
             torch.backends.cudnn.benchmark = True  # Auto-tune kernels for better performance
+        # Only check MPS on macOS to avoid false positives on Linux
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            import platform
+            if platform.system() == "Darwin":  # macOS only
+                self.device = "mps"
+            else:
+                self.device = "cpu"
+        else:
+            self.device = "cpu"
         
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
@@ -1745,13 +1742,21 @@ class pMLP(ModelObject):
 
         self.prediction_batch_size = prediction_batch_size
         self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if torch.backends.mps.is_available():
-            self.device = "mps"  # Added for MacOS users
         
-        # Enable optimizations
-        if self.device == "cuda":
+        # Device selection: CUDA > MPS > CPU
+        # Check CUDA first (highest priority for performance)
+        if torch.cuda.is_available():
+            self.device = "cuda"
             torch.backends.cudnn.benchmark = True  # Auto-tune kernels for better performance
+        # Only check MPS on macOS to avoid false positives on Linux
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            import platform
+            if platform.system() == "Darwin":  # macOS only
+                self.device = "mps"
+            else:
+                self.device = "cpu"
+        else:
+            self.device = "cpu"
         
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
