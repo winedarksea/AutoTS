@@ -22,7 +22,7 @@
 * improvements to the calendars, Hindu calendar should be working now
 * changes to HistoricValues which hopefully makes it more reliable
 * added pMLP and MambaSSM models (painfully slow)
-* deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet. Unlikely you were using these, deprecated for a while
+* deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet, UnivariateRegression
 * improvements to model_interrupt
 * synthetic data generation and feature extractor new, very much in beta
 * updated weather data to CDO v2 (requires API key)

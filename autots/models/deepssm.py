@@ -798,9 +798,8 @@ class MambaMinimalBlock(Module):
         x = F.silu(x)
         y = self.ssm(x)
 
-        # Combine gating and output projection
-        z_gated = F.silu(z)
-        y = y * z_gated
+        # Fuse gating and output projection to reduce operations
+        y = y * F.silu(z)
         output = self.out_proj(y)
         return output
 
@@ -816,23 +815,34 @@ class MambaMinimalBlock(Module):
         bc = self.x_proj(x)
         B_val, C_val = torch.split(bc, self.d_state, dim=-1)
 
-        h = torch.zeros(B, d_inner, self.d_state, device=x.device)
+        # Preallocate with dtype to avoid conversion overhead
+        h = torch.zeros(B, d_inner, self.d_state, device=x.device, dtype=x.dtype)
         y = torch.zeros(B, L, d_inner, device=x.device, dtype=x.dtype)
 
+        # Pre-extract slices to reduce indexing overhead
+        delta_slices = delta.unbind(dim=1)  # List of L tensors, each (B, d_inner)
+        B_slices = B_val.unbind(dim=1)  # List of L tensors, each (B, d_state)
+        C_slices = C_val.unbind(dim=1)  # List of L tensors, each (B, d_state)
+        x_slices = x.unbind(dim=1)  # List of L tensors, each (B, d_inner)
+        
+        if self.use_extra_gating:
+            gate_slices = gate.unbind(dim=1)
+
+        # Optimized loop with reduced indexing
         for i in range(L):
-            delta_i = delta[:, i, :].unsqueeze(-1)
+            delta_i = delta_slices[i].unsqueeze(-1)  # (B, d_inner, 1)
             A_bar = torch.exp(delta_i * A)
-            B_bar = delta_i * B_val[:, i, :].unsqueeze(1)
+            B_bar = delta_i * B_slices[i].unsqueeze(1)  # (B, 1, d_state) -> broadcast
+            x_i = x_slices[i].unsqueeze(-1)  # (B, d_inner, 1)
 
             if self.use_extra_gating:
-                # Additional gating on state transition
-                gate_i = gate[:, i, :].unsqueeze(-1)
-                h = (gate_i * A_bar) * h + B_bar * x[:, i, :].unsqueeze(-1)
+                gate_i = gate_slices[i].unsqueeze(-1)
+                h = (gate_i * A_bar) * h + B_bar * x_i
             else:
-                # Standard Mamba SSM update (already has implicit gating via delta/A_bar)
-                h = A_bar * h + B_bar * x[:, i, :].unsqueeze(-1)
+                h = A_bar * h + B_bar * x_i
 
-            y[:, i, :] = torch.sum(h * C_val[:, i, :].unsqueeze(1), dim=-1)
+            # Use einsum for potentially faster matrix mult
+            y[:, i, :] = torch.einsum('bds,bs->bd', h, C_slices[i])
 
         y = y + x * self.D
         return y
@@ -875,12 +885,12 @@ class MambaCore(Module):
     def forward(self, x):
         # x shape: (batch_size, seq_len, input_dim)
         # Process sequence through Mamba blocks
-        x = self.dropout(self.input_projection(x))
+        x = self.input_projection(x)
+        x = self.dropout(x)
 
         for norm, block in self.layers:
-            # Cache normalized input to avoid recomputation
-            x_norm = norm(x)
-            x = block(x_norm) + x
+            # Residual connection with in-place addition when possible
+            x = x + block(norm(x))
 
         x = self.norm_f(x)
         # Output for all timesteps in sequence
@@ -971,7 +981,7 @@ class MLPCore(Module):
             # Reshape to (batch_size * seq_len, input_dim) to process all timesteps
             x = x.reshape(-1, input_dim)
             
-            # Process through backbone
+            # Process through backbone - no change needed, BatchNorm1d works on flattened
             hidden = self.backbone(x)
             
             # Generate outputs
@@ -1059,6 +1069,11 @@ class MambaSSM(ModelObject):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if torch.backends.mps.is_available():
             self.device = "mps"  # Added for MacOS users
+        
+        # Enable optimizations
+        if self.device == "cuda":
+            torch.backends.cudnn.benchmark = True  # Auto-tune kernels for better performance
+        
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self.changepoint_features = None
@@ -1276,8 +1291,9 @@ class MambaSSM(ModelObject):
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=2 if self.device == "cpu" else 0,  # Parallel loading for CPU
             pin_memory=(self.device == "cuda"),
+            persistent_workers=(self.device == "cpu" and True),  # Reuse workers
         )
 
         if self.verbose:
@@ -1287,27 +1303,42 @@ class MambaSSM(ModelObject):
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self.model.train()
+        
+        # Use gradient accumulation for better throughput with smaller batches
+        accumulation_steps = max(1, 32 // self.batch_size)  # Effective batch size of ~32
+        
         for epoch in range(self.epochs):
             running_loss = 0.0
-            for x_batch, y_batch in tqdm(
+            num_batches = 0
+            optimizer.zero_grad(set_to_none=True)
+            
+            for batch_idx, (x_batch, y_batch) in enumerate(tqdm(
                 dataloader,
                 desc=f"Epoch {epoch+1}/{self.epochs}",
                 disable=(self.verbose == 0),
-            ):
-                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-                optimizer.zero_grad()
+                mininterval=1.0,  # Update progress bar less frequently
+            )):
+                x_batch, y_batch = x_batch.to(self.device, non_blocking=True), y_batch.to(self.device, non_blocking=True)
+                
                 mu, sigma = self.model(x_batch)
                 
                 # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
                 # y_batch has shape (batch_size, prediction_batch_size, 1)
                 # Calculate loss across all timesteps in the batch
                 loss = criterion(mu, sigma, y_batch)
+                loss = loss / accumulation_steps  # Scale loss for accumulation
                 loss.backward()
-                optimizer.step()
-                running_loss += loss.item()
+                
+                # Update weights every accumulation_steps batches
+                if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+                
+                running_loss += loss.item() * accumulation_steps  # Unscale for reporting
+                num_batches += 1
             if self.verbose:
                 print(
-                    f"Epoch {epoch+1}  avg-loss: {running_loss / len(dataloader):.4f}"
+                    f"Epoch {epoch+1}  avg-loss: {running_loss / num_batches:.4f}"
                 )
 
         self.fit_runtime = datetime.datetime.now() - fit_start_time
@@ -1730,6 +1761,11 @@ class pMLP(ModelObject):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if torch.backends.mps.is_available():
             self.device = "mps"  # Added for MacOS users
+        
+        # Enable optimizations
+        if self.device == "cuda":
+            torch.backends.cudnn.benchmark = True  # Auto-tune kernels for better performance
+        
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self.changepoint_features = None
@@ -1945,8 +1981,9 @@ class pMLP(ModelObject):
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=2 if self.device == "cpu" else 0,  # Parallel loading for CPU
             pin_memory=(self.device == "cuda"),
+            persistent_workers=(self.device == "cpu" and True),  # Reuse workers
         )
 
         if self.verbose:
@@ -1960,34 +1997,42 @@ class pMLP(ModelObject):
         # Learning rate scheduler for better convergence
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
         
+        # Use gradient accumulation for better throughput
+        accumulation_steps = max(1, 64 // self.batch_size)  # Effective batch size of ~64
+        
         for epoch in range(self.epochs):
             running_loss = 0.0
-            epoch_losses = []
+            num_batches = 0
+            optimizer.zero_grad(set_to_none=True)
             
-            for x_batch, y_batch in tqdm(
+            for batch_idx, (x_batch, y_batch) in enumerate(tqdm(
                 dataloader,
                 desc=f"Epoch {epoch+1}/{self.epochs}",
                 disable=(self.verbose == 0),
-            ):
-                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-                optimizer.zero_grad()
+                mininterval=1.0,  # Update progress bar less frequently
+            )):
+                x_batch, y_batch = x_batch.to(self.device, non_blocking=True), y_batch.to(self.device, non_blocking=True)
+                
                 mu, sigma = self.model(x_batch)
                 
                 # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
                 # y_batch has shape (batch_size, prediction_batch_size, 1)
                 # Calculate loss across all timesteps in the batch
                 loss = criterion(mu, sigma, y_batch)
+                loss = loss / accumulation_steps  # Scale loss for accumulation
                 loss.backward()
                 
-                # Gradient clipping for stability
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                # Update weights every accumulation_steps batches
+                if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
+                    # Gradient clipping for stability
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
                 
-                optimizer.step()
-                loss_item = loss.item()
-                running_loss += loss_item
-                epoch_losses.append(loss_item)
+                running_loss += loss.item() * accumulation_steps  # Unscale for reporting
+                num_batches += 1
             
-            avg_loss = running_loss / len(dataloader)
+            avg_loss = running_loss / num_batches
             scheduler.step(avg_loss)
             
             if self.verbose:
