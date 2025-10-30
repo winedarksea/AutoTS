@@ -45,9 +45,10 @@ except Exception:
 def build_series_feature_mapping(feature_columns, series_names, changepoint_features_cols):
     """
     Build a mapping from series index to their corresponding feature column indices.
-    
-    This handles per-series changepoint features where each series has its own set
-    of changepoint features (e.g., 'SeriesA_basic_changepoint_1', 'SeriesB_basic_changepoint_1').
+
+    This handles per-series feature columns (changepoints, naive features, etc.)
+    so that each series only receives its own feature subset while shared features
+    remain available to all series.
     
     Args:
         feature_columns: All feature column names
@@ -59,48 +60,67 @@ def build_series_feature_mapping(feature_columns, series_names, changepoint_feat
             - series_feat_mapping: dict mapping series_idx -> list of feature column indices
             - has_per_series_features: bool indicating if per-series features were detected
     """
-    if len(changepoint_features_cols) == 0:
+    if len(feature_columns) == 0:
         return None, False
-    
-    # Check if we have per-series changepoint features
-    # Per-series features have pattern: {series_name}_{method}_changepoint_{num}
-    has_per_series = any(
-        any(str(col).startswith(f"{series_name}_") for series_name in series_names)
-        for col in changepoint_features_cols
-    )
-    
+
+    # Normalize to strings for reliable comparisons
+    feature_columns_list = list(feature_columns)
+    feature_columns_str = [str(col) for col in feature_columns_list]
+    series_names_str = [str(name) for name in series_names]
+
+    def _col_targets_series(col_str, series_name):
+        """Return True if column appears to belong exclusively to a series."""
+        if col_str == f"naive_last_{series_name}":
+            return True
+        if col_str.startswith(series_name):
+            if len(col_str) == len(series_name):
+                return True
+            next_char = col_str[len(series_name)]
+            if not next_char.isalnum():
+                return True
+        if col_str.endswith(f"_{series_name}"):
+            return True
+        return False
+
+    def _col_targets_any_series(col_str):
+        return any(_col_targets_series(col_str, s) for s in series_names_str)
+
+    # Detect per-series features across all feature columns
+    has_per_series = any(_col_targets_any_series(col_str) for col_str in feature_columns_str)
+
+    # Fallback: inspect changepoint columns if detection fails (legacy naming safeguards)
+    if (
+        not has_per_series
+        and changepoint_features_cols is not None
+        and len(changepoint_features_cols) > 0
+    ):
+        has_per_series = any(
+            _col_targets_any_series(str(col)) for col in changepoint_features_cols
+        )
+
     if not has_per_series:
         return None, False
-    
+
     # Build the mapping
     series_feat_mapping = {}
-    feature_columns_list = list(feature_columns)
-    
-    for series_idx, series_name in enumerate(series_names):
+
+    for series_idx, series_name in enumerate(series_names_str):
         # Find all feature columns for this series
         # Includes: date features (shared), series-specific changepoint features, series-specific naive features
         series_feature_indices = []
-        
-        for feat_idx, feat_col in enumerate(feature_columns_list):
-            feat_col_str = str(feat_col)
-            
-            # Include if it's a shared feature (doesn't start with any series name)
-            is_shared = not any(
-                feat_col_str.startswith(f"{sname}_") 
-                for sname in series_names
-            )
-            
+
+        for feat_idx, feat_col_str in enumerate(feature_columns_str):
+            # Include if it's a shared feature (doesn't map to a specific series)
+            is_shared = not _col_targets_any_series(feat_col_str)
+
             # Or if it's specific to this series
-            is_series_specific = feat_col_str.startswith(f"{series_name}_")
-            
-            # Include naive features for this series
-            is_naive_for_series = feat_col_str == f"naive_last_{series_name}"
-            
-            if is_shared or is_series_specific or is_naive_for_series:
+            is_series_specific = _col_targets_series(feat_col_str, series_name)
+
+            if is_shared or is_series_specific:
                 series_feature_indices.append(feat_idx)
-        
+
         series_feat_mapping[series_idx] = series_feature_indices
-    
+
     return series_feat_mapping, True
 
 
