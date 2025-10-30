@@ -66,7 +66,7 @@ class TestAnomalies(unittest.TestCase):
         
         # Filter methods based on torch availability
         test_methods = [m for m in available_methods if m != 'VAEOutlier' or torch_available]
-        
+
         while not all(x in tried for x in test_methods):
             params = AnomalyDetector.get_new_params(method="deep")
             # remove 'Slice' as it messes up assertions

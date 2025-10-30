@@ -75,9 +75,20 @@ def sk_outliers(df, method, method_params={}):
     elif method == "EE":
         if method_params['contamination'] == "auto":
             method_params['contamination'] = 0.1
+        # EllipticEnvelope is sensitive to NaN values and needs sufficient samples
+        # Fill NaN with mean to avoid covariance matrix errors
+        df_filled = df.fillna(df.mean()).fillna(0)
+        # Ensure we have enough samples for the support_fraction
+        if 'support_fraction' in method_params and method_params['support_fraction'] is not None:
+            min_samples = max(df_filled.shape[1] + 1, 2)  # at least n_features + 1
+            required_samples = int(np.ceil(min_samples / method_params['support_fraction']))
+            if len(df_filled) < required_samples:
+                # Increase support_fraction to ensure we have enough samples
+                method_params = method_params.copy()
+                method_params['support_fraction'] = max(min_samples / len(df_filled), 0.5)
         model = EllipticEnvelope(**method_params)
-        res = model.fit_predict(df)
-        scores = model.decision_function(df)
+        res = model.fit_predict(df_filled)
+        scores = model.decision_function(df_filled)
     elif method == "GaussianMixture":
         model = GaussianMixture(**method_params)
         model.fit(df)
@@ -580,7 +591,9 @@ def anomaly_new_params(method='random'):
                 [0.02, 0.1, 0.05, 0.15], [0.1, 0.8, 0.05, 0.05]
             )[0],
             'assume_centered': random.choices([False, True], [0.9, 0.1])[0],
-            'support_fraction': random.choices([None, 0.2, 0.8], [0.9, 0.1, 0.1])[0],
+            # Reduced probability of low support_fraction to avoid covariance matrix errors
+            # Higher support_fraction = more samples used = more robust
+            'support_fraction': random.choices([None, 0.5, 0.8], [0.8, 0.1, 0.1])[0],
         }
     elif method_choice == "GaussianMixture":
         method_params = {

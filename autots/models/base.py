@@ -18,6 +18,17 @@ from autots.tools.plotting import plot_distributions, plot_forecast_with_interva
 import matplotlib.pyplot as plt
 
 
+DEFAULT_ALIGN_LAST_VALUE_PARAMS = {
+    "rows": 1,
+    "lag": 1,
+    "method": "additive",
+    "strength": 1.0,
+    "first_value_only": False,
+    "threshold": 3,
+    "threshold_method": "max",
+}
+
+
 def create_forecast_index(frequency, forecast_length, train_last_date, last_date=None):
     if frequency == 'infer':
         raise ValueError(
@@ -197,6 +208,207 @@ def apply_constraints(
         )
 
     return forecast, lower_forecast, upper_forecast
+
+
+def apply_adjustments(
+    forecast,
+    lower_forecast,
+    upper_forecast,
+    adjustments=None,
+    df_train=None,
+):
+    """Apply post-forecast adjustments such as percentage, additive, and smoothing.
+    
+    Args:
+        forecast (pd.DataFrame): forecast df, wide style
+        lower_forecast (pd.DataFrame): lower bound forecast df
+        upper_forecast (pd.DataFrame): upper bound forecast df
+        adjustments (list): list of dictionaries of adjustments to apply
+            keys: "adjustment_method" or "method", "columns", "start_date", "end_date", "apply_bounds", plus method-specific params
+        df_train (pd.DataFrame): required for align_last_value method
+    
+    Returns:
+        forecast, lower, upper (pd.DataFrame)
+    """
+    if adjustments is None or not adjustments:
+        return forecast, lower_forecast, upper_forecast
+    if isinstance(adjustments, dict):
+        adjustments = [adjustments]
+    if not isinstance(forecast, pd.DataFrame):
+        raise TypeError("apply_adjustments requires forecast to be a pandas DataFrame.")
+
+    forecast_adj = forecast.copy()
+    lower_adj = lower_forecast.copy() if isinstance(lower_forecast, pd.DataFrame) else lower_forecast
+    upper_adj = upper_forecast.copy() if isinstance(upper_forecast, pd.DataFrame) else upper_forecast
+
+    def _resolve_columns(adjustment):
+        """Get list of valid columns from adjustment specification."""
+        cols = adjustment.get("columns")
+        if cols is None:
+            return list(forecast_adj.columns)
+        if isinstance(cols, (str, int)):
+            cols = [cols]
+        # Filter to only existing columns
+        valid_cols = [col for col in cols if col in forecast_adj.columns]
+        if not valid_cols and cols:
+            warnings.warn(f"Adjustment columns {cols} not found in forecast; skipping.")
+        return valid_cols
+
+    def _create_mask(index, adjustment):
+        """Create boolean mask for date range filtering."""
+        if index.empty:
+            return pd.Series(dtype=bool, index=index)
+        start = adjustment.get("start_date")
+        end = adjustment.get("end_date")
+        start = index[0] if start is None else pd.to_datetime(start)
+        end = index[-1] if end is None else pd.to_datetime(end)
+        if end < start:
+            warnings.warn(f"Adjustment end_date {end} precedes start_date {start}; skipping window.")
+            return pd.Series(False, index=index)
+        return (index >= start) & (index <= end)
+
+    # Process each adjustment
+    for adjustment in adjustments:
+        if not isinstance(adjustment, dict):
+            warnings.warn(f"Adjustment {adjustment} is not a dict and will be skipped.")
+            continue
+        
+        method = adjustment.get("adjustment_method") or adjustment.get("method")
+        if method is None:
+            warnings.warn("No adjustment_method provided; skipping.")
+            continue
+        method = str(method).lower()
+        
+        columns = _resolve_columns(adjustment)
+        if not columns:
+            continue
+        
+        apply_bounds = adjustment.get("apply_bounds", True)
+        mask = _create_mask(forecast_adj.index, adjustment)
+        
+        # Apply adjustment based on method
+        if method in ("percentage", "percent"):
+            # Percentage adjustment - multiply by (1 + percentage)
+            start_value = adjustment.get("start_value")
+            end_value = adjustment.get("end_value")
+            constant_value = adjustment.get("value")
+            
+            # Handle different value specifications
+            if start_value is None and end_value is None and constant_value is not None:
+                start_value = end_value = constant_value
+            elif start_value is None and end_value is not None:
+                start_value = end_value
+            elif end_value is None and start_value is not None:
+                end_value = start_value
+            
+            if start_value is None:
+                warnings.warn("Percentage adjustment missing value definitions; skipping.")
+                continue
+            if not mask.any():
+                continue
+            
+            # Create linear interpolation between start and end
+            num_periods = int(mask.sum())
+            pct_values = np.linspace(start_value, end_value, num=num_periods)
+            pct_series = pd.Series(pct_values, index=forecast_adj.index[mask])
+            
+            # Apply to forecast and bounds
+            forecast_adj.loc[mask, columns] = forecast_adj.loc[mask, columns].multiply(
+                1 + pct_series, axis=0
+            )
+            if apply_bounds and isinstance(lower_adj, pd.DataFrame):
+                lower_adj.loc[mask, columns] = lower_adj.loc[mask, columns].multiply(
+                    1 + pct_series, axis=0
+                )
+            if apply_bounds and isinstance(upper_adj, pd.DataFrame):
+                upper_adj.loc[mask, columns] = upper_adj.loc[mask, columns].multiply(
+                    1 + pct_series, axis=0
+                )
+                
+        elif method in ("additive", "add"):
+            # Additive adjustment - add constant or array
+            value = adjustment.get("value")
+            if value is None:
+                warnings.warn("Additive adjustment missing 'value'; skipping.")
+                continue
+            if not mask.any():
+                continue
+            
+            # Apply to forecast and bounds
+            forecast_adj.loc[mask, columns] = forecast_adj.loc[mask, columns] + value
+            if apply_bounds and isinstance(lower_adj, pd.DataFrame):
+                lower_adj.loc[mask, columns] = lower_adj.loc[mask, columns] + value
+            if apply_bounds and isinstance(upper_adj, pd.DataFrame):
+                upper_adj.loc[mask, columns] = upper_adj.loc[mask, columns] + value
+                
+        elif method in ("align_last_value", "alignlastvalue", "align"):
+            # Align forecast to last historical value
+            from autots.tools.transform import AlignLastValue
+
+            if df_train is None or not isinstance(df_train, pd.DataFrame):
+                warnings.warn("AlignLastValue adjustment requires df_train dataframe; skipping.")
+                continue
+            
+            # Parse parameters
+            params = adjustment.get("parameters") or adjustment.get("transformation_params") or {}
+            if isinstance(params, dict) and "0" in params and isinstance(params["0"], dict):
+                params = params["0"]
+            align_params = {**DEFAULT_ALIGN_LAST_VALUE_PARAMS, **params}
+            
+            # Fit and apply aligner
+            aligner = AlignLastValue(**align_params)
+            try:
+                aligner.fit(df_train[columns])
+            except KeyError as err:
+                warnings.warn(f"AlignLastValue could not find columns {err}; skipping.")
+                continue
+            
+            # Apply to forecast
+            forecast_adj.loc[:, columns] = aligner.inverse_transform(forecast_adj.loc[:, columns])
+            
+            # Apply to bounds with same adjustment values
+            if apply_bounds:
+                adjustment_values = aligner.adjustment
+                if isinstance(lower_adj, pd.DataFrame):
+                    lower_adj.loc[:, columns] = aligner.inverse_transform(
+                        lower_adj.loc[:, columns], adjustment=adjustment_values
+                    )
+                if isinstance(upper_adj, pd.DataFrame):
+                    upper_adj.loc[:, columns] = aligner.inverse_transform(
+                        upper_adj.loc[:, columns], adjustment=adjustment_values
+                    )
+                    
+        elif method in ("smoothing", "ewma"):
+            # Exponential weighted moving average smoothing
+            span = adjustment.get("span", 7)
+            if span is None or span <= 0:
+                warnings.warn(f"Invalid EWMA span '{span}' in adjustment; skipping.")
+                continue
+            
+            # Apply smoothing
+            smoothed_forecast = forecast_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+            if mask.any():
+                forecast_adj.loc[mask, columns] = smoothed_forecast.loc[mask, columns]
+            else:
+                forecast_adj.loc[:, columns] = smoothed_forecast
+            
+            if apply_bounds:
+                if isinstance(lower_adj, pd.DataFrame):
+                    smoothed_lower = lower_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+                    if mask.any():
+                        lower_adj.loc[mask, columns] = smoothed_lower.loc[mask, columns]
+                    else:
+                        lower_adj.loc[:, columns] = smoothed_lower
+                if isinstance(upper_adj, pd.DataFrame):
+                    smoothed_upper = upper_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+                    if mask.any():
+                        upper_adj.loc[mask, columns] = smoothed_upper.loc[mask, columns]
+                    else:
+                        upper_adj.loc[:, columns] = smoothed_upper
+        else:
+            warnings.warn(f"Unknown adjustment_method '{method}' provided; skipping.")
+
+    return forecast_adj, lower_adj, upper_adj
 
 
 def extract_single_series_from_horz(series, model_name, model_parameters):
@@ -1098,6 +1310,21 @@ class PredictionObject(object):
             upper_constraint=upper_constraint,
             lower_constraint=lower_constraint,
             bounds=bounds,
+        )
+        return self
+
+    def apply_adjustments(self, adjustments=None, df_train=None):
+        """Apply post-processing adjustments to the stored forecasts."""
+        (
+            self.forecast,
+            self.lower_forecast,
+            self.upper_forecast,
+        ) = apply_adjustments(
+            self.forecast,
+            self.lower_forecast,
+            self.upper_forecast,
+            adjustments=adjustments,
+            df_train=df_train,
         )
         return self
 

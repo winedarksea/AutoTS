@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Test constraint."""
 import unittest
+import warnings
 import numpy as np
 import pandas as pd
 from autots import load_daily, ModelPrediction
@@ -169,3 +170,315 @@ class TestConstraint(unittest.TestCase):
                     self.assertTrue(prediction.forecast.iloc[0, :].max() == df.iloc[-1, :].max())
                 # test for nulls
                 self.assertTrue(prediction.forecast.isnull().sum().sum() == 0)
+
+    def test_adjustments(self):
+        """Test apply_adjustments functionality."""
+        df = load_daily(long=False)
+        forecast_length = 30
+        
+        # Create a basic model and prediction
+        model = ModelPrediction(
+            forecast_length=forecast_length,
+            transformation_dict={
+                "fillna": "median",
+                "transformations": {"0": "SinTrend"},
+                "transformation_params": {"0": {}}
+            },
+            model_str="SeasonalityMotif",
+            parameter_dict={
+                "window": 7, "point_method": "midhinge",
+                "distance_metric": "canberra", "k": 10,
+                "datepart_method": "common_fourier",
+            },
+        )
+        prediction = model.fit_predict(df, forecast_length=forecast_length)
+        
+        # Store original values for comparison
+        orig_forecast = prediction.forecast.copy()
+        orig_lower = prediction.lower_forecast.copy()
+        orig_upper = prediction.upper_forecast.copy()
+        
+        # Test 1: Percentage adjustment
+        with self.subTest(i="percentage_constant"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "percentage",
+                    "value": 0.1,  # 10% increase
+                    "apply_bounds": True,
+                }],
+                df_train=df,
+            )
+            # Check that values increased by approximately 10%
+            expected = orig_forecast * 1.1
+            pd.testing.assert_frame_equal(pred.forecast, expected, rtol=1e-10)
+            expected_lower = orig_lower * 1.1
+            pd.testing.assert_frame_equal(pred.lower_forecast, expected_lower, rtol=1e-10)
+        
+        # Test 2: Percentage with gradient
+        with self.subTest(i="percentage_gradient"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "percentage",
+                    "start_value": 0.0,
+                    "end_value": 0.2,  # 0% to 20% increase over forecast period
+                    "apply_bounds": False,
+                }],
+                df_train=df,
+            )
+            # First value should be unchanged, last should be ~20% higher
+            self.assertTrue((pred.forecast.iloc[0, :] - orig_forecast.iloc[0, :]).abs().max() < 1e-10)
+            expected_last = orig_forecast.iloc[-1, :] * 1.2
+            pd.testing.assert_series_equal(pred.forecast.iloc[-1, :], expected_last, rtol=1e-10)
+            # Bounds should be unchanged
+            pd.testing.assert_frame_equal(pred.lower_forecast, orig_lower)
+        
+        # Test 3: Additive adjustment
+        with self.subTest(i="additive"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            adjustment_value = 5.0
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "additive",
+                    "value": adjustment_value,
+                    "apply_bounds": True,
+                }],
+                df_train=df,
+            )
+            expected = orig_forecast + adjustment_value
+            pd.testing.assert_frame_equal(pred.forecast, expected)
+            expected_lower = orig_lower + adjustment_value
+            pd.testing.assert_frame_equal(pred.lower_forecast, expected_lower)
+        
+        # Test 4: Smoothing adjustment
+        with self.subTest(i="smoothing"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "smoothing",
+                    "span": 5,
+                    "apply_bounds": True,
+                }],
+                df_train=df,
+            )
+            # Check that forecast was smoothed (values should differ)
+            self.assertFalse(pred.forecast.equals(orig_forecast))
+            # Check no nulls introduced
+            self.assertEqual(pred.forecast.isnull().sum().sum(), 0)
+        
+        # Test 5: AlignLastValue adjustment
+        with self.subTest(i="align_last_value"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "align_last_value",
+                    "apply_bounds": True,
+                    "parameters": {
+                        "rows": 1,
+                        "lag": 1,
+                        "method": "additive",
+                        "strength": 1.0,
+                    }
+                }],
+                df_train=df,
+            )
+            # First forecast value should align with last training value
+            for col in df.columns:
+                last_train = df[col].iloc[-1]
+                first_forecast = pred.forecast[col].iloc[0]
+                # Should be aligned (allowing small numerical differences)
+                self.assertAlmostEqual(first_forecast, last_train, delta=abs(last_train * 0.01) + 0.1)
+        
+        # Test 6: Multiple adjustments in sequence
+        with self.subTest(i="multiple_adjustments"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            pred.apply_adjustments(
+                adjustments=[
+                    {
+                        "adjustment_method": "percentage",
+                        "value": 0.1,
+                    },
+                    {
+                        "adjustment_method": "additive",
+                        "value": 2.0,
+                    },
+                ],
+                df_train=df,
+            )
+            # Should apply both: (orig * 1.1) + 2.0
+            expected = (orig_forecast * 1.1) + 2.0
+            pd.testing.assert_frame_equal(pred.forecast, expected, rtol=1e-10)
+        
+        # Test 7: Column-specific adjustment
+        with self.subTest(i="column_specific"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            test_col = df.columns[0]
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "additive",
+                    "value": 10.0,
+                    "columns": [test_col],
+                }],
+                df_train=df,
+            )
+            # Only specified column should change
+            expected = orig_forecast.copy()
+            expected[test_col] = orig_forecast[test_col] + 10.0
+            pd.testing.assert_frame_equal(pred.forecast, expected)
+        
+        # Test 8: Date range filtering
+        with self.subTest(i="date_range"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            # Apply adjustment only to middle portion
+            mid_idx = len(pred.forecast) // 2
+            start_date = pred.forecast.index[mid_idx]
+            
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "additive",
+                    "value": 5.0,
+                    "start_date": start_date,
+                }],
+                df_train=df,
+            )
+            # First half should be unchanged
+            pd.testing.assert_frame_equal(
+                pred.forecast.iloc[:mid_idx, :], 
+                orig_forecast.iloc[:mid_idx, :]
+            )
+            # Second half should be adjusted
+            expected_second_half = orig_forecast.iloc[mid_idx:, :] + 5.0
+            pd.testing.assert_frame_equal(
+                pred.forecast.iloc[mid_idx:, :],
+                expected_second_half
+            )
+        
+        # Test 9: Empty adjustments
+        with self.subTest(i="empty_adjustments"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            # Should not change anything
+            pred.apply_adjustments(adjustments=None, df_train=df)
+            pd.testing.assert_frame_equal(pred.forecast, orig_forecast)
+            
+            pred.apply_adjustments(adjustments=[], df_train=df)
+            pd.testing.assert_frame_equal(pred.forecast, orig_forecast)
+        
+        # Test 10: Invalid method handling
+        with self.subTest(i="invalid_method"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            
+            # Should warn and not crash
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                pred.apply_adjustments(
+                    adjustments=[{
+                        "adjustment_method": "nonexistent_method",
+                        "value": 1.0,
+                    }],
+                    df_train=df,
+                )
+                self.assertTrue(len(w) > 0)
+                self.assertTrue("Unknown adjustment_method" in str(w[-1].message))
+            # Forecast should be unchanged
+            pd.testing.assert_frame_equal(pred.forecast, orig_forecast)
+        
+        # Test 11: Percentage with gradient over date range
+        with self.subTest(i="percentage_gradient_with_date_range"):
+            pred = prediction
+            pred.forecast = orig_forecast.copy()
+            pred.lower_forecast = orig_lower.copy()
+            pred.upper_forecast = orig_upper.copy()
+            
+            # Apply a gradient from 0% to 10% increase, but only to middle portion
+            quarter_idx = len(pred.forecast) // 4
+            three_quarter_idx = 3 * len(pred.forecast) // 4
+            start_date = pred.forecast.index[quarter_idx]
+            end_date = pred.forecast.index[three_quarter_idx]
+            
+            pred.apply_adjustments(
+                adjustments=[{
+                    "adjustment_method": "percentage",
+                    "start_value": 0.0,   # 0% increase at start of range
+                    "end_value": 0.1,      # 10% increase at end of range
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "apply_bounds": True,
+                }],
+                df_train=df,
+            )
+            
+            # Before start_date should be unchanged
+            pd.testing.assert_frame_equal(
+                pred.forecast.iloc[:quarter_idx, :],
+                orig_forecast.iloc[:quarter_idx, :]
+            )
+            
+            # After end_date should be unchanged
+            if three_quarter_idx + 1 < len(pred.forecast):
+                pd.testing.assert_frame_equal(
+                    pred.forecast.iloc[three_quarter_idx + 1:, :],
+                    orig_forecast.iloc[three_quarter_idx + 1:, :]
+                )
+            
+            # At start of range should be nearly unchanged (0% adjustment)
+            expected_start = orig_forecast.iloc[quarter_idx, :] * 1.0
+            pd.testing.assert_series_equal(
+                pred.forecast.iloc[quarter_idx, :],
+                expected_start,
+                rtol=1e-10
+            )
+            
+            # At end of range should be increased by ~10%
+            expected_end = orig_forecast.iloc[three_quarter_idx, :] * 1.1
+            pd.testing.assert_series_equal(
+                pred.forecast.iloc[three_quarter_idx, :],
+                expected_end,
+                rtol=1e-10
+            )
+            
+            # Check bounds were also adjusted
+            expected_lower_end = orig_lower.iloc[three_quarter_idx, :] * 1.1
+            pd.testing.assert_series_equal(
+                pred.lower_forecast.iloc[three_quarter_idx, :],
+                expected_lower_end,
+                rtol=1e-10
+            )
+
