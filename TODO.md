@@ -27,9 +27,11 @@
 * synthetic data generation and feature extractor new, very much in beta
 * updated weather data to CDO v2 (requires API key)
 * added NASA solar data to load_live_daily
+* new methods to LevelShiftTransformer
 * created the seasonal_linear interpolation which is quite promisiing for seasonal data
+* added apply_adjustments
 * created an MCP server for AutoTS
-* many bug fixes, tweaks, and added unittests
+* many bug fixes, tweaks, reorganizations, and added unittests
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

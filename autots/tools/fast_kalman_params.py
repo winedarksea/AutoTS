@@ -211,6 +211,10 @@ def new_kalman_params(method=None, allow_auto=True):
 
     def finalize(params_dict):
         params_dict['em_iter'] = em_iter
+        # Disable 'auto' observation_noise when em_iter is set to prevent
+        # extremely slow nested optimization (up to 50 iterations each running em_iter EM steps)
+        if em_iter is not None and params_dict.get('observation_noise') == 'auto':
+            params_dict['observation_noise'] = random.choice([0.05, 0.1, 0.25])
         if not allow_auto and params_dict.get('observation_noise') == 'auto':
             params_dict['observation_noise'] = 0.1
         return params_dict

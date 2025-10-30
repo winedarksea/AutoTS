@@ -152,9 +152,10 @@ def generate_random_fir_params(method='random', data_type="time_series"):
     params = {}
 
     # Random number of taps (filter length)
+    # Reduced weights for 128+ to avoid slow FFT convolution
     params["numtaps"] = random.choices(
         [4, 7, 12, 32, 64, 128, 256, 512, 1024],
-        [0.1, 0.2, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1],
+        [0.15, 0.25, 0.15, 0.15, 0.2, 0.05, 0.025, 0.0125, 0.0125],
     )[0]
 
     if data_type == "audio":

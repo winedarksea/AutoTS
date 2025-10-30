@@ -369,6 +369,7 @@ def plot_feature_panels(
     show: bool = True,
 ):
     """Create a four-panel diagnostic plot shared by generator and detector."""
+    # TODO: switch the anomaly type labels to colored by type, only impact number shown on label, and prevent label overlap
     if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
         raise ImportError("matplotlib is required for plotting")
 

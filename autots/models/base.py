@@ -230,6 +230,8 @@ def apply_adjustments(
     Returns:
         forecast, lower, upper (pd.DataFrame)
     """
+    # TODO: apply adjustment to trend component of the predictions, if present
+    # TODO: have a df on the PredictionObject to track the adjustments applied
     if adjustments is None or not adjustments:
         return forecast, lower_forecast, upper_forecast
     if isinstance(adjustments, dict):
@@ -500,6 +502,7 @@ class PredictionObject(object):
         lower_forecast
 
     Methods:
+        copy: return a deep copy with separate memory for all key elements
         long_form_results: return complete results in long form
         total_runtime: return runtime for all model components in seconds
         plot
@@ -571,6 +574,55 @@ class PredictionObject(object):
             return True
         else:
             return False
+
+    def copy(self):
+        """Create a deep copy of the PredictionObject with separate memory for all key elements.
+        
+        Returns:
+            PredictionObject: A new PredictionObject with deep copies of all attributes
+        """
+        import copy
+        
+        # Create a new instance with copied forecasts and core attributes
+        new_obj = PredictionObject(
+            model_name=self.model_name,
+            forecast_length=self.forecast_length,
+            forecast_index=self.forecast_index.copy() if isinstance(self.forecast_index, pd.Index) else self.forecast_index,
+            forecast_columns=self.forecast_columns.copy() if isinstance(self.forecast_columns, pd.Index) else self.forecast_columns,
+            lower_forecast=self.lower_forecast.copy() if isinstance(self.lower_forecast, pd.DataFrame) else self.lower_forecast,
+            forecast=self.forecast.copy() if isinstance(self.forecast, pd.DataFrame) else self.forecast,
+            upper_forecast=self.upper_forecast.copy() if isinstance(self.upper_forecast, pd.DataFrame) else self.upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=self.predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=copy.deepcopy(self.model_parameters),
+            transformation_parameters=copy.deepcopy(self.transformation_parameters),
+            transformation_runtime=self.transformation_runtime,
+            per_series_metrics=self.per_series_metrics.copy() if isinstance(self.per_series_metrics, pd.DataFrame) else self.per_series_metrics,
+            per_timestamp=self.per_timestamp.copy() if isinstance(self.per_timestamp, pd.DataFrame) else self.per_timestamp,
+            avg_metrics=self.avg_metrics.copy() if isinstance(self.avg_metrics, pd.Series) else self.avg_metrics,
+            avg_metrics_weighted=self.avg_metrics_weighted.copy() if isinstance(self.avg_metrics_weighted, pd.Series) else self.avg_metrics_weighted,
+            full_mae_error=self.full_mae_error.copy() if isinstance(self.full_mae_error, np.ndarray) else self.full_mae_error,
+            model=None,  # Don't copy model objects as they can be complex
+            transformer=None,  # Don't copy transformer objects
+            result_windows=copy.deepcopy(self.result_windows) if self.result_windows is not None else None,
+            components=self.components.copy() if isinstance(self.components, pd.DataFrame) else self.components,
+        )
+        
+        # Copy additional attributes that may have been set after initialization
+        if hasattr(self, 'runtime_dict') and self.runtime_dict is not None:
+            new_obj.runtime_dict = copy.deepcopy(self.runtime_dict)
+        
+        if hasattr(self, 'squared_errors'):
+            new_obj.squared_errors = self.squared_errors.copy() if isinstance(self.squared_errors, np.ndarray) else self.squared_errors
+        
+        if hasattr(self, 'upper_pl'):
+            new_obj.upper_pl = self.upper_pl.copy() if isinstance(self.upper_pl, np.ndarray) else self.upper_pl
+        
+        if hasattr(self, 'lower_pl'):
+            new_obj.lower_pl = self.lower_pl.copy() if isinstance(self.lower_pl, np.ndarray) else self.lower_pl
+        
+        return new_obj
 
     def long_form_results(
         self,

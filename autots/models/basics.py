@@ -3208,6 +3208,7 @@ class FFT(ModelObject):
             n_harmonics (int): number of frequencies to include
             detrend (str): None, 'linear', or 'quadratic', use if no other detrending already done
         """
+        # TODO: add more detrend options (changepoint based)
         ModelObject.__init__(
             self,
             name,
@@ -4089,20 +4090,13 @@ class TVVAR(BasicLinearModel):
 
     Notes:
         var_preprocessing will fail with many options, anything that scales/shifts the space
-        x_scaled=True seems to fail often when base_scaled=False and VAR components used
-    TODO:
-        # plot of feature impacts
-
-        # highly correlated, shared hidden factors
-        # groups / geos
-
-        # impulse response
-        # allow other regression models
-        # could run regression twice, setting to zero any X which had low coefficients for the second run
-
-        # feature summarization (dynamic factor is PCA)
-        # hierchial by GEO
+        x_scaled=True seems to fail often when base_scaled=False and VAR components use
     """
+    # TODO: add BayesianRegression as a model option (include uncertainty)
+    # TODO: add a plot of components
+    # TODO: add a function for impulse response analysis
+    # TODO: have an option for hierarchial coefficients (constrainted to same distribution)
+    # TODO: feature summarization for VAR components (PCA)
 
     def __init__(
         self,

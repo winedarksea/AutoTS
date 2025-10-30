@@ -1438,8 +1438,9 @@ def generate_regressor_params(
             ).item()
             if solver in ['sgd', 'adam']:
                 early_stopping = np.random.choice([True, False], size=1).item()
+                # Removed 0.00001 (1e-05) as it's too slow for sgd solver
                 learning_rate_init = np.random.choice(
-                    [0.01, 0.001, 0.0001, 0.00001], p=[0.1, 0.7, 0.1, 0.1], size=1
+                    [0.01, 0.001, 0.0001], p=[0.15, 0.7, 0.15], size=1
                 ).item()
             else:
                 early_stopping = False
@@ -2194,8 +2195,9 @@ class RollingRegression(ModelObject):
             [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.05, 0.1, 0.1, 0.05]
         )[0]
         abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
+        # Removed 30 as it's too slow for rolling autocorr computation
         rolling_autocorr_periods_choice = random.choices(
-            [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
+            [None, 2, 7, 12], [0.8, 0.05, 0.1, 0.05]
         )[0]
         add_date_part_choice = random.choices(
             [
@@ -3361,6 +3363,9 @@ class MultivariateRegression(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
+    # TODO: add a lag feature that can efficiently just pull seasonal lags, for example (7, 14, 28, 56, 365)
+    # TODO: add a trend tracking feature, possibly the changepoint features like in pMLP
+    # TODO: add change based targets such as y_t − y_{t-k} or y_t / y_{t-k} (perhaps as part of seasonal lags)
 
     def __init__(
         self,
@@ -3947,8 +3952,9 @@ class MultivariateRegression(ModelObject):
             [None, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.1, 0.1, 0.05]
         )[0]
         abs_energy_choice = False
+        # Removed 30 as it's too slow for rolling autocorr computation
         rolling_autocorr_periods_choice = random.choices(
-            [None, 2, 7, 12, 30], [0.99, 0.01, 0.01, 0.01, 0.01]
+            [None, 2, 7, 12], [0.99, 0.01, 0.01, 0.01]
         )[0]
         nonzero_last_n = random.choices(
             [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]

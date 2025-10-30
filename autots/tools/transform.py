@@ -1177,6 +1177,7 @@ class SeasonalDifference(EmptyTransformer):
 
 class DatepartRegressionTransformer(EmptyTransformer):
     """Remove a regression on datepart from the data. See tools.seasonal.date_part"""
+    # TODO: support passing in future_regressor via GeneralTransformer, use regression types like ARDL
 
     def __init__(
         self,
@@ -7487,6 +7488,13 @@ class ReconciliationTransformer(EmptyTransformer):
             W = manual_shrink * diagW + (1.0 - manual_shrink) * W
 
         # 5) Optional ridge for stability
+        # For ERM with full weighting, enforce a minimum ridge to prevent
+        # ill-conditioned matrices that cause extremely slow solve operations
+        if method == "erm" and weighting == "full":
+            min_ridge = 1e-8
+            if ridge_val is None or ridge_val < min_ridge:
+                ridge_val = min_ridge
+        
         if ridge_val is not None and ridge_val > 0.0:
             W += np.eye(n_levels) * ridge_val
 
@@ -7555,8 +7563,9 @@ class ReconciliationTransformer(EmptyTransformer):
         weighting_choice = random.choice(weighting_opts)
         led_wolf = random.choices([True, False], [0.3, 0.7])[0]
         shrink_val = random.choices([0.0, 0.05, 0.1, 0.15, 0.3, 0.5, 0.7], [0.1, 0.2, 0.3, 0.2, 0.1, 0.2, 0.1])[0]
-        # Some possible ridge values, or None
-        ridge_candidates = [None, 1e-12, 1e-9, 1e-8, 1e-7, 1e-6]
+        # Ridge values: avoid extremely small values (1e-12) which can cause slow solve operations
+        # Especially important for ERM with full weighting
+        ridge_candidates = [None, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
         ridge_val = random.choice(ridge_candidates)
 
         params = {
