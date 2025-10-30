@@ -14,12 +14,15 @@ import copy
 import warnings
 import json
 import time
+import datetime
 from autots.tools.transform import (
     DatepartRegressionTransformer,
     AnomalyRemoval,
     LevelShiftMagic,
     GeneralTransformer,
 )
+from pandas.tseries.frequencies import to_offset
+from autots.models.base import PredictionObject, stack_component_frames
 from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.tools.changepoints import ChangepointDetector
 from autots.tools.anomaly_utils import anomaly_new_params
@@ -181,10 +184,10 @@ class TimeSeriesFeatureDetector:
         # Ensure level_shift_params uses the correct output mode
         if level_shift_params is None:
             self.level_shift_params = {
-                'window_size': 90,
-                'alpha': 2.5,
-                'grouping_forward_limit': 5,
-                'max_level_shifts': 5,
+                'window_size': 364,
+                'alpha': 1.8,
+                'grouping_forward_limit': 3,
+                'max_level_shifts': 10,
                 'alignment': 'rolling_diff',
                 'output': self.detection_mode,
             }
@@ -385,6 +388,93 @@ class TimeSeriesFeatureDetector:
         )
         
         return self
+
+    def forecast(self, forecast_length, frequency=None):
+        """Generate a simple forward projection similar to BasicLinearModel.
+        This detector is not optimized for forecasting; dedicated forecasting models may provide better results.
+        """
+        if self.df_original is None or self.date_index is None:
+            raise ValueError("TimeSeriesFeatureDetector must be fit before forecasting.")
+        forecast_length = int(forecast_length)
+        if forecast_length <= 0:
+            raise ValueError("forecast_length must be a positive integer.")
+        inferred = frequency or getattr(self.date_index, 'freq', None) or pd.infer_freq(self.date_index)
+        if inferred is None:
+            if len(self.date_index) < 2:
+                raise ValueError("Unable to infer frequency from the training index.")
+            inferred = self.date_index[-1] - self.date_index[-2]
+        freq = to_offset(inferred)
+        future_index = pd.date_range(start=self.date_index[-1], periods=forecast_length + 1, freq=freq)[1:]
+        columns = self.df_original.columns
+        zeros = pd.DataFrame(0.0, index=future_index, columns=columns)
+        seasonal = zeros.copy()
+        holidays = zeros.copy()
+        train_reg = getattr(self, "_holiday_regressors_temp", None)
+        if self.seasonality_model is not None:
+            future_reg = None
+            if (
+                self.holiday_detector is not None
+                and train_reg is not None
+                and not getattr(train_reg, "empty", True)
+            ):
+                future_reg = self.holiday_detector.dates_to_holidays(future_index, style='flag')
+                future_reg = future_reg.reindex(columns=train_reg.columns, fill_value=0.0)
+                if future_reg.empty:
+                    future_reg = None
+            if future_reg is not None:
+                zero_reg = future_reg.copy()
+                zero_reg.loc[:, :] = 0.0
+                seasonal = self.seasonality_model.inverse_transform(zeros, regressor=zero_reg)
+                holidays = self.seasonality_model.inverse_transform(zeros, regressor=future_reg) - seasonal
+            else:
+                seasonal = self.seasonality_model.inverse_transform(zeros)
+        trend = pd.DataFrame(0.0, index=future_index, columns=columns)
+        # level shift by the logic of this detector might always be 0 for forecast, but for now it is here.
+        level_shifts = pd.DataFrame(0.0, index=future_index, columns=columns)
+        steps = np.arange(1, forecast_length + 1, dtype=float)
+        for col in columns:
+            comp = self.components.get(col, {})
+            trend_hist = np.asarray(comp.get('trend', []), dtype=float)
+            if trend_hist.size:
+                mask = ~np.isnan(trend_hist)
+                last_val = trend_hist[mask][-1] if mask.any() else float(self.df_original[col].iloc[-1])
+            else:
+                last_val = float(self.df_original[col].iloc[-1])
+            slope_info = self.trend_slopes.get(col, [])
+            slope = float(slope_info[-1]['slope']) if slope_info else 0.0
+            trend[col] = last_val + slope * steps
+            level_shift_hist = np.asarray(comp.get('level_shift', []), dtype=float)
+            if level_shift_hist.size:
+                mask = ~np.isnan(level_shift_hist)
+                last_level_shift = level_shift_hist[mask][-1] if mask.any() else 0.0
+            else:
+                last_level_shift = 0.0
+            level_shifts[col] = last_level_shift
+        seasonal = self._convert_to_original_scale(seasonal)
+        holidays = self._convert_to_original_scale(holidays)
+
+        component_frames = {
+            'trend': trend,
+            'level_shift': level_shifts,
+            'seasonality': seasonal,
+            'holidays': holidays,
+        }
+        components_df = stack_component_frames(component_frames)
+        forecast = trend + level_shifts + seasonal + holidays
+        return PredictionObject(
+            model_name="TimeSeriesFeatureDetectorForecast",
+            forecast_length=forecast_length,
+            forecast_index=future_index,
+            forecast_columns=columns,
+            forecast=forecast,
+            lower_forecast=forecast,
+            upper_forecast=forecast,
+            prediction_interval=0.0,
+            predict_runtime=datetime.timedelta(0),
+            fit_runtime=datetime.timedelta(0),
+            model_parameters={'detection_mode': self.detection_mode},
+            components=components_df,
+        )
     
     def _prepare_data(self, df):
         """Prepare and standardize input data."""
@@ -1813,7 +1903,311 @@ class TimeSeriesFeatureDetector:
                 print(f"  {idx + 1}. {hol}")
         print("\n" + "=" * 80)
 
+    def query_features(
+        self,
+        dates=None,
+        series=None,
+        include_components=False,
+        include_metadata=False,
+        return_json=False,
+    ):
+        """Query a specific slice of detected features with minimal token usage.
+        
+        Designed for LLM-friendly output with compact representation.
+        
+        Args:
+            dates (str, datetime, list, slice): Date(s) to query for features.
+                - Single date: "2024-01-15" or datetime object
+                - Date range: slice("2024-01-01", "2024-01-31")
+                - List of dates: ["2024-01-15", "2024-01-20"]
+                - None: return all features (not filtered by date)
+            series (str, list): Series name(s) to query.
+                - Single series: "sales"
+                - Multiple series: ["sales", "revenue"]
+                - None: all series
+            include_components (bool): Include component time series values for the date range
+            include_metadata (bool): Include metadata like noise levels, scales, etc.
+            return_json (bool): Return JSON string instead of dict
+            
+        Returns:
+            dict or str: Compact feature data including anomalies, changepoints, 
+                        level shifts, holidays, and optionally components
+            
+        Examples:
+            >>> # Get all features for one series
+            >>> detector.query_features(series="sales")
+            
+            >>> # Get features occurring in a date range
+            >>> detector.query_features(
+            ...     dates=slice("2024-01-01", "2024-01-31"),
+            ...     series=["sales", "revenue"]
+            ... )
+            
+            >>> # Get components for specific dates
+            >>> detector.query_features(
+            ...     dates=["2024-01-15", "2024-01-16"],
+            ...     series="sales",
+            ...     include_components=True
+            ... )
+        """
+        if self.df_original is None:
+            raise RuntimeError("TimeSeriesFeatureDetector has not been fit.")
+        
+        # Handle series selection
+        if series is None:
+            selected_series = self.df_original.columns.tolist()
+        elif isinstance(series, str):
+            selected_series = [series]
+        else:
+            selected_series = list(series)
+        
+        # Validate series exist
+        missing = set(selected_series) - set(self.df_original.columns)
+        if missing:
+            raise ValueError(f"Series not found: {missing}")
+        
+        # Handle date filtering
+        date_filter = None
+        if dates is not None:
+            if isinstance(dates, slice):
+                start = pd.to_datetime(dates.start) if dates.start else None
+                stop = pd.to_datetime(dates.stop) if dates.stop else None
+                date_filter = (start, stop)
+            elif isinstance(dates, (list, pd.Index)):
+                date_filter = set(pd.to_datetime(d) for d in dates)
+            else:
+                # Single date
+                date_filter = {pd.to_datetime(dates)}
+        
+        def _filter_by_date(items, date_key_idx=0):
+            """Filter list of tuples/lists by date (first element by default)."""
+            if date_filter is None:
+                return items
+            
+            if isinstance(date_filter, set):
+                # Exact date matching
+                return [item for item in items if pd.to_datetime(item[date_key_idx]) in date_filter]
+            else:
+                # Range matching
+                start, stop = date_filter
+                filtered = []
+                for item in items:
+                    dt = pd.to_datetime(item[date_key_idx])
+                    if start is not None and dt < start:
+                        continue
+                    if stop is not None and dt > stop:
+                        continue
+                    filtered.append(item)
+                return filtered
+        
+        def _filter_dict_by_date(date_dict):
+            """Filter dict with datetime keys."""
+            if date_filter is None:
+                return date_dict
+            
+            if isinstance(date_filter, set):
+                return {k: v for k, v in date_dict.items() if pd.to_datetime(k) in date_filter}
+            else:
+                start, stop = date_filter
+                filtered = {}
+                for k, v in date_dict.items():
+                    dt = pd.to_datetime(k)
+                    if start is not None and dt < start:
+                        continue
+                    if stop is not None and dt > stop:
+                        continue
+                    filtered[k] = v
+                return filtered
+        
+        # Build result
+        result = {
+            'detection_mode': self.detection_mode,
+            'series': {}
+        }
+        
+        # Extract features for each series
+        for col in selected_series:
+            series_features = {}
+            
+            # Trend changepoints (list of [date, prior_slope, new_slope])
+            changepoints = self.trend_changepoints.get(col, [])
+            if changepoints:
+                filtered_cp = _filter_by_date(changepoints)
+                if filtered_cp:
+                    series_features['trend_changepoints'] = [
+                        {
+                            'date': pd.to_datetime(cp[0]).isoformat(),
+                            'prior_slope': float(cp[1]),
+                            'new_slope': float(cp[2])
+                        }
+                        for cp in filtered_cp
+                    ]
+            
+            # Level shifts (list of [date, magnitude, shift_type, metadata])
+            level_shifts = self.level_shifts.get(col, [])
+            if level_shifts:
+                filtered_ls = _filter_by_date(level_shifts)
+                if filtered_ls:
+                    series_features['level_shifts'] = [
+                        {
+                            'date': pd.to_datetime(ls[0]).isoformat(),
+                            'magnitude': float(ls[1]),
+                            'type': ls[2]
+                        }
+                        for ls in filtered_ls
+                    ]
+            
+            # Anomalies (list of [date, magnitude, anomaly_type, baseline, residual])
+            anomalies = self.anomalies.get(col, [])
+            if anomalies:
+                filtered_an = _filter_by_date(anomalies)
+                if filtered_an:
+                    series_features['anomalies'] = [
+                        {
+                            'date': pd.to_datetime(an[0]).isoformat(),
+                            'magnitude': float(an[1]),
+                            'type': an[2],
+                            'baseline': float(an[3]) if len(an) > 3 else None,
+                        }
+                        for an in filtered_an
+                    ]
+            
+            # Holiday dates
+            holiday_dates = self.holiday_dates.get(col, [])
+            if holiday_dates:
+                if date_filter is not None:
+                    if isinstance(date_filter, set):
+                        filtered_hd = [d for d in holiday_dates if pd.to_datetime(d) in date_filter]
+                    else:
+                        start, stop = date_filter
+                        filtered_hd = []
+                        for d in holiday_dates:
+                            dt = pd.to_datetime(d)
+                            if start is not None and dt < start:
+                                continue
+                            if stop is not None and dt > stop:
+                                continue
+                            filtered_hd.append(d)
+                else:
+                    filtered_hd = holiday_dates
+                
+                if filtered_hd:
+                    series_features['holiday_dates'] = [
+                        pd.to_datetime(d).isoformat() for d in filtered_hd
+                    ]
+            
+            # Holiday impacts (dict of date: impact)
+            holiday_impacts = self.holiday_impacts.get(col, {})
+            if holiday_impacts:
+                filtered_hi = _filter_dict_by_date(holiday_impacts)
+                if filtered_hi:
+                    series_features['holiday_impacts'] = {
+                        pd.to_datetime(k).isoformat(): float(v)
+                        for k, v in filtered_hi.items()
+                    }
+            
+            # Seasonality strength
+            if col in self.seasonality_strength:
+                series_features['seasonality_strength'] = float(self.seasonality_strength[col])
+            
+            # Add metadata if requested
+            if include_metadata:
+                metadata = {}
+                if col in self.noise_to_signal_ratios:
+                    metadata['noise_to_signal_ratio'] = float(self.noise_to_signal_ratios[col])
+                if col in self.series_noise_levels:
+                    metadata['noise_level'] = float(self.series_noise_levels[col])
+                if col in self.series_scales:
+                    metadata['scale'] = float(self.series_scales[col])
+                
+                # Noise changepoints
+                noise_cp = self.noise_changepoints.get(col, [])
+                if noise_cp:
+                    filtered_ncp = _filter_by_date(noise_cp)
+                    if filtered_ncp:
+                        metadata['noise_changepoints'] = [
+                            pd.to_datetime(ncp).isoformat() for ncp in filtered_ncp
+                        ]
+                
+                if metadata:
+                    series_features['metadata'] = metadata
+            
+            # Add components if requested
+            if include_components and col in self.components:
+                comp_dict = self.components[col]
+                
+                # Determine date range for components
+                if dates is None:
+                    comp_index = self.date_index
+                elif isinstance(dates, slice):
+                    start_dt = pd.to_datetime(dates.start) if dates.start else self.date_index[0]
+                    stop_dt = pd.to_datetime(dates.stop) if dates.stop else self.date_index[-1]
+                    comp_index = self.date_index[(self.date_index >= start_dt) & (self.date_index <= stop_dt)]
+                elif isinstance(dates, (list, pd.Index)):
+                    comp_index = pd.DatetimeIndex([d for d in pd.to_datetime(dates) if d in self.date_index])
+                else:
+                    single_dt = pd.to_datetime(dates)
+                    comp_index = pd.DatetimeIndex([single_dt]) if single_dt in self.date_index else pd.DatetimeIndex([])
+                
+                if len(comp_index) > 0:
+                    components_data = {}
+                    for comp_name, comp_values in comp_dict.items():
+                        comp_array = np.asarray(comp_values)
+                        # Map index positions
+                        comp_data = {}
+                        for dt in comp_index:
+                            if dt in self.date_index:
+                                idx = self.date_index.get_loc(dt)
+                                if idx < len(comp_array):
+                                    val = comp_array[idx]
+                                    if not np.isnan(val):
+                                        comp_data[dt.isoformat()] = float(val)
+                        if comp_data:
+                            components_data[comp_name] = comp_data
+                    
+                    if components_data:
+                        series_features['components'] = components_data
+            
+            result['series'][col] = series_features
+        
+        # Add shared events if in univariate mode
+        if self.detection_mode == 'univariate':
+            shared = {}
+            if self.shared_events.get('anomalies'):
+                filtered_shared_an = _filter_by_date(self.shared_events['anomalies'])
+                if filtered_shared_an:
+                    shared['anomalies'] = [
+                        {
+                            'date': pd.to_datetime(an[0]).isoformat(),
+                            'magnitude': float(an[1]),
+                            'type': an[2]
+                        }
+                        for an in filtered_shared_an
+                    ]
+            
+            if self.shared_events.get('level_shifts'):
+                filtered_shared_ls = _filter_by_date(self.shared_events['level_shifts'])
+                if filtered_shared_ls:
+                    shared['level_shifts'] = [
+                        {
+                            'date': pd.to_datetime(ls[0]).isoformat(),
+                            'magnitude': float(ls[1]),
+                            'type': ls[2]
+                        }
+                        for ls in filtered_shared_ls
+                    ]
+            
+            if shared:
+                result['shared_events'] = shared
+        
+        if return_json:
+            import json
+            return json.dumps(result, indent=2)
+        
+        return result
+
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
+        # TODO: switch the anomaly type labels to colored by type, only impact number shown on label, and prevent label overlap
         if not HAS_MATPLOTLIB:
             raise ImportError("matplotlib is required for plotting.")
         if self.df_original is None:
