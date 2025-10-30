@@ -233,19 +233,29 @@ def erm_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarray
         S_T = S.T
         A = S_T @ W @ S  # shape (M, M)
         
+        # Add small regularization to ensure numerical stability
+        # This prevents ill-conditioned matrices from causing extremely slow solves
+        # Use adaptive ridge based on matrix scale
+        ridge = 1e-8 * np.trace(A) / A.shape[0]
+        A_reg = A + np.eye(A.shape[0]) * ridge
+        
         # Compute projection matrix efficiently using solve
         # P = S (S' W S)^{-1} S' W
-        temp = solve(A, S_T @ W)  # More stable than A_inv @ S_T @ W
+        temp = solve(A_reg, S_T @ W, check_finite=False)
         P = S @ temp  # shape (L, L)
         
         # Apply projection
         y_reconciled = y_all @ P.T
         return y_reconciled
         
-    except LinAlgError:
-        # Fallback with regularization
+    except (LinAlgError, ValueError):
+        # Fallback with stronger regularization
         ridge = 1e-6 * np.trace(W) / W.shape[0]
         W_reg = W + ridge * np.eye(W.shape[0])
+        # Prevent infinite recursion - if already regularized, just use mint
+        if np.allclose(W_reg, W):
+            # Fall back to mint_reconcile if regularization doesn't help
+            return mint_reconcile(S, y_all, W_reg)
         return erm_reconcile(S, y_all, W_reg)
 
 

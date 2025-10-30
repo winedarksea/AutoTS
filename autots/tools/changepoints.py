@@ -2355,8 +2355,14 @@ class ChangepointDetector(object):
             slope_penalty = lambda_slope * np.sum(np.abs(D2 @ x))
             return data_fit + level_penalty + slope_penalty
         
-        # Solve optimization
-        result = minimize(objective, data, method='L-BFGS-B')
+        # Solve optimization with limited iterations for performance
+        # L1 penalties are non-smooth, so we limit iterations and use loose tolerance
+        options = {
+            'maxiter': 100,  # Limit iterations for performance
+            'ftol': 1e-4,    # Looser tolerance for faster convergence
+            'gtol': 1e-3,    # Looser gradient tolerance
+        }
+        result = minimize(objective, data, method='L-BFGS-B', options=options)
         fitted_trend = result.x
         
         # Find changepoints from both level and slope changes
@@ -2958,8 +2964,14 @@ class ChangepointDetector(object):
         
         # Generate common parameters with weighted choices
         if selection_mode == "fast":
-            aggregate_options = ['mean', 'median', 'individual']
-            aggregate_weights = [0.45, 0.35, 0.20]
+            # For composite_fused_lasso, avoid 'individual' due to performance issues
+            # It runs expensive optimization per series which is very slow
+            if new_method == 'composite_fused_lasso':
+                aggregate_options = ['mean', 'median', 'individual']
+                aggregate_weights = [0.55, 0.45, 0.01]
+            else:
+                aggregate_options = ['mean', 'median', 'individual']
+                aggregate_weights = [0.45, 0.35, 0.20]
             min_segment_options = [5, 10, 15]
             min_segment_weights = [0.5, 0.3, 0.2]
             probabilistic_options = [False, True]
@@ -2970,7 +2982,7 @@ class ChangepointDetector(object):
             new_params.setdefault('n_bootstrap', 15)
         else:
             aggregate_options = ['mean', 'median', 'individual']
-            aggregate_weights = [0.45, 0.30, 0.25]
+            aggregate_weights = [0.45, 0.35, 0.2]
             min_segment_options = [3, 5, 10, 15]
             min_segment_weights = [0.25, 0.4, 0.25, 0.1]
             probabilistic_options = [True, False]
