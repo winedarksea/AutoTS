@@ -51,6 +51,7 @@ class TimeSeriesFeatureDetector:
     TODO: Build upon the JSON template so that it can be converted to a fixed size embedding (probably a 2d embedding). The fixed size may vary by parameters, but for a given parameter set should always be the same size. The embedding does not need to be capable of fully reconstructing the time series, just representing it.
     TODO: Support for modeling the trend with a fast kalman state space approach, ideally aligned with changepoints in some way if possible.
     TODO: Improved scaling and option to skip scaling
+    TODO: consider also having "deviation from group" type anomaly detection for multivariate series
 
         Parameters
     ----------
@@ -2207,7 +2208,6 @@ class TimeSeriesFeatureDetector:
         return result
 
     def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
-        # TODO: switch the anomaly type labels to colored by type, only impact number shown on label, and prevent label overlap
         if not HAS_MATPLOTLIB:
             raise ImportError("matplotlib is required for plotting.")
         if self.df_original is None:

@@ -39,7 +39,8 @@ except Exception:
     HAS_TORCH = False
 
 
-# Custom Loss Functions Only - Dataset creation now uses window_maker
+# TODO: consider instead of passing changepoint features, pass the fit changepoint (from TimeSeriesFeatureDetector)
+# TODO: take advantage of the 2d feature shape with convolutional designs
 
 
 def build_series_feature_mapping(feature_columns, series_names, changepoint_features_cols):
@@ -65,195 +66,230 @@ def build_series_feature_mapping(feature_columns, series_names, changepoint_feat
 
     # Normalize to strings for reliable comparisons
     feature_columns_list = list(feature_columns)
-    feature_columns_str = [str(col) for col in feature_columns_list]
+    feature_columns_str = np.array([str(col) for col in feature_columns_list])
     series_names_str = [str(name) for name in series_names]
+    n_features = len(feature_columns_str)
+    n_series = len(series_names_str)
 
-    def _col_targets_series(col_str, series_name):
-        """Return True if column appears to belong exclusively to a series."""
-        if col_str == f"naive_last_{series_name}":
-            return True
-        if col_str.startswith(series_name):
-            if len(col_str) == len(series_name):
-                return True
-            next_char = col_str[len(series_name)]
-            if not next_char.isalnum():
-                return True
-        if col_str.endswith(f"_{series_name}"):
-            return True
-        return False
-
-    def _col_targets_any_series(col_str):
-        return any(_col_targets_series(col_str, s) for s in series_names_str)
-
-    # Detect per-series features across all feature columns
-    has_per_series = any(_col_targets_any_series(col_str) for col_str in feature_columns_str)
-
+    # Vectorized per-series feature detection
+    # Create boolean matrix: [n_features, n_series] where True means feature belongs to series
+    feature_series_matrix = np.zeros((n_features, n_series), dtype=bool)
+    
+    # Process all series at once for each pattern type
+    for series_idx, series_name in enumerate(series_names_str):
+        # Pattern 1: Naive feature - exact match (vectorized)
+        naive_match = feature_columns_str == f"naive_last_{series_name}"
+        
+        # Pattern 2: Prefix pattern - starts with series_name followed by non-alphanumeric (vectorized)
+        # Use vectorized string operations where possible
+        prefix_match = np.zeros(n_features, dtype=bool)
+        starts_with_series = np.char.startswith(feature_columns_str.astype(str), series_name)
+        # Check for exact match or non-alphanumeric following character
+        for feat_idx in np.where(starts_with_series)[0]:
+            col_str = feature_columns_str[feat_idx]
+            if len(col_str) == len(series_name) or not col_str[len(series_name)].isalnum():
+                prefix_match[feat_idx] = True
+        
+        # Pattern 3: Suffix pattern - ends with _series_name (vectorized)
+        suffix_pattern = f"_{series_name}"
+        suffix_match = np.char.endswith(feature_columns_str.astype(str), suffix_pattern)
+        
+        # Combine all patterns for this series
+        feature_series_matrix[:, series_idx] = naive_match | prefix_match | suffix_match
+    
+    # Detect if any per-series features exist
+    has_per_series = np.any(feature_series_matrix)
+    
     # Fallback: inspect changepoint columns if detection fails (legacy naming safeguards)
     if (
         not has_per_series
         and changepoint_features_cols is not None
         and len(changepoint_features_cols) > 0
     ):
-        has_per_series = any(
-            _col_targets_any_series(str(col)) for col in changepoint_features_cols
-        )
+        cp_cols_str = [str(col) for col in changepoint_features_cols]
+        for series_name in series_names_str:
+            for col_str in cp_cols_str:
+                if (col_str == f"naive_last_{series_name}" or 
+                    col_str.endswith(f"_{series_name}") or
+                    (col_str.startswith(series_name) and 
+                     (len(col_str) == len(series_name) or not col_str[len(series_name)].isalnum()))):
+                    has_per_series = True
+                    break
+            if has_per_series:
+                break
 
     if not has_per_series:
         return None, False
 
-    # Build the mapping
+    # Build the mapping efficiently using vectorized operations
+    # Shared features: those that don't belong to any specific series
+    is_shared = ~np.any(feature_series_matrix, axis=1)
+    shared_indices = np.where(is_shared)[0]
+    
     series_feat_mapping = {}
-
-    for series_idx, series_name in enumerate(series_names_str):
-        # Find all feature columns for this series
-        # Includes: date features (shared), series-specific changepoint features, series-specific naive features
-        series_feature_indices = []
-
-        for feat_idx, feat_col_str in enumerate(feature_columns_str):
-            # Include if it's a shared feature (doesn't map to a specific series)
-            is_shared = not _col_targets_any_series(feat_col_str)
-
-            # Or if it's specific to this series
-            is_series_specific = _col_targets_series(feat_col_str, series_name)
-
-            if is_shared or is_series_specific:
-                series_feature_indices.append(feat_idx)
-
-        series_feat_mapping[series_idx] = series_feature_indices
+    for series_idx in range(n_series):
+        # Get series-specific feature indices
+        series_specific_indices = np.where(feature_series_matrix[:, series_idx])[0]
+        
+        # Combine shared and series-specific features
+        # Use concatenate for efficiency, then convert to list
+        series_feature_indices = np.concatenate([shared_indices, series_specific_indices])
+        series_feature_indices.sort()  # Maintain order for consistency
+        
+        series_feat_mapping[series_idx] = series_feature_indices.tolist()
 
     return series_feat_mapping, True
 
 
-def create_training_windows(
+def create_training_batches(
     y_train_scaled, 
     train_feats_scaled, 
-    context_length, 
-    max_windows=50000, 
+    prediction_batch_size, 
+    max_samples=50000, 
     random_seed=2023,
     series_feat_mapping=None,
-    series_names=None
+    series_names=None,
+    naive_feature_indices=None,
+    use_naive_window=False
 ):
     """
-    Efficient shared function to create training windows for both MambaSSM and pMLP.
+    Create training batches for models that predict multiple future steps at once.
+    
+    Each sample contains features for prediction_batch_size future timesteps,
+    with naive features properly handled to avoid data leakage.
     
     Args:
         y_train_scaled: Scaled time series data (n_timesteps, n_series)
-        train_feats_scaled: Scaled feature data (n_timesteps, n_features) or 
-                           dict mapping series names to (n_timesteps, n_features_per_series)
-        context_length: Length of context window
-        max_windows: Maximum number of windows to generate
+        train_feats_scaled: Scaled feature data (n_timesteps, n_features)
+        prediction_batch_size: Number of timesteps to predict in each batch
+        max_samples: Maximum number of training samples to generate
         random_seed: Random seed for sampling
         series_feat_mapping: Optional dict mapping series index to feature column indices
         series_names: Optional list of series names (for per-series features)
+        naive_feature_indices: Indices of naive features (if single value) or window features (if use_naive_window=True)
+        use_naive_window: If True, naive features are windows that are already lagged in train_feats_scaled
         
     Returns:
-        tuple: (X_data, Y_data) where X_data has shape (n_windows, context_length, 1+n_features)
-               and Y_data has shape (n_windows, 1)
+        tuple: (X_data, Y_data) where:
+            - X_data has shape (n_samples, prediction_batch_size, n_features)
+            - Y_data has shape (n_samples, prediction_batch_size, 1)
     """
-    # Calculate maximum possible windows for memory efficiency
-    max_possible_windows = (y_train_scaled.shape[0] - context_length) * y_train_scaled.shape[1]
-    max_windows = min(max_windows, max_possible_windows)
+    n_timesteps, n_series = y_train_scaled.shape
+    n_features = train_feats_scaled.shape[1]
     
-    # Use numpy for efficient window generation via stride tricks
-    y_windows = sliding_window_view(y_train_scaled, context_length + 1, axis=0)
-    
-    # Handle per-series features
-    if series_feat_mapping is not None and series_names is not None:
-        # Per-series features: each series has its own set of feature columns
-        num_windows_per_series = y_windows.shape[0]
-        total_windows = num_windows_per_series * y_train_scaled.shape[1]
-        
-        # Sample windows if needed
-        if total_windows > max_windows:
-            rng = np.random.default_rng(random_seed)
-            selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
-        else:
-            selected_indices = np.arange(total_windows)
-        
-        # Calculate series and window indices
-        series_indices = selected_indices % y_train_scaled.shape[1]
-        window_indices = selected_indices // y_train_scaled.shape[1]
-        
-        # Determine max features across all series
-        max_feats = max(len(feat_cols) for feat_cols in series_feat_mapping.values())
-
-        # Pre-allocate output arrays
-        X_data = np.zeros((len(selected_indices), context_length, 1 + max_feats), dtype=np.float32)
-        Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
-
-        # Cache feature windows once; avoid recomputing per series
-        feat_windows_all = (
-            sliding_window_view(train_feats_scaled, context_length, axis=0)
-            if train_feats_scaled.shape[1] > 0
-            else None
+    # Validate that we have enough data
+    # When using naive windows, we need prediction_batch_size extra for the initial window
+    min_required = (2 * prediction_batch_size) if use_naive_window else (prediction_batch_size + 1)
+    if n_timesteps < min_required:
+        raise ValueError(
+            f"Training data has {n_timesteps} timesteps but need at least {min_required}. "
+            f"Either increase training data length or decrease prediction_batch_size."
         )
-
-        # Process each unique series to minimize feature extraction overhead
-        for series_idx in range(y_train_scaled.shape[1]):
-            # Find all samples for this series
-            mask = series_indices == series_idx
-            if not np.any(mask):
-                continue
-                
-            series_window_indices = window_indices[mask]
-            
-            # Extract y values for this series
-            X_data[mask, :, 0] = y_windows[series_window_indices, series_idx, :context_length]
-            Y_data[mask, 0] = y_windows[series_window_indices, series_idx, context_length]
-            
-            # Extract series-specific features
-            series_name = series_names[series_idx]
-            feat_cols = series_feat_mapping.get(series_idx, [])
-            
-            if len(feat_cols) > 0:
-                if feat_windows_all is None:
-                    continue
-                # Assign to X_data (features start at index 1)
-                # feat_windows_all shape: (n_windows, n_features, context_length)
-                # We need: (n_windows, context_length, n_features)
-                series_feat_windows = feat_windows_all[series_window_indices][:, feat_cols, :]
-                X_data[mask, :, 1:1+len(feat_cols)] = series_feat_windows.transpose(0, 2, 1)
-        
-        return X_data, Y_data
+    
+    # When using naive windows, exclude first prediction_batch_size timesteps
+    # since they don't have complete windows before them
+    start_offset = prediction_batch_size if use_naive_window else 0
+    
+    # Calculate maximum possible samples (excluding the offset)
+    max_possible_samples = (n_timesteps - prediction_batch_size - start_offset) * n_series
+    max_samples = min(max_samples, max_possible_samples)
+    
+    # Calculate maximum possible samples (excluding the offset)
+    max_possible_samples = (n_timesteps - prediction_batch_size - start_offset) * n_series
+    max_samples = min(max_samples, max_possible_samples)
+    
+    # Generate sample indices
+    rng = np.random.default_rng(random_seed)
+    if max_possible_samples > max_samples:
+        selected_indices = rng.choice(max_possible_samples, size=max_samples, replace=False)
     else:
-        # Original path: shared features across all series
-        feat_windows = sliding_window_view(train_feats_scaled, context_length, axis=0) 
+        selected_indices = np.arange(max_possible_samples)
+    
+    # Calculate which series and starting timestep for each sample
+    # Add start_offset to ensure we skip the first prediction_batch_size timesteps when using naive windows
+    series_indices = selected_indices % n_series
+    start_indices = (selected_indices // n_series) + start_offset
+    
+    if series_feat_mapping is not None and series_names is not None:
+        # Per-series features: different feature subsets per series
+        max_feats = max(len(feat_cols) for feat_cols in series_feat_mapping.values())
+        X_data = np.zeros((len(selected_indices), prediction_batch_size, max_feats), dtype=np.float32)
+    else:
+        X_data = np.zeros((len(selected_indices), prediction_batch_size, n_features), dtype=np.float32)
+    
+    Y_data = np.zeros((len(selected_indices), prediction_batch_size, 1), dtype=np.float32)
+    
+    # Fill in data for each sample
+    for i, (start_idx, series_idx) in enumerate(zip(start_indices, series_indices)):
+        end_idx = start_idx + prediction_batch_size
         
-        # Flatten across all series and time windows
-        num_windows_per_series = y_windows.shape[0]
-        total_windows = num_windows_per_series * y_train_scaled.shape[1]
+        # Get target values for this series and window
+        Y_data[i, :, 0] = y_train_scaled[start_idx:end_idx, series_idx]
         
-        # Sample windows if we exceed max_windows
-        if total_windows > max_windows:
-            rng = np.random.default_rng(random_seed)
-            selected_indices = rng.choice(total_windows, size=max_windows, replace=False)
+        if series_feat_mapping is not None and series_names is not None:
+            # Get feature indices for this series
+            feat_indices = series_feat_mapping.get(series_idx, [])
+            if len(feat_indices) > 0:
+                # Get features for this window
+                batch_features = train_feats_scaled[start_idx:end_idx, feat_indices].copy()
+                
+                # For window-based naive features, populate with proper historical window
+                if use_naive_window and naive_feature_indices is not None:
+                    for naive_idx in naive_feature_indices:
+                        if naive_idx in feat_indices:
+                            # Find position in the subset
+                            local_idx = feat_indices.index(naive_idx)
+                            # Fill this feature with window values: [t-1, t-2, ..., t-prediction_batch_size]
+                            # where t is start_idx (the beginning of the prediction window)
+                            if start_idx >= prediction_batch_size:
+                                # Get window from [start_idx-prediction_batch_size : start_idx]
+                                window_values = y_train_scaled[start_idx-prediction_batch_size:start_idx, series_idx]
+                                batch_features[:, local_idx] = window_values
+                            else:
+                                # Edge case: not enough history, pad with earliest available values
+                                available = y_train_scaled[:start_idx, series_idx]
+                                if len(available) > 0:
+                                    batch_features[:, local_idx] = np.pad(
+                                        available, 
+                                        (prediction_batch_size - len(available), 0), 
+                                        mode='edge'
+                                    )
+                
+                X_data[i, :, :len(feat_indices)] = batch_features
         else:
-            selected_indices = np.arange(total_windows)
+            # Shared features across all series
+            batch_features = train_feats_scaled[start_idx:end_idx, :].copy()
             
-        # Generate training samples efficiently using vectorized operations
-        num_features = train_feats_scaled.shape[1]
-        
-        # Vectorized index calculations (much faster than Python loop)
-        series_indices = selected_indices % y_train_scaled.shape[1]
-        window_indices = selected_indices // y_train_scaled.shape[1]
-        
-        # Pre-allocate output arrays
-        X_data = np.empty((len(selected_indices), context_length, 1 + num_features), dtype=np.float32)
-        Y_data = np.empty((len(selected_indices), 1), dtype=np.float32)
-        
-        # Vectorized data extraction using advanced indexing
-        # Time series values: y_windows[window_indices, series_indices, :context_length]
-        X_data[:, :, 0] = y_windows[window_indices, series_indices, :context_length]
-        
-        # Feature values: broadcast feat_windows across all selected samples
-        # feat_windows[window_indices] has shape (n_samples, n_features, context_length)
-        # We need (n_samples, context_length, n_features) so transpose the last two dimensions
-        X_data[:, :, 1:] = feat_windows[window_indices].transpose(0, 2, 1)
-        
-        # Target values: y_windows[window_indices, series_indices, context_length]
-        Y_data[:, 0] = y_windows[window_indices, series_indices, context_length]
-
-        return X_data, Y_data
+            # For window-based naive features, populate with proper historical window
+            if use_naive_window and naive_feature_indices is not None:
+                for naive_idx in naive_feature_indices:
+                    # Fill this feature with window values for the corresponding series
+                    # Since this is shared features, we need to fill with THIS series' historical values
+                    if start_idx >= prediction_batch_size:
+                        # Get window from [start_idx-prediction_batch_size : start_idx]
+                        window_values = y_train_scaled[start_idx-prediction_batch_size:start_idx, series_idx]
+                        batch_features[:, naive_idx] = window_values
+                    else:
+                        # Edge case: not enough history, pad with earliest available values
+                        available = y_train_scaled[:start_idx, series_idx]
+                        if len(available) > 0:
+                            batch_features[:, naive_idx] = np.pad(
+                                available, 
+                                (prediction_batch_size - len(available), 0), 
+                                mode='edge'
+                            )
+            elif not use_naive_window and naive_feature_indices is not None:
+                # Legacy single-value naive features
+                for naive_idx in naive_feature_indices:
+                    if start_idx > 0:
+                        naive_val = train_feats_scaled[start_idx - 1, naive_idx]
+                    else:
+                        naive_val = train_feats_scaled[0, naive_idx]
+                    batch_features[:, naive_idx] = naive_val
+            
+            X_data[i, :, :] = batch_features
+    
+    return X_data, Y_data
 
 
 class CombinedNLLWassersteinLoss(Module):
@@ -837,6 +873,8 @@ class MambaCore(Module):
         self.softplus = nn.Softplus()
 
     def forward(self, x):
+        # x shape: (batch_size, seq_len, input_dim)
+        # Process sequence through Mamba blocks
         x = self.dropout(self.input_projection(x))
 
         for norm, block in self.layers:
@@ -845,9 +883,10 @@ class MambaCore(Module):
             x = block(x_norm) + x
 
         x = self.norm_f(x)
+        # Output for all timesteps in sequence
         mu = self.out_mu(x)
         sigma = self.softplus(self.out_sigma(x))
-        sigma = torch.clamp(sigma, min=1e-6)  # More efficient than addition
+        sigma = torch.clamp(sigma, min=1e-6)
         return mu, sigma
 
 
@@ -921,25 +960,34 @@ class MLPCore(Module):
             x: Input tensor of shape (batch_size, seq_len, input_dim) or (batch_size, input_dim)
             
         Returns:
-            mu: Mean predictions 
-            sigma: Standard deviation predictions
+            mu: Mean predictions, shape matches input: (batch_size, seq_len, 1) or (batch_size, 1)
+            sigma: Standard deviation predictions, same shape as mu
         """
-        # Handle both sequence and non-sequence inputs
+        original_shape = x.shape
+        
+        # Handle sequence inputs: (batch_size, seq_len, input_dim)
         if x.dim() == 3:
-            # For sequence input, we can either:
-            # 1. Take the last timestep (like RNN)
-            # 2. Global average pooling
-            # 3. Flatten the sequence
-            # For time series, taking last timestep often works well
-            x = x[:, -1, :]  # Take last timestep: (batch_size, input_dim)
-        
-        # Process through backbone
-        hidden = self.backbone(x)
-        
-        # Generate probabilistic outputs
-        mu = self.out_mu(hidden)
-        sigma = self.softplus(self.out_sigma(hidden))
-        sigma = torch.clamp(sigma, min=1e-6)  # Ensure positive sigma
+            batch_size, seq_len, input_dim = x.shape
+            # Reshape to (batch_size * seq_len, input_dim) to process all timesteps
+            x = x.reshape(-1, input_dim)
+            
+            # Process through backbone
+            hidden = self.backbone(x)
+            
+            # Generate outputs
+            mu = self.out_mu(hidden)
+            sigma = self.softplus(self.out_sigma(hidden))
+            sigma = torch.clamp(sigma, min=1e-6)
+            
+            # Reshape back to (batch_size, seq_len, 1)
+            mu = mu.reshape(batch_size, seq_len, 1)
+            sigma = sigma.reshape(batch_size, seq_len, 1)
+        else:
+            # Single timestep: (batch_size, input_dim)
+            hidden = self.backbone(x)
+            mu = self.out_mu(hidden)
+            sigma = self.softplus(self.out_sigma(hidden))
+            sigma = torch.clamp(sigma, min=1e-6)
         
         return mu, sigma
 
@@ -1094,6 +1142,10 @@ class MambaSSM(ModelObject):
         
         # Changepoint features
         if use_changepoints:
+            # Default to individual per-series changepoints unless overridden in kwargs
+            if 'aggregate_method' not in kwargs:
+                kwargs['aggregate_method'] = 'individual'
+            
             self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
@@ -1110,23 +1162,31 @@ class MambaSSM(ModelObject):
         self.changepoint_features = changepoint_features
         self.changepoint_features_columns = changepoint_features.columns
 
-        # Last value naive features (constant per series)
+        # Single naive feature per series (will be populated with window values during batch creation)
         if self.use_naive_feature:
-            last_values = df.ffill().iloc[-1].fillna(0.0).astype(np.float32)
-            naive_feature_mapping = {
-                f"naive_last_{col}": float(last_values[col]) for col in df.columns
-            }
-            naive_features = pd.DataFrame(
-                naive_feature_mapping,
-                index=df.index,
-                dtype=np.float32,
-            )
+            # Create ONE naive feature column per series
+            # During training batch creation, this will be filled with the appropriate window values
+            naive_feature_data = {}
+            for col in df.columns:
+                feature_name = f"naive_last_{col}"
+                # Initialize with shifted values (will be replaced during batch creation with proper windows)
+                shifted_values = df[col].shift(1).fillna(method='bfill').fillna(0.0).astype(np.float32)
+                naive_feature_data[feature_name] = shifted_values
+            
+            naive_features = pd.DataFrame(naive_feature_data, index=df.index, dtype=np.float32)
             self.naive_feature_columns = naive_features.columns
-            self.naive_feature_values = last_values
+            # Store last window for each series (for prediction)
+            self.naive_window_size = self.prediction_batch_size
+            self.naive_feature_windows = {}
+            for col in df.columns:
+                # Get the last prediction_batch_size values
+                last_window = df[col].ffill().iloc[-self.prediction_batch_size:].fillna(0.0).values.astype(np.float32)
+                self.naive_feature_windows[col] = last_window
         else:
             naive_features = None
             self.naive_feature_columns = pd.Index([])
-            self.naive_feature_values = None
+            self.naive_feature_windows = None
+            self.naive_window_size = 0
         
         # Combine all features
         feature_list = [date_feats_train, changepoint_features]
@@ -1162,25 +1222,36 @@ class MambaSSM(ModelObject):
         self.series_feat_mapping = series_feat_mapping
         self.has_per_series_features = has_per_series
         
-        # 4b. Create training windows using shared efficient function
-        X_data, Y_data = create_training_windows(
+        # 4b. Create training batches using shared efficient function
+        # Get naive feature indices for anti-leakage
+        if self.use_naive_feature:
+            naive_feature_indices = [
+                i for i, col in enumerate(self.feature_columns)
+                if col in self.naive_feature_columns
+            ]
+        else:
+            naive_feature_indices = []
+        
+        X_data, Y_data = create_training_batches(
             y_train_scaled, 
             train_feats_scaled, 
-            self.context_length, 
-            max_windows=50000,
+            self.prediction_batch_size, 
+            max_samples=50000,
             random_seed=self.random_seed,
             series_feat_mapping=series_feat_mapping,
-            series_names=series_names if has_per_series else None
+            series_names=series_names if has_per_series else None,
+            naive_feature_indices=naive_feature_indices,
+            use_naive_window=self.use_naive_feature  # Window-based naive features
         )
 
         # 5. Torch plumbing
         # Account for potentially different feature dimensions per series
         if has_per_series:
             # Use max features across all series
-            num_features = X_data.shape[2] - 1  # Subtract 1 for the y value
+            num_features = X_data.shape[2]  # Features only (no y value in X anymore)
         else:
             num_features = train_feats_scaled.shape[1]
-        input_dim = 1 + num_features
+        input_dim = num_features
         self.model = MambaCore(
             input_dim,
             self.d_model,
@@ -1227,11 +1298,10 @@ class MambaSSM(ModelObject):
                 optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
                 
-                # Extract only the last timestep prediction for loss calculation
-                mu_last = mu[:, -1, :]  # Shape: (batch_size, 1)
-                sigma_last = sigma[:, -1, :]  # Shape: (batch_size, 1)
-                
-                loss = criterion(mu_last, sigma_last, y_batch)
+                # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
+                # y_batch has shape (batch_size, prediction_batch_size, 1)
+                # Calculate loss across all timesteps in the batch
+                loss = criterion(mu, sigma, y_batch)
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
@@ -1246,7 +1316,7 @@ class MambaSSM(ModelObject):
     # ----------------------------------------------------------------------
 
     def predict(self, forecast_length: int, future_regressor=None, **kwargs):
-        """Roll-forward prediction."""
+        """Batch prediction using future features."""
         predict_start_time = datetime.datetime.now()
         self.model.eval()
 
@@ -1261,7 +1331,7 @@ class MambaSSM(ModelObject):
             holiday_countries_used=self.holiday_countries_used,
         )
         
-        # Create future changepoint features without re-fitting detector
+        # Create future changepoint features without re-fitting detector (single fit at start)
         if (
             getattr(self, "changepoint_features", None) is not None
             and not self.changepoint_features.empty
@@ -1279,152 +1349,143 @@ class MambaSSM(ModelObject):
                 columns=getattr(self, "changepoint_features_columns", []),
             )
 
-        # Naive last value features extended as constant
-        if self.use_naive_feature and self.naive_feature_values is not None:
-            naive_future_feats = pd.DataFrame(
-                {
-                    f"naive_last_{col}": float(self.naive_feature_values[col])
-                    for col in self.df_train.columns
-                },
-                index=forecast_index,
-                dtype=np.float32,
-            )
-            naive_future_feats = naive_future_feats.reindex(
-                columns=self.naive_feature_columns
-            )
+        # Get last observed window for naive features (before prediction starts)
+        if self.use_naive_feature and self.naive_feature_windows is not None:
+            # Start with last training window for each series
+            current_naive_windows = {
+                col: window.copy() for col, window in self.naive_feature_windows.items()
+            }
         else:
-            naive_future_feats = None
+            current_naive_windows = None
         
-        # Combine all future features
-        feature_list = [future_date_feats, future_changepoint_feats]
-        if naive_future_feats is not None:
-            feature_list.append(naive_future_feats)
-        if future_regressor is not None:
-            feature_list.append(future_regressor)
-            
-        feat_future_df = pd.concat(feature_list, axis=1)
-
-        feat_future_df = (
-            feat_future_df.reindex(columns=self.feature_columns)
-            .ffill()
-            .bfill()
-            .fillna(0.0)
-            .astype(np.float32)
-        )
-        future_feats_scaled = self.feature_scaler.transform(feat_future_df.values)
-
-        # 3. Context tensors (scaled) - cache the scaled training data
-        if not hasattr(self, "_cached_y_train_scaled"):
-            self._cached_y_train_scaled = (
-                self.df_train.to_numpy(dtype=np.float32) - self.scaler_means
-            ) / self.scaler_stds
-
-        ctx_ts = torch.tensor(
-            self._cached_y_train_scaled[-self.context_length :, :],
-            device=self.device,
-            dtype=torch.float32,
-        )
-
-        ctx_feat_np = self.feature_scaler.transform(
-            self.features.iloc[-self.context_length :].values.astype(np.float32)
-        )
-        ctx_feat = torch.tensor(ctx_feat_np, device=self.device, dtype=torch.float32)
-
         num_series = self.df_train.shape[1]
         forecast_mu_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
-        forecast_sigma_scaled = np.zeros(
-            (forecast_length, num_series), dtype=np.float32
-        )
+        forecast_sigma_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
 
-        # 4. Roll forward with per-series feature support
+        # 3. Predict in batches of prediction_batch_size
+        num_batches = int(np.ceil(forecast_length / self.prediction_batch_size))
+        
         with torch.no_grad():
-            if getattr(self, 'has_per_series_features', False):
-                # Per-series features: process each series individually
-                series_names = list(self.df_train.columns)
+            for batch_idx in range(num_batches):
+                start_step = batch_idx * self.prediction_batch_size
+                end_step = min(start_step + self.prediction_batch_size, forecast_length)
+                actual_batch_size = end_step - start_step
                 
-                # Determine the max feature dimension used during training
-                # This should match what was used in create_training_windows
-                max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
+                if self.verbose and batch_idx % 5 == 0:
+                    print(f"Predicting batch {batch_idx+1}/{num_batches} (steps {start_step+1}-{end_step})")
                 
-                for series_idx in range(num_series):
-                    if self.verbose and series_idx % 10 == 0:
-                        print(f"Predicting series {series_idx+1}/{num_series}")
+                # Build window-based naive features for this batch
+                if current_naive_windows is not None:
+                    # Create ONE naive feature per series
+                    # For each series, the naive feature at each prediction timestep gets the corresponding window value
+                    # If predicting steps t, t+1, ..., t+prediction_batch_size-1:
+                    #   - At timestep t: use window value at position corresponding to t-1 (most recent)
+                    #   - At timestep t+1: use window value at position corresponding to t (which is now in window)
+                    #   - etc.
+                    naive_feature_data = {}
+                    for col in self.df_train.columns:
+                        feature_name = f"naive_last_{col}"
+                        window = current_naive_windows[col]  # Current window for this series
+                        # The window contains [t-prediction_batch_size, ..., t-2, t-1]
+                        # For prediction batch, we use these values in order
+                        naive_feature_data[feature_name] = window[:actual_batch_size].tolist()
                     
-                    # Get feature indices for this series
-                    feat_indices = self.series_feat_mapping.get(series_idx, [])
+                    naive_future_feats = pd.DataFrame(
+                        naive_feature_data,
+                        index=forecast_index[start_step:end_step],
+                        dtype=np.float32,
+                    )
+                    naive_future_feats = naive_future_feats.reindex(columns=self.naive_feature_columns)
+                else:
+                    naive_future_feats = None
+                
+                # Combine all future features for this batch
+                feature_list = [
+                    future_date_feats.iloc[start_step:end_step],
+                    future_changepoint_feats.iloc[start_step:end_step]
+                ]
+                if naive_future_feats is not None:
+                    feature_list.append(naive_future_feats)
+                if future_regressor is not None:
+                    feature_list.append(future_regressor.iloc[start_step:end_step])
                     
-                    # Initialize context for this series
-                    series_ctx_ts = ctx_ts[:, series_idx].unsqueeze(1)  # (context_length, 1)
+                feat_batch_df = pd.concat(feature_list, axis=1)
+                feat_batch_df = (
+                    feat_batch_df.reindex(columns=self.feature_columns)
+                    .ffill()
+                    .bfill()
+                    .fillna(0.0)
+                    .astype(np.float32)
+                )
+                batch_feats_scaled = self.feature_scaler.transform(feat_batch_df.values)
+                
+                # Handle per-series vs shared features
+                if getattr(self, 'has_per_series_features', False):
+                    # Per-series features: process each series individually
+                    max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
                     
-                    # Extract features for this series from the full feature array
-                    series_ctx_feat_full = ctx_feat_np[:, feat_indices]  # (context_length, n_feats_for_series)
-                    
-                    # Pad to match model input dimension if needed
-                    if len(feat_indices) < max_feats_from_mapping:
-                        pad_size = max_feats_from_mapping - len(feat_indices)
-                        padding = np.zeros((self.context_length, pad_size), dtype=np.float32)
-                        series_ctx_feat_full = np.concatenate([series_ctx_feat_full, padding], axis=1)
-                    
-                    series_ctx_feat = torch.tensor(series_ctx_feat_full, device=self.device, dtype=torch.float32)
-                    
-                    for step in range(forecast_length):
-                        # Build model input for this series
-                        model_in = torch.cat([series_ctx_ts, series_ctx_feat], dim=-1).unsqueeze(0)
-                        mu, sigma = self.model(model_in)
+                    for series_idx in range(num_series):
+                        # Get feature indices for this series
+                        feat_indices = self.series_feat_mapping.get(series_idx, [])
                         
-                        # Extract prediction
-                        mu_next = mu[0, -1, 0]
-                        sigma_next = sigma[0, -1, 0]
-                        
-                        # Store predictions
-                        forecast_mu_scaled[step, series_idx] = mu_next.cpu().numpy()
-                        forecast_sigma_scaled[step, series_idx] = sigma_next.cpu().numpy()
-                        
-                        # Update context
-                        series_ctx_ts = torch.cat([series_ctx_ts[1:], mu_next.unsqueeze(0).unsqueeze(1)], dim=0)
-                        
-                        # Update features for next step
-                        next_feat_full = future_feats_scaled[step, feat_indices]
+                        # Extract features for this series
+                        series_feats = batch_feats_scaled[:, feat_indices]
                         
                         # Pad if needed
                         if len(feat_indices) < max_feats_from_mapping:
                             pad_size = max_feats_from_mapping - len(feat_indices)
-                            padding = np.zeros(pad_size, dtype=np.float32)
-                            next_feat_full = np.concatenate([next_feat_full, padding])
+                            padding = np.zeros((actual_batch_size, pad_size), dtype=np.float32)
+                            series_feats = np.concatenate([series_feats, padding], axis=1)
                         
-                        next_feat_tensor = torch.tensor(next_feat_full, device=self.device, dtype=torch.float32)
-                        series_ctx_feat = torch.cat([series_ctx_feat[1:], next_feat_tensor.unsqueeze(0)], dim=0)
-            else:
-                # Original path: shared features across all series
-                # Pre-allocate broadcast tensor shape to avoid repeated allocations
-                feat_broadcast_shape = (num_series, self.context_length, ctx_feat.shape[1])
-
-                for step in range(forecast_length):
-                    if self.verbose and step % self.prediction_batch_size == 0:
-                        print(f"Predicting step {step+1}/{forecast_length}")
-
-                    # More efficient broadcasting without repeat()
-                    feat_broadcast = ctx_feat.unsqueeze(0).expand(feat_broadcast_shape)
-                    model_in = torch.cat([ctx_ts.T.unsqueeze(-1), feat_broadcast], dim=-1)
-                    mu, sigma = self.model(model_in)
-
-                    # Extract next predictions (already on correct device)
-                    mu_next = mu[:, -1, 0]  # Remove unnecessary squeeze operations
-                    sigma_next = sigma[:, -1, 0]
-
-                    # Store predictions (convert to numpy once)
-                    forecast_mu_scaled[step] = mu_next.cpu().numpy()
-                    forecast_sigma_scaled[step] = sigma_next.cpu().numpy()
-
-                    # Update context more efficiently
-                    ctx_ts = torch.cat([ctx_ts[1:], mu_next.unsqueeze(0)], dim=0)
-                    # Update features by shifting and replacing last element
-                    ctx_feat[:-1] = ctx_feat[1:]
-                    ctx_feat[-1] = torch.tensor(
-                        future_feats_scaled[step], device=self.device, dtype=ctx_feat.dtype
+                        # Create input tensor: (1, actual_batch_size, n_features)
+                        model_in = torch.tensor(
+                            series_feats, 
+                            device=self.device, 
+                            dtype=torch.float32
+                        ).unsqueeze(0)
+                        
+                        # Predict for this series
+                        mu, sigma = self.model(model_in)
+                        
+                        # Store predictions: (actual_batch_size, 1)
+                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :, 0].cpu().numpy()
+                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :, 0].cpu().numpy()
+                else:
+                    # Shared features: broadcast for all series
+                    # batch_feats_scaled shape: (actual_batch_size, n_features)
+                    # Expand to (num_series, actual_batch_size, n_features)
+                    batch_feats_tensor = torch.tensor(
+                        batch_feats_scaled,
+                        device=self.device,
+                        dtype=torch.float32
                     )
+                    model_in = batch_feats_tensor.unsqueeze(0).expand(num_series, -1, -1)
+                    
+                    # Predict for all series at once
+                    mu, sigma = self.model(model_in)
+                    
+                    # Store predictions: (num_series, actual_batch_size, 1)
+                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :, 0].T.cpu().numpy()
+                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :, 0].T.cpu().numpy()
+                
+                # Update naive window with predictions from this batch for next batch
+                if current_naive_windows is not None:
+                    # Get all predictions from this batch (unscaled)
+                    batch_predictions_scaled = forecast_mu_scaled[start_step:end_step, :]
+                    batch_predictions_unscaled = batch_predictions_scaled * self.scaler_stds + self.scaler_means
+                    
+                    # Update window for each series
+                    for col_idx, col in enumerate(self.df_train.columns):
+                        # Get current window and predictions for this series
+                        current_window = current_naive_windows[col]
+                        new_values = batch_predictions_unscaled[:, col_idx]
+                        
+                        # Slide the window: remove oldest values and append new predictions
+                        # Keep only the last prediction_batch_size values
+                        updated_window = np.concatenate([current_window, new_values])[-self.naive_window_size:]
+                        current_naive_windows[col] = updated_window
 
-        # 5. Un-scale & wrap
+        # 4. Un-scale & wrap
         mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means
         sigma_unscaled = forecast_sigma_scaled * self.scaler_stds
 
@@ -1749,6 +1810,10 @@ class pMLP(ModelObject):
         
         # Changepoint features
         if use_changepoints:
+            # Default to individual per-series changepoints unless overridden in kwargs
+            if 'aggregate_method' not in kwargs:
+                kwargs['aggregate_method'] = 'individual'
+            
             self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
@@ -1765,22 +1830,31 @@ class pMLP(ModelObject):
         self.changepoint_features = changepoint_features
         self.changepoint_features_columns = changepoint_features.columns
 
+        # Single naive feature per series (will be populated with window values during batch creation) - pMLP version
         if self.use_naive_feature:
-            last_values = df.ffill().iloc[-1].fillna(0.0).astype(np.float32)
-            naive_feature_mapping = {
-                f"naive_last_{col}": float(last_values[col]) for col in df.columns
-            }
-            naive_features = pd.DataFrame(
-                naive_feature_mapping,
-                index=df.index,
-                dtype=np.float32,
-            )
+            # Create ONE naive feature column per series
+            # During training batch creation, this will be filled with the appropriate window values
+            naive_feature_data = {}
+            for col in df.columns:
+                feature_name = f"naive_last_{col}"
+                # Initialize with shifted values (will be replaced during batch creation with proper windows)
+                shifted_values = df[col].shift(1).fillna(method='bfill').fillna(0.0).astype(np.float32)
+                naive_feature_data[feature_name] = shifted_values
+            
+            naive_features = pd.DataFrame(naive_feature_data, index=df.index, dtype=np.float32)
             self.naive_feature_columns = naive_features.columns
-            self.naive_feature_values = last_values
+            # Store last window for each series (for prediction)
+            self.naive_window_size = self.prediction_batch_size
+            self.naive_feature_windows = {}
+            for col in df.columns:
+                # Get the last prediction_batch_size values
+                last_window = df[col].ffill().iloc[-self.prediction_batch_size:].fillna(0.0).values.astype(np.float32)
+                self.naive_feature_windows[col] = last_window
         else:
             naive_features = None
             self.naive_feature_columns = pd.Index([])
-            self.naive_feature_values = None
+            self.naive_feature_windows = None
+            self.naive_window_size = 0
         
         # Combine all features
         feature_list = [date_feats_train, changepoint_features]
@@ -1816,27 +1890,38 @@ class pMLP(ModelObject):
         self.series_feat_mapping = series_feat_mapping
         self.has_per_series_features = has_per_series
         
-        # 4b. Create training windows using shared efficient function
-        X_data, Y_data = create_training_windows(
+        # 4b. Create training batches using shared efficient function
+        # Get naive feature indices for anti-leakage
+        if self.use_naive_feature:
+            naive_feature_indices = [
+                i for i, col in enumerate(self.feature_columns)
+                if col in self.naive_feature_columns
+            ]
+        else:
+            naive_feature_indices = []
+        
+        self.X_data, self.Y_data = create_training_batches(
             y_train_scaled, 
             train_feats_scaled, 
-            self.context_length, 
-            max_windows=100000,  # More windows for MLP efficiency
+            self.prediction_batch_size, 
+            max_samples=100000,  # More samples for MLP efficiency
             random_seed=self.random_seed,
             series_feat_mapping=series_feat_mapping,
-            series_names=series_names if has_per_series else None
+            series_names=series_names if has_per_series else None,
+            naive_feature_indices=naive_feature_indices,
+            use_naive_window=self.use_naive_feature  # Window-based naive features
         )
 
         # 5. Torch setup - optimized for MLP
         # Account for potentially different feature dimensions per series
         if has_per_series:
             # Use max features across all series
-            num_features = X_data.shape[2] - 1  # Subtract 1 for the y value
+            num_features = self.X_data.shape[2]  # Features only (no y value in X anymore)
         else:
             num_features = train_feats_scaled.shape[1]
-        input_dim = 1 + num_features
+        input_dim = num_features
         self.model = MLPCore(
-            input_dim * self.context_length,  # Flatten the input for MLP
+            input_dim,  # Input per timestep
             self.hidden_dims,
             self.dropout_rate,
             self.use_batch_norm,
@@ -1846,17 +1931,15 @@ class pMLP(ModelObject):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
         criterion = self._get_loss_function()
 
-        # Create tensors and dataset - flatten inputs for MLP
+        # Create tensors and dataset - keep sequence structure for MLP
         try:
-            # Flatten the sequence dimension for MLP
-            X_flattened = X_data.reshape(X_data.shape[0], -1)
-            X_tensor = torch.tensor(X_flattened, dtype=torch.float32)
-            Y_tensor = torch.tensor(Y_data, dtype=torch.float32)
+            X_tensor = torch.tensor(self.X_data, dtype=torch.float32)
+            Y_tensor = torch.tensor(self.Y_data, dtype=torch.float32)
         except (AttributeError, NameError):
             # Fallback when torch is not available
-            X_tensor = X_data.reshape(X_data.shape[0], -1)
-            Y_tensor = Y_data
-        
+            X_tensor = self.X_data
+            Y_tensor = self.Y_data
+
         dataset = TensorDataset(X_tensor, Y_tensor)
         dataloader = DataLoader(
             dataset,
@@ -1890,6 +1973,9 @@ class pMLP(ModelObject):
                 optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
                 
+                # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
+                # y_batch has shape (batch_size, prediction_batch_size, 1)
+                # Calculate loss across all timesteps in the batch
                 loss = criterion(mu, sigma, y_batch)
                 loss.backward()
                 
@@ -1911,7 +1997,7 @@ class pMLP(ModelObject):
         return self
 
     def predict(self, forecast_length: int, future_regressor=None, **kwargs):
-        """Roll-forward prediction for pMLP."""
+        """Batch prediction using future features for pMLP."""
         predict_start_time = datetime.datetime.now()
         self.model.eval()
 
@@ -1926,7 +2012,7 @@ class pMLP(ModelObject):
             holiday_countries_used=self.holiday_countries_used,
         )
         
-        # Create future changepoint features without re-fitting detector
+        # Create future changepoint features without re-fitting detector (single fit at start)
         if (
             getattr(self, "changepoint_features", None) is not None
             and not self.changepoint_features.empty
@@ -1944,153 +2030,143 @@ class pMLP(ModelObject):
                 columns=getattr(self, "changepoint_features_columns", []),
             )
 
-        if self.use_naive_feature and self.naive_feature_values is not None:
-            naive_future_feats = pd.DataFrame(
-                {
-                    f"naive_last_{col}": float(self.naive_feature_values[col])
-                    for col in self.df_train.columns
-                },
-                index=forecast_index,
-                dtype=np.float32,
-            )
-            naive_future_feats = naive_future_feats.reindex(
-                columns=self.naive_feature_columns
-            )
+        # Get last observed window for naive features (before prediction starts) - pMLP version
+        if self.use_naive_feature and self.naive_feature_windows is not None:
+            # Start with last training window for each series
+            current_naive_windows = {
+                col: window.copy() for col, window in self.naive_feature_windows.items()
+            }
         else:
-            naive_future_feats = None
+            current_naive_windows = None
         
-        # Combine all future features
-        feature_list = [future_date_feats, future_changepoint_feats]
-        if naive_future_feats is not None:
-            feature_list.append(naive_future_feats)
-        if future_regressor is not None:
-            feature_list.append(future_regressor)
-            
-        feat_future_df = pd.concat(feature_list, axis=1)
-
-        feat_future_df = (
-            feat_future_df.reindex(columns=self.feature_columns)
-            .ffill()
-            .bfill()
-            .fillna(0.0)
-            .astype(np.float32)
-        )
-        future_feats_scaled = self.feature_scaler.transform(feat_future_df.values)
-
-        # 3. Context tensors (scaled) - cache the scaled training data
-        if not hasattr(self, "_cached_y_train_scaled"):
-            self._cached_y_train_scaled = (
-                self.df_train.to_numpy(dtype=np.float32) - self.scaler_means
-            ) / self.scaler_stds
-
-        # Get context window
-        ctx_ts = self._cached_y_train_scaled[-self.context_length :, :]
-        ctx_feat_np = self.feature_scaler.transform(
-            self.features.iloc[-self.context_length :].values.astype(np.float32)
-        )
-
         num_series = self.df_train.shape[1]
         forecast_mu_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
         forecast_sigma_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
 
-        # 4. Roll forward prediction with per-series feature support
+        # 3. Predict in batches of prediction_batch_size
+        num_batches = int(np.ceil(forecast_length / self.prediction_batch_size))
+        
         with torch.no_grad():
-            if getattr(self, 'has_per_series_features', False):
-                # Per-series features: process each series individually
-                series_names = list(self.df_train.columns)
+            for batch_idx in range(num_batches):
+                start_step = batch_idx * self.prediction_batch_size
+                end_step = min(start_step + self.prediction_batch_size, forecast_length)
+                actual_batch_size = end_step - start_step
                 
-                # Determine the max feature dimension used during training
-                max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
+                if self.verbose and batch_idx % 5 == 0:
+                    print(f"Predicting batch {batch_idx+1}/{num_batches} (steps {start_step+1}-{end_step})")
                 
-                for series_idx in range(num_series):
-                    if self.verbose and series_idx % 10 == 0:
-                        print(f"Predicting series {series_idx+1}/{num_series}")
+                # Build window-based naive features for this batch - pMLP version
+                if current_naive_windows is not None:
+                    # Create ONE naive feature per series
+                    # For each series, the naive feature at each prediction timestep gets the corresponding window value
+                    # If predicting steps t, t+1, ..., t+prediction_batch_size-1:
+                    #   - At timestep t: use window value at position corresponding to t-1 (most recent)
+                    #   - At timestep t+1: use window value at position corresponding to t (which is now in window)
+                    #   - etc.
+                    naive_feature_data = {}
+                    for col in self.df_train.columns:
+                        feature_name = f"naive_last_{col}"
+                        window = current_naive_windows[col]  # Current window for this series
+                        # The window contains [t-prediction_batch_size, ..., t-2, t-1]
+                        # For prediction batch, we use these values in order
+                        naive_feature_data[feature_name] = window[:actual_batch_size].tolist()
                     
-                    # Get feature indices for this series
-                    feat_indices = self.series_feat_mapping.get(series_idx, [])
+                    naive_future_feats = pd.DataFrame(
+                        naive_feature_data,
+                        index=forecast_index[start_step:end_step],
+                        dtype=np.float32,
+                    )
+                    naive_future_feats = naive_future_feats.reindex(columns=self.naive_feature_columns)
+                else:
+                    naive_future_feats = None
+                
+                # Combine all future features for this batch
+                feature_list = [
+                    future_date_feats.iloc[start_step:end_step],
+                    future_changepoint_feats.iloc[start_step:end_step]
+                ]
+                if naive_future_feats is not None:
+                    feature_list.append(naive_future_feats)
+                if future_regressor is not None:
+                    feature_list.append(future_regressor.iloc[start_step:end_step])
                     
-                    # Initialize context for this series
-                    series_ctx_ts = ctx_ts[:, series_idx:series_idx+1]  # (context_length, 1)
-                    series_ctx_feat = ctx_feat_np[:, feat_indices]  # (context_length, n_feats_for_series)
+                feat_batch_df = pd.concat(feature_list, axis=1)
+                feat_batch_df = (
+                    feat_batch_df.reindex(columns=self.feature_columns)
+                    .ffill()
+                    .bfill()
+                    .fillna(0.0)
+                    .astype(np.float32)
+                )
+                batch_feats_scaled = self.feature_scaler.transform(feat_batch_df.values)
+                
+                # Handle per-series vs shared features
+                if getattr(self, 'has_per_series_features', False):
+                    # Per-series features: process each series individually
+                    max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
                     
-                    # Pad to match model input dimension if needed
-                    if len(feat_indices) < max_feats_from_mapping:
-                        pad_size = max_feats_from_mapping - len(feat_indices)
-                        padding = np.zeros((self.context_length, pad_size), dtype=np.float32)
-                        series_ctx_feat = np.concatenate([series_ctx_feat, padding], axis=1)
-                    
-                    for step in range(forecast_length):
-                        # Combine and flatten for MLP
-                        combined = np.concatenate([series_ctx_ts, series_ctx_feat], axis=1)
-                        flattened = combined.flatten()
+                    for series_idx in range(num_series):
+                        # Get feature indices for this series
+                        feat_indices = self.series_feat_mapping.get(series_idx, [])
                         
-                        # Predict
-                        input_tensor = torch.tensor(
-                            flattened, 
+                        # Extract features for this series
+                        series_feats = batch_feats_scaled[:, feat_indices]
+                        
+                        # Pad if needed
+                        if len(feat_indices) < max_feats_from_mapping:
+                            pad_size = max_feats_from_mapping - len(feat_indices)
+                            padding = np.zeros((actual_batch_size, pad_size), dtype=np.float32)
+                            series_feats = np.concatenate([series_feats, padding], axis=1)
+                        
+                        # Create input tensor: (1, actual_batch_size, n_features)
+                        model_in = torch.tensor(
+                            series_feats, 
                             device=self.device, 
                             dtype=torch.float32
                         ).unsqueeze(0)
                         
-                        mu, sigma = self.model(input_tensor)
+                        # Predict for this series
+                        mu, sigma = self.model(model_in)
                         
-                        # Store predictions
-                        forecast_mu_scaled[step, series_idx] = mu.cpu().numpy().flatten()[0]
-                        forecast_sigma_scaled[step, series_idx] = sigma.cpu().numpy().flatten()[0]
-                        
-                        # Update context
-                        new_value = mu.cpu().numpy().flatten()[0]
-                        series_ctx_ts = np.concatenate([series_ctx_ts[1:], [[new_value]]], axis=0)
-                        
-                        # Update features for next step
-                        if step < len(future_feats_scaled):
-                            next_feat_full = future_feats_scaled[step, feat_indices]
-                            
-                            # Pad if needed
-                            if len(feat_indices) < max_feats_from_mapping:
-                                pad_size = max_feats_from_mapping - len(feat_indices)
-                                padding = np.zeros(pad_size, dtype=np.float32)
-                                next_feat_full = np.concatenate([next_feat_full, padding])
-                            
-                            series_ctx_feat = np.concatenate([series_ctx_feat[1:], [next_feat_full]], axis=0)
-            else:
-                # Original path: shared features across all series
-                for step in range(forecast_length):
-                    if self.verbose and step % self.prediction_batch_size == 0:
-                        print(f"Predicting step {step+1}/{forecast_length}")
-
-                    # Prepare input for all series at once
-                    batch_inputs = []
-                    for series_idx in range(num_series):
-                        # Combine time series values with features
-                        ts_values = ctx_ts[:, series_idx:series_idx+1]  # Shape: (context_length, 1)
-                        features = ctx_feat_np  # Shape: (context_length, n_features)
-                        combined = np.concatenate([ts_values, features], axis=1)  # Shape: (context_length, 1+n_features)
-                        flattened = combined.flatten()  # Flatten for MLP
-                        batch_inputs.append(flattened)
-                    
-                    # Convert to tensor and predict
-                    input_tensor = torch.tensor(
-                        np.array(batch_inputs), 
-                        device=self.device, 
+                        # Store predictions: (actual_batch_size, 1)
+                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :, 0].cpu().numpy()
+                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :, 0].cpu().numpy()
+                else:
+                    # Shared features: broadcast for all series
+                    # batch_feats_scaled shape: (actual_batch_size, n_features)
+                    # Expand to (num_series, actual_batch_size, n_features)
+                    batch_feats_tensor = torch.tensor(
+                        batch_feats_scaled,
+                        device=self.device,
                         dtype=torch.float32
                     )
+                    model_in = batch_feats_tensor.unsqueeze(0).expand(num_series, -1, -1)
                     
-                    mu, sigma = self.model(input_tensor)
+                    # Predict for all series at once
+                    mu, sigma = self.model(model_in)
                     
-                    # Store predictions
-                    forecast_mu_scaled[step] = mu.cpu().numpy().flatten()
-                    forecast_sigma_scaled[step] = sigma.cpu().numpy().flatten()
+                    # Store predictions: (num_series, actual_batch_size, 1)
+                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :, 0].T.cpu().numpy()
+                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :, 0].T.cpu().numpy()
+                
+                # Update naive window with predictions from this batch for next batch - pMLP version
+                if current_naive_windows is not None:
+                    # Get all predictions from this batch (unscaled)
+                    batch_predictions_scaled = forecast_mu_scaled[start_step:end_step, :]
+                    batch_predictions_unscaled = batch_predictions_scaled * self.scaler_stds + self.scaler_means
+                    
+                    # Update window for each series
+                    for col_idx, col in enumerate(self.df_train.columns):
+                        # Get current window and predictions for this series
+                        current_window = current_naive_windows[col]
+                        new_values = batch_predictions_unscaled[:, col_idx]
+                        
+                        # Slide the window: remove oldest values and append new predictions
+                        # Keep only the last prediction_batch_size values
+                        updated_window = np.concatenate([current_window, new_values])[-self.naive_window_size:]
+                        current_naive_windows[col] = updated_window
 
-                    # Update context for next step
-                    new_values = mu.cpu().numpy().flatten()
-                    ctx_ts = np.concatenate([ctx_ts[1:], new_values.reshape(1, -1)], axis=0)
-                    
-                    # Update features
-                    if step < len(future_feats_scaled):
-                        new_feat = future_feats_scaled[step].reshape(1, -1)
-                        ctx_feat_np = np.concatenate([ctx_feat_np[1:], new_feat], axis=0)
-
-        # 5. Un-scale & wrap
+        # 4. Un-scale & wrap
         mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means
         sigma_unscaled = forecast_sigma_scaled * self.scaler_stds
 

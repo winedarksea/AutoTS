@@ -123,7 +123,7 @@ default = {
     'UnobservedComponents': 0.6,
     'VAR': 1,
     'VECM': 1,
-    'ARIMA': 0.3,
+    # 'ARIMA': 0.3,
     'WindowRegression': 0.8,
     'DatepartRegression': 1,
     # 'UnivariateRegression': 0.1,
@@ -221,7 +221,7 @@ scalable = fast_parallel_no_arima = {
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'NeuralForecast', 'PytorchForecasting']
+        + ['MultivariateRegression', 'NeuralForecast']
     )
 )
 

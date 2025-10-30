@@ -263,6 +263,7 @@ class DeepSSMTest(unittest.TestCase):
             d_state=2,
             verbose=0,
             random_seed=42,
+            prediction_batch_size=10,  # Small enough for 40 timestep dataset
             changepoint_method="l1_fused_lasso",
             changepoint_params={"lambda_reg": 2.0}
         )
@@ -283,6 +284,7 @@ class DeepSSMTest(unittest.TestCase):
             d_state=2,
             verbose=0,
             random_seed=42,
+            prediction_batch_size=10,  # Small enough for 40 timestep dataset
             changepoint_method="l1_total_variation",
             changepoint_params={"lambda_reg": 1.0}
         )
@@ -334,7 +336,8 @@ class DeepSSMTest(unittest.TestCase):
             epochs=2,  # Quick test
             batch_size=16,
             verbose=0,  # Reduce verbosity for testing
-            random_seed=42
+            random_seed=42,
+            prediction_batch_size=30  # Small enough for 100 timestep dataset
         )
         
         # Test fitting
@@ -585,6 +588,7 @@ class DeepSSMTest(unittest.TestCase):
             d_state=2,
             verbose=0,
             random_seed=0,
+            prediction_batch_size=10,  # Small enough for 40 timestep dataset
             changepoint_method=None,
         )
         mamba.fit(df)
@@ -613,6 +617,7 @@ class DeepSSMTest(unittest.TestCase):
             d_state=2,
             verbose=0,
             random_seed=0,
+            prediction_batch_size=10,  # Small enough for 40 timestep dataset
             changepoint_method=None,
             use_naive_feature=False,
         )
@@ -630,6 +635,7 @@ class DeepSSMTest(unittest.TestCase):
             batch_size=8,
             verbose=0,
             random_seed=0,
+            prediction_batch_size=10,  # Small enough for 40 timestep dataset
             changepoint_method=None,
         )
         mlp.fit(df)
@@ -656,6 +662,7 @@ class DeepSSMTest(unittest.TestCase):
             batch_size=8,
             verbose=0,
             random_seed=0,
+            prediction_batch_size=10,  # Small enough for 40 timestep dataset
             changepoint_method=None,
             use_naive_feature=False,
         )
@@ -905,7 +912,8 @@ class DeepSSMTest(unittest.TestCase):
         # Test 4: Verify different behavior between individual and shared changepoints
         print("  Testing comparison between individual and shared changepoints")
         
-        # Train a model with shared changepoints (default behavior)
+        # Train a model with shared changepoints (explicitly set aggregate_method='mean')
+        # Disable naive features so we can isolate changepoint feature behavior
         model_shared = MambaSSM(
             context_length=30,
             d_model=16,
@@ -916,16 +924,17 @@ class DeepSSMTest(unittest.TestCase):
             verbose=0,
             random_seed=42,
             changepoint_method='cusum',
-            changepoint_params={'threshold': 3.0, 'min_distance': 10}
+            changepoint_params={'threshold': 3.0, 'min_distance': 10},
+            use_naive_feature=False  # Disable to test only changepoint feature behavior
         )
         
-        # Fit without aggregate_method (defaults to shared)
-        model_shared.fit(train_df)
+        # Fit with aggregate_method='mean' for shared changepoints
+        model_shared.fit(train_df, aggregate_method='mean')
         
-        # Should not have per-series features
+        # Should not have per-series features with shared changepoints and no naive features
         self.assertFalse(
             getattr(model_shared, 'has_per_series_features', False),
-            "Model with shared changepoints should not have per-series features"
+            "Model with shared changepoints and no naive features should not have per-series features"
         )
         
         # Make predictions
@@ -989,6 +998,322 @@ class DeepSSMTest(unittest.TestCase):
         self.assertTrue(np.isfinite(prediction.forecast.values).all())
         
         print("Per-series basic changepoint method test passed!")
+
+    def test_training_data_shape_and_features(self):
+        """Test that training data X_data has correct shape and proper feature values.
+        
+        This test validates:
+        1. X_data shape is (n_samples, prediction_batch_size, n_features)
+        2. Seasonality features are populated correctly (date parts)
+        3. Changepoint features are populated correctly (not all zeros)
+        4. Naive window feature contains proper historical data when use_naive_window=True
+        5. All features have reasonable non-zero variance
+        """
+        print("Testing training data shape and feature content")
+        
+        # Create synthetic data with clear patterns
+        n_timesteps = 200
+        n_series = 3
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+        
+        np.random.seed(42)
+        
+        # Create data with clear weekly seasonality and trend
+        time_idx = np.arange(n_timesteps)
+        weekly_season = np.sin(time_idx * 2 * np.pi / 7)  # Weekly pattern
+        trend = time_idx * 0.05  # Upward trend
+        
+        # Series with different patterns but all have seasonality
+        series_data = np.zeros((n_timesteps, n_series))
+        for i in range(n_series):
+            series_data[:, i] = trend + weekly_season * (i + 1) + np.random.randn(n_timesteps) * 0.5
+            # Add a level shift at timestep 100 for changepoint detection
+            series_data[100:, i] += 5 * (i + 1)
+        
+        df = pd.DataFrame(
+            series_data,
+            index=dates,
+            columns=['series_a', 'series_b', 'series_c']
+        )
+        
+        # Test with pMLP (easier to inspect as it stores X_data)
+        prediction_batch_size = 30
+        model = pMLP(
+            context_length=50,
+            hidden_dims=[64],
+            epochs=1,
+            batch_size=16,
+            verbose=0,
+            random_seed=42,
+            prediction_batch_size=prediction_batch_size,
+            datepart_method='expanded',  # Rich date features
+            holiday_countries_used=True,
+            use_naive_feature=True,  # Enable naive window feature
+            changepoint_method='ewma',  # Method that should detect our level shifts
+            changepoint_params={'window': 10, 'alpha': 0.3}
+        )
+        
+        # Fit the model with individual aggregate_method
+        model.fit(df, aggregate_method='individual')
+        
+        # Test 1: Verify X_data shape
+        print(f"  X_data shape: {model.X_data.shape}")
+        self.assertEqual(len(model.X_data.shape), 3, "X_data should be 3-dimensional")
+        
+        n_samples, batch_size, n_features = model.X_data.shape
+        self.assertEqual(batch_size, prediction_batch_size, 
+                        f"Second dimension should be prediction_batch_size ({prediction_batch_size})")
+        
+        # Test 2: Verify feature count makes sense
+        # Expected features:
+        # - Date features (from 'expanded' method - typically 10-20 features)
+        # - Changepoint features (per-series with 'individual' aggregation)
+        # - Naive features (1 per series = 3)
+        print(f"  Total features: {n_features}")
+        print(f"  Feature columns: {len(model.feature_columns)}")
+        
+        # When per-series features are used, X_data has max feature count (padded)
+        # Otherwise, feature count should match exactly
+        if model.has_per_series_features:
+            # X_data should have max feature count across all series
+            max_feat_count = max(len(feat_indices) for feat_indices in model.series_feat_mapping.values())
+            self.assertEqual(n_features, max_feat_count,
+                           "X_data feature count should match max per-series feature count")
+            print(f"  Per-series mode: X_data has max feature count {max_feat_count}")
+        else:
+            self.assertEqual(n_features, len(model.feature_columns),
+                           "X_data feature count should match feature_columns length")
+        
+        # Test 3: Check seasonality features (date parts) are not all zeros
+        # Find date feature indices - need to map to X_data indices correctly
+        date_feature_indices = []
+        
+        # In per-series mode, we need to find features within any series mapping
+        # In shared mode, indices map directly
+        if model.has_per_series_features:
+            # Collect all unique feature indices used by any series
+            all_used_indices = set()
+            for feat_indices in model.series_feat_mapping.values():
+                all_used_indices.update(feat_indices)
+            
+            # Find date features within the used indices
+            for feat_idx in sorted(all_used_indices):
+                if feat_idx < len(model.feature_columns):
+                    col_str = str(model.feature_columns[feat_idx])
+                    if any(x in col_str.lower() for x in ['month', 'day', 'week', 'year', 'weekday', 'sin', 'cos']):
+                        # Map to X_data index (find position in one of the series mappings)
+                        for series_idx, indices in model.series_feat_mapping.items():
+                            if feat_idx in indices:
+                                xdata_idx = indices.index(feat_idx)
+                                if xdata_idx < n_features:
+                                    date_feature_indices.append(xdata_idx)
+                                break
+        else:
+            for i, col in enumerate(model.feature_columns):
+                col_str = str(col)
+                if any(x in col_str.lower() for x in ['month', 'day', 'week', 'year', 'weekday', 'sin', 'cos']):
+                    date_feature_indices.append(i)
+        
+        print(f"  Date feature count: {len(date_feature_indices)}")
+        self.assertGreater(len(date_feature_indices), 0, "Should have date/seasonality features")
+        
+        # Check that date features have variance (not all zeros)
+        for feat_idx in list(set(date_feature_indices))[:5]:  # Check first 5 unique date features
+            if feat_idx < n_features:
+                feat_values = model.X_data[:, :, feat_idx]
+                feat_var = np.var(feat_values)
+                self.assertGreater(feat_var, 0,
+                                 f"Date feature at index {feat_idx} should have non-zero variance")
+        
+        # Test 4: Check changepoint features are not all zeros
+        changepoint_feature_indices = []
+        changepoint_xdata_mapping = {}  # Maps feature_columns index to X_data index
+        
+        if model.has_per_series_features:
+            # Build mapping for changepoint features in per-series mode
+            for series_idx, feat_indices in model.series_feat_mapping.items():
+                for xdata_idx, feat_col_idx in enumerate(feat_indices):
+                    if feat_col_idx < len(model.feature_columns):
+                        col_str = str(model.feature_columns[feat_col_idx])
+                        if 'changepoint' in col_str.lower() or 'ewma' in col_str.lower():
+                            if feat_col_idx not in changepoint_xdata_mapping:
+                                changepoint_xdata_mapping[feat_col_idx] = xdata_idx
+                                if xdata_idx < n_features:
+                                    changepoint_feature_indices.append(xdata_idx)
+        else:
+            for i, col in enumerate(model.feature_columns):
+                col_str = str(col)
+                if 'changepoint' in col_str.lower() or 'ewma' in col_str.lower():
+                    changepoint_feature_indices.append(i)
+                    changepoint_xdata_mapping[i] = i
+        
+        print(f"  Changepoint feature count: {len(changepoint_feature_indices)}")
+        
+        if len(changepoint_feature_indices) > 0:
+            # Check that at least some changepoint features have non-zero values
+            has_nonzero_changepoint = False
+            changepoint_stats = []
+            for xdata_idx in changepoint_feature_indices:
+                if xdata_idx < n_features:
+                    feat_values = model.X_data[:, :, xdata_idx]
+                    nonzero_count = np.count_nonzero(feat_values)
+                    feat_var = np.var(feat_values)
+                    
+                    # Find the feature column name
+                    feat_name = f"X_data_index_{xdata_idx}"
+                    for feat_col_idx, mapped_xdata_idx in changepoint_xdata_mapping.items():
+                        if mapped_xdata_idx == xdata_idx and feat_col_idx < len(model.feature_columns):
+                            feat_name = str(model.feature_columns[feat_col_idx])
+                            break
+                    
+                    changepoint_stats.append({
+                        'name': feat_name,
+                        'nonzero_count': nonzero_count,
+                        'variance': feat_var
+                    })
+                    if nonzero_count > 0:
+                        has_nonzero_changepoint = True
+                        print(f"    Feature {feat_name}: {nonzero_count} non-zero values, variance={feat_var:.6f}")
+            
+            # This is a critical test - changepoint features should not all be zero
+            self.assertTrue(has_nonzero_changepoint, 
+                          f"At least some changepoint features should have non-zero values. Stats: {changepoint_stats}")
+        else:
+            self.fail("No changepoint features found in feature columns despite using changepoint_method='ewma'")        # Test 5: Check naive window features are populated correctly
+        naive_feature_indices = []
+        naive_xdata_mapping = {}  # Maps feature_columns index to X_data index
+        
+        if model.has_per_series_features:
+            # Build mapping for naive features in per-series mode
+            for series_idx, feat_indices in model.series_feat_mapping.items():
+                for xdata_idx, feat_col_idx in enumerate(feat_indices):
+                    if feat_col_idx < len(model.feature_columns):
+                        col_str = str(model.feature_columns[feat_col_idx])
+                        if 'naive_last_' in col_str:
+                            if feat_col_idx not in naive_xdata_mapping:
+                                naive_xdata_mapping[feat_col_idx] = xdata_idx
+                                if xdata_idx < n_features:
+                                    naive_feature_indices.append(xdata_idx)
+        else:
+            for i, col in enumerate(model.feature_columns):
+                col_str = str(col)
+                if 'naive_last_' in col_str:
+                    naive_feature_indices.append(i)
+                    naive_xdata_mapping[i] = i
+        
+        print(f"  Naive feature count: {len(naive_feature_indices)}")
+        self.assertEqual(len(naive_feature_indices), n_series,
+                        f"Should have {n_series} naive features (one per series)")
+        
+        # Test 6: Verify naive window feature has proper historical data
+        # The naive feature should contain window values, not just a single repeated value
+        for xdata_idx in naive_feature_indices:
+            if xdata_idx < n_features:
+                feat_values = model.X_data[:, :, xdata_idx]
+                
+                # Find the feature column name
+                feat_name = f"X_data_index_{xdata_idx}"
+                for feat_col_idx, mapped_xdata_idx in naive_xdata_mapping.items():
+                    if mapped_xdata_idx == xdata_idx and feat_col_idx < len(model.feature_columns):
+                        feat_name = str(model.feature_columns[feat_col_idx])
+                        break
+                
+                # Check variance within individual samples
+                # For window-based features, values should vary across the prediction_batch_size dimension
+                sample_variances = []
+                for sample_idx in range(min(100, n_samples)):  # Check first 100 samples
+                    sample_values = feat_values[sample_idx, :]
+                    sample_var = np.var(sample_values)
+                    sample_variances.append(sample_var)
+                
+                avg_sample_variance = np.mean(sample_variances)
+                print(f"    Naive feature {feat_name}: avg variance within samples = {avg_sample_variance:.6f}")
+                
+                # With window-based naive features, there should be variance within samples
+                # (different historical values for different timesteps in the window)
+                self.assertGreater(avg_sample_variance, 0,
+                                 f"Naive window feature {feat_name} should have variance within samples")
+        
+        # Test 7: Verify no unexpected features are entirely zero
+        # Some features can legitimately be all zeros (e.g., months/holidays not in date range)
+        all_zero_features = []
+        unexpected_zero_features = []
+        for feat_idx in range(n_features):
+            if np.all(model.X_data[:, :, feat_idx] == 0):
+                # Find feature name (need to reverse map from X_data index)
+                feat_name = f"unknown_feature_{feat_idx}"
+                if model.has_per_series_features:
+                    # Find which feature_column this X_data index corresponds to
+                    for series_idx, feat_indices in model.series_feat_mapping.items():
+                        if feat_idx < len(feat_indices):
+                            feat_col_idx = feat_indices[feat_idx]
+                            if feat_col_idx < len(model.feature_columns):
+                                feat_name = str(model.feature_columns[feat_col_idx])
+                                break
+                else:
+                    if feat_idx < len(model.feature_columns):
+                        feat_name = str(model.feature_columns[feat_idx])
+                
+                all_zero_features.append(feat_name)
+                
+                # Check if this is an expected zero (month/holiday not in range, or padding)
+                is_expected_zero = (
+                    'month_' in feat_name.lower() or
+                    'holiday' in feat_name.lower() or
+                    'day' in feat_name.lower() and ('christmas' in feat_name.lower() or 
+                                                     'thanksgiving' in feat_name.lower() or
+                                                     'independence' in feat_name.lower() or
+                                                     'labor' in feat_name.lower() or
+                                                     'veterans' in feat_name.lower() or
+                                                     'columbus' in feat_name.lower() or
+                                                     'juneteenth' in feat_name.lower() or
+                                                     'memorial' in feat_name.lower() or
+                                                     'martin' in feat_name.lower() or
+                                                     'president' in feat_name.lower() or
+                                                     'new year' in feat_name.lower())
+                )
+                
+                if not is_expected_zero:
+                    unexpected_zero_features.append(feat_name)
+        
+        if all_zero_features:
+            print(f"  All-zero features (may be expected): {all_zero_features}")
+        
+        # Only fail if we have unexpected zeros (not months/holidays)
+        if unexpected_zero_features:
+            self.fail(f"These features are unexpectedly all zeros: {unexpected_zero_features}")
+        
+        # Test 8: Verify per-series feature mapping if present
+        if model.has_per_series_features:
+            print(f"  Has per-series features: True")
+            self.assertIsNotNone(model.series_feat_mapping, "Should have series_feat_mapping")
+            
+            # Verify each series has features assigned
+            for series_idx in range(n_series):
+                self.assertIn(series_idx, model.series_feat_mapping,
+                            f"Series {series_idx} should be in mapping")
+                feat_indices = model.series_feat_mapping[series_idx]
+                self.assertGreater(len(feat_indices), 0,
+                                 f"Series {series_idx} should have features assigned")
+                print(f"    Series {series_idx} has {len(feat_indices)} features")
+        else:
+            print(f"  Has per-series features: False")
+        
+        # Test 9: Basic sanity checks on the data
+        # Check for NaN or Inf values
+        self.assertFalse(np.isnan(model.X_data).any(), "X_data should not contain NaN values")
+        self.assertFalse(np.isinf(model.X_data).any(), "X_data should not contain Inf values")
+        
+        # Check that data is properly scaled (should have reasonable range after StandardScaler)
+        data_mean = np.mean(model.X_data)
+        data_std = np.std(model.X_data)
+        print(f"  X_data mean: {data_mean:.6f}, std: {data_std:.6f}")
+        
+        # After scaling, mean should be close to 0 and std close to 1 (for most features)
+        # Allow some tolerance since some features might be constant or near-constant
+        self.assertLess(abs(data_mean), 2.0, "Mean should be reasonably close to 0 after scaling")
+        
+        print("Training data shape and feature content test passed!")
 
 
 if __name__ == '__main__':
