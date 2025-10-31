@@ -991,6 +991,129 @@ class MLPCore(Module):
         return mu, sigma
 
 
+class SqueezeExcitation(nn.Module):
+    def __init__(self, channels, reduction=8):
+        super().__init__()
+        reduced = max(1, channels // reduction)
+        self.fc1 = nn.Linear(channels, reduced, bias=False)
+        self.fc2 = nn.Linear(reduced, channels, bias=False)
+
+    def forward(self, x):
+        """
+        Apply squeeze-and-excitation weighting.
+        
+        Args:
+            x: Tensor of shape (batch, channels, time)
+        """
+        batch, channels, _ = x.shape
+        weights = F.adaptive_avg_pool1d(x, 1).view(batch, channels)
+        weights = torch.sigmoid(self.fc2(F.silu(self.fc1(weights)))).view(batch, channels, 1)
+        return x * weights
+
+
+class DepthwiseSeparableTemporal(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        mid_channels=None,
+        kernel_size=5,
+        dilation=1,
+        use_se=True,
+        dropout=0.1,
+    ):
+        super().__init__()
+        mid_channels = mid_channels or min(128, max(16, in_channels // 2))
+        padding = ((kernel_size - 1) // 2) * dilation
+
+        self.pointwise_in = nn.Conv1d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.bn_in = nn.BatchNorm1d(mid_channels)
+        self.depthwise = nn.Conv1d(
+            mid_channels,
+            mid_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            dilation=dilation,
+            groups=mid_channels,
+            bias=False,
+        )
+        self.bn_depth = nn.BatchNorm1d(mid_channels)
+        self.se = SqueezeExcitation(mid_channels) if use_se else nn.Identity()
+        self.pointwise_out = nn.Conv1d(mid_channels, in_channels, kernel_size=1, bias=False)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        """
+        Residual depthwise-separable temporal convolution.
+        
+        Args:
+            x: Tensor of shape (batch, time, features)
+        """
+        residual = x
+        y = x.transpose(1, 2)  # (batch, features, time)
+        y = F.silu(self.bn_in(self.pointwise_in(y)))
+        y = F.silu(self.bn_depth(self.depthwise(y)))
+        y = self.se(y)
+        y = self.pointwise_out(y)
+        y = self.dropout(y).transpose(1, 2)
+        return residual + y
+
+
+class CNNMLPHead(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dims,
+        dropout_rate=0.2,
+        use_batch_norm=True,
+        activation="relu",
+        num_blocks=1,
+        kernel_size=5,
+        use_se=True,
+    ):
+        super().__init__()
+        num_blocks = max(0, int(num_blocks)) if num_blocks is not None else 0
+
+        blocks = []
+        if num_blocks > 0:
+            blocks.append(
+                DepthwiseSeparableTemporal(
+                    input_dim,
+                    kernel_size=kernel_size,
+                    dilation=1,
+                    use_se=use_se,
+                    dropout=dropout_rate,
+                )
+            )
+        if num_blocks > 1:
+            blocks.append(
+                DepthwiseSeparableTemporal(
+                    input_dim,
+                    kernel_size=kernel_size,
+                    dilation=2,
+                    use_se=use_se,
+                    dropout=dropout_rate,
+                )
+            )
+        self.cnn = nn.Sequential(*blocks) if blocks else nn.Identity()
+        self.mlp = MLPCore(
+            input_dim,
+            hidden_dims,
+            dropout_rate=dropout_rate,
+            use_batch_norm=use_batch_norm,
+            activation=activation,
+        )
+
+    def forward(self, x):
+        """
+        Apply optional CNN front-end followed by MLP.
+        
+        Args:
+            x: Tensor of shape (batch, time, features)
+        """
+        x = self.cnn(x)
+        return self.mlp(x)
+
+
 class MambaSSM(ModelObject):
     def __init__(
         self,
@@ -1701,6 +1824,7 @@ class pMLP(ModelObject):
         changepoint_method: str = "basic",
         changepoint_params: dict = None,
         regression_type: str = None,
+        num_cnn_blocks: int | None = 0,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -1734,6 +1858,7 @@ class pMLP(ModelObject):
         self.batch_size = batch_size
         self.lr = lr
         self.use_naive_feature = use_naive_feature
+        self.num_cnn_blocks = None if num_cnn_blocks is None else max(0, int(num_cnn_blocks))
 
         # Loss function parameters
         self.loss_function = loss_function
@@ -1948,13 +2073,23 @@ class pMLP(ModelObject):
         else:
             num_features = train_feats_scaled.shape[1]
         input_dim = num_features
-        self.model = MLPCore(
-            input_dim,  # Input per timestep
-            self.hidden_dims,
-            self.dropout_rate,
-            self.use_batch_norm,
-            self.activation,
-        ).to(self.device)
+        if self.num_cnn_blocks and self.num_cnn_blocks > 0:
+            self.model = CNNMLPHead(
+                input_dim,
+                hidden_dims=self.hidden_dims,
+                dropout_rate=self.dropout_rate,
+                use_batch_norm=self.use_batch_norm,
+                activation=self.activation,
+                num_blocks=self.num_cnn_blocks,
+            ).to(self.device)
+        else:
+            self.model = MLPCore(
+                input_dim,  # Input per timestep
+                self.hidden_dims,
+                self.dropout_rate,
+                self.use_batch_norm,
+                self.activation,
+            ).to(self.device)
         
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
         criterion = self._get_loss_function()
@@ -2243,6 +2378,7 @@ class pMLP(ModelObject):
             "nll_weight": self.nll_weight,
             "wasserstein_weight": self.wasserstein_weight,
             "prediction_batch_size": self.prediction_batch_size,
+            "num_cnn_blocks": self.num_cnn_blocks,
             "datepart_method": self.datepart_method,
             "holiday_countries_used": self.holiday_countries_used,
             "use_naive_feature": self.use_naive_feature,
@@ -2331,6 +2467,10 @@ class pMLP(ModelObject):
         # Wasserstein weight for combined loss
         wasserstein_weights = [0.05, 0.1, 0.15, 0.2, 0.3]
         wasserstein_weight_probs = [0.15, 0.3, 0.25, 0.2, 0.1]
+
+        # CNN blocks - allow optional temporal convolutions
+        cnn_block_options = [0, 1, 2]
+        cnn_block_weights = [0.55, 0.3, 0.15]
         
         # Datepart method
         datepart_method = random_datepart()
@@ -2357,6 +2497,7 @@ class pMLP(ModelObject):
             "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[0],
             "nll_weight": random.choices(nll_weights, weights=nll_weight_probs, k=1)[0],
             "wasserstein_weight": random.choices(wasserstein_weights, weights=wasserstein_weight_probs, k=1)[0],
+            "num_cnn_blocks": random.choices(cnn_block_options, weights=cnn_block_weights, k=1)[0],
             "datepart_method": datepart_method,
             "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
             "use_naive_feature": random.choices(naive_feature_options, weights=naive_feature_weights, k=1)[0],
