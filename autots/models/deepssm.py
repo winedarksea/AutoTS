@@ -897,10 +897,12 @@ class MLPCore(Module):
         dropout_rate=0.2,
         use_batch_norm=True,
         activation='relu',
+        preserve_temporal=False,  # New: whether to preserve temporal dimension
     ):
         super().__init__()
         self.activation_name = activation
         self.use_batch_norm = use_batch_norm
+        self.preserve_temporal = preserve_temporal
         
         # Choose activation function
         if activation == 'relu':
@@ -913,27 +915,37 @@ class MLPCore(Module):
             raise ValueError(f"Unsupported activation: {activation}")
         
         # Build layers
-        layers = []
-        prev_dim = input_dim
-        
-        for i, hidden_dim in enumerate(hidden_dims):
-            # Linear layer
-            layers.append(nn.Linear(prev_dim, hidden_dim))
+        if preserve_temporal:
+            # Use LayerNorm for temporal data (works on last dim, preserves seq structure)
+            layers = []
+            prev_dim = input_dim
             
-            # Batch normalization (optional, but often helps with wide networks)
-            if use_batch_norm:
-                layers.append(nn.BatchNorm1d(hidden_dim))
+            for i, hidden_dim in enumerate(hidden_dims):
+                layers.append(nn.Linear(prev_dim, hidden_dim))
+                if use_batch_norm:
+                    # LayerNorm normalizes over the feature dimension
+                    layers.append(nn.LayerNorm(hidden_dim))
+                layers.append(self.activation)
+                if i < len(hidden_dims) - 1:
+                    layers.append(nn.Dropout(dropout_rate))
+                prev_dim = hidden_dim
             
-            # Activation
-            layers.append(self.activation)
+            self.backbone = nn.Sequential(*layers)
+        else:
+            # Original BatchNorm1d path for backwards compatibility
+            layers = []
+            prev_dim = input_dim
             
-            # Dropout (skip on last hidden layer to avoid over-regularization before output)
-            if i < len(hidden_dims) - 1:
-                layers.append(nn.Dropout(dropout_rate))
+            for i, hidden_dim in enumerate(hidden_dims):
+                layers.append(nn.Linear(prev_dim, hidden_dim))
+                if use_batch_norm:
+                    layers.append(nn.BatchNorm1d(hidden_dim))
+                layers.append(self.activation)
+                if i < len(hidden_dims) - 1:
+                    layers.append(nn.Dropout(dropout_rate))
+                prev_dim = hidden_dim
             
-            prev_dim = hidden_dim
-        
-        self.backbone = nn.Sequential(*layers)
+            self.backbone = nn.Sequential(*layers)
         
         # Output heads for probabilistic forecasting
         self.out_mu = nn.Linear(prev_dim, 1)
@@ -964,8 +976,19 @@ class MLPCore(Module):
         """
         original_shape = x.shape
         
-        # Handle sequence inputs: (batch_size, seq_len, input_dim)
-        if x.dim() == 3:
+        if self.preserve_temporal and x.dim() == 3:
+            # Keep temporal structure intact
+            # x: (batch_size, seq_len, input_dim)
+            hidden = self.backbone(x)  # LayerNorm and Linear work on last dim
+            
+            # Generate outputs
+            mu = self.out_mu(hidden)
+            sigma = self.softplus(self.out_sigma(hidden))
+            sigma = torch.clamp(sigma, min=1e-6)
+            # Output: (batch_size, seq_len, 1)
+            
+        elif x.dim() == 3:
+            # Original flattening path for backwards compatibility
             batch_size, seq_len, input_dim = x.shape
             # Reshape to (batch_size * seq_len, input_dim) to process all timesteps
             x = x.reshape(-1, input_dim)
@@ -991,7 +1014,7 @@ class MLPCore(Module):
         return mu, sigma
 
 
-class SqueezeExcitation(nn.Module):
+class SqueezeExcitation(Module):
     def __init__(self, channels, reduction=8):
         super().__init__()
         reduced = max(1, channels // reduction)
@@ -1011,7 +1034,7 @@ class SqueezeExcitation(nn.Module):
         return x * weights
 
 
-class DepthwiseSeparableTemporal(nn.Module):
+class DepthwiseSeparableTemporal(Module):
     def __init__(
         self,
         in_channels,
@@ -1020,13 +1043,14 @@ class DepthwiseSeparableTemporal(nn.Module):
         dilation=1,
         use_se=True,
         dropout=0.1,
+        use_batch_norm=True,
     ):
         super().__init__()
         mid_channels = mid_channels or min(128, max(16, in_channels // 2))
         padding = ((kernel_size - 1) // 2) * dilation
 
         self.pointwise_in = nn.Conv1d(in_channels, mid_channels, kernel_size=1, bias=False)
-        self.bn_in = nn.BatchNorm1d(mid_channels)
+        self.bn_in = nn.BatchNorm1d(mid_channels) if use_batch_norm else nn.Identity()
         self.depthwise = nn.Conv1d(
             mid_channels,
             mid_channels,
@@ -1036,7 +1060,7 @@ class DepthwiseSeparableTemporal(nn.Module):
             groups=mid_channels,
             bias=False,
         )
-        self.bn_depth = nn.BatchNorm1d(mid_channels)
+        self.bn_depth = nn.BatchNorm1d(mid_channels) if use_batch_norm else nn.Identity()
         self.se = SqueezeExcitation(mid_channels) if use_se else nn.Identity()
         self.pointwise_out = nn.Conv1d(mid_channels, in_channels, kernel_size=1, bias=False)
         self.dropout = nn.Dropout(dropout)
@@ -1045,20 +1069,29 @@ class DepthwiseSeparableTemporal(nn.Module):
         """
         Residual depthwise-separable temporal convolution.
         
+        Processes temporal patterns within each feature independently (depthwise),
+        then mixes features (pointwise). This captures:
+        - Within-feature temporal patterns (e.g., "weekday_sin" oscillating over forecast horizon)
+        - Cross-feature interactions via pointwise convolutions
+        - Global feature importance via squeeze-excitation
+        
         Args:
             x: Tensor of shape (batch, time, features)
+            
+        Returns:
+            Tensor of shape (batch, time, features) with residual connection
         """
         residual = x
-        y = x.transpose(1, 2)  # (batch, features, time)
+        y = x.transpose(1, 2)  # (batch, features, time) for Conv1d
         y = F.silu(self.bn_in(self.pointwise_in(y)))
         y = F.silu(self.bn_depth(self.depthwise(y)))
         y = self.se(y)
         y = self.pointwise_out(y)
-        y = self.dropout(y).transpose(1, 2)
+        y = self.dropout(y).transpose(1, 2)  # Back to (batch, time, features)
         return residual + y
 
 
-class CNNMLPHead(nn.Module):
+class CNNMLPHead(Module):
     def __init__(
         self,
         input_dim,
@@ -1069,6 +1102,7 @@ class CNNMLPHead(nn.Module):
         num_blocks=1,
         kernel_size=5,
         use_se=True,
+        cnn_batch_norm=False,  # Separate control for CNN batch norm (can be unstable with small sequences)
     ):
         super().__init__()
         num_blocks = max(0, int(num_blocks)) if num_blocks is not None else 0
@@ -1082,6 +1116,7 @@ class CNNMLPHead(nn.Module):
                     dilation=1,
                     use_se=use_se,
                     dropout=dropout_rate,
+                    use_batch_norm=cnn_batch_norm,
                 )
             )
         if num_blocks > 1:
@@ -1092,6 +1127,7 @@ class CNNMLPHead(nn.Module):
                     dilation=2,
                     use_se=use_se,
                     dropout=dropout_rate,
+                    use_batch_norm=cnn_batch_norm,
                 )
             )
         self.cnn = nn.Sequential(*blocks) if blocks else nn.Identity()
@@ -1101,6 +1137,7 @@ class CNNMLPHead(nn.Module):
             dropout_rate=dropout_rate,
             use_batch_norm=use_batch_norm,
             activation=activation,
+            preserve_temporal=True,  # KEY: Don't flatten after CNN!
         )
 
     def forward(self, x):
@@ -1109,6 +1146,9 @@ class CNNMLPHead(nn.Module):
         
         Args:
             x: Tensor of shape (batch, time, features)
+            
+        Returns:
+            mu, sigma: Predictions with shape (batch, time, 1)
         """
         x = self.cnn(x)
         return self.mlp(x)
