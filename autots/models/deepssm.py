@@ -1839,6 +1839,43 @@ class MambaSSM(ModelObject):
 
 
 class pMLP(ModelObject):
+    """
+    Probabilistic MLP for time series forecasting.
+    
+    Uses a wide, shallow MLP architecture with optional CNN front-end for
+    capturing temporal patterns in future seasonal features.
+    
+    Args:
+        name: Model name
+        frequency: Time series frequency
+        prediction_interval: Prediction interval (e.g., 0.9 for 90% interval)
+        holiday_country: Country code for holiday features
+        random_seed: Random seed for reproducibility
+        verbose: Verbosity level (0=silent, 1=progress)
+        hidden_dims: List of hidden layer dimensions (default: [768, 256])
+        dropout_rate: Dropout rate for regularization
+        use_batch_norm: Whether to use batch normalization
+        activation: Activation function ('relu', 'gelu', 'silu')
+        epochs: Number of training epochs
+        batch_size: Training batch size
+        lr: Learning rate
+        loss_function: Loss function to use
+        nll_weight: Weight for NLL component in combined loss
+        wasserstein_weight: Weight for Wasserstein component in combined loss
+        prediction_batch_size: Number of timesteps to predict per batch
+        datepart_method: Method for date feature extraction
+        holiday_countries_used: Whether to use holiday features
+        use_naive_feature: Whether to use naive/last-value features
+        changepoint_method: Method for changepoint detection
+        changepoint_params: Parameters for changepoint detection
+        regression_type: Type of regression (None or 'User')
+        num_cnn_blocks: Number of CNN blocks (0=no CNN, 1-2=CNN layers)
+        cnn_params: Dictionary of CNN parameters:
+            - kernel_size (int): Temporal kernel size (3, 5, 7, 9)
+            - use_se (bool): Use squeeze-and-excitation for feature importance
+    """
+    # TODO: improve the changepoint features / future trend modeling for MLP
+    # TODO: add a holiday detector integration
     def __init__(
         self,
         name: str = "pMLP",  # Probabilistic MLP
@@ -1865,6 +1902,7 @@ class pMLP(ModelObject):
         changepoint_params: dict = None,
         regression_type: str = None,
         num_cnn_blocks: int | None = 0,
+        cnn_params: dict = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -1899,6 +1937,9 @@ class pMLP(ModelObject):
         self.lr = lr
         self.use_naive_feature = use_naive_feature
         self.num_cnn_blocks = None if num_cnn_blocks is None else max(0, int(num_cnn_blocks))
+        
+        # CNN parameters: kernel_size, use_se, etc.
+        self.cnn_params = cnn_params if cnn_params is not None else {}
 
         # Loss function parameters
         self.loss_function = loss_function
@@ -2121,6 +2162,7 @@ class pMLP(ModelObject):
                 use_batch_norm=self.use_batch_norm,
                 activation=self.activation,
                 num_blocks=self.num_cnn_blocks,
+                **self.cnn_params  # Pass through CNN parameters
             ).to(self.device)
         else:
             self.model = MLPCore(
@@ -2419,6 +2461,7 @@ class pMLP(ModelObject):
             "wasserstein_weight": self.wasserstein_weight,
             "prediction_batch_size": self.prediction_batch_size,
             "num_cnn_blocks": self.num_cnn_blocks,
+            "cnn_params": self.cnn_params,
             "datepart_method": self.datepart_method,
             "holiday_countries_used": self.holiday_countries_used,
             "use_naive_feature": self.use_naive_feature,
@@ -2512,6 +2555,15 @@ class pMLP(ModelObject):
         cnn_block_options = [0, 1, 2]
         cnn_block_weights = [0.55, 0.3, 0.15]
         
+        # CNN parameters - only matters when num_cnn_blocks > 0
+        # Kernel size options - affects temporal receptive field
+        cnn_kernel_sizes = [3, 5, 7, 9]
+        cnn_kernel_weights = [0.2, 0.4, 0.3, 0.1]  # Prefer 5-7 for daily data
+        
+        # Squeeze-and-excitation - feature importance weighting
+        cnn_use_se_options = [True, False]
+        cnn_use_se_weights = [0.7, 0.3]  # Usually helps
+        
         # Datepart method
         datepart_method = random_datepart()
         
@@ -2525,6 +2577,19 @@ class pMLP(ModelObject):
         # Generate changepoint method and parameters
         changepoint_method, changepoint_params = generate_random_changepoint_params()
 
+        # Generate CNN parameters dict
+        selected_num_cnn_blocks = random.choices(cnn_block_options, weights=cnn_block_weights, k=1)[0]
+        
+        # Only generate detailed CNN params if we're using CNN blocks
+        if selected_num_cnn_blocks > 0:
+            cnn_params_dict = {
+                "kernel_size": random.choices(cnn_kernel_sizes, weights=cnn_kernel_weights, k=1)[0],
+                "use_se": random.choices(cnn_use_se_options, weights=cnn_use_se_weights, k=1)[0],
+            }
+        else:
+            # No CNN, so params don't matter but include defaults for consistency
+            cnn_params_dict = {}
+
         # Generate random selections
         selected_params = {
             "hidden_dims": random.choices(hidden_dim_options, weights=hidden_weights, k=1)[0],
@@ -2537,7 +2602,8 @@ class pMLP(ModelObject):
             "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[0],
             "nll_weight": random.choices(nll_weights, weights=nll_weight_probs, k=1)[0],
             "wasserstein_weight": random.choices(wasserstein_weights, weights=wasserstein_weight_probs, k=1)[0],
-            "num_cnn_blocks": random.choices(cnn_block_options, weights=cnn_block_weights, k=1)[0],
+            "num_cnn_blocks": selected_num_cnn_blocks,
+            "cnn_params": cnn_params_dict,
             "datepart_method": datepart_method,
             "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
             "use_naive_feature": random.choices(naive_feature_options, weights=naive_feature_weights, k=1)[0],
