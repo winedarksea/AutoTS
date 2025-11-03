@@ -4,16 +4,22 @@ MCP Server for AutoTS Time Series Forecasting
 This server exposes AutoTS forecasting and analysis functions as MCP tools
 for integration with LLM environments like VS Code.
 """
-
+import asyncio
+import base64
+import io
 import json
 import logging
-from datetime import datetime
-from typing import Any, Optional, Dict
-import pandas as pd
-import numpy as np
+import os
+import tempfile
 import uuid
-import io
-import base64
+from datetime import datetime
+from typing import Any, Optional, Dict, Union
+
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 try:
     from mcp.server import Server
@@ -38,87 +44,207 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# Prediction Cache - Store prediction objects for later retrieval
+# Utility Functions
 # ============================================================================
 
-# Global cache to store prediction objects and their metadata
-PREDICTION_CACHE: Dict[str, Dict[str, Any]] = {}
-
-def cache_prediction(prediction_obj: Any, model_obj: Any = None, metadata: dict = None) -> str:
+def serialize_timestamps(obj):
     """
-    Cache a prediction object and return a unique ID.
+    Recursively convert pandas Timestamp objects to strings for JSON serialization.
     
     Args:
-        prediction_obj: The AutoTS prediction object to cache
-        model_obj: Optional fitted model object
-        metadata: Optional additional metadata
+        obj: Object that may contain Timestamp objects
     
     Returns:
-        Unique prediction ID
+        Object with Timestamps converted to strings
     """
-    prediction_id = str(uuid.uuid4())
-    PREDICTION_CACHE[prediction_id] = {
-        'prediction': prediction_obj,
-        'model': model_obj,
+    if isinstance(obj, pd.Timestamp):
+        return obj.strftime('%Y-%m-%d %H:%M:%S')
+    elif isinstance(obj, dict):
+        return {k: serialize_timestamps(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_timestamps(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(serialize_timestamps(item) for item in obj)
+    else:
+        return obj
+
+
+# ============================================================================
+# Global Caches - Store objects for later retrieval
+# ============================================================================
+
+PREDICTION_CACHE: Dict[str, Dict[str, Any]] = {}
+AUTOTS_CACHE: Dict[str, Dict[str, Any]] = {}
+EVENT_RISK_CACHE: Dict[str, Dict[str, Any]] = {}
+FEATURE_DETECTOR_CACHE: Dict[str, Dict[str, Any]] = {}
+DATA_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+# ============================================================================
+# Cache Management Functions
+# ============================================================================
+
+def cache_object(obj: Any, cache_type: str, metadata: dict = None) -> str:
+    """
+    Cache an object and return a unique ID.
+    
+    Args:
+        obj: Object to cache
+        cache_type: Type of cache ('prediction', 'autots', 'event_risk', 'feature_detector', 'data')
+        metadata: Optional metadata
+    
+    Returns:
+        Unique object ID
+    """
+    obj_id = str(uuid.uuid4())
+    cache_entry = {
+        'object': obj,
         'metadata': metadata or {},
         'created_at': datetime.now().isoformat()
     }
-    return prediction_id
+    
+    if cache_type == 'prediction':
+        PREDICTION_CACHE[obj_id] = cache_entry
+    elif cache_type == 'autots':
+        AUTOTS_CACHE[obj_id] = cache_entry
+    elif cache_type == 'event_risk':
+        EVENT_RISK_CACHE[obj_id] = cache_entry
+    elif cache_type == 'feature_detector':
+        FEATURE_DETECTOR_CACHE[obj_id] = cache_entry
+    elif cache_type == 'data':
+        DATA_CACHE[obj_id] = cache_entry
+    else:
+        raise ValueError(f"Unknown cache type: {cache_type}")
+    
+    return obj_id
 
-def get_cached_prediction(prediction_id: str) -> Dict[str, Any]:
-    """Retrieve a cached prediction by ID."""
-    if prediction_id not in PREDICTION_CACHE:
-        raise ValueError(f"Prediction ID {prediction_id} not found in cache")
-    return PREDICTION_CACHE[prediction_id]
 
-def list_cached_predictions() -> list:
-    """List all cached prediction IDs with metadata."""
-    return [
-        {
-            'id': pid,
-            'created_at': cache['created_at'],
-            'metadata': cache['metadata']
-        }
-        for pid, cache in PREDICTION_CACHE.items()
-    ]
+def get_cached_object(obj_id: str, cache_type: str) -> Dict[str, Any]:
+    """Retrieve a cached object by ID and type."""
+    if cache_type == 'prediction':
+        cache = PREDICTION_CACHE
+    elif cache_type == 'autots':
+        cache = AUTOTS_CACHE
+    elif cache_type == 'event_risk':
+        cache = EVENT_RISK_CACHE
+    elif cache_type == 'feature_detector':
+        cache = FEATURE_DETECTOR_CACHE
+    elif cache_type == 'data':
+        cache = DATA_CACHE
+    else:
+        raise ValueError(f"Unknown cache type: {cache_type}")
+    
+    if obj_id not in cache:
+        raise ValueError(f"{cache_type} ID {obj_id} not found in cache")
+    return cache[obj_id]
 
-def clear_prediction_cache(prediction_id: Optional[str] = None):
-    """Clear cache - specific ID or all if None."""
-    if prediction_id:
-        if prediction_id in PREDICTION_CACHE:
-            del PREDICTION_CACHE[prediction_id]
+
+def list_all_cached_objects() -> dict:
+    """List all cached objects across all cache types."""
+    result = {}
+    
+    if PREDICTION_CACHE:
+        result['predictions'] = [
+            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
+            for k, v in PREDICTION_CACHE.items()
+        ]
+    if AUTOTS_CACHE:
+        result['autots_models'] = [
+            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
+            for k, v in AUTOTS_CACHE.items()
+        ]
+    if EVENT_RISK_CACHE:
+        result['event_risk'] = [
+            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
+            for k, v in EVENT_RISK_CACHE.items()
+        ]
+    if FEATURE_DETECTOR_CACHE:
+        result['feature_detectors'] = [
+            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
+            for k, v in FEATURE_DETECTOR_CACHE.items()
+        ]
+    if DATA_CACHE:
+        result['data'] = [
+            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
+            for k, v in DATA_CACHE.items()
+        ]
+    
+    return result
+
+
+def clear_cache(obj_id: Optional[str] = None, cache_type: Optional[str] = None):
+    """Clear cache - specific ID, specific type, or all if both None."""
+    if obj_id and cache_type:
+        cache = {
+            'prediction': PREDICTION_CACHE,
+            'autots': AUTOTS_CACHE,
+            'event_risk': EVENT_RISK_CACHE,
+            'feature_detector': FEATURE_DETECTOR_CACHE,
+            'data': DATA_CACHE
+        }.get(cache_type)
+        if cache and obj_id in cache:
+            del cache[obj_id]
+    elif cache_type:
+        if cache_type == 'prediction':
+            PREDICTION_CACHE.clear()
+        elif cache_type == 'autots':
+            AUTOTS_CACHE.clear()
+        elif cache_type == 'event_risk':
+            EVENT_RISK_CACHE.clear()
+        elif cache_type == 'feature_detector':
+            FEATURE_DETECTOR_CACHE.clear()
+        elif cache_type == 'data':
+            DATA_CACHE.clear()
     else:
         PREDICTION_CACHE.clear()
+        AUTOTS_CACHE.clear()
+        EVENT_RISK_CACHE.clear()
+        FEATURE_DETECTOR_CACHE.clear()
+        DATA_CACHE.clear()
 
 
 # ============================================================================
-# Utility Functions for JSON/DataFrame conversion
+# Data Loading and Conversion Functions
 # ============================================================================
 
-def json_to_dataframe(data: dict, data_format: str = "wide") -> pd.DataFrame:
+def load_to_dataframe(
+    data: Optional[Union[dict, str]] = None,
+    data_format: str = "wide",
+    data_id: Optional[str] = None
+) -> pd.DataFrame:
     """
-    Convert JSON data to pandas DataFrame with DatetimeIndex.
+    Load data to pandas DataFrame from multiple sources.
     
     Args:
-        data: Dictionary with either:
-            - Wide format: {"datetime": [...], "series1": [...], "series2": [...]}
-            - Long format: {"datetime": [...], "series_id": [...], "value": [...]}
-        data_format: "wide" or "long"
+        data: JSON dict, CSV file path, or URL. If None, must provide data_id
+        data_format: "wide" or "long" (for JSON input)
+        data_id: Optional cached data ID to load from cache
     
     Returns:
         DataFrame with DatetimeIndex
     """
-    try:
+    if data_id:
+        cached = get_cached_object(data_id, 'data')
+        return cached['object']
+    
+    if data is None:
+        raise ValueError("Must provide either data or data_id")
+    
+    if isinstance(data, str):
+        df = pd.read_csv(data, parse_dates=True, index_col=0)
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index)
+        return df
+    
+    if isinstance(data, dict):
         df = pd.DataFrame(data)
         
-        # Convert datetime column to DatetimeIndex
         if 'datetime' in df.columns:
             df['datetime'] = pd.to_datetime(df['datetime'])
             df = df.set_index('datetime')
         else:
             raise ValueError("Data must include 'datetime' column")
         
-        # Convert from long to wide if needed
         if data_format == "long":
             if 'series_id' not in df.columns or 'value' not in df.columns:
                 raise ValueError("Long format requires 'series_id' and 'value' columns")
@@ -131,48 +257,140 @@ def json_to_dataframe(data: dict, data_format: str = "wide") -> pd.DataFrame:
             )
         
         return df
-    except Exception as e:
-        raise ValueError(f"Error converting JSON to DataFrame: {str(e)}")
+    
+    raise ValueError(f"Unsupported data type: {type(data)}")
 
 
-def dataframe_to_json(df: pd.DataFrame, data_format: str = "wide") -> dict:
+def dataframe_to_output(
+    df: pd.DataFrame,
+    output_format: str = "json_wide",
+    save_path: Optional[str] = None
+) -> Union[dict, str]:
     """
-    Convert pandas DataFrame to JSON-compatible dictionary.
+    Convert DataFrame to requested output format (token-efficient).
     
     Args:
         df: DataFrame with DatetimeIndex
-        data_format: "wide" or "long"
+        output_format: "json_wide", "json_long", "csv_wide", "csv_long"
+        save_path: Optional path to save CSV (returns path)
     
     Returns:
-        Dictionary suitable for JSON serialization
+        Dictionary (JSON) or string (CSV path)
     """
-    try:
-        if not isinstance(df.index, pd.DatetimeIndex):
-            df.index = pd.to_datetime(df.index)
-        
-        df_copy = df.copy()
-        df_copy.index = df_copy.index.strftime('%Y-%m-%d %H:%M:%S')
-        
-        if data_format == "wide":
-            result = df_copy.reset_index().to_dict(orient='list')
-            result['datetime'] = result.pop('index', result.get('datetime'))
-        else:
-            # Convert to long format
-            df_reset = df_copy.reset_index()
-            # Get the name of the index column (might be 'index' or 'datetime' or something else)
-            index_col = df_reset.columns[0]
-            
-            df_long = df_reset.melt(
-                id_vars=[index_col],
-                var_name='series_id',
-                value_name='value'
-            )
-            df_long = df_long.rename(columns={index_col: 'datetime'})
-            result = df_long.to_dict(orient='list')
-        
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    
+    df_copy = df.copy()
+    df_copy.index = df_copy.index.strftime('%Y-%m-%d %H:%M:%S')
+    
+    if output_format == "json_wide":
+        result = df_copy.reset_index().to_dict(orient='list')
+        result['datetime'] = result.pop('index', result.get('datetime'))
         return result
-    except Exception as e:
-        raise ValueError(f"Error converting DataFrame to JSON: {str(e)}")
+    
+    elif output_format == "json_long":
+        df_reset = df_copy.reset_index()
+        index_col = df_reset.columns[0]
+        df_long = df_reset.melt(
+            id_vars=[index_col],
+            var_name='series_id',
+            value_name='value'
+        )
+        df_long = df_long.rename(columns={index_col: 'datetime'})
+        return df_long.to_dict(orient='list')
+    
+    elif output_format in ["csv_wide", "csv_long"]:
+        if save_path is None:
+            save_path = save_temp_csv(df, is_long=(output_format == "csv_long"))
+        else:
+            if output_format == "csv_long":
+                df_reset = df_copy.reset_index()
+                index_col = df_reset.columns[0]
+                df_long = df_reset.melt(
+                    id_vars=[index_col],
+                    var_name='series_id',
+                    value_name='value'
+                )
+                df_long = df_long.rename(columns={index_col: 'datetime'})
+                df_long.to_csv(save_path, index=False)
+            else:
+                df_copy.to_csv(save_path)
+        return save_path
+    
+    raise ValueError(f"Unknown output format: {output_format}")
+
+
+def save_temp_csv(df: pd.DataFrame, is_long: bool = False) -> str:
+    """
+    Save DataFrame to temporary CSV file.
+    
+    Args:
+        df: DataFrame to save
+        is_long: Convert to long format before saving
+    
+    Returns:
+        Full path to saved CSV
+    """
+    temp_dir = tempfile.gettempdir()
+    file_id = str(uuid.uuid4())[:8]
+    filename = f"autots_{file_id}_{'long' if is_long else 'wide'}.csv"
+    filepath = os.path.join(temp_dir, filename)
+    
+    if is_long:
+        df_copy = df.copy()
+        if not isinstance(df_copy.index, pd.DatetimeIndex):
+            df_copy.index = pd.to_datetime(df_copy.index)
+        df_copy.index = df_copy.index.strftime('%Y-%m-%d %H:%M:%S')
+        df_reset = df_copy.reset_index()
+        index_col = df_reset.columns[0]
+        df_long = df_reset.melt(
+            id_vars=[index_col],
+            var_name='series_id',
+            value_name='value'
+        )
+        df_long = df_long.rename(columns={index_col: 'datetime'})
+        df_long.to_csv(filepath, index=False)
+    else:
+        df.to_csv(filepath)
+    
+    return filepath
+
+
+def build_csv_metadata(filepath: str, df: pd.DataFrame, is_long: bool = False) -> dict:
+    """
+    Build metadata for CSV export with loading instructions.
+    
+    Args:
+        filepath: Path to CSV file
+        df: DataFrame that was saved
+        is_long: Whether CSV is in long format
+    
+    Returns:
+        Metadata dictionary with loading instructions
+    """
+    if is_long:
+        columns_info = ['datetime', 'series_id', 'value']
+        description = 'Long format: datetime,series_id,value columns'
+        pandas_cmd = f"pd.read_csv('{filepath}')"
+        autots_mcp_cmd = f"Use load_to_dataframe('{filepath}') then convert_long_to_wide"
+    else:
+        columns_info = list(df.columns)
+        description = 'Wide format: datetime index, series as columns'
+        pandas_cmd = f"pd.read_csv('{filepath}',parse_dates=True,index_col=0)"
+        autots_mcp_cmd = f"Use load_to_dataframe('{filepath}') to load this CSV file"
+    
+    metadata = {
+        'filepath': filepath,
+        'format': 'long' if is_long else 'wide',
+        'shape': {'rows': len(df), 'columns': len(df.columns)},
+        'columns': columns_info,
+        'loading_instructions': {
+            'description': description,
+            'pandas': pandas_cmd,
+            'autots_mcp': autots_mcp_cmd
+        }
+    }
+    return metadata
 
 
 # ============================================================================
@@ -188,14 +406,32 @@ if MCP_AVAILABLE:
     async def list_tools() -> list[Tool]:
         """List all available AutoTS tools."""
         return [
-            # Data loading tools
+            # Cache management
             Tool(
-                name="get_sample_data",
-                description=(
-                    "Get sample time series data for testing. Returns load_daily by default (wide format). "
-                    "Options: daily, hourly, weekly, monthly, yearly, linear, sine, artificial. "
-                    "Set long=false for wide format (default), long=true for long format."
-                ),
+                name="list_cache",
+                description="List all cached objects (predictions, autots models, event_risk, feature_detectors, data)",
+                inputSchema={"type": "object", "properties": {}}
+            ),
+            Tool(
+                name="clear_cache",
+                description="Clear cache: specific object by ID and type, entire cache type, or all caches",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "object_id": {"type": "string", "description": "Specific object ID to clear"},
+                        "cache_type": {
+                            "type": "string",
+                            "enum": ["prediction", "autots", "event_risk", "feature_detector", "data"],
+                            "description": "Cache type to clear (omit both params to clear all)"
+                        }
+                    }
+                }
+            ),
+            
+            # Data loading
+            Tool(
+                name="load_sample_data",
+                description="Load sample time series dataset. Returns data_id for use in other tools",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -203,418 +439,351 @@ if MCP_AVAILABLE:
                             "type": "string",
                             "enum": ["daily", "hourly", "weekly", "monthly", "yearly", "linear", "sine", "artificial"],
                             "default": "daily",
-                            "description": "Which sample dataset to load"
+                            "description": "Sample dataset to load"
                         },
-                        "long": {
-                            "type": "boolean",
-                            "default": False,
-                            "description": "Return data in long format (true) or wide format (false)"
-                        }
+                        "long": {"type": "boolean", "default": False, "description": "Return long format (default: wide)"}
                     }
                 }
             ),
             Tool(
-                name="load_live_daily",
-                description=(
-                    "Load live daily data from various sources (FRED, stocks, Google Trends, weather, etc.). "
-                    "Requires API keys for some sources. Returns wide format by default."
-                ),
+                name="load_live_data",
+                description="Load live data from FRED, stocks, etc. Returns data_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "fred_key": {
-                            "type": "string",
-                            "description": "FRED API key for economic data"
-                        },
-                        "fred_series": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of FRED series codes"
-                        },
-                        "tickers": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of stock tickers"
-                        },
-                        "long": {
-                            "type": "boolean",
-                            "default": False,
-                            "description": "Return data in long format"
-                        }
+                        "fred_key": {"type": "string", "description": "FRED API key"},
+                        "fred_series": {"type": "array", "items": {"type": "string"}, "description": "FRED series codes"},
+                        "tickers": {"type": "array", "items": {"type": "string"}, "description": "Stock tickers"},
+                        "long": {"type": "boolean", "default": False, "description": "Return long format"}
                     }
                 }
             ),
             Tool(
                 name="generate_synthetic_data",
-                description=(
-                    "Generate synthetic daily time series data with labeled components using SyntheticDailyGenerator. "
-                    "Useful for testing and demonstrations. Only n_series parameter is exposed."
-                ),
+                description="Generate synthetic time series with labeled components. Returns data_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "n_series": {
-                            "type": "integer",
-                            "default": 5,
-                            "description": "Number of time series to generate"
-                        }
+                        "n_series": {"type": "integer", "default": 5, "description": "Number of series to generate"}
                     }
                 }
             ),
             Tool(
-                name="long_to_wide_converter",
-                description=(
-                    "Convert long-format time series data to wide format. "
-                    "Long format has columns: datetime, series_id, value. "
-                    "Wide format has datetime as index and one column per series."
-                ),
+                name="load_data_from_file",
+                description="Load CSV from local path or URL. Returns data_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Long format data with datetime, series_id, and value"
+                        "filepath": {"type": "string", "description": "Local file path or URL to CSV"}
+                    },
+                    "required": ["filepath"]
+                }
+            ),
+            Tool(
+                name="get_data",
+                description="Get cached data as JSON (wide/long) or save as CSV with metadata",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cached data ID"},
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["json_wide", "json_long", "csv_wide", "csv_long"],
+                            "default": "json_wide",
+                            "description": "Output format"
                         }
                     },
-                    "required": ["data"]
+                    "required": ["data_id"]
                 }
             ),
-            
-            # Forecasting tools
             Tool(
-                name="forecast_mosaic_profile",
-                description=(
-                    "FAST: Run a pre-configured mosaic profile forecast. This is the fastest forecasting method. "
-                    "Uses a pre-trained ensemble model from a JSON profile template. "
-                    "Best for quick forecasts when data length >= requested forecast length."
-                ),
+                name="convert_long_to_wide",
+                description="Convert long format to wide. Returns new data_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data (datetime + series columns)"
-                        },
-                        "forecast_length": {
-                            "type": "integer",
-                            "description": "Number of periods to forecast",
-                            "default": 30
-                        },
-                        "profile_template": {
-                            "type": "object",
-                            "description": "Optional: Custom mosaic profile as JSON. If not provided, uses default."
-                        }
-                    },
-                    "required": ["data"]
+                        "data": {"type": "object", "description": "Long format data with datetime,series_id,value"},
+                        "data_id": {"type": "string", "description": "Cached data ID (alternative to data)"}
+                    }
                 }
             ),
             Tool(
-                name="forecast_autots_search",
-                description=(
-                    "MODERATE SPEED: Run AutoTS model search with hard-coded fast parameters. "
-                    "Searches across multiple model types but is optimized for speed. "
-                    "Use this for explainable forecasts (no ensembles, specific model types only). "
-                    "Models limited to: Cassandra, TVVAR, BasicLinearModel."
-                ),
+                name="clean_data",
+                description="Clean time series data (handle missing values, outliers). Returns data_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data"
-                        },
-                        "forecast_length": {
-                            "type": "integer",
-                            "description": "Number of periods to forecast",
-                            "default": 30
-                        }
-                    },
-                    "required": ["data"]
-                }
-            ),
-            Tool(
-                name="forecast_custom",
-                description=(
-                    "CUSTOM: Run AutoTS with custom parameters or a specific model template. "
-                    "Use this ONLY when user provides specific AutoTS parameters. "
-                    "This tool accepts either AutoTS init parameters or a model template to run."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data"
-                        },
-                        "forecast_length": {
-                            "type": "integer",
-                            "description": "Number of periods to forecast",
-                            "default": 30
-                        },
-                        "autots_params": {
-                            "type": "object",
-                            "description": "AutoTS initialization parameters (forecast_length, frequency, etc.)"
-                        },
-                        "model_template": {
-                            "type": "object",
-                            "description": "Specific model template to run"
-                        }
-                    },
-                    "required": ["data"]
-                }
-            ),
-            Tool(
-                name="get_autots_docs",
-                description=(
-                    "Get documentation for AutoTS custom forecast parameters. "
-                    "Returns explanation of commonly used parameters for the forecast_custom tool."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {}
-                }
-            ),
-            
-            # Analysis tools
-            Tool(
-                name="detect_features",
-                description=(
-                    "Use TimeSeriesFeatureDetector to detect anomalies, holidays, changepoints, and patterns. "
-                    "Runs with default parameters. Returns comprehensive detected features including:\n"
-                    "- Trend changepoints (dates, slope changes)\n"
-                    "- Level shifts (dates, magnitudes)\n"
-                    "- Anomalies (dates, magnitudes, types)\n"
-                    "- Holidays (dates, impacts, splash effects)\n"
-                    "- Seasonality strength and patterns\n"
-                    "- Noise characteristics\n"
-                    "Results are organized per series with detection counts and full feature details."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data"
-                        }
-                    },
-                    "required": ["data"]
-                }
-            ),
-            Tool(
-                name="get_cleaned_data",
-                description=(
-                    "Clean time series data using AutoTS transformers. "
-                    "Handles missing values, outliers, and data quality issues."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data"
-                        },
+                        "data": {"type": "object", "description": "Wide format data"},
+                        "data_id": {"type": "string", "description": "Cached data ID"},
                         "fillna": {
                             "type": "string",
                             "enum": ["ffill", "mean", "median", "rolling_mean", "linear"],
                             "default": "ffill",
-                            "description": "Method to fill missing values"
+                            "description": "Missing value fill method"
                         }
-                    },
-                    "required": ["data"]
+                    }
                 }
             ),
             
-            # Event Risk Forecasting tools
+            # Forecasting
             Tool(
-                name="forecast_event_risk_default",
-                description=(
-                    "Forecast the probability of crossing a threshold value. "
-                    "Uses default parameters optimized for general use cases."
-                ),
+                name="forecast_mosaic",
+                description="FAST: Pre-configured mosaic ensemble forecast. Use data or data_id. Returns prediction_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data"
-                        },
-                        "forecast_length": {
-                            "type": "integer",
-                            "description": "Number of periods to forecast",
-                            "default": 30
-                        },
-                        "threshold": {
-                            "type": "number",
-                            "description": "Threshold value to monitor"
-                        },
-                        "direction": {
-                            "type": "string",
-                            "enum": ["upper", "lower"],
-                            "default": "upper",
-                            "description": "Whether to detect crossing above (upper) or below (lower) threshold"
-                        }
-                    },
-                    "required": ["data", "threshold"]
+                        "data": {"type": "object", "description": "Wide format data"},
+                        "data_id": {"type": "string", "description": "Cached data ID"},
+                        "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
+                        "profile_template": {"type": "object", "description": "Optional custom mosaic profile JSON"}
+                    }
                 }
             ),
             Tool(
-                name="forecast_event_risk_tuning",
-                description=(
-                    "Forecast event risk with model tuning. "
-                    "Slower than default but provides more accurate probability estimates. "
-                    "Tunes the forecasting model specifically for event risk prediction."
-                ),
+                name="forecast_search",
+                description="MODERATE: AutoTS model search (explainable models only). Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "data": {
-                            "type": "object",
-                            "description": "Wide format time series data"
-                        },
-                        "forecast_length": {
-                            "type": "integer",
-                            "description": "Number of periods to forecast",
-                            "default": 30
-                        },
-                        "threshold": {
-                            "type": "number",
-                            "description": "Threshold value to monitor"
-                        },
-                        "direction": {
-                            "type": "string",
-                            "enum": ["upper", "lower"],
-                            "default": "upper",
-                            "description": "Whether to detect crossing above or below threshold"
-                        }
-                    },
-                    "required": ["data", "threshold"]
+                        "data": {"type": "object", "description": "Wide format data"},
+                        "data_id": {"type": "string", "description": "Cached data ID"},
+                        "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"}
+                    }
                 }
+            ),
+            Tool(
+                name="forecast_custom",
+                description="CUSTOM: AutoTS with user-specified parameters or template. Returns prediction_id and autots_id",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data": {"type": "object", "description": "Wide format data"},
+                        "data_id": {"type": "string", "description": "Cached data ID"},
+                        "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
+                        "autots_params": {"type": "object", "description": "AutoTS initialization parameters"},
+                        "model_template": {"type": "object", "description": "Specific model template to run"}
+                    }
+                }
+            ),
+            Tool(
+                name="get_autots_docs",
+                description="Get documentation for AutoTS custom forecast parameters. Use this before forecast_custom to understand available options",
+                inputSchema={"type": "object", "properties": {}}
             ),
             
-            # Prediction Object Management Tools
+            # Prediction object tools
             Tool(
-                name="list_predictions",
-                description=(
-                    "List all cached prediction objects with their IDs and metadata. "
-                    "Use this to see available predictions that can be further analyzed."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {}
-                }
-            ),
-            Tool(
-                name="get_prediction_forecast",
-                description=(
-                    "Get the forecast data from a cached prediction as JSON. "
-                    "This is the primary way to retrieve forecast values after running a forecast."
-                ),
+                name="get_forecast",
+                description="Get forecast from cached prediction as JSON or CSV",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "prediction_id": {
-                            "type": "string",
-                            "description": "ID of the cached prediction"
-                        },
+                        "prediction_id": {"type": "string", "description": "Cached prediction ID"},
                         "output": {
                             "type": "string",
                             "enum": ["forecast", "upper_forecast", "lower_forecast"],
                             "default": "forecast",
-                            "description": "Which forecast to return (point, upper bound, or lower bound)"
+                            "description": "Which forecast to return"
+                        },
+                        "format": {
+                            "type": "string",
+                            "enum": ["json_wide", "json_long", "csv_wide", "csv_long"],
+                            "default": "json_wide",
+                            "description": "Output format"
                         }
                     },
                     "required": ["prediction_id"]
                 }
             ),
             Tool(
-                name="plot_prediction",
-                description=(
-                    "Generate a plot of the forecast from a cached prediction. "
-                    "Returns a base64-encoded PNG image of the forecast visualization."
-                ),
+                name="plot_forecast",
+                description="Plot forecast from prediction. Returns base64 PNG image",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "prediction_id": {
-                            "type": "string",
-                            "description": "ID of the cached prediction"
-                        },
-                        "include_history": {
-                            "type": "boolean",
-                            "default": True,
-                            "description": "Include historical data in the plot"
-                        },
-                        "series": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Specific series to plot (default: all series)"
-                        }
+                        "prediction_id": {"type": "string", "description": "Cached prediction ID"},
+                        "include_history": {"type": "boolean", "default": True, "description": "Include historical data"},
+                        "series": {"type": "array", "items": {"type": "string"}, "description": "Specific series to plot"}
                     },
                     "required": ["prediction_id"]
                 }
             ),
             Tool(
                 name="apply_constraints",
-                description=(
-                    "Apply constraints to a cached forecast (e.g., enforce bounds, dampening). "
-                    "Returns a new prediction ID with the constrained forecast."
-                ),
+                description="Apply constraints to forecast (dampen, bounds, quantiles). Returns new prediction_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "prediction_id": {
-                            "type": "string",
-                            "description": "ID of the cached prediction"
-                        },
+                        "prediction_id": {"type": "string", "description": "Cached prediction ID"},
                         "constraint_method": {
                             "type": "string",
                             "enum": ["dampen", "upper", "lower", "quantile"],
-                            "description": "Type of constraint to apply"
+                            "description": "Constraint type"
                         },
-                        "constraint_value": {
-                            "type": "number",
-                            "description": "Value for the constraint (e.g., dampening factor, upper/lower bound)"
-                        },
+                        "constraint_value": {"type": "number", "description": "Constraint value"},
                         "constraint_direction": {
                             "type": "string",
                             "enum": ["upper", "lower"],
-                            "description": "Direction for bound constraints"
+                            "description": "Direction for bounds"
                         }
                     },
                     "required": ["prediction_id", "constraint_method"]
                 }
             ),
             Tool(
-                name="get_prediction_components",
-                description=(
-                    "Get decomposed forecast components (trend, seasonality, etc.) if available. "
-                    "Only works with models that support decomposition (e.g., Cassandra, TVVAR)."
-                ),
+                name="get_model_params",
+                description="Get model parameters from cached prediction",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "prediction_id": {
-                            "type": "string",
-                            "description": "ID of the cached prediction"
-                        }
+                        "prediction_id": {"type": "string", "description": "Cached prediction ID"}
                     },
                     "required": ["prediction_id"]
                 }
             ),
             Tool(
-                name="clear_predictions",
-                description=(
-                    "Clear cached predictions to free memory. "
-                    "Can clear a specific prediction or all predictions."
-                ),
+                name="get_forecast_components",
+                description="Get decomposed forecast components (trend, seasonality) if available. Only for Cassandra/TVVAR models",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "prediction_id": {
+                        "prediction_id": {"type": "string", "description": "Cached prediction ID"}
+                    },
+                    "required": ["prediction_id"]
+                }
+            ),
+            
+            # AutoTS model tools
+            Tool(
+                name="get_validation_results",
+                description="Get validation results summary from AutoTS search",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "autots_id": {"type": "string", "description": "Cached AutoTS ID"}
+                    },
+                    "required": ["autots_id"]
+                }
+            ),
+            Tool(
+                name="plot_validation",
+                description="Plot validation forecasts from AutoTS search. Returns base64 PNG",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "autots_id": {"type": "string", "description": "Cached AutoTS ID"}
+                    },
+                    "required": ["autots_id"]
+                }
+            ),
+            Tool(
+                name="plot_generation_loss",
+                description="Plot unpredictability score from AutoTS search. Returns base64 PNG",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "autots_id": {"type": "string", "description": "Cached AutoTS ID"}
+                    },
+                    "required": ["autots_id"]
+                }
+            ),
+            
+            # Event Risk tools
+            Tool(
+                name="forecast_event_risk",
+                description="Forecast probability of crossing threshold. Returns event_risk_id",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data": {"type": "object", "description": "Wide format data"},
+                        "data_id": {"type": "string", "description": "Cached data ID"},
+                        "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
+                        "threshold": {"type": "number", "description": "Threshold value"},
+                        "direction": {
                             "type": "string",
-                            "description": "ID of prediction to clear (omit to clear all)"
+                            "enum": ["upper", "lower"],
+                            "default": "upper",
+                            "description": "Detect crossing above (upper) or below (lower)"
+                        },
+                        "tune": {"type": "boolean", "default": False, "description": "Enable model tuning (slower but more accurate)"}
+                    },
+                    "required": ["threshold"]
+                }
+            ),
+            Tool(
+                name="get_event_risk_results",
+                description="Get event risk probabilities from cached EventRiskForecast",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "event_risk_id": {"type": "string", "description": "Cached event risk ID"},
+                        "format": {
+                            "type": "string",
+                            "enum": ["json_wide", "json_long", "csv_wide", "csv_long"],
+                            "default": "json_wide",
+                            "description": "Output format"
                         }
+                    },
+                    "required": ["event_risk_id"]
+                }
+            ),
+            Tool(
+                name="plot_event_risk",
+                description="Plot event risk probabilities. Returns base64 PNG",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "event_risk_id": {"type": "string", "description": "Cached event risk ID"}
+                    },
+                    "required": ["event_risk_id"]
+                }
+            ),
+            
+            # Feature detection tools
+            Tool(
+                name="detect_features",
+                description="Detect anomalies, changepoints, holidays, patterns. Returns detector_id",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data": {"type": "object", "description": "Wide format data"},
+                        "data_id": {"type": "string", "description": "Cached data ID"}
                     }
+                }
+            ),
+            Tool(
+                name="get_detected_features",
+                description="Get detected features (anomalies, changepoints, holidays, seasonality) from cached detector",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "detector_id": {"type": "string", "description": "Cached detector ID"}
+                    },
+                    "required": ["detector_id"]
+                }
+            ),
+            Tool(
+                name="plot_features",
+                description="Plot detected features. Returns base64 PNG",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "detector_id": {"type": "string", "description": "Cached detector ID"},
+                        "series": {"type": "array", "items": {"type": "string"}, "description": "Specific series to plot"}
+                    },
+                    "required": ["detector_id"]
+                }
+            ),
+            Tool(
+                name="forecast_from_features",
+                description="Create forecast using detected features (EXPERIMENTAL: use only after feature detection, not for standalone forecasts). Returns prediction_id",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "detector_id": {"type": "string", "description": "Cached detector ID"},
+                        "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"}
+                    },
+                    "required": ["detector_id"]
                 }
             ),
         ]
@@ -627,311 +796,261 @@ if MCP_AVAILABLE:
     async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         """Execute the requested tool."""
         try:
-            if name == "get_sample_data":
+            # Cache management tools
+            if name == "list_cache":
+                cache_info = list_all_cached_objects()
+                return [TextContent(type="text", text=json.dumps(cache_info, separators=(',', ':')))]
+            
+            elif name == "clear_cache":
+                obj_id = arguments.get("object_id")
+                cache_type = arguments.get("cache_type")
+                clear_cache(obj_id, cache_type)
+                return [TextContent(type="text", text=json.dumps({"success": True}, separators=(',', ':')))]
+            
+            # Data loading tools
+            elif name == "load_sample_data":
                 dataset = arguments.get("dataset", "daily")
                 long = arguments.get("long", False)
                 
                 loaders = {
-                    "daily": load_daily,
-                    "hourly": load_hourly,
-                    "weekly": load_weekly,
-                    "monthly": load_monthly,
-                    "yearly": load_yearly,
-                    "linear": load_linear,
-                    "sine": load_sine,
-                    "artificial": load_artificial,
+                    "daily": load_daily, "hourly": load_hourly, "weekly": load_weekly,
+                    "monthly": load_monthly, "yearly": load_yearly, "linear": load_linear,
+                    "sine": load_sine, "artificial": load_artificial
                 }
-                
                 df = loaders[dataset](long=long)
                 
-                # Convert to JSON
-                if long:
-                    result = dataframe_to_json(df, data_format="long")
-                else:
-                    result = dataframe_to_json(df, data_format="wide")
+                data_id = cache_object(df, 'data', {
+                    'source': dataset, 'format': 'long' if long else 'wide',
+                    'rows': len(df), 'columns': len(df.columns)
+                })
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "dataset": dataset,
-                        "format": "long" if long else "wide",
-                        "shape": {"rows": len(df), "columns": len(df.columns) if not long else "3"},
-                        "data": result
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "data_id": data_id, "source": dataset, "rows": len(df), "cols": len(df.columns)
+                }, separators=(',', ':')))]
             
-            elif name == "load_live_daily":
+            elif name == "load_live_data":
                 fred_key = arguments.get("fred_key")
                 fred_series = arguments.get("fred_series")
                 tickers = arguments.get("tickers")
                 long = arguments.get("long", False)
                 
-                df = load_live_daily(
-                    long=long,
-                    fred_key=fred_key,
-                    fred_series=fred_series,
-                    tickers=tickers
-                )
+                df = load_live_daily(long=long, fred_key=fred_key, fred_series=fred_series, tickers=tickers)
                 
-                result = dataframe_to_json(df, data_format="long" if long else "wide")
+                data_id = cache_object(df, 'data', {
+                    'source': 'live', 'format': 'long' if long else 'wide',
+                    'rows': len(df), 'columns': len(df.columns)
+                })
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "source": "live_daily",
-                        "format": "long" if long else "wide",
-                        "shape": {"rows": len(df), "columns": len(df.columns)},
-                        "data": result
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "data_id": data_id, "rows": len(df), "cols": len(df.columns)
+                }, separators=(',', ':')))]
             
             elif name == "generate_synthetic_data":
                 n_series = arguments.get("n_series", 5)
-                
-                generator = SyntheticDailyGenerator(
-                    n_series=n_series,
-                    random_seed=42
-                )
-                # Data is automatically generated in __init__
+                generator = SyntheticDailyGenerator(n_series=n_series, random_seed=42)
                 df = generator.data
-                template = generator.template
                 
-                result = dataframe_to_json(df, data_format="wide")
+                data_id = cache_object(df, 'data', {
+                    'source': 'synthetic', 'n_series': n_series,
+                    'rows': len(df), 'columns': len(df.columns)
+                })
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "source": "synthetic",
-                        "n_series": n_series,
-                        "shape": {"rows": len(df), "columns": len(df.columns)},
-                        "data": result,
-                        "labels": {
-                            "info": "Generated with labeled components for evaluation",
-                            "template_available": True,
-                            "series_types": list(template.get('meta', {}).get('series_type_descriptions', {}).keys())
-                        }
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "data_id": data_id, "n_series": n_series, "rows": len(df), "cols": len(df.columns)
+                }, separators=(',', ':')))]
             
-            elif name == "long_to_wide_converter":
-                data = arguments.get("data")
-                df_long = json_to_dataframe(data, data_format="long")
-                df_wide = long_to_wide(
-                    df_long.reset_index(),
-                    date_col='datetime',
-                    value_col='value',
-                    id_col='series_id'
-                )
+            elif name == "load_data_from_file":
+                filepath = arguments.get("filepath")
+                df = load_to_dataframe(filepath)
                 
-                result = dataframe_to_json(df_wide, data_format="wide")
+                data_id = cache_object(df, 'data', {
+                    'source': 'file', 'filepath': filepath,
+                    'rows': len(df), 'columns': len(df.columns)
+                })
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "format": "wide",
-                        "shape": {"rows": len(df_wide), "columns": len(df_wide.columns)},
-                        "data": result
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "data_id": data_id, "source": filepath, "rows": len(df), "cols": len(df.columns)
+                }, separators=(',', ':')))]
             
-            elif name == "forecast_mosaic_profile":
+            elif name == "get_data":
+                data_id = arguments.get("data_id")
+                output_format = arguments.get("output_format", "json_wide")
+                
+                cached = get_cached_object(data_id, 'data')
+                df = cached['object']
+                
+                if output_format.startswith("csv"):
+                    filepath = dataframe_to_output(df, output_format)
+                    is_long = output_format == "csv_long"
+                    metadata = build_csv_metadata(filepath, df, is_long)
+                    return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+                else:
+                    result = dataframe_to_output(df, output_format)
+                    return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+            
+            elif name == "convert_long_to_wide":
                 data = arguments.get("data")
+                data_id = arguments.get("data_id")
+                
+                if data_id:
+                    df = load_to_dataframe(data_id=data_id)
+                elif data:
+                    df = load_to_dataframe(data, data_format="long")
+                else:
+                    raise ValueError("Must provide data or data_id")
+                
+                new_data_id = cache_object(df, 'data', {
+                    'source': 'converted', 'format': 'wide',
+                    'rows': len(df), 'columns': len(df.columns)
+                })
+                
+                return [TextContent(type="text", text=json.dumps({
+                    "data_id": new_data_id, "rows": len(df), "cols": len(df.columns)
+                }, separators=(',', ':')))]
+            
+            elif name == "clean_data":
+                data = arguments.get("data")
+                data_id = arguments.get("data_id")
+                fillna = arguments.get("fillna", "ffill")
+                
+                df = load_to_dataframe(data, data_id=data_id)
+                
+                transformer = GeneralTransformer(fillna=fillna)
+                df_clean = transformer.fit_transform(df)
+                
+                clean_data_id = cache_object(df_clean, 'data', {
+                    'source': 'cleaned', 'fillna': fillna,
+                    'rows': len(df_clean), 'columns': len(df_clean.columns)
+                })
+                
+                return [TextContent(type="text", text=json.dumps({
+                    "data_id": clean_data_id, "rows": len(df_clean), "cols": len(df_clean.columns)
+                }, separators=(',', ':')))]
+            
+            # Forecasting tools
+            elif name == "forecast_mosaic":
+                data = arguments.get("data")
+                data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
                 profile_template = arguments.get("profile_template")
                 
-                df = json_to_dataframe(data, data_format="wide")
+                df = load_to_dataframe(data, data_id=data_id)
                 
-                # Check if data length is sufficient
-                if len(df) < forecast_length:
-                    return [TextContent(
-                        type="text",
-                        text=json.dumps({
-                            "error": f"Insufficient data. Need at least {forecast_length} rows, got {len(df)}. Use forecast_autots_search instead."
-                        })
-                    )]
+                if profile_template:
+                    model = AutoTS(
+                        forecast_length=forecast_length,
+                        frequency='infer',
+                        ensemble='mosaic',
+                        model_list='no_shared',
+                        max_generations=0,
+                        num_validations=0,
+                        validation_method='backwards'
+                    )
+                    model = model.import_template(profile_template, method='only')
+                    prediction = model.predict()
+                else:
+                    model = AutoTS(
+                        forecast_length=forecast_length,
+                        frequency='infer',
+                        ensemble='mosaic-window',
+                        model_list='fast',
+                        max_generations=0,
+                        num_validations=0,
+                        validation_method='backwards'
+                    )
+                    model.fit(df)
+                    prediction = model.predict()
                 
-                # Use provided profile or load default
-                if profile_template is None:
-                    # Load the mosaic_profile_template.json from the mcp folder
-                    import os
-                    from os.path import dirname, join
-                    template_path = join(dirname(__file__), 'mosaic_profile_template.json')
-                    if os.path.exists(template_path):
-                        with open(template_path, 'r') as f:
-                            profile_template = json.load(f)
-                    else:
-                        return [TextContent(
-                            type="text",
-                            text=json.dumps({
-                                "error": "No profile template provided and default not found"
-                            })
-                        )]
+                prediction_id = cache_object(prediction, 'prediction', {
+                    'method': 'mosaic', 'forecast_length': forecast_length,
+                    'series_count': len(df.columns)
+                })
                 
-                # Initialize AutoTS with mosaic profile
-                model = AutoTS(
-                    forecast_length=forecast_length,
-                    frequency='infer',
-                    ensemble='mosaic',
-                    model_list='no_shared',
-                    transformer_list='fast',
-                    max_generations=0,
-                    num_validations=0,
-                    validation_method='backwards'
-                )
-                
-                # Import the template
-                model.import_template(
-                    profile_template,
-                    method='only',
-                    enforce_model_list=True
-                )
-                
-                # Fit and predict
-                model = model.fit(df)
-                prediction = model.predict()
-                
-                # Cache the prediction object
-                prediction_id = cache_prediction(
-                    prediction_obj=prediction,
-                    model_obj=model,
-                    metadata={
-                        "method": "mosaic_profile",
-                        "forecast_length": forecast_length,
-                        "model_name": prediction.model_name,
-                        "series_count": len(df.columns),
-                        "data_points": len(df)
-                    }
-                )
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": True,
-                        "prediction_id": prediction_id,
-                        "method": "mosaic_profile",
-                        "forecast_length": forecast_length,
-                        "model_name": prediction.model_name,
-                        "series": list(df.columns),
-                        "message": f"Forecast created. Use 'get_prediction_forecast' with prediction_id to retrieve forecast data, or 'plot_prediction' to visualize."
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "prediction_id": prediction_id, "forecast_length": forecast_length
+                }, separators=(',', ':')))]
             
-            elif name == "forecast_autots_search":
+            elif name == "forecast_search":
                 data = arguments.get("data")
+                data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
                 
-                df = json_to_dataframe(data, data_format="wide")
+                df = load_to_dataframe(data, data_id=data_id)
                 
-                # Fast AutoTS search with limited models for explainability
                 model = AutoTS(
                     forecast_length=forecast_length,
                     frequency='infer',
-                    ensemble=None,  # No ensembles for explainability
+                    ensemble=None,
                     model_list=['Cassandra', 'TVVAR', 'BasicLinearModel'],
-                    transformer_list='fast',
                     max_generations=3,
                     num_validations=2,
-                    validation_method='backwards',
-                    models_to_validate=0.2,
-                    n_jobs='auto'
+                    validation_method='backwards'
                 )
-                
-                model = model.fit(df)
+                model.fit(df)
                 prediction = model.predict()
                 
-                # Cache the prediction object
-                prediction_id = cache_prediction(
-                    prediction_obj=prediction,
-                    model_obj=model,
-                    metadata={
-                        "method": "autots_search",
-                        "forecast_length": forecast_length,
-                        "model_name": prediction.model_name,
-                        "series_count": len(df.columns),
-                        "data_points": len(df),
-                        "explainable": True
-                    }
-                )
+                prediction_id = cache_object(prediction, 'prediction', {
+                    'method': 'search', 'forecast_length': forecast_length,
+                    'series_count': len(df.columns)
+                })
+                autots_id = cache_object(model, 'autots', {
+                    'forecast_length': forecast_length, 'series_count': len(df.columns)
+                })
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": True,
-                        "prediction_id": prediction_id,
-                        "method": "autots_search",
-                        "forecast_length": forecast_length,
-                        "model_name": prediction.model_name,
-                        "model_params": str(prediction.model_parameters),
-                        "transformation": str(prediction.transformation_parameters),
-                        "series": list(df.columns),
-                        "message": f"Forecast created with explainable model. Use 'get_prediction_forecast' to retrieve data, 'plot_prediction' to visualize, or 'get_prediction_components' for decomposition."
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "prediction_id": prediction_id, "autots_id": autots_id,
+                    "forecast_length": forecast_length
+                }, separators=(',', ':')))]
             
             elif name == "forecast_custom":
                 data = arguments.get("data")
+                data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
                 autots_params = arguments.get("autots_params", {})
                 model_template = arguments.get("model_template")
                 
-                df = json_to_dataframe(data, data_format="wide")
+                df = load_to_dataframe(data, data_id=data_id)
                 
-                # Build AutoTS parameters
-                params = {
-                    "forecast_length": forecast_length,
-                    "frequency": "infer",
-                    **autots_params
-                }
+                if 'forecast_length' not in autots_params:
+                    autots_params['forecast_length'] = forecast_length
+                if 'frequency' not in autots_params:
+                    autots_params['frequency'] = 'infer'
                 
-                model = AutoTS(**params)
+                model = AutoTS(**autots_params)
                 
-                # Import template if provided
-                if model_template is not None:
-                    model.import_template(model_template, method='only')
+                if model_template:
+                    model = model.import_template(model_template, method='only')
+                    prediction = model.predict()
+                else:
+                    model.fit(df)
+                    prediction = model.predict()
                 
-                model = model.fit(df)
-                prediction = model.predict()
+                prediction_id = cache_object(prediction, 'prediction', {
+                    'method': 'custom', 'forecast_length': forecast_length,
+                    'series_count': len(df.columns)
+                })
+                autots_id = cache_object(model, 'autots', {
+                    'forecast_length': forecast_length, 'series_count': len(df.columns)
+                })
                 
-                # Cache the prediction object
-                prediction_id = cache_prediction(
-                    prediction_obj=prediction,
-                    model_obj=model,
-                    metadata={
-                        "method": "custom",
-                        "forecast_length": forecast_length,
-                        "model_name": prediction.model_name,
-                        "series_count": len(df.columns),
-                        "data_points": len(df),
-                        "custom_params": autots_params
-                    }
-                )
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": True,
-                        "prediction_id": prediction_id,
-                        "method": "custom",
-                        "forecast_length": forecast_length,
-                        "model_name": prediction.model_name,
-                        "series": list(df.columns),
-                        "message": f"Custom forecast created. Use 'get_prediction_forecast' to retrieve data or 'plot_prediction' to visualize."
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "prediction_id": prediction_id, "autots_id": autots_id,
+                    "forecast_length": forecast_length
+                }, separators=(',', ':')))]
             
             elif name == "get_autots_docs":
                 docs = {
-                    "AutoTS Parameters": {
+                    "AutoTS_Parameters": {
                         "forecast_length": "Number of periods to forecast (required)",
-                        "frequency": "Pandas frequency string ('D', 'H', 'W', 'MS', etc.) or 'infer'",
-                        "ensemble": "Ensemble method: 'simple', 'distance', 'horizontal', 'mosaic', None",
-                        "model_list": "List of models or preset: 'fast', 'superfast', 'all', 'default'",
-                        "transformer_list": "Transformations: 'fast', 'superfast', 'all'",
+                        "frequency": "Pandas frequency string ('D','H','W','MS',etc.) or 'infer'",
+                        "ensemble": "Ensemble method: 'simple','distance','horizontal','mosaic',None",
+                        "model_list": "List of models or preset: 'fast','superfast','all','default'",
+                        "transformer_list": "Transformations: 'fast','superfast','all'",
                         "max_generations": "Number of genetic algorithm generations",
                         "num_validations": "Number of cross-validation splits",
-                        "validation_method": "'backwards', 'even', 'seasonal', etc.",
+                        "validation_method": "'backwards','even','seasonal',etc.",
                         "models_to_validate": "Fraction of models to fully validate (0.0-1.0)",
-                        "n_jobs": "Parallel processes: 'auto', -1, or specific number"
+                        "n_jobs": "Parallel processes: 'auto',-1,or specific number"
                     },
                     "Example": {
                         "autots_params": {
@@ -944,242 +1063,17 @@ if MCP_AVAILABLE:
                     },
                     "Documentation": "See extended_tutorial.md for complete documentation"
                 }
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps(docs, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps(docs, separators=(',', ':')))]
             
-            elif name == "detect_features":
-                data = arguments.get("data")
-                df = json_to_dataframe(data, data_format="wide")
-                
-                # Run feature detection
-                detector = TimeSeriesFeatureDetector()
-                detector.fit(df)
-                
-                # Get detected features using the detector's public API
-                features = detector.get_detected_features(
-                    include_components=False,
-                    include_metadata=True
-                )
-                
-                # Convert all Timestamp objects to strings for JSON serialization
-                def serialize_timestamps(obj):
-                    """Recursively convert Timestamp objects to strings."""
-                    if isinstance(obj, pd.Timestamp):
-                        return obj.strftime('%Y-%m-%d %H:%M:%S')
-                    elif isinstance(obj, dict):
-                        return {k: serialize_timestamps(v) for k, v in obj.items()}
-                    elif isinstance(obj, list):
-                        return [serialize_timestamps(item) for item in obj]
-                    elif isinstance(obj, tuple):
-                        return tuple(serialize_timestamps(item) for item in obj)
-                    else:
-                        return obj
-                
-                features_serialized = serialize_timestamps(features)
-                
-                # Add summary statistics
-                summary = {
-                    "date_range": {
-                        "start": detector.date_index[0].strftime('%Y-%m-%d'),
-                        "end": detector.date_index[-1].strftime('%Y-%m-%d')
-                    },
-                    "num_series": len(detector.df_original.columns),
-                    "num_observations": len(detector.df_original),
-                    "series_names": list(detector.df_original.columns),
-                }
-                
-                # Count detections per series
-                detection_counts = {}
-                for series_name in detector.df_original.columns:
-                    detection_counts[series_name] = {
-                        "trend_changepoints": len(detector.trend_changepoints.get(series_name, [])),
-                        "level_shifts": len(detector.level_shifts.get(series_name, [])),
-                        "anomalies": len(detector.anomalies.get(series_name, [])),
-                        "holidays": len(detector.holiday_dates.get(series_name, [])),
-                        "seasonality_strength": float(detector.seasonality_strength.get(series_name, 0.0)),
-                    }
-                
-                results = {
-                    "summary": summary,
-                    "detection_counts": detection_counts,
-                    "features": features_serialized,
-                }
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps(results, indent=2)
-                )]
-            
-            elif name == "get_cleaned_data":
-                data = arguments.get("data")
-                fillna = arguments.get("fillna", "ffill")
-                
-                df = json_to_dataframe(data, data_format="wide")
-                
-                # Apply cleaning transformation
-                transformer = GeneralTransformer(
-                    fillna=fillna,
-                    transformations={"0": "ClipOutliers"},
-                    transformation_params={"0": {}}
-                )
-                
-                df_cleaned = transformer.fit_transform(df)
-                result = dataframe_to_json(df_cleaned, data_format="wide")
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "cleaned": True,
-                        "method": fillna,
-                        "shape": {"rows": len(df_cleaned), "columns": len(df_cleaned.columns)},
-                        "data": result
-                    }, indent=2)
-                )]
-            
-            elif name == "forecast_event_risk_default":
-                data = arguments.get("data")
-                forecast_length = arguments.get("forecast_length", 30)
-                threshold = arguments.get("threshold")
-                direction = arguments.get("direction", "upper")
-                
-                df = json_to_dataframe(data, data_format="wide")
-                
-                # Convert absolute threshold to quantile
-                # Find which quantile this threshold represents in the historical data
-                if threshold is not None:
-                    # Calculate quantile for each series
-                    quantiles = []
-                    for col in df.columns:
-                        series_vals = df[col].dropna()
-                        if len(series_vals) > 0:
-                            q = (series_vals <= threshold).sum() / len(series_vals)
-                            quantiles.append(q)
-                    # Use average quantile across series
-                    quantile_limit = np.mean(quantiles) if quantiles else 0.5
-                    # Ensure it's in valid range
-                    quantile_limit = max(0.01, min(0.99, quantile_limit))
-                else:
-                    # Default quantiles
-                    quantile_limit = 0.95 if direction == "upper" else 0.05
-                
-                # Determine quantile limit from threshold
-                upper_limit = quantile_limit if direction == "upper" else None
-                lower_limit = quantile_limit if direction == "lower" else None
-                
-                # Initialize EventRiskForecast with defaults
-                erf = EventRiskForecast(
-                    df_train=df,
-                    forecast_length=forecast_length,
-                    frequency='infer',
-                    upper_limit=upper_limit,
-                    lower_limit=lower_limit
-                )
-                
-                # Fit the model
-                erf.fit()
-                
-                # Generate predictions - this returns (upper_risk_df, lower_risk_df)
-                upper_risk_df, lower_risk_df = erf.predict()
-                
-                # Get the relevant risk dataframe
-                risk_df = upper_risk_df if direction == "upper" else lower_risk_df
-                
-                # Convert risk array to serializable format
-                risk_data = {
-                    "threshold": threshold,
-                    "threshold_quantile": quantile_limit,
-                    "direction": direction,
-                    "probabilities": dataframe_to_json(risk_df, data_format="wide") if risk_df is not None else None
-                }
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps(risk_data, indent=2)
-                )]
-            
-            elif name == "forecast_event_risk_tuning":
-                data = arguments.get("data")
-                forecast_length = arguments.get("forecast_length", 30)
-                threshold = arguments.get("threshold")
-                direction = arguments.get("direction", "upper")
-                
-                df = json_to_dataframe(data, data_format="wide")
-                
-                # Convert absolute threshold to quantile
-                if threshold is not None:
-                    quantiles = []
-                    for col in df.columns:
-                        series_vals = df[col].dropna()
-                        if len(series_vals) > 0:
-                            q = (series_vals <= threshold).sum() / len(series_vals)
-                            quantiles.append(q)
-                    quantile_limit = np.mean(quantiles) if quantiles else 0.5
-                    quantile_limit = max(0.01, min(0.99, quantile_limit))
-                else:
-                    quantile_limit = 0.95 if direction == "upper" else 0.05
-                
-                # Determine limit configuration
-                upper_limit = quantile_limit if direction == "upper" else None
-                lower_limit = quantile_limit if direction == "lower" else None
-                
-                # Initialize with tuning parameters
-                erf = EventRiskForecast(
-                    df_train=df,
-                    forecast_length=forecast_length,
-                    frequency='infer',
-                    upper_limit=upper_limit,
-                    lower_limit=lower_limit,
-                    # Tuning parameters for better accuracy
-                    model_name='BallTreeMultivariateMotif',
-                    model_param_dict={
-                        'window': 5,
-                        'point_method': 'median',
-                        'distance_metric': 'canberra',
-                        'k': 10
-                    }
-                )
-                
-                erf.fit()
-                upper_risk_df, lower_risk_df = erf.predict()
-                
-                # Get the relevant risk dataframe
-                risk_df = upper_risk_df if direction == "upper" else lower_risk_df
-                
-                risk_data = {
-                    "threshold": threshold,
-                    "threshold_quantile": quantile_limit,
-                    "direction": direction,
-                    "method": "tuned",
-                    "probabilities": dataframe_to_json(risk_df, data_format="wide") if risk_df is not None else None
-                }
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps(risk_data, indent=2)
-                )]
-            
-            elif name == "list_predictions":
-                predictions = list_cached_predictions()
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "cached_predictions": predictions,
-                        "count": len(predictions)
-                    }, indent=2)
-                )]
-            
-            elif name == "get_prediction_forecast":
+            # Prediction object tools
+            elif name == "get_forecast":
                 prediction_id = arguments.get("prediction_id")
                 output = arguments.get("output", "forecast")
+                format_type = arguments.get("format", "json_wide")
                 
-                cached = get_cached_prediction(prediction_id)
-                prediction = cached['prediction']
+                cached = get_cached_object(prediction_id, 'prediction')
+                prediction = cached['object']
                 
-                # Get the requested output
                 if output == "forecast":
                     df = prediction.forecast
                 elif output == "upper_forecast":
@@ -1189,314 +1083,399 @@ if MCP_AVAILABLE:
                 else:
                     raise ValueError(f"Unknown output type: {output}")
                 
-                result = dataframe_to_json(df, data_format="wide")
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "prediction_id": prediction_id,
-                        "output_type": output,
-                        "model_name": prediction.model_name,
-                        "metadata": cached['metadata'],
-                        "forecast": result
-                    }, indent=2)
-                )]
+                if format_type.startswith("csv"):
+                    filepath = dataframe_to_output(df, format_type)
+                    is_long = format_type == "csv_long"
+                    metadata = build_csv_metadata(filepath, df, is_long)
+                    return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+                else:
+                    result = dataframe_to_output(df, format_type)
+                    return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
             
-            elif name == "plot_prediction":
+            elif name == "plot_forecast":
                 prediction_id = arguments.get("prediction_id")
                 include_history = arguments.get("include_history", True)
                 series = arguments.get("series")
                 
-                cached = get_cached_prediction(prediction_id)
-                prediction = cached['prediction']
-                model = cached.get('model')
+                cached = get_cached_object(prediction_id, 'prediction')
+                prediction = cached['object']
                 
-                # Import matplotlib
-                try:
-                    import matplotlib
-                    matplotlib.use('Agg')  # Non-interactive backend
-                    import matplotlib.pyplot as plt
-                except ImportError:
-                    return [TextContent(
-                        type="text",
-                        text=json.dumps({
-                            "error": "Matplotlib not installed. Install with: pip install matplotlib"
-                        })
-                    )]
-                
-                # Create the plot
-                fig = plt.figure(figsize=(12, 6))
-                
-                forecast_df = prediction.forecast
-                
-                # Filter series if specified
                 if series:
-                    forecast_df = forecast_df[series]
+                    forecast_df = prediction.forecast[series]
+                    if include_history:
+                        history_df = prediction.df_wide_numeric[series]
+                else:
+                    forecast_df = prediction.forecast
+                    if include_history:
+                        history_df = prediction.df_wide_numeric
                 
-                # Plot forecast
-                for col in forecast_df.columns:
-                    plt.plot(forecast_df.index, forecast_df[col], label=f'{col} (forecast)', linewidth=2)
+                fig, ax = plt.subplots(figsize=(12, 6))
                 
-                # Plot historical data if available and requested
-                if include_history and model is not None:
-                    try:
-                        if hasattr(model, 'df_wide_numeric'):
-                            hist_df = model.df_wide_numeric
-                            if series:
-                                hist_df = hist_df[series]
-                            for col in hist_df.columns:
-                                plt.plot(hist_df.index, hist_df[col], label=f'{col} (history)', 
-                                        alpha=0.6, linestyle='--')
-                    except:
-                        pass  # Skip if historical data not available
+                if include_history:
+                    history_df.plot(ax=ax, label='History', alpha=0.7)
                 
-                # Plot confidence intervals if available
-                if prediction.upper_forecast is not None:
-                    upper_df = prediction.upper_forecast
-                    lower_df = prediction.lower_forecast
-                    if series:
-                        upper_df = upper_df[series]
-                        lower_df = lower_df[series]
-                    for col in upper_df.columns:
-                        plt.fill_between(
-                            upper_df.index,
-                            lower_df[col],
-                            upper_df[col],
+                forecast_df.plot(ax=ax, label='Forecast', linestyle='--')
+                
+                if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None:
+                    for col in forecast_df.columns:
+                        ax.fill_between(
+                            forecast_df.index,
+                            prediction.lower_forecast[col],
+                            prediction.upper_forecast[col],
                             alpha=0.2
                         )
                 
-                plt.xlabel('Date')
-                plt.ylabel('Value')
-                plt.title(f'Forecast - {prediction.model_name}')
-                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-                plt.grid(True, alpha=0.3)
+                ax.set_title('Forecast')
+                ax.set_xlabel('Date')
+                ax.set_ylabel('Value')
+                ax.legend()
                 plt.tight_layout()
                 
-                # Save to base64
-                buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
-                buffer.seek(0)
-                image_base64 = base64.b64encode(buffer.read()).decode()
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100)
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
                 plt.close(fig)
                 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({
-                            "prediction_id": prediction_id,
-                            "model_name": prediction.model_name,
-                            "series_plotted": list(forecast_df.columns),
-                            "image_format": "png"
-                        }, indent=2)
-                    ),
-                    ImageContent(
-                        type="image",
-                        data=image_base64,
-                        mimeType="image/png"
-                    )
-                ]
+                return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
             
             elif name == "apply_constraints":
                 prediction_id = arguments.get("prediction_id")
                 constraint_method = arguments.get("constraint_method")
                 constraint_value = arguments.get("constraint_value")
-                constraint_direction = arguments.get("constraint_direction")
+                constraint_direction = arguments.get("constraint_direction", "upper")
                 
-                cached = get_cached_prediction(prediction_id)
-                prediction = cached['prediction']
-                
-                # Apply constraints to the forecast
-                forecast_df = prediction.forecast.copy()
+                cached = get_cached_object(prediction_id, 'prediction')
+                prediction = cached['object']
                 
                 if constraint_method == "dampen":
-                    # Apply dampening to forecast
-                    dampen_factor = constraint_value if constraint_value else 0.9
-                    # Simple dampening: reduce deviation from last historical value
-                    for col in forecast_df.columns:
-                        last_val = forecast_df[col].iloc[0]
-                        for i in range(len(forecast_df)):
-                            forecast_df[col].iloc[i] = last_val + (forecast_df[col].iloc[i] - last_val) * (dampen_factor ** i)
-                
+                    prediction = prediction.apply_constraints(
+                        constraint_method="dampen",
+                        constraint_value=constraint_value
+                    )
                 elif constraint_method in ["upper", "lower"]:
-                    # Apply upper/lower bounds
-                    if constraint_value is None:
-                        raise ValueError("constraint_value required for upper/lower bounds")
-                    if constraint_method == "upper":
-                        forecast_df = forecast_df.clip(upper=constraint_value)
-                    else:
-                        forecast_df = forecast_df.clip(lower=constraint_value)
-                
+                    prediction = prediction.apply_constraints(
+                        constraint_method="constraint",
+                        constraint_value=constraint_value,
+                        constraint_direction=constraint_direction
+                    )
                 elif constraint_method == "quantile":
-                    # Constraint to historical quantile
-                    if constraint_value is None:
-                        raise ValueError("constraint_value (quantile) required")
-                    # This would need historical data from model
-                    return [TextContent(
-                        type="text",
-                        text=json.dumps({
-                            "error": "Quantile constraints require historical data (not yet implemented)"
-                        })
-                    )]
+                    prediction = prediction.apply_constraints(
+                        constraint_method="quantile",
+                        constraint_value=constraint_value
+                    )
+                else:
+                    raise ValueError(f"Unknown constraint method: {constraint_method}")
                 
-                # Create a new prediction-like object with constrained forecast
-                # We'll cache this as a new prediction
-                class ConstrainedPrediction:
-                    def __init__(self, original_prediction, constrained_forecast):
-                        self.forecast = constrained_forecast
-                        self.upper_forecast = original_prediction.upper_forecast
-                        self.lower_forecast = original_prediction.lower_forecast
-                        self.model_name = f"{original_prediction.model_name} (constrained)"
-                        self.model_parameters = original_prediction.model_parameters
-                        self.transformation_parameters = original_prediction.transformation_parameters
+                new_prediction_id = cache_object(prediction, 'prediction', {
+                    'method': 'constrained', 'constraint_method': constraint_method,
+                    'original_prediction_id': prediction_id
+                })
                 
-                constrained_pred = ConstrainedPrediction(prediction, forecast_df)
-                
-                # Cache the constrained prediction
-                new_prediction_id = cache_prediction(
-                    prediction_obj=constrained_pred,
-                    metadata={
-                        **cached['metadata'],
-                        "constrained": True,
-                        "constraint_method": constraint_method,
-                        "constraint_value": constraint_value,
-                        "original_prediction_id": prediction_id
-                    }
-                )
-                
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": True,
-                        "new_prediction_id": new_prediction_id,
-                        "original_prediction_id": prediction_id,
-                        "constraint_applied": constraint_method,
-                        "constraint_value": constraint_value,
-                        "message": "Constraints applied. Use 'get_prediction_forecast' with new_prediction_id to retrieve constrained forecast."
-                    }, indent=2)
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "prediction_id": new_prediction_id, "constraint_method": constraint_method
+                }, separators=(',', ':')))]
             
-            elif name == "get_prediction_components":
+            elif name == "get_model_params":
                 prediction_id = arguments.get("prediction_id")
                 
-                cached = get_cached_prediction(prediction_id)
-                prediction = cached['prediction']
-                model = cached.get('model')
+                cached = get_cached_object(prediction_id, 'prediction')
+                prediction = cached['object']
                 
-                # Try to get decomposition/components
-                components = {}
+                params = {
+                    'model_name': prediction.model_name,
+                    'model_parameters': prediction.model_parameters,
+                    'transformation_parameters': prediction.transformation_parameters,
+                    'forecast_length': len(prediction.forecast)
+                }
                 
-                # Check if model supports component extraction
-                if hasattr(prediction, 'model_parameters'):
-                    model_name = prediction.model_name
+                return [TextContent(type="text", text=json.dumps(params, separators=(',', ':')))]
+            
+            elif name == "get_forecast_components":
+                prediction_id = arguments.get("prediction_id")
+                
+                cached = get_cached_object(prediction_id, 'prediction')
+                prediction = cached['object']
+                
+                if hasattr(prediction, 'model') and hasattr(prediction.model, 'get_params_components'):
+                    components = prediction.model.get_params_components()
+                    result = {}
+                    for key, df in components.items():
+                        result[key] = dataframe_to_output(df, "json_wide")
+                    return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+                else:
+                    return [TextContent(type="text", text=json.dumps({
+                        "error": "Components not available for this model type"
+                    }, separators=(',', ':')))]
+            
+            # AutoTS model tools
+            elif name == "get_validation_results":
+                autots_id = arguments.get("autots_id")
+                
+                cached = get_cached_object(autots_id, 'autots')
+                model = cached['object']
+                
+                if hasattr(model, 'results'):
+                    results_summary = model.results().head(10).to_string()
+                    return [TextContent(type="text", text=results_summary)]
+                else:
+                    return [TextContent(type="text", text="No validation results available")]
+            
+            elif name == "plot_validation":
+                autots_id = arguments.get("autots_id")
+                
+                cached = get_cached_object(autots_id, 'autots')
+                model = cached['object']
+                
+                fig = model.plot_validations()
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100)
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close(fig)
+                
+                return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+            
+            elif name == "plot_generation_loss":
+                autots_id = arguments.get("autots_id")
+                
+                cached = get_cached_object(autots_id, 'autots')
+                model = cached['object']
+                
+                fig = model.plot_generation_loss()
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100)
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close(fig)
+                
+                return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+            
+            # Event Risk tools
+            elif name == "forecast_event_risk":
+                data = arguments.get("data")
+                data_id = arguments.get("data_id")
+                forecast_length = arguments.get("forecast_length", 30)
+                threshold = arguments.get("threshold")
+                direction = arguments.get("direction", "upper")
+                tune = arguments.get("tune", False)
+                
+                df = load_to_dataframe(data, data_id=data_id)
+                
+                erf = EventRiskForecast(
+                    df=df,
+                    forecast_length=forecast_length,
+                    frequency='infer',
+                    threshold=threshold,
+                    direction=direction,
+                    model_name='default',
+                    include_differenced=True,
+                    regression_type=None
+                )
+                
+                if tune:
+                    erf.fit(constraint=None)
+                else:
+                    erf.fit_no_tune()
+                
+                event_risk_id = cache_object(erf, 'event_risk', {
+                    'threshold': threshold, 'direction': direction,
+                    'forecast_length': forecast_length, 'tuned': tune
+                })
+                
+                return [TextContent(type="text", text=json.dumps({
+                    "event_risk_id": event_risk_id, "threshold": threshold,
+                    "direction": direction, "forecast_length": forecast_length
+                }, separators=(',', ':')))]
+            
+            elif name == "get_event_risk_results":
+                event_risk_id = arguments.get("event_risk_id")
+                format_type = arguments.get("format", "json_wide")
+                
+                cached = get_cached_object(event_risk_id, 'event_risk')
+                erf = cached['object']
+                
+                df = erf.predict_historic_risk()
+                
+                if format_type.startswith("csv"):
+                    filepath = dataframe_to_output(df, format_type)
+                    is_long = format_type == "csv_long"
+                    metadata = build_csv_metadata(filepath, df, is_long)
+                    return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+                else:
+                    result = dataframe_to_output(df, format_type)
+                    return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+            
+            elif name == "plot_event_risk":
+                event_risk_id = arguments.get("event_risk_id")
+                
+                cached = get_cached_object(event_risk_id, 'event_risk')
+                erf = cached['object']
+                
+                fig = erf.plot()
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100)
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close(fig)
+                
+                return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+            
+            # Feature detection tools
+            elif name == "detect_features":
+                data = arguments.get("data")
+                data_id = arguments.get("data_id")
+                
+                df = load_to_dataframe(data, data_id=data_id)
+                
+                detector = TimeSeriesFeatureDetector()
+                detector.fit(df)
+                
+                detector_id = cache_object(detector, 'feature_detector', {
+                    'series_count': len(df.columns), 'data_rows': len(df)
+                })
+                
+                return [TextContent(type="text", text=json.dumps({
+                    "detector_id": detector_id, "series_count": len(df.columns)
+                }, separators=(',', ':')))]
+            
+            elif name == "get_detected_features":
+                detector_id = arguments.get("detector_id")
+                
+                cached = get_cached_object(detector_id, 'feature_detector')
+                detector = cached['object']
+                
+                # Build summary
+                summary = {
+                    "date_range": {
+                        "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
+                        "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
+                    },
+                    "num_series": len(detector.df_original.columns),
+                    "num_observations": len(detector.df_original),
+                    "series_names": list(detector.df_original.columns)
+                }
+                
+                # Count detections per series with seasonality strength
+                detection_counts = {}
+                for series_name in detector.df_original.columns:
+                    counts = {
+                        "trend_changepoints": len(detector.trend_changepoints.get(series_name, [])) if hasattr(detector, 'trend_changepoints') else 0,
+                        "level_shifts": len(detector.level_shifts.get(series_name, [])) if hasattr(detector, 'level_shifts') else 0,
+                        "anomalies": len(detector.anomalies[detector.anomalies['series'] == series_name]) if hasattr(detector, 'anomalies') and len(detector.anomalies) > 0 else 0,
+                        "holidays": len(detector.holiday_dates.get(series_name, [])) if hasattr(detector, 'holiday_dates') else 0
+                    }
                     
-                    # For models like Cassandra that have components
-                    if 'cassandra' in model_name.lower():
-                        # Try to access Cassandra components if available
+                    # Add seasonality strength if available
+                    if hasattr(detector, 'seasonal_params') and series_name in detector.seasonal_params.index:
                         try:
-                            if hasattr(model, 'best_model'):
-                                best_model = model.best_model
-                                if hasattr(best_model, 'seasonal_coef'):
-                                    components['seasonality'] = "Available (Cassandra model)"
-                                if hasattr(best_model, 'trend_coef'):
-                                    components['trend'] = "Available (Cassandra model)"
+                            strength = float(detector.seasonal_params.loc[series_name, 'seasonality_strength'])
+                            counts['seasonality_strength'] = strength
                         except:
                             pass
                     
-                    # For seasonal decomposition models
-                    if 'seasonal' in model_name.lower():
-                        components['info'] = "Seasonal decomposition model - components embedded in forecast"
+                    detection_counts[series_name] = counts
                 
-                if not components:
-                    components['message'] = f"Model {prediction.model_name} does not expose decomposed components via MCP. Consider using models like Cassandra or TVVAR for component extraction."
+                # Serialize features (handle Timestamps)
+                features = {
+                    'anomalies': serialize_timestamps(detector.anomalies.to_dict()) if hasattr(detector, 'anomalies') else {},
+                    'changepoints': serialize_timestamps(detector.changepoints.to_dict()) if hasattr(detector, 'changepoints') else {},
+                    'holidays': serialize_timestamps(detector.holiday_params if hasattr(detector, 'holiday_params') else {}),
+                    'seasonality': serialize_timestamps(detector.seasonal_params.to_dict() if hasattr(detector, 'seasonal_params') else {})
+                }
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "prediction_id": prediction_id,
-                        "model_name": prediction.model_name,
-                        "components": components,
-                        "note": "Full component extraction is model-specific. This feature is under development."
-                    }, indent=2)
-                )]
+                results = {
+                    'summary': summary,
+                    'detection_counts': detection_counts,
+                    'features': features
+                }
+                
+                return [TextContent(type="text", text=json.dumps(results, separators=(',', ':')))]
             
-            elif name == "clear_predictions":
-                prediction_id = arguments.get("prediction_id")
+            elif name == "plot_features":
+                detector_id = arguments.get("detector_id")
+                series = arguments.get("series")
                 
-                if prediction_id:
-                    clear_prediction_cache(prediction_id)
-                    message = f"Cleared prediction {prediction_id}"
+                cached = get_cached_object(detector_id, 'feature_detector')
+                detector = cached['object']
+                
+                if series:
+                    fig = detector.plot(series=series[0])
                 else:
-                    clear_prediction_cache()
-                    message = "Cleared all cached predictions"
+                    fig = detector.plot()
                 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "success": True,
-                        "message": message
-                    }, indent=2)
-                )]
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100)
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close(fig)
+                
+                return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+            
+            elif name == "forecast_from_features":
+                detector_id = arguments.get("detector_id")
+                forecast_length = arguments.get("forecast_length", 30)
+                
+                cached = get_cached_object(detector_id, 'feature_detector')
+                detector = cached['object']
+                
+                prediction = detector.predict(forecast_length=forecast_length)
+                
+                prediction_id = cache_object(prediction, 'prediction', {
+                    'method': 'feature_detector', 'forecast_length': forecast_length,
+                    'detector_id': detector_id
+                })
+                
+                return [TextContent(type="text", text=json.dumps({
+                    "prediction_id": prediction_id, "forecast_length": forecast_length,
+                    "note": "This forecast is based on detected features and is experimental"
+                }, separators=(',', ':')))]
             
             else:
-                return [TextContent(
-                    type="text",
-                    text=json.dumps({"error": f"Unknown tool: {name}"})
-                )]
+                return [TextContent(type="text", text=json.dumps({
+                    "error": f"Unknown tool: {name}"
+                }, separators=(',', ':')))]
         
         except Exception as e:
             logger.exception(f"Error in tool {name}")
-            return [TextContent(
-                type="text",
-                text=json.dumps({
-                    "error": str(e),
-                    "tool": name,
-                    "traceback": str(e.__traceback__)
-                }, indent=2)
-            )]
+            return [TextContent(type="text", text=json.dumps({
+                "error": str(e), "tool": name
+            }, separators=(',', ':')))]
 
     @app.list_resources()
     async def list_resources() -> list[Any]:
         """List available documentation resources."""
-        import os
         from os.path import dirname, join, exists
         
         resources = []
         base_path = dirname(dirname(dirname(__file__)))
         mcp_path = dirname(__file__)
         
-        # Documentation files to expose
         doc_files = [
+            ("README.md", "MCP Server README", mcp_path),
             ("extended_tutorial.md", "Extended AutoTS Tutorial", base_path),
             ("production_example.py", "Production Example Script", base_path),
-            ("README.md", "AutoTS README", base_path),
-            ("docs/metric_weighting_guide.md", "Metric Weighting Guide", base_path),
-            ("docs/catlin_m6_paper.tex", "M6 Forecasting Competition Paper (LaTeX)", base_path),
-            ("QUICK_REFERENCE.md", "⭐ MCP Quick Reference - START HERE", mcp_path),
-            ("PREDICTION_CACHING_GUIDE.md", "MCP Prediction Caching Pattern Guide", mcp_path),
-            ("ARCHITECTURE_DIAGRAM.md", "MCP Architecture and Data Flow Diagrams", mcp_path),
-            ("IMPLEMENTATION_SUMMARY.md", "MCP Implementation Summary", mcp_path),
-            ("example_prediction_workflow.py", "MCP Prediction Workflow Examples", mcp_path),
+            ("README.md", "AutoTS Main README", base_path),
+            ("TODO.md", "AutoTS Development Roadmap", base_path),
         ]
         
         for filename, description, base in doc_files:
             filepath = join(base, filename)
             if exists(filepath):
-                # Determine MIME type
-                if filename.endswith(".md"):
-                    mime_type = "text/markdown"
-                elif filename.endswith(".py"):
-                    mime_type = "text/x-python"
-                elif filename.endswith(".tex"):
-                    mime_type = "text/x-tex"
-                else:
-                    mime_type = "text/plain"
-                
-                resources.append({
-                    "uri": f"file://{filepath}",
-                    "name": filename,
-                    "description": description,
-                    "mimeType": mime_type
-                })
+                resources.append(
+                    EmbeddedResource(
+                        type="resource",
+                        resource={
+                            "uri": f"file://{filepath}",
+                            "name": filename,
+                            "description": description,
+                            "mimeType": "text/markdown" if filename.endswith('.md') else "text/plain"
+                        }
+                    )
+                )
         
         return resources
 
@@ -1504,11 +1483,10 @@ if MCP_AVAILABLE:
     async def read_resource(uri: str) -> str:
         """Read a documentation resource."""
         if uri.startswith("file://"):
-            filepath = uri[7:]  # Remove "file://"
+            filepath = uri[7:]
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                return content
+                    return f.read()
             except Exception as e:
                 return f"Error reading {filepath}: {str(e)}"
         else:
@@ -1518,19 +1496,13 @@ if MCP_AVAILABLE:
 def serve():
     """Start the MCP server."""
     if not MCP_AVAILABLE:
-        raise ImportError(
-            "MCP package not installed. Install with: pip install autots[mcp]"
-        )
+        raise ImportError("MCP package not installed. Install with: pip install autots[mcp]")
     
-    import asyncio
+    logging.basicConfig(level=logging.INFO)
     
     async def main():
         async with stdio_server() as (read_stream, write_stream):
-            await app.run(
-                read_stream,
-                write_stream,
-                app.create_initialization_options()
-            )
+            await app.run(read_stream, write_stream, app.create_initialization_options())
     
     asyncio.run(main())
 
