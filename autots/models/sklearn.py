@@ -1130,7 +1130,7 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.1, 0.1, 0.1, 0.7])[
+            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.05, 0.05, 0.05, 0.85])[
                 0
             ]
             if branch == 'p1':
@@ -1185,12 +1185,12 @@ def generate_regressor_params(
                 }
                 if random.choices([True, False], [0.4, 0.6])[0]:
                     param_dict["model_params"]["max_depth"] = random.choices(
-                        [3, 6, 9], [0.1, 0.8, 0.1]
+                        [3, 6, 9], [0.3, 0.6, 0.1]
                     )[0]
                 if random.choices([True, False], [0.5, 0.5])[0]:
                     param_dict["model_params"]["n_estimators"] = random.choices(
                         [4, 7, 10, 20, 100, 1000],
-                        [0.2, 0.2, 0.2, 0.2, 0.5, 0.2],
+                        [0.2, 0.3, 0.3, 0.2, 0.3, 0.1],
                     )[0]
                 if random.choices([True, False], [0.2, 0.8])[0]:
                     param_dict["model_params"]["grow_policy"] = "lossguide"

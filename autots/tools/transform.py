@@ -220,7 +220,7 @@ class Detrend(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         window = random.choices(
-            [None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1]
+            [None, 365, 900, 30, 90, 10], [2.5, 0.05, 0.05, 0.15, 0.15, 0.1]
         )[0]
         if method == "fast":
             choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
@@ -2507,7 +2507,7 @@ class FastICA(EmptyTransformer):
         return {
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
-            "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
+            "max_iter": random.choices([100, 250, 500], [0.7, 0.2, 0.1])[0],
             "whiten": random.choices(
                 ['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1]
             )[0],
@@ -7131,7 +7131,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         """
         params = {
             "mode": random.choice(["upscale", "downscale"]),
-            "factor": random.choice([1, 2, 3, 4]),  # Reduced max factor to improve stability
+            "factor": random.choice([1, 2, 3, 4]),
             "down_method": random.choice(["decimate", "mean"]),
             "fill_method": random.choice(["linear", "nearest", "ffill", "pchip", "akima"]),  # More stable methods
         }
@@ -7563,8 +7563,6 @@ class ReconciliationTransformer(EmptyTransformer):
         weighting_choice = random.choice(weighting_opts)
         led_wolf = random.choices([True, False], [0.3, 0.7])[0]
         shrink_val = random.choices([0.0, 0.05, 0.1, 0.15, 0.3, 0.5, 0.7], [0.1, 0.2, 0.3, 0.2, 0.1, 0.2, 0.1])[0]
-        # Ridge values: avoid extremely small values (1e-12) which can cause slow solve operations
-        # Especially important for ERM with full weighting
         ridge_candidates = [None, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
         ridge_val = random.choice(ridge_candidates)
 
@@ -8266,7 +8264,7 @@ transformer_dict = {
     "StandardScaler": 0.04,
     "RobustScaler": 0.03,
     "PCA": 0.01,
-    "FastICA": 0.01,
+    "FastICA": 0.005,
     "Detrend": 0.02,  # slow with some params, but that's handled in get_params
     "RollingMeanTransformer": 0.02,
     "RollingMean100thN": 0.01,  # old
@@ -8293,7 +8291,7 @@ transformer_dict = {
     "STLFilter": 0.01,
     "EWMAFilter": 0.02,
     "MeanDifference": 0.002,
-    "BTCD": 0.01,
+    "BTCD": 0.005,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
