@@ -255,16 +255,34 @@ def new_kalman_params(method=None, allow_auto=True):
         }
 
     def make_ets_aan():
-        choices = [0.0, 0.01] + [round(v * 0.1, 1) for v in range(1, 16)]
+        # Improved ETS (AAN) implementation with better parameter ranges
+        # Alpha (level smoothing) typically 0.01 to 0.99, with emphasis on higher values
+        # Beta (trend smoothing) typically 0.0 to 0.3, with emphasis on lower values
+        alpha_choices = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.99]
+        beta_choices = [0.0, 0.001, 0.01, 0.05, 0.1, 0.2, 0.3]
+        
+        # For ETS state space: process_noise relates to smoothing parameters
+        # Smaller noise = more smoothing (closer to deterministic)
+        alpha = random.choice(alpha_choices)
+        beta = random.choice(beta_choices)
+        
+        # Convert smoothing parameters to process noise
+        # For ETS: sigma_level ≈ alpha, sigma_slope ≈ beta
+        level_noise = alpha
+        trend_noise = beta
+        
+        # Observation noise should typically be small for ETS
+        obs_noise_choices = [0.001, 0.01, 0.05, 0.1, 0.25, 0.5]
+        
         return {
             'model_name': 'local_linear_trend_ets_aan',
             'state_transition': [[1, 1], [0, 1]],
             'process_noise': [
-                [random.choice(choices), 0.0],
-                [0.0, random.choice(choices)],
+                [level_noise, 0.0],
+                [0.0, trend_noise],
             ],
             'observation_model': [[1, 0]],
-            'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
+            'observation_noise': random.choice(obs_noise_choices),
         }
 
     def make_stochastic_dummy():
@@ -619,8 +637,9 @@ def new_kalman_params(method=None, allow_auto=True):
 
     def make_theta_equivalent():
         # State-space equivalent of the Theta method (SES with drift).
-        level_variance = random.choice([1e-4, 5e-4, 1e-3, 1e-2])
-        observation_variance = random.choice([0.01, 0.05, 0.1, 0.5])
+        # Use smaller variances for smoother forecasts
+        level_variance = random.choice([1e-4, 5e-4, 1e-3, 5e-3, 1e-2])
+        observation_variance = random.choice([0.001, 0.01, 0.05, 0.1, 0.5])
         return {
             'model_name': 'theta_equivalent',
             'state_transition': [[1, 1], [0, 1]],
@@ -629,30 +648,181 @@ def new_kalman_params(method=None, allow_auto=True):
             'observation_noise': observation_variance,
         }
 
+    def make_ets_simple_exponential_smoothing():
+        # Simple Exponential Smoothing (SES) - ETS(A,N,N)
+        # Only level, no trend or seasonality
+        alpha = random.choice([0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9])
+        return {
+            'model_name': 'ets_simple_exponential_smoothing',
+            'state_transition': [[1]],
+            'process_noise': [[alpha]],
+            'observation_model': [[1]],
+            'observation_noise': random.choice([0.001, 0.01, 0.05, 0.1]),
+        }
+
+    def make_ets_linear_trend():
+        # Linear Trend (Holt) - ETS(A,A,N)  
+        alpha = random.choice([0.1, 0.2, 0.3, 0.5, 0.7, 0.9])
+        beta = random.choice([0.001, 0.01, 0.05, 0.1, 0.2])
+        return {
+            'model_name': 'ets_linear_trend',
+            'state_transition': [[1, 1], [0, 1]],
+            'process_noise': [[alpha, 0.0], [0.0, beta]],
+            'observation_model': [[1, 0]],
+            'observation_noise': random.choice([0.001, 0.01, 0.05, 0.1]),
+        }
+
+    def make_ets_damped_trend():
+        # Damped Trend - ETS(A,Ad,N)
+        alpha = random.choice([0.1, 0.2, 0.3, 0.5, 0.7, 0.9])
+        beta = random.choice([0.001, 0.01, 0.05, 0.1])
+        phi = random.choice([0.8, 0.85, 0.9, 0.95, 0.98])  # damping parameter
+        return {
+            'model_name': 'ets_damped_trend',
+            'state_transition': [[1, phi], [0, phi]],
+            'process_noise': [[alpha, 0.0], [0.0, beta]],
+            'observation_model': [[1, 1]],
+            'observation_noise': random.choice([0.001, 0.01, 0.05, 0.1]),
+        }
+
+    def make_arima_model():
+        # ARIMA(p,0,q) in state space form - favoring (1,0,4) but allowing variations
+        # Choose AR order (p) - favor p=1
+        p = random.choices([0, 1, 2, 3], weights=[0.1, 0.6, 0.2, 0.1])[0]
+        
+        # Choose MA order (q) - favor q=4
+        q = random.choices([0, 1, 2, 3, 4, 5, 6], weights=[0.05, 0.1, 0.1, 0.1, 0.4, 0.15, 0.1])[0]
+        
+        # Ensure at least one of p or q is non-zero
+        if p == 0 and q == 0:
+            p = 1
+            q = 4
+        
+        # Generate AR coefficients (ensuring stationarity)
+        ar_coeffs = []
+        if p > 0:
+            for i in range(p):
+                # First AR coefficient can be larger, subsequent ones smaller
+                if i == 0:
+                    ar_coeffs.append(random.choice([0.1, 0.3, 0.5, 0.7, 0.9, 0.95]))
+                else:
+                    ar_coeffs.append(random.choice([0.0, 0.1, 0.2, 0.3]))
+        
+        # Generate MA coefficients (decreasing magnitude for higher orders)
+        ma_coeffs = []
+        if q > 0:
+            for i in range(q):
+                if i == 0:
+                    ma_coeffs.append(random.choice([0.1, 0.3, 0.5, 0.7, 0.9]))
+                elif i == 1:
+                    ma_coeffs.append(random.choice([0.0, 0.1, 0.3, 0.5]))
+                else:
+                    ma_coeffs.append(random.choice([0.0, 0.1, 0.3]))
+        
+        # For ARMA(p,q) state space, dimension is max(p, q+1)
+        # State vector: [y_t, y_{t-1}, ..., y_{t-p+1}, ε_{t-1}, ..., ε_{t-q}]
+        # Simplified: [y_t, ε_{t-1}, ε_{t-2}, ..., ε_{t-q}] for AR(1)
+        # Or more states if p > 1
+        
+        if p == 0:
+            # Pure MA(q) model
+            state_dim = q + 1
+        elif q == 0:
+            # Pure AR(p) model  
+            state_dim = p
+        else:
+            # ARMA(p,q) - use max(p, q+1)
+            state_dim = max(p, q + 1)
+        
+        # Build state transition matrix
+        state_transition = [[0.0] * state_dim for _ in range(state_dim)]
+        
+        if p == 0:
+            # MA(q) model: x_t = [ε_t, ε_{t-1}, ..., ε_{t-q}]
+            # First row stays zero (pure innovation)
+            # Shift register for errors
+            for i in range(1, q):
+                state_transition[i+1][i] = 1.0
+        elif q == 0:
+            # AR(p) model: x_t = [y_t, y_{t-1}, ..., y_{t-p+1}]
+            for i in range(p):
+                state_transition[0][i] = ar_coeffs[i]
+            # Shift register for AR states
+            for i in range(1, p):
+                state_transition[i][i-1] = 1.0
+        else:
+            # ARMA(p,q): x_t = [y_t, ε_{t-1}, ..., ε_{t-q}] (simplified for p=1)
+            # First element is AR coefficient
+            state_transition[0][0] = ar_coeffs[0] if p == 1 else 0.0
+            
+            # Add MA coefficients
+            for i in range(min(q, state_dim - 1)):
+                state_transition[0][i + 1] = ma_coeffs[i]
+            
+            # If p > 1, need companion form
+            if p > 1:
+                for i in range(p):
+                    state_transition[0][i] = ar_coeffs[i]
+                for i in range(1, p):
+                    state_transition[i][i-1] = 1.0
+            else:
+                # Shift register for MA errors
+                for i in range(1, min(q, state_dim - 1)):
+                    state_transition[i+1][i] = 1.0
+        
+        # Build process noise matrix
+        process_noise_var = random.choice([0.1, 0.5, 1.0, 2.0])
+        process_noise = [[0.0] * state_dim for _ in range(state_dim)]
+        
+        # Innovation enters first state
+        process_noise[0][0] = process_noise_var
+        
+        # For MA terms, innovation also enters the error state
+        if q > 0 and state_dim > 1:
+            process_noise[1][1] = process_noise_var
+        
+        # Observation model - observe only first state (or sum for AR)
+        observation_model = [[1.0] + [0.0] * (state_dim - 1)]
+        
+        # Observation noise
+        observation_noise = random.choice([0.01, 0.05, 0.1, 0.5])
+        
+        return {
+            'model_name': f'ARIMA({p},0,{q})',
+            'state_transition': state_transition,
+            'process_noise': process_noise,
+            'observation_model': observation_model,
+            'observation_noise': observation_noise,
+        }
+
     model_generators = [
-        (0.1, make_ets_aan),
+        (0.15, make_ets_aan),  # Increased weight for improved ETS
         (0.1, make_stochastic_dummy),
         (0.1, make_stochastic_seasonal_7),
-        (0.1, make_ma_model),
-        (0.1, make_ar2_model),
-        (0.1, make_ucm_deterministic_trend),
+        (0.05, make_ma_model),
+        (0.05, make_ar2_model),
+        (0.05, make_ucm_deterministic_trend),
         (0.1, make_ucm_random_walk_drift_ar1),
         (0.05, make_ucm_random_walk_drift_ar1_weekly_fourier),
-        (0.1, make_x1_model),
+        (0.05, make_x1_model),
         (0.1, make_hidden_state_seasonal_7),
-        (0.1, make_factor_model),
-        (0.1, make_ucm_deterministictrend_seasonal7),
-        (0.1, make_spline_model),
-        (0.1, make_locallinear_weekly_fourier),
-        (0.05, make_locallinear_daily_fourier),
-        (0.05, make_randomwalk_weekly_fourier),
-        (0.1, make_holt_winters_damped),
-        (0.1, lambda: make_seasonal_hidden_state(364)),
-        (0.1, lambda: make_seasonal_hidden_state(12)),
-        (0.2, lambda: make_randomly_generated(False)),
-        (0.1, lambda: make_randomly_generated(True)),
-        (0.1, make_dynamic_linear),
+        (0.05, make_factor_model),
+        (0.05, make_ucm_deterministictrend_seasonal7),
+        (0.05, make_spline_model),
+        (0.05, make_locallinear_weekly_fourier),
+        (0.03, make_locallinear_daily_fourier),
+        (0.03, make_randomwalk_weekly_fourier),
+        (0.05, make_holt_winters_damped),
+        (0.05, lambda: make_seasonal_hidden_state(364)),
+        (0.05, lambda: make_seasonal_hidden_state(12)),
+        (0.1, lambda: make_randomly_generated(False)),
+        (0.05, lambda: make_randomly_generated(True)),
+        (0.05, make_dynamic_linear),
         (0.1, make_theta_equivalent),
+        (0.1, make_ets_simple_exponential_smoothing),
+        (0.1, make_ets_linear_trend),
+        (0.1, make_ets_damped_trend),
+        (0.1, make_arima_model),  # ARIMA models, favoring (1,0,4)
     ]
 
     weights = [item[0] for item in model_generators]
