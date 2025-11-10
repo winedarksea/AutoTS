@@ -44,6 +44,7 @@ from autots.tools.fir_filter import (
     generate_random_fir_params,
     fft_fir_filter_to_timeseries,
 )
+from autots.tools.g726_filter import g726_adpcm_filter
 from autots.tools.hierarchial import (
     ledoit_wolf_covariance, 
     mint_reconcile, 
@@ -6317,6 +6318,132 @@ class FIRFilter(EmptyTransformer):
         return params
 
 
+class G726Filter(EmptyTransformer):
+    """Adaptive differential PCM smoothing inspired by the G.726 codec.
+    
+    Implements proper G.726-style adaptive filtering with:
+    - 2-pole/6-zero adaptive predictor with decision-directed updates
+    - Non-uniform quantization optimized for time series
+    - Fast/slow scale factor adaptation with speed switching
+    """
+
+    def __init__(
+        self,
+        quant_bits: int = 4,
+        adaptation_rate: float = 0.96,
+        prediction_alpha: float = 0.92,
+        floor_step: float = 0.01,
+        dynamic_range: float = 1.5,
+        blend: float = 0.15,
+        noise_gate: float = 0.0,
+        fill_method: str = "interpolate",
+        on_transform: bool = True,
+        on_inverse: bool = False,
+        bounds_only: bool = False,
+        quantizer: str = "uniform",
+        use_adaptive_predictor: bool = True,
+        predictor_leak: float = 0.9999,
+        **kwargs,
+    ):
+        super().__init__(name="G726Filter")
+        self.quant_bits = quant_bits
+        self.adaptation_rate = adaptation_rate
+        self.prediction_alpha = prediction_alpha
+        self.floor_step = floor_step
+        self.dynamic_range = dynamic_range
+        self.blend = blend
+        self.noise_gate = noise_gate
+        self.fill_method = fill_method
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
+        self.bounds_only = bounds_only
+        self.quantizer = quantizer
+        self.use_adaptive_predictor = use_adaptive_predictor
+        self.predictor_leak = predictor_leak
+        self.adjustment = None
+
+    def fit(self, df):
+        self.columns = df.columns
+        return self
+
+    def _prepare_frame(self, df: pd.DataFrame) -> pd.DataFrame:
+        frame = df.apply(pd.to_numeric, errors="coerce")
+        if self.fill_method == "interpolate":
+            frame = frame.interpolate(limit_direction="both")
+        elif self.fill_method == "ffill":
+            frame = frame.ffill().bfill()
+        elif self.fill_method == "bfill":
+            frame = frame.bfill().ffill()
+        elif self.fill_method == "median":
+            frame = frame.fillna(frame.median())
+        else:
+            frame = frame.fillna(0.0)
+        return frame.fillna(0.0)
+
+    def _filter(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+        prepared = self._prepare_frame(df)
+        filtered = g726_adpcm_filter(
+            prepared.to_numpy(),
+            quant_bits=self.quant_bits,
+            adaptation_rate=self.adaptation_rate,
+            prediction_alpha=self.prediction_alpha,
+            floor_step=self.floor_step,
+            dynamic_range=self.dynamic_range,
+            blend=self.blend,
+            noise_gate=self.noise_gate,
+            quantizer=self.quantizer,
+            use_adaptive_predictor=self.use_adaptive_predictor,
+            predictor_leak=self.predictor_leak,
+        )
+        return pd.DataFrame(filtered, index=df.index, columns=df.columns)
+
+    def transform(self, df):
+        if self.on_transform:
+            return self._filter(df)
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
+        if self.on_inverse:
+            if not self.bounds_only or (self.bounds_only and adjustment is not None):
+                return self._filter(df)
+            self.adjustment = True
+        return df
+
+    def fit_transform(self, df):
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        selection = random.choices([True, False], [0.75, 0.25])[0]
+        quant_bits = random.choices([3, 4, 5], [0.2, 0.6, 0.2])[0]
+        use_adaptive = random.choices([True, False], [0.8, 0.2])[0]
+        params = {
+            "quant_bits": quant_bits,
+            "adaptation_rate": random.uniform(0.9, 0.99),
+            "prediction_alpha": random.uniform(0.7, 0.97),
+            "floor_step": random.uniform(0.002, 0.05),
+            "dynamic_range": random.uniform(0.5, 2.5),
+            "blend": random.uniform(0.0, 0.3),
+            "noise_gate": random.choice([0.0, random.uniform(0.0, 0.1)]),
+            "fill_method": random.choices(
+                ["interpolate", "ffill", "median"], [0.6, 0.3, 0.1]
+            )[0],
+            "on_transform": selection,
+            "on_inverse": not selection,
+            "quantizer": random.choices(["uniform", "nonuniform"], [0.4, 0.6])[0],
+            "use_adaptive_predictor": use_adaptive,
+            "predictor_leak": random.uniform(0.9995, 0.99995) if use_adaptive else 0.9999,
+        }
+        if not selection:
+            params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]
+        else:
+            params["bounds_only"] = False
+        return params
+
+
 class ThetaTransformer:
     def __init__(self, theta_values=[0, 2], regularization=1e-3, verbose=0):
         """
@@ -7677,6 +7804,7 @@ have_params = {
     "DifferencedTransformer": DifferencedTransformer,
     "Constraint": Constraint,
     "FIRFilter": FIRFilter,
+    "G726Filter": G726Filter,
     "ThetaTransformer": ThetaTransformer,
     "ChangepointDetector": ChangepointDetector,
     "ChangepointDetrend": ChangepointDetrend,
@@ -8309,6 +8437,7 @@ transformer_dict = {
     "BKBandpassFilter": 0.01,
     "Constraint": 0.01,  # 52
     "FIRFilter": 0.01,
+    "G726Filter": 0.01,
     "ThetaTransformer": 0.01,
     "ChangepointDetector": 0.01,
     "ChangepointDetrend": 0.01,
@@ -8347,6 +8476,7 @@ superfast_transformer_dict = {
     "Constraint": 0.005,  # not well tested yet on speed/ram
     "BKBandpassFilter": 0.01,  # seems feasible, untested
     "DiffSmoother": 0.005,  # seems feasible, untested
+    "G726Filter": 0.01,
     # "FIRFilter": 0.005,  # seems feasible, untested
     # "FFTFilter": 0.01,  # seems feasible, untested
     # "FFTDecomposition": 0.01,  # seems feasible, untested
@@ -8373,6 +8503,7 @@ filters = {
     "RollingMean100thN": 0.005,
     "DiffSmoother": 0.005,
     "convolution_filter": 0.005,
+    "G726Filter": 0.02,
 }
 scalers = {
     "MinMaxScaler": 0.05,
