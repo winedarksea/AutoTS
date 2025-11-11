@@ -30,6 +30,7 @@
 * new methods to LevelShiftTransformer
 * created the seasonal_linear interpolation which is quite promisiing for seasonal data
 * added apply_adjustments
+* added G726Filter and G711Scaler
 * created an MCP server for AutoTS
 * many bug fixes, tweaks, reorganizations, and added unittests
 

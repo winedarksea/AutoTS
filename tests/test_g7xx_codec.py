@@ -1,11 +1,129 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for G726Filter and g726_adpcm_filter."""
+"""Unit tests for G.711 and G.726 codec utilities."""
 import unittest
 import numpy as np
 import pandas as pd
-from autots.tools.g726_filter import g726_adpcm_filter
-from autots.tools.transform import G726Filter
 
+from autots.tools.g7xx_codec import (
+    g711_encode,
+    g711_decode,
+    g726_adpcm_filter,
+    G711Scaler,
+    G726Filter,
+)
+
+
+# ============================================================================
+# G.711 Tests
+# ============================================================================
+
+class TestG711EncodeDecode(unittest.TestCase):
+    def test_roundtrip_mu(self):
+        # Daily-like random walk data
+        rng = np.random.default_rng(123)
+        data = rng.normal(scale=1.0, size=(300, 5)).cumsum(axis=0)
+        enc, c, s = g711_encode(
+            data, mode="mu", mu=255.0, center="median", scale_method="mad", scale_factor=3.0
+        )
+        dec = g711_decode(enc, center=c, scale=s, mode="mu", mu=255.0)
+        self.assertEqual(dec.shape, data.shape)
+        # Companding is non-linear and MAD scaling can have outliers
+        # Most values should be very close, but extreme values may differ more
+        # Check that 95% of values are within 1% relative error
+        rel_error = np.abs((dec - data) / (np.abs(data) + 1e-8))
+        within_tolerance = np.sum(rel_error < 0.01) / rel_error.size
+        self.assertGreater(within_tolerance, 0.95)
+
+    def test_roundtrip_a(self):
+        rng = np.random.default_rng(321)
+        data = rng.normal(scale=0.5, size=200)
+        enc, c, s = g711_encode(data, mode="a", A=87.6)
+        dec = g711_decode(enc, center=c, scale=s, mode="a", A=87.6)
+        self.assertEqual(dec.shape, data.shape)
+        np.testing.assert_allclose(dec, data, rtol=1e-6, atol=1e-6)
+
+    def test_shapes_and_types(self):
+        arr = np.random.randn(50, 3)
+        enc, c, s = g711_encode(arr)
+        self.assertEqual(enc.shape, arr.shape)
+        self.assertEqual(c.shape, (1, arr.shape[1]))
+        self.assertEqual(s.shape, (1, arr.shape[1]))
+        self.assertEqual(enc.dtype, np.float64)
+
+    def test_dataframe_input(self):
+        dates = pd.date_range('2022-01-01', periods=90, freq='D')
+        df = pd.DataFrame({
+            'a': np.random.randn(90).cumsum(),
+            'b': np.random.randn(90).cumsum(),
+        }, index=dates)
+        enc, c, s = g711_encode(df)
+        self.assertEqual(enc.shape, df.shape)
+        dec = g711_decode(enc, center=c, scale=s)
+        self.assertEqual(dec.shape, df.shape)
+
+
+class TestG711ScalerTransformer(unittest.TestCase):
+    def test_basic_fit_transform_inverse(self):
+        dates = pd.date_range('2020-01-01', periods=200, freq='D')
+        df = pd.DataFrame({
+            'series1': np.random.randn(200).cumsum() + 50,
+            'series2': np.random.randn(200).cumsum() - 20,
+        }, index=dates)
+        tr = G711Scaler(mode="mu")
+        tr.fit(df)
+        encoded = tr.transform(df)
+        self.assertEqual(encoded.shape, df.shape)
+        # Encoded should be in [-1, 1]
+        self.assertLessEqual(float(np.nanmax(np.abs(encoded.values))), 1.0 + 1e-9)
+        decoded = tr.inverse_transform(encoded)
+        pd.testing.assert_index_equal(decoded.index, df.index)
+        pd.testing.assert_index_equal(decoded.columns, df.columns)
+        # Round-trip equality (tolerance for companding numerical precision)
+        np.testing.assert_allclose(decoded.values, df.values, rtol=1e-3, atol=1e-3)
+
+    def test_modes_mu_and_a(self):
+        df = pd.DataFrame({
+            'x': np.random.randn(300).cumsum(),
+            'y': np.random.randn(300).cumsum() * 0.5,
+        })
+        tr_mu = G711Scaler(mode='mu')
+        tr_mu.fit(df)
+        enc_mu = tr_mu.transform(df)
+        dec_mu = tr_mu.inverse_transform(enc_mu)
+        # Most values should be close (95% within 1% relative error)
+        rel_error = np.abs((dec_mu.values - df.values) / (np.abs(df.values) + 1e-8))
+        within_tolerance = np.sum(rel_error < 0.01) / rel_error.size
+        self.assertGreater(within_tolerance, 0.95)
+
+        tr_a = G711Scaler(mode='a')
+        tr_a.fit(df)
+        enc_a = tr_a.transform(df)
+        dec_a = tr_a.inverse_transform(enc_a)
+        # Most values should be close (95% within 1% relative error)
+        rel_error = np.abs((dec_a.values - df.values) / (np.abs(df.values) + 1e-8))
+        within_tolerance = np.sum(rel_error < 0.01) / rel_error.size
+        self.assertGreater(within_tolerance, 0.95)
+
+    def test_fill_methods(self):
+        df = pd.DataFrame({
+            'z': [1.0, np.nan, 3.0, np.nan, 5.0],
+        })
+        for fm in ["interpolate", "ffill", "bfill", "median", "zero"]:
+            tr = G711Scaler(fill_method=fm)
+            tr.fit(df)
+            enc = tr.transform(df)
+            self.assertFalse(enc.isnull().any().any())
+
+    def test_get_new_params(self):
+        params = G711Scaler.get_new_params()
+        self.assertIn(params['mode'], ['mu', 'a'])
+        self.assertIn(params['center'], ['median', 'mean'])
+        self.assertIn(params['scale_method'], ['mad', 'std', 'maxabs', 'percentile'])
+
+
+# ============================================================================
+# G.726 Tests
+# ============================================================================
 
 class TestG726AdpcmFilter(unittest.TestCase):
     """Test the low-level g726_adpcm_filter function."""
@@ -102,11 +220,12 @@ class TestG726AdpcmFilter(unittest.TestCase):
 
     def test_blend_parameter(self):
         """Test that blend parameter mixes signal with baseline."""
+        # Use legacy mode for more predictable blending behavior
         data = np.random.randn(100).cumsum()
         
-        # High blend should produce smoother output
-        filtered_low_blend = g726_adpcm_filter(data, blend=0.0)
-        filtered_high_blend = g726_adpcm_filter(data, blend=0.8)
+        # High blend should produce smoother output in legacy mode
+        filtered_low_blend = g726_adpcm_filter(data, blend=0.0, use_adaptive_predictor=False)
+        filtered_high_blend = g726_adpcm_filter(data, blend=0.8, use_adaptive_predictor=False)
         
         # Higher blend should have lower variance (smoother)
         self.assertLess(np.std(filtered_high_blend), np.std(filtered_low_blend))

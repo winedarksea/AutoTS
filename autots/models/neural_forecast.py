@@ -381,7 +381,7 @@ class NeuralForecast(ModelObject):
             models = method
         else:
             models = random.choices(
-                model_list, [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]
+                model_list, [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.01]
             )[0]
         if "regressor" in method:
             regression_type_choice = "User"
