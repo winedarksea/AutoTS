@@ -390,7 +390,9 @@ class GLM(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=7200)(
+            # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
+            timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=timeout_value)(
                 delayed(glm_forecast_by_column)(
                     current_series=df[col],
                     X=X,
@@ -573,6 +575,9 @@ class ETS(ModelObject):
             parallel = False
         elif not joblib_present:
             parallel = False
+        else:
+            # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
+            timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
 
         # seems to perhaps be more stable when defined inside, unclear
         from statsmodels.tsa.holtwinters import ExponentialSmoothing
@@ -625,7 +630,7 @@ class ETS(ModelObject):
 
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, timeout=36000)(
+            df_list = Parallel(n_jobs=self.n_jobs, timeout=timeout_value)(
                 delayed(ets_forecast_by_column)(
                     self.df_train[col].astype(float), args, test_index
                 )
@@ -872,7 +877,9 @@ class ARIMA(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
+            # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
+            timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
                 delayed(arima_seek_the_oracle)(
                     current_series=self.df_train[col], args=args, series=col
                 )
@@ -1156,7 +1163,9 @@ class UnobservedComponents(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
+            # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
+            timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
                 delayed(uc_forecast_by_column)(
                     current_series=self.df_train[col],
                     args=args,
@@ -1216,7 +1225,23 @@ class UnobservedComponents(ModelObject):
             'smooth trend',
             'random trend',
         ]
-        level_choice = random.choice(levels)
+        # Weighted selection - reduce probability of slow levels
+        level_probabilities = [
+            0.15,  # irregular - fast
+            0.03,  # fixed intercept - can be slow
+            0.1,   # deterministic constant - fast
+            0.15,  # local level - fast
+            0.15,  # random walk - fast
+            0.05,  # fixed slope
+            0.03,  # deterministic trend - can be slow
+            0.05,  # local linear deterministic trend
+            0.03,  # random walk with drift - can be slow
+            0.08,  # local linear trend
+            0.15,  # smooth trend - fast, good default
+            0.03,  # random trend - can be slow
+        ]
+        level_choice = random.choices(levels, level_probabilities)[0]
+        
         """
         level_choice = random.choice([True, False])
         if level_choice:
@@ -1242,18 +1267,38 @@ class UnobservedComponents(ModelObject):
                 0
             ]
 
+        # Reduce maxiter for slow methods and slow levels
+        maxiter_choice = random.choice([50, 100, 250])
+        method_choice = random.choices(
+            ["lbfgs", "bfgs", "powell", "cg", "newton", "nm"],
+            [0.8, 0.1, 0.05, 0.05, 0.0, 0.0],  # Removed newton, reduced powell
+        )[0]
+        cov_type_choice = random.choices(
+            ["opg", "oim", "approx", 'robust'], 
+            [0.85, 0.05, 0.08, 0.02]  # Reduced robust probability
+        )[0]
+        
+        # If slow level, method, or cov_type, reduce maxiter
+        slow_levels = ['fixed intercept', 'deterministic trend', 'random walk with drift', 
+                      'random trend', 'local linear deterministic trend']
+        if (level_choice in slow_levels or 
+            method_choice in ['powell', 'newton', 'nm', 'bfgs'] or 
+            cov_type_choice == 'robust'):
+            maxiter_choice = random.choice([50, 100])  # Cap at 100 for slow configs
+        
+        # Reduce autoregressive with already slow configs
+        if level_choice in slow_levels or maxiter_choice == 250:
+            ar_choice = random.choices([None, 1], [0.9, 0.1])[0]  # Avoid AR with slow configs
+        else:
+            ar_choice = random.choices([None, 1, 2], [0.8, 0.2, 0.01])[0]
+
         return {
             'level': level_choice,
-            'maxiter': random.choice([50, 100, 250]),
-            'cov_type': random.choices(
-                ["opg", "oim", "approx", 'robust'], [0.8, 0.02, 0.1, 0.1]
-            )[0],
-            'method': random.choices(
-                ["lbfgs", "bfgs", "powell", "cg", "newton", "nm"],
-                [0.8, 0.1, 0.1, 0.1, 0.1, 0.1],
-            )[0],
+            'maxiter': maxiter_choice,
+            'cov_type': cov_type_choice,
+            'method': method_choice,
             # AR1 is helpful but AR2 is getting slow
-            'autoregressive': random.choices([None, 1, 2], [0.8, 0.3, 0.02])[0],
+            'autoregressive': ar_choice,
             'regression_type': regression_choice,
         }
 
@@ -2083,7 +2128,9 @@ class Theta(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=36000)(
+            # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
+            timeout_value = max(300, int(160 * len(cols) / self.n_jobs))
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
                 delayed(theta_forecast_by_column)(
                     current_series=self.df_train[col], args=args
                 )
@@ -2332,7 +2379,9 @@ class ARDL(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=72000)(
+            # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
+            timeout_value = max(300, int(180 * len(cols) / self.n_jobs))
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
                 delayed(ardl_per_column)(
                     current_series=self.df_train[col],
                     args=args,
