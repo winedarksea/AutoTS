@@ -842,7 +842,7 @@ class IntermittentOccurrence(EmptyTransformer):
     Does not inverse to original values!
 
     Args:
-        center (str): one of "mean", "median", "midhinge"
+        center (str): one of "mean", "median", "midhinge", "geometric_mean"
     """
 
     def __init__(self, center: str = "median", **kwargs):
@@ -859,8 +859,9 @@ class IntermittentOccurrence(EmptyTransformer):
                     "mean",
                     "median",
                     "midhinge",
+                    "geometric_mean",
                 ],
-                [0.4, 0.3, 0.3],
+                [0.4, 0.3, 0.25, 0.05],
                 k=1,
             )[0]
         return {
@@ -877,6 +878,20 @@ class IntermittentOccurrence(EmptyTransformer):
             self.df_med = df.mean(axis=0)
         elif self.center == "midhinge":
             self.df_med = (df.quantile(0.75, axis=0) + df.quantile(0.25, axis=0)) / 2
+        elif self.center == "geometric_mean":
+            # Vectorized geometric mean: handle negative/zero values
+            df_pos = df.copy()
+            # Replace non-positive values with NaN for geometric mean calculation
+            df_pos[df_pos <= 0] = np.nan
+            # Geometric mean: exp(mean(log(x)))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                log_vals = np.log(df_pos)
+                self.df_med = np.exp(np.nanmean(log_vals, axis=0))
+            # Fill NaN (from all non-positive columns) with regular mean as fallback
+            self.df_med = pd.Series(self.df_med, index=df.columns)
+            nan_mask = self.df_med.isna()
+            if nan_mask.any():
+                self.df_med[nan_mask] = df.loc[:, nan_mask].mean(axis=0)
         else:
             self.df_med = df.median(axis=0, skipna=True)
         self.upper_mean = df[df > self.df_med].mean(axis=0) - self.df_med
@@ -931,6 +946,7 @@ class RollingMeanTransformer(EmptyTransformer):
         window (int): number of periods to take mean over
         fixed (bool): if True, don't inverse to volatile state
         macro_micro (bool): if True, split on rolling trend vs remainder and later recombine. Overrides fixed arg.
+        mean_type (str): "arithmetic" or "geometric" - type of mean to compute
     """
 
     def __init__(
@@ -940,6 +956,7 @@ class RollingMeanTransformer(EmptyTransformer):
         macro_micro: bool = False,
         suffix: str = "_lltmicro",
         center: bool = False,
+        mean_type: str = "arithmetic",
         **kwargs,
     ):
         super().__init__(name="RollingMeanTransformer")
@@ -948,6 +965,7 @@ class RollingMeanTransformer(EmptyTransformer):
         self.macro_micro = macro_micro
         self.suffix = suffix
         self.center = center
+        self.mean_type = mean_type
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -965,6 +983,9 @@ class RollingMeanTransformer(EmptyTransformer):
             "window": choice,
             "macro_micro": macro_micro,
             "center": center,
+            "mean_type": random.choices(
+                ["arithmetic", "geometric"], [0.95, 0.05]
+            )[0],
         }
 
     def fit(self, df):
@@ -991,7 +1012,28 @@ class RollingMeanTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        macro = df.rolling(window=self.window, min_periods=1, center=self.center).mean()
+        if self.mean_type == "geometric":
+            # Vectorized geometric mean for rolling windows
+            # Handle non-positive values by replacing with NaN
+            df_pos = df.copy()
+            df_pos[df_pos <= 0] = np.nan
+            with np.errstate(divide='ignore', invalid='ignore'):
+                log_df = np.log(df_pos)
+                # Rolling mean of logs, then exponentiate
+                macro = log_df.rolling(
+                    window=self.window, min_periods=1, center=self.center
+                ).mean()
+                macro = np.exp(macro)
+            # For any NaN results (from all non-positive windows), fallback to arithmetic mean
+            nan_mask = macro.isna()
+            if nan_mask.any().any():
+                arith_macro = df.rolling(
+                    window=self.window, min_periods=1, center=self.center
+                ).mean()
+                macro = macro.where(~nan_mask, arith_macro)
+        else:
+            macro = df.rolling(window=self.window, min_periods=1, center=self.center).mean()
+        
         if self.macro_micro:
             self.columns = df.columns
             micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
@@ -3134,6 +3176,7 @@ class AlignLastValue(EmptyTransformer):
         method (str): 'additive', 'multiplicative'
         strength (float): softening parameter [0, 1], 1.0 for full difference
         threshold (float): if below this threshold then the shift is not applied
+        mean_type (str): "arithmetic" or "geometric" - type of mean to compute for centering
     """
 
     def __init__(
@@ -3145,6 +3188,7 @@ class AlignLastValue(EmptyTransformer):
         first_value_only: bool = False,
         threshold: int = None,
         threshold_method: str = "max",
+        mean_type: str = "arithmetic",
         **kwargs,
     ):
         super().__init__(name="AlignLastValue")
@@ -3156,6 +3200,7 @@ class AlignLastValue(EmptyTransformer):
         self.adjustment = None
         self.threshold = threshold
         self.threshold_method = threshold_method
+        self.mean_type = mean_type
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -3173,6 +3218,9 @@ class AlignLastValue(EmptyTransformer):
             'first_value_only': random.choices([True, False], [0.1, 0.9])[0],
             "threshold": random.choices([None, 1, 3, 10], [0.8, 0.9, 0.2, 0.9])[0],
             "threshold_method": random.choices(['max', 'mean'], [0.5, 0.5])[0],
+            "mean_type": random.choices(
+                ["arithmetic", "geometric"], [0.95, 0.05]
+            )[0],
         }
 
     def fit(self, df):
@@ -3185,9 +3233,11 @@ class AlignLastValue(EmptyTransformer):
             self.rows = df.shape[0]
         # fill NaN if present (up to a limit for slight speedup)
         if np.isnan(np.sum(np.array(df)[-50:])):
-            self.center = self.find_centerpoint(df.ffill(axis=0), self.rows, self.lag)
+            self.center = self.find_centerpoint(
+                df.ffill(axis=0), self.rows, self.lag, self.mean_type
+            )
         else:
-            self.center = self.find_centerpoint(df, self.rows, self.lag)
+            self.center = self.find_centerpoint(df, self.rows, self.lag, self.mean_type)
         if self.threshold is not None:
             if self.method == "multiplicative":
                 if self.threshold_method == "max":
@@ -3202,7 +3252,7 @@ class AlignLastValue(EmptyTransformer):
         return self
 
     @staticmethod
-    def find_centerpoint(df, rows, lag):
+    def find_centerpoint(df, rows, lag, mean_type="arithmetic"):
         if rows <= 1:
             if lag > 1:
                 center = df.iloc[-lag, :]
@@ -3210,9 +3260,24 @@ class AlignLastValue(EmptyTransformer):
                 center = df.iloc[-1, :]
         else:
             if lag > 1:
-                center = df.iloc[-(lag + rows - 1) : -(lag - 1), :].mean()
+                df_slice = df.iloc[-(lag + rows - 1) : -(lag - 1), :]
             else:
-                center = df.tail(rows).mean()
+                df_slice = df.tail(rows)
+            
+            if mean_type == "geometric":
+                # Vectorized geometric mean
+                df_pos = df_slice.copy()
+                df_pos[df_pos <= 0] = np.nan
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    log_vals = np.log(df_pos)
+                    center = np.exp(np.nanmean(log_vals, axis=0))
+                # Fallback to arithmetic mean for columns with all non-positive values
+                center = pd.Series(center, index=df.columns)
+                nan_mask = center.isna()
+                if nan_mask.any():
+                    center[nan_mask] = df_slice.loc[:, nan_mask].mean(axis=0)
+            else:
+                center = df_slice.mean()
         return center
 
     def transform(self, df):

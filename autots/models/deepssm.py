@@ -1511,12 +1511,13 @@ class MambaSSM(ModelObject):
         
         # Create future changepoint features without re-fitting detector (single fit at start)
         if (
-            getattr(self, "changepoint_features", None) is not None
-            and not self.changepoint_features.empty
+            getattr(self, "changepoint_detector", None) is not None
+            and self.changepoint_detector is not None
         ):
-            future_changepoint_feats = changepoint_fcst_from_last_row(
-                self.changepoint_features.iloc[-1], n_forecast=forecast_length
-            )
+            # Use the changepoint detector's create_features method for consistent feature generation
+            # This properly continues "periods since changepoint" values into the future
+            all_features = self.changepoint_detector.create_features(forecast_length=forecast_length)
+            future_changepoint_feats = all_features.iloc[-forecast_length:].copy()
             future_changepoint_feats.index = forecast_index
             future_changepoint_feats = future_changepoint_feats.reindex(
                 columns=self.changepoint_features_columns
@@ -2260,12 +2261,13 @@ class pMLP(ModelObject):
         
         # Create future changepoint features without re-fitting detector (single fit at start)
         if (
-            getattr(self, "changepoint_features", None) is not None
-            and not self.changepoint_features.empty
+            getattr(self, "changepoint_detector", None) is not None
+            and self.changepoint_detector is not None
         ):
-            future_changepoint_feats = changepoint_fcst_from_last_row(
-                self.changepoint_features.iloc[-1], n_forecast=forecast_length
-            )
+            # Use the changepoint detector's create_features method for consistent feature generation
+            # This properly continues "periods since changepoint" values into the future
+            all_features = self.changepoint_detector.create_features(forecast_length=forecast_length)
+            future_changepoint_feats = all_features.iloc[-forecast_length:].copy()
             future_changepoint_feats.index = forecast_index
             future_changepoint_feats = future_changepoint_feats.reindex(
                 columns=self.changepoint_features_columns
