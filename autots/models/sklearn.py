@@ -1960,6 +1960,7 @@ class RollingRegression(ModelObject):
         ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
+        lag_periods_choice = 90 if lag_periods_choice > 90 else lag_periods_choice
         ewm_choice = random.choices(
             [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.05, 0.1, 0.1, 0.05]
         )[0]
@@ -1981,7 +1982,7 @@ class RollingRegression(ModelObject):
             [0.7, 0.05, 0.05, 0.05, 0.05, 0.1, 0.01],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
-        polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
+        polynomial_degree_choice = None
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
             [0.85, 0.05, 0.05, 0.05],
@@ -2052,9 +2053,11 @@ class RandomFourierEncoding(object):
 
     def transform(self, X):
         projection = np.dot(X, self.W) + self.b
-        X_new = np.sqrt(2 / self.n_components) * np.concatenate(
-            [np.sin(projection), np.cos(projection)], axis=1
-        )
+        # Optimized: pre-allocate array instead of concatenate
+        scale = np.sqrt(2 / self.n_components)
+        X_new = np.empty((X.shape[0], 2 * self.n_components), dtype=projection.dtype)
+        X_new[:, :self.n_components] = scale * np.sin(projection)
+        X_new[:, self.n_components:] = scale * np.cos(projection)
         return X_new
 
 
@@ -2414,15 +2417,23 @@ class WindowRegression(ModelObject):
             model_choice.get('model') == 'ElasticNet'):
             model_choice['model_params']['max_iter'] = 200
         
+        # Fourier encoding with large max_windows is memory-intensive
+        # Reduce probability of this combination or adjust max_windows
+        fourier_choice = random.choices(
+            [None, 2, 5, 10], [0.9, 0.1, 0.01, 0.01]
+        )[0]
+        
+        # If fourier encoding is enabled with very large max_windows, reduce max_windows
+        if fourier_choice is not None and max_windows_choice is not None and max_windows_choice > 500000:
+            max_windows_choice = random.choice([5000, 50000, 500000])
+        
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
             'max_windows': max_windows_choice,
-            'fourier_encoding_components': random.choices(
-                [None, 2, 5, 10], [0.8, 0.1, 0.1, 0.01]
-            )[0],
+            'fourier_encoding_components': fourier_choice,
             'scale': random.choices([True, False], [0.7, 0.3])[0],
             'datepart_method': datepart_method,
             'regression_type': regression_type_choice,
