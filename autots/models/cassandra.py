@@ -2055,15 +2055,15 @@ class Cassandra(ModelObject):
             trend_base = 'deep'
             trend_standin = random.choices(
                 [None, 'random_normal', 'rolling_trend', "changepoints"],
-                [0.7, 0.3, 0.1, 0.2],
+                [0.8, 0.3, 0.05, 0.05],
             )[0]
         else:
             trend_base = random.choices(
-                ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
+                ['pb1', 'pb2', 'pb3', 'random'], [0.15, 0.02, 0.0, 0.83]
             )[0]
             trend_standin = random.choices(
                 [None, 'random_normal', 'changepoints'],
-                [0.7, 0.2, 0.2],
+                [0.8, 0.15, 0.05],
             )[0]
         if trend_base == "random":
             model_str = random.choices(
@@ -2082,7 +2082,7 @@ class Cassandra(ModelObject):
                     'RRVAR',
                     "NeuralForecast",
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.01],
+                [0.05, 0.05, 0.2, 0.05, 0.02, 0.05, 0.2, 0.05, 0.05, 0.05, 0.005],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -2188,8 +2188,6 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         if method in ['deep', 'all_linear']:
-            # Reduced weights for minimize-based methods (l1_norm, l1_positive, etc.)
-            # as they get slow with many features and high maxiter
             linear_model = random.choices(
                 [
                     'lstsq',
@@ -2200,10 +2198,9 @@ class Cassandra(ModelObject):
                     'l1_positive',
                     'bayesian_linear',
                 ],  # the minimize based norms get slow and memory hungry at scale
-                [0.92, 0.22, 0.008, 0.008, 0.004, 0.005, 0.05],
+                [0.95, 0.22, 0.008, 0.008, 0.004, 0.005, 0.01],
             )[0]
         else:
-            # Reduced l1_positive weight since it can be very slow with many features
             linear_model = random.choices(
                 [
                     'lstsq',
@@ -2211,7 +2208,7 @@ class Cassandra(ModelObject):
                     'bayesian_linear',
                     'l1_positive',
                 ],
-                [0.85, 0.12, 0.025, 0.005],
+                [0.88, 0.12, 0.005, 0.005],
             )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -2231,8 +2228,6 @@ class Cassandra(ModelObject):
                 'recency_weighting': recency_weighting,
             }
         elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm', 'l1_positive']:
-            # Reduce maxiter to avoid extremely slow optimization
-            # especially for l1_positive which can be particularly slow
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,

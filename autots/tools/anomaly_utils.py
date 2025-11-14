@@ -555,7 +555,7 @@ def anomaly_new_params(method='random'):
                 "VAEOutlier",
                 # "GaussianMixtureBase",
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.15, 0.25, 0.1, 0.1, 0.25, 0.1, 0.05, 0.005, 0.05],
+            [0.05, 0.1, 0.15, 0.25, 0.1, 0.1, 0.25, 0.1, 0.05, 0.005, 0.01],
         )[0]
 
     if method_choice == "IsolationForest":
@@ -591,7 +591,6 @@ def anomaly_new_params(method='random'):
                 [0.02, 0.1, 0.05, 0.15], [0.1, 0.8, 0.05, 0.05]
             )[0],
             'assume_centered': random.choices([False, True], [0.9, 0.1])[0],
-            # Reduced probability of low support_fraction to avoid covariance matrix errors
             # Higher support_fraction = more samples used = more robust
             'support_fraction': random.choices([None, 0.5, 0.8], [0.8, 0.1, 0.1])[0],
         }
@@ -690,13 +689,13 @@ def anomaly_new_params(method='random'):
         }
     elif method_choice == "VAEOutlier":
         method_params = {
-            'depth': random.choices([1, 2], [0.7, 0.3])[0],
+            'depth': random.choices([1, 2], [0.85, 0.15])[0],
             'batch_size': random.choices([32, 64], [0.6, 0.4])[0],
-            'epochs': random.choices([25, 50, 75, 100], [0.1, 0.6, 0.2, 0.1])[0],
+            'epochs': random.choices([15, 25, 50, 75], [0.3, 0.5, 0.15, 0.05])[0],
             'learning_rate': random.choices([1e-4, 1e-3, 1e-2], [0.2, 0.6, 0.2])[0],
             'loss_function': random.choices(['elbo', 'mse', 'lmse'], [0.6, 0.2, 0.2])[0],
-            'dropout_rate': random.choices([0.0, 0.2], [0.7, 0.3])[0],
-            'latent_dim': random.choices([None, 'custom'], [0.8, 0.2])[0],
+            'dropout_rate': random.choices([0.0, 0.2], [0.8, 0.2])[0],
+            'latent_dim': random.choices([None, 'custom'], [0.9, 0.1])[0],
             'beta': random.choices([0.5, 1.0, 2.0], [0.2, 0.6, 0.2])[0],
             'contamination': random.choices([0.05, 0.1, 0.15], [0.3, 0.5, 0.2])[0],
             'random_state': random.choices([None, 42], [0.8, 0.2])[0],

@@ -1126,7 +1126,7 @@ def generate_regressor_params(
                     "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
                     "fit_intercept": random.choices([True, False], [0.9, 0.1])[0],
                     "selection": random.choices(["cyclic", "random"], [0.8, 0.1])[0],
-                    "max_iter": random.choices([1000, 2000, 5000], [0.8, 0.2, 0.01])[0],
+                    "max_iter": random.choices([200, 1000, 2000, 5000], [0.1, 0.8, 0.2, 0.01])[0],
                 },
             }
         elif model == 'xgboost':
@@ -2408,6 +2408,12 @@ class WindowRegression(ModelObject):
         datepart_method = random.choices([None, "something"], [0.9, 0.1])[0]
         if datepart_method == "something":
             datepart_method = random_datepart()
+        
+        # ElasticNet's iterative solver is very slow for multi-output regression
+        if (output_dim_choice == 'forecast_length' and 
+            model_choice.get('model') == 'ElasticNet'):
+            model_choice['model_params']['max_iter'] = 200
+        
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
