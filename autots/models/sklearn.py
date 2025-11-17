@@ -854,10 +854,10 @@ xgparam3 = {
     "model_params": {
         "booster": 'gbtree',
         "colsample_bylevel": 0.54,
-        "learning_rate": 0.0125,
+        "learning_rate": 0.025,
         "max_depth": 11,
-        "min_child_weight": 0.0127203,
-        "n_estimators": 319,
+        "min_child_weight": 0.0127,
+        "n_estimators": 240,
     },
 }
 xgparam1 = {

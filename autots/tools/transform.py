@@ -7199,11 +7199,16 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         Returns:
             dict: Dictionary of transformer parameters.
         """
+        mode = random.choice(["upscale", "downscale"])
+        if mode == "upscale":
+            factor = random.choice([1, 2])
+        else:
+            factor = random.choice([1, 2, 3, 4])
         params = {
-            "mode": random.choice(["upscale", "downscale"]),
-            "factor": random.choice([1, 2, 3, 4]),
+            "mode": mode,
+            "factor": factor,
             "down_method": random.choice(["decimate", "mean"]),
-            "fill_method": random.choice(["linear", "nearest", "ffill", "pchip", "akima"]),  # More stable methods
+            "fill_method": random.choice(["linear", "nearest", "ffill", "pchip", "seasonal_linear"]),
         }
         return params
 
@@ -8387,7 +8392,7 @@ transformer_dict = {
     "ChangepointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
-    "UpscaleDownscaleTransformer": 0.01,
+    "UpscaleDownscaleTransformer": 0.005,  # Reduced from 0.01 to reduce selection of potentially slow transformer
     "ReconciliationTransformer": 0.01,
     "CointegrationTransformer": 0.01,
 }
