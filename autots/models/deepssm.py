@@ -1233,9 +1233,13 @@ class MambaSSM(ModelObject):
                 self.device = "cpu"
         else:
             self.device = "cpu"
-        
-        torch.manual_seed(self.random_seed)
-        np.random.seed(self.random_seed)
+
+        try:
+            torch.manual_seed(self.random_seed)
+            np.random.seed(self.random_seed)
+        except Exception:
+            pass
+
         self.changepoint_features = None
         self.changepoint_features_columns = pd.Index([])
         self.naive_feature_columns = pd.Index([])
