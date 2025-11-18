@@ -351,3 +351,85 @@ class CassandraTest(unittest.TestCase):
 
         self.assertFalse(pred.forecast.isna().all().all())
         self.assertEqual(pred.forecast.shape[0], 10)
+
+    def test_fft_multivariate_feature(self):
+        """Test Cassandra with FFT multivariate feature to ensure no NaN values in harmonics."""
+        print("Starting Cassandra FFT multivariate feature test")
+        from autots import load_daily
+
+        df = load_daily(long=False)
+        forecast_length = 30
+        df_train = df.iloc[:-forecast_length]
+        df_test = df.iloc[-forecast_length:]
+        
+        # Test with FFT multivariate feature
+        params = {
+            'multivariate_feature': 'fft',
+            'scaling': 'BaseScaler',
+            'seasonalities': [7, 30.5],
+            'linear_model': {'model': 'lstsq'},
+            'trend_model': {'Model': 'LastValueNaive', 'ModelParameters': {}},
+            'regressors_used': False,
+            'n_jobs': 1,
+        }
+        
+        mod = Cassandra(**params)
+        mod.fit(df_train)
+        
+        # Verify X array has no NaN during fit
+        if hasattr(mod, 'x_array'):
+            self.assertFalse(
+                np.isnan(mod.x_array.values).any(),
+                "Training X array contains NaN values"
+            )
+            # Check for FFT harmonic columns
+            fft_cols = [col for col in mod.x_array.columns if 'fft' in str(col).lower()]
+            self.assertGreater(
+                len(fft_cols), 0, 
+                "No FFT harmonic columns found in X array"
+            )
+            print(f"Found {len(fft_cols)} FFT harmonic features")
+        
+        # Test prediction without history
+        pred = mod.predict(forecast_length=forecast_length, include_history=False)
+        
+        # Verify forecast has no NaN
+        self.assertFalse(
+            pred.forecast.isna().any().any(),
+            "Forecast contains NaN values"
+        )
+        self.assertEqual(pred.forecast.shape[0], forecast_length)
+        
+        # Verify predict X array has no NaN
+        if hasattr(mod, 'predict_x_array'):
+            x_arr = mod.predict_x_array
+            if isinstance(x_arr, pd.DataFrame):
+                self.assertFalse(
+                    x_arr.isna().any().any(),
+                    "Predict X array contains NaN values"
+                )
+                # Specifically check FFT columns
+                fft_cols = [col for col in x_arr.columns if 'fft' in str(col).lower()]
+                for col in fft_cols:
+                    self.assertFalse(
+                        x_arr[col].isna().any(),
+                        f"FFT column '{col}' contains NaN values in predict X array"
+                    )
+        
+        # Test prediction with history
+        pred_with_hist = mod.predict(forecast_length=forecast_length, include_history=True)
+        self.assertFalse(
+            pred_with_hist.forecast.isna().any().any(),
+            "Forecast with history contains NaN values"
+        )
+        
+        # Test with different forecast lengths
+        for fl in [10, 50, 100]:
+            pred_fl = mod.predict(forecast_length=fl, include_history=False)
+            self.assertFalse(
+                pred_fl.forecast.isna().any().any(),
+                f"Forecast with length {fl} contains NaN values"
+            )
+            self.assertEqual(pred_fl.forecast.shape[0], fl)
+        
+        print("FFT multivariate feature test completed successfully")

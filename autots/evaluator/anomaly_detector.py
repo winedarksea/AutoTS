@@ -79,6 +79,8 @@ class AnomalyDetector(object):
         self.isolated_only = isolated_only
         self.n_jobs = n_jobs
         self.anomaly_classifier = None
+        self.anomalies = None
+        self.scores = None
 
     def detect(self, df):
         """Shared anomaly detection routine."""
