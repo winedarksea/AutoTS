@@ -1265,7 +1265,7 @@ def generate_regressor_params(
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.2])[0]
             else:
                 n_estimators = random.choices(
-                    [4, 300, 100, 1000], [0.1, 0.4, 0.4, 0.2]
+                    [4, 300, 100, 1000], [0.1, 0.5, 0.5, 0.05]
                 )[0]
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0]
             param_dict = {
@@ -1281,7 +1281,7 @@ def generate_regressor_params(
                 [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
             )[0]
             estimators_choice = random.choices(
-                [4, 50, 100, 500], [0.05, 0.05, 0.9, 0.05]
+                [4, 50, 100, 500], [0.05, 0.1, 0.85, 0.02]
             )[0]
             param_dict = {
                 "model": 'ExtraTrees',
@@ -1294,7 +1294,7 @@ def generate_regressor_params(
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
-                        [0.25, 0.0, 0.25, 0.1],  # abs error very slow
+                        [0.90, 0.0, 0.01, 0.05],  # everything that isn't squared_error is slow
                     )[0],
                     "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
                 },
@@ -2862,7 +2862,7 @@ class MultivariateRegression(ModelObject):
         """
         df = self.basic_profile(df)
         # assume memory and CPU count are correlated
-        with config_context(assume_finite=True, working_memory=int(self.n_jobs * 512)):
+        with config_context(assume_finite=True, working_memory=int(abs(self.n_jobs) * 512)):
             # if external regressor, do some check up
             if self.regression_type is not None:
                 if future_regressor is None:
@@ -3336,7 +3336,7 @@ class MultivariateRegression(ModelObject):
             coint_choice = None
         if coint_choice is not None:
             coint_lag = random.choice([1, 2, 7])
-        transform_choice = random.choices([True, None], [0.5, 0.5])[0]
+        transform_choice = random.choices([True, None], [0.25, 0.75])[0]
         if transform_choice:
             from autots.tools.transform import (
                 GeneralTransformer,

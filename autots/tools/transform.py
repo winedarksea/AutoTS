@@ -8491,11 +8491,12 @@ postprocessing = {
     "Round": 0.1,
     "HistoricValues": 0.1,
     "BKBandpassFilter": 0.1,
-    "KalmanSmoothing": 0.01,
+    "KalmanSmoothing": 0.001,
+    "G726Filter": 0.01,
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
     "Constraint": 0.1,
-    "FIRFilter": 0.1,
+    "FIRFilter": 0.01,
 }
 # transformers that may change the number of columns/index
 expanding_transformers = [
