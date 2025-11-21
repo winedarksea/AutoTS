@@ -465,7 +465,7 @@ class AutoTS(object):
         self.regressor_used = False
         self.subset_flag = False
         self.grouping_ids = None
-        self.validation_results = self.initial_results = TemplateEvalObject()
+        self.initial_results = TemplateEvalObject()
         self.best_model = pd.DataFrame()
         self.best_model_id = ""
         self.best_model_name = ""
@@ -2595,8 +2595,11 @@ class AutoTS(object):
             else:
                 export_template = self.validation_results.model_results.copy()
                 # all validated models + horizontal ensembles
+                expected_runs = (self.num_validations + 1)
+                max_vals = self.validation_results.model_results['Runs'].max()
+                expected_runs = max_vals if max_vals < expected_runs else expected_runs
                 export_template = export_template[
-                    (export_template['Runs'] >= (self.num_validations + 1))
+                    (export_template['Runs'] >= expected_runs)
                     | (export_template['Ensemble'] >= 2)
                 ]
                 if not include_ensemble:
