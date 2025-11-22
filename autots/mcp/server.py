@@ -540,8 +540,8 @@ if MCP_AVAILABLE:
                 }
             ),
             Tool(
-                name="forecast_search",
-                description="MODERATE: AutoTS model search with EXPLAINABLE models only (Cassandra, TVVAR, BasicLinearModel). Use when interpretability is required. Returns prediction_id and autots_id",
+                name="forecast_explainable",
+                description="MODERATE: AutoTS model search with EXPLAINABLE models only (Cassandra, TVVAR, BasicLinearModel). Convenience wrapper for interpretable forecasts. Use when you need to understand model components. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -553,7 +553,7 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="forecast_custom",
-                description="CUSTOM: AutoTS with user-specified parameters or template. Defaults to 'scalable' model_list for speed and accuracy. Set model_list to 'explainable' or ['Cassandra','TVVAR','BasicLinearModel'] for interpretability. Returns prediction_id and autots_id",
+                description="CUSTOM: AutoTS with user-specified parameters or template. Defaults to 'scalable' model_list for speed and accuracy. For explainable models, use forecast_explainable instead. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -754,11 +754,17 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="get_detected_features",
-                description="Get detected features (anomalies, changepoints, holidays, seasonality) from cached detector",
+                description="Get detected features (anomalies, changepoints, holidays, seasonality) from cached detector. Supports filtering by date range, specific dates, and by series name. Use this to answer queries like 'was there an anomaly on Christmas 2024' or 'when was the first level shift'. Parameters: detector_id (required), date_start/date_end for ranges, series_name for filtering, include_components and include_metadata flags.",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "detector_id": {"type": "string", "description": "Cached detector ID"}
+                        "detector_id": {"type": "string", "description": "Cached detector ID"},
+                        "date_start": {"type": "string", "description": "Optional start date for filtering (YYYY-MM-DD format)"},
+                        "date_end": {"type": "string", "description": "Optional end date for filtering (YYYY-MM-DD format)"},
+                        "specific_date": {"type": "string", "description": "Optional specific single date to query (YYYY-MM-DD format)"},
+                        "series_name": {"type": "string", "description": "Optional series name to filter results"},
+                        "include_components": {"type": "boolean", "description": "Include component time series values (default: false)"},
+                        "include_metadata": {"type": "boolean", "description": "Include metadata like noise levels, scales (default: false)"}
                     },
                     "required": ["detector_id"]
                 }
@@ -972,7 +978,7 @@ if MCP_AVAILABLE:
                     "prediction_id": prediction_id, "forecast_length": forecast_length
                 }, separators=(',', ':')))]
             
-            elif name == "forecast_search":
+            elif name == "forecast_explainable":
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
@@ -992,7 +998,7 @@ if MCP_AVAILABLE:
                 prediction = model.predict()
                 
                 prediction_id = cache_object(prediction, 'prediction', {
-                    'method': 'search', 'forecast_length': forecast_length,
+                    'method': 'explainable', 'forecast_length': forecast_length,
                     'series_count': len(df.columns),
                     'historical_data_id': data_id
                 })
@@ -1380,56 +1386,98 @@ if MCP_AVAILABLE:
             
             elif name == "get_detected_features":
                 detector_id = arguments.get("detector_id")
+                date_start = arguments.get("date_start")
+                date_end = arguments.get("date_end")
+                specific_date = arguments.get("specific_date")
+                series_name = arguments.get("series_name")
+                include_components = arguments.get("include_components", False)
+                include_metadata = arguments.get("include_metadata", False)
                 
                 cached = get_cached_object(detector_id, 'feature_detector')
                 detector = cached['object']
                 
-                # Build summary
-                summary = {
-                    "date_range": {
-                        "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
-                        "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
-                    },
-                    "num_series": len(detector.df_original.columns),
-                    "num_observations": len(detector.df_original),
-                    "series_names": list(detector.df_original.columns)
-                }
+                # Parse dates argument to appropriate format for query_features
+                date_filter = None
+                if specific_date:
+                    # Single specific date
+                    date_filter = specific_date
+                elif date_start or date_end:
+                    # Date range
+                    date_filter = slice(date_start, date_end)
                 
-                # Count detections per series with seasonality strength
-                detection_counts = {}
-                for series_name in detector.df_original.columns:
-                    counts = {
-                        "trend_changepoints": len(detector.trend_changepoints.get(series_name, [])) if hasattr(detector, 'trend_changepoints') else 0,
-                        "level_shifts": len(detector.level_shifts.get(series_name, [])) if hasattr(detector, 'level_shifts') else 0,
-                        "anomalies": len(detector.anomalies[detector.anomalies['series'] == series_name]) if hasattr(detector, 'anomalies') and len(detector.anomalies) > 0 else 0,
-                        "holidays": len(detector.holiday_dates.get(series_name, [])) if hasattr(detector, 'holiday_dates') else 0
+                # Call query_features with the parsed arguments
+                try:
+                    results = detector.query_features(
+                        dates=date_filter,
+                        series=series_name,
+                        include_components=include_components,
+                        include_metadata=include_metadata,
+                        return_json=False
+                    )
+                    
+                    # Add summary information at the top level
+                    summary = {
+                        "date_range": {
+                            "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
+                            "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
+                        },
+                        "num_series": len(detector.df_original.columns),
+                        "num_observations": len(detector.df_original),
+                        "series_names": list(detector.df_original.columns)
                     }
                     
-                    # Add seasonality strength if available
-                    if hasattr(detector, 'seasonal_params') and series_name in detector.seasonal_params.index:
-                        try:
-                            strength = float(detector.seasonal_params.loc[series_name, 'seasonality_strength'])
-                            counts['seasonality_strength'] = strength
-                        except:
-                            pass
+                    # Add detection counts for quick reference
+                    detection_counts = {}
+                    for series_name in results.get('series', {}).keys():
+                        series_data = results['series'][series_name]
+                        counts = {
+                            "trend_changepoints": len(series_data.get('trend_changepoints', [])),
+                            "level_shifts": len(series_data.get('level_shifts', [])),
+                            "anomalies": len(series_data.get('anomalies', [])),
+                            "holidays": len(series_data.get('holiday_dates', []))
+                        }
+                        if 'seasonality_strength' in series_data:
+                            counts['seasonality_strength'] = series_data['seasonality_strength']
+                        detection_counts[series_name] = counts
                     
-                    detection_counts[series_name] = counts
-                
-                # Serialize features (handle Timestamps)
-                features = {
-                    'anomalies': serialize_timestamps(detector.anomalies.to_dict()) if hasattr(detector, 'anomalies') else {},
-                    'changepoints': serialize_timestamps(detector.changepoints.to_dict()) if hasattr(detector, 'changepoints') else {},
-                    'holidays': serialize_timestamps(detector.holiday_params if hasattr(detector, 'holiday_params') else {}),
-                    'seasonality': serialize_timestamps(detector.seasonal_params.to_dict() if hasattr(detector, 'seasonal_params') else {})
-                }
-                
-                results = {
-                    'summary': summary,
-                    'detection_counts': detection_counts,
-                    'features': features
-                }
-                
-                return [TextContent(type="text", text=json.dumps(results, separators=(',', ':')))]
+                    output = {
+                        'summary': summary,
+                        'detection_counts': detection_counts,
+                        'features': results
+                    }
+                    
+                    return [TextContent(type="text", text=json.dumps(output, indent=2))]
+                    
+                except Exception as e:
+                    # Fallback to basic feature extraction if query_features fails
+                    import traceback
+                    logger.warning(f"query_features failed, falling back to basic extraction: {e}")
+                    logger.warning(f"Traceback: {traceback.format_exc()}")
+                    
+                    # Get all features using the old method
+                    all_features = detector.get_detected_features(
+                        series_name=series_name,
+                        include_components=include_components,
+                        include_metadata=include_metadata
+                    )
+                    
+                    summary = {
+                        "date_range": {
+                            "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
+                            "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
+                        },
+                        "num_series": len(detector.df_original.columns),
+                        "num_observations": len(detector.df_original),
+                        "series_names": list(detector.df_original.columns)
+                    }
+                    
+                    results = {
+                        'summary': summary,
+                        'features': all_features,
+                        'note': 'Date filtering not applied due to error'
+                    }
+                    
+                    return [TextContent(type="text", text=json.dumps(results, indent=2))]
             
             elif name == "plot_features":
                 detector_id = arguments.get("detector_id")

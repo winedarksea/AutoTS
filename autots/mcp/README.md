@@ -29,6 +29,20 @@ Add to MCP settings (`.vscode/mcp.json` or user settings):
   }
 }
 ```
+For local downloads
+```json
+{
+	"servers": {
+		"autots": {
+			"type": "stdio",
+			"command": "python",
+			"args": ["-m", "autots.mcp.server"],
+			"cwd": "~/Documents/AutoTS"
+		}
+	},
+	"inputs": []
+}
+```
 
 ## Available Tools (12)
 
