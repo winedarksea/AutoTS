@@ -541,7 +541,7 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="forecast_search",
-                description="MODERATE: AutoTS model search (explainable models only). Returns prediction_id and autots_id",
+                description="MODERATE: AutoTS model search with EXPLAINABLE models only (Cassandra, TVVAR, BasicLinearModel). Use when interpretability is required. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -553,14 +553,14 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="forecast_custom",
-                description="CUSTOM: AutoTS with user-specified parameters or template. Returns prediction_id and autots_id",
+                description="CUSTOM: AutoTS with user-specified parameters or template. Defaults to 'scalable' model_list for speed and accuracy. Set model_list to 'explainable' or ['Cassandra','TVVAR','BasicLinearModel'] for interpretability. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "data": {"type": "object", "description": "Wide format data"},
                         "data_id": {"type": "string", "description": "Cached data ID"},
                         "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
-                        "autots_params": {"type": "object", "description": "AutoTS initialization parameters"},
+                        "autots_params": {"type": "object", "description": "AutoTS initialization parameters (defaults: model_list='scalable')"},
                         "model_template": {"type": "object", "description": "Specific model template to run"}
                     }
                 }
@@ -597,13 +597,14 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="plot_forecast",
-                description="Plot forecast from prediction. Returns base64 PNG image",
+                description="Plot forecast from prediction. Returns base64 PNG image. Defaults to first series only.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "prediction_id": {"type": "string", "description": "Cached prediction ID"},
                         "include_history": {"type": "boolean", "default": True, "description": "Include historical data"},
-                        "series": {"type": "array", "items": {"type": "string"}, "description": "Specific series to plot"}
+                        "series": {"type": "array", "items": {"type": "string"}, "description": "Specific series to plot (by name/id)"},
+                        "plot_all": {"type": "boolean", "default": False, "description": "Plot all series (overrides series parameter)"}
                     },
                     "required": ["prediction_id"]
                 }
@@ -963,7 +964,8 @@ if MCP_AVAILABLE:
                 
                 prediction_id = cache_object(prediction, 'prediction', {
                     'method': 'mosaic', 'forecast_length': forecast_length,
-                    'series_count': len(df.columns)
+                    'series_count': len(df.columns),
+                    'historical_data_id': data_id
                 })
                 
                 return [TextContent(type="text", text=json.dumps({
@@ -991,7 +993,8 @@ if MCP_AVAILABLE:
                 
                 prediction_id = cache_object(prediction, 'prediction', {
                     'method': 'search', 'forecast_length': forecast_length,
-                    'series_count': len(df.columns)
+                    'series_count': len(df.columns),
+                    'historical_data_id': data_id
                 })
                 autots_id = cache_object(model, 'autots', {
                     'forecast_length': forecast_length, 'series_count': len(df.columns)
@@ -1015,6 +1018,8 @@ if MCP_AVAILABLE:
                     autots_params['forecast_length'] = forecast_length
                 if 'frequency' not in autots_params:
                     autots_params['frequency'] = 'infer'
+                if 'model_list' not in autots_params:
+                    autots_params['model_list'] = 'scalable'
                 
                 model = AutoTS(**autots_params)
                 
@@ -1027,7 +1032,8 @@ if MCP_AVAILABLE:
                 
                 prediction_id = cache_object(prediction, 'prediction', {
                     'method': 'custom', 'forecast_length': forecast_length,
-                    'series_count': len(df.columns)
+                    'series_count': len(df.columns),
+                    'historical_data_id': data_id
                 })
                 autots_id = cache_object(model, 'autots', {
                     'forecast_length': forecast_length, 'series_count': len(df.columns)
@@ -1096,28 +1102,52 @@ if MCP_AVAILABLE:
                 prediction_id = arguments.get("prediction_id")
                 include_history = arguments.get("include_history", True)
                 series = arguments.get("series")
+                plot_all = arguments.get("plot_all", False)
                 
                 cached = get_cached_object(prediction_id, 'prediction')
                 prediction = cached['object']
+                metadata = cached.get('metadata', {})
                 
-                if series:
-                    forecast_df = prediction.forecast[series]
-                    if include_history:
-                        history_df = prediction.df_wide_numeric[series]
-                else:
+                # Determine which series to plot
+                if plot_all:
                     forecast_df = prediction.forecast
-                    if include_history:
-                        history_df = prediction.df_wide_numeric
+                    series_names = list(prediction.forecast.columns)
+                elif series:
+                    forecast_df = prediction.forecast[series]
+                    series_names = series if isinstance(series, list) else [series]
+                else:
+                    # Default to first series only
+                    first_col = prediction.forecast.columns[0]
+                    forecast_df = prediction.forecast[[first_col]]
+                    series_names = [first_col]
                 
-                fig, ax = plt.subplots(figsize=(12, 6))
+                # Adjust figure size based on legend needs
+                if len(series_names) > 5:
+                    fig, ax = plt.subplots(figsize=(14, 6))
+                else:
+                    fig, ax = plt.subplots(figsize=(12, 6))
                 
-                if include_history:
-                    history_df.plot(ax=ax, label='History', alpha=0.7)
+                # Try to get historical data if available
+                history_df = None
+                if include_history and 'historical_data_id' in metadata:
+                    try:
+                        history_cached = get_cached_object(metadata['historical_data_id'], 'data')
+                        history_df = history_cached['object'][series_names]
+                    except:
+                        pass
                 
-                forecast_df.plot(ax=ax, label='Forecast', linestyle='--')
+                # Plot historical data
+                if history_df is not None:
+                    for col in series_names:
+                        ax.plot(history_df.index, history_df[col], label=f'{col} (history)', alpha=0.7)
                 
+                # Plot forecast
+                for col in series_names:
+                    ax.plot(forecast_df.index, forecast_df[col], label=f'{col} (forecast)', linestyle='--', linewidth=2)
+                
+                # Plot prediction intervals
                 if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None:
-                    for col in forecast_df.columns:
+                    for col in series_names:
                         ax.fill_between(
                             forecast_df.index,
                             prediction.lower_forecast[col],
@@ -1125,11 +1155,17 @@ if MCP_AVAILABLE:
                             alpha=0.2
                         )
                 
-                ax.set_title('Forecast')
+                ax.set_title(f'Forecast ({len(series_names)} series)' if len(series_names) > 1 else f'Forecast: {series_names[0]}')
                 ax.set_xlabel('Date')
                 ax.set_ylabel('Value')
-                ax.legend()
-                plt.tight_layout()
+                
+                # Place legend outside plot area if many series, otherwise inside
+                if len(series_names) > 5:
+                    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+                    plt.tight_layout(rect=[0, 0, 0.85, 1])
+                else:
+                    ax.legend(loc='best')
+                    plt.tight_layout()
                 
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png', dpi=100)
