@@ -398,6 +398,7 @@ def build_csv_metadata(filepath: str, df: pd.DataFrame, is_long: bool = False) -
 # ============================================================================
 # TODO: add a forecast adjustment tool for specific date ranges (e.g., "increase growth by 2% for Q3 2026")
 # TODO: enhance component extraction for more model types (currently limited to Cassandra/TVVAR)
+# TODO: add AutoTS template upload/download functionality
 
 if MCP_AVAILABLE:
     app = Server("autots")
@@ -498,18 +499,22 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="convert_long_to_wide",
-                description="Convert long format to wide. Returns new data_id",
+                description="Convert long format to wide. Must provide either 'data' or 'data_id'. Returns new data_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "data": {"type": "object", "description": "Long format data with datetime,series_id,value"},
                         "data_id": {"type": "string", "description": "Cached data ID (alternative to data)"}
-                    }
+                    },
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             Tool(
                 name="clean_data",
-                description="Clean time series data (handle missing values, outliers). Returns data_id",
+                description="Clean time series data (handle missing values, outliers). Returns data_id. Must provide either 'data' or 'data_id'.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -521,14 +526,18 @@ if MCP_AVAILABLE:
                             "default": "ffill",
                             "description": "Missing value fill method"
                         }
-                    }
+                    },
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             
             # Forecasting
             Tool(
                 name="forecast_mosaic",
-                description="FAST: Pre-configured mosaic ensemble forecast. Use data or data_id. Returns prediction_id",
+                description="FAST: Pre-configured mosaic ensemble forecast. Must provide either 'data' or 'data_id'. Returns prediction_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -536,24 +545,32 @@ if MCP_AVAILABLE:
                         "data_id": {"type": "string", "description": "Cached data ID"},
                         "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
                         "profile_template": {"type": "object", "description": "Optional custom mosaic profile JSON"}
-                    }
+                    },
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             Tool(
                 name="forecast_explainable",
-                description="MODERATE: AutoTS model search with EXPLAINABLE models only (Cassandra, TVVAR, BasicLinearModel). Convenience wrapper for interpretable forecasts. Use when you need to understand model components. Returns prediction_id and autots_id",
+                description="MODERATE: AutoTS model search with EXPLAINABLE models only (Cassandra, TVVAR, BasicLinearModel). Convenience wrapper for interpretable forecasts. Use when you need to understand model components. Must provide either 'data' or 'data_id'. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "data": {"type": "object", "description": "Wide format data"},
                         "data_id": {"type": "string", "description": "Cached data ID"},
                         "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"}
-                    }
+                    },
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             Tool(
                 name="forecast_custom",
-                description="CUSTOM: AutoTS with user-specified parameters or template. Defaults to 'scalable' model_list for speed and accuracy. For explainable models, use forecast_explainable instead. Returns prediction_id and autots_id",
+                description="CUSTOM: AutoTS with user-specified parameters or template. Defaults to 'scalable' model_list for speed and accuracy. For explainable models, use forecast_explainable instead. Must provide either 'data' or 'data_id'. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -561,8 +578,14 @@ if MCP_AVAILABLE:
                         "data_id": {"type": "string", "description": "Cached data ID"},
                         "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
                         "autots_params": {"type": "object", "description": "AutoTS initialization parameters (defaults: model_list='scalable')"},
-                        "model_template": {"type": "object", "description": "Specific model template to run"}
-                    }
+                        "model_template": {"type": "object", "description": "Specific model template to run"},
+                        "future_regressor_train": {"type": "object", "description": "Future regressor for training (wide format DataFrame)"},
+                        "future_regressor_forecast": {"type": "object", "description": "Future regressor for forecast period (wide format DataFrame)"}
+                    },
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             Tool(
@@ -692,14 +715,14 @@ if MCP_AVAILABLE:
             # Event Risk tools
             Tool(
                 name="forecast_event_risk",
-                description="Forecast probability of crossing threshold. Returns event_risk_id",
+                description="Forecast probability of crossing threshold. Must provide 'threshold' and either 'data' or 'data_id'. Returns event_risk_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "data": {"type": "object", "description": "Wide format data"},
                         "data_id": {"type": "string", "description": "Cached data ID"},
                         "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
-                        "threshold": {"type": "number", "description": "Threshold value"},
+                        "threshold": {"type": "number", "description": "Threshold value (required)"},
                         "direction": {
                             "type": "string",
                             "enum": ["upper", "lower"],
@@ -708,7 +731,11 @@ if MCP_AVAILABLE:
                         },
                         "tune": {"type": "boolean", "default": False, "description": "Enable model tuning (slower but more accurate)"}
                     },
-                    "required": ["threshold"]
+                    "required": ["threshold"],
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             Tool(
@@ -743,13 +770,17 @@ if MCP_AVAILABLE:
             # Feature detection tools
             Tool(
                 name="detect_features",
-                description="Detect anomalies, changepoints, holidays, patterns. Returns detector_id",
+                description="Detect anomalies, changepoints, holidays, patterns. Must provide either 'data' or 'data_id'. Returns detector_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "data": {"type": "object", "description": "Wide format data"},
                         "data_id": {"type": "string", "description": "Cached data ID"}
-                    }
+                    },
+                    "oneOf": [
+                        {"required": ["data"]},
+                        {"required": ["data_id"]}
+                    ]
                 }
             ),
             Tool(
@@ -783,7 +814,7 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="forecast_from_features",
-                description="Create forecast using detected features (EXPERIMENTAL: use only after feature detection, not for standalone forecasts). Returns prediction_id",
+                description="Create forecast using detected features (EXPERIMENTAL: use only after feature detection, not for standalone forecasts). Returns prediction_id. SEQUENTIAL: Requires detector_id from detect_features first. Must complete before using prediction_id in plot_forecast or get_forecast",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -899,6 +930,9 @@ if MCP_AVAILABLE:
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
                 
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
+                
                 if data_id:
                     df = load_to_dataframe(data_id=data_id)
                 elif data:
@@ -919,6 +953,9 @@ if MCP_AVAILABLE:
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
                 fillna = arguments.get("fillna", "ffill")
+                
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
                 
                 df = load_to_dataframe(data, data_id=data_id)
                 
@@ -941,7 +978,18 @@ if MCP_AVAILABLE:
                 forecast_length = arguments.get("forecast_length", 30)
                 profile_template = arguments.get("profile_template")
                 
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
+                
                 df = load_to_dataframe(data, data_id=data_id)
+                
+                # Cache historical data if not already cached
+                if not data_id:
+                    data_id = cache_object(df, 'data', {
+                        'source': 'forecast_mosaic_input',
+                        'rows': len(df),
+                        'columns': len(df.columns)
+                    })
                 
                 if profile_template:
                     model = AutoTS(
@@ -954,6 +1002,8 @@ if MCP_AVAILABLE:
                         validation_method='backwards'
                     )
                     model = model.import_template(profile_template, method='only')
+                    # Fit on df before predict to ensure model has historical context
+                    model.fit_data(df)
                     prediction = model.predict()
                 else:
                     model = AutoTS(
@@ -983,7 +1033,18 @@ if MCP_AVAILABLE:
                 data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
                 
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
+                
                 df = load_to_dataframe(data, data_id=data_id)
+                
+                # Cache historical data if not already cached
+                if not data_id:
+                    data_id = cache_object(df, 'data', {
+                        'source': 'forecast_explainable_input',
+                        'rows': len(df),
+                        'columns': len(df.columns)
+                    })
                 
                 model = AutoTS(
                     forecast_length=forecast_length,
@@ -1017,8 +1078,29 @@ if MCP_AVAILABLE:
                 forecast_length = arguments.get("forecast_length", 30)
                 autots_params = arguments.get("autots_params", {})
                 model_template = arguments.get("model_template")
+                future_regressor_train = arguments.get("future_regressor_train")
+                future_regressor_forecast = arguments.get("future_regressor_forecast")
+                
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
                 
                 df = load_to_dataframe(data, data_id=data_id)
+                
+                # Load future regressors if provided
+                future_regressor_train_df = None
+                future_regressor_forecast_df = None
+                if future_regressor_train:
+                    future_regressor_train_df = load_to_dataframe(future_regressor_train, data_format="wide")
+                if future_regressor_forecast:
+                    future_regressor_forecast_df = load_to_dataframe(future_regressor_forecast, data_format="wide")
+                
+                # Cache historical data if not already cached
+                if not data_id:
+                    data_id = cache_object(df, 'data', {
+                        'source': 'forecast_custom_input',
+                        'rows': len(df),
+                        'columns': len(df.columns)
+                    })
                 
                 if 'forecast_length' not in autots_params:
                     autots_params['forecast_length'] = forecast_length
@@ -1031,10 +1113,12 @@ if MCP_AVAILABLE:
                 
                 if model_template:
                     model = model.import_template(model_template, method='only')
-                    prediction = model.predict()
+                    # Fit on df before predict to ensure model has historical context
+                    model.fit(df, future_regressor=future_regressor_train_df)
+                    prediction = model.predict(future_regressor=future_regressor_forecast_df)
                 else:
-                    model.fit(df)
-                    prediction = model.predict()
+                    model.fit(df, future_regressor=future_regressor_train_df)
+                    prediction = model.predict(future_regressor=future_regressor_forecast_df)
                 
                 prediction_id = cache_object(prediction, 'prediction', {
                     'method': 'custom', 'forecast_length': forecast_length,
@@ -1256,12 +1340,74 @@ if MCP_AVAILABLE:
                 
                 cached = get_cached_object(autots_id, 'autots')
                 model = cached['object']
+                metadata = cached.get('metadata', {})
                 
-                if hasattr(model, 'results'):
-                    results_summary = model.results().head(10).to_string()
-                    return [TextContent(type="text", text=results_summary)]
-                else:
-                    return [TextContent(type="text", text="No validation results available")]
+                if not hasattr(model, 'results'):
+                    return [TextContent(type="text", text=json.dumps({
+                        "error": "No validation results available"
+                    }, indent=2))]
+                
+                results_df = model.results()
+                
+                # Get best model info
+                best_model = {
+                    'name': model.best_model_name,
+                    'parameters': model.best_model_params,
+                    'transformation': model.best_model_transformation_params
+                }
+                
+                # Get top 10 models with structured data
+                top_models = []
+                for idx, row in results_df.head(10).iterrows():
+                    model_info = {
+                        'model_name': row.get('Model', 'Unknown'),
+                        'smape': float(row.get('smape', 0)) if pd.notna(row.get('smape')) else None,
+                        'mae': float(row.get('mae', 0)) if pd.notna(row.get('mae')) else None,
+                        'rmse': float(row.get('rmse', 0)) if pd.notna(row.get('rmse')) else None,
+                        'runtime_seconds': float(row.get('TotalRuntimeSeconds', 0)) if pd.notna(row.get('TotalRuntimeSeconds')) else None,
+                        'validation_round': int(row.get('ValidationRound', 0)) if pd.notna(row.get('ValidationRound')) else None,
+                    }
+                    # Add any other columns that are present
+                    for col in results_df.columns:
+                        if col not in ['Model', 'smape', 'mae', 'rmse', 'TotalRuntimeSeconds', 'ValidationRound']:
+                            val = row.get(col)
+                            if pd.notna(val):
+                                try:
+                                    model_info[col] = float(val) if isinstance(val, (int, float)) else str(val)
+                                except:
+                                    model_info[col] = str(val)
+                    top_models.append(model_info)
+                
+                # Get training info
+                train_info = {
+                    'forecast_length': metadata.get('forecast_length', model.forecast_length),
+                    'frequency': model.frequency,
+                    'ensemble': model.ensemble,
+                    'max_generations': model.max_generations,
+                    'num_validations': model.num_validations,
+                    'validation_method': model.validation_method,
+                    'models_count': len(results_df)
+                }
+                
+                # Get training data info if available
+                if hasattr(model, 'df_wide_numeric') and model.df_wide_numeric is not None:
+                    train_info['train_shape'] = {
+                        'rows': model.df_wide_numeric.shape[0],
+                        'columns': model.df_wide_numeric.shape[1]
+                    }
+                    train_info['date_range'] = {
+                        'start': model.df_wide_numeric.index[0].strftime('%Y-%m-%d'),
+                        'end': model.df_wide_numeric.index[-1].strftime('%Y-%m-%d')
+                    }
+                
+                result = {
+                    'best_model': best_model,
+                    'train_info': train_info,
+                    'top_10_models': top_models,
+                    'available_metrics': list(results_df.columns)
+                }
+                
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
             
             elif name == "plot_validation":
                 autots_id = arguments.get("autots_id")
@@ -1304,6 +1450,11 @@ if MCP_AVAILABLE:
                 direction = arguments.get("direction", "upper")
                 tune = arguments.get("tune", False)
                 
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
+                if threshold is None:
+                    raise ValueError("Must provide 'threshold' parameter")
+                
                 df = load_to_dataframe(data, data_id=data_id)
                 
                 erf = EventRiskForecast(
@@ -1338,17 +1489,45 @@ if MCP_AVAILABLE:
                 
                 cached = get_cached_object(event_risk_id, 'event_risk')
                 erf = cached['object']
+                metadata = cached['metadata']
                 
-                df = erf.predict_historic_risk()
+                # Get forward-looking risk forecasts (not historic in-sample)
+                upper_risk_df, lower_risk_df = erf.predict()
+                
+                # Determine which direction to return based on metadata
+                direction = metadata.get('direction', 'upper')
+                if direction == 'upper':
+                    df = upper_risk_df
+                    risk_type = 'upper_risk'
+                elif direction == 'lower':
+                    df = lower_risk_df
+                    risk_type = 'lower_risk'
+                else:
+                    # If both, return combined structure
+                    result = {
+                        'threshold': metadata.get('threshold'),
+                        'forecast_length': metadata.get('forecast_length'),
+                        'upper_risk': dataframe_to_output(upper_risk_df, format_type) if upper_risk_df is not None else None,
+                        'lower_risk': dataframe_to_output(lower_risk_df, format_type) if lower_risk_df is not None else None,
+                    }
+                    return [TextContent(type="text", text=json.dumps(result, indent=2))]
                 
                 if format_type.startswith("csv"):
                     filepath = dataframe_to_output(df, format_type)
                     is_long = format_type == "csv_long"
-                    metadata = build_csv_metadata(filepath, df, is_long)
-                    return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+                    csv_metadata = build_csv_metadata(filepath, df, is_long)
+                    csv_metadata['risk_type'] = risk_type
+                    csv_metadata['threshold'] = metadata.get('threshold')
+                    csv_metadata['forecast_length'] = metadata.get('forecast_length')
+                    return [TextContent(type="text", text=json.dumps(csv_metadata, indent=2))]
                 else:
-                    result = dataframe_to_output(df, format_type)
-                    return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+                    result = {
+                        'risk_type': risk_type,
+                        'threshold': metadata.get('threshold'),
+                        'forecast_length': metadata.get('forecast_length'),
+                        'probabilities': dataframe_to_output(df, format_type)
+                    }
+                    return [TextContent(type="text", text=json.dumps(result, indent=2))]
             
             elif name == "plot_event_risk":
                 event_risk_id = arguments.get("event_risk_id")
@@ -1370,6 +1549,9 @@ if MCP_AVAILABLE:
             elif name == "detect_features":
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
+                
+                if not data and not data_id:
+                    raise ValueError("Must provide either 'data' or 'data_id' parameter")
                 
                 df = load_to_dataframe(data, data_id=data_id)
                 
@@ -1506,11 +1688,21 @@ if MCP_AVAILABLE:
                 cached = get_cached_object(detector_id, 'feature_detector')
                 detector = cached['object']
                 
-                prediction = detector.predict(forecast_length=forecast_length)
+                prediction = detector.forecast(forecast_length=forecast_length)
+                
+                # Cache historical data if available from detector
+                historical_data_id = None
+                if hasattr(detector, 'df_original') and detector.df_original is not None:
+                    historical_data_id = cache_object(detector.df_original, 'data', {
+                        'source': 'feature_detector_history',
+                        'rows': len(detector.df_original),
+                        'columns': len(detector.df_original.columns)
+                    })
                 
                 prediction_id = cache_object(prediction, 'prediction', {
                     'method': 'feature_detector', 'forecast_length': forecast_length,
-                    'detector_id': detector_id
+                    'detector_id': detector_id,
+                    'historical_data_id': historical_data_id
                 })
                 
                 return [TextContent(type="text", text=json.dumps({
