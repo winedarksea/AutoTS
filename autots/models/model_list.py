@@ -188,7 +188,7 @@ parallel = {
     'FBProphet': 0.8,
     'ARIMA': 0.2,  # slow
     'GLM': 1,
-    'UnobservedComponents': 1,
+    'UnobservedComponents': 0.5,  # sometimes slow
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'Theta': 1,

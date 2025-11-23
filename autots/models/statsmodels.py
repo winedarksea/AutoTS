@@ -1268,7 +1268,7 @@ class UnobservedComponents(ModelObject):
             ]
 
         # Reduce maxiter for slow methods and slow levels
-        maxiter_choice = random.choice([50, 100, 250])
+        maxiter_choice = random.choices([50, 100, 250], [0.5, 0.3, 0.2])[0]
         method_choice = random.choices(
             ["lbfgs", "bfgs", "powell", "cg", "newton", "nm"],
             [0.8, 0.1, 0.05, 0.05, 0.0, 0.0],  # Removed newton, reduced powell
