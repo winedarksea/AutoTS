@@ -1275,7 +1275,7 @@ class UnobservedComponents(ModelObject):
         )[0]
         cov_type_choice = random.choices(
             ["opg", "oim", "approx", 'robust'], 
-            [0.85, 0.05, 0.08, 0.02]  # Reduced robust probability
+            [0.85, 0.0, 0.08, 0.02]  # Reduced robust probability
         )[0]
         
         # If slow level, method, or cov_type, reduce maxiter
@@ -1288,9 +1288,9 @@ class UnobservedComponents(ModelObject):
         
         # Reduce autoregressive with already slow configs
         if level_choice in slow_levels or maxiter_choice == 250:
-            ar_choice = random.choices([None, 1], [0.9, 0.1])[0]  # Avoid AR with slow configs
+            ar_choice = random.choices([None, 1], [0.95, 0.05])[0]  # Avoid AR with slow configs
         else:
-            ar_choice = random.choices([None, 1, 2], [0.8, 0.2, 0.01])[0]
+            ar_choice = random.choices([None, 1, 2], [0.8, 0.1, 0.005])[0]
 
         return {
             'level': level_choice,

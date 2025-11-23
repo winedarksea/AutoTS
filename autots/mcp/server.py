@@ -39,6 +39,7 @@ from autots.datasets.synthetic import SyntheticDailyGenerator
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 from autots.tools.transform import GeneralTransformer
+from autots.tools.constraint import apply_adjustment_single
 
 logger = logging.getLogger(__name__)
 
@@ -396,9 +397,9 @@ def build_csv_metadata(filepath: str, df: pd.DataFrame, is_long: bool = False) -
 # ============================================================================
 # MCP Server Implementation
 # ============================================================================
-# TODO: add a forecast adjustment tool for specific date ranges (e.g., "increase growth by 2% for Q3 2026")
 # TODO: enhance component extraction for more model types (currently limited to Cassandra/TVVAR)
 # TODO: add AutoTS template upload/download functionality
+# TODO: consider adding more memory management to the cache
 
 if MCP_AVAILABLE:
     app = Server("autots")
@@ -652,6 +653,32 @@ if MCP_AVAILABLE:
                         }
                     },
                     "required": ["prediction_id", "constraint_method"]
+                }
+            ),
+            Tool(
+                name="apply_adjustments",  # TODO: consider setting this up to work on historical data as well
+                description="Apply adjustments to forecast (basic ramp, align to history, smoothing). Returns new prediction_id. Three adjustment types: 1) 'basic' - linear ramp between start/end dates with start/end values (additive or multiplicative), 2) 'align_last_value' - align forecast to recent history (requires df_train), 3) 'smoothing' - EWMA smoothing with span parameter. Can apply to specific series_ids or all series (default).",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cached prediction ID"},
+                        "data_id": {"type": "string", "description": "Cached data ID for training data (required for align_last_value)"},
+                        "adjustment_method": {
+                            "type": "string",
+                            "enum": ["basic", "linear", "ramp", "align_last_value", "alignlastvalue", "smoothing", "ewma"],
+                            "description": "Adjustment type: basic/linear/ramp (linear ramp), align_last_value/alignlastvalue (align to history), smoothing/ewma (exponential smoothing)"
+                        },
+                        "adjustment_params": {
+                            "type": "object",
+                            "description": "Adjustment parameters. For basic: {start_date, end_date, start_value, end_value, value, method='additive'|'multiplicative'}. For align_last_value: {rows, lag, method, strength, etc.}. For smoothing: {span}"
+                        },
+                        "series_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of series IDs to apply adjustment to. If not provided, applies to all series."
+                        }
+                    },
+                    "required": ["prediction_id", "adjustment_method"]
                 }
             ),
             Tool(
@@ -991,32 +1018,24 @@ if MCP_AVAILABLE:
                         'columns': len(df.columns)
                     })
                 
-                if profile_template:
-                    model = AutoTS(
-                        forecast_length=forecast_length,
-                        frequency='infer',
-                        ensemble='mosaic',
-                        model_list='no_shared',
-                        max_generations=0,
-                        num_validations=0,
-                        validation_method='backwards'
-                    )
-                    model = model.import_template(profile_template, method='only')
-                    # Fit on df before predict to ensure model has historical context
-                    model.fit_data(df)
-                    prediction = model.predict()
-                else:
-                    model = AutoTS(
-                        forecast_length=forecast_length,
-                        frequency='infer',
-                        ensemble='mosaic-window',
-                        model_list='fast',
-                        max_generations=0,
-                        num_validations=0,
-                        validation_method='backwards'
-                    )
-                    model.fit(df)
-                    prediction = model.predict()
+                # Load default profile template if not provided
+                if not profile_template:
+                    template_path = Path(__file__).parent / 'mosaic_profile_template.json'
+                    with open(template_path, 'r') as f:
+                        profile_template = json.load(f)
+                
+                model = AutoTS(
+                    forecast_length=forecast_length,
+                    frequency='infer',
+                    ensemble='mosaic',
+                    model_list='no_shared',
+                    max_generations=0,
+                    num_validations=0,
+                    validation_method='backwards'
+                )
+                model = model.import_template(profile_template, method='only')
+                model.fit(df)
+                prediction = model.predict()
                 
                 prediction_id = cache_object(prediction, 'prediction', {
                     'method': 'mosaic', 'forecast_length': forecast_length,
@@ -1300,6 +1319,59 @@ if MCP_AVAILABLE:
                 
                 return [TextContent(type="text", text=json.dumps({
                     "prediction_id": new_prediction_id, "constraint_method": constraint_method
+                }, separators=(',', ':')))]
+            
+            elif name == "apply_adjustments":
+                prediction_id = arguments.get("prediction_id")
+                adjustment_method = arguments.get("adjustment_method")
+                adjustment_params = arguments.get("adjustment_params", {})
+                series_ids = arguments.get("series_ids")
+                data_id = arguments.get("data_id")
+                
+                cached = get_cached_object(prediction_id, 'prediction')
+                prediction = cached['object']
+                
+                # Get training data if needed for align_last_value
+                df_train = None
+                if adjustment_method in ["align_last_value", "alignlastvalue"]:
+                    if data_id is None:
+                        raise ValueError("data_id is required for align_last_value adjustment")
+                    train_cached = get_cached_object(data_id, 'data')
+                    df_train = train_cached['object']
+                
+                # Apply adjustment
+                forecast_adj, lower_adj, upper_adj = apply_adjustment_single(
+                    forecast=prediction.forecast.copy(),
+                    adjustment_method=adjustment_method,
+                    adjustment_params=adjustment_params,
+                    df_train=df_train,
+                    series_ids=series_ids,
+                    lower_forecast=prediction.lower_forecast.copy() if hasattr(prediction, 'lower_forecast') and prediction.lower_forecast is not None else None,
+                    upper_forecast=prediction.upper_forecast.copy() if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None else None
+                )
+                
+                # Create new prediction object with adjusted forecasts
+                # We need to create a copy of the prediction object and update its forecasts
+                import copy
+                new_prediction = copy.deepcopy(prediction)
+                new_prediction.forecast = forecast_adj
+                if lower_adj is not None:
+                    new_prediction.lower_forecast = lower_adj
+                if upper_adj is not None:
+                    new_prediction.upper_forecast = upper_adj
+                
+                new_prediction_id = cache_object(new_prediction, 'prediction', {
+                    'method': 'adjusted',
+                    'adjustment_method': adjustment_method,
+                    'adjustment_params': adjustment_params,
+                    'series_ids': series_ids,
+                    'original_prediction_id': prediction_id
+                })
+                
+                return [TextContent(type="text", text=json.dumps({
+                    "prediction_id": new_prediction_id,
+                    "adjustment_method": adjustment_method,
+                    "series_ids_applied": series_ids if series_ids else "all"
                 }, separators=(',', ':')))]
             
             elif name == "get_model_params":
@@ -1588,78 +1660,46 @@ if MCP_AVAILABLE:
                     date_filter = slice(date_start, date_end)
                 
                 # Call query_features with the parsed arguments
-                try:
-                    results = detector.query_features(
-                        dates=date_filter,
-                        series=series_name,
-                        include_components=include_components,
-                        include_metadata=include_metadata,
-                        return_json=False
-                    )
-                    
-                    # Add summary information at the top level
-                    summary = {
-                        "date_range": {
-                            "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
-                            "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
-                        },
-                        "num_series": len(detector.df_original.columns),
-                        "num_observations": len(detector.df_original),
-                        "series_names": list(detector.df_original.columns)
+                results = detector.query_features(
+                    dates=date_filter,
+                    series=series_name,
+                    include_components=include_components,
+                    include_metadata=include_metadata,
+                    return_json=False
+                )
+                
+                # Add summary information at the top level
+                summary = {
+                    "date_range": {
+                        "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
+                        "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
+                    },
+                    "num_series": len(detector.df_original.columns),
+                    "num_observations": len(detector.df_original),
+                    "series_names": list(detector.df_original.columns)
+                }
+                
+                # Add detection counts for quick reference
+                detection_counts = {}
+                for series_name in results.get('series', {}).keys():
+                    series_data = results['series'][series_name]
+                    counts = {
+                        "trend_changepoints": len(series_data.get('trend_changepoints', [])),
+                        "level_shifts": len(series_data.get('level_shifts', [])),
+                        "anomalies": len(series_data.get('anomalies', [])),
+                        "holidays": len(series_data.get('holiday_dates', []))
                     }
-                    
-                    # Add detection counts for quick reference
-                    detection_counts = {}
-                    for series_name in results.get('series', {}).keys():
-                        series_data = results['series'][series_name]
-                        counts = {
-                            "trend_changepoints": len(series_data.get('trend_changepoints', [])),
-                            "level_shifts": len(series_data.get('level_shifts', [])),
-                            "anomalies": len(series_data.get('anomalies', [])),
-                            "holidays": len(series_data.get('holiday_dates', []))
-                        }
-                        if 'seasonality_strength' in series_data:
-                            counts['seasonality_strength'] = series_data['seasonality_strength']
-                        detection_counts[series_name] = counts
-                    
-                    output = {
-                        'summary': summary,
-                        'detection_counts': detection_counts,
-                        'features': results
-                    }
-                    
-                    return [TextContent(type="text", text=json.dumps(output, indent=2))]
-                    
-                except Exception as e:
-                    # Fallback to basic feature extraction if query_features fails
-                    import traceback
-                    logger.warning(f"query_features failed, falling back to basic extraction: {e}")
-                    logger.warning(f"Traceback: {traceback.format_exc()}")
-                    
-                    # Get all features using the old method
-                    all_features = detector.get_detected_features(
-                        series_name=series_name,
-                        include_components=include_components,
-                        include_metadata=include_metadata
-                    )
-                    
-                    summary = {
-                        "date_range": {
-                            "start": detector.df_original.index[0].strftime('%Y-%m-%d'),
-                            "end": detector.df_original.index[-1].strftime('%Y-%m-%d')
-                        },
-                        "num_series": len(detector.df_original.columns),
-                        "num_observations": len(detector.df_original),
-                        "series_names": list(detector.df_original.columns)
-                    }
-                    
-                    results = {
-                        'summary': summary,
-                        'features': all_features,
-                        'note': 'Date filtering not applied due to error'
-                    }
-                    
-                    return [TextContent(type="text", text=json.dumps(results, indent=2))]
+                    if 'seasonality_strength' in series_data:
+                        counts['seasonality_strength'] = series_data['seasonality_strength']
+                    detection_counts[series_name] = counts
+                
+                output = {
+                    'summary': summary,
+                    'detection_counts': detection_counts,
+                    'features': results
+                }
+                
+                return [TextContent(type="text", text=json.dumps(output, indent=2))]
             
             elif name == "plot_features":
                 detector_id = arguments.get("detector_id")
