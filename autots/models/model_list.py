@@ -276,7 +276,7 @@ multivariate = [
     'DynamicFactor',
     'GluonTS',
     # 'VARMAX',  # yes but so slow
-    'RollingRegression',
+    # 'RollingRegression',
     'WindowRegression',
     'VAR',
     "MultivariateMotif",
@@ -373,7 +373,7 @@ regressor = [
     'GLM',
     'ARIMA',
     'FBProphet',
-    'RollingRegression',
+    # 'RollingRegression',
     'UnobservedComponents',
     'VECM',
     'DynamicFactor',
@@ -405,7 +405,7 @@ motifs = [
     "BallTreeRegressionMotif",
 ]
 regressions = [
-    'RollingRegression',
+    # 'RollingRegression',
     'WindowRegression',
     'DatepartRegression',
     'MultivariateRegression',
