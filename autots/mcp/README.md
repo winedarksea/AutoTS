@@ -53,7 +53,7 @@ For local downloads
 - `long_to_wide_converter` - Convert between long/wide formats
 
 **Forecasting (4 tools)**
-- `forecast_mosaic_profile` - **FAST**: Pre-configured ensemble (requires data length >= forecast length)
+- `forecast_fast` - **FAST**: Pre-configured profile ensemble using fit_data (no model search)
 - `forecast_autots_search` - **MODERATE**: Explainable models only (Cassandra, TVVAR, BasicLinearModel)
 - `forecast_custom` - **CUSTOM**: Full AutoTS capabilities with user parameters
 - `get_autots_docs` - Documentation for custom parameters
@@ -92,7 +92,7 @@ Long format is also supported with automatic conversion:
 
 **Basic Forecast**
 ```
-get_sample_data → forecast_mosaic_profile
+get_sample_data → forecast_fast
 ```
 
 **Live Data Analysis**
@@ -123,7 +123,7 @@ get_sample_data → forecast_event_risk_default (with threshold)
 
 ## Tips
 
-- Start with `forecast_mosaic_profile` for fastest results
+- Start with `forecast_fast` for fastest results
 - Use `forecast_autots_search` when you need explainability or have insufficient data
 - Event risk tools automatically convert absolute thresholds to quantiles
 - All tools are chainable - output from one can be input to another

@@ -537,8 +537,8 @@ if MCP_AVAILABLE:
             
             # Forecasting
             Tool(
-                name="forecast_mosaic",
-                description="FAST: Pre-configured mosaic ensemble forecast. Must provide either 'data' or 'data_id'. Returns prediction_id",
+                name="forecast_fast",
+                description="FAST: Pre-configured mosaic ensemble forecast using fit_data (no model search). Must provide either 'data' or 'data_id'. Returns prediction_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -999,7 +999,7 @@ if MCP_AVAILABLE:
                 }, separators=(',', ':')))]
             
             # Forecasting tools
-            elif name == "forecast_mosaic":
+            elif name == "forecast_fast":
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
@@ -1013,7 +1013,7 @@ if MCP_AVAILABLE:
                 # Cache historical data if not already cached
                 if not data_id:
                     data_id = cache_object(df, 'data', {
-                        'source': 'forecast_mosaic_input',
+                        'source': 'forecast_fast_input',
                         'rows': len(df),
                         'columns': len(df.columns)
                     })
@@ -1034,11 +1034,11 @@ if MCP_AVAILABLE:
                     validation_method='backwards'
                 )
                 model = model.import_template(profile_template, method='only')
-                model.fit(df)
+                model.fit_data(df)
                 prediction = model.predict()
                 
                 prediction_id = cache_object(prediction, 'prediction', {
-                    'method': 'mosaic', 'forecast_length': forecast_length,
+                    'method': 'fast', 'forecast_length': forecast_length,
                     'series_count': len(df.columns),
                     'historical_data_id': data_id
                 })
