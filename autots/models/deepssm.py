@@ -150,7 +150,10 @@ def create_training_batches(
     series_feat_mapping=None,
     series_names=None,
     naive_feature_indices=None,
-    use_naive_window=False
+    use_naive_window=False,
+    y_train_raw=None,
+    feature_means=None,
+    feature_scales=None,
 ):
     """
     Create training batches for models that predict multiple future steps at once.
@@ -168,6 +171,9 @@ def create_training_batches(
         series_names: Optional list of series names (for per-series features)
         naive_feature_indices: Indices of naive features (if single value) or window features (if use_naive_window=True)
         use_naive_window: If True, naive features are windows that are already lagged in train_feats_scaled
+        y_train_raw: Optional raw target values (unscaled) for building naive windows without the shift bug
+        feature_means: Optional per-feature mean from the fitted feature scaler
+        feature_scales: Optional per-feature scale from the fitted feature scaler
         
     Returns:
         tuple: (X_data, Y_data) where:
@@ -244,13 +250,39 @@ def create_training_batches(
                             # REVERSED so most recent value comes first
                             if start_idx >= prediction_batch_size:
                                 # Get window from [start_idx-prediction_batch_size : start_idx]
-                                # Use feature-scaled values from train_feats_scaled instead of y_train_scaled
-                                window_values = train_feats_scaled[start_idx-prediction_batch_size:start_idx, naive_idx]
+                                if (
+                                    y_train_raw is not None
+                                    and feature_means is not None
+                                    and feature_scales is not None
+                                ):
+                                    # Use true targets, then scale to feature space to avoid shifted naive column
+                                    window_raw = y_train_raw[
+                                        start_idx - prediction_batch_size : start_idx,
+                                        series_idx,
+                                    ]
+                                    window_values = (
+                                        window_raw - feature_means[naive_idx]
+                                    ) / feature_scales[naive_idx]
+                                else:
+                                    window_values = train_feats_scaled[
+                                        start_idx - prediction_batch_size : start_idx,
+                                        naive_idx,
+                                    ]
                                 # Reverse so most recent (t-1) is at index 0
                                 batch_features[:, local_idx] = window_values[::-1]
                             else:
                                 # Edge case: not enough history, pad with earliest available values
-                                available = train_feats_scaled[:start_idx, naive_idx]
+                                if (
+                                    y_train_raw is not None
+                                    and feature_means is not None
+                                    and feature_scales is not None
+                                ):
+                                    available = (
+                                        y_train_raw[:start_idx, series_idx]
+                                        - feature_means[naive_idx]
+                                    ) / feature_scales[naive_idx]
+                                else:
+                                    available = train_feats_scaled[:start_idx, naive_idx]
                                 if len(available) > 0:
                                     padded = np.pad(
                                         available, 
@@ -270,15 +302,40 @@ def create_training_batches(
                 for naive_idx in naive_feature_indices:
                     # Fill this feature with window values for the corresponding series
                     # Since this is shared features, we need to fill with THIS series' historical values
-                    # Use feature-scaled values from train_feats_scaled instead of y_train_scaled
                     if start_idx >= prediction_batch_size:
                         # Get window from [start_idx-prediction_batch_size : start_idx]
-                        window_values = train_feats_scaled[start_idx-prediction_batch_size:start_idx, naive_idx]
+                        if (
+                            y_train_raw is not None
+                            and feature_means is not None
+                            and feature_scales is not None
+                        ):
+                            window_raw = y_train_raw[
+                                start_idx - prediction_batch_size : start_idx,
+                                series_idx,
+                            ]
+                            window_values = (
+                                window_raw - feature_means[naive_idx]
+                            ) / feature_scales[naive_idx]
+                        else:
+                            window_values = train_feats_scaled[
+                                start_idx - prediction_batch_size : start_idx,
+                                naive_idx,
+                            ]
                         # Reverse so most recent (t-1) is at index 0
                         batch_features[:, naive_idx] = window_values[::-1]
                     else:
                         # Edge case: not enough history, pad with earliest available values
-                        available = train_feats_scaled[:start_idx, naive_idx]
+                        if (
+                            y_train_raw is not None
+                            and feature_means is not None
+                            and feature_scales is not None
+                        ):
+                            available = (
+                                y_train_raw[:start_idx, series_idx]
+                                - feature_means[naive_idx]
+                            ) / feature_scales[naive_idx]
+                        else:
+                            available = train_feats_scaled[:start_idx, naive_idx]
                         if len(available) > 0:
                             padded = np.pad(
                                 available, 
@@ -1430,7 +1487,10 @@ class MambaSSM(ModelObject):
             series_feat_mapping=series_feat_mapping,
             series_names=series_names if has_per_series else None,
             naive_feature_indices=naive_feature_indices,
-            use_naive_window=self.use_naive_feature  # Window-based naive features
+            use_naive_window=self.use_naive_feature,  # Window-based naive features
+            y_train_raw=y_train,
+            feature_means=self.feature_scaler.mean_,
+            feature_scales=self.feature_scaler.scale_,
         )
 
         # 5. Torch plumbing
@@ -2161,7 +2221,10 @@ class pMLP(ModelObject):
             series_feat_mapping=series_feat_mapping,
             series_names=series_names if has_per_series else None,
             naive_feature_indices=naive_feature_indices,
-            use_naive_window=self.use_naive_feature  # Window-based naive features
+            use_naive_window=self.use_naive_feature,  # Window-based naive features
+            y_train_raw=y_train,
+            feature_means=self.feature_scaler.mean_,
+            feature_scales=self.feature_scaler.scale_,
         )
 
         # 5. Torch setup - optimized for MLP
