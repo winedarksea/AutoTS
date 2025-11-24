@@ -165,7 +165,8 @@ class DeepSSMTest(unittest.TestCase):
             n_layers=1,
             d_state=2,
             verbose=0,  # Reduce verbosity for test speed
-            random_seed=42
+            random_seed=42,
+            prediction_batch_size=20  # Small enough for 100 timestep dataset
         )
         
         # Fit with regressor
@@ -213,6 +214,7 @@ class DeepSSMTest(unittest.TestCase):
             d_state=2,
             verbose=0,
             random_seed=42,
+            prediction_batch_size=30,  # Small enough for 120 timestep dataset
             changepoint_method="basic",  # Should detect the change around day 60
             changepoint_params={"changepoint_spacing": 25, "changepoint_distance_end": 10}
         )
@@ -416,14 +418,11 @@ class DeepSSMTest(unittest.TestCase):
         self.assertIsInstance(new_params, dict, "get_new_params should return a dictionary")
         
         # Verify key parameters are present
-        expected_params = ['context_length', 'hidden_dims', 'epochs', 'batch_size', 'lr']
+        expected_params = ['hidden_dims', 'epochs', 'batch_size', 'lr', 'prediction_batch_size']
         for param in expected_params:
             self.assertIn(param, new_params, f"Parameter '{param}' should be in new_params")
         
         # Verify parameter types and ranges
-        self.assertIsInstance(new_params['context_length'], int, "context_length should be int")
-        self.assertGreater(new_params['context_length'], 0, "context_length should be positive")
-        
         self.assertIsInstance(new_params['hidden_dims'], list, "hidden_dims should be list")
         self.assertGreater(len(new_params['hidden_dims']), 0, "hidden_dims should not be empty")
         self.assertTrue(all(isinstance(x, int) for x in new_params['hidden_dims']), "hidden_dims should contain integers")
@@ -446,7 +445,7 @@ class DeepSSMTest(unittest.TestCase):
         
         # Verify get_params returns the set parameters
         retrieved_params = model.get_params()
-        for key in ['context_length', 'hidden_dims', 'epochs', 'batch_size']:
+        for key in ['hidden_dims', 'epochs', 'batch_size']:
             self.assertEqual(
                 retrieved_params[key], 
                 test_params[key], 
@@ -477,7 +476,8 @@ class DeepSSMTest(unittest.TestCase):
                 batch_size=16,  # Larger batch size
                 use_batch_norm=False,  # Disable to avoid batch norm issues with small data
                 verbose=0,
-                random_seed=42
+                random_seed=42,
+                prediction_batch_size=30  # Small enough for 120 timestep dataset
             ),
             'MambaSSM': MambaSSM(
                 context_length=15,
@@ -487,7 +487,8 @@ class DeepSSMTest(unittest.TestCase):
                 n_layers=1,
                 d_state=4,
                 verbose=0,
-                random_seed=42
+                random_seed=42,
+                prediction_batch_size=30  # Small enough for 120 timestep dataset
             )
         }
         
@@ -839,6 +840,7 @@ class DeepSSMTest(unittest.TestCase):
             batch_size=16,
             verbose=0,
             random_seed=42,
+            prediction_batch_size=30,  # Small enough for 140 timestep dataset
             changepoint_method='cusum',
             changepoint_params={'threshold': 3.0, 'min_distance': 10}
         )
@@ -979,6 +981,7 @@ class DeepSSMTest(unittest.TestCase):
             batch_size=8,
             verbose=0,
             random_seed=0,
+            prediction_batch_size=30,  # Small enough for 113 timestep dataset
             changepoint_method='basic',
             changepoint_params={'changepoint_spacing': 30, 'changepoint_distance_end': 15}
         )

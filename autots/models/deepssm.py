@@ -241,19 +241,24 @@ def create_training_batches(
                             local_idx = feat_indices.index(naive_idx)
                             # Fill this feature with window values: [t-1, t-2, ..., t-prediction_batch_size]
                             # where t is start_idx (the beginning of the prediction window)
+                            # REVERSED so most recent value comes first
                             if start_idx >= prediction_batch_size:
                                 # Get window from [start_idx-prediction_batch_size : start_idx]
-                                window_values = y_train_scaled[start_idx-prediction_batch_size:start_idx, series_idx]
-                                batch_features[:, local_idx] = window_values
+                                # Use feature-scaled values from train_feats_scaled instead of y_train_scaled
+                                window_values = train_feats_scaled[start_idx-prediction_batch_size:start_idx, naive_idx]
+                                # Reverse so most recent (t-1) is at index 0
+                                batch_features[:, local_idx] = window_values[::-1]
                             else:
                                 # Edge case: not enough history, pad with earliest available values
-                                available = y_train_scaled[:start_idx, series_idx]
+                                available = train_feats_scaled[:start_idx, naive_idx]
                                 if len(available) > 0:
-                                    batch_features[:, local_idx] = np.pad(
+                                    padded = np.pad(
                                         available, 
                                         (prediction_batch_size - len(available), 0), 
                                         mode='edge'
                                     )
+                                    # Reverse so most recent is first
+                                    batch_features[:, local_idx] = padded[::-1]
                 
                 X_data[i, :, :len(feat_indices)] = batch_features
         else:
@@ -265,19 +270,23 @@ def create_training_batches(
                 for naive_idx in naive_feature_indices:
                     # Fill this feature with window values for the corresponding series
                     # Since this is shared features, we need to fill with THIS series' historical values
+                    # Use feature-scaled values from train_feats_scaled instead of y_train_scaled
                     if start_idx >= prediction_batch_size:
                         # Get window from [start_idx-prediction_batch_size : start_idx]
-                        window_values = y_train_scaled[start_idx-prediction_batch_size:start_idx, series_idx]
-                        batch_features[:, naive_idx] = window_values
+                        window_values = train_feats_scaled[start_idx-prediction_batch_size:start_idx, naive_idx]
+                        # Reverse so most recent (t-1) is at index 0
+                        batch_features[:, naive_idx] = window_values[::-1]
                     else:
                         # Edge case: not enough history, pad with earliest available values
-                        available = y_train_scaled[:start_idx, series_idx]
+                        available = train_feats_scaled[:start_idx, naive_idx]
                         if len(available) > 0:
-                            batch_features[:, naive_idx] = np.pad(
+                            padded = np.pad(
                                 available, 
                                 (prediction_batch_size - len(available), 0), 
                                 mode='edge'
                             )
+                            # Reverse so most recent is first
+                            batch_features[:, naive_idx] = padded[::-1]
             elif not use_naive_window and naive_feature_indices is not None:
                 # Legacy single-value naive features
                 for naive_idx in naive_feature_indices:
@@ -1360,7 +1369,8 @@ class MambaSSM(ModelObject):
             for col in df.columns:
                 # Get the last prediction_batch_size values
                 last_window = df[col].ffill().iloc[-self.prediction_batch_size:].fillna(0.0).values.astype(np.float32)
-                self.naive_feature_windows[col] = last_window
+                # Reverse so most recent is first: [t-1, t-2, ..., t-prediction_batch_size]
+                self.naive_feature_windows[col] = last_window[::-1]
         else:
             naive_features = None
             self.naive_feature_columns = pd.Index([])
@@ -1569,7 +1579,7 @@ class MambaSSM(ModelObject):
                     for col in self.df_train.columns:
                         feature_name = f"naive_last_{col}"
                         window = current_naive_windows[col]  # Current window for this series
-                        # The window contains [t-prediction_batch_size, ..., t-2, t-1]
+                        # The window contains [t-1, t-2, ..., t-prediction_batch_size] (REVERSED, most recent first)
                         # For prediction batch, we use these values in order
                         naive_feature_data[feature_name] = window[:actual_batch_size].tolist()
                     
@@ -1655,19 +1665,21 @@ class MambaSSM(ModelObject):
                 
                 # Update naive window with predictions from this batch for next batch
                 if current_naive_windows is not None:
-                    # Get all predictions from this batch (unscaled)
+                    # Get all predictions from this batch (unscaled to match stored window)
                     batch_predictions_scaled = forecast_mu_scaled[start_step:end_step, :]
-                    batch_predictions_unscaled = batch_predictions_scaled * self.scaler_stds + self.scaler_means
+                    batch_predictions_unscaled = (
+                        batch_predictions_scaled * self.scaler_stds + self.scaler_means
+                    )
                     
                     # Update window for each series
                     for col_idx, col in enumerate(self.df_train.columns):
-                        # Get current window and predictions for this series
                         current_window = current_naive_windows[col]
                         new_values = batch_predictions_unscaled[:, col_idx]
                         
-                        # Slide the window: remove oldest values and append new predictions
-                        # Keep only the last prediction_batch_size values
-                        updated_window = np.concatenate([current_window, new_values])[-self.naive_window_size:]
+                        # Prepend new predictions in reverse order so most recent is first
+                        updated_window = np.concatenate(
+                            [new_values[::-1], current_window]
+                        )[: self.naive_window_size]
                         current_naive_windows[col] = updated_window
 
         # 4. Un-scale & wrap
@@ -2088,7 +2100,8 @@ class pMLP(ModelObject):
             for col in df.columns:
                 # Get the last prediction_batch_size values
                 last_window = df[col].ffill().iloc[-self.prediction_batch_size:].fillna(0.0).values.astype(np.float32)
-                self.naive_feature_windows[col] = last_window
+                # Reverse so most recent is first: [t-1, t-2, ..., t-prediction_batch_size]
+                self.naive_feature_windows[col] = last_window[::-1]
         else:
             naive_features = None
             self.naive_feature_columns = pd.Index([])
@@ -2312,14 +2325,14 @@ class pMLP(ModelObject):
                     # Create ONE naive feature per series
                     # For each series, the naive feature at each prediction timestep gets the corresponding window value
                     # If predicting steps t, t+1, ..., t+prediction_batch_size-1:
-                    #   - At timestep t: use window value at position corresponding to t-1 (most recent)
-                    #   - At timestep t+1: use window value at position corresponding to t (which is now in window)
+                    #   - At timestep t: use window value at position 0 (t-1, most recent)
+                    #   - At timestep t+1: use window value at position 1 (t-2)
                     #   - etc.
                     naive_feature_data = {}
                     for col in self.df_train.columns:
                         feature_name = f"naive_last_{col}"
                         window = current_naive_windows[col]  # Current window for this series
-                        # The window contains [t-prediction_batch_size, ..., t-2, t-1]
+                        # The window contains [t-1, t-2, ..., t-prediction_batch_size] (REVERSED, most recent first)
                         # For prediction batch, we use these values in order
                         naive_feature_data[feature_name] = window[:actual_batch_size].tolist()
                     
@@ -2405,19 +2418,21 @@ class pMLP(ModelObject):
                 
                 # Update naive window with predictions from this batch for next batch - pMLP version
                 if current_naive_windows is not None:
-                    # Get all predictions from this batch (unscaled)
+                    # Get all predictions from this batch (unscaled to match stored window)
                     batch_predictions_scaled = forecast_mu_scaled[start_step:end_step, :]
-                    batch_predictions_unscaled = batch_predictions_scaled * self.scaler_stds + self.scaler_means
+                    batch_predictions_unscaled = (
+                        batch_predictions_scaled * self.scaler_stds + self.scaler_means
+                    )
                     
                     # Update window for each series
                     for col_idx, col in enumerate(self.df_train.columns):
-                        # Get current window and predictions for this series
                         current_window = current_naive_windows[col]
                         new_values = batch_predictions_unscaled[:, col_idx]
                         
-                        # Slide the window: remove oldest values and append new predictions
-                        # Keep only the last prediction_batch_size values
-                        updated_window = np.concatenate([current_window, new_values])[-self.naive_window_size:]
+                        # Prepend new predictions in reverse order so most recent is first
+                        updated_window = np.concatenate(
+                            [new_values[::-1], current_window]
+                        )[: self.naive_window_size]
                         current_naive_windows[col] = updated_window
 
         # 4. Un-scale & wrap
