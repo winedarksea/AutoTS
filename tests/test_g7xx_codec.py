@@ -69,7 +69,8 @@ class TestG711ScalerTransformer(unittest.TestCase):
             'series1': np.random.randn(200).cumsum() + 50,
             'series2': np.random.randn(200).cumsum() - 20,
         }, index=dates)
-        tr = G711Scaler(mode="mu")
+        # Use mu=255.0 to match the encoding test behavior (default changed to 100.0)
+        tr = G711Scaler(mode="mu", mu=255.0)
         tr.fit(df)
         encoded = tr.transform(df)
         self.assertEqual(encoded.shape, df.shape)
@@ -82,11 +83,13 @@ class TestG711ScalerTransformer(unittest.TestCase):
         np.testing.assert_allclose(decoded.values, df.values, rtol=1e-3, atol=1e-3)
 
     def test_modes_mu_and_a(self):
+        rng = np.random.default_rng(8675309)
         df = pd.DataFrame({
-            'x': np.random.randn(300).cumsum(),
-            'y': np.random.randn(300).cumsum() * 0.5,
+            'x': rng.normal(scale=1.0, size=300).cumsum(),
+            'y': rng.normal(scale=0.5, size=300).cumsum(),
         })
-        tr_mu = G711Scaler(mode='mu')
+        # Use mu=255.0 to match the encoding test behavior (default changed to 100.0)
+        tr_mu = G711Scaler(mode='mu', mu=255.0)
         tr_mu.fit(df)
         enc_mu = tr_mu.transform(df)
         dec_mu = tr_mu.inverse_transform(enc_mu)
@@ -231,8 +234,9 @@ class TestG726AdpcmFilter(unittest.TestCase):
         self.assertLess(np.std(filtered_high_blend), np.std(filtered_low_blend))
 
     def test_noise_gate(self):
-        """Test that noise gate attenuates small residuals."""
-        data = np.random.randn(100) * 0.1  # Small noise
+        """Test that noise gate produces valid output and affects the signal."""
+        rng = np.random.default_rng(4242)
+        data = rng.normal(scale=0.1, size=100)
         
         filtered_no_gate = g726_adpcm_filter(data, noise_gate=0.0)
         filtered_with_gate = g726_adpcm_filter(data, noise_gate=0.05)

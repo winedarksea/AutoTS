@@ -1394,16 +1394,48 @@ if MCP_AVAILABLE:
                 
                 cached = get_cached_object(prediction_id, 'prediction')
                 prediction = cached['object']
+                metadata = cached.get('metadata', {})
                 
-                if hasattr(prediction, 'model') and hasattr(prediction.model, 'get_params_components'):
-                    components = prediction.model.get_params_components()
-                    result = {}
-                    for key, df in components.items():
-                        result[key] = dataframe_to_output(df, "json_wide")
-                    return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+                # Get model name for better error reporting
+                model_name = prediction.model_name if hasattr(prediction, 'model_name') else 'Unknown'
+                
+                if hasattr(prediction, 'components') and prediction.components is not None:
+                    # Components is a MultiIndex DataFrame with (series, component_type) columns
+                    # Convert to a more readable format
+                    components_df = prediction.components
+                    
+                    if isinstance(components_df, pd.DataFrame):
+                        # Check if MultiIndex columns (Cassandra/TVVAR style)
+                        if isinstance(components_df.columns, pd.MultiIndex):
+                            # Get unique component types from level 1
+                            component_types = components_df.columns.get_level_values(1).unique().tolist()
+                            series_names = components_df.columns.get_level_values(0).unique().tolist()
+                            
+                            # Flatten MultiIndex columns to strings for JSON serialization
+                            components_flat = components_df.copy()
+                            components_flat.columns = [f"{series}_{comp}" for series, comp in components_df.columns]
+                            
+                            result = {
+                                "format": "multiindex",
+                                "series": series_names,
+                                "component_types": component_types,
+                                "components": dataframe_to_output(components_flat, "json_wide"),
+                                "note": "Column names are formatted as 'series_component_type'"
+                            }
+                        else:
+                            # Simple DataFrame
+                            result = {
+                                "format": "simple",
+                                "components": dataframe_to_output(components_df, "json_wide")
+                            }
+                        return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+                    else:
+                        return [TextContent(type="text", text=json.dumps({
+                            "error": f"Components has unexpected type: {type(components_df)}"
+                        }, separators=(',', ':')))]
                 else:
                     return [TextContent(type="text", text=json.dumps({
-                        "error": "Components not available for this model type"
+                        "error": "Components not available for this model type. Only certain models (Cassandra, TVVAR) provide component decomposition."
                     }, separators=(',', ':')))]
             
             # AutoTS model tools
@@ -1529,21 +1561,24 @@ if MCP_AVAILABLE:
                 
                 df = load_to_dataframe(data, data_id=data_id)
                 
+                # Set upper_limit or lower_limit based on direction
+                if direction == "lower":
+                    upper_limit = None
+                    lower_limit = threshold
+                else:
+                    upper_limit = threshold
+                    lower_limit = None
+                
                 erf = EventRiskForecast(
-                    df=df,
+                    df_train=df,
                     forecast_length=forecast_length,
                     frequency='infer',
-                    threshold=threshold,
-                    direction=direction,
-                    model_name='default',
-                    include_differenced=True,
-                    regression_type=None
+                    lower_limit=lower_limit,
+                    upper_limit=upper_limit
                 )
                 
-                if tune:
-                    erf.fit(constraint=None)
-                else:
-                    erf.fit_no_tune()
+                erf.fit()
+                erf.predict()
                 
                 event_risk_id = cache_object(erf, 'event_risk', {
                     'threshold': threshold, 'direction': direction,
