@@ -119,6 +119,8 @@ def profile_time_series(
     flat_threshold=0.92,
     new_product_threshold='auto',
     seasonal_threshold=0.46,
+    drift_trend_threshold=0.6,
+    drift_autocorr_threshold=0.7,
 ):
     """
     Profiles time series data into categories:
@@ -126,7 +128,7 @@ def profile_time_series(
         intermittent: occasional demand, one-sided spikes around median, usually many zeroes
         binary: only two values, often 0 and 1 (also includes trinary, three states)
         stationary: limited trend, drift, or seasonality, two-sided around mean
-        smooth_drift
+        smooth_drift: smooth series whose dynamics are predominantly changepoint/trend driven with strong first-order autocorrelation
         smooth_trend
         erratic: high volatility series
         flat: generally constant with only occasional movements
@@ -136,6 +138,8 @@ def profile_time_series(
     Args:
         df (pd.DataFrame): Wide format DataFrame with datetime index and each column as a time series.
         new_product_threshold (float): one of the more finiky thresholds, percent of null or zero data from beginning to declare new product
+        drift_trend_threshold (float): minimum proportion of trend/changepoint contribution required to flag a smooth series as smooth_drift
+        drift_autocorr_threshold (float): minimum lag-1 autocorrelation required to flag a smooth series as smooth_drift
         new_product_correct (bool): use dt index to correct
     Returns:
         pd.DataFrame: DataFrame with 'SERIES' and 'DEMAND_PROFILE' columns.
@@ -181,6 +185,23 @@ def profile_time_series(
     metrics_df.loc[
         metrics_df['season_trend_percent'] > seasonal_threshold, 'PROFILE'
     ] = "highly_seasonal"
+
+    # Identify smooth series dominated by drift-like trend contributions
+    trend_strength = (
+        1
+        - metrics_df.get(
+            'season_trend_percent', pd.Series(0, index=metrics_df.index)
+        ).fillna(0)
+    )
+    autocorr = metrics_df.get(
+        'autocorr_1', pd.Series(0, index=metrics_df.index)
+    ).fillna(0)
+    drift_mask = (
+        (metrics_df['PROFILE'] == 'smooth')
+        & (trend_strength >= drift_trend_threshold)
+        & (autocorr >= drift_autocorr_threshold)
+    )
+    metrics_df.loc[drift_mask, 'PROFILE'] = 'smooth_drift'
 
     # Reset index to get 'SERIES' column
     intermittence_df = (
