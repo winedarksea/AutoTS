@@ -161,15 +161,25 @@ class TestChangepointDetector(unittest.TestCase):
 
     def test_changepoint_detector_features(self):
         dates = pd.date_range("2020-01-01", periods=60, freq="D")
+        rng = np.random.default_rng(123)
+        # Embed deterministic level shifts so the detector consistently emits features
+        base_shift_one = np.concatenate([np.ones(30) * 10, np.ones(30) * 15])
+        base_shift_two = np.concatenate([np.ones(30) * 12, np.ones(30) * 18])
+        series_one = base_shift_one + rng.normal(0, 0.2, 60)
+        series_two = base_shift_two + rng.normal(0, 0.2, 60)
         df = pd.DataFrame(
             {
-                "series1": np.random.normal(10, 1, 60),
-                "series2": np.random.normal(12, 1, 60),
+                "series1": series_one,
+                "series2": series_two,
             },
             index=dates,
         )
 
-        detector = ChangepointDetector(method="pelt", aggregate_method="individual")
+        detector = ChangepointDetector(
+            method="pelt",
+            aggregate_method="individual",
+            method_params={"penalty": 5, "loss_function": "l2"},
+        )
         detector.detect(df)
 
         features = detector.create_features(forecast_length=12)

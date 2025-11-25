@@ -596,7 +596,7 @@ def plot_feature_panels(
     plt.tight_layout(rect=[0, 0.04, 1, 0.97])
 
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
 
     if show:
         plt.show()

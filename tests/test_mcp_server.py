@@ -3,7 +3,7 @@ Tests for AutoTS MCP Server
 
 Tests cover:
 - Data loading (daily, weekly, hourly)
-- Forecasting (forecast_fast, search, custom)
+- Forecasting (mosaic profile, search, custom)
 - Feature detection and cleaning
 - Event risk forecasting
 - Server utilities (cache, data conversion)
@@ -98,7 +98,7 @@ class TestMCPForecasting(unittest.TestCase):
         # Data with only 20 rows but requesting 30 forecast
         short_df = self.df_daily.iloc[:20]
         
-        # This should fail or warn for forecast_fast
+        # This should fail or warn for mosaic profile
         # (Actual implementation would check this)
         self.assertLess(len(short_df), 30)
     
