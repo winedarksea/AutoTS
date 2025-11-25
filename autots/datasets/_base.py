@@ -367,7 +367,25 @@ def load_live_daily(
                 msft_hist = msft_hist.rename(
                     columns=lambda x: x.lower().replace(" ", "_")
                 )
-                msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
+                ticker_lower = ticker.lower()
+                msft_hist = msft_hist.rename(
+                    columns=lambda x: ticker_lower + "_" + x
+                )
+                close_col = f"{ticker_lower}_close"
+                if close_col in msft_hist.columns:
+                    prev_close = msft_hist[close_col].ffill().shift(1)
+                    pct_col = f"{ticker_lower}_close_pct_change"
+                    msft_hist[pct_col] = (
+                        msft_hist[close_col] - prev_close
+                    ) / prev_close
+                    direction_col = f"{ticker_lower}_close_direction"
+                    delta = msft_hist[close_col] - prev_close
+                    direction = np.select(
+                        [delta > 0, delta < 0, delta == 0],
+                        [1, -1, 0],
+                        default=np.nan,
+                    )
+                    msft_hist[direction_col] = direction
                 try:
                     msft_hist.index = msft_hist.index.tz_localize(None)
                 except Exception:
@@ -471,6 +489,10 @@ def load_live_daily(
                         dtype_df = dtype_df.set_index('date')[['value']].rename(
                             columns={'value': f'{wstation}_{dtype}'}
                         )
+                        if dtype.upper() == "PRCP":
+                            precip_col = f'{wstation}_{dtype}'
+                            binary_name = f'{wstation}_PRCP_binary'
+                            dtype_df[binary_name] = dtype_df[precip_col].gt(0).astype(int)
                         station_data.append(dtype_df)
                 
                 # Combine all data types for this station

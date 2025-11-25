@@ -398,7 +398,6 @@ def plot_feature_panels(
 
     anomalies = labels.get('anomalies', [])
     if anomalies:
-        y_top = ax.get_ylim()[1]
         for record in anomalies:
             date, magnitude, pattern, duration, shared = _extract_event(
                 record,
@@ -408,8 +407,6 @@ def plot_feature_panels(
                 continue
             ts = _to_timestamp(date)
             ax.axvline(ts, color='red', alpha=0.35, linestyle='--', linewidth=1.5)
-            ax.plot(ts, min(y_top, magnitude if magnitude is not None else y_top * 0.95),
-                    marker='v', color='red', markersize=6, alpha=0.8)
 
     # Trend changepoints
     for record in labels.get('trend_changepoints', []):
