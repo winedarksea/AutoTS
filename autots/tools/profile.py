@@ -79,14 +79,16 @@ def summarize_series(df):
                 : df.shape[1], df.shape[1] :
             ]
         )
+        # df_sum.loc["autocorr_1"] = df.corrwith(df.shift(1))
     except Exception as e:
         print(f"summarize_series autocorr_1 failed with {repr(e)}")
     df_sum.loc["null_percentage"] = (first_non_nan_index / df.shape[0]).fillna(1)
-    diffs = df.diff().iloc[1:]  # Exclude the first row with NaN
-    zero_diffs = (diffs == 0).sum()
-    total_diffs = df.shape[0] - 1  # Number of differences per series
-    total_diffs = total_diffs if total_diffs > 0 else 1
-    zero_diff_proportions = zero_diffs / total_diffs
+    diffs = df.diff().iloc[1:]
+    valid_pairs = (df.notna() & df.shift(1).notna()).iloc[1:]
+    zero_diffs = ((diffs == 0) & valid_pairs).sum()
+    total_valid_diffs = valid_pairs.sum()
+    zero_diff_proportions = zero_diffs / total_valid_diffs.replace(0, np.nan)
+    zero_diff_proportions = zero_diff_proportions.fillna(0)
     df_sum.loc['zero_diff_proportion'] = zero_diff_proportions
     df_sum.loc["deseasonalized_mean"] = df_sum.loc["mean"]
     try:
@@ -116,11 +118,11 @@ def profile_time_series(
     df,
     adi_threshold=1.2,
     cvar_threshold=0.5,
-    flat_threshold=0.92,
+    flat_threshold=0.95,
     new_product_threshold='auto',
     seasonal_threshold=0.46,
     drift_trend_threshold=0.6,
-    drift_autocorr_threshold=0.7,
+    drift_autocorr_threshold=0.9,
 ):
     """
     Profiles time series data into categories:

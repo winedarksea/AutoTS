@@ -185,7 +185,7 @@ fast = {
 # models that can scale well if many CPU cores are available
 parallel = {
     'ETS': 1,
-    'FBProphet': 0.8,
+    'FBProphet': 0.6,
     'ARIMA': 0.2,  # slow
     'GLM': 1,
     'UnobservedComponents': 0.5,  # sometimes slow
