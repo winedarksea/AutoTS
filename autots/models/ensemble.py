@@ -13,13 +13,14 @@ from autots.tools.profile import profile_time_series, summarize_series
 from autots.tools.kalman import kalman_fusion_forecasts
 
 
-horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
+horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min', 'horizontal-profile']
 # try to include all types in here
 full_ensemble_test_list = [
     'simple',
     "distance",
     "horizontal",
     "horizontal-max",
+    "horizontal-profile",
     "mosaic",
     'mosaic-window',
     'mosaic-crosshair',
@@ -177,6 +178,7 @@ h_ens_list = [
     'mosaic-crosshair',
     'horizontal-max',
     'horizontal-min',
+    'horizontal-profile',
 ]
 mosaic_list = [
     'mosaic',
@@ -795,7 +797,24 @@ def HorizontalEnsemble(
         print("No full models available for horizontal generalization!")
         full_models = available_models  # hope it doesn't need to fill
     # print(f"FULLMODEL {len(full_models)}: {full_models}")
-    if prematched_series is None:
+    
+    # handle profiled horizontal
+    profiled = "profile" in ensemble_params.get("model_metric", "")
+    if profiled and prematched_series is None:
+        profiled_mapping = (
+            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
+        )
+        known_matches = ensemble_params['series']
+        valid_values = list(known_matches.keys())
+        profiled_mapping = {
+            key: value if value in valid_values else "overall"
+            for key, value in profiled_mapping.items()
+        }
+        # Map each series to its profile's model
+        prematched_series = {
+            col: known_matches[profiled_mapping[col]] for col in df_train.columns
+        }
+    elif prematched_series is None:
         prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(
         df_train, prematched_series, available_models, full_models
@@ -1538,6 +1557,7 @@ def HorizontalTemplateGenerator(
     subset_flag: bool = True,
     per_series2=None,
     only_specified: bool = False,
+    series_profiles=None,
 ):
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
@@ -1576,6 +1596,68 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
+    
+    # horizontal-profile: choose best model per actual profile type
+    if 'horizontal-profile' in ensemble:
+        profile_to_model = {}
+        if isinstance(series_profiles, dict) and series_profiles:
+            filtered_profiles = {
+                series: series_profiles.get(series)
+                for series in per_series.columns
+                if series in series_profiles and pd.notna(series_profiles.get(series))
+            }
+            if filtered_profiles:
+                unique_profiles = sorted(set(filtered_profiles.values()))
+                for profile_name in unique_profiles:
+                    profile_series = [
+                        series
+                        for series, prof in filtered_profiles.items()
+                        if prof == profile_name
+                    ]
+                    if not profile_series:
+                        continue
+                    profile_errors = per_series[profile_series]
+                    profile_scores = profile_errors.mean(axis=1, skipna=True)
+                    profile_scores = profile_scores[~profile_scores.isna()]
+                    if profile_scores.empty:
+                        continue
+                    profile_to_model[profile_name] = profile_scores.idxmin()
+        if profile_to_model:
+            overall_scores = per_series.mean(axis=1, skipna=True)
+            overall_scores = overall_scores[~overall_scores.isna()]
+            if not overall_scores.empty:
+                profile_to_model.setdefault('overall', overall_scores.idxmin())
+
+            mods = list(set(profile_to_model.values()))
+            best_profile = (
+                model_results[model_results['ID'].isin(mods)]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+            )
+
+            nomen = 'Horizontal'
+            metric = 'horizontal-profile'
+            best_profile_params = {
+                'Model': 'Ensemble',
+                'ModelParameters': json.dumps(
+                    {
+                        'model_name': nomen,
+                        'model_count': len(mods),
+                        'model_metric': metric,
+                        'models': best_profile.to_dict(orient='index'),
+                        'series': profile_to_model,
+                    }
+                ),
+                'TransformationParameters': '{}',
+                'Ensemble': 2,
+            }
+            best_profile_params = pd.DataFrame(best_profile_params, index=[0])
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best_profile_params], axis=0, ignore_index=True
+            )
+    
     # this is legacy, replaced by mosaic
     if 'hdist' in ensemble and not subset_flag:
         mods_per_series = per_series.idxmin()

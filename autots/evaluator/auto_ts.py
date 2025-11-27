@@ -489,6 +489,7 @@ class AutoTS(object):
         self.validation_results = None
         self.validation_indexes = None
         self.score_breakdown = pd.DataFrame()
+        self.series_profiles = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -1165,6 +1166,15 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
+        try:
+            profile_df = profile_time_series(self.df_wide_numeric)
+            self.series_profiles = (
+                profile_df.set_index("SERIES").to_dict().get("PROFILE", {})
+            )
+        except Exception as e:
+            if self.verbose >= 0:
+                print(f"profile_time_series failed during fit_data: {repr(e)}")
+            self.series_profiles = {}
 
         if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
@@ -1608,6 +1618,7 @@ class AutoTS(object):
                     forecast_length=self.forecast_length,
                     ensemble=self.ensemble,
                     subset_flag=self.subset_flag,
+                    series_profiles=self.series_profiles,
                 )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
@@ -3150,6 +3161,7 @@ class AutoTS(object):
                 forecast_length=self.forecast_length,
                 ensemble=self.ensemble,
                 subset_flag=self.subset_flag,
+                series_profiles=self.series_profiles,
                 only_specified=True,
             )
             reg_tr = (
@@ -3282,6 +3294,7 @@ class AutoTS(object):
                     forecast_length=self.forecast_length,
                     ensemble=['horizontal-max'],
                     subset_flag=False,
+                    series_profiles=self.series_profiles,
                     only_specified=True,
                 )
             else:
