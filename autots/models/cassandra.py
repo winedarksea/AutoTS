@@ -2078,11 +2078,11 @@ class Cassandra(ModelObject):
                     'VAR',
                     'UnivariateMotif',
                     # 'UnobservedComponents',
-                    # "KalmanStateSpace",
+                    "KalmanStateSpace",
                     'RRVAR',
                     "NeuralForecast",
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.02, 0.05, 0.2, 0.05, 0.05, 0.05, 0.005],
+                [0.05, 0.05, 0.1, 0.05, 0.02, 0.05, 0.4, 0.05, 0.05, 0.005, 0.05, 0.0005],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}

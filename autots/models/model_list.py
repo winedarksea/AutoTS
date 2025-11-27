@@ -211,6 +211,7 @@ scalable = fast_parallel_no_arima = {
         "VECM",
         "MAR",
         "BallTreeMultivariateMotif",  # might need sample_fraction tuning
+        "FBProphet",
         # "WindowRegression"  # same base shaping as BallTreeMM
     ]
 }
