@@ -1289,7 +1289,6 @@ class MambaSSM(ModelObject):
         # Check CUDA first (highest priority for performance)
         if torch.cuda.is_available():
             self.device = "cuda"
-            torch.backends.cudnn.benchmark = True  # Auto-tune kernels for better performance
         # Only check MPS on macOS to avoid false positives on Linux
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             import platform
@@ -2025,24 +2024,7 @@ class pMLP(ModelObject):
 
         self.prediction_batch_size = prediction_batch_size
         self.model = None
-        
-        # Device selection: CUDA > MPS > CPU
-        # Check CUDA first (highest priority for performance)
-        if torch.cuda.is_available():
-            self.device = "cuda"
-            torch.backends.cudnn.benchmark = True  # Auto-tune kernels for better performance
-        # Only check MPS on macOS to avoid false positives on Linux
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            import platform
-            if platform.system() == "Darwin":  # macOS only
-                self.device = "mps"
-            else:
-                self.device = "cpu"
-        else:
-            self.device = "cpu"
-        
-        torch.manual_seed(self.random_seed)
-        np.random.seed(self.random_seed)
+
         self.changepoint_features = None
 
     def _get_loss_function(self):
@@ -2088,6 +2070,8 @@ class pMLP(ModelObject):
         # 1. Book-keeping
         df = self.basic_profile(df)  # saves col names
         self.df_train = df  # Store training data for predict method
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
         y_train = df.to_numpy(dtype=np.float32)
         train_index = df.index
 
@@ -2228,6 +2212,20 @@ class pMLP(ModelObject):
         )
 
         # 5. Torch setup - optimized for MLP
+        # # Device selection: CUDA > MPS > CPU
+        # Check CUDA first (highest priority for performance)
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        # Only check MPS on macOS to avoid false positives on Linux
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            import platform
+            if platform.system() == "Darwin":  # macOS only
+                self.device = "mps"
+            else:
+                self.device = "cpu"
+        else:
+            self.device = "cpu"
+
         # Account for potentially different feature dimensions per series
         if has_per_series:
             # Use max features across all series

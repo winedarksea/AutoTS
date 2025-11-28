@@ -571,7 +571,7 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="forecast_custom",
-                description="CUSTOM: AutoTS with user-specified parameters or template. Defaults to 'scalable' model_list for speed and accuracy. For explainable models, use forecast_explainable instead. Must provide either 'data' or 'data_id'. Returns prediction_id and autots_id",
+                description="CUSTOM: AutoTS with user-specified parameters or template Generally use this when the forecast_fast results are insufficient and higher accuracy is needed. Defaults to 'scalable' model_list for speed and accuracy. Must provide either 'data' or 'data_id'. Returns prediction_id and autots_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -591,29 +591,29 @@ if MCP_AVAILABLE:
             ),
             Tool(
                 name="get_autots_docs",
-                description="Get documentation for AutoTS custom forecast parameters. Use this before forecast_custom to understand available options",
+                description="Get documentation for AutoTS custom forecast parameters. Use this before forecast_custom to understand the primary options",
                 inputSchema={"type": "object", "properties": {}}
             ),
             
             # Prediction object tools
             Tool(
                 name="get_forecast",
-                description="Get forecast from cached prediction as JSON or CSV",
+                description="Get forecast from cached prediction as JSON or CSV. Use 'all' output to get point, upper, and lower forecasts combined in long format with forecast_type column",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "prediction_id": {"type": "string", "description": "Cached prediction ID"},
                         "output": {
                             "type": "string",
-                            "enum": ["forecast", "upper_forecast", "lower_forecast"],
+                            "enum": ["forecast", "upper_forecast", "lower_forecast", "all"],
                             "default": "forecast",
-                            "description": "Which forecast to return"
+                            "description": "Which forecast to return. 'all' returns point, upper, and lower forecasts combined in long format with forecast_type column"
                         },
                         "format": {
                             "type": "string",
                             "enum": ["json_wide", "json_long", "csv_wide", "csv_long"],
                             "default": "json_wide",
-                            "description": "Output format"
+                            "description": "Output format. Note: 'all' output automatically uses long format"
                         }
                     },
                     "required": ["prediction_id"]
@@ -1161,7 +1161,8 @@ if MCP_AVAILABLE:
                         "ensemble": "Ensemble method: 'simple','distance','horizontal','mosaic',None",
                         "model_list": "List of models or preset: 'fast','superfast','all','default'",
                         "transformer_list": "Transformations: 'fast','superfast','all'",
-                        "max_generations": "Number of genetic algorithm generations",
+                        "max_generations": "Number of genetic algorithm generations, generally controls runtime.",
+                        "generation_timeout": "Max time (minutes) for all generations. Useful to set a sanity cap on runtime.",
                         "num_validations": "Number of cross-validation splits",
                         "validation_method": "'backwards','even','seasonal',etc.",
                         "models_to_validate": "Fraction of models to fully validate (0.0-1.0)",
@@ -1189,7 +1190,80 @@ if MCP_AVAILABLE:
                 cached = get_cached_object(prediction_id, 'prediction')
                 prediction = cached['object']
                 
-                if output == "forecast":
+                if output == "all":
+                    # Combine all forecasts into long format with forecast_type column
+                    dfs_to_combine = []
+                    
+                    # Point forecast
+                    df_forecast = prediction.forecast.copy()
+                    df_forecast.index = df_forecast.index.strftime('%Y-%m-%d %H:%M:%S')
+                    df_forecast_long = df_forecast.reset_index().melt(
+                        id_vars=[df_forecast.reset_index().columns[0]],
+                        var_name='series_id',
+                        value_name='value'
+                    )
+                    df_forecast_long = df_forecast_long.rename(columns={df_forecast_long.columns[0]: 'datetime'})
+                    df_forecast_long['forecast_type'] = 'point'
+                    dfs_to_combine.append(df_forecast_long)
+                    
+                    # Upper forecast
+                    if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None:
+                        df_upper = prediction.upper_forecast.copy()
+                        df_upper.index = df_upper.index.strftime('%Y-%m-%d %H:%M:%S')
+                        df_upper_long = df_upper.reset_index().melt(
+                            id_vars=[df_upper.reset_index().columns[0]],
+                            var_name='series_id',
+                            value_name='value'
+                        )
+                        df_upper_long = df_upper_long.rename(columns={df_upper_long.columns[0]: 'datetime'})
+                        df_upper_long['forecast_type'] = 'upper'
+                        dfs_to_combine.append(df_upper_long)
+                    
+                    # Lower forecast
+                    if hasattr(prediction, 'lower_forecast') and prediction.lower_forecast is not None:
+                        df_lower = prediction.lower_forecast.copy()
+                        df_lower.index = df_lower.index.strftime('%Y-%m-%d %H:%M:%S')
+                        df_lower_long = df_lower.reset_index().melt(
+                            id_vars=[df_lower.reset_index().columns[0]],
+                            var_name='series_id',
+                            value_name='value'
+                        )
+                        df_lower_long = df_lower_long.rename(columns={df_lower_long.columns[0]: 'datetime'})
+                        df_lower_long['forecast_type'] = 'lower'
+                        dfs_to_combine.append(df_lower_long)
+                    
+                    # Combine all
+                    df_combined = pd.concat(dfs_to_combine, ignore_index=True)
+                    # Reorder columns for better readability
+                    df_combined = df_combined[['datetime', 'series_id', 'forecast_type', 'value']]
+                    
+                    if format_type.startswith("csv") or format_type == "json_wide":
+                        # For 'all' output, always use CSV for simplicity
+                        temp_dir = tempfile.gettempdir()
+                        file_id = str(uuid.uuid4())[:8]
+                        filename = f"autots_{file_id}_all_forecasts.csv"
+                        filepath = os.path.join(temp_dir, filename)
+                        df_combined.to_csv(filepath, index=False)
+                        
+                        metadata = {
+                            'filepath': filepath,
+                            'format': 'long_with_forecast_type',
+                            'shape': {'rows': len(df_combined), 'columns': len(df_combined.columns)},
+                            'columns': ['datetime', 'series_id', 'forecast_type', 'value'],
+                            'forecast_types': df_combined['forecast_type'].unique().tolist(),
+                            'loading_instructions': {
+                                'description': 'Long format with forecast_type: datetime, series_id, forecast_type (point/upper/lower), value columns',
+                                'pandas': f"pd.read_csv('{filepath}')",
+                                'autots_mcp': f"Use load_to_dataframe('{filepath}') then pivot on forecast_type if needed"
+                            }
+                        }
+                        return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+                    else:
+                        # JSON long format
+                        result = df_combined.to_dict(orient='list')
+                        return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+                
+                elif output == "forecast":
                     df = prediction.forecast
                 elif output == "upper_forecast":
                     df = prediction.upper_forecast
