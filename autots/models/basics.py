@@ -1390,21 +1390,29 @@ class Motif(ModelObject):
         ]
         if method == "event_risk":
             k_choice = random.choices(
-                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.03]
             )[0]
         else:
             k_choice = random.choices(
                 [1, 3, 5, 10, 15, 20, 100], [0.02, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
+        if k_choice <= 50:
+            point_method = random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.1, 0.2, 0.2],
+            )[0]
+        else:
+            # redue median probability with large k
+            point_method = random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.03, 0.2, 0.2],
             )[0]
         return {
             "window": random.choices(
                 [2, 3, 5, 7, 10, 14, 28, 60],
                 [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
-            "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "closest"],
-                [0.4, 0.2, 0.2, 0.2, 0.2],
-            )[0],
+            "point_method": point_method,
             "distance_metric": random.choice(metric_list),
             "k": k_choice,
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],

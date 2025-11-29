@@ -2257,7 +2257,7 @@ class Cassandra(ModelObject):
             regressors_used = random.choices([True, False], [0.5, 0.5])[0]
         ar_lags = random.choices(
             [None, [1], [1, 7], [7], [seasonal_int(small=True)]],
-            [0.9, 0.025, 0.025, 0.05, 0.05],
+            [0.95, 0.025, 0.025, 0.05, 0.025],
         )[0]
         ar_interaction_seasonality = None
         if ar_lags is not None:
@@ -2279,6 +2279,8 @@ class Cassandra(ModelObject):
             ],
             [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.01, 0.1],
         )[0]
+        if seasonalities is not None and "hourlydayofweek" in seasonalities:
+            ar_lags = None
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
             if predefined:
