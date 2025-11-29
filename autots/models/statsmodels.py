@@ -2211,7 +2211,8 @@ class ARDL(ModelObject):
         lags (int): lags 1 to max
         trend (str): n/c/t/ct
         order (int): 0 to max
-        regression_type (str): type of regression (None, 'User', or 'Holiday')
+        regression_type (str or list): type of regression (None, 'User', 'Holiday', or a datepart method).
+            Can also be a list to combine multiple regression types, e.g., ['common_fourier_rw', 'holiday']
         n_jobs (int): passed to joblib for multiprocessing. Set to none for context manager.
 
     """
@@ -2256,7 +2257,31 @@ class ARDL(ModelObject):
         """
         df = self.basic_profile(df)
         self.regressor_train = None
-        if self.regression_type == 'holiday':
+        
+        # Handle list of regression types
+        if isinstance(self.regression_type, list):
+            regressor_parts = []
+            for reg_type in self.regression_type:
+                if reg_type == 'holiday':
+                    regressor_parts.append(
+                        pd.DataFrame(holiday_flag(df.index, country=self.holiday_country))
+                    )
+                elif reg_type in date_part_methods:
+                    regressor_parts.append(date_part(df.index, method=reg_type))
+                elif reg_type in ["User", "user"]:
+                    if future_regressor is None:
+                        raise ValueError(
+                            "regression_type='User' but future_regressor not supplied"
+                        )
+                    else:
+                        regressor_parts.append(future_regressor.reindex(df.index))
+                elif reg_type not in [None, 'None']:
+                    raise ValueError(
+                        f"ARDL regression_type `{reg_type}` not recognized"
+                    )
+            if regressor_parts:
+                self.regressor_train = pd.concat(regressor_parts, axis=1)
+        elif self.regression_type == 'holiday':
             self.regressor_train = pd.DataFrame(
                 holiday_flag(df.index, country=self.holiday_country)
             )
@@ -2347,16 +2372,38 @@ class ARDL(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
-        if self.regression_type == 'holiday':
+        
+        # Handle list of regression types
+        if isinstance(self.regression_type, list):
+            regressor_parts = []
+            for reg_type in self.regression_type:
+                if reg_type == 'holiday':
+                    regressor_parts.append(
+                        pd.DataFrame(holiday_flag(test_index, country=self.holiday_country))
+                    )
+                elif reg_type in date_part_methods:
+                    regressor_parts.append(date_part(test_index, method=reg_type))
+                elif reg_type not in [None, 'None']:
+                    # For User type in list, future_regressor should be passed in
+                    pass
+            if regressor_parts:
+                future_regressor = pd.concat(regressor_parts, axis=1)
+        elif self.regression_type == 'holiday':
             future_regressor = pd.DataFrame(
                 holiday_flag(test_index, country=self.holiday_country)
             )
         elif self.regression_type in date_part_methods:
             future_regressor = date_part(test_index, method=self.regression_type)
-        if self.regression_type is not None:
+        
+        if self.regression_type is not None and not isinstance(self.regression_type, list):
             assert (
                 future_regressor.shape[0] == forecast_length
             ), "regressor not equal to forecast length"
+        elif isinstance(self.regression_type, list) and len(self.regression_type) > 0:
+            if self.regressor_train is not None:
+                assert (
+                    future_regressor.shape[0] == forecast_length
+                ), "regressor not equal to forecast length"
 
         args = {
             'lags': self.lags,
@@ -2423,17 +2470,22 @@ class ARDL(ModelObject):
         if "regressor" in method:
             regression_choice = "User"
         else:
-            regression_list = [None, 'User', 'holiday', 'datepart']
-            regression_probability = [0.1, 0.4, 0.3, 0.3]
+            regression_list = [None, 'User', 'holiday', 'datepart', 'list']
+            regression_probability = [0.1, 0.3, 0.2, 0.2, 0.2]
             regression_choice = random.choices(regression_list, regression_probability)[
                 0
             ]
             if regression_choice == "datepart":
                 regression_choice = random.choice(date_part_methods)
+            elif regression_choice == 'list':
+                # Create a list with 2-3 regression types
+                list_options = ['holiday'] + date_part_methods
+                n_types = random.choices([2, 3], [0.7, 0.3])[0]
+                regression_choice = random.sample(list_options, min(n_types, len(list_options)))
         if regression_choice is None:
             order_choice = 0
         else:
-            order_choice = random.choices([0, 1, 2, 3], [0.2, 0.5, 0.2, 0.1])[0]
+            order_choice = random.choices([0, 1, 2, 3, 4], [0.2, 0.5, 0.2, 0.1, 0.01])[0]
 
         return {
             'lags': random.choices([1, 2, 3, 4, 7], [0.4, 0.3, 0.2, 0.1, 0.01])[0],

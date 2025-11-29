@@ -75,6 +75,7 @@ date_part_methods = [
     "expanded_binarized",
     'common_fourier',
     'common_fourier_rw',
+    'common_fourier_rw_lag',
     'anchored_warped_fourier:quarter_end',
     'anchored_segment_fourier:quarter_end',
     'anchored_warped_fourier:us_school',
@@ -82,6 +83,8 @@ date_part_methods = [
 ]
 
 origin_ts = "2030-01-01"
+
+COMMON_FOURIER_RW_LAG_ORDER = 3  # mirror ARDL order for exog lag depth
 
 
 ANCHOR_SCHEMES = {
@@ -383,6 +386,10 @@ def date_part(
         )
         if method == "common_fourier_rw":
             date_part_df['epoch'] = (DTindex.to_julian_date() ** 0.65).astype(int)
+    elif isinstance(method, str) and method == "common_fourier_rw_lag":
+        date_part_df = _common_fourier_rw_lag_features(
+            DTindex, lag_count=COMMON_FOURIER_RW_LAG_ORDER
+        )
     elif "morlet" in method:
         parts = method.split("_")
         if len(parts) >= 2:
@@ -1053,6 +1060,53 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
 
 
+def _common_fourier_rw_lag_features(DTindex, lag_count=COMMON_FOURIER_RW_LAG_ORDER):
+    """Construct common_fourier_rw features with deterministic lags."""
+    lag_count = 0 if lag_count is None else int(max(0, lag_count))
+    base_length = len(DTindex)
+    if base_length == 0:
+        return pd.DataFrame(index=pd.RangeIndex(0))
+    if lag_count == 0:
+        return date_part(DTindex, method="common_fourier_rw", set_index=False)
+    # For small date ranges, fall back to shift-based lagging
+    if base_length < 3:
+        base_features = date_part(DTindex, method="common_fourier_rw", set_index=False)
+        lagged_frames = []
+        for lag in range(1, lag_count + 1):
+            lag_slice = base_features.shift(lag)
+            lag_slice = lag_slice.bfill().fillna(0.0)
+            lag_slice.columns = [f"{col}_lag{lag}" for col in lag_slice.columns]
+            lagged_frames.append(lag_slice)
+        return pd.concat([base_features] + lagged_frames, axis=1)
+    frequency = infer_frequency(DTindex)
+    tz = getattr(DTindex, 'tz', None)
+    if frequency is not None:
+        longer_idx = pd.date_range(
+            end=DTindex[-1],
+            periods=base_length + lag_count,
+            freq=frequency,
+            tz=tz,
+        )
+        extended = date_part(longer_idx, method="common_fourier_rw", set_index=False)
+        base_features = extended.iloc[lag_count:].reset_index(drop=True)
+        lagged_frames = []
+        for lag in range(1, lag_count + 1):
+            start = lag_count - lag
+            stop = start + base_length
+            lag_slice = extended.iloc[start:stop].reset_index(drop=True)
+            lag_slice.columns = [f"{col}_lag{lag}" for col in lag_slice.columns]
+            lagged_frames.append(lag_slice)
+        return pd.concat([base_features] + lagged_frames, axis=1)
+    base_features = date_part(DTindex, method="common_fourier_rw", set_index=False)
+    lagged_frames = []
+    for lag in range(1, lag_count + 1):
+        lag_slice = base_features.shift(lag)
+        lag_slice = lag_slice.bfill().fillna(0.0)
+        lag_slice.columns = [f"{col}_lag{lag}" for col in lag_slice.columns]
+        lagged_frames.append(lag_slice)
+    return pd.concat([base_features] + lagged_frames, axis=1)
+
+
 base_seasonalities = [  # this needs to be a list
     "recurring",
     "simple",
@@ -1062,6 +1116,7 @@ base_seasonalities = [  # this needs to be a list
     "expanded_binarized",
     'common_fourier',
     'common_fourier_rw',
+    'common_fourier_rw_lag',
     'anchored_warped_fourier:us_school',
     'anchored_segment_fourier:us_school',
     "simple_poly",
@@ -1102,6 +1157,7 @@ def random_datepart(method='random'):
             0.4,
             0.35,
             0.45,
+            0.1,
             0.2,
             0.25,
             0.25,

@@ -2586,8 +2586,9 @@ class pMLP(ModelObject):
             [768, 384],         # Very wide -> Medium-wide
             [1024, 512],        # Extremely wide -> Wide
             [256, 128],         # Medium -> Narrow (for smaller datasets)
+            [768, 128],         # Very wide -> Narrow
         ]
-        hidden_weights = [0.15, 0.2, 0.15, 0.2, 0.15, 0.1, 0.1, 0.05, 0.05, 0.05, 0.03, 0.02]
+        hidden_weights = [0.15, 0.2, 0.15, 0.2, 0.15, 0.1, 0.1, 0.05, 0.05, 0.05, 0.03, 0.02, 0.01]
         
         # Dropout rates - moderate values for regularization
         dropout_rates = [0.1, 0.15, 0.2, 0.25, 0.3]
