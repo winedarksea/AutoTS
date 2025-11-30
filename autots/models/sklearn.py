@@ -741,21 +741,21 @@ sklearn_model_dict = {
     # 'MultioutputGPR': 0.0000001,  # memory intensive kernel killing
 }
 multivariate_model_dict = {
-    'RandomForest': 0.02,
+    'RandomForest': 0.03,
     # 'ElasticNet': 0.05,
     'MLP': 0.01,
-    'DecisionTree': 0.05,
-    'KNN': 0.05,
+    'DecisionTree': 0.06,
+    'KNN': 0.02,
     'Adaboost': 0.03,
-    'SVM': 0.02,
+    'SVM': 0.03,
     # 'BayesianRidge': 0.05,
     'xgboost': 0.01,
     # 'KerasRNN': 0.01,  # too slow on big data
-    'HistGradientBoost': 0.03,
-    'LightGBM': 0.12,
+    'HistGradientBoost': 0.04,
+    'LightGBM': 0.05,
     # 'LightGBMRegressorChain': 0.03,
-    'ExtraTrees': 0.05,
-    'RadiusNeighbors': 0.02,
+    'ExtraTrees': 0.04,
+    'RadiusNeighbors': 0.01,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
@@ -1478,7 +1478,7 @@ def generate_regressor_params(
                                 'mape',
                                 ['regression', 'mape'],
                             ],
-                            [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01, 0.05, 0.05, 0.1],
+                            [0.5, 0.2, 0.2, 0.1, 0.2, 0.05, 0.01, 0.05, 0.05, 0.1],
                         )[0],
                         "learning_rate": random.choices(
                             [0.001, 0.1, 0.01, 0.7],
@@ -1494,7 +1494,7 @@ def generate_regressor_params(
                         )[0],
                         "boosting_type": random.choices(
                             ['gbdt', 'rf', 'dart', 'goss'],
-                            [0.6, 0, 0.2, 0.2],
+                            [0.6, 0, 0.1, 0.2],
                         )[0],
                         "n_estimators": random.choices(
                             [100, 250, 50, 500],
@@ -3279,7 +3279,7 @@ class MultivariateRegression(ModelObject):
         std_rolling_periods_choice = random.choices(
             [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
-        ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.4, 0.1, 0.1, 0.05])[0]
+        ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.95, 0.02, 0.02, 0.01])[0]
         quantile90_rolling_periods = random.choices(
             [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]

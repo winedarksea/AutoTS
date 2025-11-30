@@ -31,7 +31,7 @@
 * created the seasonal_linear interpolation which is quite promisiing for seasonal data
 * added apply_adjustments
 * added G726Filter and G711Scaler
-* created an MCP server for AutoTS
+* created an MCP server for AutoTS (tool naming and pattern still in beta)
 * many bug fixes, tweaks, reorganizations, and added unittests
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
