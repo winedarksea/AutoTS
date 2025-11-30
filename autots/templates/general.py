@@ -443,7 +443,25 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "Log", "1": "SinTrend", "2": "ChangepointDetrend"}, "transformation_params": {"0": {}, "1": {}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
         'Ensemble': 0,
     },
-    # Add a WindowRegression, add new UnobservedComponents, new VECM, add a pMLP, a new MultivariateRegression, new DatepartRegression, new Cassandra (from ensemble)
+    "70": {  # from mosaic profile template (subset of prod example)
+        'Model': 'DatepartRegression',
+        'ModelParameters': '{"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic", "max_iter": 1000}}, "datepart_method": "anchored_warped_fourier:us_school", "polynomial_degree": null, "holiday_countries_used": true, "lags": null, "forward_lags": null, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "AlignLastValue", "1": "Slice", "2": "Constraint", "3": "Log", "4": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": false, "threshold": null, "threshold_method": "max"}, "1": {"method": 0.5}, "2": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.7, "constraint_value": {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "3": {}, "4": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": false, "threshold": 3, "threshold_method": "max", "mean_type": "arithmetic"}}}',
+        'Ensemble': 0,
+    },
+    "71": {  # VECM best on subset of prod example
+        'Model': 'VECM',
+        'ModelParameters': '{"deterministic": "n", "k_ar_diff": 3, "seasons": 0, "coint_rank": 1, "regression_type": "Holiday"}',
+        'TransformationParameters': '{"fillna": "zero", "transformations": {"0": "Log", "1": "SeasonalDifference", "2": "AnomalyRemoval", "3": "SeasonalDifference", "4": "EWMAFilter", "5": "SinTrend"}, "transformation_params": {"0": {}, "1": {"lag_1": 7, "method": "Mean"}, "2": {"method": "rolling_zscore", "method_params": {"distribution": "gamma", "alpha": 0.05, "rolling_periods": 200, "center": false}, "fillna": "ffill", "transform_dict": null, "isolated_only": false, "on_inverse": false}, "3": {"lag_1": 7, "method": 5}, "4": {"span": 10}, "5": {}}}',
+        'Ensemble': 0,
+    },
+    "72": {  # VECM best overall smape on prod example
+        'Model': 'VECM',
+        'ModelParameters': '{"deterministic": "n", "k_ar_diff": 0, "seasons": 0, "coint_rank": 1, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "quadratic", "transformations": {"0": "QuantileTransformer", "1": "SeasonalDifference", "2": "AlignLastDiff", "3": "Constraint", "4": "convolution_filter"}, "transformation_params": {"0": {"output_distribution": "uniform", "n_quantiles": 1000}, "1": {"lag_1": 7, "method": "Mean"}, "2": {"rows": 1, "displacement_rows": 1, "quantile": 1.0, "decay_span": 3}, "3": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.7, "constraint_value": {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "4": {}}}',
+        'Ensemble': 0,
+    },
+    # Add a WindowRegression, add new UnobservedComponents, add a pMLP, a new MultivariateRegression, new Cassandra (from ensemble)
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

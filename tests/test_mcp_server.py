@@ -13,6 +13,7 @@ Tests cover:
 import unittest
 import sys
 import os
+import json
 import pandas as pd
 import numpy as np
 
@@ -105,6 +106,7 @@ class TestMCPForecasting(unittest.TestCase):
     def test_daily_data_forecast_structure(self):
         """Test forecast with daily data returns correct structure."""
         from autots import AutoTS
+        from autots.evaluator.auto_model import create_model_id
         
         model = AutoTS(
             forecast_length=14,
@@ -154,6 +156,68 @@ class TestMCPForecasting(unittest.TestCase):
         prediction = model.predict()
         
         self.assertEqual(len(prediction.forecast), 24)
+
+    def test_horizontal_profile_import_best_model(self):
+        """Ensure a horizontal profile ensemble can be imported directly for prediction."""
+        from autots import AutoTS
+        from autots.evaluator.auto_model import create_model_id
+
+        model_params = {'method': 'median', 'window': None}
+        model_id = create_model_id('AverageValueNaive', model_params, {})
+        profile_template = {
+            "model_name": "Horizontal",
+            "model_metric": "horizontal-profile",
+            "model_count": 1,
+            "models": {
+                model_id: {
+                    "Model": "AverageValueNaive",
+                    "ModelParameters": json.dumps(model_params),
+                    "TransformationParameters": "{}",
+                }
+            },
+            "series": {
+                "overall": model_id,
+                "smooth": model_id,
+                "binary": model_id,
+            },
+            "transformation": {
+                "fillna": "ffill",
+                "transformations": {},
+                "transformation_params": {}
+            },
+        }
+        ensemble_params = {
+            'Model': 'Ensemble',
+            'ModelParameters': json.dumps(profile_template),
+            'TransformationParameters': json.dumps(
+                profile_template.get('transformation', {})
+            ),
+            'Ensemble': 2,
+        }
+        ensemble_template = pd.DataFrame(ensemble_params, index=[0])
+
+        model = AutoTS(
+            forecast_length=14,
+            frequency='infer',
+            ensemble='horizontal-profile',
+            model_list='scalable',
+            max_generations=0,
+            num_validations=0,
+            validation_method='backwards'
+        )
+        model.fit_data(self.df_daily.iloc[:120, :2])
+        model.import_best_model(
+            ensemble_template,
+            enforce_model_list=False,
+            include_ensemble=True
+        )
+        prediction = model.predict()
+
+        self.assertEqual(len(prediction.forecast), 14)
+        self.assertEqual(
+            prediction.forecast.shape[1],
+            self.df_daily.iloc[:120, :2].shape[1]
+        )
 
 
 class TestMCPFeatureDetection(unittest.TestCase):

@@ -922,12 +922,12 @@ class ARIMA(ModelObject):
         """
         p_choice = random.choices(
             [0, 1, 2, 3, 4, 5, 7, 12],
-            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.01],
         )[0]
         d_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
         q_choice = random.choices(
             [0, 1, 2, 3, 4, 5, 7, 12],
-            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.01],
         )[0]
         if "regressor" in method:
             regression_choice = "User"

@@ -1020,21 +1020,34 @@ if MCP_AVAILABLE:
                 
                 # Load default profile template if not provided
                 if not profile_template:
-                    template_path = Path(__file__).parent / 'mosaic_profile_template.json'
+                    template_path = str(Path(__file__).parent / 'mosaic_profile_template.json')
                     with open(template_path, 'r') as f:
                         profile_template = json.load(f)
+                
+                # Create ensemble template from profile
+                ensemble_params = {
+                    'Model': 'Ensemble',
+                    'ModelParameters': json.dumps(profile_template),
+                    'TransformationParameters': json.dumps(profile_template.get('transformation', {})),
+                    'Ensemble': 2,
+                }
+                ensemble_template = pd.DataFrame(ensemble_params, index=[0])
                 
                 model = AutoTS(
                     forecast_length=forecast_length,
                     frequency='infer',
-                    ensemble='mosaic',
-                    model_list='no_shared',
+                    ensemble='horizontal-profile',
+                    model_list='scalable',
                     max_generations=0,
                     num_validations=0,
                     validation_method='backwards'
                 )
-                model = model.import_template(profile_template, method='only')
                 model.fit_data(df)
+                model.import_best_model(
+                    ensemble_template,
+                    enforce_model_list=False,
+                    include_ensemble=True
+                )
                 prediction = model.predict()
                 
                 prediction_id = cache_object(prediction, 'prediction', {
