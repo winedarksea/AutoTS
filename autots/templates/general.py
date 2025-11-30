@@ -467,7 +467,13 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "AlignLastValue", "1": "Slice", "2": "Constraint", "3": "Log", "4": "AlignLastValue", "5": "SeasonalDifference", "6": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "multiplicative", "strength": 1.0, "first_value_only": false, "threshold": null, "threshold_method": "max"}, "1": {"method": 0.5}, "2": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.7, "constraint_value": {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "3": {}, "4": {"rows": 1, "lag": 1, "method": "additive", "strength": 0.7, "first_value_only": false, "threshold": 3, "threshold_method": "max", "mean_type": "arithmetic"}, "5": {"lag_1": 12, "method": "Median"}, "6": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": 1, "threshold_method": "mean"}}}',
         'Ensemble': 0,
     },
-    # Add a WindowRegression, add new UnobservedComponents, add a pMLP, a new MultivariateRegression
+    "74": {  # pMLP recurring dateparts with changepoints
+        'Model': 'pMLP',
+        'ModelParameters': '{"hidden_dims": [768, 256], "dropout_rate": 0.2, "use_batch_norm": true, "activation": "silu", "epochs": 20, "batch_size": 128, "lr": 0.0015, "loss_function": "quantile", "nll_weight": 1.2, "wasserstein_weight": 0.1, "prediction_batch_size": 100, "num_cnn_blocks": 2, "cnn_params": {}, "datepart_method": "recurring", "holiday_countries_used": false, "use_naive_feature": true, "changepoint_method": "basic", "changepoint_params": {"threshold": 15.0, "drift": 0.0, "normalize": true, "min_distance": 10}, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Constraint", "1": "AlignLastValue", "2": "HistoricValues", "3": "LocalLinearTrend"}, "transformation_params": {"0": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.2, "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"window": null}, "3": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
+        'Ensemble': 0,
+    },
+    # Add a WindowRegression, add new UnobservedComponents, a new MultivariateRegression
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
