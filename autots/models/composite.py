@@ -171,9 +171,7 @@ class PreprocessingExperts(ModelObject):
 
         new_df = df
         self.model = {}
-        self._ordered_trans_keys = tuple(
-            self.transformer_object.transformations.keys()
-        )
+        self._ordered_trans_keys = tuple(self.transformer_object.transformations.keys())
 
         self.model[0] = ModelPrediction(
             forecast_length=self.forecast_length,

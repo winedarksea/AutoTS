@@ -33,9 +33,11 @@ try:
     import torch.nn.functional as F
     from torch.nn import Module
     from torch.utils.data import DataLoader, Dataset, TensorDataset
+
     HAS_TORCH = True
 except Exception:
     from autots.tools.mocks import Module, Dataset, DataLoader, TensorDataset
+
     HAS_TORCH = False
 
 
@@ -43,19 +45,21 @@ except Exception:
 # TODO: take advantage of the 2d feature shape with convolutional designs
 
 
-def build_series_feature_mapping(feature_columns, series_names, changepoint_features_cols):
+def build_series_feature_mapping(
+    feature_columns, series_names, changepoint_features_cols
+):
     """
     Build a mapping from series index to their corresponding feature column indices.
 
     This handles per-series feature columns (changepoints, naive features, etc.)
     so that each series only receives its own feature subset while shared features
     remain available to all series.
-    
+
     Args:
         feature_columns: All feature column names
         series_names: List of series names in order
         changepoint_features_cols: Changepoint feature column names
-        
+
     Returns:
         tuple: (series_feat_mapping, has_per_series_features)
             - series_feat_mapping: dict mapping series_idx -> list of feature column indices
@@ -74,32 +78,37 @@ def build_series_feature_mapping(feature_columns, series_names, changepoint_feat
     # Vectorized per-series feature detection
     # Create boolean matrix: [n_features, n_series] where True means feature belongs to series
     feature_series_matrix = np.zeros((n_features, n_series), dtype=bool)
-    
+
     # Process all series at once for each pattern type
     for series_idx, series_name in enumerate(series_names_str):
         # Pattern 1: Naive feature - exact match (vectorized)
         naive_match = feature_columns_str == f"naive_last_{series_name}"
-        
+
         # Pattern 2: Prefix pattern - starts with series_name followed by non-alphanumeric (vectorized)
         # Use vectorized string operations where possible
         prefix_match = np.zeros(n_features, dtype=bool)
-        starts_with_series = np.char.startswith(feature_columns_str.astype(str), series_name)
+        starts_with_series = np.char.startswith(
+            feature_columns_str.astype(str), series_name
+        )
         # Check for exact match or non-alphanumeric following character
         for feat_idx in np.where(starts_with_series)[0]:
             col_str = feature_columns_str[feat_idx]
-            if len(col_str) == len(series_name) or not col_str[len(series_name)].isalnum():
+            if (
+                len(col_str) == len(series_name)
+                or not col_str[len(series_name)].isalnum()
+            ):
                 prefix_match[feat_idx] = True
-        
+
         # Pattern 3: Suffix pattern - ends with _series_name (vectorized)
         suffix_pattern = f"_{series_name}"
         suffix_match = np.char.endswith(feature_columns_str.astype(str), suffix_pattern)
-        
+
         # Combine all patterns for this series
         feature_series_matrix[:, series_idx] = naive_match | prefix_match | suffix_match
-    
+
     # Detect if any per-series features exist
     has_per_series = np.any(feature_series_matrix)
-    
+
     # Fallback: inspect changepoint columns if detection fails (legacy naming safeguards)
     if (
         not has_per_series
@@ -109,10 +118,17 @@ def build_series_feature_mapping(feature_columns, series_names, changepoint_feat
         cp_cols_str = [str(col) for col in changepoint_features_cols]
         for series_name in series_names_str:
             for col_str in cp_cols_str:
-                if (col_str == f"naive_last_{series_name}" or 
-                    col_str.endswith(f"_{series_name}") or
-                    (col_str.startswith(series_name) and 
-                     (len(col_str) == len(series_name) or not col_str[len(series_name)].isalnum()))):
+                if (
+                    col_str == f"naive_last_{series_name}"
+                    or col_str.endswith(f"_{series_name}")
+                    or (
+                        col_str.startswith(series_name)
+                        and (
+                            len(col_str) == len(series_name)
+                            or not col_str[len(series_name)].isalnum()
+                        )
+                    )
+                ):
                     has_per_series = True
                     break
             if has_per_series:
@@ -125,27 +141,29 @@ def build_series_feature_mapping(feature_columns, series_names, changepoint_feat
     # Shared features: those that don't belong to any specific series
     is_shared = ~np.any(feature_series_matrix, axis=1)
     shared_indices = np.where(is_shared)[0]
-    
+
     series_feat_mapping = {}
     for series_idx in range(n_series):
         # Get series-specific feature indices
         series_specific_indices = np.where(feature_series_matrix[:, series_idx])[0]
-        
+
         # Combine shared and series-specific features
         # Use concatenate for efficiency, then convert to list
-        series_feature_indices = np.concatenate([shared_indices, series_specific_indices])
+        series_feature_indices = np.concatenate(
+            [shared_indices, series_specific_indices]
+        )
         series_feature_indices.sort()  # Maintain order for consistency
-        
+
         series_feat_mapping[series_idx] = series_feature_indices.tolist()
 
     return series_feat_mapping, True
 
 
 def create_training_batches(
-    y_train_scaled, 
-    train_feats_scaled, 
-    prediction_batch_size, 
-    max_samples=50000, 
+    y_train_scaled,
+    train_feats_scaled,
+    prediction_batch_size,
+    max_samples=50000,
     random_seed=2023,
     series_feat_mapping=None,
     series_names=None,
@@ -157,10 +175,10 @@ def create_training_batches(
 ):
     """
     Create training batches for models that predict multiple future steps at once.
-    
+
     Each sample contains features for prediction_batch_size future timesteps,
     with naive features properly handled to avoid data leakage.
-    
+
     Args:
         y_train_scaled: Scaled time series data (n_timesteps, n_series)
         train_feats_scaled: Scaled feature data (n_timesteps, n_features)
@@ -174,7 +192,7 @@ def create_training_batches(
         y_train_raw: Optional raw target values (unscaled) for building naive windows without the shift bug
         feature_means: Optional per-feature mean from the fitted feature scaler
         feature_scales: Optional per-feature scale from the fitted feature scaler
-        
+
     Returns:
         tuple: (X_data, Y_data) where:
             - X_data has shape (n_samples, prediction_batch_size, n_features)
@@ -182,63 +200,79 @@ def create_training_batches(
     """
     n_timesteps, n_series = y_train_scaled.shape
     n_features = train_feats_scaled.shape[1]
-    
+
     # Validate that we have enough data
     # When using naive windows, we need prediction_batch_size extra for the initial window
-    min_required = (2 * prediction_batch_size) if use_naive_window else (prediction_batch_size + 1)
+    min_required = (
+        (2 * prediction_batch_size) if use_naive_window else (prediction_batch_size + 1)
+    )
     if n_timesteps < min_required:
         raise ValueError(
             f"Training data has {n_timesteps} timesteps but need at least {min_required}. "
             f"Either increase training data length or decrease prediction_batch_size."
         )
-    
+
     # When using naive windows, exclude first prediction_batch_size timesteps
     # since they don't have complete windows before them
     start_offset = prediction_batch_size if use_naive_window else 0
-    
+
     # Calculate maximum possible samples (excluding the offset)
-    max_possible_samples = (n_timesteps - prediction_batch_size - start_offset) * n_series
+    max_possible_samples = (
+        n_timesteps - prediction_batch_size - start_offset
+    ) * n_series
     max_samples = min(max_samples, max_possible_samples)
-    
+
     # Calculate maximum possible samples (excluding the offset)
-    max_possible_samples = (n_timesteps - prediction_batch_size - start_offset) * n_series
+    max_possible_samples = (
+        n_timesteps - prediction_batch_size - start_offset
+    ) * n_series
     max_samples = min(max_samples, max_possible_samples)
-    
+
     # Generate sample indices
     rng = np.random.default_rng(random_seed)
     if max_possible_samples > max_samples:
-        selected_indices = rng.choice(max_possible_samples, size=max_samples, replace=False)
+        selected_indices = rng.choice(
+            max_possible_samples, size=max_samples, replace=False
+        )
     else:
         selected_indices = np.arange(max_possible_samples)
-    
+
     # Calculate which series and starting timestep for each sample
     # Add start_offset to ensure we skip the first prediction_batch_size timesteps when using naive windows
     series_indices = selected_indices % n_series
     start_indices = (selected_indices // n_series) + start_offset
-    
+
     if series_feat_mapping is not None and series_names is not None:
         # Per-series features: different feature subsets per series
         max_feats = max(len(feat_cols) for feat_cols in series_feat_mapping.values())
-        X_data = np.zeros((len(selected_indices), prediction_batch_size, max_feats), dtype=np.float32)
+        X_data = np.zeros(
+            (len(selected_indices), prediction_batch_size, max_feats), dtype=np.float32
+        )
     else:
-        X_data = np.zeros((len(selected_indices), prediction_batch_size, n_features), dtype=np.float32)
-    
-    Y_data = np.zeros((len(selected_indices), prediction_batch_size, 1), dtype=np.float32)
-    
+        X_data = np.zeros(
+            (len(selected_indices), prediction_batch_size, n_features), dtype=np.float32
+        )
+
+    Y_data = np.zeros(
+        (len(selected_indices), prediction_batch_size, 1), dtype=np.float32
+    )
+
     # Fill in data for each sample
     for i, (start_idx, series_idx) in enumerate(zip(start_indices, series_indices)):
         end_idx = start_idx + prediction_batch_size
-        
+
         # Get target values for this series and window
         Y_data[i, :, 0] = y_train_scaled[start_idx:end_idx, series_idx]
-        
+
         if series_feat_mapping is not None and series_names is not None:
             # Get feature indices for this series
             feat_indices = series_feat_mapping.get(series_idx, [])
             if len(feat_indices) > 0:
                 # Get features for this window
-                batch_features = train_feats_scaled[start_idx:end_idx, feat_indices].copy()
-                
+                batch_features = train_feats_scaled[
+                    start_idx:end_idx, feat_indices
+                ].copy()
+
                 # For window-based naive features, populate with proper historical window
                 if use_naive_window and naive_feature_indices is not None:
                     for naive_idx in naive_feature_indices:
@@ -282,21 +316,23 @@ def create_training_batches(
                                         - feature_means[naive_idx]
                                     ) / feature_scales[naive_idx]
                                 else:
-                                    available = train_feats_scaled[:start_idx, naive_idx]
+                                    available = train_feats_scaled[
+                                        :start_idx, naive_idx
+                                    ]
                                 if len(available) > 0:
                                     padded = np.pad(
-                                        available, 
-                                        (prediction_batch_size - len(available), 0), 
-                                        mode='edge'
+                                        available,
+                                        (prediction_batch_size - len(available), 0),
+                                        mode='edge',
                                     )
                                     # Reverse so most recent is first
                                     batch_features[:, local_idx] = padded[::-1]
-                
-                X_data[i, :, :len(feat_indices)] = batch_features
+
+                X_data[i, :, : len(feat_indices)] = batch_features
         else:
             # Shared features across all series
             batch_features = train_feats_scaled[start_idx:end_idx, :].copy()
-            
+
             # For window-based naive features, populate with proper historical window
             if use_naive_window and naive_feature_indices is not None:
                 for naive_idx in naive_feature_indices:
@@ -338,9 +374,9 @@ def create_training_batches(
                             available = train_feats_scaled[:start_idx, naive_idx]
                         if len(available) > 0:
                             padded = np.pad(
-                                available, 
-                                (prediction_batch_size - len(available), 0), 
-                                mode='edge'
+                                available,
+                                (prediction_batch_size - len(available), 0),
+                                mode='edge',
                             )
                             # Reverse so most recent is first
                             batch_features[:, naive_idx] = padded[::-1]
@@ -352,9 +388,9 @@ def create_training_batches(
                     else:
                         naive_val = train_feats_scaled[0, naive_idx]
                     batch_features[:, naive_idx] = naive_val
-            
+
             X_data[i, :, :] = batch_features
-    
+
     return X_data, Y_data
 
 
@@ -556,13 +592,15 @@ class RegularizedGaussianNLL(Module):
 
 
 class RankedSharpeLoss(Module):
-    def __init__(self, nll_weight=0.7, rank_weight=0.3, temperature=1.0, use_kendall=False):
+    def __init__(
+        self, nll_weight=0.7, rank_weight=0.3, temperature=1.0, use_kendall=False
+    ):
         """
         Loss function optimized for ranked Sharpe metric performance.
-        
+
         Combines Gaussian NLL for probabilistic anchoring with rank correlation
         objectives to optimize cross-series relative performance.
-        
+
         Args:
             nll_weight: Weight for Gaussian NLL anchoring term
             rank_weight: Weight for rank correlation term
@@ -575,89 +613,91 @@ class RankedSharpeLoss(Module):
         self.temperature = temperature
         self.use_kendall = use_kendall
         self.nll_loss = nn.GaussianNLLLoss(reduction="mean")
-        
+
     def _soft_rank(self, x, temperature=1.0):
         """
         Compute differentiable soft ranks using temperature-scaled sigmoid.
-        
+
         For short horizon forecasting, we need stable gradients that preserve
         the relative ordering information critical for ranked Sharpe.
         """
         # x shape: (batch_size,) - predictions for all series at one timestep
         n = x.shape[0]
-        
+
         # Create pairwise comparison matrix
         # diff[i,j] = x[i] - x[j]
         x_expanded = x.unsqueeze(1)  # (n, 1)
         diff = x_expanded - x_expanded.T  # (n, n)
-        
+
         # Soft ranks using sigmoid: higher values get lower ranks (ranks start from 1)
         # sigmoid(diff/temp) ≈ 1 when x[i] > x[j], ≈ 0 when x[i] < x[j]
         soft_comparison = torch.sigmoid(diff / temperature)
-        
+
         # Sum gives approximate rank (higher values = higher ranks)
         # Add 1 to make ranks start from 1 instead of 0
         soft_ranks = soft_comparison.sum(dim=1) + 1
-        
+
         return soft_ranks
-    
+
     def _kendall_tau_loss(self, pred_ranks, true_ranks):
         """
         Compute differentiable approximation of Kendall's tau correlation.
-        
+
         Kendall's tau is more robust for short sequences and focuses on
         pairwise concordance, which aligns well with ranked Sharpe objectives.
         """
         n = pred_ranks.shape[0]
         if n < 2:
             return torch.tensor(0.0, device=pred_ranks.device)
-        
+
         # Create all pairwise differences
         pred_diff = pred_ranks.unsqueeze(1) - pred_ranks.unsqueeze(0)  # (n, n)
         true_diff = true_ranks.unsqueeze(1) - true_ranks.unsqueeze(0)  # (n, n)
-        
+
         # Concordant pairs: same sign in both differences
         # Use tanh to make it differentiable
-        concordant = torch.tanh(pred_diff / self.temperature) * torch.tanh(true_diff / self.temperature)
-        
+        concordant = torch.tanh(pred_diff / self.temperature) * torch.tanh(
+            true_diff / self.temperature
+        )
+
         # Sum over upper triangle (avoid diagonal and duplicates)
         mask = torch.triu(torch.ones_like(concordant), diagonal=1)
         kendall = (concordant * mask).sum() / mask.sum()
-        
+
         # Return negative for minimization (we want to maximize correlation)
         return -kendall
-    
+
     def _spearman_loss(self, pred_ranks, true_ranks):
         """
         Compute differentiable Spearman correlation using soft ranks.
-        
+
         This matches the Spearman correlation used in your ranked Sharpe metric.
         """
         # Center the ranks
         pred_centered = pred_ranks - pred_ranks.mean()
         true_centered = true_ranks - true_ranks.mean()
-        
+
         # Compute correlation
         numerator = (pred_centered * true_centered).sum()
-        pred_var = (pred_centered ** 2).sum()
-        true_var = (true_centered ** 2).sum()
-        
+        pred_var = (pred_centered**2).sum()
+        true_var = (true_centered**2).sum()
+
         # Add epsilon for numerical stability
         epsilon = 1e-8
         correlation = numerator / (torch.sqrt(pred_var * true_var) + epsilon)
-        
+
         # Return negative for minimization
         return -correlation
-    
+
     def forward(self, mu, sigma, y_true):
         """
         Forward pass combining NLL anchoring with rank correlation optimization.
-        
+
         Args:
             mu: Mean predictions, shape (batch_size, 1) or (batch_size,)
             sigma: Std predictions, same shape as mu
             y_true: True values, same shape as mu
-            
+
         Returns:
             Combined loss value (scalar)
         """
@@ -668,19 +708,21 @@ class RankedSharpeLoss(Module):
             sigma = sigma.squeeze(-1)
         if y_true.dim() > 1:
             y_true = y_true.squeeze(-1)
-            
+
         sigma = torch.clamp(sigma, min=1e-6)
-        
+
         # 1. Probabilistic anchoring term (Gaussian NLL)
-        nll = self.nll_loss(mu.unsqueeze(-1), y_true.unsqueeze(-1), sigma.pow(2).unsqueeze(-1))
-        
+        nll = self.nll_loss(
+            mu.unsqueeze(-1), y_true.unsqueeze(-1), sigma.pow(2).unsqueeze(-1)
+        )
+
         # 2. Rank correlation term
         # For short horizon forecasting, we focus on cross-series ranking at each timestep
         if mu.shape[0] >= 2:  # Need at least 2 series for ranking
             # Compute soft ranks for predictions and actuals
             pred_ranks = self._soft_rank(mu, self.temperature)
             true_ranks = self._soft_rank(y_true, self.temperature)
-            
+
             # Choose correlation method
             if self.use_kendall:
                 rank_loss = self._kendall_tau_loss(pred_ranks, true_ranks)
@@ -688,22 +730,28 @@ class RankedSharpeLoss(Module):
                 rank_loss = self._spearman_loss(pred_ranks, true_ranks)
         else:
             rank_loss = torch.tensor(0.0, device=mu.device)
-        
+
         # Combine losses
         total_loss = self.nll_weight * nll + self.rank_weight * rank_loss
-        
+
         return total_loss
 
 
 class ShortHorizonRankLoss(Module):
-    def __init__(self, nll_weight=0.6, rank_weight=0.3, consistency_weight=0.1, 
-                 temperature=0.5, horizon_steps=4):
+    def __init__(
+        self,
+        nll_weight=0.6,
+        rank_weight=0.3,
+        consistency_weight=0.1,
+        temperature=0.5,
+        horizon_steps=4,
+    ):
         """
         Specialized loss for short horizon (≤4 steps) ranked Sharpe optimization.
-        
+
         Adds temporal consistency term to ensure predictions maintain relative
         rankings across the short forecast horizon.
-        
+
         Args:
             nll_weight: Weight for probabilistic anchoring
             rank_weight: Weight for cross-series rank correlation
@@ -718,59 +766,59 @@ class ShortHorizonRankLoss(Module):
         self.temperature = temperature
         self.horizon_steps = horizon_steps
         self.nll_loss = nn.GaussianNLLLoss(reduction="mean")
-        
+
         # Store recent predictions for temporal consistency
         self.register_buffer('recent_predictions', torch.zeros(horizon_steps, 1))
         self.register_buffer('recent_actuals', torch.zeros(horizon_steps, 1))
         self.step_count = 0
-        
+
     def _soft_rank(self, x, temperature=1.0):
         """Compute differentiable soft ranks."""
         n = x.shape[0]
         if n < 2:
             return x  # Return original if can't rank
-            
+
         x_expanded = x.unsqueeze(1)
         diff = x_expanded - x_expanded.T
         soft_comparison = torch.sigmoid(diff / temperature)
         soft_ranks = soft_comparison.sum(dim=1) + 1
         return soft_ranks
-        
+
     def _rank_correlation_loss(self, pred_ranks, true_ranks):
         """Compute Spearman correlation loss."""
         pred_centered = pred_ranks - pred_ranks.mean()
         true_centered = true_ranks - true_ranks.mean()
-        
+
         numerator = (pred_centered * true_centered).sum()
-        pred_var = (pred_centered ** 2).sum()
-        true_var = (true_centered ** 2).sum()
-        
+        pred_var = (pred_centered**2).sum()
+        true_var = (true_centered**2).sum()
+
         epsilon = 1e-8
         correlation = numerator / (torch.sqrt(pred_var * true_var) + epsilon)
         return -correlation
-        
+
     def _temporal_consistency_loss(self, current_pred_ranks):
         """
         Penalize sudden changes in relative rankings across timesteps.
-        
+
         For short horizons, maintaining ranking consistency helps achieve
         better Sharpe ratios by reducing ranking volatility.
         """
         if self.step_count < 2:
             return torch.tensor(0.0, device=current_pred_ranks.device)
-            
+
         # Get the most recent stored prediction ranks
         if hasattr(self, '_prev_pred_ranks'):
             prev_ranks = self._prev_pred_ranks
-            
+
             # Compute ranking change penalty
             rank_diff = torch.abs(current_pred_ranks - prev_ranks)
             consistency_loss = rank_diff.mean()
-            
+
             return consistency_loss
-        
+
         return torch.tensor(0.0, device=current_pred_ranks.device)
-    
+
     def forward(self, mu, sigma, y_true):
         """
         Forward pass with temporal consistency for short horizon optimization.
@@ -782,34 +830,38 @@ class ShortHorizonRankLoss(Module):
             sigma = sigma.squeeze(-1)
         if y_true.dim() > 1:
             y_true = y_true.squeeze(-1)
-            
+
         sigma = torch.clamp(sigma, min=1e-6)
-        
+
         # 1. Probabilistic anchoring
-        nll = self.nll_loss(mu.unsqueeze(-1), y_true.unsqueeze(-1), sigma.pow(2).unsqueeze(-1))
-        
+        nll = self.nll_loss(
+            mu.unsqueeze(-1), y_true.unsqueeze(-1), sigma.pow(2).unsqueeze(-1)
+        )
+
         # 2. Cross-series rank correlation
         rank_loss = torch.tensor(0.0, device=mu.device)
         consistency_loss = torch.tensor(0.0, device=mu.device)
-        
+
         if mu.shape[0] >= 2:
             pred_ranks = self._soft_rank(mu, self.temperature)
             true_ranks = self._soft_rank(y_true, self.temperature)
-            
+
             rank_loss = self._rank_correlation_loss(pred_ranks, true_ranks)
-            
+
             # 3. Temporal consistency (only during training)
             if self.training:
                 consistency_loss = self._temporal_consistency_loss(pred_ranks)
                 # Store current ranks for next timestep
                 self._prev_pred_ranks = pred_ranks.detach()
                 self.step_count += 1
-        
+
         # Combine all terms
-        total_loss = (self.nll_weight * nll + 
-                     self.rank_weight * rank_loss + 
-                     self.consistency_weight * consistency_loss)
-        
+        total_loss = (
+            self.nll_weight * nll
+            + self.rank_weight * rank_loss
+            + self.consistency_weight * consistency_loss
+        )
+
         return total_loss
 
 
@@ -969,7 +1021,7 @@ class MLPCore(Module):
         self.activation_name = activation
         self.use_batch_norm = use_batch_norm
         self.preserve_temporal = preserve_temporal
-        
+
         # Choose activation function
         if activation == 'relu':
             self.activation = nn.ReLU()
@@ -979,13 +1031,13 @@ class MLPCore(Module):
             self.activation = nn.SiLU()
         else:
             raise ValueError(f"Unsupported activation: {activation}")
-        
+
         # Build layers
         if preserve_temporal:
             # Use LayerNorm for temporal data (works on last dim, preserves seq structure)
             layers = []
             prev_dim = input_dim
-            
+
             for i, hidden_dim in enumerate(hidden_dims):
                 layers.append(nn.Linear(prev_dim, hidden_dim))
                 if use_batch_norm:
@@ -995,13 +1047,13 @@ class MLPCore(Module):
                 if i < len(hidden_dims) - 1:
                     layers.append(nn.Dropout(dropout_rate))
                 prev_dim = hidden_dim
-            
+
             self.backbone = nn.Sequential(*layers)
         else:
             # Original BatchNorm1d path for backwards compatibility
             layers = []
             prev_dim = input_dim
-            
+
             for i, hidden_dim in enumerate(hidden_dims):
                 layers.append(nn.Linear(prev_dim, hidden_dim))
                 if use_batch_norm:
@@ -1010,17 +1062,17 @@ class MLPCore(Module):
                 if i < len(hidden_dims) - 1:
                     layers.append(nn.Dropout(dropout_rate))
                 prev_dim = hidden_dim
-            
+
             self.backbone = nn.Sequential(*layers)
-        
+
         # Output heads for probabilistic forecasting
         self.out_mu = nn.Linear(prev_dim, 1)
         self.out_sigma = nn.Linear(prev_dim, 1)
         self.softplus = nn.Softplus()
-        
+
         # Initialize weights for better convergence
         self._init_weights()
-    
+
     def _init_weights(self):
         """Initialize weights using Xavier/Glorot initialization for better convergence."""
         for module in self.modules():
@@ -1028,45 +1080,45 @@ class MLPCore(Module):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
-    
+
     def forward(self, x):
         """
         Forward pass for MLP.
-        
+
         Args:
             x: Input tensor of shape (batch_size, seq_len, input_dim) or (batch_size, input_dim)
-            
+
         Returns:
             mu: Mean predictions, shape matches input: (batch_size, seq_len, 1) or (batch_size, 1)
             sigma: Standard deviation predictions, same shape as mu
         """
         original_shape = x.shape
-        
+
         if self.preserve_temporal and x.dim() == 3:
             # Keep temporal structure intact
             # x: (batch_size, seq_len, input_dim)
             hidden = self.backbone(x)  # LayerNorm and Linear work on last dim
-            
+
             # Generate outputs
             mu = self.out_mu(hidden)
             sigma = self.softplus(self.out_sigma(hidden))
             sigma = torch.clamp(sigma, min=1e-6)
             # Output: (batch_size, seq_len, 1)
-            
+
         elif x.dim() == 3:
             # Original flattening path for backwards compatibility
             batch_size, seq_len, input_dim = x.shape
             # Reshape to (batch_size * seq_len, input_dim) to process all timesteps
             x = x.reshape(-1, input_dim)
-            
+
             # Process through backbone - no change needed, BatchNorm1d works on flattened
             hidden = self.backbone(x)
-            
+
             # Generate outputs
             mu = self.out_mu(hidden)
             sigma = self.softplus(self.out_sigma(hidden))
             sigma = torch.clamp(sigma, min=1e-6)
-            
+
             # Reshape back to (batch_size, seq_len, 1)
             mu = mu.reshape(batch_size, seq_len, 1)
             sigma = sigma.reshape(batch_size, seq_len, 1)
@@ -1076,7 +1128,7 @@ class MLPCore(Module):
             mu = self.out_mu(hidden)
             sigma = self.softplus(self.out_sigma(hidden))
             sigma = torch.clamp(sigma, min=1e-6)
-        
+
         return mu, sigma
 
 
@@ -1090,13 +1142,15 @@ class SqueezeExcitation(Module):
     def forward(self, x):
         """
         Apply squeeze-and-excitation weighting.
-        
+
         Args:
             x: Tensor of shape (batch, channels, time)
         """
         batch, channels, _ = x.shape
         weights = F.adaptive_avg_pool1d(x, 1).view(batch, channels)
-        weights = torch.sigmoid(self.fc2(F.silu(self.fc1(weights)))).view(batch, channels, 1)
+        weights = torch.sigmoid(self.fc2(F.silu(self.fc1(weights)))).view(
+            batch, channels, 1
+        )
         return x * weights
 
 
@@ -1115,7 +1169,9 @@ class DepthwiseSeparableTemporal(Module):
         mid_channels = mid_channels or min(128, max(16, in_channels // 2))
         padding = ((kernel_size - 1) // 2) * dilation
 
-        self.pointwise_in = nn.Conv1d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.pointwise_in = nn.Conv1d(
+            in_channels, mid_channels, kernel_size=1, bias=False
+        )
         self.bn_in = nn.BatchNorm1d(mid_channels) if use_batch_norm else nn.Identity()
         self.depthwise = nn.Conv1d(
             mid_channels,
@@ -1126,24 +1182,28 @@ class DepthwiseSeparableTemporal(Module):
             groups=mid_channels,
             bias=False,
         )
-        self.bn_depth = nn.BatchNorm1d(mid_channels) if use_batch_norm else nn.Identity()
+        self.bn_depth = (
+            nn.BatchNorm1d(mid_channels) if use_batch_norm else nn.Identity()
+        )
         self.se = SqueezeExcitation(mid_channels) if use_se else nn.Identity()
-        self.pointwise_out = nn.Conv1d(mid_channels, in_channels, kernel_size=1, bias=False)
+        self.pointwise_out = nn.Conv1d(
+            mid_channels, in_channels, kernel_size=1, bias=False
+        )
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         """
         Residual depthwise-separable temporal convolution.
-        
+
         Processes temporal patterns within each feature independently (depthwise),
         then mixes features (pointwise). This captures:
         - Within-feature temporal patterns (e.g., "weekday_sin" oscillating over forecast horizon)
         - Cross-feature interactions via pointwise convolutions
         - Global feature importance via squeeze-excitation
-        
+
         Args:
             x: Tensor of shape (batch, time, features)
-            
+
         Returns:
             Tensor of shape (batch, time, features) with residual connection
         """
@@ -1209,10 +1269,10 @@ class CNNMLPHead(Module):
     def forward(self, x):
         """
         Apply optional CNN front-end followed by MLP.
-        
+
         Args:
             x: Tensor of shape (batch, time, features)
-            
+
         Returns:
             mu, sigma: Predictions with shape (batch, time, 1)
         """
@@ -1263,11 +1323,15 @@ class MambaSSM(ModelObject):
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
         self.use_extra_gating = use_extra_gating
-        normalized_method = changepoint_method if changepoint_method is not None else "none"
+        normalized_method = (
+            changepoint_method if changepoint_method is not None else "none"
+        )
         if isinstance(normalized_method, str):
             normalized_method = normalized_method.lower()
         self.changepoint_method = normalized_method
-        self.changepoint_params = changepoint_params if changepoint_params is not None else {}
+        self.changepoint_params = (
+            changepoint_params if changepoint_params is not None else {}
+        )
         self.context_length = context_length
         self.d_model = d_model
         self.n_layers = n_layers
@@ -1284,7 +1348,7 @@ class MambaSSM(ModelObject):
 
         self.prediction_batch_size = prediction_batch_size
         self.model = None
-        
+
         # Device selection: CUDA > MPS > CPU
         # Check CUDA first (highest priority for performance)
         if torch.cuda.is_available():
@@ -1292,6 +1356,7 @@ class MambaSSM(ModelObject):
         # Only check MPS on macOS to avoid false positives on Linux
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             import platform
+
             if platform.system() == "Darwin":  # macOS only
                 self.device = "mps"
             else:
@@ -1315,9 +1380,7 @@ class MambaSSM(ModelObject):
         if self.loss_function == "combined_nll_wasserstein":
             return CombinedNLLWassersteinLoss(self.nll_weight, self.wasserstein_weight)
         elif self.loss_function == "quantile":
-            return QuantileLoss(
-                prediction_interval=self.prediction_interval
-            )
+            return QuantileLoss(prediction_interval=self.prediction_interval)
         elif self.loss_function == "crps":
             return CRPSLoss()
         elif self.loss_function == "energy":
@@ -1329,7 +1392,7 @@ class MambaSSM(ModelObject):
                 nll_weight=getattr(self, 'nll_weight', 0.7),
                 rank_weight=getattr(self, 'rank_weight', 0.3),
                 temperature=getattr(self, 'temperature', 1.0),
-                use_kendall=getattr(self, 'use_kendall', False)
+                use_kendall=getattr(self, 'use_kendall', False),
             )
         elif self.loss_function == "short_horizon_rank":
             return ShortHorizonRankLoss(
@@ -1337,7 +1400,7 @@ class MambaSSM(ModelObject):
                 rank_weight=getattr(self, 'rank_weight', 0.3),
                 consistency_weight=getattr(self, 'consistency_weight', 0.1),
                 temperature=getattr(self, 'temperature', 0.5),
-                horizon_steps=getattr(self, 'horizon_steps', 4)
+                horizon_steps=getattr(self, 'horizon_steps', 4),
             )
         else:
             raise ValueError(
@@ -1369,7 +1432,7 @@ class MambaSSM(ModelObject):
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
         )
-        
+
         use_changepoints = self.changepoint_method not in {None, "none"}
 
         # Set default changepoint parameters for basic method if not provided
@@ -1381,15 +1444,15 @@ class MambaSSM(ModelObject):
             half_yr_space = half_yr_spacing(df)
             self.changepoint_params = {
                 'changepoint_spacing': int(half_yr_space),
-                'changepoint_distance_end': int(half_yr_space / 2)
+                'changepoint_distance_end': int(half_yr_space / 2),
             }
-        
+
         # Changepoint features
         if use_changepoints:
             # Default to individual per-series changepoints unless overridden in kwargs
             if 'aggregate_method' not in kwargs:
                 kwargs['aggregate_method'] = 'individual'
-            
+
             self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
@@ -1416,15 +1479,23 @@ class MambaSSM(ModelObject):
                 # Initialize with shifted values (will be replaced during batch creation with proper windows)
                 shifted_values = df[col].shift(1).bfill().fillna(0.0).astype(np.float32)
                 naive_feature_data[feature_name] = shifted_values
-            
-            naive_features = pd.DataFrame(naive_feature_data, index=df.index, dtype=np.float32)
+
+            naive_features = pd.DataFrame(
+                naive_feature_data, index=df.index, dtype=np.float32
+            )
             self.naive_feature_columns = naive_features.columns
             # Store last window for each series (for prediction)
             self.naive_window_size = self.prediction_batch_size
             self.naive_feature_windows = {}
             for col in df.columns:
                 # Get the last prediction_batch_size values
-                last_window = df[col].ffill().iloc[-self.prediction_batch_size:].fillna(0.0).values.astype(np.float32)
+                last_window = (
+                    df[col]
+                    .ffill()
+                    .iloc[-self.prediction_batch_size :]
+                    .fillna(0.0)
+                    .values.astype(np.float32)
+                )
                 # Reverse so most recent is first: [t-1, t-2, ..., t-prediction_batch_size]
                 self.naive_feature_windows[col] = last_window[::-1]
         else:
@@ -1432,14 +1503,14 @@ class MambaSSM(ModelObject):
             self.naive_feature_columns = pd.Index([])
             self.naive_feature_windows = None
             self.naive_window_size = 0
-        
+
         # Combine all features
         feature_list = [date_feats_train, changepoint_features]
         if naive_features is not None:
             feature_list.append(naive_features)
         if future_regressor is not None:
             feature_list.append(future_regressor)
-            
+
         feat_df_train = pd.concat(feature_list, axis=1).reindex(train_index)
 
         feat_df_train = feat_df_train.ffill().bfill().astype(np.float32)
@@ -1460,27 +1531,26 @@ class MambaSSM(ModelObject):
         # 4. Build per-series feature mapping if needed
         series_names = list(df.columns)
         series_feat_mapping, has_per_series = build_series_feature_mapping(
-            self.feature_columns, 
-            series_names,
-            self.changepoint_features_columns
+            self.feature_columns, series_names, self.changepoint_features_columns
         )
         self.series_feat_mapping = series_feat_mapping
         self.has_per_series_features = has_per_series
-        
+
         # 4b. Create training batches using shared efficient function
         # Get naive feature indices for anti-leakage
         if self.use_naive_feature:
             naive_feature_indices = [
-                i for i, col in enumerate(self.feature_columns)
+                i
+                for i, col in enumerate(self.feature_columns)
                 if col in self.naive_feature_columns
             ]
         else:
             naive_feature_indices = []
-        
+
         X_data, Y_data = create_training_batches(
-            y_train_scaled, 
-            train_feats_scaled, 
-            self.prediction_batch_size, 
+            y_train_scaled,
+            train_feats_scaled,
+            self.prediction_batch_size,
             max_samples=50000,
             random_seed=self.random_seed,
             series_feat_mapping=series_feat_mapping,
@@ -1518,7 +1588,7 @@ class MambaSSM(ModelObject):
             # Fallback when torch is not available
             X_tensor = X_data
             Y_tensor = Y_data
-        
+
         dataset = TensorDataset(X_tensor, Y_tensor)
         dataloader = DataLoader(
             dataset,
@@ -1535,20 +1605,20 @@ class MambaSSM(ModelObject):
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self.model.train()
-        
+
         for epoch in range(self.epochs):
             running_loss = 0.0
-            
+
             for x_batch, y_batch in tqdm(
                 dataloader,
                 desc=f"Epoch {epoch+1}/{self.epochs}",
                 disable=(self.verbose == 0),
             ):
                 x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-                
+
                 optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
-                
+
                 # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
                 # y_batch has shape (batch_size, prediction_batch_size, 1)
                 # Calculate loss across all timesteps in the batch
@@ -1581,7 +1651,7 @@ class MambaSSM(ModelObject):
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
         )
-        
+
         # Create future changepoint features without re-fitting detector (single fit at start)
         if (
             getattr(self, "changepoint_detector", None) is not None
@@ -1589,7 +1659,9 @@ class MambaSSM(ModelObject):
         ):
             # Use the changepoint detector's create_features method for consistent feature generation
             # This properly continues "periods since changepoint" values into the future
-            all_features = self.changepoint_detector.create_features(forecast_length=forecast_length)
+            all_features = self.changepoint_detector.create_features(
+                forecast_length=forecast_length
+            )
             future_changepoint_feats = all_features.iloc[-forecast_length:].copy()
             future_changepoint_feats.index = forecast_index
             future_changepoint_feats = future_changepoint_feats.reindex(
@@ -1609,23 +1681,27 @@ class MambaSSM(ModelObject):
             }
         else:
             current_naive_windows = None
-        
+
         num_series = self.df_train.shape[1]
         forecast_mu_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
-        forecast_sigma_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
+        forecast_sigma_scaled = np.zeros(
+            (forecast_length, num_series), dtype=np.float32
+        )
 
         # 3. Predict in batches of prediction_batch_size
         num_batches = int(np.ceil(forecast_length / self.prediction_batch_size))
-        
+
         with torch.no_grad():
             for batch_idx in range(num_batches):
                 start_step = batch_idx * self.prediction_batch_size
                 end_step = min(start_step + self.prediction_batch_size, forecast_length)
                 actual_batch_size = end_step - start_step
-                
+
                 if self.verbose and batch_idx % 5 == 0:
-                    print(f"Predicting batch {batch_idx+1}/{num_batches} (steps {start_step+1}-{end_step})")
-                
+                    print(
+                        f"Predicting batch {batch_idx+1}/{num_batches} (steps {start_step+1}-{end_step})"
+                    )
+
                 # Build window-based naive features for this batch
                 if current_naive_windows is not None:
                     # Create ONE naive feature per series
@@ -1637,30 +1713,36 @@ class MambaSSM(ModelObject):
                     naive_feature_data = {}
                     for col in self.df_train.columns:
                         feature_name = f"naive_last_{col}"
-                        window = current_naive_windows[col]  # Current window for this series
+                        window = current_naive_windows[
+                            col
+                        ]  # Current window for this series
                         # The window contains [t-1, t-2, ..., t-prediction_batch_size] (REVERSED, most recent first)
                         # For prediction batch, we use these values in order
-                        naive_feature_data[feature_name] = window[:actual_batch_size].tolist()
-                    
+                        naive_feature_data[feature_name] = window[
+                            :actual_batch_size
+                        ].tolist()
+
                     naive_future_feats = pd.DataFrame(
                         naive_feature_data,
                         index=forecast_index[start_step:end_step],
                         dtype=np.float32,
                     )
-                    naive_future_feats = naive_future_feats.reindex(columns=self.naive_feature_columns)
+                    naive_future_feats = naive_future_feats.reindex(
+                        columns=self.naive_feature_columns
+                    )
                 else:
                     naive_future_feats = None
-                
+
                 # Combine all future features for this batch
                 feature_list = [
                     future_date_feats.iloc[start_step:end_step],
-                    future_changepoint_feats.iloc[start_step:end_step]
+                    future_changepoint_feats.iloc[start_step:end_step],
                 ]
                 if naive_future_feats is not None:
                     feature_list.append(naive_future_feats)
                 if future_regressor is not None:
                     feature_list.append(future_regressor.iloc[start_step:end_step])
-                    
+
                 feat_batch_df = pd.concat(feature_list, axis=1)
                 feat_batch_df = (
                     feat_batch_df.reindex(columns=self.feature_columns)
@@ -1670,71 +1752,86 @@ class MambaSSM(ModelObject):
                     .astype(np.float32)
                 )
                 batch_feats_scaled = self.feature_scaler.transform(feat_batch_df.values)
-                
+
                 # Handle per-series vs shared features
                 if getattr(self, 'has_per_series_features', False):
                     # Per-series features: process each series individually
-                    max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
-                    
+                    max_feats_from_mapping = max(
+                        len(feat_indices)
+                        for feat_indices in self.series_feat_mapping.values()
+                    )
+
                     for series_idx in range(num_series):
                         # Get feature indices for this series
                         feat_indices = self.series_feat_mapping.get(series_idx, [])
-                        
+
                         # Extract features for this series
                         series_feats = batch_feats_scaled[:, feat_indices]
-                        
+
                         # Pad if needed
                         if len(feat_indices) < max_feats_from_mapping:
                             pad_size = max_feats_from_mapping - len(feat_indices)
-                            padding = np.zeros((actual_batch_size, pad_size), dtype=np.float32)
-                            series_feats = np.concatenate([series_feats, padding], axis=1)
-                        
+                            padding = np.zeros(
+                                (actual_batch_size, pad_size), dtype=np.float32
+                            )
+                            series_feats = np.concatenate(
+                                [series_feats, padding], axis=1
+                            )
+
                         # Create input tensor: (1, actual_batch_size, n_features)
                         model_in = torch.tensor(
-                            series_feats, 
-                            device=self.device, 
-                            dtype=torch.float32
+                            series_feats, device=self.device, dtype=torch.float32
                         ).unsqueeze(0)
-                        
+
                         # Predict for this series
                         mu, sigma = self.model(model_in)
-                        
+
                         # Store predictions: (actual_batch_size, 1)
                         # Take only actual_batch_size elements in case model outputs more
-                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :actual_batch_size, 0].cpu().numpy()
-                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :actual_batch_size, 0].cpu().numpy()
+                        forecast_mu_scaled[start_step:end_step, series_idx] = (
+                            mu[0, :actual_batch_size, 0].cpu().numpy()
+                        )
+                        forecast_sigma_scaled[start_step:end_step, series_idx] = (
+                            sigma[0, :actual_batch_size, 0].cpu().numpy()
+                        )
                 else:
                     # Shared features: broadcast for all series
                     # batch_feats_scaled shape: (actual_batch_size, n_features)
                     # Expand to (num_series, actual_batch_size, n_features)
                     batch_feats_tensor = torch.tensor(
-                        batch_feats_scaled,
-                        device=self.device,
-                        dtype=torch.float32
+                        batch_feats_scaled, device=self.device, dtype=torch.float32
                     )
-                    model_in = batch_feats_tensor.unsqueeze(0).expand(num_series, -1, -1)
-                    
+                    model_in = batch_feats_tensor.unsqueeze(0).expand(
+                        num_series, -1, -1
+                    )
+
                     # Predict for all series at once
                     mu, sigma = self.model(model_in)
-                    
+
                     # Store predictions: (num_series, actual_batch_size, 1)
                     # Take only actual_batch_size elements in case model outputs more
-                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :actual_batch_size, 0].T.cpu().numpy()
-                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :actual_batch_size, 0].T.cpu().numpy()
-                
+                    forecast_mu_scaled[start_step:end_step, :] = (
+                        mu[:, :actual_batch_size, 0].T.cpu().numpy()
+                    )
+                    forecast_sigma_scaled[start_step:end_step, :] = (
+                        sigma[:, :actual_batch_size, 0].T.cpu().numpy()
+                    )
+
                 # Update naive window with predictions from this batch for next batch
                 if current_naive_windows is not None:
                     # Get all predictions from this batch (unscaled to match stored window)
-                    batch_predictions_scaled = forecast_mu_scaled[start_step:end_step, :]
+                    batch_predictions_scaled = forecast_mu_scaled[
+                        start_step:end_step, :
+                    ]
                     batch_predictions_unscaled = (
                         batch_predictions_scaled * self.scaler_stds + self.scaler_means
                     )
-                    
+
                     # Update window for each series
                     for col_idx, col in enumerate(self.df_train.columns):
                         current_window = current_naive_windows[col]
                         new_values = batch_predictions_unscaled[:, col_idx]
-                        
+
                         # Prepend new predictions in reverse order so most recent is first
                         updated_window = np.concatenate(
                             [new_values[::-1], current_window]
@@ -1800,78 +1897,78 @@ class MambaSSM(ModelObject):
     def get_new_params(method: str = "random"):
         """
         Generate new random parameters for MambaSSM model.
-        
+
         Parameters are weighted based on:
         - Accuracy: Higher weights for parameters likely to improve accuracy
         - Speed: Lower weights for parameters that are slower on larger datasets
         - Stability: Higher weights for more stable/reliable options
-        
+
         Args:
             method: Method for parameter selection (currently only 'random' supported)
-            
+
         Returns:
             dict: Dictionary of randomly selected parameters
         """
         import random
-        
+
         # Context length options - longer contexts can be more accurate but slower
         context_lengths = [30, 60, 90, 120, 180, 240]
         context_weights = [0.1, 0.2, 0.3, 0.25, 0.1, 0.05]  # Prefer medium lengths
-        
+
         # Model dimension - larger models more accurate but slower
         d_models = [16, 24, 32, 48, 64, 96]
         d_model_weights = [0.1, 0.15, 0.25, 0.25, 0.2, 0.05]  # Prefer 32-64 range
-        
+
         # Number of layers - more layers can be more accurate but much slower
         n_layers_options = [1, 2, 3, 4, 6]
         n_layers_weights = [0.15, 0.35, 0.25, 0.2, 0.05]  # Prefer 2-3 layers
-        
+
         # State dimension - affects model capacity
         d_states = [4, 8, 12, 16, 24, 32]
         d_state_weights = [0.1, 0.25, 0.2, 0.25, 0.15, 0.05]  # Prefer 8-16 range
-        
+
         # Training epochs - more epochs more accurate but slower
         epochs_options = [5, 8, 10, 15, 20, 30]
         epochs_weights = [0.1, 0.2, 0.25, 0.25, 0.15, 0.05]  # Prefer 10-15 range
-        
+
         # Batch size - affects training stability and speed
         batch_sizes = [16, 24, 32, 48, 64, 96]
         batch_weights = [0.15, 0.2, 0.25, 0.2, 0.15, 0.05]  # Prefer 24-48 range
-        
+
         # Learning rate - critical for convergence
         learning_rates = [5e-4, 1e-3, 2e-3, 3e-3, 5e-3]
         lr_weights = [0.2, 0.35, 0.25, 0.15, 0.05]  # Prefer lower learning rates
-        
+
         # Loss functions - weight by expected accuracy and stability
         loss_functions = [
-            "combined_nll_wasserstein", 
-            "crps", 
-            "quantile", 
-            "regularized_nll", 
+            "combined_nll_wasserstein",
+            "crps",
+            "quantile",
+            "regularized_nll",
             "energy",
-            "short_horizon_rank",      # Best for short horizon ranked Sharpe
-            "ranked_sharpe",           # General ranked Sharpe optimization
+            "short_horizon_rank",  # Best for short horizon ranked Sharpe
+            "ranked_sharpe",  # General ranked Sharpe optimization
         ]
         loss_weights = [0.3, 0.25, 0.2, 0.15, 0.05, 0.03, 0.03]
-        
+
         # NLL weight for combined loss
         nll_weights = [0.5, 0.8, 1.0, 1.2, 1.5]
         nll_weight_probs = [0.1, 0.2, 0.4, 0.2, 0.1]  # Prefer around 1.0
-        
+
         # Wasserstein weight for combined loss
         wasserstein_weights = [0.05, 0.1, 0.15, 0.2, 0.3]
         wasserstein_weight_probs = [0.15, 0.3, 0.25, 0.2, 0.1]  # Prefer lower values
-        
+
         # Datepart method - use existing random_datepart function for proper weighting
         # This leverages the sophisticated weighting already built into random_datepart
-        
+
         # Boolean options with appropriate weights
         holiday_used_options = [True, False]
         holiday_weights = [0.3, 0.7]  # Prefer False for simplicity unless needed
-        
-        extra_gating_options = [True, False]  
+
+        extra_gating_options = [True, False]
         gating_weights = [0.25, 0.75]  # Prefer False for stability
-        
+
         naive_feature_options = [True, False]
         naive_feature_weights = [0.5, 0.5]  # Default to using naive features
 
@@ -1886,41 +1983,59 @@ class MambaSSM(ModelObject):
 
         # Generate random selections
         selected_params = {
-            "context_length": random.choices(context_lengths, weights=context_weights, k=1)[0],
+            "context_length": random.choices(
+                context_lengths, weights=context_weights, k=1
+            )[0],
             "d_model": random.choices(d_models, weights=d_model_weights, k=1)[0],
-            "n_layers": random.choices(n_layers_options, weights=n_layers_weights, k=1)[0],
+            "n_layers": random.choices(n_layers_options, weights=n_layers_weights, k=1)[
+                0
+            ],
             "d_state": random.choices(d_states, weights=d_state_weights, k=1)[0],
             "epochs": random.choices(epochs_options, weights=epochs_weights, k=1)[0],
             "batch_size": random.choices(batch_sizes, weights=batch_weights, k=1)[0],
             "lr": random.choices(learning_rates, weights=lr_weights, k=1)[0],
-            "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[0],
+            "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[
+                0
+            ],
             "nll_weight": random.choices(nll_weights, weights=nll_weight_probs, k=1)[0],
-            "wasserstein_weight": random.choices(wasserstein_weights, weights=wasserstein_weight_probs, k=1)[0],
+            "wasserstein_weight": random.choices(
+                wasserstein_weights, weights=wasserstein_weight_probs, k=1
+            )[0],
             "datepart_method": random_datepart(),
-            "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
-            "use_extra_gating": random.choices(extra_gating_options, weights=gating_weights, k=1)[0],
-            "use_naive_feature": random.choices(naive_feature_options, weights=naive_feature_weights, k=1)[0],
+            "holiday_countries_used": random.choices(
+                holiday_used_options, weights=holiday_weights, k=1
+            )[0],
+            "use_extra_gating": random.choices(
+                extra_gating_options, weights=gating_weights, k=1
+            )[0],
+            "use_naive_feature": random.choices(
+                naive_feature_options, weights=naive_feature_weights, k=1
+            )[0],
             "changepoint_method": changepoint_method,
             "changepoint_params": changepoint_params,
             "regression_type": regression_choice,
         }
-        
+
         # Add prediction_batch_size based on context_length (longer contexts need smaller batches)
         if selected_params["context_length"] >= 180:
-            selected_params["prediction_batch_size"] = random.choices([30, 45, 60], weights=[0.4, 0.4, 0.2], k=1)[0]
+            selected_params["prediction_batch_size"] = random.choices(
+                [30, 45, 60], weights=[0.4, 0.4, 0.2], k=1
+            )[0]
         else:
-            selected_params["prediction_batch_size"] = random.choices([45, 60, 90], weights=[0.3, 0.4, 0.3], k=1)[0]
-        
+            selected_params["prediction_batch_size"] = random.choices(
+                [45, 60, 90], weights=[0.3, 0.4, 0.3], k=1
+            )[0]
+
         return selected_params
 
 
 class pMLP(ModelObject):
     """
     Probabilistic MLP for time series forecasting.
-    
+
     Uses a wide, shallow MLP architecture with optional CNN front-end for
     capturing temporal patterns in future seasonal features.
-    
+
     Args:
         name: Model name
         frequency: Time series frequency
@@ -1950,6 +2065,7 @@ class pMLP(ModelObject):
             - kernel_size (int): Temporal kernel size (3, 5, 7, 9)
             - use_se (bool): Use squeeze-and-excitation for feature importance
     """
+
     # TODO: improve the changepoint features / future trend modeling for MLP
     # TODO: add a holiday detector integration
     def __init__(
@@ -1994,17 +2110,21 @@ class pMLP(ModelObject):
         self.regression_type = regression_type
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
-        normalized_method = changepoint_method if changepoint_method is not None else "none"
+        normalized_method = (
+            changepoint_method if changepoint_method is not None else "none"
+        )
         if isinstance(normalized_method, str):
             normalized_method = normalized_method.lower()
         self.changepoint_method = normalized_method
-        self.changepoint_params = changepoint_params if changepoint_params is not None else {}
-        
+        self.changepoint_params = (
+            changepoint_params if changepoint_params is not None else {}
+        )
+
         # Default to wide, shallow architecture if not specified
         if hidden_dims is None:
             hidden_dims = [768, 256]  # Wide first layer, narrower second
         self.hidden_dims = hidden_dims
-        
+
         self.dropout_rate = dropout_rate
         self.use_batch_norm = use_batch_norm
         self.activation = activation
@@ -2012,8 +2132,10 @@ class pMLP(ModelObject):
         self.batch_size = batch_size
         self.lr = lr
         self.use_naive_feature = use_naive_feature
-        self.num_cnn_blocks = None if num_cnn_blocks is None else max(0, int(num_cnn_blocks))
-        
+        self.num_cnn_blocks = (
+            None if num_cnn_blocks is None else max(0, int(num_cnn_blocks))
+        )
+
         # CNN parameters: kernel_size, use_se, etc.
         self.cnn_params = cnn_params if cnn_params is not None else {}
 
@@ -2032,9 +2154,7 @@ class pMLP(ModelObject):
         if self.loss_function == "combined_nll_wasserstein":
             return CombinedNLLWassersteinLoss(self.nll_weight, self.wasserstein_weight)
         elif self.loss_function == "quantile":
-            return QuantileLoss(
-                prediction_interval=self.prediction_interval
-            )
+            return QuantileLoss(prediction_interval=self.prediction_interval)
         elif self.loss_function == "crps":
             return CRPSLoss()
         elif self.loss_function == "energy":
@@ -2046,7 +2166,7 @@ class pMLP(ModelObject):
                 nll_weight=getattr(self, 'nll_weight', 0.7),
                 rank_weight=getattr(self, 'rank_weight', 0.3),
                 temperature=getattr(self, 'temperature', 1.0),
-                use_kendall=getattr(self, 'use_kendall', False)
+                use_kendall=getattr(self, 'use_kendall', False),
             )
         elif self.loss_function == "short_horizon_rank":
             return ShortHorizonRankLoss(
@@ -2054,7 +2174,7 @@ class pMLP(ModelObject):
                 rank_weight=getattr(self, 'rank_weight', 0.3),
                 consistency_weight=getattr(self, 'consistency_weight', 0.1),
                 temperature=getattr(self, 'temperature', 0.5),
-                horizon_steps=getattr(self, 'horizon_steps', 4)
+                horizon_steps=getattr(self, 'horizon_steps', 4),
             )
         else:
             raise ValueError(
@@ -2088,7 +2208,7 @@ class pMLP(ModelObject):
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
         )
-        
+
         use_changepoints = self.changepoint_method not in {None, "none"}
 
         # Set default changepoint parameters for basic method if not provided
@@ -2100,15 +2220,15 @@ class pMLP(ModelObject):
             half_yr_space = half_yr_spacing(df)
             self.changepoint_params = {
                 'changepoint_spacing': int(half_yr_space),
-                'changepoint_distance_end': int(half_yr_space / 2)
+                'changepoint_distance_end': int(half_yr_space / 2),
             }
-        
+
         # Changepoint features
         if use_changepoints:
             # Default to individual per-series changepoints unless overridden in kwargs
             if 'aggregate_method' not in kwargs:
                 kwargs['aggregate_method'] = 'individual'
-            
+
             self.changepoint_detector = ChangepointDetector(
                 method=self.changepoint_method,
                 method_params=self.changepoint_params,
@@ -2135,15 +2255,23 @@ class pMLP(ModelObject):
                 # Initialize with shifted values (will be replaced during batch creation with proper windows)
                 shifted_values = df[col].shift(1).bfill().fillna(0.0).astype(np.float32)
                 naive_feature_data[feature_name] = shifted_values
-            
-            naive_features = pd.DataFrame(naive_feature_data, index=df.index, dtype=np.float32)
+
+            naive_features = pd.DataFrame(
+                naive_feature_data, index=df.index, dtype=np.float32
+            )
             self.naive_feature_columns = naive_features.columns
             # Store last window for each series (for prediction)
             self.naive_window_size = self.prediction_batch_size
             self.naive_feature_windows = {}
             for col in df.columns:
                 # Get the last prediction_batch_size values
-                last_window = df[col].ffill().iloc[-self.prediction_batch_size:].fillna(0.0).values.astype(np.float32)
+                last_window = (
+                    df[col]
+                    .ffill()
+                    .iloc[-self.prediction_batch_size :]
+                    .fillna(0.0)
+                    .values.astype(np.float32)
+                )
                 # Reverse so most recent is first: [t-1, t-2, ..., t-prediction_batch_size]
                 self.naive_feature_windows[col] = last_window[::-1]
         else:
@@ -2151,14 +2279,14 @@ class pMLP(ModelObject):
             self.naive_feature_columns = pd.Index([])
             self.naive_feature_windows = None
             self.naive_window_size = 0
-        
+
         # Combine all features
         feature_list = [date_feats_train, changepoint_features]
         if naive_features is not None:
             feature_list.append(naive_features)
         if future_regressor is not None:
             feature_list.append(future_regressor)
-            
+
         feat_df_train = pd.concat(feature_list, axis=1).reindex(train_index)
 
         feat_df_train = feat_df_train.ffill().bfill().astype(np.float32)
@@ -2179,27 +2307,26 @@ class pMLP(ModelObject):
         # 4. Build per-series feature mapping if needed
         series_names = list(df.columns)
         series_feat_mapping, has_per_series = build_series_feature_mapping(
-            self.feature_columns, 
-            series_names,
-            self.changepoint_features_columns
+            self.feature_columns, series_names, self.changepoint_features_columns
         )
         self.series_feat_mapping = series_feat_mapping
         self.has_per_series_features = has_per_series
-        
+
         # 4b. Create training batches using shared efficient function
         # Get naive feature indices for anti-leakage
         if self.use_naive_feature:
             naive_feature_indices = [
-                i for i, col in enumerate(self.feature_columns)
+                i
+                for i, col in enumerate(self.feature_columns)
                 if col in self.naive_feature_columns
             ]
         else:
             naive_feature_indices = []
-        
+
         self.X_data, self.Y_data = create_training_batches(
-            y_train_scaled, 
-            train_feats_scaled, 
-            self.prediction_batch_size, 
+            y_train_scaled,
+            train_feats_scaled,
+            self.prediction_batch_size,
             max_samples=100000,  # More samples for MLP efficiency
             random_seed=self.random_seed,
             series_feat_mapping=series_feat_mapping,
@@ -2219,6 +2346,7 @@ class pMLP(ModelObject):
         # Only check MPS on macOS to avoid false positives on Linux
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             import platform
+
             if platform.system() == "Darwin":  # macOS only
                 self.device = "mps"
             else:
@@ -2229,7 +2357,9 @@ class pMLP(ModelObject):
         # Account for potentially different feature dimensions per series
         if has_per_series:
             # Use max features across all series
-            num_features = self.X_data.shape[2]  # Features only (no y value in X anymore)
+            num_features = self.X_data.shape[
+                2
+            ]  # Features only (no y value in X anymore)
         else:
             num_features = train_feats_scaled.shape[1]
         input_dim = num_features
@@ -2241,7 +2371,7 @@ class pMLP(ModelObject):
                 use_batch_norm=self.use_batch_norm,
                 activation=self.activation,
                 num_blocks=self.num_cnn_blocks,
-                **self.cnn_params  # Pass through CNN parameters
+                **self.cnn_params,  # Pass through CNN parameters
             ).to(self.device)
         else:
             self.model = MLPCore(
@@ -2251,8 +2381,10 @@ class pMLP(ModelObject):
                 self.use_batch_norm,
                 self.activation,
             ).to(self.device)
-        
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
+
+        optimizer = torch.optim.AdamW(
+            self.model.parameters(), lr=self.lr, weight_decay=1e-5
+        )
         criterion = self._get_loss_function()
 
         # Create tensors and dataset - keep sequence structure for MLP
@@ -2280,41 +2412,43 @@ class pMLP(ModelObject):
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self.model.train()
-        
+
         # Learning rate scheduler for better convergence
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
-        
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 'min', patience=3, factor=0.5
+        )
+
         for epoch in range(self.epochs):
             running_loss = 0.0
             num_batches = 0
-            
+
             for x_batch, y_batch in tqdm(
                 dataloader,
                 desc=f"Epoch {epoch+1}/{self.epochs}",
                 disable=(self.verbose == 0),
             ):
                 x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-                
+
                 optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
-                
+
                 # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
                 # y_batch has shape (batch_size, prediction_batch_size, 1)
                 # Calculate loss across all timesteps in the batch
                 loss = criterion(mu, sigma, y_batch)
                 loss.backward()
-                
+
                 # Gradient clipping for stability
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                
+
                 optimizer.step()
-                
+
                 running_loss += loss.item()
                 num_batches += 1
-            
+
             avg_loss = running_loss / num_batches
             scheduler.step(avg_loss)
-            
+
             if self.verbose:
                 print(f"Epoch {epoch+1}  avg-loss: {avg_loss:.4f}")
 
@@ -2336,7 +2470,7 @@ class pMLP(ModelObject):
             holiday_country=self.holiday_country,
             holiday_countries_used=self.holiday_countries_used,
         )
-        
+
         # Create future changepoint features without re-fitting detector (single fit at start)
         if (
             getattr(self, "changepoint_detector", None) is not None
@@ -2344,7 +2478,9 @@ class pMLP(ModelObject):
         ):
             # Use the changepoint detector's create_features method for consistent feature generation
             # This properly continues "periods since changepoint" values into the future
-            all_features = self.changepoint_detector.create_features(forecast_length=forecast_length)
+            all_features = self.changepoint_detector.create_features(
+                forecast_length=forecast_length
+            )
             future_changepoint_feats = all_features.iloc[-forecast_length:].copy()
             future_changepoint_feats.index = forecast_index
             future_changepoint_feats = future_changepoint_feats.reindex(
@@ -2364,23 +2500,27 @@ class pMLP(ModelObject):
             }
         else:
             current_naive_windows = None
-        
+
         num_series = self.df_train.shape[1]
         forecast_mu_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
-        forecast_sigma_scaled = np.zeros((forecast_length, num_series), dtype=np.float32)
+        forecast_sigma_scaled = np.zeros(
+            (forecast_length, num_series), dtype=np.float32
+        )
 
         # 3. Predict in batches of prediction_batch_size
         num_batches = int(np.ceil(forecast_length / self.prediction_batch_size))
-        
+
         with torch.no_grad():
             for batch_idx in range(num_batches):
                 start_step = batch_idx * self.prediction_batch_size
                 end_step = min(start_step + self.prediction_batch_size, forecast_length)
                 actual_batch_size = end_step - start_step
-                
+
                 if self.verbose and batch_idx % 5 == 0:
-                    print(f"Predicting batch {batch_idx+1}/{num_batches} (steps {start_step+1}-{end_step})")
-                
+                    print(
+                        f"Predicting batch {batch_idx+1}/{num_batches} (steps {start_step+1}-{end_step})"
+                    )
+
                 # Build window-based naive features for this batch - pMLP version
                 if current_naive_windows is not None:
                     # Create ONE naive feature per series
@@ -2392,30 +2532,36 @@ class pMLP(ModelObject):
                     naive_feature_data = {}
                     for col in self.df_train.columns:
                         feature_name = f"naive_last_{col}"
-                        window = current_naive_windows[col]  # Current window for this series
+                        window = current_naive_windows[
+                            col
+                        ]  # Current window for this series
                         # The window contains [t-1, t-2, ..., t-prediction_batch_size] (REVERSED, most recent first)
                         # For prediction batch, we use these values in order
-                        naive_feature_data[feature_name] = window[:actual_batch_size].tolist()
-                    
+                        naive_feature_data[feature_name] = window[
+                            :actual_batch_size
+                        ].tolist()
+
                     naive_future_feats = pd.DataFrame(
                         naive_feature_data,
                         index=forecast_index[start_step:end_step],
                         dtype=np.float32,
                     )
-                    naive_future_feats = naive_future_feats.reindex(columns=self.naive_feature_columns)
+                    naive_future_feats = naive_future_feats.reindex(
+                        columns=self.naive_feature_columns
+                    )
                 else:
                     naive_future_feats = None
-                
+
                 # Combine all future features for this batch
                 feature_list = [
                     future_date_feats.iloc[start_step:end_step],
-                    future_changepoint_feats.iloc[start_step:end_step]
+                    future_changepoint_feats.iloc[start_step:end_step],
                 ]
                 if naive_future_feats is not None:
                     feature_list.append(naive_future_feats)
                 if future_regressor is not None:
                     feature_list.append(future_regressor.iloc[start_step:end_step])
-                    
+
                 feat_batch_df = pd.concat(feature_list, axis=1)
                 feat_batch_df = (
                     feat_batch_df.reindex(columns=self.feature_columns)
@@ -2425,71 +2571,86 @@ class pMLP(ModelObject):
                     .astype(np.float32)
                 )
                 batch_feats_scaled = self.feature_scaler.transform(feat_batch_df.values)
-                
+
                 # Handle per-series vs shared features
                 if getattr(self, 'has_per_series_features', False):
                     # Per-series features: process each series individually
-                    max_feats_from_mapping = max(len(feat_indices) for feat_indices in self.series_feat_mapping.values())
-                    
+                    max_feats_from_mapping = max(
+                        len(feat_indices)
+                        for feat_indices in self.series_feat_mapping.values()
+                    )
+
                     for series_idx in range(num_series):
                         # Get feature indices for this series
                         feat_indices = self.series_feat_mapping.get(series_idx, [])
-                        
+
                         # Extract features for this series
                         series_feats = batch_feats_scaled[:, feat_indices]
-                        
+
                         # Pad if needed
                         if len(feat_indices) < max_feats_from_mapping:
                             pad_size = max_feats_from_mapping - len(feat_indices)
-                            padding = np.zeros((actual_batch_size, pad_size), dtype=np.float32)
-                            series_feats = np.concatenate([series_feats, padding], axis=1)
-                        
+                            padding = np.zeros(
+                                (actual_batch_size, pad_size), dtype=np.float32
+                            )
+                            series_feats = np.concatenate(
+                                [series_feats, padding], axis=1
+                            )
+
                         # Create input tensor: (1, actual_batch_size, n_features)
                         model_in = torch.tensor(
-                            series_feats, 
-                            device=self.device, 
-                            dtype=torch.float32
+                            series_feats, device=self.device, dtype=torch.float32
                         ).unsqueeze(0)
-                        
+
                         # Predict for this series
                         mu, sigma = self.model(model_in)
-                        
+
                         # Store predictions: (actual_batch_size, 1)
                         # Take only actual_batch_size elements in case model outputs more
-                        forecast_mu_scaled[start_step:end_step, series_idx] = mu[0, :actual_batch_size, 0].cpu().numpy()
-                        forecast_sigma_scaled[start_step:end_step, series_idx] = sigma[0, :actual_batch_size, 0].cpu().numpy()
+                        forecast_mu_scaled[start_step:end_step, series_idx] = (
+                            mu[0, :actual_batch_size, 0].cpu().numpy()
+                        )
+                        forecast_sigma_scaled[start_step:end_step, series_idx] = (
+                            sigma[0, :actual_batch_size, 0].cpu().numpy()
+                        )
                 else:
                     # Shared features: broadcast for all series
                     # batch_feats_scaled shape: (actual_batch_size, n_features)
                     # Expand to (num_series, actual_batch_size, n_features)
                     batch_feats_tensor = torch.tensor(
-                        batch_feats_scaled,
-                        device=self.device,
-                        dtype=torch.float32
+                        batch_feats_scaled, device=self.device, dtype=torch.float32
                     )
-                    model_in = batch_feats_tensor.unsqueeze(0).expand(num_series, -1, -1)
-                    
+                    model_in = batch_feats_tensor.unsqueeze(0).expand(
+                        num_series, -1, -1
+                    )
+
                     # Predict for all series at once
                     mu, sigma = self.model(model_in)
-                    
+
                     # Store predictions: (num_series, actual_batch_size, 1)
                     # Take only actual_batch_size elements in case model outputs more
-                    forecast_mu_scaled[start_step:end_step, :] = mu[:, :actual_batch_size, 0].T.cpu().numpy()
-                    forecast_sigma_scaled[start_step:end_step, :] = sigma[:, :actual_batch_size, 0].T.cpu().numpy()
-                
+                    forecast_mu_scaled[start_step:end_step, :] = (
+                        mu[:, :actual_batch_size, 0].T.cpu().numpy()
+                    )
+                    forecast_sigma_scaled[start_step:end_step, :] = (
+                        sigma[:, :actual_batch_size, 0].T.cpu().numpy()
+                    )
+
                 # Update naive window with predictions from this batch for next batch - pMLP version
                 if current_naive_windows is not None:
                     # Get all predictions from this batch (unscaled to match stored window)
-                    batch_predictions_scaled = forecast_mu_scaled[start_step:end_step, :]
+                    batch_predictions_scaled = forecast_mu_scaled[
+                        start_step:end_step, :
+                    ]
                     batch_predictions_unscaled = (
                         batch_predictions_scaled * self.scaler_stds + self.scaler_means
                     )
-                    
+
                     # Update window for each series
                     for col_idx, col in enumerate(self.df_train.columns):
                         current_window = current_naive_windows[col]
                         new_values = batch_predictions_unscaled[:, col_idx]
-                        
+
                         # Prepend new predictions in reverse order so most recent is first
                         updated_window = np.concatenate(
                             [new_values[::-1], current_window]
@@ -2556,12 +2717,12 @@ class pMLP(ModelObject):
     def get_new_params(method: str = "random"):
         """
         Generate new random parameters for pMLP model.
-        
+
         Focuses on wide, shallow architectures and efficient training.
-        
+
         Args:
             method: Method for parameter selection (currently only 'random' supported)
-            
+
         Returns:
             dict: Dictionary of randomly selected parameters
         """
@@ -2574,62 +2735,80 @@ class pMLP(ModelObject):
 
         # Hidden dimensions - focus on wide, shallow architectures
         hidden_dim_options = [
-            [512],              # Single wide layer
-            [768],              # Single very wide layer  
-            [1024],             # Single extremely wide layer
-            [2056],             # Single ultra-wide layer
-            [512, 256],         # Wide -> Medium
-            [768, 256],         # Very wide -> Medium
-            [1024, 256],        # Extremely wide -> Medium
-            [512, 256, 128],    # Wide -> Medium -> Narrow (3 layers max)
-            [512, 256, 512],    # Wide -> Medium -> Wide (3 layers max)
-            [768, 384],         # Very wide -> Medium-wide
-            [1024, 512],        # Extremely wide -> Wide
-            [256, 128],         # Medium -> Narrow (for smaller datasets)
-            [768, 128],         # Very wide -> Narrow
+            [512],  # Single wide layer
+            [768],  # Single very wide layer
+            [1024],  # Single extremely wide layer
+            [2056],  # Single ultra-wide layer
+            [512, 256],  # Wide -> Medium
+            [768, 256],  # Very wide -> Medium
+            [1024, 256],  # Extremely wide -> Medium
+            [512, 256, 128],  # Wide -> Medium -> Narrow (3 layers max)
+            [512, 256, 512],  # Wide -> Medium -> Wide (3 layers max)
+            [768, 384],  # Very wide -> Medium-wide
+            [1024, 512],  # Extremely wide -> Wide
+            [256, 128],  # Medium -> Narrow (for smaller datasets)
+            [768, 128],  # Very wide -> Narrow
         ]
-        hidden_weights = [0.15, 0.2, 0.15, 0.2, 0.15, 0.1, 0.1, 0.05, 0.05, 0.05, 0.03, 0.02, 0.01]
-        
+        hidden_weights = [
+            0.15,
+            0.2,
+            0.15,
+            0.2,
+            0.15,
+            0.1,
+            0.1,
+            0.05,
+            0.05,
+            0.05,
+            0.03,
+            0.02,
+            0.01,
+        ]
+
         # Dropout rates - moderate values for regularization
         dropout_rates = [0.1, 0.15, 0.2, 0.25, 0.3]
         dropout_weights = [0.15, 0.25, 0.3, 0.25, 0.05]  # Prefer 0.15-0.25 range
-        
+
         # Batch normalization - usually helps with wide networks
         batch_norm_options = [True, False]
         batch_norm_weights = [0.8, 0.2]  # Strongly prefer batch norm
-        
+
         # Activation functions
         activations = ['relu', 'gelu', 'silu']
-        activation_weights = [0.5, 0.3, 0.2]  # ReLU still dominant, but GELU/SiLU competitive
-        
+        activation_weights = [
+            0.5,
+            0.3,
+            0.2,
+        ]  # ReLU still dominant, but GELU/SiLU competitive
+
         # Training epochs - MLPs train faster, can use more epochs
         epochs_options = [10, 15, 20, 25, 30]
         epochs_weights = [0.15, 0.3, 0.3, 0.2, 0.05]  # Prefer 15-20 range
-        
+
         # Batch size - larger for efficiency with MLPs
         batch_sizes = [32, 48, 64, 96, 128]
         batch_weights = [0.1, 0.2, 0.35, 0.25, 0.1]  # Prefer 64-96 range
-        
+
         # Learning rate - MLPs can handle slightly higher learning rates
         learning_rates = [1e-3, 1.5e-3, 2e-3, 3e-3, 5e-3]
         lr_weights = [0.2, 0.25, 0.3, 0.2, 0.05]  # Prefer 1.5e-3 to 2e-3
-        
+
         # Loss functions - weight by expected performance
         loss_functions = [
-            "combined_nll_wasserstein", 
-            "crps", 
-            "quantile", 
-            "regularized_nll", 
+            "combined_nll_wasserstein",
+            "crps",
+            "quantile",
+            "regularized_nll",
             "energy",
-            "short_horizon_rank",      # Best for short horizon ranked Sharpe with MLPs
-            "ranked_sharpe",           # General ranked Sharpe optimization
+            "short_horizon_rank",  # Best for short horizon ranked Sharpe with MLPs
+            "ranked_sharpe",  # General ranked Sharpe optimization
         ]
         loss_weights = [0.3, 0.25, 0.25, 0.15, 0.1, 0.1, 0.1]
-        
+
         # NLL weight for combined loss
         nll_weights = [0.5, 0.8, 1.0, 1.2, 1.5]
         nll_weight_probs = [0.1, 0.2, 0.4, 0.2, 0.1]
-        
+
         # Wasserstein weight for combined loss
         wasserstein_weights = [0.05, 0.1, 0.15, 0.2, 0.3]
         wasserstein_weight_probs = [0.15, 0.3, 0.25, 0.2, 0.1]
@@ -2637,37 +2816,43 @@ class pMLP(ModelObject):
         # CNN blocks - allow optional temporal convolutions
         cnn_block_options = [0, 1, 2]
         cnn_block_weights = [0.55, 0.3, 0.15]
-        
+
         # CNN parameters - only matters when num_cnn_blocks > 0
         # Kernel size options - affects temporal receptive field
         cnn_kernel_sizes = [3, 5, 7, 9]
         cnn_kernel_weights = [0.2, 0.4, 0.3, 0.1]  # Prefer 5-7 for daily data
-        
+
         # Squeeze-and-excitation - feature importance weighting
         cnn_use_se_options = [True, False]
         cnn_use_se_weights = [0.7, 0.3]  # Usually helps
-        
+
         # Datepart method
         datepart_method = random_datepart()
-        
+
         # Boolean options
         holiday_used_options = [True, False]
         holiday_weights = [0.3, 0.7]
-        
+
         naive_feature_options = [True, False]
         naive_feature_weights = [0.75, 0.25]
-        
+
         # Generate changepoint method and parameters
         changepoint_method, changepoint_params = generate_random_changepoint_params()
 
         # Generate CNN parameters dict
-        selected_num_cnn_blocks = random.choices(cnn_block_options, weights=cnn_block_weights, k=1)[0]
-        
+        selected_num_cnn_blocks = random.choices(
+            cnn_block_options, weights=cnn_block_weights, k=1
+        )[0]
+
         # Only generate detailed CNN params if we're using CNN blocks
         if selected_num_cnn_blocks > 0:
             cnn_params_dict = {
-                "kernel_size": random.choices(cnn_kernel_sizes, weights=cnn_kernel_weights, k=1)[0],
-                "use_se": random.choices(cnn_use_se_options, weights=cnn_use_se_weights, k=1)[0],
+                "kernel_size": random.choices(
+                    cnn_kernel_sizes, weights=cnn_kernel_weights, k=1
+                )[0],
+                "use_se": random.choices(
+                    cnn_use_se_options, weights=cnn_use_se_weights, k=1
+                )[0],
             }
         else:
             # No CNN, so params don't matter but include defaults for consistency
@@ -2675,33 +2860,49 @@ class pMLP(ModelObject):
 
         # Generate random selections
         selected_params = {
-            "hidden_dims": random.choices(hidden_dim_options, weights=hidden_weights, k=1)[0],
-            "dropout_rate": random.choices(dropout_rates, weights=dropout_weights, k=1)[0],
-            "use_batch_norm": random.choices(batch_norm_options, weights=batch_norm_weights, k=1)[0],
-            "activation": random.choices(activations, weights=activation_weights, k=1)[0],
+            "hidden_dims": random.choices(
+                hidden_dim_options, weights=hidden_weights, k=1
+            )[0],
+            "dropout_rate": random.choices(dropout_rates, weights=dropout_weights, k=1)[
+                0
+            ],
+            "use_batch_norm": random.choices(
+                batch_norm_options, weights=batch_norm_weights, k=1
+            )[0],
+            "activation": random.choices(activations, weights=activation_weights, k=1)[
+                0
+            ],
             "epochs": random.choices(epochs_options, weights=epochs_weights, k=1)[0],
             "batch_size": random.choices(batch_sizes, weights=batch_weights, k=1)[0],
             "lr": random.choices(learning_rates, weights=lr_weights, k=1)[0],
-            "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[0],
+            "loss_function": random.choices(loss_functions, weights=loss_weights, k=1)[
+                0
+            ],
             "nll_weight": random.choices(nll_weights, weights=nll_weight_probs, k=1)[0],
-            "wasserstein_weight": random.choices(wasserstein_weights, weights=wasserstein_weight_probs, k=1)[0],
+            "wasserstein_weight": random.choices(
+                wasserstein_weights, weights=wasserstein_weight_probs, k=1
+            )[0],
             "num_cnn_blocks": selected_num_cnn_blocks,
             "cnn_params": cnn_params_dict,
             "datepart_method": datepart_method,
-            "holiday_countries_used": random.choices(holiday_used_options, weights=holiday_weights, k=1)[0],
-            "use_naive_feature": random.choices(naive_feature_options, weights=naive_feature_weights, k=1)[0],
+            "holiday_countries_used": random.choices(
+                holiday_used_options, weights=holiday_weights, k=1
+            )[0],
+            "use_naive_feature": random.choices(
+                naive_feature_options, weights=naive_feature_weights, k=1
+            )[0],
             "changepoint_method": changepoint_method,
             "changepoint_params": changepoint_params,
             "regression_type": regression_choice,
         }
-        
+
         # Add prediction_batch_size - larger for MLP efficiency
         prediction_batch_options = [60, 100, 150, 200]
         prediction_batch_weights = [0.2, 0.4, 0.3, 0.1]
         selected_params["prediction_batch_size"] = random.choices(
             prediction_batch_options, weights=prediction_batch_weights, k=1
         )[0]
-        
+
         return selected_params
 
 

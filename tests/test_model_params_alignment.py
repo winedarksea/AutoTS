@@ -75,9 +75,11 @@ class ModelParamsAlignmentTest(unittest.TestCase):
                 mismatches.append((f"{module_name}.{model_cls.__name__}", missing))
 
         self.assertEqual(
-            [], mismatches,
-            f"Models with missing params in get_params:\n" + "\n".join(
+            [],
+            mismatches,
+            f"Models with missing params in get_params:\n"
+            + "\n".join(
                 f"  {class_name}: {', '.join(sorted(keys))}"
                 for class_name, keys in mismatches
-            )
+            ),
         )

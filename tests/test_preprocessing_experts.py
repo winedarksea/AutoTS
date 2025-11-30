@@ -14,7 +14,9 @@ def _build_training_frame(rows: int = 120, cols: int = 4) -> pd.DataFrame:
     values = rng.normal(loc=50.0, scale=5.0, size=(rows, cols))
     values += np.linspace(0, 3, rows)[:, None]
     values += 2.5 * np.sin(np.arange(rows) * 2 * np.pi / 7)[:, None]
-    return pd.DataFrame(values, index=dates, columns=[f"series_{i}" for i in range(cols)])
+    return pd.DataFrame(
+        values, index=dates, columns=[f"series_{i}" for i in range(cols)]
+    )
 
 
 def _base_model_params() -> dict:

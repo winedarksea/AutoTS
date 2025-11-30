@@ -93,7 +93,9 @@ class AnomalyDetector(object):
             # the post selecting by columns is for CenterSplit and any similar renames or expansions
             transformed_df = model.fit_transform(self.df_anomaly)
             # Only select columns that exist in both original and transformed data (from expanding transformers)
-            common_cols = [col for col in self.df.columns if col in transformed_df.columns]
+            common_cols = [
+                col for col in self.df.columns if col in transformed_df.columns
+            ]
             if common_cols:
                 self.df_anomaly = transformed_df[common_cols]
             else:
@@ -165,21 +167,30 @@ class AnomalyDetector(object):
         if df is not None:
             _, _ = self.detect(df)
         elif not hasattr(self, "df"):
-            raise ValueError("Call `detect(df)` or provide `df` before removing anomalies.")
+            raise ValueError(
+                "Call `detect(df)` or provide `df` before removing anomalies."
+            )
         df_clean = self.df.copy()
         df_clean = df_clean[self.anomalies != -1]
         if fillna is not None:
             df_clean = FillNA(df_clean, method=fillna, window=10)
         return df_clean
 
-    def plot(self, series_name=None, title=None, marker_size=None, plot_kwargs={}, start_date=None):
+    def plot(
+        self,
+        series_name=None,
+        title=None,
+        marker_size=None,
+        plot_kwargs={},
+        start_date=None,
+    ):
         import matplotlib.pyplot as plt
 
         if series_name is None:
             series_name = random.choice(self.df.columns)
         if title is None:
             title = series_name[0:50] + f" with {self.method} outliers"
-        
+
         # Filter data by start_date if provided
         df_plot = self.df
         anomalies_plot = self.anomalies
@@ -187,7 +198,7 @@ class AnomalyDetector(object):
             start_date = pd.to_datetime(start_date)
             df_plot = self.df.loc[self.df.index >= start_date]
             anomalies_plot = self.anomalies.loc[self.anomalies.index >= start_date]
-        
+
         fig, ax = plt.subplots()
         df_plot[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if self.output == "univariate":
@@ -372,13 +383,13 @@ class HolidayDetector(object):
                 series_name[0:50]
                 + f" with {self.anomaly_detector_params['method']} holidays"
             )
-        
+
         # Filter data by start_date if provided
         df_plot = self.df
         if start_date is not None:
             start_date = pd.to_datetime(start_date)
             df_plot = self.df.loc[self.df.index >= start_date]
-        
+
         fig, ax = plt.subplots()
         df_plot[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if marker_size is None:
@@ -392,13 +403,13 @@ class HolidayDetector(object):
             else:
                 series_anom = self.anomaly_model.anomalies[series_name]
                 i_anom = series_anom[series_anom == -1].index
-            
+
             # Filter anomalies by start_date if provided
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
             # Ensure anomaly indices exist in filtered dataframe
             i_anom = i_anom[i_anom.isin(df_plot.index)]
-            
+
             if len(i_anom) > 0:
                 ax.scatter(
                     i_anom.tolist(),
@@ -407,15 +418,17 @@ class HolidayDetector(object):
                     s=marker_size,
                 )
         # now the actual holidays
-        holiday_dates = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
+        holiday_dates = self.dates_to_holidays(self.df.index, style="series_flag")[
+            series_name
+        ]
         i_anom = holiday_dates.index[holiday_dates == 1]
-        
+
         # Filter holidays by start_date if provided
         if start_date is not None:
             i_anom = i_anom[i_anom >= start_date]
         # Ensure holiday indices exist in filtered dataframe
         i_anom = i_anom[i_anom.isin(df_plot.index)]
-        
+
         if len(i_anom) > 0:
             ax.scatter(
                 i_anom.tolist(),

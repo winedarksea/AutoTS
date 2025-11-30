@@ -65,9 +65,7 @@ def sk_outliers(df, method, method_params={}):
         # Always scale the data for OneClassSVM to prevent non-finite coefficient errors
         scaler = MinMaxScaler()
         df_scaled = pd.DataFrame(
-            scaler.fit_transform(df),
-            index=df.index,
-            columns=df.columns
+            scaler.fit_transform(df), index=df.index, columns=df.columns
         )
         model = OneClassSVM(**method_params)
         res = model.fit_predict(df_scaled)
@@ -79,13 +77,20 @@ def sk_outliers(df, method, method_params={}):
         # Fill NaN with mean to avoid covariance matrix errors
         df_filled = df.fillna(df.mean()).fillna(0)
         # Ensure we have enough samples for the support_fraction
-        if 'support_fraction' in method_params and method_params['support_fraction'] is not None:
+        if (
+            'support_fraction' in method_params
+            and method_params['support_fraction'] is not None
+        ):
             min_samples = max(df_filled.shape[1] + 1, 2)  # at least n_features + 1
-            required_samples = int(np.ceil(min_samples / method_params['support_fraction']))
+            required_samples = int(
+                np.ceil(min_samples / method_params['support_fraction'])
+            )
             if len(df_filled) < required_samples:
                 # Increase support_fraction to ensure we have enough samples
                 method_params = method_params.copy()
-                method_params['support_fraction'] = max(min_samples / len(df_filled), 0.5)
+                method_params['support_fraction'] = max(
+                    min_samples / len(df_filled), 0.5
+                )
         model = EllipticEnvelope(**method_params)
         res = model.fit_predict(df_filled)
         scores = model.decision_function(df_filled)
@@ -442,7 +447,14 @@ def detect_anomalies(
         df_anomaly = model.fit_transform(df_anomaly)
     """
 
-    if method in ["IsolationForest", "LOF", "EE", "OneClassSVM", "GaussianMixture", "isolation_forest"]:
+    if method in [
+        "IsolationForest",
+        "LOF",
+        "EE",
+        "OneClassSVM",
+        "GaussianMixture",
+        "isolation_forest",
+    ]:
         if output == "univariate":
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
@@ -530,7 +542,23 @@ def anomaly_new_params(method='random'):
     if method == "deep":
         method_choice = random.choices(
             available_methods,
-            [0.2, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.05, 0.08, 0.08, 0.13, 0.08, 0.08, 0.08, 0.08],
+            [
+                0.2,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+                0.05,
+                0.08,
+                0.08,
+                0.13,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+            ],
         )[0]
     elif method == "fast":
         method_choice = random.choices(
@@ -693,13 +721,17 @@ def anomaly_new_params(method='random'):
             'batch_size': random.choices([32, 64], [0.6, 0.4])[0],
             'epochs': random.choices([15, 25, 50, 75], [0.3, 0.5, 0.15, 0.05])[0],
             'learning_rate': random.choices([1e-4, 1e-3, 1e-2], [0.2, 0.6, 0.2])[0],
-            'loss_function': random.choices(['elbo', 'mse', 'lmse'], [0.6, 0.2, 0.2])[0],
+            'loss_function': random.choices(['elbo', 'mse', 'lmse'], [0.6, 0.2, 0.2])[
+                0
+            ],
             'dropout_rate': random.choices([0.0, 0.2], [0.8, 0.2])[0],
             'latent_dim': random.choices([None, 'custom'], [0.9, 0.1])[0],
             'beta': random.choices([0.5, 1.0, 2.0], [0.2, 0.6, 0.2])[0],
             'contamination': random.choices([0.05, 0.1, 0.15], [0.3, 0.5, 0.2])[0],
             'random_state': random.choices([None, 42], [0.8, 0.2])[0],
-            'device': random.choices([None, 'cpu'], [0.9, 0.1])[0],  # Usually auto-detect is best
+            'device': random.choices([None, 'cpu'], [0.9, 0.1])[
+                0
+            ],  # Usually auto-detect is best
         }
         if method_params['latent_dim'] == 'custom':
             method_params['latent_dim'] = random.choice([2, 4, 8, 16])
@@ -1489,14 +1521,14 @@ def gaussian_mixture(
 
 def fit_anomaly_classifier(anomalies, scores):
     """Fit a DecisionTree model to predict if a score is an anomaly.
-    
+
     This is a shared utility for both AnomalyDetector and AnomalyRemoval classes.
     Using DecisionTree as it can handle nonparametric anomalies.
-    
+
     Args:
         anomalies (pd.DataFrame): DataFrame with -1 for anomalies, 1 for normal
         scores (pd.DataFrame): DataFrame with anomaly scores
-    
+
     Returns:
         tuple: (classifier, score_categories) - trained classifier and categorical mapping
     """
@@ -1519,14 +1551,14 @@ def fit_anomaly_classifier(anomalies, scores):
 
 def score_to_anomaly(scores, classifier, score_categories):
     """Convert anomaly scores to anomaly classifications using a trained classifier.
-    
+
     This is a shared utility for both AnomalyDetector and AnomalyRemoval classes.
-    
+
     Args:
         scores (pd.DataFrame): DataFrame with anomaly scores
         classifier: trained sklearn classifier
         score_categories: categorical mapping from fit_anomaly_classifier
-    
+
     Returns:
         pd.DataFrame: Classifications (-1 = anomaly, 1 = normal)
     """

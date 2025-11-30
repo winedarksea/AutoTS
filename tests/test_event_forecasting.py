@@ -12,14 +12,13 @@ from autots import (
 
 
 class TestEventRisk(unittest.TestCase):
-
     def test_event_risk(self):
         print("Starting test_event_risk")
         """This at least assures no changes in behavior go unnoticed, hopefully."""
         forecast_length = 6
         df_full = load_weekly(long=False)
-        df = df_full[0: (df_full.shape[0] - forecast_length)]
-        df_test = df[(df.shape[0] - forecast_length):]
+        df = df_full[0 : (df_full.shape[0] - forecast_length)]
+        df_test = df[(df.shape[0] - forecast_length) :]
 
         upper_limit = 0.8
         # if using manual array limits, historic limit must be defined separately (if used)
@@ -42,20 +41,22 @@ class TestEventRisk(unittest.TestCase):
                 "max_generations": 6,
                 "verbose": 1,
                 "transformer_list": "no_expanding",
-            }
+            },
         )
         # .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)
         model.fit()
         risk_df_upper, risk_df_lower = model.predict()
-        historic_upper_risk_df, historic_lower_risk_df = model.predict_historic(lower_limit=historic_lower_limit)
-        model.plot(column=df.columns[0])
-        self.assertTrue(
-            np.array_equal(model.lower_limit_2d, lower_limit.to_numpy())
+        historic_upper_risk_df, historic_lower_risk_df = model.predict_historic(
+            lower_limit=historic_lower_limit
         )
+        model.plot(column=df.columns[0])
+        self.assertTrue(np.array_equal(model.lower_limit_2d, lower_limit.to_numpy()))
 
         # also eval summed version
         threshold = 0.1
-        eval_upper = EventRiskForecast.generate_historic_risk_array(df_test, model.upper_limit_2d, direction="upper")
+        eval_upper = EventRiskForecast.generate_historic_risk_array(
+            df_test, model.upper_limit_2d, direction="upper"
+        )
         pred_upper = np.where(model.upper_risk_array > threshold, 1, 0)
 
         self.assertTrue(risk_df_lower.shape == (forecast_length, df.shape[1]))
@@ -188,7 +189,9 @@ class TestEventRisk(unittest.TestCase):
         )
         raw_multivariate = model_multivariate.prediction_object.model.result_windows
         self.assertFalse(
-            np.allclose(raw_multivariate, model_multivariate.result_windows, equal_nan=True)
+            np.allclose(
+                raw_multivariate, model_multivariate.result_windows, equal_nan=True
+            )
         )
         self.assertTrue(np.isfinite(model_multivariate.result_windows).all())
 
@@ -353,7 +356,5 @@ class TestEventRisk(unittest.TestCase):
         raw_windows = model.prediction_object.model.result_windows
         self.assertIsInstance(raw_windows, dict)
         raw_array = np.moveaxis(np.array(list(raw_windows.values())), 0, -1)
-        self.assertFalse(
-            np.allclose(raw_array, model.result_windows, equal_nan=True)
-        )
+        self.assertFalse(np.allclose(raw_array, model.result_windows, equal_nan=True))
         self.assertTrue(np.isfinite(model.result_windows).all())

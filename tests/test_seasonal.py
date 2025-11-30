@@ -10,13 +10,18 @@ Created on Sat May  4 21:43:02 2024
 import unittest
 import numpy as np
 import pandas as pd
-from autots.tools.seasonal import date_part, base_seasonalities, datepart_components, random_datepart, fourier_df
+from autots.tools.seasonal import (
+    date_part,
+    base_seasonalities,
+    datepart_components,
+    random_datepart,
+    fourier_df,
+)
 from autots.tools.holiday import holiday_flag
 from autots.tools.wavelet import create_narrowing_wavelets, offset_wavelet
 
 
 class TestSeasonal(unittest.TestCase):
-
     def test_date_part(self):
         DTindex = pd.date_range("2020-01-01", "2024-01-01", freq="D")
         for method in base_seasonalities:
@@ -106,11 +111,17 @@ class TestSeasonal(unittest.TestCase):
         # hourly being trickier
         train_index = pd.date_range("2020-01-01", "2023-01-01", freq="h")
         pred_index = pd.date_range("2023-01-02", "2024-01-01", freq="h")
-        
-        train_holiday = holiday_flag(train_index, country=["US", "CA"], encode_holiday_type=True)
-        pred_holiday = holiday_flag(pred_index, country=["US", "CA"], encode_holiday_type=True)
 
-        self.assertCountEqual(train_holiday.columns.tolist(), pred_holiday.columns.tolist())
+        train_holiday = holiday_flag(
+            train_index, country=["US", "CA"], encode_holiday_type=True
+        )
+        pred_holiday = holiday_flag(
+            pred_index, country=["US", "CA"], encode_holiday_type=True
+        )
+
+        self.assertCountEqual(
+            train_holiday.columns.tolist(), pred_holiday.columns.tolist()
+        )
         self.assertGreaterEqual(train_holiday.sum().sum(), 24)
         self.assertGreaterEqual(pred_holiday.sum().sum(), 24)
 
@@ -148,7 +159,9 @@ class TestSeasonal(unittest.TestCase):
         jun_row = df.loc[pd.Timestamp('2020-06-15')]
 
         self.assertTrue(np.any(np.abs(jan_row[segment0_fourier]) > 1e-6))
-        self.assertTrue(np.allclose(jan_row[[c for c in df.columns if 'segment1_' in c]], 0.0))
+        self.assertTrue(
+            np.allclose(jan_row[[c for c in df.columns if 'segment1_' in c]], 0.0)
+        )
         self.assertEqual(jan_row[segment0_dow].sum(), 1.0)
         self.assertTrue(np.allclose(jan_row[segment1_dow], 0.0))
 

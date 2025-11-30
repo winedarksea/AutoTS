@@ -102,6 +102,7 @@ the *last* two axes of the arrays.
 import numpy as np
 from functools import wraps
 
+
 class Gaussian:
     def __init__(self, mean, cov):
         self.mean = mean
@@ -794,9 +795,7 @@ class KalmanFilter(object):
             observation_noise = current_model.em_observation_noise(
                 e_step, data, verbose=verbose
             )
-            initial_value, initial_covariance = em_initial_state(
-                e_step, initial_value
-            )
+            initial_value, initial_covariance = em_initial_state(e_step, initial_value)
 
             new_model = KalmanFilter(
                 current_model.state_transition,
@@ -806,9 +805,7 @@ class KalmanFilter(object):
             )
 
             if tol is not None:
-                delta_q = np.max(
-                    np.abs(process_noise - current_model.process_noise)
-                )
+                delta_q = np.max(np.abs(process_noise - current_model.process_noise))
                 delta_r = np.max(
                     np.abs(observation_noise - current_model.observation_noise)
                 )

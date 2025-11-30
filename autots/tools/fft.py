@@ -182,7 +182,9 @@ class FFT(object):
             phase = np.angle(self.x_freqdom[idx])
             # Generate the harmonic component for extended time, summed across series
             # This creates a multivariate summary feature
-            harmonic_extended = ampli * np.exp(2j * np.pi * self.f[idx] * t_extended[:, None] + 1j * phase)
+            harmonic_extended = ampli * np.exp(
+                2j * np.pi * self.f[idx] * t_extended[:, None] + 1j * phase
+            )
             # Sum across all series to create a single feature per harmonic
             harmonics_data[:, 2 * i] = np.sum(np.real(harmonic_extended), axis=1)
             harmonics_data[:, 2 * i + 1] = np.sum(np.imag(harmonic_extended), axis=1)

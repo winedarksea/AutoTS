@@ -4,6 +4,7 @@ Generate random state-space model parameters paired with fast_kalman.py.
 import random
 import numpy as np
 
+
 def random_state_space_original():
     """Return randomly generated statespace models."""
     n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
@@ -207,7 +208,14 @@ def new_kalman_params(method=None, allow_auto=True):
     elif method == "deep":
         em_iter = random.choices([None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1])[0]
     else:
-        em_iter = random.choices([None, 5, 10,], [0.3, 0.7, 0.1])[0]
+        em_iter = random.choices(
+            [
+                None,
+                5,
+                10,
+            ],
+            [0.3, 0.7, 0.1],
+        )[0]
 
     def finalize(params_dict):
         params_dict['em_iter'] = em_iter
@@ -260,20 +268,20 @@ def new_kalman_params(method=None, allow_auto=True):
         # Beta (trend smoothing) typically 0.0 to 0.3, with emphasis on lower values
         alpha_choices = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.99]
         beta_choices = [0.0, 0.001, 0.01, 0.05, 0.1, 0.2, 0.3]
-        
+
         # For ETS state space: process_noise relates to smoothing parameters
         # Smaller noise = more smoothing (closer to deterministic)
         alpha = random.choice(alpha_choices)
         beta = random.choice(beta_choices)
-        
+
         # Convert smoothing parameters to process noise
         # For ETS: sigma_level ≈ alpha, sigma_slope ≈ beta
         level_noise = alpha
         trend_noise = beta
-        
+
         # Observation noise should typically be small for ETS
         obs_noise_choices = [0.001, 0.01, 0.05, 0.1, 0.25, 0.5]
-        
+
         return {
             'model_name': 'local_linear_trend_ets_aan',
             'state_transition': [[1, 1], [0, 1]],
@@ -399,9 +407,16 @@ def new_kalman_params(method=None, allow_auto=True):
             level_var=level_noise,
             slope_var=drift_noise,
         )
-        ar_block = {'F': np.array([[phi]]), 'Q': np.array([[ar_noise]]), 'H': np.array([1.0])}
+        ar_block = {
+            'F': np.array([[phi]]),
+            'Q': np.array([[ar_noise]]),
+            'H': np.array([1.0]),
+        }
         fourier_block = _fourier_state_block(
-            period=7, harmonics=harmonics, variance=sigma_fourier2, observation_phase=False
+            period=7,
+            harmonics=harmonics,
+            variance=sigma_fourier2,
+            observation_phase=False,
         )
 
         F_full, Q_block, H_full = _compose_state_space(
@@ -661,7 +676,7 @@ def new_kalman_params(method=None, allow_auto=True):
         }
 
     def make_ets_linear_trend():
-        # Linear Trend (Holt) - ETS(A,A,N)  
+        # Linear Trend (Holt) - ETS(A,A,N)
         alpha = random.choice([0.1, 0.2, 0.3, 0.5, 0.7, 0.9])
         beta = random.choice([0.001, 0.01, 0.05, 0.1, 0.2])
         return {
@@ -689,15 +704,17 @@ def new_kalman_params(method=None, allow_auto=True):
         # ARIMA(p,0,q) in state space form - favoring (1,0,4) but allowing variations
         # Choose AR order (p) - favor p=1
         p = random.choices([0, 1, 2, 3], weights=[0.1, 0.6, 0.2, 0.1])[0]
-        
+
         # Choose MA order (q) - favor q=4
-        q = random.choices([0, 1, 2, 3, 4, 5, 6], weights=[0.05, 0.1, 0.1, 0.1, 0.4, 0.15, 0.1])[0]
-        
+        q = random.choices(
+            [0, 1, 2, 3, 4, 5, 6], weights=[0.05, 0.1, 0.1, 0.1, 0.4, 0.15, 0.1]
+        )[0]
+
         # Ensure at least one of p or q is non-zero
         if p == 0 and q == 0:
             p = 1
             q = 4
-        
+
         # Generate AR coefficients (ensuring stationarity)
         ar_coeffs = []
         if p > 0:
@@ -707,7 +724,7 @@ def new_kalman_params(method=None, allow_auto=True):
                     ar_coeffs.append(random.choice([0.1, 0.3, 0.5, 0.7, 0.9, 0.95]))
                 else:
                     ar_coeffs.append(random.choice([0.0, 0.1, 0.2, 0.3]))
-        
+
         # Generate MA coefficients (decreasing magnitude for higher orders)
         ma_coeffs = []
         if q > 0:
@@ -718,75 +735,75 @@ def new_kalman_params(method=None, allow_auto=True):
                     ma_coeffs.append(random.choice([0.0, 0.1, 0.3, 0.5]))
                 else:
                     ma_coeffs.append(random.choice([0.0, 0.1, 0.3]))
-        
+
         # For ARMA(p,q) state space, dimension is max(p, q+1)
         # State vector: [y_t, y_{t-1}, ..., y_{t-p+1}, ε_{t-1}, ..., ε_{t-q}]
         # Simplified: [y_t, ε_{t-1}, ε_{t-2}, ..., ε_{t-q}] for AR(1)
         # Or more states if p > 1
-        
+
         if p == 0:
             # Pure MA(q) model
             state_dim = q + 1
         elif q == 0:
-            # Pure AR(p) model  
+            # Pure AR(p) model
             state_dim = p
         else:
             # ARMA(p,q) - use max(p, q+1)
             state_dim = max(p, q + 1)
-        
+
         # Build state transition matrix
         state_transition = [[0.0] * state_dim for _ in range(state_dim)]
-        
+
         if p == 0:
             # MA(q) model: x_t = [ε_t, ε_{t-1}, ..., ε_{t-q}]
             # First row stays zero (pure innovation)
             # Shift register for errors
             for i in range(1, q):
-                state_transition[i+1][i] = 1.0
+                state_transition[i + 1][i] = 1.0
         elif q == 0:
             # AR(p) model: x_t = [y_t, y_{t-1}, ..., y_{t-p+1}]
             for i in range(p):
                 state_transition[0][i] = ar_coeffs[i]
             # Shift register for AR states
             for i in range(1, p):
-                state_transition[i][i-1] = 1.0
+                state_transition[i][i - 1] = 1.0
         else:
             # ARMA(p,q): x_t = [y_t, ε_{t-1}, ..., ε_{t-q}] (simplified for p=1)
             # First element is AR coefficient
             state_transition[0][0] = ar_coeffs[0] if p == 1 else 0.0
-            
+
             # Add MA coefficients
             for i in range(min(q, state_dim - 1)):
                 state_transition[0][i + 1] = ma_coeffs[i]
-            
+
             # If p > 1, need companion form
             if p > 1:
                 for i in range(p):
                     state_transition[0][i] = ar_coeffs[i]
                 for i in range(1, p):
-                    state_transition[i][i-1] = 1.0
+                    state_transition[i][i - 1] = 1.0
             else:
                 # Shift register for MA errors
                 for i in range(1, min(q, state_dim - 1)):
-                    state_transition[i+1][i] = 1.0
-        
+                    state_transition[i + 1][i] = 1.0
+
         # Build process noise matrix
         process_noise_var = random.choice([0.1, 0.5, 1.0, 2.0])
         process_noise = [[0.0] * state_dim for _ in range(state_dim)]
-        
+
         # Innovation enters first state
         process_noise[0][0] = process_noise_var
-        
+
         # For MA terms, innovation also enters the error state
         if q > 0 and state_dim > 1:
             process_noise[1][1] = process_noise_var
-        
+
         # Observation model - observe only first state (or sum for AR)
         observation_model = [[1.0] + [0.0] * (state_dim - 1)]
-        
+
         # Observation noise
         observation_noise = random.choice([0.01, 0.05, 0.1, 0.5])
-        
+
         return {
             'model_name': f'ARIMA({p},0,{q})',
             'state_transition': state_transition,

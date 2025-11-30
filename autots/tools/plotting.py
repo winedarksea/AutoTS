@@ -13,6 +13,7 @@ try:  # pragma: no-cover - optional dependency
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
     from matplotlib.lines import Line2D
+
     HAS_MATPLOTLIB = True
 except ImportError:  # pragma: no-cover
     HAS_MATPLOTLIB = False
@@ -157,7 +158,9 @@ def create_seaborn_palette_from_cmap(cmap_name: str = "gist_rainbow", n: int = 1
     try:
         import seaborn as sns
     except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError("seaborn is required for create_seaborn_palette_from_cmap") from exc
+        raise ImportError(
+            "seaborn is required for create_seaborn_palette_from_cmap"
+        ) from exc
 
     cm = plt.get_cmap(cmap_name)
     colors = cm(np.linspace(0, 1, n))
@@ -287,11 +290,15 @@ def plot_forecast_with_intervals(
         if forecast_col and forecast_col in plot_df.columns:
             columns_to_plot.append(forecast_col)
         if not columns_to_plot:
-            raise ValueError("plot_df must contain at least one of actual_col or forecast_col.")
+            raise ValueError(
+                "plot_df must contain at least one of actual_col or forecast_col."
+            )
 
         color_mapping = None
         if colors is not None:
-            color_mapping = {col: color for col, color in colors.items() if col in columns_to_plot}
+            color_mapping = {
+                col: color for col, color in colors.items() if col in columns_to_plot
+            }
             if color_mapping:
                 # Create a copy and update with color mapping
                 plot_kwargs_copy = dict(plot_kwargs)
@@ -389,19 +396,29 @@ def plot_feature_panels(
     fig, axes = plt.subplots(4, 1, figsize=figsize, sharex=True)
 
     # Overall Title
-    type_suffix = f" (type: {series_type_description})" if series_type_description else ""
-    fig.suptitle(f"{title_prefix}: {series_name}{type_suffix}", fontsize=16, fontweight='bold')
+    type_suffix = (
+        f" (type: {series_type_description})" if series_type_description else ""
+    )
+    fig.suptitle(
+        f"{title_prefix}: {series_name}{type_suffix}", fontsize=16, fontweight='bold'
+    )
 
     # Panel 1: Raw series with labeled events
     ax = axes[0]
-    ax.plot(date_index, series_data.values, color='tab:blue', alpha=0.75, linewidth=1.2, label='Series')
+    ax.plot(
+        date_index,
+        series_data.values,
+        color='tab:blue',
+        alpha=0.75,
+        linewidth=1.2,
+        label='Series',
+    )
 
     anomalies = labels.get('anomalies', [])
     if anomalies:
         for record in anomalies:
             date, magnitude, pattern, duration, shared = _extract_event(
-                record,
-                ['date', 'magnitude', 'pattern', 'duration', 'shared']
+                record, ['date', 'magnitude', 'pattern', 'duration', 'shared']
             )
             if date is None:
                 continue
@@ -419,8 +436,7 @@ def plot_feature_panels(
     # Level shifts
     for record in labels.get('level_shifts', []):
         date, magnitude, shift_type, shared = _extract_event(
-            record,
-            ['date', 'magnitude', 'shift_type', 'shared']
+            record, ['date', 'magnitude', 'shift_type', 'shared']
         )
         if date is None:
             continue
@@ -444,10 +460,23 @@ def plot_feature_panels(
     legend_elements = [
         Line2D([0], [0], color='tab:blue', linewidth=2, label='Series'),
         Line2D([0], [0], color='red', linestyle='--', linewidth=1.5, label='Anomalies'),
-        Line2D([0], [0], color='green', linestyle='-', linewidth=1.2, label='Trend CPs'),
-        Line2D([0], [0], color='purple', linestyle=':', linewidth=1.5, label='Level Shifts'),
-        Line2D([0], [0], color='goldenrod', linestyle='-.', linewidth=1.0, label='Holidays'),
-        Line2D([0], [0], color='darkcyan', linestyle='-.', linewidth=1.0, label='Seasonality CPs'),
+        Line2D(
+            [0], [0], color='green', linestyle='-', linewidth=1.2, label='Trend CPs'
+        ),
+        Line2D(
+            [0], [0], color='purple', linestyle=':', linewidth=1.5, label='Level Shifts'
+        ),
+        Line2D(
+            [0], [0], color='goldenrod', linestyle='-.', linewidth=1.0, label='Holidays'
+        ),
+        Line2D(
+            [0],
+            [0],
+            color='darkcyan',
+            linestyle='-.',
+            linewidth=1.0,
+            label='Seasonality CPs',
+        ),
     ]
     ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
     ax.set_ylabel('Value', fontsize=10)
@@ -456,19 +485,29 @@ def plot_feature_panels(
 
     # Panel 2: Trend vs Level Shifts
     ax = axes[1]
-    ax.plot(date_index, trend, color='tab:green', linewidth=1.4, alpha=0.8, label='Trend')
-    ax.plot(date_index, combined_trend, color='black', linewidth=1.4, alpha=0.85, label='Trend + Level Shifts')
+    ax.plot(
+        date_index, trend, color='tab:green', linewidth=1.4, alpha=0.8, label='Trend'
+    )
+    ax.plot(
+        date_index,
+        combined_trend,
+        color='black',
+        linewidth=1.4,
+        alpha=0.85,
+        label='Trend + Level Shifts',
+    )
 
     for record in labels.get('trend_changepoints', []):
         date, *_ = _extract_event(record, ['date', 'prior_slope', 'new_slope'])
         if date is None:
             continue
-        ax.axvline(_to_timestamp(date), color='green', alpha=0.35, linestyle='--', linewidth=1)
+        ax.axvline(
+            _to_timestamp(date), color='green', alpha=0.35, linestyle='--', linewidth=1
+        )
 
     for record in labels.get('level_shifts', []):
         date, magnitude, shift_type, shared = _extract_event(
-            record,
-            ['date', 'magnitude', 'shift_type', 'shared']
+            record, ['date', 'magnitude', 'shift_type', 'shared']
         )
         if date is None:
             continue
@@ -479,8 +518,11 @@ def plot_feature_panels(
             ax.annotate(
                 f"{magnitude:+.1f}" if magnitude is not None else '',
                 xy=(ts, combined_trend[idx]),
-                xytext=(8, 10), textcoords='offset points', fontsize=8, color='purple',
-                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7)
+                xytext=(8, 10),
+                textcoords='offset points',
+                fontsize=8,
+                color='purple',
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7),
             )
         except KeyError:
             pass
@@ -492,9 +534,25 @@ def plot_feature_panels(
 
     # Panel 3: Seasonality + Holiday impacts
     ax = axes[2]
-    ax.plot(date_index, seasonality, color='tab:cyan', linewidth=1.0, alpha=0.7, label='Seasonality')
-    ax.plot(date_index, holidays, color='orange', linewidth=1.2, alpha=0.8, label='Holidays')
-    ax.plot(date_index, seasonality + holidays, color='tab:blue', linewidth=1.2, alpha=0.75, label='Combined')
+    ax.plot(
+        date_index,
+        seasonality,
+        color='tab:cyan',
+        linewidth=1.0,
+        alpha=0.7,
+        label='Seasonality',
+    )
+    ax.plot(
+        date_index, holidays, color='orange', linewidth=1.2, alpha=0.8, label='Holidays'
+    )
+    ax.plot(
+        date_index,
+        seasonality + holidays,
+        color='tab:blue',
+        linewidth=1.2,
+        alpha=0.75,
+        label='Combined',
+    )
 
     holiday_impacts = labels.get('holiday_impacts', {})
     for date in holiday_impacts.keys():
@@ -502,7 +560,9 @@ def plot_feature_panels(
         ax.axvline(ts, color='orange', alpha=0.25, linestyle='--', linewidth=0.9)
         try:
             idx = date_index.get_loc(ts)
-            ax.plot(ts, holidays[idx], marker='o', color='orange', markersize=4, alpha=0.65)
+            ax.plot(
+                ts, holidays[idx], marker='o', color='orange', markersize=4, alpha=0.65
+            )
         except KeyError:
             pass
 
@@ -514,12 +574,18 @@ def plot_feature_panels(
     # Panel 4: Noise and anomaly contributions
     ax = axes[3]
     ax.plot(date_index, noise, color='gray', linewidth=0.7, alpha=0.8, label='Noise')
-    ax.plot(date_index, anomalies_component, color='red', linewidth=1.2, alpha=0.75, label='Anomaly Component')
+    ax.plot(
+        date_index,
+        anomalies_component,
+        color='red',
+        linewidth=1.2,
+        alpha=0.75,
+        label='Anomaly Component',
+    )
 
     for record in labels.get('anomalies', []):
         date, magnitude, pattern, duration, shared = _extract_event(
-            record,
-            ['date', 'magnitude', 'pattern', 'duration', 'shared']
+            record, ['date', 'magnitude', 'pattern', 'duration', 'shared']
         )
         if date is None:
             continue
@@ -531,9 +597,12 @@ def plot_feature_panels(
             ax.annotate(
                 f"{text}\n{magnitude:+.1f}" if magnitude is not None else text,
                 xy=(ts, anomalies_component[idx]),
-                xytext=(10, 10), textcoords='offset points', fontsize=7, color='red',
+                xytext=(10, 10),
+                textcoords='offset points',
+                fontsize=7,
+                color='red',
                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8),
-                arrowprops=dict(arrowstyle='->', color='red', alpha=0.4)
+                arrowprops=dict(arrowstyle='->', color='red', alpha=0.4),
             )
         except KeyError:
             pass
@@ -542,7 +611,9 @@ def plot_feature_panels(
         date, *_ = _extract_event(record, ['date', 'from_params', 'to_params'])
         if date is None:
             continue
-        ax.axvline(_to_timestamp(date), color='gray', alpha=0.25, linestyle=':', linewidth=1.0)
+        ax.axvline(
+            _to_timestamp(date), color='gray', alpha=0.25, linestyle=':', linewidth=1.0
+        )
 
     ax.set_ylabel('Value', fontsize=10)
     ax.set_xlabel('Date', fontsize=10)
@@ -615,9 +686,9 @@ def plot_risk_score_bar(
     **bar_kwargs,
 ):
     """Plot risk scores as a bar chart.
-    
+
     Utility function for plotting event risk or similar probability scores.
-    
+
     Args:
         risk_data: Series or array of risk scores to plot
         index: x-axis values; if None, uses range or Series index
@@ -628,16 +699,16 @@ def plot_risk_score_bar(
         xlabel: x-axis label
         ax: matplotlib axis to plot on; if None, creates new subplot
         **bar_kwargs: additional arguments passed to ax.bar()
-        
+
     Returns:
         matplotlib axis
     """
     if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
         raise ImportError("matplotlib is required for plotting")
-    
+
     if ax is None:
         _, ax = plt.subplots()
-    
+
     if isinstance(risk_data, pd.Series):
         if index is None:
             index = risk_data.index
@@ -646,28 +717,28 @@ def plot_risk_score_bar(
         values = np.asarray(risk_data)
         if index is None:
             index = np.arange(len(values))
-    
+
     bar_kwargs_copy = dict(bar_kwargs)
     if 'color' not in bar_kwargs_copy:
         bar_kwargs_copy['color'] = bar_color
     if 'width' not in bar_kwargs_copy:
         bar_kwargs_copy['width'] = 0.6
-    
+
     ax.bar(index, values, **bar_kwargs_copy)
-    
+
     if bar_ylim is not None:
         ax.set_ylim(bar_ylim)
-    
+
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
     ax.set_title(title)
     ax.set_facecolor("#f9f9f9")
     ax.grid(axis="y", linestyle=":", alpha=0.3)
-    
+
     # Rotate x-axis labels if they're datetime-like
     if isinstance(index, pd.Index) and not index.is_numeric():
         ax.tick_params(axis="x", rotation=45)
-    
+
     return ax
 
 
@@ -681,9 +752,9 @@ def plot_simulation_paths(
     **plot_kwargs,
 ):
     """Plot multiple simulation/forecast paths.
-    
+
     Utility for plotting Monte Carlo simulations, motif neighbors, or ensemble members.
-    
+
     Args:
         simulations: 2D array of shape (n_simulations, n_timesteps)
         index: x-axis values; if None, uses range
@@ -692,43 +763,44 @@ def plot_simulation_paths(
         linewidth: width of lines
         ax: matplotlib axis to plot on; if None, creates new subplot
         **plot_kwargs: additional arguments passed to ax.plot()
-        
+
     Returns:
         matplotlib axis
     """
     if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
         raise ImportError("matplotlib is required for plotting")
-    
+
     if ax is None:
         _, ax = plt.subplots()
-    
+
     simulations = np.asarray(simulations)
     if simulations.ndim != 2:
         raise ValueError(f"simulations must be 2D, got shape {simulations.shape}")
-    
+
     n_sims, n_steps = simulations.shape
-    
+
     if index is None:
         index = np.arange(n_steps)
-    
+
     if colors is None:
         # Use random gray shades for simulation paths
         import random
+
         colors = random.choices(grays, k=n_sims)
-    
+
     plot_kwargs_copy = dict(plot_kwargs)
     if 'alpha' not in plot_kwargs_copy:
         plot_kwargs_copy['alpha'] = alpha
     if 'linewidth' not in plot_kwargs_copy:
         plot_kwargs_copy['linewidth'] = linewidth
-    
+
     for idx, series in enumerate(simulations):
         color = colors[idx] if idx < len(colors) else colors[0]
         ax.plot(index, series, color=color, **plot_kwargs_copy)
-    
+
     ax.set_facecolor("#f7f7f7")
     ax.grid(axis="y", linestyle="--", alpha=0.25)
-    
+
     return ax
 
 

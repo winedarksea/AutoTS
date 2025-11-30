@@ -67,6 +67,7 @@ from autots.tools.plotting import (
     colors_list,
     ancient_roman,
 )
+
 try:
     from sklearn.preprocessing import StandardScaler
 except Exception:
@@ -1010,7 +1011,7 @@ class AutoTS(object):
 
     def best_model_str_val_results(self):
         """Generate a readable string of validation results for the best model.
-        
+
         Returns:
             str: Formatted string containing validation results for key metrics (SMAPE, MAE, SPL)
         """
@@ -1714,21 +1715,25 @@ class AutoTS(object):
             self.initial_results.model_results['Exceptions'].isna()
         ]
         validation_template = validation_template[validation_template['Ensemble'] <= 1]
-        
+
         # filter out slow models if skip_slow_models_seconds is specified
         # only apply to non-ensemble models during validation
-        if (self.skip_slow_models_seconds is not None and 
-            'TotalRuntimeSeconds' in validation_template.columns):
+        if (
+            self.skip_slow_models_seconds is not None
+            and 'TotalRuntimeSeconds' in validation_template.columns
+        ):
             # Keep ensemble models (Ensemble > 0) regardless of runtime
             # Filter non-ensemble models (Ensemble == 0) based on runtime
-            slow_models_mask = (
-                (validation_template['Ensemble'] == 0) & 
-                (validation_template['TotalRuntimeSeconds'] > self.skip_slow_models_seconds)
+            slow_models_mask = (validation_template['Ensemble'] == 0) & (
+                validation_template['TotalRuntimeSeconds']
+                > self.skip_slow_models_seconds
             )
             if self.verbose > 0:
                 num_slow = slow_models_mask.sum()
                 if num_slow > 0:
-                    print(f"Skipping {num_slow} models that took longer than {self.skip_slow_models_seconds} seconds")
+                    print(
+                        f"Skipping {num_slow} models that took longer than {self.skip_slow_models_seconds} seconds"
+                    )
             validation_template = validation_template[~slow_models_mask]
         validation_template = validation_template.drop_duplicates(
             subset=self.template_cols, keep='first'
@@ -2606,7 +2611,7 @@ class AutoTS(object):
             else:
                 export_template = self.validation_results.model_results.copy()
                 # all validated models + horizontal ensembles
-                expected_runs = (self.num_validations + 1)
+                expected_runs = self.num_validations + 1
                 max_vals = self.validation_results.model_results['Runs'].max()
                 expected_runs = max_vals if max_vals < expected_runs else expected_runs
                 export_template = export_template[
@@ -3916,9 +3921,8 @@ class AutoTS(object):
                 else:
                     ax = plot_df.plot(title=title, ax=ax_param, **plot_kwargs)
 
-        if (
-            include_bounds
-            and {'chosen_upper', 'chosen_lower', 'chosen'}.issubset(plot_df.columns)
+        if include_bounds and {'chosen_upper', 'chosen_lower', 'chosen'}.issubset(
+            plot_df.columns
         ):
             shading_cols = ['chosen', 'chosen_lower', 'chosen_upper']
             if 'actuals' in plot_df.columns:
@@ -5399,12 +5403,14 @@ class AutoTS(object):
         if summary.empty:
             return summary
 
-        summary = summary.sort_values(
-            'relative_change', ascending=False
-        ).reset_index(drop=True)
+        summary = summary.sort_values('relative_change', ascending=False).reset_index(
+            drop=True
+        )
 
         metric_name = (
-            'failure rate' if target == 'exception' else metric_lookup.get(target, target)
+            'failure rate'
+            if target == 'exception'
+            else metric_lookup.get(target, target)
         )
         print(f"Overall {metric_name}: {overall_mean:.4f}")
         print(

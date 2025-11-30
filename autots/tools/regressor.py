@@ -8,6 +8,7 @@ from autots.tools.cointegration import coint_johansen
 from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.tools.transform import GeneralTransformer
 from autots.tools.fft import FFT
+
 try:
     from sklearn.preprocessing import StandardScaler
 except Exception:
@@ -22,10 +23,10 @@ def create_fft_features(
     freq_range=None,
 ):
     """Create FFT (Fast Fourier Transform) harmonic features for regression.
-    
+
     Extracts frequency-domain features that can capture periodic patterns in the data.
     These features are useful for models that can leverage fourier components.
-    
+
     Args:
         df (pd.DataFrame): training data in wide format
         forecast_length (int): length of forecasts
@@ -33,7 +34,7 @@ def create_fft_features(
             Can be int, float (as percentage), or None for all harmonics
         detrend (str): detrending method - None, 'linear', 'quadratic', 'cubic', 'quartic'
         freq_range (tuple): optional (low, high) frequency range filter
-        
+
     Returns:
         tuple: (fft_train_features, fft_forecast_features)
             Both are DataFrames with harmonic features (real and imaginary components)
@@ -42,38 +43,37 @@ def create_fft_features(
         raise ValueError("df must be a 'wide' dataframe with a pd.DatetimeIndex.")
     if isinstance(df, pd.Series):
         df = df.to_frame()
-    
+
     # Fill NaN values before FFT
     df_filled = FillNA(df.copy(), method='ffill')
-    
+
     # Initialize and fit FFT
     fft_model = FFT(n_harm=n_harmonics, detrend=detrend, freq_range=freq_range)
     fft_model.fit(df_filled.to_numpy())
-    
+
     # Generate harmonics for train + forecast periods
-    harmonics_data = fft_model.generate_harmonics_dataframe(forecast_length=forecast_length)
-    
+    harmonics_data = fft_model.generate_harmonics_dataframe(
+        forecast_length=forecast_length
+    )
+
     # Split into train and forecast
     train_harmonics = harmonics_data[: len(df)]
     forecast_harmonics = harmonics_data[len(df) :]
-    
+
     # Create column names
     n_harm_actual = len(fft_model.use_idx)
     col_names = []
     for i in range(n_harm_actual):
         col_names.append(f"fft_harmonic_{i}_real")
         col_names.append(f"fft_harmonic_{i}_imag")
-    
+
     # Convert to DataFrames with proper indices
-    fft_train = pd.DataFrame(
-        train_harmonics, 
-        index=df.index, 
-        columns=col_names
-    )
-    
+    fft_train = pd.DataFrame(train_harmonics, index=df.index, columns=col_names)
+
     # Create forecast index
     try:
         from autots.tools.shaping import infer_frequency
+
         freq = infer_frequency(df)
         forecast_index = pd.date_range(
             df.index[-1], periods=(forecast_length + 1), freq=freq
@@ -81,13 +81,11 @@ def create_fft_features(
     except Exception:
         # Fallback if frequency inference fails
         forecast_index = pd.RangeIndex(start=len(df), stop=len(df) + forecast_length)
-    
+
     fft_forecast = pd.DataFrame(
-        forecast_harmonics, 
-        index=forecast_index, 
-        columns=col_names
+        forecast_harmonics, index=forecast_index, columns=col_names
     )
-    
+
     return fft_train, fft_forecast
 
 

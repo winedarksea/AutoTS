@@ -1188,7 +1188,9 @@ class TemplateEvalObject(object):
         if another_eval.interrupted and not self.interrupted:
             self.interrupted = True
             self.interrupt_details = another_eval.interrupt_details
-        elif another_eval.interrupted and self.interrupted and not self.interrupt_details:
+        elif (
+            another_eval.interrupted and self.interrupted and not self.interrupt_details
+        ):
             self.interrupt_details = another_eval.interrupt_details
         return self
 
@@ -1614,7 +1616,7 @@ def _eval_prediction_for_template(
         round_smape = round(
             model_error.avg_metrics['smape'], 2
         )  # should work on both DF and single value
-        
+
         validation_accuracy_print = "{} - {} with avg smape {} in {:.2f}s: ".format(
             str(template_result.model_count),
             model_str,

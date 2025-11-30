@@ -499,7 +499,7 @@ def drop_leading_na_block(
     threshold: float = 0.75,
     window: int = 7,
     max_drop_fraction: float = 0.5,
-    warn: bool = True
+    warn: bool = True,
 ) -> pd.DataFrame:
     """
     Drop an initial leading block of rows if:

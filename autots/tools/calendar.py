@@ -323,18 +323,20 @@ def gregorian_to_hindu(datetime_index, method: str = "lunar"):
         # Get full moon data from astronomical calculations
         # Use multiple epoch values to account for timing uncertainty
         epochs = [2444238.0, 2444238.5]  # neutral and Asian timezones
-        
+
         # Start with the original date range index
         date_range_index = pd.date_range(
             datetime_input[0] - pd.Timedelta(days=400), datetime_input[-1], freq='D'
         )
         full_moon_combined = pd.Series(0, index=date_range_index)
-        
+
         for epoch in epochs:
             moon_df_epoch = moon_phase_df(date_range_index, epoch=epoch)
             full_moon_combined = full_moon_combined | moon_df_epoch['full_moon']
-        
-        expanded_dates = pd.concat([expanded_dates, full_moon_combined.rename('full_moon')], axis=1)
+
+        expanded_dates = pd.concat(
+            [expanded_dates, full_moon_combined.rename('full_moon')], axis=1
+        )
         expanded_dates['full_moon'] = expanded_dates['full_moon'].fillna(0)
 
         # Use actual full moon occurrences to determine Krishna Paksha
@@ -346,29 +348,40 @@ def gregorian_to_hindu(datetime_index, method: str = "lunar"):
         # Shift only occurs on days AFTER the full moon (not on the full moon day itself)
         waning_shift = (waning_shift > 0) & (expanded_dates['full_moon'] == 0)
         waning_shift = np.where(waning_shift, 1, 0)
-        
+
         # Special adjustment for known calendar edge cases where the base month calculation
         # doesn't align with established cultural/religious calendar practices
         # This specifically handles Holi dates that fall on full moons in late February/early March
         # which should be in Phalguna according to traditional Hindu calendar usage
         full_moon_days = expanded_dates['full_moon'] == 1
-        gregorian_months = pd.Series(expanded_dates.index.month, index=expanded_dates.index)
+        gregorian_months = pd.Series(
+            expanded_dates.index.month, index=expanded_dates.index
+        )
         is_late_feb_early_mar = (gregorian_months == 2) | (gregorian_months == 3)
-        needs_phalguna_correction = full_moon_days & (base_month == 11) & is_late_feb_early_mar
+        needs_phalguna_correction = (
+            full_moon_days & (base_month == 11) & is_late_feb_early_mar
+        )
         waning_shift = np.where(needs_phalguna_correction, 1, waning_shift)
     else:
         raise ValueError("method must be one of 'simple' or 'lunar'")
-    expanded_dates['hindu_month_number'] = (
-        (base_month + waning_shift - 1) % 12
-    ) + 1
+    expanded_dates['hindu_month_number'] = ((base_month + waning_shift - 1) % 12) + 1
 
     expanded_dates['hindu_month_name'] = expanded_dates['hindu_month_number'].map(
         hindu_month_names
     )
     # Return the data for the input dates
-    result = expanded_dates.loc[
-        datetime_input,
-        ['hindu_calendar_year', 'hindu_month_number', 'hindu_month_name', 'lunar_day'],
-    ].rename(columns={'hindu_calendar_year': 'lunar_year'}).rename_axis(index='date')
+    result = (
+        expanded_dates.loc[
+            datetime_input,
+            [
+                'hindu_calendar_year',
+                'hindu_month_number',
+                'hindu_month_name',
+                'lunar_day',
+            ],
+        ]
+        .rename(columns={'hindu_calendar_year': 'lunar_year'})
+        .rename_axis(index='date')
+    )
 
     return result

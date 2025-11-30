@@ -586,7 +586,9 @@ def _holiday_anchors_for_year(year, tz, scheme, holiday_cache):
         end = pd.Timestamp(year=year, month=12, day=31, tz=tz)
         anchor_index = pd.date_range(start, end, freq='D')
         holiday_cache[year] = holiday_flag(
-            anchor_index, country=[scheme.get('country', 'US')], encode_holiday_type=True
+            anchor_index,
+            country=[scheme.get('country', 'US')],
+            encode_holiday_type=True,
         )
     flags = holiday_cache[year]
     approx = scheme.get('approximate_dayofyear', [])
@@ -608,8 +610,7 @@ def _holiday_anchors_for_year(year, tz, scheme, holiday_cache):
             else:
                 # spread evenly if approximation missing
                 span_days = (
-                    pd.Timestamp(year=year + 1, month=1, day=1, tz=tz)
-                    - start_year
+                    pd.Timestamp(year=year + 1, month=1, day=1, tz=tz) - start_year
                 ).days
                 frac = (idx + 1) / (len(holidays_list) + 1)
                 selected = start_year + pd.Timedelta(days=int(round(frac * span_days)))
@@ -652,11 +653,11 @@ def _compute_anchor_positions(DTindex, scheme_key):
     max_year = DTindex.max().year
     holiday_cache = {}
     years = list(range(min_year - 1, max_year + 2))
-    
+
     all_boundaries = []
     for year in years:
         all_boundaries.extend(_anchor_year_boundaries(year, tz, scheme, holiday_cache))
-    
+
     all_boundaries = pd.Series(all_boundaries).drop_duplicates().sort_values().to_list()
     base_length = len(_anchor_year_boundaries(years[0], tz, scheme, holiday_cache))
 
@@ -678,10 +679,7 @@ def _compute_anchor_positions(DTindex, scheme_key):
     )
     # fill any NaNs from dates outside the boundary range
     segment_indices = (
-        pd.Series(segment_indices, index=DTindex)
-        .bfill()
-        .ffill()
-        .to_numpy(dtype=float)
+        pd.Series(segment_indices, index=DTindex).bfill().ffill().to_numpy(dtype=float)
     )
     max_segment_index = len(all_boundaries) - 2
     if max_segment_index < 0:
@@ -715,7 +713,7 @@ def _compute_anchor_positions(DTindex, scheme_key):
         where=durations != 0,
     )
     segment_frac = np.clip(segment_frac, 0.0, 1.0)
-    
+
     segment_idx = segment_indices % (base_length - 1)
 
     target_positions = np.linspace(0, 1, base_length)
@@ -738,9 +736,7 @@ def anchored_warped_fourier_features(DTindex, method: str):
     if warped.size == 0:
         return pd.DataFrame()
     data = fourier_series(warped, p=1.0, n=order)
-    columns = _fourier_column_names(
-        f"anchored_warped_{scheme_key}_fourier", order
-    )
+    columns = _fourier_column_names(f"anchored_warped_{scheme_key}_fourier", order)
     return pd.DataFrame(data, columns=columns)
 
 
@@ -779,9 +775,7 @@ def anchored_segment_fourier_features(DTindex, method: str):
             col_idx = base + day
             if mask.any():
                 dow_data[mask, col_idx] = (weekday[mask] == day).astype(float)
-            columns.append(
-                f"anchored_segment_{scheme_key}_segment{seg}_dow_{day}"
-            )
+            columns.append(f"anchored_segment_{scheme_key}_segment{seg}_dow_{day}")
     feature_arrays.append(dow_data)
     # hourly gating when grains are hourly or faster
     include_hour = False

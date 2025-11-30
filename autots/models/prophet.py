@@ -226,7 +226,9 @@ class FBProphet(ModelObject):
                 pargs.pop("changepoint_range", None)
                 pargs.pop("n_changepoints", None)
             m = Prophet(**pargs)
-            if current_series.shape[0] > 3000:  # larger data sets slow, but not sure if this 100% supported or ideal
+            if (
+                current_series.shape[0] > 3000
+            ):  # larger data sets slow, but not sure if this 100% supported or ideal
                 try:
                     m.stan_backend.set_options(newton_fallback=False)
                 except Exception:

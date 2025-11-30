@@ -80,9 +80,7 @@ class TestChangepointFeatures(unittest.TestCase):
 
         self.assertEqual(features.shape[0], len(dt_index))
         self.assertGreater(features.shape[1], 0)
-        self.assertTrue(
-            all("cusum_changepoint" in col for col in features.columns)
-        )
+        self.assertTrue(all("cusum_changepoint" in col for col in features.columns))
 
     def test_create_changepoint_features_ewma(self):
         dt_index = pd.date_range("2021-01-01", periods=160, freq="D")
@@ -104,9 +102,7 @@ class TestChangepointFeatures(unittest.TestCase):
 
         self.assertEqual(features.shape[0], len(dt_index))
         self.assertGreater(features.shape[1], 0)
-        self.assertTrue(
-            all("ewma_changepoint" in col for col in features.columns)
-        )
+        self.assertTrue(all("ewma_changepoint" in col for col in features.columns))
 
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"

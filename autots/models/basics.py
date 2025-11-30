@@ -1468,7 +1468,9 @@ def predict_reservoir(
     if warmup_pts <= 0:
         raise ValueError("nvar `warmup_pts` must be > 0")
     if df.shape[1] <= k:
-        raise ValueError(f"nvar input data must contain at least {k+1} records, got {df.shape[1]}")
+        raise ValueError(
+            f"nvar input data must contain at least {k+1} records, got {df.shape[1]}"
+        )
 
     n_pts = df.shape[1]
     # handle short data edge case
@@ -1497,7 +1499,7 @@ def predict_reservoir(
     # fill in the linear part of the feature vector for all times
     # Vectorized version - much faster than nested loops
     for delay in range(k):
-        x[d * delay : d * (delay + 1), delay:] = df[:, :maxtime_pts - delay]
+        x[d * delay : d * (delay + 1), delay:] = df[:, : maxtime_pts - delay]
 
     # create an array to hold the full feature vector for training time
     # (use ones so the constant term is already 1)
@@ -1514,13 +1516,15 @@ def predict_reservoir(
     for row in range(dlin):
         # Only compute upper triangle (including diagonal) since symmetric
         out_train[dlin + 1 + idx : dlin + 1 + idx + (dlin - row)] = (
-            x_train[row:row+1, :] * x_train[row:, :]
+            x_train[row : row + 1, :] * x_train[row:, :]
         )
         idx += dlin - row
 
     # ridge regression: train W_out to map out_train to df[t] - df[t - 1]
-    y_train = x[0:d, warmup_pts:warmtrain_pts] - x[0:d, warmup_pts - 1 : warmtrain_pts - 1]
-    
+    y_train = (
+        x[0:d, warmup_pts:warmtrain_pts] - x[0:d, warmup_pts - 1 : warmtrain_pts - 1]
+    )
+
     # Use more numerically stable ridge regression computation
     # Instead of: W_out = (A^T A + λI)^-1 A^T b
     # We use Cholesky decomposition for better numerical stability
@@ -1529,17 +1533,17 @@ def predict_reservoir(
     # Then solve: L @ L.T @ W_out.T = b.T
     # First solve: L @ y = b.T  (forward substitution)
     # Then solve: L.T @ W_out.T = y  (backward substitution)
-    
+
     try:
         # Compute the Gram matrix with ridge regularization
         A = out_train @ out_train.T
         # Add ridge parameter to diagonal for regularization
         # Use np.eye instead of np.identity for better precision control
-        A.flat[::dtot + 1] += ridge_param
-        
+        A.flat[:: dtot + 1] += ridge_param
+
         # Compute right-hand side
         b = y_train @ out_train.T
-        
+
         # Use Cholesky decomposition for more stable solve
         # This is more numerically stable than direct solve for symmetric positive definite matrices
         try:
@@ -1558,8 +1562,6 @@ def predict_reservoir(
         b = y_train @ out_train.T
         W_out = np.linalg.lstsq(A, b.T, rcond=None)[0].T
 
-
-
     # create a place to store feature vectors for prediction
     out_test = np.ones(dtot)  # full feature vector
     x_test = np.zeros((dlin, testtime_pts))  # linear part
@@ -1576,7 +1578,7 @@ def predict_reservoir(
     divergence_threshold = np.maximum(100 * train_range, 1000 * train_std)
     # Also set an absolute threshold to catch extreme cases
     absolute_threshold = 1e12
-    
+
     # Track if we've stopped early
     stopped_early = False
 
@@ -1584,7 +1586,7 @@ def predict_reservoir(
     for j in range(testtime_pts - 1):
         # copy linear part into whole feature vector
         out_test[1 : dlin + 1] = x_test[:, j]  # shift by one for constant
-        
+
         # Vectorized polynomial feature creation - much faster
         x_j = x_test[:, j]
         idx = 0
@@ -1593,29 +1595,30 @@ def predict_reservoir(
                 x_j[row] * x_j[row:]
             )
             idx += dlin - row
-        
+
         # fill in the delay taps of the next state
         x_test[d:dlin, j + 1] = x_test[0 : (dlin - d), j]
         # do a prediction
         x_test[0:d, j + 1] = x_test[0:d, j] + W_out @ out_test[:]
-        
+
         # Early stopping: check for divergence
         # Only check after first few steps to allow initial adjustment
         if j >= 2:
             current_values = x_test[0:d, j + 1]
             # Check if any value exceeds threshold or is NaN/Inf
-            if (np.any(np.abs(current_values) > divergence_threshold) or 
-                np.any(np.abs(current_values) > absolute_threshold) or
-                np.any(~np.isfinite(current_values))):
+            if (
+                np.any(np.abs(current_values) > divergence_threshold)
+                or np.any(np.abs(current_values) > absolute_threshold)
+                or np.any(~np.isfinite(current_values))
+            ):
                 # Forecast is diverging - use last stable value for remaining steps
                 # This prevents wasted computation and Inf/NaN propagation
                 for remaining_j in range(j + 2, testtime_pts):
                     x_test[:, remaining_j] = x_test[:, j]
                 stopped_early = True
                 break
-    
-    pred = x_test[0:d, 1:]
 
+    pred = x_test[0:d, 1:]
 
     if prediction_interval is not None or seed_pts > 1:
         # this works by using n most recent points as different starting "seeds"
@@ -1634,7 +1637,7 @@ def predict_reservoir(
             for j in range(testtime_pts - 1 + n_samples):
                 # copy linear part into whole feature vector
                 out_test[1 : dlin + 1] = x_int[:, j]  # shift by one for constant
-                
+
                 # Vectorized polynomial feature creation
                 x_j = x_int[:, j]
                 idx = 0
@@ -1643,30 +1646,32 @@ def predict_reservoir(
                         x_j[row] * x_j[row:]
                     )
                     idx += dlin - row
-                
+
                 # fill in the delay taps of the next state
                 x_int[d:dlin, j + 1] = x_int[0 : (dlin - d), j]
                 # do a prediction
                 x_int[0:d, j + 1] = x_int[0:d, j] + W_out @ out_test[:]
-                
+
                 # Early stopping for interval predictions (same logic as main prediction)
                 if j >= 2:
                     current_values = x_int[0:d, j + 1]
-                    if (np.any(np.abs(current_values) > divergence_threshold) or 
-                        np.any(np.abs(current_values) > absolute_threshold) or
-                        np.any(~np.isfinite(current_values))):
+                    if (
+                        np.any(np.abs(current_values) > divergence_threshold)
+                        or np.any(np.abs(current_values) > absolute_threshold)
+                        or np.any(~np.isfinite(current_values))
+                    ):
                         # Use last stable value for remaining steps
                         for remaining_j in range(j + 2, testtime_pts + n_samples):
                             x_int[:, remaining_j] = x_int[:, j]
                         interval_stopped_early = True
                         break
-                
+
             # Extract forecast portion: skip ns+1 warmup points from historical seed, then take forecast_length steps
             # This accounts for the offset in starting position (warmtrain_pts - 2 - ns)
-            interval_list.append(x_int[:, (ns + 1):(ns + 1 + forecast_length)])
+            interval_list.append(x_int[:, (ns + 1) : (ns + 1 + forecast_length)])
 
         interval_list = np.array(interval_list)
-        
+
         if seed_pts > 1:
             pred_int = np.concatenate(
                 [np.expand_dims(x_test[:, 1:], axis=0), interval_list]
@@ -1682,7 +1687,7 @@ def predict_reservoir(
                 )[0:d]
             else:
                 pred = np.quantile(pred_int, q=0.5, axis=0)[0:d]
-        
+
         pred_upper = nan_quantile(interval_list, q=prediction_interval, axis=0)[0:d]
         pred_upper = np.where(pred_upper < pred, pred, pred_upper)
         pred_lower = nan_quantile(interval_list, q=(1 - prediction_interval), axis=0)[
@@ -1758,33 +1763,30 @@ class NVAR(ModelObject):
             # Use stable sort with column names as secondary key for deterministic ordering
             stats = df.median()
             # Create a DataFrame to enable multi-key sorting
-            sort_df = pd.DataFrame({
-                'stat': stats,
-                'col': stats.index
-            })
+            sort_df = pd.DataFrame({'stat': stats, 'col': stats.index})
             # Sort by statistic descending, then by column name ascending for stability
-            sort_df = sort_df.sort_values(by=['stat', 'col'], ascending=[False, True], kind='stable')
+            sort_df = sort_df.sort_values(
+                by=['stat', 'col'], ascending=[False, True], kind='stable'
+            )
             df = df.loc[:, sort_df['col']]
         elif self.batch_method == "std_sorted":
             # Use stable sort with column names as secondary key for deterministic ordering
             stats = df.std()
-            sort_df = pd.DataFrame({
-                'stat': stats,
-                'col': stats.index
-            })
-            sort_df = sort_df.sort_values(by=['stat', 'col'], ascending=[False, True], kind='stable')
+            sort_df = pd.DataFrame({'stat': stats, 'col': stats.index})
+            sort_df = sort_df.sort_values(
+                by=['stat', 'col'], ascending=[False, True], kind='stable'
+            )
             df = df.loc[:, sort_df['col']]
         elif self.batch_method == "max_sorted":
             # Use stable sort with column names as secondary key for deterministic ordering
             stats = df.max()
-            sort_df = pd.DataFrame({
-                'stat': stats,
-                'col': stats.index
-            })
-            sort_df = sort_df.sort_values(by=['stat', 'col'], ascending=[False, True], kind='stable')
+            sort_df = pd.DataFrame({'stat': stats, 'col': stats.index})
+            sort_df = sort_df.sort_values(
+                by=['stat', 'col'], ascending=[False, True], kind='stable'
+            )
             df = df.loc[:, sort_df['col']]
         # else: input_order - no sorting needed
-        
+
         self.new_col_names = df.columns
         self.batch_steps = ceil(df.shape[1] / self.batch_size)
         self.df_train = df.to_numpy().T
@@ -3814,9 +3816,15 @@ class BasicLinearModel(ModelObject):
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X = pd.concat([X, future_regressor.reindex(test_index).rename(
-                columns=lambda x: "regr_" + str(x)
-            )], axis=1)
+            X = pd.concat(
+                [
+                    X,
+                    future_regressor.reindex(test_index).rename(
+                        columns=lambda x: "regr_" + str(x)
+                    ),
+                ],
+                axis=1,
+            )
         X["constant"] = 1
         X_values = X.to_numpy().astype(float)
         self.X = X
@@ -3853,7 +3861,9 @@ class BasicLinearModel(ModelObject):
             )
 
         # COMPONENT EXTRACTION (for analysis, not used in forecast)
-        beta_df = pd.DataFrame(self.beta, index=self.X.columns, columns=self.column_names)
+        beta_df = pd.DataFrame(
+            self.beta, index=self.X.columns, columns=self.column_names
+        )
         component_frames = OrderedDict()
         categorized_cols = set()
 
@@ -3874,7 +3884,11 @@ class BasicLinearModel(ModelObject):
             trend_matrix = X[trend_cols].to_numpy().astype(float)
             trend_beta = beta_df.loc[trend_cols].to_numpy()
             trend_contrib = trend_matrix @ trend_beta
-            if self.trend_phi is not None and self.trend_phi != 1 and len(test_index) >= 2:
+            if (
+                self.trend_phi is not None
+                and self.trend_phi != 1
+                and len(test_index) >= 2
+            ):
                 req_len = len(test_index) - 1
                 phi_series = pd.Series(
                     [self.trend_phi] * req_len,
@@ -4100,6 +4114,7 @@ class TVVAR(BasicLinearModel):
         var_preprocessing will fail with many options, anything that scales/shifts the space
         x_scaled=True seems to fail often when base_scaled=False and VAR components use
     """
+
     # TODO: add BayesianRegression as a model option (include uncertainty)
     # TODO: add a plot of components
     # TODO: add a function for impulse response analysis
@@ -4393,9 +4408,15 @@ class TVVAR(BasicLinearModel):
         x_t.index = test_index
         X_ext = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index).rename(
-                columns=lambda x: "regr_" + str(x)
-            )], axis=1)
+            X_ext = pd.concat(
+                [
+                    X_ext,
+                    future_regressor.reindex(test_index).rename(
+                        columns=lambda x: "regr_" + str(x)
+                    ),
+                ],
+                axis=1,
+            )
         X_ext["constant"] = 1
 
         predictions = pd.DataFrame(
@@ -4666,7 +4687,9 @@ class TVVAR(BasicLinearModel):
         components_df_final = pd.concat(result.values(), axis=1)
         return components_df_final
 
-    def _assemble_component_frames(self, raw_components, category_map, default_label='var'):
+    def _assemble_component_frames(
+        self, raw_components, category_map, default_label='var'
+    ):
         """Aggregate raw component dataframe into category DataFrames."""
         idx = raw_components.index
         frames = OrderedDict()

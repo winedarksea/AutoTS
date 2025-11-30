@@ -336,7 +336,8 @@ def rolling_x_regressor_regressor(
         X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
+            % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -940,7 +941,7 @@ def generate_classifier_params(
     model_list = list(model_dict.keys())
     weights = list(model_dict.values())
     model_choice = random.choices(model_list, weights, k=1)[0]
-    
+
     if model_choice == 'SGD':
         if method == "fast":
             max_iter = random.choices([4, 5, 6], [0.4, 0.4, 0.2])[0]
@@ -963,7 +964,9 @@ def generate_classifier_params(
                     ['log_loss', 'modified_huber'],
                     [0.7, 0.3],
                 )[0],
-                "penalty": random.choices(['l2', 'l1', 'elasticnet'], [0.6, 0.2, 0.2])[0],
+                "penalty": random.choices(['l2', 'l1', 'elasticnet'], [0.6, 0.2, 0.2])[
+                    0
+                ],
                 "alpha": random.choice([1e-5, 1e-4, 1e-3]),
                 "max_iter": max_iter,
                 "tol": random.choice([1e-3, 5e-4]),
@@ -978,9 +981,7 @@ def generate_classifier_params(
         return {
             "model": 'GaussianNB',
             "model_params": {
-                "var_smoothing": random.choice(
-                    [1e-9, 1e-8, 1e-7, 5e-7]
-                ),
+                "var_smoothing": random.choice([1e-9, 1e-8, 1e-7, 5e-7]),
             },
         }
     elif model_choice == 'DecisionTree':
@@ -990,9 +991,7 @@ def generate_classifier_params(
                 "max_depth": random.choice([1, 2, 3, 4, None]),
                 "min_samples_split": random.choice([2, 4, 6]),
                 "min_samples_leaf": random.choice([1, 2, 3]),
-                "class_weight": random.choice(
-                    [None, "balanced"]
-                ),
+                "class_weight": random.choice([None, "balanced"]),
             },
         }
     elif model_choice == 'ExtraTrees':
@@ -1126,13 +1125,15 @@ def generate_regressor_params(
                     "l1_ratio": random.choices([0.5, 0.1, 0.9], [0.7, 0.2, 0.1])[0],
                     "fit_intercept": random.choices([True, False], [0.9, 0.1])[0],
                     "selection": random.choices(["cyclic", "random"], [0.8, 0.1])[0],
-                    "max_iter": random.choices([200, 1000, 2000, 5000], [0.1, 0.8, 0.2, 0.01])[0],
+                    "max_iter": random.choices(
+                        [200, 1000, 2000, 5000], [0.1, 0.8, 0.2, 0.01]
+                    )[0],
                 },
             }
         elif model == 'xgboost':
-            branch = random.choices(['p1', 'p2', 'p3', 'random'], [0.05, 0.05, 0.05, 0.85])[
-                0
-            ]
+            branch = random.choices(
+                ['p1', 'p2', 'p3', 'random'], [0.05, 0.05, 0.05, 0.85]
+            )[0]
             if branch == 'p1':
                 param_dict = xgparam1
             elif branch == 'p2':
@@ -1294,7 +1295,12 @@ def generate_regressor_params(
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
-                        [0.90, 0.0, 0.01, 0.05],  # everything that isn't squared_error is slow
+                        [
+                            0.90,
+                            0.0,
+                            0.01,
+                            0.05,
+                        ],  # everything that isn't squared_error is slow
                     )[0],
                     "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
                 },
@@ -2056,8 +2062,8 @@ class RandomFourierEncoding(object):
         # Optimized: pre-allocate array instead of concatenate
         scale = np.sqrt(2 / self.n_components)
         X_new = np.empty((X.shape[0], 2 * self.n_components), dtype=projection.dtype)
-        X_new[:, :self.n_components] = scale * np.sin(projection)
-        X_new[:, self.n_components:] = scale * np.cos(projection)
+        X_new[:, : self.n_components] = scale * np.sin(projection)
+        X_new[:, self.n_components :] = scale * np.cos(projection)
         return X_new
 
 
@@ -2411,22 +2417,26 @@ class WindowRegression(ModelObject):
         datepart_method = random.choices([None, "something"], [0.9, 0.1])[0]
         if datepart_method == "something":
             datepart_method = random_datepart()
-        
+
         # ElasticNet's iterative solver is very slow for multi-output regression
-        if (output_dim_choice == 'forecast_length' and 
-            model_choice.get('model') == 'ElasticNet'):
+        if (
+            output_dim_choice == 'forecast_length'
+            and model_choice.get('model') == 'ElasticNet'
+        ):
             model_choice['model_params']['max_iter'] = 200
-        
+
         # Fourier encoding with large max_windows is memory-intensive
         # Reduce probability of this combination or adjust max_windows
-        fourier_choice = random.choices(
-            [None, 2, 5, 10], [0.9, 0.1, 0.01, 0.01]
-        )[0]
-        
+        fourier_choice = random.choices([None, 2, 5, 10], [0.9, 0.1, 0.01, 0.01])[0]
+
         # If fourier encoding is enabled with very large max_windows, reduce max_windows
-        if fourier_choice is not None and max_windows_choice is not None and max_windows_choice > 500000:
+        if (
+            fourier_choice is not None
+            and max_windows_choice is not None
+            and max_windows_choice > 500000
+        ):
             max_windows_choice = random.choice([5000, 50000, 500000])
-        
+
         return {
             'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
@@ -2707,6 +2717,7 @@ class MultivariateRegression(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
+
     # TODO: add a lag feature that can efficiently just pull seasonal lags, for example (7, 14, 28, 56, 365)
     # TODO: add a trend tracking feature, possibly the changepoint features like in pMLP
     # TODO: add change based targets such as y_t − y_{t-k} or y_t / y_{t-k} (perhaps as part of seasonal lags)
@@ -2807,9 +2818,7 @@ class MultivariateRegression(ModelObject):
         self.frac_slice = frac_slice
         self.transformation_dict = transformation_dict
         self.discard_data = discard_data
-        self.synthetic_boundary_ratio = max(
-            float(synthetic_boundary_ratio or 0.0), 0.0
-        )
+        self.synthetic_boundary_ratio = max(float(synthetic_boundary_ratio or 0.0), 0.0)
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2862,7 +2871,9 @@ class MultivariateRegression(ModelObject):
         """
         df = self.basic_profile(df)
         # assume memory and CPU count are correlated
-        with config_context(assume_finite=True, working_memory=int(abs(self.n_jobs) * 512)):
+        with config_context(
+            assume_finite=True, working_memory=int(abs(self.n_jobs) * 512)
+        ):
             # if external regressor, do some check up
             if self.regression_type is not None:
                 if future_regressor is None:
@@ -3279,7 +3290,9 @@ class MultivariateRegression(ModelObject):
         std_rolling_periods_choice = random.choices(
             [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
-        ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.95, 0.02, 0.02, 0.01])[0]
+        ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.95, 0.02, 0.02, 0.01])[
+            0
+        ]
         quantile90_rolling_periods = random.choices(
             [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
@@ -3442,6 +3455,7 @@ class VectorizedMultiOutputGPR:
         lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as lambda_.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
+
     # TODO: benchmark that this is sufficiently efficient with memory at very large scale and that runtime is reasonable. Fix or remove if not.
 
     def __init__(self, kernel='rbf', noise_var=10, gamma=0.1, lambda_prime=0.1, p=7):
@@ -3463,7 +3477,9 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1)
+            + np.sum(x2**2, 1)
+            - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

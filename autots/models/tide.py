@@ -45,6 +45,7 @@ try:
     full_import = True
 except Exception:
     from autots.tools.mocks import StandardScaler
+
     full_import = False
 
 

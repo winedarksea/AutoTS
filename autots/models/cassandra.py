@@ -1323,7 +1323,10 @@ class Cassandra(ModelObject):
                 lower = str(name).lower()
                 if 'trend' in lower:
                     return 'trend_linear'
-                if any(term in lower for term in ['fourier', 'season', 'sin', 'cos', 'datepart']):
+                if any(
+                    term in lower
+                    for term in ['fourier', 'season', 'sin', 'cos', 'datepart']
+                ):
                     return 'seasonality'
                 if 'holiday' in lower:
                     return 'holiday'
@@ -1331,7 +1334,9 @@ class Cassandra(ModelObject):
                     return 'regressors'
                 if 'impact' in lower:
                     return 'impacts_linear'
-                if any(term in lower for term in ['lag', 'randomwalk', 'ar', 'rolling']):
+                if any(
+                    term in lower for term in ['lag', 'randomwalk', 'ar', 'rolling']
+                ):
                     return 'lags'
                 if any(term in lower for term in ['intercept', 'bias']):
                     return 'bias'
@@ -2082,7 +2087,20 @@ class Cassandra(ModelObject):
                     'RRVAR',
                     "NeuralForecast",
                 ],
-                [0.05, 0.05, 0.1, 0.05, 0.02, 0.05, 0.4, 0.05, 0.05, 0.005, 0.05, 0.0005],
+                [
+                    0.05,
+                    0.05,
+                    0.1,
+                    0.05,
+                    0.02,
+                    0.05,
+                    0.4,
+                    0.05,
+                    0.05,
+                    0.005,
+                    0.05,
+                    0.0005,
+                ],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -2779,11 +2797,11 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     except (np.linalg.LinAlgError, ValueError):
         # If matrix is ill-conditioned, fall back to lstsq with rcond
         x0 = np.linalg.lstsq(X, y, rcond=1e-6)[0].flatten()
-    
+
     # Check if initial solution has issues (NaN or Inf)
     if not np.all(np.isfinite(x0)):
         x0 = np.zeros(X.shape[1])
-    
+
     # assuming scaled, these should be reasonable bounds
     bounds = [(-10, 10) for x in x0]
     if cost_function == "dwae":
@@ -2799,14 +2817,14 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
         x0[x0 > max_bound] = max_bound - 0.0001
     else:
         cost_func = cost_function_l1
-    
+
     # Add early stopping via ftol and gtol for faster convergence
     options = {
         'maxiter': maxiter,
         'ftol': 1e-6,  # function value tolerance
         'gtol': 1e-5,  # gradient tolerance
     }
-    
+
     try:
         result = minimize(
             cost_func,
@@ -2833,17 +2851,21 @@ def fit_linear_model(x, y, params=None):
     model_type = params.get("model", "lstsq")
     lambd = params.get("lambda", None)
     rec = params.get("recency_weighting", None)
-    
+
     # Check condition number to detect ill-conditioned matrices
     # and automatically add regularization if needed
     try:
         cond_num = np.linalg.cond(x)
         # If condition number is very high (>1e10), force regularization
-        if cond_num > 1e10 and lambd is None and model_type in ['lstsq', 'linalg_solve']:
+        if (
+            cond_num > 1e10
+            and lambd is None
+            and model_type in ['lstsq', 'linalg_solve']
+        ):
             lambd = 1.0  # Add modest regularization
     except Exception:
         pass  # If condition number check fails, proceed normally
-    
+
     if lambd is not None:
         id_mat = np.zeros((x.shape[1], x.shape[1]))
         np.fill_diagonal(id_mat, 1)

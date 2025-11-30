@@ -408,9 +408,7 @@ def ell_w(ind, W, X, rho, wxt=None):
 def conj_grad_w(sparse_mat, ind, W, X, rho, maxiter=5):
     rank, dim1 = W.shape
     w = np.reshape(W, -1, order="F")
-    r = np.reshape(
-        X @ sparse_mat.T - ell_w(ind, W, X, rho, wxt=W.T @ X), -1, order="F"
-    )
+    r = np.reshape(X @ sparse_mat.T - ell_w(ind, W, X, rho, wxt=W.T @ X), -1, order="F")
     q = r.copy()
     rold = np.inner(r, r)
     for it in range(maxiter):
@@ -438,8 +436,7 @@ def conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, maxiter=5):
     rank, dim2 = X.shape
     x = np.reshape(X, -1, order="F")
     r = np.reshape(
-        W @ sparse_mat
-        - ell_x(ind, W, X, A, Psi, d, lambda0, rho, wtx=W.T @ X),
+        W @ sparse_mat - ell_x(ind, W, X, A, Psi, d, lambda0, rho, wtx=W.T @ X),
         -1,
         order="F",
     )

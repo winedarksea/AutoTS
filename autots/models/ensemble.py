@@ -13,7 +13,13 @@ from autots.tools.profile import profile_time_series, summarize_series
 from autots.tools.kalman import kalman_fusion_forecasts
 
 
-horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min', 'horizontal-profile']
+horizontal_aliases = [
+    'horizontal',
+    'probabilistic',
+    'horizontal-max',
+    'horizontal-min',
+    'horizontal-profile',
+]
 # try to include all types in here
 full_ensemble_test_list = [
     'simple',
@@ -245,10 +251,16 @@ def BestNEnsemble(
     # this is expected to have to handle NaN
     if point_method in ["median", "midhinge"]:
         # Align all forecasts to have the same columns before creating numpy arrays, due to expanding transformers
-        aligned_forecasts = [forecasts[m].reindex(columns=columnz) for m in forecast_keys]
-        aligned_lower_forecasts = [lower_forecasts[m].reindex(columns=columnz) for m in forecast_keys]
-        aligned_upper_forecasts = [upper_forecasts[m].reindex(columns=columnz) for m in forecast_keys]
-        
+        aligned_forecasts = [
+            forecasts[m].reindex(columns=columnz) for m in forecast_keys
+        ]
+        aligned_lower_forecasts = [
+            lower_forecasts[m].reindex(columns=columnz) for m in forecast_keys
+        ]
+        aligned_upper_forecasts = [
+            upper_forecasts[m].reindex(columns=columnz) for m in forecast_keys
+        ]
+
         forecast_array = np.array(
             [x.values.reshape(1, -1) if x.ndim == 1 else x for x in aligned_forecasts]
         )
@@ -311,7 +323,9 @@ def BestNEnsemble(
         ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
     elif point_method == "kalman":
         # Align all forecasts to have the same columns before creating numpy arrays
-        aligned_forecasts = [forecasts[m].reindex(columns=columnz) for m in forecast_keys]
+        aligned_forecasts = [
+            forecasts[m].reindex(columns=columnz) for m in forecast_keys
+        ]
         F = np.array([x.values for x in aligned_forecasts])
         ens_df, ens_df_lower, ens_df_upper = kalman_fusion_forecasts(
             F=F,
@@ -454,7 +468,7 @@ def BestNEnsemble(
             x_aligned = x.reindex(columns=columnz, fill_value=0)
             lower_aligned = lower_forecasts[idx].reindex(columns=columnz, fill_value=0)
             upper_aligned = upper_forecasts[idx].reindex(columns=columnz, fill_value=0)
-            
+
             ens_df = ens_df + (x_aligned * current_weight)
             ens_df_lower = ens_df_lower + (lower_aligned * current_weight)
             ens_df_upper = ens_df_upper + (upper_aligned * current_weight)
@@ -797,7 +811,7 @@ def HorizontalEnsemble(
         print("No full models available for horizontal generalization!")
         full_models = available_models  # hope it doesn't need to fill
     # print(f"FULLMODEL {len(full_models)}: {full_models}")
-    
+
     # handle profiled horizontal
     profiled = "profile" in ensemble_params.get("model_metric", "")
     if profiled and prematched_series is None:
@@ -1596,7 +1610,7 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-    
+
     # horizontal-profile: choose best model per actual profile type
     if 'horizontal-profile' in ensemble:
         profile_to_model = {}
@@ -1634,7 +1648,9 @@ def HorizontalTemplateGenerator(
                 .drop_duplicates(
                     subset=['Model', 'ModelParameters', 'TransformationParameters']
                 )
-                .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
 
             nomen = 'Horizontal'
@@ -1657,7 +1673,7 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best_profile_params], axis=0, ignore_index=True
             )
-    
+
     # this is legacy, replaced by mosaic
     if 'hdist' in ensemble and not subset_flag:
         mods_per_series = per_series.idxmin()

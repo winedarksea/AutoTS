@@ -51,27 +51,28 @@ def summarize_series(df):
     df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
     df_filled = df.ffill().bfill()
     df_sum.loc["count_non_zero"] = ((df != 0) & df.notna()).sum()
-    df_sum.loc["cv_squared"] = (
-        df_sum.loc["std"] / df.abs().mean().replace(0, 1)
+    df_sum.loc["cv_squared"] = (df_sum.loc["std"] / df.abs().mean().replace(0, 1)) ** 2
+    df_sum.loc["adi"] = (
+        df_sum.loc["count"] / df_sum.loc["count_non_zero"].replace(0, 1)
     ) ** 2
-    df_sum.loc["adi"] = (df_sum.loc["count"] / df_sum.loc["count_non_zero"].replace(0, 1)) ** 2
-    
+
     # Calculate ADI for first and second halves to avoid false positives from leading/trailing zeros
     mid_point = df.shape[0] // 2
     df_first_half = df.iloc[:mid_point]
     df_second_half = df.iloc[mid_point:]
-    
-    for half_df, suffix in [(df_first_half, "_first_half"), (df_second_half, "_second_half")]:
+
+    for half_df, suffix in [
+        (df_first_half, "_first_half"),
+        (df_second_half, "_second_half"),
+    ]:
         count_valid = half_df.notna().sum()
         count_non_zero_half = ((half_df != 0) & half_df.notna()).sum()
         # If entire half is NaN, set adi to 0 (will pass any threshold check)
         adi_half = np.where(
-            count_valid == 0,
-            0,
-            (count_valid / count_non_zero_half.replace(0, 1)) ** 2
+            count_valid == 0, 0, (count_valid / count_non_zero_half.replace(0, 1)) ** 2
         )
         df_sum.loc[f"adi{suffix}"] = adi_half
-    
+
     first_non_nan_index = df.replace(0, np.nan).reset_index(drop=True).notna().idxmax()
     try:
         df_sum.loc["autocorr_1"] = np.diag(
@@ -165,8 +166,14 @@ def profile_time_series(
     # (halves with all NaN are ignored, not required to pass)
     metrics_df.loc[
         (metrics_df['adi'] >= adi_threshold)
-        & ((metrics_df['adi_first_half'] == 0) | (metrics_df['adi_first_half'] >= adi_threshold))
-        & ((metrics_df['adi_second_half'] == 0) | (metrics_df['adi_second_half'] >= adi_threshold)),
+        & (
+            (metrics_df['adi_first_half'] == 0)
+            | (metrics_df['adi_first_half'] >= adi_threshold)
+        )
+        & (
+            (metrics_df['adi_second_half'] == 0)
+            | (metrics_df['adi_second_half'] >= adi_threshold)
+        ),
         'PROFILE',
     ] = 'intermittent'
     metrics_df.loc[
@@ -189,12 +196,9 @@ def profile_time_series(
     ] = "highly_seasonal"
 
     # Identify smooth series dominated by drift-like trend contributions
-    trend_strength = (
-        1
-        - metrics_df.get(
-            'season_trend_percent', pd.Series(0, index=metrics_df.index)
-        ).fillna(0)
-    )
+    trend_strength = 1 - metrics_df.get(
+        'season_trend_percent', pd.Series(0, index=metrics_df.index)
+    ).fillna(0)
     autocorr = metrics_df.get(
         'autocorr_1', pd.Series(0, index=metrics_df.index)
     ).fillna(0)

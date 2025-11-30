@@ -392,7 +392,9 @@ class GLM(ModelObject):
         if parallel:
             # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
             timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose, timeout=timeout_value)(
+            df_list = Parallel(
+                n_jobs=self.n_jobs, verbose=pool_verbose, timeout=timeout_value
+            )(
                 delayed(glm_forecast_by_column)(
                     current_series=df[col],
                     X=X,
@@ -879,7 +881,9 @@ class ARIMA(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
             timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
+            df_list = Parallel(
+                n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value
+            )(
                 delayed(arima_seek_the_oracle)(
                     current_series=self.df_train[col], args=args, series=col
                 )
@@ -1165,7 +1169,9 @@ class UnobservedComponents(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
             timeout_value = max(300, int(120 * len(cols) / self.n_jobs))
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
+            df_list = Parallel(
+                n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value
+            )(
                 delayed(uc_forecast_by_column)(
                     current_series=self.df_train[col],
                     args=args,
@@ -1229,7 +1235,7 @@ class UnobservedComponents(ModelObject):
         level_probabilities = [
             0.15,  # irregular - fast
             0.03,  # fixed intercept - can be slow
-            0.1,   # deterministic constant - fast
+            0.1,  # deterministic constant - fast
             0.15,  # local level - fast
             0.15,  # random walk - fast
             0.05,  # fixed slope
@@ -1241,7 +1247,7 @@ class UnobservedComponents(ModelObject):
             0.03,  # random trend - can be slow
         ]
         level_choice = random.choices(levels, level_probabilities)[0]
-        
+
         """
         level_choice = random.choice([True, False])
         if level_choice:
@@ -1274,21 +1280,30 @@ class UnobservedComponents(ModelObject):
             [0.8, 0.1, 0.05, 0.05, 0.0, 0.0],  # Removed newton, reduced powell
         )[0]
         cov_type_choice = random.choices(
-            ["opg", "oim", "approx", 'robust'], 
-            [0.85, 0.0, 0.08, 0.02]  # Reduced robust probability
+            ["opg", "oim", "approx", 'robust'],
+            [0.85, 0.0, 0.08, 0.02],  # Reduced robust probability
         )[0]
-        
+
         # If slow level, method, or cov_type, reduce maxiter
-        slow_levels = ['fixed intercept', 'deterministic trend', 'random walk with drift', 
-                      'random trend', 'local linear deterministic trend']
-        if (level_choice in slow_levels or 
-            method_choice in ['powell', 'newton', 'nm', 'bfgs'] or 
-            cov_type_choice == 'robust'):
+        slow_levels = [
+            'fixed intercept',
+            'deterministic trend',
+            'random walk with drift',
+            'random trend',
+            'local linear deterministic trend',
+        ]
+        if (
+            level_choice in slow_levels
+            or method_choice in ['powell', 'newton', 'nm', 'bfgs']
+            or cov_type_choice == 'robust'
+        ):
             maxiter_choice = random.choice([50, 100])  # Cap at 100 for slow configs
-        
+
         # Reduce autoregressive with already slow configs
         if level_choice in slow_levels or maxiter_choice == 250:
-            ar_choice = random.choices([None, 1], [0.95, 0.05])[0]  # Avoid AR with slow configs
+            ar_choice = random.choices([None, 1], [0.95, 0.05])[
+                0
+            ]  # Avoid AR with slow configs
         else:
             ar_choice = random.choices([None, 1, 2], [0.8, 0.1, 0.005])[0]
 
@@ -2130,7 +2145,9 @@ class Theta(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
             timeout_value = max(300, int(160 * len(cols) / self.n_jobs))
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
+            df_list = Parallel(
+                n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value
+            )(
                 delayed(theta_forecast_by_column)(
                     current_series=self.df_train[col], args=args
                 )
@@ -2183,7 +2200,7 @@ class Theta(ModelObject):
             'period': period,
             'theta': random.choices(
                 [1.0, 1.1, 1.2, 1.3, 1.4, 1.6, 2.0, 2.5, 3.0, 4.0],
-                [0.1, 0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+                [0.1, 0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
             )[0],
             'use_mle': random.choices([True, False], [0.0001, 0.99])[0],
         }
@@ -2257,14 +2274,16 @@ class ARDL(ModelObject):
         """
         df = self.basic_profile(df)
         self.regressor_train = None
-        
+
         # Handle list of regression types
         if isinstance(self.regression_type, list):
             regressor_parts = []
             for reg_type in self.regression_type:
                 if reg_type == 'holiday':
                     regressor_parts.append(
-                        pd.DataFrame(holiday_flag(df.index, country=self.holiday_country))
+                        pd.DataFrame(
+                            holiday_flag(df.index, country=self.holiday_country)
+                        )
                     )
                 elif reg_type in date_part_methods:
                     regressor_parts.append(date_part(df.index, method=reg_type))
@@ -2372,14 +2391,16 @@ class ARDL(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
-        
+
         # Handle list of regression types
         if isinstance(self.regression_type, list):
             regressor_parts = []
             for reg_type in self.regression_type:
                 if reg_type == 'holiday':
                     regressor_parts.append(
-                        pd.DataFrame(holiday_flag(test_index, country=self.holiday_country))
+                        pd.DataFrame(
+                            holiday_flag(test_index, country=self.holiday_country)
+                        )
                     )
                 elif reg_type in date_part_methods:
                     regressor_parts.append(date_part(test_index, method=reg_type))
@@ -2394,8 +2415,10 @@ class ARDL(ModelObject):
             )
         elif self.regression_type in date_part_methods:
             future_regressor = date_part(test_index, method=self.regression_type)
-        
-        if self.regression_type is not None and not isinstance(self.regression_type, list):
+
+        if self.regression_type is not None and not isinstance(
+            self.regression_type, list
+        ):
             assert (
                 future_regressor.shape[0] == forecast_length
             ), "regressor not equal to forecast length"
@@ -2428,7 +2451,9 @@ class ARDL(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             # dynamic timeout: minimum 300s, budget of 120s per series divided by n_jobs
             timeout_value = max(300, int(180 * len(cols) / self.n_jobs))
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value)(
+            df_list = Parallel(
+                n_jobs=self.n_jobs, verbose=(verbs), timeout=timeout_value
+            )(
                 delayed(ardl_per_column)(
                     current_series=self.df_train[col],
                     args=args,
@@ -2481,11 +2506,15 @@ class ARDL(ModelObject):
                 # Create a list with 2-3 regression types
                 list_options = ['holiday'] + date_part_methods
                 n_types = random.choices([2, 3], [0.7, 0.3])[0]
-                regression_choice = random.sample(list_options, min(n_types, len(list_options)))
+                regression_choice = random.sample(
+                    list_options, min(n_types, len(list_options))
+                )
         if regression_choice is None:
             order_choice = 0
         else:
-            order_choice = random.choices([0, 1, 2, 3, 4], [0.2, 0.5, 0.2, 0.1, 0.01])[0]
+            order_choice = random.choices([0, 1, 2, 3, 4], [0.2, 0.5, 0.2, 0.1, 0.01])[
+                0
+            ]
 
         return {
             'lags': random.choices([1, 2, 3, 4, 7], [0.4, 0.3, 0.2, 0.1, 0.01])[0],

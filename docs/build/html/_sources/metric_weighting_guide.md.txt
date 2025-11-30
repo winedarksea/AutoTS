@@ -1,0 +1,138 @@
+AutoTS Metric Weighting
+
+The purpose of the metric_weighting argument is to guide the selection of a forecasting model
+towards a model that best serves a business needs. It addresses the problem where a forecast
+optimized on a single traditional metric like mean absolute error (MAE), won’t necessary fit the
+shape, probabilistic, directional, or production implementation constraints of a problem. For
+example an MAE optimized forecast might produce a flat line, where the user needs a line the
+shows more of the movement and energy of the original series.
+Each metric weighting is relative to all other weightings given and is not an absolute weight. In
+general, if all metric weightings are 1, then all metrics would be equally weighted. This works
+because behind the scenes, all metrics are normalized relative to the other metrics and put
+together into a single Score which is used for model selection. However it isn’t quite perfect so
+it is best to have an order of magnitude between most and least important features. For
+example there might be an spl_weighting of 10, saying that probabilistic forecast bound
+accuracy is most important, and an smape_weighting of 1 saying that the scaled point
+accuracy is also important but not the most important consideration, and finally a 0.1
+runtime_weighting which is a very small relative weighting essentially saying to use the runtime
+weighting as a tie breaker and to choose the fastest model assuming two otherwise very
+similar models.
+In all cases a larger weighting means a greater emphasis on improving that metric. So in the
+case of minimizing metrics, which most are, this means the larger weighting will favor smaller
+values of that metric. For the few maximizing metrics, the larger score favors larger values of
+that metric.
+Here is a breakdown of each of the weightings and potential uses:
+smape_weighting - this metric provides a good overall impression of balanced point accuracy
+across all time series in a dataset. It is usually the single best metric for an overall impression of
+accuracy but it lacks a lot of nuance that other metrics can add in. The value is relatively easy
+to interpret and explain to a lay person as well.
+mae_weighting - this metric provides the mean absolute error which is unscaled, accordingly it
+tends to favor accuracy on the largest scale series. This can be a benefit where the highest
+volume series are most important, but can be a major hinderance is scaled accuracy matters.
+This metric is probably the easiest to explain in the context of most business cases.’
+rmse_weighting - this metric is the root mean squared error. It is very similar to the
+mae_weighting but has greater penalty on outliers. This will tend to result in a flatter, more
+conservative forecast in most cases which make it a popular choice. However, in the case of
+time series where very large spikes can occur due to events or holidays, this metric can
+become distorted by these events, choosing models that do well on these diﬃcult to forecast
+and high penalty spikes at the cost of overall accuracy. This metric also does poorly on time
+series where there are many noisy or anomalous points in the history.
+containment_weighting - containment is also called coverage. This describes what percentage
+of test values fell within the upper and lower forecast bounds. It is the most human
+interpretable way of assessing probabilistic forecasts and is useful in conformal forecasts,
+however the spl_weighting is often most useful for providing good probabilistic bounds and it
+is often used in combination with that metric. Containment’s score is always relative to the
+target prediction interval, and the goal isn’t to make containment large or small but to match
+containment as closely as possible to the desired prediction range, so a 60% forecast
+coverage would be best for a 60% probabilistic range target coverage.
+spl_weighting is scaled pinball loss. It is the metric most used for optimizing upper and lower
+bound forecasts to fit probabilistic forecasting. It is also often useful for driving good point
+forecasts, especially in noisy datasets, as it is a little more flexible in handling outliers.
+runtime_weighting is a straightforward metric. More importance here favors faster models. A
+small weighting here, usually the smallest weighting of the group, is usually helpful in choosing
+faster models that are easier to put into production.
+contour_weighting is the first of the shape fitting metrics. Shape fitting is the idea of forecasts
+and actuals not only having similar values but having similar shapes as they move across time.
+It matches what percentage of the time the forecast and actuals moved in the same direction.
+It is based on the idea of parallel contours on a map, where two lines usually follow each
+other’s shape closely, even if they don’t match the same value. While unfamiliar to most
+people, it can still be explained fairly simply to end users. Because it has fairly weak penalties,
+this can be a useful way of adding light shape fitting to a model, but is not good for when
+strong shape fitting is desired.
+made_weighting is mean absolute diﬀerential error and is a shape fitting metric that measures
+the absolute magnitude of each t to t+1 step change and compares those diﬀs between the
+forecast and actuals. It is a good way of observing if a forecast generally has spikes to the
+same magnitude as the original
+dwd_weighting is the diﬀerential Wasserstein distance weighting. It is similar made_weighting
+but it looks at the total energy of the diﬀerentials, and so thus has a more average look at
+overall energy. It is often the most balanced metric to use for shape fitting because it considers
+the entire diﬀerentials but has some leeway for changes occurring close but not exactly on the
+same days.
+mage_weighting is mean aggregate error. This is very useful in hierarchical forecasting as it
+assesses how well a rollup of all series compares in the forecasts and actuals. This is very
+useful if forecasting, for example products, and a total daily product sold volume needs to be
+accurately produced. Without this metric, the overall rollup is more prone to over or under
+estimation.
+mle_weighting is the mean logarithmic error. It favors an overestimate but tries to still be close
+to the actual point value. This is useful is cases such as safety stock scenarios where a bit of
+excess inventory is desired to prevent out of stock events and reduced customer experience. It
+can also be added anytime it seems forecasts are tending towards being too low. It is
+commonly used in any situation where custom experience is important and a bit of excess is
+included to prevent customer dissatisfaction (such as staﬃng for an amusement park), while
+also trying to minimize the excess.
+imle_weighting is the inverse mean logarithmic error. It favors underestimate and is useful for
+the opposite case of mle_weighting. Here it favors an underestimate and can be useful for
+example in inventory forecasting where the goal is to have enough product for most sales but
+never to have excess inventory waste. This is good for optimal eﬃciency in many cases where
+the system in tolerant of a bit of an underestimate.
+maxe_weighting is maximum error from the entire evaluation period. Minimizing this reduces
+the error on the forecasts “worse case scenario” prediction. However, as it ignores everything
+but the worse error, it isn’t very useful as a standalone metric and should be combined with
+others.
+mqae_weighting is mean quantile absolute error. This metric takes the quantile, here the 85th
+quantile of mean absolute error. The purpose of this metric is to assess accuracy but to throw
+out the worse data points from evaluation. This is useful in cases where the source data has a
+lot of noise or anomalies but the forecaster wishes to try and avoid forecasting the worst of
+those. This can be very helpful and is the opposite of RMSE in that a single fluke event here
+can be ignored and will help reduce the distortion of such events. It is still best combined with
+other metrics, such as spl_weighting.
+oda_weighting is the first of the direction fitting metrics. It is the percentage of time that the
+forecasts moved in the correct direction relative to the last historical value. This can be very
+useful in business financial metrics and similar situations where correctly predicting growth or
+decline is itself more important than slight variations in that growth or decline. This can also be
+useful in stock market forecasting where the correctly predicting the direction will result in a
+profit and reduced risk, where this metric is less focused on maximal profit and more focused
+on assured profit. It can be challenging on very noisy series and works best when there are
+strong long term trends.
+dwae_weighting is another direction fitting metric. In this case, the correct directionality from
+the historical origin is used to increase or decrease the penalty. For example, if a 2% growth is
+predicting and a 4% growth occurs, that would be a much lower penalty here than if a 1%
+growth was predicted and a -1% decline occurred. Even though both have the same 2%
+magnitude diﬀerence, the case where growth or decline was incorrect gets the harsher penalty.
+This is good optimization metric where direction is desired but is not the only consideration. It
+is usually better for optimization than oda_weighting but is less easy for end users to
+understand.
+ewmae_weighting is the endpoint weighted mean absolute error. This metric favors long term
+forecasts points more than near term ones. This is useful where long term trend is more
+important than short term predictions, but where both are considered.
+uwmse_weighting is the ‘U’ weighted mean square error. This is primarily intended for
+producing better graphs. It addresses the problem where the first forecast step of a forecast is
+often very important for a good looking graph. Most metrics weight all points equally, but this
+adds extra weight to the first and last forecast horizon steps. This should often be used instead
+of rmse_weighting because it optimizes similarly but tends to produce more graph friendly
+forecasts.
+smoothness_weighting. This is the only metric that makes sense to provide a negative value to
+sometimes. It is not an accuracy metric but a descriptive metric. High values for this favor flat
+forecasts, while negative values for this favor more volatile forecasts. It should always be used
+with other metrics that provide a few on point accuracy as well. It can be the quickest metric to
+tune to satisfy users demands for flatter or more curvy forecasts.
+mate_weighting is similar to mage_weighting but looks at a single series aggregation across
+the entire time. This can be useful where total sales are important and provides a few of the
+total inventory needed. matse_weighting is a scaled version of the same which provides this
+metric normalized across series.
+wasserstein_weighting is the wasserstein distance which is often more useful than
+mate_weighting for inventory. It minimizes the total energy of the series which means it
+assesses overall volume but it also favors proximity. This is useful where there is some
+flexibility in the business case across time. It is not a good choice for cases like volatile staﬃng
+where predictions must be accurate on the predicted day. In those cases rmse_weighting
+might be better.

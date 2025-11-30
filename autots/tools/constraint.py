@@ -602,10 +602,16 @@ def apply_adjustment_single(
         if start_value is None and end_value is None:
             start_value = end_value = 0 if value is None else value
         elif start_value is None:
-            start_value = end_value if end_value is not None else (0 if value is None else value)
+            start_value = (
+                end_value if end_value is not None else (0 if value is None else value)
+            )
         elif end_value is None:
             end_value = start_value
-        if value is not None and adjustment_params.get("end_value", None) is None and adjustment_params.get("start_value", None) is None:
+        if (
+            value is not None
+            and adjustment_params.get("end_value", None) is None
+            and adjustment_params.get("start_value", None) is None
+        ):
             start_value = end_value = value
         method = adjustment_params.get("method", "additive")
 

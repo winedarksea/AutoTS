@@ -218,7 +218,7 @@ def apply_adjustments(
     df_train=None,
 ):
     """Apply post-forecast adjustments such as percentage, additive, and smoothing.
-    
+
     Args:
         forecast (pd.DataFrame): forecast df, wide style
         lower_forecast (pd.DataFrame): lower bound forecast df
@@ -226,7 +226,7 @@ def apply_adjustments(
         adjustments (list): list of dictionaries of adjustments to apply
             keys: "adjustment_method" or "method", "columns", "start_date", "end_date", "apply_bounds", plus method-specific params
         df_train (pd.DataFrame): required for align_last_value method
-    
+
     Returns:
         forecast, lower, upper (pd.DataFrame)
     """
@@ -240,8 +240,16 @@ def apply_adjustments(
         raise TypeError("apply_adjustments requires forecast to be a pandas DataFrame.")
 
     forecast_adj = forecast.copy()
-    lower_adj = lower_forecast.copy() if isinstance(lower_forecast, pd.DataFrame) else lower_forecast
-    upper_adj = upper_forecast.copy() if isinstance(upper_forecast, pd.DataFrame) else upper_forecast
+    lower_adj = (
+        lower_forecast.copy()
+        if isinstance(lower_forecast, pd.DataFrame)
+        else lower_forecast
+    )
+    upper_adj = (
+        upper_forecast.copy()
+        if isinstance(upper_forecast, pd.DataFrame)
+        else upper_forecast
+    )
 
     def _resolve_columns(adjustment):
         """Get list of valid columns from adjustment specification."""
@@ -265,7 +273,9 @@ def apply_adjustments(
         start = index[0] if start is None else pd.to_datetime(start)
         end = index[-1] if end is None else pd.to_datetime(end)
         if end < start:
-            warnings.warn(f"Adjustment end_date {end} precedes start_date {start}; skipping window.")
+            warnings.warn(
+                f"Adjustment end_date {end} precedes start_date {start}; skipping window."
+            )
             return pd.Series(False, index=index)
         return (index >= start) & (index <= end)
 
@@ -274,27 +284,27 @@ def apply_adjustments(
         if not isinstance(adjustment, dict):
             warnings.warn(f"Adjustment {adjustment} is not a dict and will be skipped.")
             continue
-        
+
         method = adjustment.get("adjustment_method") or adjustment.get("method")
         if method is None:
             warnings.warn("No adjustment_method provided; skipping.")
             continue
         method = str(method).lower()
-        
+
         columns = _resolve_columns(adjustment)
         if not columns:
             continue
-        
+
         apply_bounds = adjustment.get("apply_bounds", True)
         mask = _create_mask(forecast_adj.index, adjustment)
-        
+
         # Apply adjustment based on method
         if method in ("percentage", "percent"):
             # Percentage adjustment - multiply by (1 + percentage)
             start_value = adjustment.get("start_value")
             end_value = adjustment.get("end_value")
             constant_value = adjustment.get("value")
-            
+
             # Handle different value specifications
             if start_value is None and end_value is None and constant_value is not None:
                 start_value = end_value = constant_value
@@ -302,18 +312,20 @@ def apply_adjustments(
                 start_value = end_value
             elif end_value is None and start_value is not None:
                 end_value = start_value
-            
+
             if start_value is None:
-                warnings.warn("Percentage adjustment missing value definitions; skipping.")
+                warnings.warn(
+                    "Percentage adjustment missing value definitions; skipping."
+                )
                 continue
             if not mask.any():
                 continue
-            
+
             # Create linear interpolation between start and end
             num_periods = int(mask.sum())
             pct_values = np.linspace(start_value, end_value, num=num_periods)
             pct_series = pd.Series(pct_values, index=forecast_adj.index[mask])
-            
+
             # Apply to forecast and bounds
             forecast_adj.loc[mask, columns] = forecast_adj.loc[mask, columns].multiply(
                 1 + pct_series, axis=0
@@ -326,7 +338,7 @@ def apply_adjustments(
                 upper_adj.loc[mask, columns] = upper_adj.loc[mask, columns].multiply(
                     1 + pct_series, axis=0
                 )
-                
+
         elif method in ("additive", "add"):
             # Additive adjustment - add constant or array
             value = adjustment.get("value")
@@ -335,28 +347,38 @@ def apply_adjustments(
                 continue
             if not mask.any():
                 continue
-            
+
             # Apply to forecast and bounds
             forecast_adj.loc[mask, columns] = forecast_adj.loc[mask, columns] + value
             if apply_bounds and isinstance(lower_adj, pd.DataFrame):
                 lower_adj.loc[mask, columns] = lower_adj.loc[mask, columns] + value
             if apply_bounds and isinstance(upper_adj, pd.DataFrame):
                 upper_adj.loc[mask, columns] = upper_adj.loc[mask, columns] + value
-                
+
         elif method in ("align_last_value", "alignlastvalue", "align"):
             # Align forecast to last historical value
             from autots.tools.transform import AlignLastValue
 
             if df_train is None or not isinstance(df_train, pd.DataFrame):
-                warnings.warn("AlignLastValue adjustment requires df_train dataframe; skipping.")
+                warnings.warn(
+                    "AlignLastValue adjustment requires df_train dataframe; skipping."
+                )
                 continue
-            
+
             # Parse parameters
-            params = adjustment.get("parameters") or adjustment.get("transformation_params") or {}
-            if isinstance(params, dict) and "0" in params and isinstance(params["0"], dict):
+            params = (
+                adjustment.get("parameters")
+                or adjustment.get("transformation_params")
+                or {}
+            )
+            if (
+                isinstance(params, dict)
+                and "0" in params
+                and isinstance(params["0"], dict)
+            ):
                 params = params["0"]
             align_params = {**DEFAULT_ALIGN_LAST_VALUE_PARAMS, **params}
-            
+
             # Fit and apply aligner
             aligner = AlignLastValue(**align_params)
             try:
@@ -364,10 +386,12 @@ def apply_adjustments(
             except KeyError as err:
                 warnings.warn(f"AlignLastValue could not find columns {err}; skipping.")
                 continue
-            
+
             # Apply to forecast
-            forecast_adj.loc[:, columns] = aligner.inverse_transform(forecast_adj.loc[:, columns])
-            
+            forecast_adj.loc[:, columns] = aligner.inverse_transform(
+                forecast_adj.loc[:, columns]
+            )
+
             # Apply to bounds with same adjustment values
             if apply_bounds:
                 adjustment_values = aligner.adjustment
@@ -379,30 +403,36 @@ def apply_adjustments(
                     upper_adj.loc[:, columns] = aligner.inverse_transform(
                         upper_adj.loc[:, columns], adjustment=adjustment_values
                     )
-                    
+
         elif method in ("smoothing", "ewma"):
             # Exponential weighted moving average smoothing
             span = adjustment.get("span", 7)
             if span is None or span <= 0:
                 warnings.warn(f"Invalid EWMA span '{span}' in adjustment; skipping.")
                 continue
-            
+
             # Apply smoothing
-            smoothed_forecast = forecast_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+            smoothed_forecast = (
+                forecast_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+            )
             if mask.any():
                 forecast_adj.loc[mask, columns] = smoothed_forecast.loc[mask, columns]
             else:
                 forecast_adj.loc[:, columns] = smoothed_forecast
-            
+
             if apply_bounds:
                 if isinstance(lower_adj, pd.DataFrame):
-                    smoothed_lower = lower_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+                    smoothed_lower = (
+                        lower_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+                    )
                     if mask.any():
                         lower_adj.loc[mask, columns] = smoothed_lower.loc[mask, columns]
                     else:
                         lower_adj.loc[:, columns] = smoothed_lower
                 if isinstance(upper_adj, pd.DataFrame):
-                    smoothed_upper = upper_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+                    smoothed_upper = (
+                        upper_adj.loc[:, columns].ewm(span=span, adjust=False).mean()
+                    )
                     if mask.any():
                         upper_adj.loc[mask, columns] = smoothed_upper.loc[mask, columns]
                     else:
@@ -577,51 +607,87 @@ class PredictionObject(object):
 
     def copy(self):
         """Create a deep copy of the PredictionObject with separate memory for all key elements.
-        
+
         Returns:
             PredictionObject: A new PredictionObject with deep copies of all attributes
         """
         import copy
-        
+
         # Create a new instance with copied forecasts and core attributes
         new_obj = PredictionObject(
             model_name=self.model_name,
             forecast_length=self.forecast_length,
-            forecast_index=self.forecast_index.copy() if isinstance(self.forecast_index, pd.Index) else self.forecast_index,
-            forecast_columns=self.forecast_columns.copy() if isinstance(self.forecast_columns, pd.Index) else self.forecast_columns,
-            lower_forecast=self.lower_forecast.copy() if isinstance(self.lower_forecast, pd.DataFrame) else self.lower_forecast,
-            forecast=self.forecast.copy() if isinstance(self.forecast, pd.DataFrame) else self.forecast,
-            upper_forecast=self.upper_forecast.copy() if isinstance(self.upper_forecast, pd.DataFrame) else self.upper_forecast,
+            forecast_index=self.forecast_index.copy()
+            if isinstance(self.forecast_index, pd.Index)
+            else self.forecast_index,
+            forecast_columns=self.forecast_columns.copy()
+            if isinstance(self.forecast_columns, pd.Index)
+            else self.forecast_columns,
+            lower_forecast=self.lower_forecast.copy()
+            if isinstance(self.lower_forecast, pd.DataFrame)
+            else self.lower_forecast,
+            forecast=self.forecast.copy()
+            if isinstance(self.forecast, pd.DataFrame)
+            else self.forecast,
+            upper_forecast=self.upper_forecast.copy()
+            if isinstance(self.upper_forecast, pd.DataFrame)
+            else self.upper_forecast,
             prediction_interval=self.prediction_interval,
             predict_runtime=self.predict_runtime,
             fit_runtime=self.fit_runtime,
             model_parameters=copy.deepcopy(self.model_parameters),
             transformation_parameters=copy.deepcopy(self.transformation_parameters),
             transformation_runtime=self.transformation_runtime,
-            per_series_metrics=self.per_series_metrics.copy() if isinstance(self.per_series_metrics, pd.DataFrame) else self.per_series_metrics,
-            per_timestamp=self.per_timestamp.copy() if isinstance(self.per_timestamp, pd.DataFrame) else self.per_timestamp,
-            avg_metrics=self.avg_metrics.copy() if isinstance(self.avg_metrics, pd.Series) else self.avg_metrics,
-            avg_metrics_weighted=self.avg_metrics_weighted.copy() if isinstance(self.avg_metrics_weighted, pd.Series) else self.avg_metrics_weighted,
-            full_mae_error=self.full_mae_error.copy() if isinstance(self.full_mae_error, np.ndarray) else self.full_mae_error,
+            per_series_metrics=self.per_series_metrics.copy()
+            if isinstance(self.per_series_metrics, pd.DataFrame)
+            else self.per_series_metrics,
+            per_timestamp=self.per_timestamp.copy()
+            if isinstance(self.per_timestamp, pd.DataFrame)
+            else self.per_timestamp,
+            avg_metrics=self.avg_metrics.copy()
+            if isinstance(self.avg_metrics, pd.Series)
+            else self.avg_metrics,
+            avg_metrics_weighted=self.avg_metrics_weighted.copy()
+            if isinstance(self.avg_metrics_weighted, pd.Series)
+            else self.avg_metrics_weighted,
+            full_mae_error=self.full_mae_error.copy()
+            if isinstance(self.full_mae_error, np.ndarray)
+            else self.full_mae_error,
             model=None,  # Don't copy model objects as they can be complex
             transformer=None,  # Don't copy transformer objects
-            result_windows=copy.deepcopy(self.result_windows) if self.result_windows is not None else None,
-            components=self.components.copy() if isinstance(self.components, pd.DataFrame) else self.components,
+            result_windows=copy.deepcopy(self.result_windows)
+            if self.result_windows is not None
+            else None,
+            components=self.components.copy()
+            if isinstance(self.components, pd.DataFrame)
+            else self.components,
         )
-        
+
         # Copy additional attributes that may have been set after initialization
         if hasattr(self, 'runtime_dict') and self.runtime_dict is not None:
             new_obj.runtime_dict = copy.deepcopy(self.runtime_dict)
-        
+
         if hasattr(self, 'squared_errors'):
-            new_obj.squared_errors = self.squared_errors.copy() if isinstance(self.squared_errors, np.ndarray) else self.squared_errors
-        
+            new_obj.squared_errors = (
+                self.squared_errors.copy()
+                if isinstance(self.squared_errors, np.ndarray)
+                else self.squared_errors
+            )
+
         if hasattr(self, 'upper_pl'):
-            new_obj.upper_pl = self.upper_pl.copy() if isinstance(self.upper_pl, np.ndarray) else self.upper_pl
-        
+            new_obj.upper_pl = (
+                self.upper_pl.copy()
+                if isinstance(self.upper_pl, np.ndarray)
+                else self.upper_pl
+            )
+
         if hasattr(self, 'lower_pl'):
-            new_obj.lower_pl = self.lower_pl.copy() if isinstance(self.lower_pl, np.ndarray) else self.lower_pl
-        
+            new_obj.lower_pl = (
+                self.lower_pl.copy()
+                if isinstance(self.lower_pl, np.ndarray)
+                else self.lower_pl
+            )
+
         return new_obj
 
     def long_form_results(
@@ -861,26 +927,26 @@ class PredictionObject(object):
         plot_kwargs = kwargs.copy()
         ax_param = plot_kwargs.pop('ax', None)
         user_color = plot_kwargs.pop('color', None)
-        
+
         # Set default linewidth for better visibility if not specified
         if 'linewidth' not in plot_kwargs and 'lw' not in plot_kwargs:
             plot_kwargs['linewidth'] = 1.5
-        
+
         # Determine band color with proper fallback
         if colors and 'low_forecast' in colors:
             band_color = colors['low_forecast']
         else:
             band_color = "#A5ADAF"
-        
+
         # Determine which colors to pass: either the colors dict or None if user provided color kwarg
         colors_to_use = None if user_color else colors
-        
+
         # Create new figure with DPI if ax not provided
         if ax_param is None and not plot_grid:
             fig_dpi = dpi if dpi is not None else 100
             fig = plt.figure(dpi=fig_dpi)
             ax_param = fig.add_subplot(111)
-        
+
         ax = plot_forecast_with_intervals(
             plot_df,
             actual_col='actuals' if 'actuals' in plot_df.columns else None,
@@ -897,19 +963,19 @@ class PredictionObject(object):
             color=user_color,
             **plot_kwargs,
         )
-        
+
         # Professional styling improvements
         ax.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.3, zorder=0)
         ax.set_axisbelow(True)  # Grid behind data
-        
+
         # Improve spine appearance
         for spine in ax.spines.values():
             spine.set_linewidth(0.8)
             spine.set_color('#333333')
-        
+
         # Better tick formatting
         ax.tick_params(axis='both', which='major', labelsize=9, length=4, width=0.8)
-        
+
         if vline is not None:
             ax.vlines(
                 x=vline,
@@ -923,7 +989,7 @@ class PredictionObject(object):
             # ax.text(vline, plot_df.max().max(), "Event", color='darkred', verticalalignment='top')
         if title_substring is not None:
             ax.set_ylabel(series, fontsize=10)
-        
+
         # Add AutoTS watermark if not part of plot_grid
         if not plot_grid:
             ax.text(
@@ -938,7 +1004,7 @@ class PredictionObject(object):
                 style='italic',
                 color='gray',
             )
-        
+
         return ax
 
     def plot_components(
@@ -953,7 +1019,7 @@ class PredictionObject(object):
         **kwargs,
     ):
         """Plot stored component contributions for a single series with Prophet-style subplots.
-        
+
         Args:
             series (str): Series name to plot. Random if None.
             start_date: Filter data from this date onward.
@@ -963,7 +1029,7 @@ class PredictionObject(object):
             include_forecast (bool): If True, adds top subplot with forecast and actuals.
             sharex (bool): Whether subplots share x-axis.
             **kwargs: Additional arguments passed to matplotlib plot.
-            
+
         Returns:
             fig: matplotlib Figure object
         """
@@ -973,29 +1039,31 @@ class PredictionObject(object):
             series = random.choice(self.components.columns.get_level_values(0).unique())
         if series not in self.components.columns.get_level_values(0):
             raise ValueError(f"Series '{series}' not found in stored components.")
-        
+
         comp_df = self.components[series].copy()
-        
+
         # Filter by start_date if provided
         if start_date is not None:
             comp_df = comp_df[comp_df.index >= start_date]
             if comp_df.empty:
-                raise ValueError("No component data remains after applying start_date filter.")
-        
+                raise ValueError(
+                    "No component data remains after applying start_date filter."
+                )
+
         # Determine number of subplots
         component_names = comp_df.columns.tolist()
         n_components = len(component_names)
         n_plots = n_components + 1 if include_forecast else n_components
-        
+
         # Auto-calculate figsize if not provided
         if figsize is None:
             figsize = (12, 3 * n_plots)
-        
+
         # Create subplots
         fig, axes = plt.subplots(n_plots, 1, figsize=figsize, sharex=sharex)
         if n_plots == 1:
             axes = [axes]
-        
+
         # Overall title
         if title is None:
             model_name = extract_single_series_from_horz(
@@ -1005,55 +1073,78 @@ class PredictionObject(object):
             )
             title = f"Component Breakdown: {series}\nModel: {model_name}"
         fig.suptitle(title, fontsize=14, fontweight='bold')
-        
+
         plot_idx = 0
-        
+
         # Plot forecast + actuals if requested
         if include_forecast:
             ax = axes[plot_idx]
             forecast_data = self.forecast[series]
             if start_date is not None:
                 forecast_data = forecast_data[forecast_data.index >= start_date]
-            
+
             # Plot actuals if available
             if df_wide is not None and series in df_wide.columns:
                 actuals = df_wide[series]
                 if start_date is not None:
                     actuals = actuals[actuals.index >= start_date]
-                ax.plot(actuals.index, actuals.values, 'o', 
-                       markersize=2, label='Actual', color='#AFDBF5', alpha=0.7)
-            
+                ax.plot(
+                    actuals.index,
+                    actuals.values,
+                    'o',
+                    markersize=2,
+                    label='Actual',
+                    color='#AFDBF5',
+                    alpha=0.7,
+                )
+
             # Plot forecast
-            ax.plot(forecast_data.index, forecast_data.values, 
-                   label='Forecast', color='#003399', linewidth=2)
-            
+            ax.plot(
+                forecast_data.index,
+                forecast_data.values,
+                label='Forecast',
+                color='#003399',
+                linewidth=2,
+            )
+
             # Plot prediction intervals
             upper = self.upper_forecast[series]
             lower = self.lower_forecast[series]
             if start_date is not None:
                 upper = upper[upper.index >= start_date]
                 lower = lower[lower.index >= start_date]
-            ax.fill_between(forecast_data.index, lower.values, upper.values,
-                           alpha=0.2, color='#A5ADAF', label='Prediction Interval')
-            
+            ax.fill_between(
+                forecast_data.index,
+                lower.values,
+                upper.values,
+                alpha=0.2,
+                color='#A5ADAF',
+                label='Prediction Interval',
+            )
+
             ax.set_ylabel('Value', fontweight='bold')
             ax.legend(loc='best', frameon=True, fancybox=True)
             ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
             ax.set_title('Forecast', fontsize=11, loc='left', fontweight='bold')
             plot_idx += 1
-        
+
         # Plot each component
         for component in component_names:
             ax = axes[plot_idx]
             comp_values = comp_df[component]
-            
-            ax.plot(comp_values.index, comp_values.values, 
-                   linewidth=1.5, color='#2C7BB6', **kwargs)
+
+            ax.plot(
+                comp_values.index,
+                comp_values.values,
+                linewidth=1.5,
+                color='#2C7BB6',
+                **kwargs,
+            )
             ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
             ax.set_ylabel('Effect', fontweight='bold')
             ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
             ax.set_title(component, fontsize=11, loc='left', fontweight='bold')
-            
+
             # Improve y-axis scaling
             y_values = comp_values.values
             if len(y_values) > 0 and not np.all(np.isnan(y_values)):
@@ -1069,12 +1160,12 @@ class PredictionObject(object):
                 else:
                     # All zeros or single value at zero
                     ax.set_ylim(-0.5, 0.5)
-            
+
             plot_idx += 1
-        
+
         # Set x-label on bottom plot only
         axes[-1].set_xlabel('Date', fontweight='bold')
-        
+
         plt.tight_layout()
         return fig
 
@@ -1093,7 +1184,7 @@ class PredictionObject(object):
         dpi=100,  # default DPI for grid plots
     ):
         """Plots multiple series in a grid, if present. Mostly identical args to the single plot function.
-        
+
         Args:
             dpi (int): dots per inch for figure resolution (default: 100)
         """
@@ -1114,7 +1205,9 @@ class PredictionObject(object):
         else:
             nrow = 1
             ncol = 2
-        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, dpi=dpi, constrained_layout=True)
+        fig, axes = plt.subplots(
+            nrow, ncol, figsize=figsize, dpi=dpi, constrained_layout=True
+        )
         fig.suptitle(title, fontsize='xx-large')
         count = 0
         if len(cols) != num_cols:
@@ -1389,9 +1482,9 @@ class PredictionObject(object):
         return_json=False,
     ):
         """Query a specific slice of forecast results with minimal token usage.
-        
+
         Designed for LLM-friendly output with compact representation.
-        
+
         Args:
             dates (str, datetime, list, slice): Date(s) to query.
                 - Single date: "2024-01-15" or datetime object
@@ -1405,15 +1498,15 @@ class PredictionObject(object):
             include_bounds (bool): Include upper/lower forecast bounds
             include_components (bool): Include component breakdown if available
             return_json (bool): Return JSON string instead of dict
-            
+
         Returns:
             dict or str: Compact forecast data
-            
+
         Examples:
             >>> # Single series, single date
             >>> pred.query_forecast(dates="2024-01-15", series="sales")
             {'forecast': {'sales': {'2024-01-15': 123.45}}}
-            
+
             >>> # Multiple series, date range with bounds
             >>> pred.query_forecast(
             ...     dates=slice("2024-01-01", "2024-01-07"),
@@ -1423,7 +1516,7 @@ class PredictionObject(object):
         """
         if not isinstance(self.forecast, pd.DataFrame):
             raise ValueError("No forecast data available")
-        
+
         # Handle series selection
         if series is None:
             selected_series = self.forecast.columns.tolist()
@@ -1431,29 +1524,29 @@ class PredictionObject(object):
             selected_series = [series]
         else:
             selected_series = list(series)
-        
+
         # Validate series exist
         missing = set(selected_series) - set(self.forecast.columns)
         if missing:
             raise ValueError(f"Series not found in forecast: {missing}")
-        
+
         # Handle date selection
         if dates is None:
             date_slice = self.forecast.index
         elif isinstance(dates, slice):
-            date_slice = self.forecast.loc[dates.start:dates.stop].index
+            date_slice = self.forecast.loc[dates.start : dates.stop].index
         elif isinstance(dates, (list, pd.Index)):
             date_slice = pd.DatetimeIndex(dates)
         else:
             # Single date
             date_slice = pd.DatetimeIndex([pd.to_datetime(dates)])
-        
+
         # Build result dictionary
         result = {
             'model': self.model_name,
             'prediction_interval': self.prediction_interval,
         }
-        
+
         # Extract forecast values
         forecast_data = {}
         for col in selected_series:
@@ -1465,7 +1558,7 @@ class PredictionObject(object):
                     col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
             forecast_data[col] = col_data
         result['forecast'] = forecast_data
-        
+
         # Add bounds if requested
         if include_bounds:
             if isinstance(self.upper_forecast, pd.DataFrame):
@@ -1475,10 +1568,12 @@ class PredictionObject(object):
                     for dt in date_slice:
                         if dt in self.upper_forecast.index:
                             val = self.upper_forecast.loc[dt, col]
-                            col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                            col_data[dt.isoformat()] = (
+                                float(val) if pd.notna(val) else None
+                            )
                     upper_data[col] = col_data
                 result['upper_forecast'] = upper_data
-            
+
             if isinstance(self.lower_forecast, pd.DataFrame):
                 lower_data = {}
                 for col in selected_series:
@@ -1486,10 +1581,12 @@ class PredictionObject(object):
                     for dt in date_slice:
                         if dt in self.lower_forecast.index:
                             val = self.lower_forecast.loc[dt, col]
-                            col_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                            col_data[dt.isoformat()] = (
+                                float(val) if pd.notna(val) else None
+                            )
                     lower_data[col] = col_data
                 result['lower_forecast'] = lower_data
-        
+
         # Add components if requested and available
         if include_components and self.components is not None:
             if isinstance(self.components, pd.DataFrame):
@@ -1503,15 +1600,18 @@ class PredictionObject(object):
                             for dt in date_slice:
                                 if dt in self.components.index:
                                     val = self.components.loc[dt, (col, comp_name)]
-                                    comp_data[dt.isoformat()] = float(val) if pd.notna(val) else None
+                                    comp_data[dt.isoformat()] = (
+                                        float(val) if pd.notna(val) else None
+                                    )
                             col_components[comp_name] = comp_data
                         components_data[col] = col_components
                 result['components'] = components_data
-        
+
         if return_json:
             import json
+
             return json.dumps(result, indent=2)
-        
+
         return result
 
 
@@ -1522,9 +1622,7 @@ def stack_component_frames(component_frames):
         if df is None:
             continue
         comp_df = df.copy()
-        comp_df.columns = pd.MultiIndex.from_product(
-            [comp_df.columns, [name]]
-        )
+        comp_df.columns = pd.MultiIndex.from_product([comp_df.columns, [name]])
         frames.append(comp_df)
     if not frames:
         return None

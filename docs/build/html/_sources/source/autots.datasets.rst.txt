@@ -12,6 +12,14 @@ autots.datasets.fred module
    :undoc-members:
    :show-inheritance:
 
+autots.datasets.synthetic module
+--------------------------------
+
+.. automodule:: autots.datasets.synthetic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

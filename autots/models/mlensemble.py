@@ -40,7 +40,9 @@ def _coerce_params(config):
 def _ensure_feature_block(array_like, target_columns):
     """Cast feature data to 3D array with axis order (feature, horizon, series)."""
     if isinstance(array_like, pd.DataFrame):
-        matrix = array_like.reindex(columns=target_columns, fill_value=0).to_numpy(copy=False)
+        matrix = array_like.reindex(columns=target_columns, fill_value=0).to_numpy(
+            copy=False
+        )
     else:
         matrix = np.asarray(array_like)
     if matrix.ndim == 2:

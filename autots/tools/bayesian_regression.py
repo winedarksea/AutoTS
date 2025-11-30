@@ -187,9 +187,7 @@ class BayesianMultiOutputRegression:
         try:
             chol_coef = np.linalg.cholesky(self.coef_cov_)
         except np.linalg.LinAlgError:
-            chol_coef = np.linalg.cholesky(
-                self.coef_cov_ + 1e-9 * np.eye(n_features)
-            )
+            chol_coef = np.linalg.cholesky(self.coef_cov_ + 1e-9 * np.eye(n_features))
 
         try:
             chol_noise = np.linalg.cholesky(self.noise_covariance_)

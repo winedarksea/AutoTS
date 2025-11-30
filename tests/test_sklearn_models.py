@@ -139,7 +139,7 @@ class TestMultivariateRegression(unittest.TestCase):
         )
         model.fit(df)
         forecast = model.predict(forecast_length=5, just_point_forecast=True)
-        
+
         # Check output shape
         self.assertEqual(forecast.shape, (5, 2))
         self.assertEqual(list(forecast.columns), ["series_1", "series_2"])
@@ -162,7 +162,7 @@ class TestMultivariateRegression(unittest.TestCase):
         )
         model.fit(df)
         prediction = model.predict(forecast_length=3, just_point_forecast=False)
-        
+
         # Check that we get upper and lower forecasts
         self.assertEqual(prediction.forecast.shape, (3, 2))
         self.assertEqual(prediction.upper_forecast.shape, (3, 2))
@@ -177,11 +177,14 @@ class TestMultivariateRegression(unittest.TestCase):
             {"col_a": np.sin(np.arange(40)) * 10, "col_b": np.cos(np.arange(40)) * 10},
             index=idx,
         )
-        
+
         # Test with DecisionTree
         model_dt = MultivariateRegression(
             forecast_length=3,
-            regression_model={"model": "DecisionTree", "model_params": {"max_depth": 5}},
+            regression_model={
+                "model": "DecisionTree",
+                "model_params": {"max_depth": 5},
+            },
             mean_rolling_periods=3,
             window=3,
             verbose=0,
@@ -197,7 +200,7 @@ class TestMultivariateRegression(unittest.TestCase):
             {"s1": np.arange(30) * 10, "s2": np.arange(30) * 5},
             index=idx,
         )
-        
+
         model = MultivariateRegression(
             forecast_length=3,
             regression_model={"model": "LinearRegression", "model_params": {}},
@@ -207,7 +210,7 @@ class TestMultivariateRegression(unittest.TestCase):
             verbose=0,
         )
         model.fit(df)
-        
+
         # Check that scaler was initialized
         self.assertIsNotNone(model.scaler_mean)
         self.assertIsNotNone(model.scaler_std)
@@ -220,7 +223,7 @@ class TestMultivariateRegression(unittest.TestCase):
             window=7,
             additional_lag_periods=15,
         )
-        
+
         # min_threshold should be the max of all period parameters
         self.assertGreaterEqual(model.min_threshold, 15)
 
@@ -231,7 +234,7 @@ class TestMultivariateRegression(unittest.TestCase):
             {"series_1": np.arange(100), "series_2": np.arange(100) * 2},
             index=idx,
         )
-        
+
         model = MultivariateRegression(
             forecast_length=5,
             regression_model={"model": "LinearRegression", "model_params": {}},
@@ -240,17 +243,17 @@ class TestMultivariateRegression(unittest.TestCase):
             verbose=0,
         )
         model.fit(df)
-        
+
         # Create new data
         idx_new = pd.date_range("2020-01-01", periods=120, freq="D")
         df_new = pd.DataFrame(
             {"series_1": np.arange(120), "series_2": np.arange(120) * 2},
             index=idx_new,
         )
-        
+
         # Update with fit_data
         model.fit_data(df_new)
-        
+
         # Check that sktraindata was updated
         self.assertEqual(len(model.sktraindata), min(model.min_threshold, len(df_new)))
 

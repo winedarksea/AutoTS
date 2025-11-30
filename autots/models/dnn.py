@@ -50,6 +50,7 @@ class KerasRNN(object):
         verbose (int): 0, 1 or 2. Passed to keras model.fit
         random_seed (int): passed to tf.random.set_seed()
     """
+
     # TODO: this entire class needs to be examined and refactored
 
     def __init__(
@@ -332,6 +333,7 @@ class Transformer(object):
         verbose (int): 0, 1 or 2. Passed to keras model.fit
         random_seed (int): passed to tf.random.set_seed()
     """
+
     # TODO: this entire class needs to be examined and refactored
 
     def __init__(

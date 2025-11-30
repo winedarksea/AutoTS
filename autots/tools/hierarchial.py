@@ -176,15 +176,15 @@ def mint_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarra
         Reconciled forecasts for all L levels (top, middle, bottom).
     """
     from scipy.linalg import solve, LinAlgError
-    
+
     # Use solve() instead of inv() for better numerical stability and performance
     # Vectorized version - no loops, processes all time points simultaneously
     try:
         S_T = S.T
         # Solve W @ temp = S for temp (vectorized)
         temp = solve(W, S, assume_a='pos')  # More stable than W_inv @ S
-        M = S_T @ temp   # shape (M, M)
-        
+        M = S_T @ temp  # shape (M, M)
+
         # Vectorized computation for all time points at once
         y_all_T = y_all.T  # (L, T)
         # Solve W @ rhs_temp = y_all_T for rhs_temp (vectorized)
@@ -193,9 +193,9 @@ def mint_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarra
         # Solve M @ beta = rhs for beta (vectorized)
         beta = solve(M, rhs, assume_a='pos')  # (M, T)
         y_all_reconciled = (S @ beta).T  # (T, L)
-        
+
         return y_all_reconciled
-        
+
     except LinAlgError:
         # Fallback to regularized version for numerical stability
         ridge = 1e-6 * np.trace(W) / W.shape[0]
@@ -228,26 +228,26 @@ def erm_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarray
         Reconciled forecasts for all L levels.
     """
     from scipy.linalg import solve, LinAlgError
-    
+
     try:
         S_T = S.T
         A = S_T @ W @ S  # shape (M, M)
-        
+
         # Add small regularization to ensure numerical stability
         # This prevents ill-conditioned matrices from causing extremely slow solves
         # Use adaptive ridge based on matrix scale
         ridge = 1e-8 * np.trace(A) / A.shape[0]
         A_reg = A + np.eye(A.shape[0]) * ridge
-        
+
         # Compute projection matrix efficiently using solve
         # P = S (S' W S)^{-1} S' W
         temp = solve(A_reg, S_T @ W, check_finite=False)
         P = S @ temp  # shape (L, L)
-        
+
         # Apply projection
         y_reconciled = y_all @ P.T
         return y_reconciled
-        
+
     except (LinAlgError, ValueError):
         # Fallback with stronger regularization
         ridge = 1e-6 * np.trace(W) / W.shape[0]
@@ -310,14 +310,14 @@ def ledoit_wolf_covariance(X: np.ndarray, assume_centered: bool = False) -> np.n
 
 
 def compute_volatility_weights(
-    S: np.ndarray, 
-    cov_bottom: np.ndarray, 
+    S: np.ndarray,
+    cov_bottom: np.ndarray,
     volatility_method: str = "variance",
-    volatility_power: float = 1.0
+    volatility_power: float = 1.0,
 ) -> np.ndarray:
     """
     Compute volatility-based weights for preferential adjustment of high-volatility series.
-    
+
     Parameters
     ----------
     S : np.ndarray, shape (L, M)
@@ -328,7 +328,7 @@ def compute_volatility_weights(
         Method to compute volatility: "variance", "std", "cv" (coefficient of variation)
     volatility_power : float
         Power to raise volatility weights (higher values increase preference for volatile series)
-        
+
     Returns
     -------
     vol_weights : np.ndarray, shape (L, L)
@@ -336,7 +336,7 @@ def compute_volatility_weights(
     """
     M = S.shape[1]  # number of bottom-level series
     L = S.shape[0]  # total levels
-    
+
     # Extract bottom-level variance/volatility
     if volatility_method == "variance":
         bottom_vol = np.diag(cov_bottom)
@@ -347,39 +347,39 @@ def compute_volatility_weights(
         bottom_vol = np.sqrt(np.diag(cov_bottom))
     else:
         raise ValueError(f"Unknown volatility_method: {volatility_method}")
-    
+
     # Normalize volatilities to [0, 1] range and apply power
     vol_normalized = bottom_vol / (np.max(bottom_vol) + 1e-8)
     vol_weighted = np.power(vol_normalized, volatility_power)
-    
+
     # Create full hierarchy volatility weights
     hierarchy_vol = S @ vol_weighted  # aggregate volatilities to all levels
-    
+
     # Normalize to maintain scale
     hierarchy_vol = hierarchy_vol / (np.mean(hierarchy_vol) + 1e-8)
-    
+
     # Create diagonal weight matrix (higher weight = more adjustment allowed)
     vol_weights = np.diag(hierarchy_vol)
-    
+
     return vol_weights
 
 
 def volatility_weighted_mint_reconcile(
-    S: np.ndarray, 
-    y_all: np.ndarray, 
+    S: np.ndarray,
+    y_all: np.ndarray,
     W: np.ndarray,
     cov_bottom: np.ndarray,
     volatility_method: str = "variance",
     volatility_power: float = 1.0,
-    volatility_mix: float = 0.5
+    volatility_mix: float = 0.5,
 ) -> np.ndarray:
     """
     Volatility-weighted MinT reconciliation that preferentially adjusts high-volatility series.
-    
+
     The method combines traditional MinT with volatility-based weighting:
     W_vol = (1 - α) * W + α * V
     where V is the volatility-based weight matrix and α is the mixing parameter.
-    
+
     Parameters
     ----------
     S : np.ndarray, shape (L, M)
@@ -396,7 +396,7 @@ def volatility_weighted_mint_reconcile(
         Power to raise volatility weights.
     volatility_mix : float
         Mixing parameter between base weights (0) and volatility weights (1).
-        
+
     Returns
     -------
     y_all_reconciled : np.ndarray, shape (T, L)
@@ -404,28 +404,28 @@ def volatility_weighted_mint_reconcile(
     """
     # Compute volatility weights
     V = compute_volatility_weights(S, cov_bottom, volatility_method, volatility_power)
-    
+
     # Mix base weights with volatility weights
     W_vol = (1.0 - volatility_mix) * W + volatility_mix * V
-    
+
     # Apply standard MinT with modified weight matrix
     return mint_reconcile(S, y_all, W_vol)
 
 
 def iterative_mint_reconcile(
-    S: np.ndarray, 
-    y_all: np.ndarray, 
+    S: np.ndarray,
+    y_all: np.ndarray,
     W: np.ndarray,
     max_iterations: int = 10,
     convergence_threshold: float = 1e-6,
-    damping_factor: float = 0.7
+    damping_factor: float = 0.7,
 ) -> np.ndarray:
     """
     Iterative MinT reconciliation that gradually converges to an optimal solution.
-    
+
     This method applies MinT reconciliation iteratively, updating the weight matrix
     based on reconciliation residuals from previous iterations.
-    
+
     Parameters
     ----------
     S : np.ndarray, shape (L, M)
@@ -440,7 +440,7 @@ def iterative_mint_reconcile(
         Convergence threshold for relative change in reconciled forecasts.
     damping_factor : float
         Damping factor for weight matrix updates (0 < damping_factor < 1).
-        
+
     Returns
     -------
     y_all_reconciled : np.ndarray, shape (T, L)
@@ -448,36 +448,40 @@ def iterative_mint_reconcile(
     """
     y_reconciled = y_all.copy()
     W_current = W.copy()
-    
+
     for iteration in range(max_iterations):
         y_prev = y_reconciled.copy()
-        
+
         # Apply MinT reconciliation
         y_reconciled = mint_reconcile(S, y_reconciled, W_current)
-        
+
         # Compute convergence metric
-        relative_change = np.linalg.norm(y_reconciled - y_prev) / (np.linalg.norm(y_prev) + 1e-8)
-        
+        relative_change = np.linalg.norm(y_reconciled - y_prev) / (
+            np.linalg.norm(y_prev) + 1e-8
+        )
+
         if relative_change < convergence_threshold:
             break
-            
+
         # Update weight matrix based on reconciliation residuals
         if iteration < max_iterations - 1:  # Don't update on last iteration
             residuals = y_reconciled - y_all
             residual_cov = np.cov(residuals, rowvar=False)
-            
+
             # Damped update of weight matrix
-            W_current = (1.0 - damping_factor) * W_current + damping_factor * residual_cov
-            
+            W_current = (
+                1.0 - damping_factor
+            ) * W_current + damping_factor * residual_cov
+
             # Add small ridge for numerical stability
             W_current += np.eye(W_current.shape[0]) * 1e-8
-    
+
     return y_reconciled
 
 
 def iterative_volatility_mint_reconcile(
-    S: np.ndarray, 
-    y_all: np.ndarray, 
+    S: np.ndarray,
+    y_all: np.ndarray,
     W: np.ndarray,
     cov_bottom: np.ndarray,
     volatility_method: str = "variance",
@@ -485,13 +489,13 @@ def iterative_volatility_mint_reconcile(
     volatility_mix: float = 0.5,
     max_iterations: int = 10,
     convergence_threshold: float = 1e-6,
-    damping_factor: float = 0.7
+    damping_factor: float = 0.7,
 ) -> np.ndarray:
     """
     Combined iterative and volatility-weighted MinT reconciliation.
-    
+
     This method combines both approaches: volatility-based weighting and iterative refinement.
-    
+
     Parameters
     ----------
     S : np.ndarray, shape (L, M)
@@ -514,7 +518,7 @@ def iterative_volatility_mint_reconcile(
         Convergence threshold for relative change in reconciled forecasts.
     damping_factor : float
         Damping factor for weight matrix updates.
-        
+
     Returns
     -------
     y_all_reconciled : np.ndarray, shape (T, L)
@@ -523,7 +527,7 @@ def iterative_volatility_mint_reconcile(
     # Start with volatility-weighted reconciliation
     V = compute_volatility_weights(S, cov_bottom, volatility_method, volatility_power)
     W_vol = (1.0 - volatility_mix) * W + volatility_mix * V
-    
+
     # Apply iterative refinement with volatility-weighted initial matrix
     return iterative_mint_reconcile(
         S, y_all, W_vol, max_iterations, convergence_threshold, damping_factor

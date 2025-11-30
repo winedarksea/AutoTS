@@ -368,9 +368,7 @@ def load_live_daily(
                     columns=lambda x: x.lower().replace(" ", "_")
                 )
                 ticker_lower = ticker.lower()
-                msft_hist = msft_hist.rename(
-                    columns=lambda x: ticker_lower + "_" + x
-                )
+                msft_hist = msft_hist.rename(columns=lambda x: ticker_lower + "_" + x)
                 close_col = f"{ticker_lower}_close"
                 if close_col in msft_hist.columns:
                     prev_close = msft_hist[close_col].ffill().shift(1)
@@ -399,7 +397,7 @@ def load_live_daily(
 
     str_end_time = current_date.strftime("%Y-%m-%d")
     weather_start_date = current_date - datetime.timedelta(days=360 * weather_years)
-    
+
     if weather_stations is not None:
         for wstation in weather_stations:
             try:
@@ -407,36 +405,39 @@ def load_live_daily(
                 # Documentation: https://www.ncdc.noaa.gov/cdo-web/webservices/v2
                 # Request token: https://www.ncdc.noaa.gov/cdo-web/token
                 if noaa_cdo_token is None:
-                    print(f"weather data skipped for {wstation}: noaa_cdo_token required. Get free token at https://www.ncdc.noaa.gov/cdo-web/token")
+                    print(
+                        f"weather data skipped for {wstation}: noaa_cdo_token required. Get free token at https://www.ncdc.noaa.gov/cdo-web/token"
+                    )
                     continue
-                
+
                 # Use v2 API endpoint
                 wbase = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
                 headers = {'token': noaa_cdo_token}
-                
+
                 # API requires date ranges to be less than 1 year, so we need to chunk requests
                 station_data = []
-                
+
                 for dtype in weather_data_types:
                     # Split date range into chunks of less than 1 year (use 360 days to be safe)
                     chunk_size_days = 360
                     all_results = []
-                    
+
                     current_chunk_start = weather_start_date
                     while current_chunk_start < current_date:
                         current_chunk_end = min(
-                            current_chunk_start + datetime.timedelta(days=chunk_size_days),
-                            current_date
+                            current_chunk_start
+                            + datetime.timedelta(days=chunk_size_days),
+                            current_date,
                         )
-                        
+
                         start_date_str = current_chunk_start.strftime("%Y-%m-%d")
                         end_date_str = current_chunk_end.strftime("%Y-%m-%d")
-                        
+
                         # Paginate within each chunk if needed
                         offset = 1
                         max_requests_per_chunk = 10
                         request_count = 0
-                        
+
                         while request_count < max_requests_per_chunk:
                             params = {
                                 'datasetid': 'GHCND',  # Global Historical Climatology Network - Daily
@@ -448,40 +449,55 @@ def load_live_daily(
                                 'limit': 1000,
                                 'offset': offset,
                             }
-                            
-                            response = s.get(wbase, headers=headers, params=params, timeout=timeout)
-                            
+
+                            response = s.get(
+                                wbase, headers=headers, params=params, timeout=timeout
+                            )
+
                             if response.status_code != 200:
-                                if offset == 1:  # Only print error on first request for this chunk
-                                    print(f"weather data failed for {wstation} ({dtype}, {start_date_str} to {end_date_str}): HTTP {response.status_code}")
+                                if (
+                                    offset == 1
+                                ):  # Only print error on first request for this chunk
+                                    print(
+                                        f"weather data failed for {wstation} ({dtype}, {start_date_str} to {end_date_str}): HTTP {response.status_code}"
+                                    )
                                 break
-                            
+
                             try:
                                 data_json = response.json()
-                                if 'results' not in data_json or len(data_json['results']) == 0:
+                                if (
+                                    'results' not in data_json
+                                    or len(data_json['results']) == 0
+                                ):
                                     # No more results for this chunk
                                     break
-                                
+
                                 results = data_json['results']
                                 all_results.extend(results)
-                                
+
                                 # If we got fewer than 1000 results, we've reached the end of this chunk
                                 if len(results) < 1000:
                                     break
-                                
+
                                 # Move to next page
                                 offset += len(results)
                                 request_count += 1
-                                time.sleep(sleep_seconds * 0.5)  # Shorter sleep within chunk pagination
-                                
+                                time.sleep(
+                                    sleep_seconds * 0.5
+                                )  # Shorter sleep within chunk pagination
+
                             except Exception as parse_error:
-                                print(f"weather data parsing failed for {wstation} ({dtype}): {repr(parse_error)}")
+                                print(
+                                    f"weather data parsing failed for {wstation} ({dtype}): {repr(parse_error)}"
+                                )
                                 break
-                        
+
                         # Move to next chunk
-                        current_chunk_start = current_chunk_end + datetime.timedelta(days=1)
+                        current_chunk_start = current_chunk_end + datetime.timedelta(
+                            days=1
+                        )
                         time.sleep(sleep_seconds)  # Respect rate limits between chunks
-                    
+
                     # Convert all results to DataFrame
                     if len(all_results) > 0:
                         dtype_df = pd.DataFrame(all_results)
@@ -492,18 +508,23 @@ def load_live_daily(
                         if dtype.upper() == "PRCP":
                             precip_col = f'{wstation}_{dtype}'
                             binary_name = f'{wstation}_PRCP_binary'
-                            dtype_df[binary_name] = dtype_df[precip_col].gt(0).astype(int)
+                            dtype_df[binary_name] = (
+                                dtype_df[precip_col].gt(0).astype(int)
+                            )
                         station_data.append(dtype_df)
-                
+
                 # Combine all data types for this station
                 if len(station_data) > 0:
                     from functools import reduce
+
                     wdf = reduce(
-                        lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"),
+                        lambda x, y: pd.merge(
+                            x, y, left_index=True, right_index=True, how="outer"
+                        ),
                         station_data,
                     )
                     dataset_lists.append(wdf)
-                    
+
             except Exception as e:
                 print(f"weather data failed for {wstation}: {repr(e)}")
 
@@ -565,7 +586,9 @@ def load_live_daily(
             nasa_start_dt = pd.to_datetime(observation_start, errors="coerce")
             nasa_end_dt = pd.to_datetime(current_date, errors="coerce")
             if pd.isna(nasa_start_dt) or pd.isna(nasa_end_dt):
-                raise ValueError("Unable to resolve observation window for NASA DONKI request.")
+                raise ValueError(
+                    "Unable to resolve observation window for NASA DONKI request."
+                )
             nasa_start_str = nasa_start_dt.strftime("%Y-%m-%d")
             nasa_end_str = nasa_end_dt.strftime("%Y-%m-%d")
             nasa_end_day = nasa_end_dt.normalize()
@@ -623,9 +646,7 @@ def load_live_daily(
                         flare_series = (
                             pd.Series(
                                 1,
-                                index=pd.DatetimeIndex(
-                                    flare_dates, name="datetime"
-                                ),
+                                index=pd.DatetimeIndex(flare_dates, name="datetime"),
                             )
                             .groupby(level=0)
                             .sum()
@@ -636,9 +657,7 @@ def load_live_daily(
                         )
                         dataset_lists.append(flare_series.to_frame())
             else:
-                print(
-                    f"NASA FLR request failed with status {response.status_code}"
-                )
+                print(f"NASA FLR request failed with status {response.status_code}")
             time.sleep(sleep_seconds)
 
             # Daily Geomagnetic Storm Maximum Intensity (Kp Index)
@@ -660,9 +679,11 @@ def load_live_daily(
                             ]
                         for kp_entry in kp_entries:
                             kp_val = kp_entry.get("kpIndex")
-                            obs_time = kp_entry.get("observedTime") or kp_entry.get(
-                                "sourceTime"
-                            ) or item.get("startTime")
+                            obs_time = (
+                                kp_entry.get("observedTime")
+                                or kp_entry.get("sourceTime")
+                                or item.get("startTime")
+                            )
                             if kp_val is None or obs_time is None:
                                 continue
                             try:
@@ -686,9 +707,7 @@ def load_live_daily(
                         )
                         dataset_lists.append(kp_series.to_frame())
             else:
-                print(
-                    f"NASA GST request failed with status {response.status_code}"
-                )
+                print(f"NASA GST request failed with status {response.status_code}")
             time.sleep(sleep_seconds)
 
             # Daily Coronal Mass Ejection Count
@@ -714,9 +733,7 @@ def load_live_daily(
                         cme_series = (
                             pd.Series(
                                 1,
-                                index=pd.DatetimeIndex(
-                                    cme_dates, name="datetime"
-                                ),
+                                index=pd.DatetimeIndex(cme_dates, name="datetime"),
                             )
                             .groupby(level=0)
                             .sum()
@@ -727,9 +744,7 @@ def load_live_daily(
                         )
                         dataset_lists.append(cme_series.to_frame())
             else:
-                print(
-                    f"NASA CME request failed with status {response.status_code}"
-                )
+                print(f"NASA CME request failed with status {response.status_code}")
             time.sleep(sleep_seconds)
         except Exception as e:
             print(f"NASA DONKI download failed with error {repr(e)}")
