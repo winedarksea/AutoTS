@@ -44,6 +44,14 @@ autots.models.composite module
    :undoc-members:
    :show-inheritance:
 
+autots.models.deepssm module
+----------------------------
+
+.. automodule:: autots.models.deepssm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.dnn module
 ------------------------
 
@@ -64,14 +72,6 @@ autots.models.gluonts module
 ----------------------------
 
 .. automodule:: autots.models.gluonts
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-autots.models.greykite module
------------------------------
-
-.. automodule:: autots.models.greykite
    :members:
    :undoc-members:
    :show-inheritance:
@@ -136,14 +136,6 @@ autots.models.statsmodels module
 --------------------------------
 
 .. automodule:: autots.models.statsmodels
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-autots.models.tfp module
-------------------------
-
-.. automodule:: autots.models.tfp
    :members:
    :undoc-members:
    :show-inheritance:

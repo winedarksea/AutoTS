@@ -23,7 +23,50 @@ from autots.models.sklearn import (
     retrieve_regressor,
 )  # generate_regressor_params, datepart_model_dict
 from autots.tools.shaping import simple_train_test_split
-from autots.tools.seasonal import date_part
+from autots.tools.seasonal import date_part, random_datepart
+
+
+def _coerce_params(config):
+    """Normalize model/config dictionaries that might arrive as JSON strings."""
+    if config in (None, "", {}):
+        return {}
+    if isinstance(config, str):
+        return json.loads(config)
+    if isinstance(config, dict):
+        return dict(config)
+    raise TypeError(f"Unsupported parameter type for MLEnsemble: {type(config)}")
+
+
+def _ensure_feature_block(array_like, target_columns):
+    """Cast feature data to 3D array with axis order (feature, horizon, series)."""
+    if isinstance(array_like, pd.DataFrame):
+        matrix = array_like.reindex(columns=target_columns, fill_value=0).to_numpy(
+            copy=False
+        )
+    else:
+        matrix = np.asarray(array_like)
+    if matrix.ndim == 2:
+        return matrix[np.newaxis, :, :]
+    if matrix.ndim == 3:
+        return matrix
+    raise ValueError(
+        f"Features must be 2D or 3D after alignment, received shape {matrix.shape}."
+    )
+
+
+def _align_result_windows(result_windows, source_columns, target_columns):
+    """Reorder or pad extracted motif windows to match training column order."""
+    if list(source_columns) == list(target_columns):
+        return result_windows
+    indexer = pd.Index(source_columns).get_indexer(target_columns)
+    aligned = np.zeros(
+        (result_windows.shape[0], result_windows.shape[1], len(target_columns)),
+        dtype=result_windows.dtype,
+    )
+    valid = indexer >= 0
+    if valid.any():
+        aligned[:, :, valid] = result_windows[:, :, indexer[valid]]
+    return aligned
 
 
 def create_feature(
@@ -33,110 +76,116 @@ def create_feature(
     future_regressor_train=None,
     future_regressor_forecast=None,
     datepart_method=None,
+    random_seed=2020,
+    verbose=0,
+    n_jobs=1,
+    base_return_model=False,
 ):
-    result_windows = None
-    res = []
-    # add last value as a feature
-    res.append(
-        np.repeat(
-            df_train.iloc[-1:,].to_numpy(),
-            forecast_length,
-            axis=0,
-        )
-    )
-    # add averages
-    res.append(
-        np.repeat(df_train.mean().to_numpy()[np.newaxis, :], forecast_length, axis=0)
-    )
-    res.append(
-        np.repeat(df_train.std().to_numpy()[np.newaxis, :], forecast_length, axis=0)
-    )
+    target_columns = df_train.columns
+    num_series = len(target_columns)
+    feature_blocks = [
+        _ensure_feature_block(
+            np.repeat(df_train.iloc[-1:,].to_numpy(), forecast_length, axis=0),
+            target_columns,
+        ),
+        _ensure_feature_block(
+            np.repeat(
+                df_train.mean().to_numpy()[np.newaxis, :], forecast_length, axis=0
+            ),
+            target_columns,
+        ),
+        _ensure_feature_block(
+            np.repeat(
+                df_train.std().to_numpy()[np.newaxis, :], forecast_length, axis=0
+            ),
+            target_columns,
+        ),
+    ]
+
+    forecast_index = None
     for model in models:
         model_name = model['Model']
-        if model_name in diff_window_motif_list:
-            model_param_dict = {
-                **json.loads(model['ModelParameters']),
-                **{"return_result_windows": True},
-            }
-        else:
-            model_param_dict = json.loads(model['ModelParameters'])
+        model_param_dict = _coerce_params(model.get('ModelParameters'))
+        transform_params = _coerce_params(model.get('TransformationParameters'))
+        if model_name in diff_window_motif_list and not model_param_dict.get(
+            "return_result_windows"
+        ):
+            model_param_dict = {**model_param_dict, "return_result_windows": True}
 
+        need_components = model_name == 'Cassandra'
+        need_result_windows = model_name in all_result_path
         forecasts = model_forecast(
-            model_name=model['Model'],
+            model_name=model_name,
             model_param_dict=model_param_dict,
-            model_transform_dict=json.loads(model['TransformationParameters']),
-            df_train=df_train,  # .iloc[:, 0:1]
+            model_transform_dict=transform_params,
+            df_train=df_train,
             forecast_length=forecast_length,
             frequency='infer',
             prediction_interval=0.9,
             no_negatives=False,
             future_regressor_train=future_regressor_train,
             future_regressor_forecast=future_regressor_forecast,
-            random_seed=321,
-            verbose=1,
-            n_jobs=4,
-            return_model=True,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            return_model=base_return_model or need_components or need_result_windows,
             fail_on_forecast_nan=True,
         )
-        res.extend(
-            [forecasts.forecast, forecasts.upper_forecast, forecasts.lower_forecast]
+        forecast_index = forecasts.forecast.index
+        feature_blocks.extend(
+            [
+                _ensure_feature_block(forecasts.forecast, target_columns),
+                _ensure_feature_block(forecasts.upper_forecast, target_columns),
+                _ensure_feature_block(forecasts.lower_forecast, target_columns),
+            ]
         )
-        if model_name == 'Cassandra':
+        if need_components and hasattr(forecasts.model, "return_components"):
             comps = forecasts.model.return_components()
             ncomps = comps.columns.get_level_values(1)
             for cp in set(ncomps):
-                res.append(
+                comp_df = (
                     comps.loc[:, comps.columns.get_level_values(1) == cp]
                     .droplevel(1, 1)
                     .reindex(forecasts.forecast.index)
                 )
-        elif model_name in all_result_path:
-            result_windows = extract_result_windows(forecasts, model_name=model_name)
-    res = np.stack(res)
-    if result_windows is not None:
-        res = np.concatenate([res, result_windows], axis=0)
-    # add regressor as a feature
+                feature_blocks.append(_ensure_feature_block(comp_df, target_columns))
+        if need_result_windows:
+            windows = extract_result_windows(forecasts, model_name=model_name)
+            aligned_windows = _align_result_windows(
+                windows, forecasts.forecast.columns, target_columns
+            )
+            feature_blocks.append(aligned_windows)
+
     if future_regressor_forecast is not None:
-        r = np.repeat(
+        reg_array = np.repeat(
             future_regressor_forecast.to_numpy().T[:, :, np.newaxis],
-            df_train.shape[1],
+            num_series,
             axis=2,
         )
-        res = np.concatenate([res, r], axis=0)
-    # add timestep as a feature
-    res = np.concatenate(
-        (
-            res,
-            np.linspace(
-                [0] * df_train.shape[1],
-                [res.shape[1] - 1] * df_train.shape[1],
-                res.shape[1],
-            )[np.newaxis, :, :],
-        ),
-        axis=0,
-    )
-    # add time series ID as a feature
-    res = np.concatenate(
-        (
-            res,
-            np.linspace(
-                [0] * forecast_length,
-                [res.shape[2] - 1] * forecast_length,
-                res.shape[2],
-            ).T[np.newaxis, :, :],
-        ),
-        axis=0,
-    )
-    if datepart_method not in [None, "None", "none"]:
-        date_part_df = date_part(forecasts.forecast.index, method=datepart_method)
-        res = np.concatenate(
-            (
-                res,
-                np.repeat(date_part_df.to_numpy()[np.newaxis, :, :], 21, axis=0).T,
-            ),
-            axis=0,
-        )
+        feature_blocks.append(reg_array)
 
+    time_feature = np.broadcast_to(
+        np.arange(forecast_length)[np.newaxis, :, np.newaxis],
+        (1, forecast_length, num_series),
+    )
+    feature_blocks.append(time_feature)
+
+    series_id_feature = np.broadcast_to(
+        np.arange(num_series)[np.newaxis, np.newaxis, :],
+        (1, forecast_length, num_series),
+    )
+    feature_blocks.append(series_id_feature)
+
+    if datepart_method not in [None, "None", "none"] and forecast_index is not None:
+        date_parts = date_part(forecast_index, method=datepart_method)
+        date_features = np.repeat(
+            date_parts.to_numpy().T[:, :, np.newaxis],
+            num_series,
+            axis=2,
+        )
+        feature_blocks.append(date_features)
+
+    res = np.concatenate(feature_blocks, axis=0)
     sys.stdout.flush()
     return res
 
@@ -378,15 +427,18 @@ class MLEnsemble(ModelObject):
                 regr_subset_t = None
                 regr_subset_f = None
             try:
-                self.res = create_feature(
+                res = create_feature(
                     df_train,
                     self.models,
                     self.forecast_length,
                     future_regressor_train=regr_subset_t,
                     future_regressor_forecast=regr_subset_f,
                     datepart_method=self.datepart_method,
+                    random_seed=self.random_seed,
+                    verbose=self.verbose,
+                    n_jobs=self.n_jobs,
                 )
-                X.append(self.res.reshape(self.res.shape[0], -1))
+                X.append(res.reshape(res.shape[0], -1))
                 y.append(df_test.to_numpy().reshape(-1))
             except Exception as e:
                 if val < 1:
@@ -439,6 +491,9 @@ class MLEnsemble(ModelObject):
             future_regressor_train=self.regressor_train,
             future_regressor_forecast=future_regressor,
             datepart_method=self.datepart_method,
+            random_seed=self.random_seed,
+            verbose=self.verbose,
+            n_jobs=self.n_jobs,
         )
         X.append(res.reshape(res.shape[0], -1))
         X = np.concatenate(X, axis=1).T
@@ -498,20 +553,7 @@ class MLEnsemble(ModelObject):
             )[0],
             "regression_model": None,
             "models": models,
-            "datepart_method": random.choices(
-                [
-                    None,
-                    "recurring",
-                    "simple",
-                    "expanded",
-                    "simple_2",
-                    "simple_binarized",
-                    "expanded_binarized",
-                    'common_fourier',
-                    'common_fourier_rw',
-                ],
-                [0.2, 0.2, 0.1, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
-            )[0],
+            "datepart_method": random_datepart(),
             "regression_type": regression_type_choice,
             "models_source": 'random',
         }
@@ -550,5 +592,3 @@ automl_settings = {
 automl.fit(X_train=X, y_train=y, **automl_settings)
 print(automl.model.estimator)
 """
-
-# run models on latest data

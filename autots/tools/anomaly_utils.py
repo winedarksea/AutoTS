@@ -37,14 +37,23 @@ try:
     from sklearn.covariance import EllipticEnvelope
     from sklearn.svm import OneClassSVM
     from sklearn.mixture import GaussianMixture
+    from sklearn.preprocessing import MinMaxScaler
     from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy, beta
 except Exception:
-    pass
+    from autots.tools.mocks import norm
+
+
+# Import autoencoder tools
+from autots.tools.autoencoder import (
+    VAEAnomalyDetector,
+    vae_outliers,
+    loop_vae_outliers,
+)
 
 
 def sk_outliers(df, method, method_params={}):
     """scikit-learn outlier methods wrapper."""
-    if method == "IsolationForest":
+    if method in ["IsolationForest", "isolation_forest"]:
         model = IsolationForest(n_jobs=1, **method_params)  # n_estimators=200
         res = model.fit_predict(df)
         scores = model.decision_function(df)
@@ -53,15 +62,38 @@ def sk_outliers(df, method, method_params={}):
         res = model.fit_predict(df)
         scores = model.negative_outlier_factor_ + 1.45
     elif method == "OneClassSVM":
-        model = OneClassSVM(**method_params)  # n_neighbors=5
-        res = model.fit_predict(df)
-        scores = model.decision_function(df)
+        # Always scale the data for OneClassSVM to prevent non-finite coefficient errors
+        scaler = MinMaxScaler()
+        df_scaled = pd.DataFrame(
+            scaler.fit_transform(df), index=df.index, columns=df.columns
+        )
+        model = OneClassSVM(**method_params)
+        res = model.fit_predict(df_scaled)
+        scores = model.decision_function(df_scaled)
     elif method == "EE":
         if method_params['contamination'] == "auto":
             method_params['contamination'] = 0.1
+        # EllipticEnvelope is sensitive to NaN values and needs sufficient samples
+        # Fill NaN with mean to avoid covariance matrix errors
+        df_filled = df.fillna(df.mean()).fillna(0)
+        # Ensure we have enough samples for the support_fraction
+        if (
+            'support_fraction' in method_params
+            and method_params['support_fraction'] is not None
+        ):
+            min_samples = max(df_filled.shape[1] + 1, 2)  # at least n_features + 1
+            required_samples = int(
+                np.ceil(min_samples / method_params['support_fraction'])
+            )
+            if len(df_filled) < required_samples:
+                # Increase support_fraction to ensure we have enough samples
+                method_params = method_params.copy()
+                method_params['support_fraction'] = max(
+                    min_samples / len(df_filled), 0.5
+                )
         model = EllipticEnvelope(**method_params)
-        res = model.fit_predict(df)
-        scores = model.decision_function(df)
+        res = model.fit_predict(df_filled)
+        scores = model.decision_function(df_filled)
     elif method == "GaussianMixture":
         model = GaussianMixture(**method_params)
         model.fit(df)
@@ -415,11 +447,23 @@ def detect_anomalies(
         df_anomaly = model.fit_transform(df_anomaly)
     """
 
-    if method in ["IsolationForest", "LOF", "EE", "OneClassSVM", "GaussianMixture"]:
+    if method in [
+        "IsolationForest",
+        "LOF",
+        "EE",
+        "OneClassSVM",
+        "GaussianMixture",
+        "isolation_forest",
+    ]:
         if output == "univariate":
             res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
             res, scores = loop_sk_outliers(df_anomaly, method, method_params, n_jobs)
+    elif method in ["VAEOutlier"]:
+        if output == "univariate":
+            res, scores = vae_outliers(df_anomaly, method_params)
+        else:
+            res, scores = loop_vae_outliers(df_anomaly, method_params, n_jobs)
     elif method in [
         "zscore",
         "rolling_zscore",
@@ -465,28 +509,29 @@ def detect_anomalies(
 
 
 available_methods = [
+    "IQR",
     "IsolationForest",  # (sklearn)
     "LOF",  # Local Outlier Factor (sklearn)
     "EE",  # Elliptical Envelope (sklearn)
     "OneClassSVM",
     "GaussianMixture",
+    "VAEOutlier",  # Variational Autoencoder
     "zscore",
     "rolling_zscore",
     "mad",
     "minmax",
     "prediction_interval",  # ridiculously slow
-    "IQR",
     "nonparametric",
     "med_diff",
     "max_diff",
     # "GaussianMixtureBase",
 ]
 fast_methods = [
+    "IQR",
     "zscore",
     "rolling_zscore",
     "mad",
     "minmax",
-    "IQR",
     "nonparametric",
     "med_diff",
     "max_diff",
@@ -497,11 +542,27 @@ def anomaly_new_params(method='random'):
     if method == "deep":
         method_choice = random.choices(
             available_methods,
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [
+                0.2,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+                0.05,
+                0.08,
+                0.08,
+                0.13,
+                0.08,
+                0.08,
+                0.08,
+                0.08,
+            ],
         )[0]
     elif method == "fast":
         method_choice = random.choices(
-            fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05, 0.1, 0.1]
+            fast_methods, [0.5, 0.2, 0.4, 0.2, 0.1, 0.05, 0.1, 0.1]
         )[0]
     elif method in available_methods:
         method_choice = method
@@ -514,14 +575,15 @@ def anomaly_new_params(method='random'):
                 "rolling_zscore",  # Matt likes this one best
                 "mad",
                 "minmax",
-                "IQR",
+                "IQR",  # consistently also very good
                 "nonparametric",
                 "IsolationForest",
                 # "OneClassSVM",  # seems too slow at times
                 "GaussianMixture",
+                "VAEOutlier",
                 # "GaussianMixtureBase",
             ],  # Isolation Forest is good but slower (parallelized also)
-            [0.05, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.1, 0.05, 0.005],
+            [0.05, 0.1, 0.15, 0.25, 0.1, 0.1, 0.25, 0.1, 0.05, 0.005, 0.01],
         )[0]
 
     if method_choice == "IsolationForest":
@@ -557,7 +619,8 @@ def anomaly_new_params(method='random'):
                 [0.02, 0.1, 0.05, 0.15], [0.1, 0.8, 0.05, 0.05]
             )[0],
             'assume_centered': random.choices([False, True], [0.9, 0.1])[0],
-            'support_fraction': random.choices([None, 0.2, 0.8], [0.9, 0.1, 0.1])[0],
+            # Higher support_fraction = more samples used = more robust
+            'support_fraction': random.choices([None, 0.5, 0.8], [0.8, 0.1, 0.1])[0],
         }
     elif method_choice == "GaussianMixture":
         method_params = {
@@ -652,6 +715,28 @@ def anomaly_new_params(method='random'):
                 0
             ],
         }
+    elif method_choice == "VAEOutlier":
+        method_params = {
+            'depth': random.choices([1, 2], [0.85, 0.15])[0],
+            'batch_size': random.choices([32, 64], [0.6, 0.4])[0],
+            'epochs': random.choices([15, 25, 50, 75], [0.3, 0.5, 0.15, 0.05])[0],
+            'learning_rate': random.choices([1e-4, 1e-3, 1e-2], [0.2, 0.6, 0.2])[0],
+            'loss_function': random.choices(['elbo', 'mse', 'lmse'], [0.6, 0.2, 0.2])[
+                0
+            ],
+            'dropout_rate': random.choices([0.0, 0.2], [0.8, 0.2])[0],
+            'latent_dim': random.choices([None, 'custom'], [0.9, 0.1])[0],
+            'beta': random.choices([0.5, 1.0, 2.0], [0.2, 0.6, 0.2])[0],
+            'contamination': random.choices([0.05, 0.1, 0.15], [0.3, 0.5, 0.2])[0],
+            'random_state': random.choices([None, 42], [0.8, 0.2])[0],
+            'device': random.choices([None, 'cpu'], [0.9, 0.1])[
+                0
+            ],  # Usually auto-detect is best
+        }
+        if method_params['latent_dim'] == 'custom':
+            method_params['latent_dim'] = random.choice([2, 4, 8, 16])
+        else:
+            method_params['latent_dim'] = None
     transform_dict = random.choices(
         [
             None,
@@ -1432,3 +1517,68 @@ def gaussian_mixture(
     scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
 
     return anomalies, scores
+
+
+def fit_anomaly_classifier(anomalies, scores):
+    """Fit a DecisionTree model to predict if a score is an anomaly.
+
+    This is a shared utility for both AnomalyDetector and AnomalyRemoval classes.
+    Using DecisionTree as it can handle nonparametric anomalies.
+
+    Args:
+        anomalies (pd.DataFrame): DataFrame with -1 for anomalies, 1 for normal
+        scores (pd.DataFrame): DataFrame with anomaly scores
+
+    Returns:
+        tuple: (classifier, score_categories) - trained classifier and categorical mapping
+    """
+    from sklearn.tree import DecisionTreeClassifier
+
+    scores_flat = scores.melt(var_name='series', value_name="value")
+    categor = pd.Categorical(scores_flat['series'])
+    score_categories = categor.categories
+    scores_flat['series'] = categor
+    scores_flat = pd.concat(
+        [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']],
+        axis=1,
+    )
+    anomalies_flat = anomalies.melt(var_name='series', value_name="value")
+    anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
+        scores_flat, anomalies_flat['value']
+    )
+    return anomaly_classifier, score_categories
+
+
+def score_to_anomaly(scores, classifier, score_categories):
+    """Convert anomaly scores to anomaly classifications using a trained classifier.
+
+    This is a shared utility for both AnomalyDetector and AnomalyRemoval classes.
+
+    Args:
+        scores (pd.DataFrame): DataFrame with anomaly scores
+        classifier: trained sklearn classifier
+        score_categories: categorical mapping from fit_anomaly_classifier
+
+    Returns:
+        pd.DataFrame: Classifications (-1 = anomaly, 1 = normal)
+    """
+    scores.index.name = 'date'
+    scores_flat = scores.reset_index(drop=False).melt(
+        id_vars="date", var_name='series', value_name="value"
+    )
+    scores_flat['series'] = pd.Categorical(
+        scores_flat['series'], categories=score_categories
+    )
+    res = classifier.predict(
+        pd.concat(
+            [
+                pd.get_dummies(scores_flat['series'], dtype=float),
+                scores_flat['value'],
+            ],
+            axis=1,
+        )
+    )
+    res = pd.concat(
+        [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
+    ).pivot_table(index='date', columns='series', values="value")
+    return res[scores.columns]

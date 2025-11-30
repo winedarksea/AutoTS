@@ -15,6 +15,8 @@ X, Y = window_maker(df, forecast_length = 6, shuffle = False,
                     input_dim = 'univariate', window_size = 10,
                     output_dim = '1step')
 """
+# TODO: all of the models here need to be refactored and tested. Efficient runtime is a key goal.
+# TODO: any of these models that are slow should just be removed
 
 if _has_tf:
 
@@ -48,6 +50,8 @@ class KerasRNN(object):
         verbose (int): 0, 1 or 2. Passed to keras model.fit
         random_seed (int): passed to tf.random.set_seed()
     """
+
+    # TODO: this entire class needs to be examined and refactored
 
     def __init__(
         self,
@@ -329,6 +333,8 @@ class Transformer(object):
         verbose (int): 0, 1 or 2. Passed to keras model.fit
         random_seed (int): passed to tf.random.set_seed()
     """
+
+    # TODO: this entire class needs to be examined and refactored
 
     def __init__(
         self,

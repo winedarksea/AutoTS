@@ -15,6 +15,8 @@ from autots.datasets import (
     load_linear,
     load_artificial,
     load_sine,
+    SyntheticDailyGenerator,
+    generate_synthetic_daily_data,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -25,9 +27,10 @@ from autots.tools.regressor import create_lagged_regressor, create_regressor
 from autots.evaluator.auto_model import model_forecast, ModelPrediction
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
+from autots.tools.impute import FillNA
 
 
-__version__ = '0.6.21'
+__version__ = '1.0.0'
 
 TransformTS = GeneralTransformer
 
@@ -56,4 +59,7 @@ __all__ = [
     'Cassandra',
     'infer_frequency',
     'ModelPrediction',
+    'SyntheticDailyGenerator',
+    'generate_synthetic_daily_data',
+    'FillNA',
 ]

@@ -1,0 +1,355 @@
+% paper
+
+\documentclass{elsarticle} % \documentclass{} is the first command in any LaTeX code.  It is used to define what kind of document you are creating such as an article or a book, and begins the document preamble
+
+\usepackage{amsmath} % \usepackage is a command that allows you to add functionality to your LaTeX code
+
+% \usepackage[backend=biber,style=numeric]{biblatex}
+% \addbibresource{m6_bib.bib}
+
+\title{Adaptive Forecasting in Dynamic Markets: An Evaluation of AutoTS within the M6 Competition} % Sets article title
+\author{} % Sets authors name
+\date{\today} % Sets date of compilation
+
+% The preamble ends with the command \begin{document}
+\begin{document} % All begin commands must be paired with an end command somewhere
+\maketitle % creates title using information in preamble (title, author, date)
+
+\section{Abstract} % creates a section
+In contemporary forecasting, the challenges of navigating the intricacies of erratic human-induced patterns combine with the challenges of navigating the overwhelming number of methods and models available to manage these data. 
+The M6 Competition, which emphasized repeated, real-time monthly forecasting of stock markets, featured many of these difficulties. 
+Here, AutoTS, an open-source Python package designed specifically for probabilistic time series predictions, is evaluated within the context of this competition. 
+AutoTS includes an extensive repertoire of models, augmented by robust data preprocessing utilities, and employs genetic algorithms to fine-tune model parameters, contingent upon user-delineated evaluation metrics. 
+This study describes the deployment of AutoTS in the M6 Competition, which won the investment decision challenge, and outlines the model selection pipeline and the process of converting forecasts into decisions which produced this result. 
+Although a single definitive model remains elusive, these findings underscore the potential value of methodologies that are dynamic and largely autonomous. 
+
+\section{Introduction} % creates a section
+
+The domain of forecasting is filled with competing models. 
+Newer machine learning (ML) methods such as deep learning and gradient boosting trees compete with conventional time series methods like ARIMA and Bayesian linear approaches with no single approach consistently outperforming the others
+\cite{boxTimeSeriesAnalysis2015, makridakisStatisticalMachineLearning2018, salinasDeepARProbabilisticForecasting2020}.
+Behind each successful model, there is often a time-consuming process of custom feature generation, smoothing, and preprocessing which are evaluated with a wide array of metrics. 
+Automated machine learning (AutoML), here in the form of a time series package called AutoTS, promises not only to speed up forecast generation but also to leverage the search process of this complex space to produce superior forecasts across datasets.
+
+The M Competitions have sought to provide some clarity to the unique demands of forecasting by providing consistent benchmarks on which to compare methodologies \cite{makridakisM4Competition1002020}. 
+The M5 Competition on Walmart intermittent sales data showed the rising dominance of machine learning methods \cite{spiliotisProductSalesProbabilistic2021}. 
+The M6 Competition sought to go even further, aiming to reduce the element of chance and historical foresight in winning submissions by spreading the evaluation of results across 12 real-time monthly submissions, each predicting the next month of real world returns on a basket of 100 securities \cite{MAKRIDAKIS2024}. 
+Compared to the local, store-level series in the M5, the M6 dataset was more global and aggregated, with a longer history. However, the task was complicated by the market's sheer scope, as market returns are more directly impacted by the vast array of influences that shape global economies.
+
+The live nature of the competition also more closely imitated production deployment constraints than previous competitions. 
+Participants had fewer than 48 hours between the arrival of data at Friday’s market close and the submission deadline on Sunday, requiring models to operate reliably on a four-week cycle. 
+Evaluation of the results was done in two separate categories plus a weighted average of the two approaches, with one an evaluation on the Ranked Probability Score (RPS) of forecast returns and another on the Information Ratio (IR) of portfolio returns \cite{makridakisFutureForecastingCompetitions2022}.
+
+\section{The AutoTS Framework}
+AutoTS is an open source Python package for generating probabilistic time series forecasts with limited user specification across univariate and multivariate datasets.\footnote{AutoTS code is available at https://github.com/winedarksea/AutoTS and data for the competition and this paper at https://github.com/winedarksea/m6} 
+AutoTS combines time series modeling, time series data transformations, and ensembling into a cross validation and evaluation framework for the automatic testing and selection of forecast models. 
+
+The core of the package is a collection of dozens of time series models. 
+These cover all common approaches, from ML regressions and deep learning to statistical models. 
+The package includes a category of naive models, which are simple, rule-based methods such as the last-value forecast. 
+Additionally, there is a selection of novel methods, particularly a family of models known as "motifs" which consist of variations on K-nearest-neighbors modeling \cite{catlinAutoTS2022}.
+
+While the available models are the headline ability of AutoTS, equally or more important are a collection of other features. 
+Extensive data preprocessing methods, known as "transformers", some of which are unique to this package, are applied in layers to the data.
+
+There are over forty transformer methods available, and they can be summarized in four groups. 
+\textit{Filters} 'smooth' the data usually resulting in lower overall variability of the data, such as the Savgol filter which in AutoTS is incorporated into the 'ScipyFilter' \cite{savitzkySmoothingDifferentiationData1964}. 
+\textit{Scalers} standardize the data, the classic example of which is normalization, to better match model assumptions. 
+\textit{Decompositions} are the most diverse set of transformers, handling time series attributes such as seasonality or the removal of a trend. 
+Any transformers that don't cleanly match these descriptions are grouped into an \textit{other} category. 
+
+Some of these transformers may have actions both before and after the forecasting model, such as "Detrend" which removes a linear trend before the underlying model is run, then adds the linear trend back to the forecasts after they are generated. 
+As such, a combination of several of these transformers is a critical element of the overall model.
+
+Genetic algorithms run an optimization on model and transformation parameter sets seeking an optimal "Score" \cite{holland1975adaptation}. 
+The Score represents a normalized and user-weighted combination of multiple evaluation metrics that seeks to assess the various facets of the model's performance on a holdout. 
+Some of the evaluation metrics present in AutoTS are novel, such as directional weighted absolute error (DWAE), introduced below. 
+These metrics are evaluated on temporally aware cross validation holdouts as defined by the user. 
+
+AutoTS provides options such as seasonal and similarity scores for choosing cross validation holdouts that most closely match the target period being forecast. 
+Seasonal holdouts align based on seasonality, for example forecasts for winter would be tested on past winter data rather than past summers. 
+In similarity validation, the window of data just before prediction is compared to prior data using a distance metric. 
+Past periods with the closest distance to this window, are used as the cutoff of new holdouts. 
+Instead of fitting a single model to all potential states, AutoTS enables each prediction cycle to be tuned to demands of the immediate time period. 
+
+AutoTS provides a selection of ensemble methods for combining methods. One of those methods used for some of the submissions in this competition was "horizontal" ensembling, the name used here for selecting different models for each target series rather than a single model to handle all time series present\footnote{The term 'horizontal' refers to applying different models across different time series (i.e., horizontally across the columns of a wide-format dataset). A 'mosaic' ensemble, also present in AutoTS, takes this further by selecting a unique model for each time step within each distinct series.}.
+
+Hyperparameter tuning of AutoTS focuses on three elements: cross validation parameters, evaluation metrics, and the list of models, preprocessing, and ensembles to allow. 
+Cross validation parameters seek to assure that the model chosen is the most consistent performer on the data without excessively testing on holdout periods that may no longer reflect relevant market conditions. 
+Evaluation metrics have the greatest impact on model selection, with the metric weighting provided altering the forecast choice, for example to select models with high performing probabilistic intervals or to choose those with the most accurate median point forecasts, or whether to use some weighted combination of the considerations. 
+Model, transformer, and ensemble choice impact the accuracy of forecasts but adjustments here most significantly impact the overall runtime of the model search process.
+
+\section{Discussion}
+\subsection{Application of AutoTS in the M6}
+While AutoTS is capable of automating forecast generation, work is still required to tune the parameters and shape the outputs into maximally effective decisions. 
+Work for the M6 Competition began with retrieval of daily close prices for the target basket of securities, limiting the history to the last five most relevant years, and then reshaping the data to a ‘4W-Fri’ frequency, keeping only the Friday close price once every four weeks, as only this final close price of the period was the target of evaluation in the competition. 
+After forecasting, closing market prices were converted to percentage returns by comparison to the last historical value. Submissions to the competition were provided under the team name "Galloping Gargoyles".
+
+The AutoTS internal model search and selection did not have RPS or market returns calculated as part of model selection.\footnote{Newer versions of AutoTS allowing passing a custom metric for scoring, but that functionality was not available during the M6 competition.} 
+A primary purpose of the high level cross validation hyperparameter search was to find among the inbuilt model metrics a combination of weightings that could approximate the competition target metrics. 
+To choose AutoTS hyperparameters, three holdouts similar to the evaluation periods of the competition were created, representing the most recent 12 weeks at the time of evaluation, and a loop of AutoTS hyperparameters was run. 
+The goal behind using the most recent possible data as holdouts was to tune AutoTS as closely as possible to the current market environment. 
+
+These holdouts comprise what is referred to as the 'high-level' or outer validation loop. This process should not be confused with the inner validation loop performed by AutoTS to select the best model for a given set of hyperparameters. This two-tiered approach is a form of nested cross-validation, used to ensure robust hyperparameter tuning and prevent optimistic performance estimates. The inner loop finds the best model for a specific configuration, while the outer loop assesses the performance of the hyperparameter configuration itself. 
+The pool of AutoTS hyper-parameters to evaluate was produced by weighted random sampling that intentionally down-weighted configurations known to be slow on earlier data sets, thereby maximizing the number of trials that could be performed. 
+
+Pseudocode is provided below to illustrate the high-level AutoTS hyperparameter search.
+
+\begin{verbatim}
+trials = 250
+validations_to_perform = 3
+result_collection = []
+for n in range(trials):
+    new_params = generate_random_parameters()
+    for v in range(validations_to_perform):
+        train, test = subset_holdout_period(data, v)
+        result = AutoTS(new_params).fit(train).predict()
+        m6_metrics = m6_evaluate(result, test)
+        result_collection.append(m6_metrics)
+\end{verbatim}
+
+The high-level cross validation results that are presented here represent this evaluation performed on three holdouts. These three holdouts were from November and December 2022, and January 2023, run near the end of the competition. 
+This was the last and most up-to-date run of this evaluation during the competition, but similar evaluations occurred several times before and during the competition. 
+This result consists of 750 total evaluations from 250 unique AutoTS hyperparameter sets, with each representing an optimized forecast and resulting decisions, originating from the given hyperparameter set.
+
+Evaluation of the hyperparameter search holdout utilized the RPS score, alongside other common evaluation metrics, such as symmetric mean absolute percentage error (SMAPE) and scaled pinball loss (SPL) \cite{spiliotisProductSalesProbabilistic2021,gneitingMakingEvaluatingPoint2011}. 
+The RPS used with AutoTS follows the formula in Constantinou and Fenton \cite{constantinouSolvingProblemInadequate2012}.
+This differs very slightly from the calculation used in the competition, which is divided by $r$ rather than $r - 1$ categories, resulting in a benchmark score of 20 versus the competition's benchmark score of 16. 
+To convert scores calculated in this way to competition RPS scores, multiply by 0.8. 
+
+The IR metric was not reproduced here and instead a simple percentage return was utilized for decision accuracy, with results compared to simple benchmarks such as a market basket return. 
+
+\subsection{High-Level Cross Validation Results}
+
+A significant challenge discovered in the high-level cross validation was that there was much less correlation between returns, RPS, and AutoTS's internal metrics like SMAPE, than had been expected in the optimized forecasts, as seen in Figure \ref{fig:correl}. 
+If the low performing models from the model search are included, correlation among metrics is quite high. Strong models tend to do well across many metrics. The low correlation here is only among the results of the high-level validation, where all forecasts present already represent the strong, highly-optimized outputs of different AutoTS searches. 
+What this low correlation amongst optimized forecasts' performance means is that there is not a one-size-fits-all model, and that maximal performance can only be achieved on a single metric. A single general purpose forecasting metric like SMAPE or SPL won't deliver the best possible results for returns or RPS. 
+
+\begin{figure}[h!]
+\includegraphics[width=\linewidth]{correlogram_nocontour.png}
+\caption{A correlogram of select evaluation metrics across the best model out of each high-level validation, covering the 3 four-week periods falling prior to the penultimate submission month. 
+The unexpectedly low correlation among metrics was one of the challenges of this competition. 
+The return hinge and return agreement shown here are two different methods for converting forecasts to market returns, discussed in detail below. 
+Note that returns are maximizing (best when the value is high), while the rest are minimizing (best when the value is low), leading to the mix of negative and positive correlations. 
+}
+\label{fig:correl}
+\end{figure}
+
+This illustrates the importance of the high-level validation loop in testing many values for the AutoTS $metric\_weighting$ parameter to find a combination of general purpose metrics that more closely approximates the competition's target. 
+With this indirect approach, AutoTS will likely be incapable of choosing the absolute best model for a task like market returns, but overall success in the competition illustrates that this approximation is still effective.
+
+Overall, the author’s initial belief was that a single set of AutoTS hyperparameters should be able to do well on both target RPS and returns, as they share the same underlying targets. 
+However, the lower than expected correlation between the two shows additional performance could have been found by targeting both competition categories with separate, tailored model searches. 
+
+Final AutoTS hyperparameters were chosen based primarily on the highest average percentage returns across high-level validations, 
+but also included a subjective element, as the author sought to choose hyperparameters that appeared to offer some degree of balanced performance across all available metrics, with the goal of avoiding model overfitting and increasing reliability. 
+
+The primary hyperparameters at the end of the competition were as follows:
+
+\noindent\begin{minipage}{\linewidth}
+\begin{verbatim}
+metric_weighting = {
+    'smape_weighting': 1,
+    'mae_weighting': 3,
+    'rmse_weighting': 3,
+    'mle_weighting': 1,
+    'spl_weighting': 5,
+    'runtime_weighting': 0.05,
+    'dwae_weighting': 1,
+}
+model_list = "fast_parallel"
+transformer_list = "fast" 
+transformer_max_depth = 4
+models_mode = "random"
+num_validations = 2
+validation_method = "backwards"
+max_generations = 100
+models_to_validate = 0.15
+ensemble = None
+\end{verbatim}
+\end{minipage}
+
+\subsection{Changes Throughout the Competition}
+
+As AutoTS was under active development during the year of the competition, the high-level cross validation was run several times and chosen hyperparameters evolved through the competition as more options became available. 
+Of particular note was the introduction, approximately halfway through the competition, of direction accuracy metrics to AutoTS, directly inspired by the challenges of the competition. 
+
+These consisted of origin direction accuracy (ODA) and directional weighted absolute error (DWAE), aiming to quantify the accuracy of successfully predicting direction, an upward or downward movement relative to the most recent of the historical data. 
+Given forecast array as $forecast$, holdout values for forecast period as $actual$ and the historical data across time $t$ for the time series as $train$, 
+ODA aims to be more readily interpretable by humans and directly returns the percentage of forecast steps where the direction was accurately predicted. 
+DWAE provides a version of mean absolute error weighted by correct directionality, aiming to produce a better loss gradient for optimization than the ODA metric provided. 
+
+\[
+\begin{aligned}
+    &\text{Let } S_f = \text{sign}(forecast - train(t_{\text{max}})), \quad S_a = \text{sign}(actuals - train(t_{\text{max}})), \\
+    &\text{with \(n\) as the sample size and \(t_{\text{max}}\) is the last timestep of the training data}
+\end{aligned}
+\]
+
+\[
+    ODA = \frac{1}{n} \sum_{i=1}^{n} 
+\begin{cases}
+    1, & \text{if } S_f = S_a \\
+    0, & \text{otherwise}
+\end{cases}
+\]
+
+\[
+    DWAE = \frac{1}{n} \sum_{i=1}^{n} 
+\begin{cases}
+    |actual - forecast|, & \text{if } S_f = S_a \\
+    \left(|actual - forecast| + 1\right) ^ 2, & \text{otherwise}
+\end{cases}
+\]
+
+Due to their later introduction ODA and DWAE were not included in the high-level validation script's reported evaluation and are therefore not present in Figure \ref{fig:correl}.
+
+Also evolving throughout the competition were the starting template for each model search and the model chosen by the search. 
+The genetic algorithms which perform a model search in a single AutoTS run, begin with an initial population of models. 
+For a new problem, this starting population will be generated by a weighted random selection, with the weighting built-in to AutoTS to favor parameters the author has observed in the past to be more accurate or efficient. 
+From there, the optimization evaluates the initial population, takes the best models and mixes these model parameters together with each other as well as with new randomly generated parameters, and evaluates again. 
+This process continues until a set time or generation limit is reached. 
+However, because of the sheer breadth of model options available, even running this search for weeks may not find the most optimal parameters available. Furthermore, the optimal model may change as market conditions change. 
+
+To help overcome this limitation, AutoTS provides the option to input a starting template of models as a starting population for the model search. 
+At the start of the competition, the starting template consisted of models optimized on tasks other than the stock market, as stock market forecasting had never been seriously attempted by the author. 
+As the competition progressed, the top fifty best models from each search were provided as part of a starting template into the next submission model search. 
+Fifty models were passed to assure an adequate depth of results without adding excessive runtime. Each month's model search ran for approximately 12 hours with each individual model taking from a few seconds to a few minutes to run. 
+This starting template should lead to a gradually improving performance as more optimal models for the target use case are found given more time to search. 
+Use of more diverse templates and a model search for each submission period also offers AutoTS the chance to adapt to changing market conditions without user intervention, while still being grounded on the previous model selection. 
+The metric weighting, cross validation, and other AutoTS hyperparameters are accordingly critical as there is no human in the loop of the final model selection.
+\begin{figure}[h!]
+\includegraphics[width=\linewidth]{count_models.png}
+\caption{A count of models utilized in a collection of M6 submissions of AutoTS from the last six months of the competition. Note that some submissions utilized ensembles with a large collection of models for a single submission, each submodel of which is counted individually here. 
+Colors are visually used to group general types of models. 
+'Motif' refers to k-nearest-neighbor type models, 'ML' refers to models containing machine learning regressions, 'stat' refers to statistical models, mostly utilizing state space representations, and 'naive' refers to the category of simple, rule-based models within AutoTS, of which the last-value naive forecast is one example.}
+\label{fig:horiz}
+\end{figure}
+
+\subsection{Models Chosen by AutoTS in the M6}
+
+The AutoTS hyperparameters used throughout the competition led to the choices of the forecasting models and transformations, seen in Figure \ref{fig:horiz} and Figure \ref{fig:horiz_transformers}. 
+These figures represent the last half of the submission months, as others were lost due to hardware failure. 
+The large count of models and transformers is due to many of the submissions using "horizontal" ensembles that would choose one model for each of the one hundred securities present in the competition basket.
+
+The frequent selection of a model in Figure \ref{fig:horiz} does not necessarily guarantee that model type is superior for the M6 Competition. 
+This is due to the model selection occurring on proxy metrics (such as SPL) in the metric weighting, rather than competition metrics. 
+Furthermore, selection of a model on cross validation results does not necessarily reflect final model performance in the competition evaluation.
+
+\begin{figure}[h!]
+\includegraphics[width=\linewidth]{count_transformers.png}
+\caption{A count of transformation types utilized in a collection of M6 submissions from AutoTS from the last six months of the competition. Some submissions utilized ensembles with many models, and each model may use several transformers.}
+\label{fig:horiz_transformers}
+\end{figure}
+\begin{figure}[h!]
+\includegraphics[width=\linewidth]{normalized_transformer_usage_with_percentages.png}
+\caption{The top fifteen transformation types utilized in a collection of M6 submissions from AutoTS, from the last six months of the competition, by class of the corresponding model they were used with. This is the normalized usage of the transformers across different model classes, adjusted for the frequency of each model class in the submissions. For example, if you sampled 100 of the models used in submission that used a SeasonalDifference transformer, you would expect that 35 of those would have been statistical models.}
+\label{fig:horiz_trans_by_class}
+\end{figure}
+
+The primary takeaway is that no model type predominates.  
+\textit{ML models}, loosely defined as various forms of regressions such as gradient boosted trees, \textit{statistical models}, loosely defined as dedicated forecasting models often using state space frameworks which usually have fewer parameters than ML models, \textit{motif models}, variations on k-nearest-neighbors models, and \textit{naive models} were all widely selected. 
+Note that ‘naive’ models may be combined with numerous transformers, such as detrending and seasonal differencing, which no longer make them a truly naive model despite the use of a naive model as their underlying framework.
+
+Among the transformers in Figure \ref{fig:horiz_transformers}, differencing of two types were the dominant methods chosen. 
+While this is often expected for non-stationary data, many of the models here do not require stationarity and yet nearly every model used performed best in cross validation while incorporating differencing. 
+Subjectively, the inclusion of differencing here appears to be more frequent than usual when compared to other non-stationary datasets the author has worked with. 
+For seasonal differencing, differencing with a lag greater than 1, the most common lag value was 12.\footnote{For examples of complete model and transformer pairings used in the competition, see the forecast template files at https://github.com/winedarksea/m6}
+
+Filtering of the data was performed less frequently than expected as well, suggesting AutoTS found much of the data variability to be of value to the models. 
+The limited use of additional filters may be due in part to the "4W-Fri" data frequency used, which acts as a filter, reducing the data to larger step changes. 
+
+Figure \ref{fig:horiz_trans_by_class} examines the usage of transformers by model class. 
+It should not be surprising that naive models are heavy users of transformers, as these transformers are necessary to increase the sophistication of these models. 
+Perhaps the most interesting difference is the very low relative usage of transformers by ML approaches, especially in contrast to statistical approaches. 
+While far from conclusive, this does suggest that the current popularity and success of ML approaches in forecasting is due in part to the need for less preprocessing and data transformation to deliver optimal results. 
+
+\section{AutoTS Forecasts to M6 Decisions}
+
+The largest practical question outside of AutoTS for this competition was how to take AutoTS outputs and convert them into the competition’s desired targets. 
+AutoTS outputs consisted of a point forecast as well as one or more probabilistic intervals referred to as the upper and lower forecasts. 
+
+Of the two competition submission outputs, the most challenging was the delivery of forecast rankings from these outputs for the RPS submission. 
+For these highly-correlated securities, the probabilistic bounds on the forecast percentage returns overlapped extensively, making discrimination between quintile ranks nearly impossible. 
+This led to a focus on the simpler point forecasts as the means of determining quintile ranks. 
+This has the advantage of being simple, but disadvantage of including less of the estimated uncertainty. 
+
+\begin{figure}[h!]
+\includegraphics[width=\linewidth]{RPS_scores_adjusted.png}
+\caption{
+RPS scores from each of three high-level validations of 250 differently-optimized AutoTS hyperparameter sets across three holdouts. 
+The vertical red line represents benchmark performance, with only values to the left outperforming the benchmark. 
+Note how few forecasts were able to beat the competition benchmark RPS score, and these best results could not be reproduced across different validation holdouts with the same hyperparameters.
+}
+\label{fig:rps}
+\end{figure}
+
+Methods for converting forecast outputs to submission outputs were tested simultaneously with AutoTS hyperparameters in the high-level validation. 
+High-level validation results seen in Figure \ref{fig:rps} suggested a benchmark RPS submission, using the competition benchmark of an equal 0.2 probability for each quintile, would consistently outperform forecasts for this task, but as benchmark submissions would have been of little interest, model forecast results were heavily biased toward the benchmark's evenly-distributed RPS forecast. This was achieved by taking a weighted average of the quintiles from the model forecasts and the benchmark before submission. 
+Various weighted combinations were trialed. As none improved upon the competition benchmark, they are not discussed in detail. 
+
+The final methodology began with a conversion to the quintile ranks expected by the competition. The point forecasts' percentage returns were ranked largest to smallest and sliced to a quintile rank. 
+The benchmark, point, and probabilistic quintiles were weighted per the following rules. The quintiles of the point forecast were multiplied by 3. The quintiles of the upper and lower forecasts of the 0.9 prediction interval (5th and 95th percentile forecasts) and the quintiles of the upper and lower forecasts of the 0.6 prediction interval (20th and 80th percentile forecasts) each had a multiplier of one. Finally the competition benchmark (i.e., 0.2 for each) were multiplied by 15. The sum of these all together was then divided by 22 to create this weighted mean for the final quintiles for the RPS submissions. 
+
+\begin{figure}[h!]
+\includegraphics[width=\linewidth]{returns_above_market.png}
+\caption{
+Percentage return of forecast minus percentage return of competition market basket (baseline) for 250 differently-optimized AutoTS forecasts across three holdouts using the hinge method of generating investment decisions. Each holdout for a trial is plotted as a separate point.
+Note that unlike RPS scores, performance superior to baseline was reproducible across multiple validation holdouts.}
+\label{fig:returns}
+\end{figure}
+
+Unlike RPS scores seen in Figure \ref{fig:rps}, the percent return predictions of investment decisions seen in Figure \ref{fig:returns} could consistently outperform the market return baseline.
+
+For the investment decisions, use of the probabilistic forecast outputs was hypothesized to be the most effective approach to capture the model’s uncertainty, believed to be approximately representative of the market risk of a forecast. 
+Two methods stood out in preliminary experimentation for decision performance. The first was termed "agreement decisions", where investments were only made in securities for which both upper, lower, and point forecasts agreed on direction. 
+This was promising in holdout evaluation but deemed riskier due to the fact that the resulting investment decisions would usually consist of a much smaller and less diverse portfolio. 
+The greater risk-return nature of agreement forecasts can be seen in Figure \ref{fig:violin} when compared to the other methods.
+
+A second method, referred to as "hinge decisions", was the one used for submissions and utilized the average of the upper and lower forecasts to supersede the point forecast as the predicted return. 
+This is similar to and inspired by the midhinge measure of central tendency \cite{tukey1977exploratory}. 
+For models with probabilistic forecasts which are asymmetric around the point forecast, like motif models, the intuition behind the use of the hinge was that it indicated greater risk in one direction or the other. 
+
+For both submission methods, the outcome was a forecast expected market price for each stock, but a price now incorporating probabilistic forecasting by use of the highest certainty subset of the market, in the agreement case, or by use of a hinge method instead of point forecasts. 
+Both of these methods represent an indirect inclusion of risk into the final decision. There was no direct incorporation of risk into the investment decisions. 
+
+The final forecasted price, for the hinge method calculated as the simple average of the upper and lower forecasts from a 0.9 prediction interval, was converted into a percentage return from the most recent close price. 
+The percentage returns of the full competition market were normalized to provide an absolute sum of 1. 
+The resulting normalized values were then truncated, to either the hundredth or thousandth digit, varying between the two in submissions for no particular reason, resulting in an absolute sum of slightly less than 1. 
+These values became the relative allocations of investments. The larger the percentage return, the larger the allocation. 
+The position was short for returns that were negative and long for those with positive returns.
+
+Results of these methods across 250 forecasts optimized on different AutoTS hyperparameters on the three validation holdouts show relatively little variation when viewed in the violin plots in Figure \ref{fig:violin}. 
+All share a similar ‘bird of prey’ appearance. 
+The means between these groups have tiny differences in percentage returns, within +/- 0.001. However, hinge returns were the only group that, across this and other tests, had an average return greater than 0, a difference that led to their choice for use throughout the entirety of the competition. 
+Note when viewing the graphs, that these present the results from each individual holdout separately, with some producing amazing returns nearing 30\%, but the same parameters averaged over multiple holdouts achieved a much lower percentage return. 
+Comparing the competition’s market basket returns for the same periods also reduces the perceived success to a smaller margin.
+
+\begin{figure}[h]
+\includegraphics[width=\linewidth]{violin_return.png}
+\caption{A comparison of the results of three different methods for converting AutoTS forecast outputs into investment decisions from the same collection of forecasts. Each violin plot presents 750 total samples, representing three high-level validation periods from each of 250 differently-optimized forecasts. Return agreement provides the greatest variation, while return hinge provides a minor advantage when averaged across all validations.}
+\label{fig:violin} 
+\end{figure}
+
+It is likely other methods for converting forecasts into decisions exist which outperform those listed here, as the search of decision methods was not extensive.
+
+On one occasion, a market decision was subjectively modified based solely on author bias to favor an increased ‘buy’ weighting to AMZN which had recently seemingly underperformed in the market. 
+This proved deleterious as in the next interval there was an even greater loss in returns for the targeted stock. 
+Exact submission data was not saved for the earlier part of the competition to confirm, but the author believes this was the submission in April 2022.
+Beyond this exception, no other manual interventions were applied and decisions arose directly from forecasts.
+
+\section{Conclusion} % creates a section
+It is unfortunately impossible to say what, if any, one model or set of model parameters in AutoTS led to beating the market. Models and AutoTS parameters changed frequently throughout the competition, and the data and market itself presented unique challenges each period.
+
+A consistent theme throughout the competition, however, was the dynamic and automated nature of the methodology. 
+The methodology's ability to adapt and improve month-over-month, with minimal human intervention, appears to be the most important factor contributing to its overall performance. 
+
+Two major challenges existed for applying this methodology. The first was limited direct correlation between AutoTS metrics available for the internal selection of methods with competition evaluation metrics. The second was the difficulty of turning probabilistic outputs into single forecast decisions. Both challenges were overcome with a high-level cross validation search of various existing parameter options and reframing of existing outputs. Both are also areas that are open to additional research and improvement.
+
+It is likely a significant performance improvement could be gained by making AutoTS more directly aware of the target metrics and decision-making process, rather than the indirect model selection criteria used here. However the approach here, using a cross validation hyperparameter search of AutoTS parameters to tailor standard AutoTS inputs and outputs towards the specific needs of a problem, has the advantage of being a highly generalizable approach that can be applied to almost any forecasting problem.
+
+% \printbibliography
+\bibliographystyle{elsarticle-num}
+\bibliography{m6_bib.bib}
+
+\end{document} % This is the end of the document

@@ -12,6 +12,10 @@ from autots.tools.window_functions import sliding_window_view
 from autots.tools.holiday import holiday_flag
 from autots.tools.wavelet import offset_wavelet, create_narrowing_wavelets
 from autots.tools.shaping import infer_frequency
+from autots.tools.changepoints import (
+    create_changepoint_features,
+    half_yr_spacing,
+)
 
 
 def seasonal_int(include_one: bool = False, small=False, very_small=False):
@@ -71,9 +75,35 @@ date_part_methods = [
     "expanded_binarized",
     'common_fourier',
     'common_fourier_rw',
+    'common_fourier_rw_lag',
+    'anchored_warped_fourier:quarter_end',
+    'anchored_segment_fourier:quarter_end',
+    'anchored_warped_fourier:us_school',
+    'anchored_segment_fourier:us_school',
 ]
 
 origin_ts = "2030-01-01"
+
+COMMON_FOURIER_RW_LAG_ORDER = 3  # mirror ARDL order for exog lag depth
+
+
+ANCHOR_SCHEMES = {
+    'quarter_end': {
+        'type': 'static_month_day',
+        'dates': [(3, 31), (6, 30), (9, 30), (12, 31)],
+    },
+    'us_school': {
+        'type': 'holiday',
+        'country': 'US',
+        'holidays': [
+            ['Memorial Day'],
+            ['Labor Day'],
+            ['Thanksgiving Day'],
+            ['Christmas Day', 'Christmas Day (observed)'],
+        ],
+        'approximate_dayofyear': [145, 247, 329, 359],
+    },
+}
 
 
 def _is_seasonality_order_list(data):
@@ -175,6 +205,10 @@ def date_part(
         # this handles it already having been run recursively
         # remove duplicate columns if present
         date_part_df = date_part_df.loc[:, ~date_part_df.columns.duplicated()]
+    elif isinstance(method, str) and method.startswith('anchored_warped_fourier'):
+        date_part_df = anchored_warped_fourier_features(DTindex, method)
+    elif isinstance(method, str) and method.startswith('anchored_segment_fourier'):
+        date_part_df = anchored_segment_fourier_features(DTindex, method)
     elif method in datepart_components:
         date_part_df = create_datepart_components(DTindex, method)
     elif method == 'recurring':
@@ -352,6 +386,10 @@ def date_part(
         )
         if method == "common_fourier_rw":
             date_part_df['epoch'] = (DTindex.to_julian_date() ** 0.65).astype(int)
+    elif isinstance(method, str) and method == "common_fourier_rw_lag":
+        date_part_df = _common_fourier_rw_lag_features(
+            DTindex, lag_count=COMMON_FOURIER_RW_LAG_ORDER
+        )
     elif "morlet" in method:
         parts = method.split("_")
         if len(parts) >= 2:
@@ -501,6 +539,269 @@ def date_part(
             add_X.index = DTindex
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     return date_part_df
+
+
+def _parse_anchor_method(method: str, default_order: int = 6):
+    parts = method.split(':')
+    if len(parts) < 2:
+        raise ValueError(f"Anchored method `{method}` is missing a scheme name.")
+    scheme_key = parts[1]
+    order = default_order
+    if len(parts) >= 3 and parts[2]:
+        try:
+            order = int(float(parts[2]))
+        except Exception:
+            pass
+    order = max(1, int(order))
+    return scheme_key, order
+
+
+def _resolve_anchor_scheme(scheme_key: str):
+    if scheme_key not in ANCHOR_SCHEMES:
+        raise ValueError(
+            f"Anchored scheme `{scheme_key}` not recognized. Available: {list(ANCHOR_SCHEMES.keys())}"
+        )
+    return ANCHOR_SCHEMES[scheme_key]
+
+
+def _align_timestamp_to_tz(ts, tz):
+    ts = pd.Timestamp(ts)
+    if tz is None:
+        if ts.tzinfo is not None:
+            return ts.tz_localize(None)
+        return ts
+    if ts.tzinfo is None:
+        return ts.tz_localize(tz)
+    if ts.tzinfo == tz:
+        return ts
+    return ts.tz_convert(tz)
+
+
+def _holiday_anchors_for_year(year, tz, scheme, holiday_cache):
+    holidays_list = scheme.get('holidays', [])
+    if not holidays_list:
+        return []
+    if year not in holiday_cache:
+        start = pd.Timestamp(year=year, month=1, day=1, tz=tz)
+        end = pd.Timestamp(year=year, month=12, day=31, tz=tz)
+        anchor_index = pd.date_range(start, end, freq='D')
+        holiday_cache[year] = holiday_flag(
+            anchor_index,
+            country=[scheme.get('country', 'US')],
+            encode_holiday_type=True,
+        )
+    flags = holiday_cache[year]
+    approx = scheme.get('approximate_dayofyear', [])
+    start_year = pd.Timestamp(year=year, month=1, day=1, tz=tz)
+    anchors = []
+    for idx, names in enumerate(holidays_list):
+        if isinstance(names, str):
+            names = [names]
+        selected = None
+        for name in names:
+            if name in flags.columns:
+                hits = flags.index[flags[name] > 0]
+                if len(hits) > 0:
+                    selected = _align_timestamp_to_tz(hits[0], tz)
+                    break
+        if selected is None:
+            if idx < len(approx):
+                selected = start_year + pd.Timedelta(days=max(0, approx[idx] - 1))
+            else:
+                # spread evenly if approximation missing
+                span_days = (
+                    pd.Timestamp(year=year + 1, month=1, day=1, tz=tz) - start_year
+                ).days
+                frac = (idx + 1) / (len(holidays_list) + 1)
+                selected = start_year + pd.Timedelta(days=int(round(frac * span_days)))
+        anchors.append(_align_timestamp_to_tz(selected, tz))
+    return anchors
+
+
+def _anchor_year_boundaries(year, tz, scheme, holiday_cache):
+    start_year = pd.Timestamp(year=year, month=1, day=1, tz=tz)
+    next_year = pd.Timestamp(year=year + 1, month=1, day=1, tz=tz)
+    anchors = []
+    if scheme.get('type') == 'static_month_day':
+        for month, day in scheme.get('dates', []):
+            anchors.append(pd.Timestamp(year=year, month=month, day=day, tz=tz))
+    elif scheme.get('type') == 'holiday':
+        anchors.extend(_holiday_anchors_for_year(year, tz, scheme, holiday_cache))
+    else:
+        raise ValueError(f"Unsupported anchor scheme type `{scheme.get('type')}`.")
+    anchors = sorted(anchor for anchor in anchors if start_year <= anchor < next_year)
+    boundaries = [start_year]
+    for anchor in anchors:
+        if anchor > boundaries[-1]:
+            boundaries.append(anchor)
+    if boundaries[-1] != next_year:
+        boundaries.append(next_year)
+    return boundaries
+
+
+def _compute_anchor_positions(DTindex, scheme_key):
+    if len(DTindex) == 0:
+        return (
+            np.array([]),
+            np.array([], dtype=int),
+            np.array([]),
+            0,
+        )
+    scheme = _resolve_anchor_scheme(scheme_key)
+    tz = DTindex.tz
+    min_year = DTindex.min().year
+    max_year = DTindex.max().year
+    holiday_cache = {}
+    years = list(range(min_year - 1, max_year + 2))
+
+    all_boundaries = []
+    for year in years:
+        all_boundaries.extend(_anchor_year_boundaries(year, tz, scheme, holiday_cache))
+
+    all_boundaries = pd.Series(all_boundaries).drop_duplicates().sort_values().to_list()
+    base_length = len(_anchor_year_boundaries(years[0], tz, scheme, holiday_cache))
+
+    if len(all_boundaries) < 2:
+        return (
+            np.zeros(len(DTindex), dtype=float),
+            np.zeros(len(DTindex), dtype=int),
+            np.zeros(len(DTindex), dtype=float),
+            0,
+        )
+
+    # Use pd.cut to find which segment each timestamp belongs to
+    segment_indices = pd.cut(
+        DTindex,
+        bins=all_boundaries,
+        right=False,
+        labels=False,
+        include_lowest=True,
+    )
+    # fill any NaNs from dates outside the boundary range
+    segment_indices = (
+        pd.Series(segment_indices, index=DTindex).bfill().ffill().to_numpy(dtype=float)
+    )
+    max_segment_index = len(all_boundaries) - 2
+    if max_segment_index < 0:
+        return (
+            np.zeros(len(DTindex), dtype=float),
+            np.zeros(len(DTindex), dtype=int),
+            np.zeros(len(DTindex), dtype=float),
+            0,
+        )
+    segment_indices = np.clip(segment_indices, 0, max_segment_index).astype(int)
+
+    start_int = np.fromiter(
+        (all_boundaries[i].value for i in segment_indices),
+        dtype=np.int64,
+        count=len(segment_indices),
+    )
+    end_int = np.fromiter(
+        (all_boundaries[i + 1].value for i in segment_indices),
+        dtype=np.int64,
+        count=len(segment_indices),
+    )
+
+    dt_int = DTindex.view('i8')
+    durations = end_int - start_int
+    time_from_start = dt_int - start_int
+
+    segment_frac = np.divide(
+        time_from_start,
+        durations,
+        out=np.zeros_like(time_from_start, dtype=float),
+        where=durations != 0,
+    )
+    segment_frac = np.clip(segment_frac, 0.0, 1.0)
+
+    segment_idx = segment_indices % (base_length - 1)
+
+    target_positions = np.linspace(0, 1, base_length)
+    warped = target_positions[segment_idx] + segment_frac * (
+        target_positions[segment_idx + 1] - target_positions[segment_idx]
+    )
+
+    return warped, segment_idx, segment_frac, base_length - 1
+
+
+def _fourier_column_names(prefix: str, order: int):
+    cos_cols = [f"{prefix}_cos{idx}" for idx in range(1, order + 1)]
+    sin_cols = [f"{prefix}_sin{idx}" for idx in range(1, order + 1)]
+    return cos_cols + sin_cols
+
+
+def anchored_warped_fourier_features(DTindex, method: str):
+    scheme_key, order = _parse_anchor_method(method, default_order=6)
+    warped, _, _, _ = _compute_anchor_positions(DTindex, scheme_key)
+    if warped.size == 0:
+        return pd.DataFrame()
+    data = fourier_series(warped, p=1.0, n=order)
+    columns = _fourier_column_names(f"anchored_warped_{scheme_key}_fourier", order)
+    return pd.DataFrame(data, columns=columns)
+
+
+def anchored_segment_fourier_features(DTindex, method: str):
+    scheme_key, order = _parse_anchor_method(method, default_order=4)
+    warped, segment_idx, segment_frac, n_segments = _compute_anchor_positions(
+        DTindex, scheme_key
+    )
+    if warped.size == 0 or n_segments <= 0:
+        return pd.DataFrame()
+    rows = len(DTindex)
+    feature_arrays = []
+    columns = []
+    # segment-specific fourier terms
+    fourier_data = np.zeros((rows, order * 2 * n_segments), dtype=float)
+    for seg in range(n_segments):
+        mask = segment_idx == seg
+        col_slice = slice(seg * order * 2, (seg + 1) * order * 2)
+        if mask.any():
+            fourier_data[mask, col_slice] = fourier_series(
+                segment_frac[mask], p=1.0, n=order
+            )
+        columns.extend(
+            _fourier_column_names(
+                f"anchored_segment_{scheme_key}_segment{seg}_fourier", order
+            )
+        )
+    feature_arrays.append(fourier_data)
+    # day-of-week gating
+    weekday = DTindex.weekday
+    dow_data = np.zeros((rows, n_segments * 7), dtype=float)
+    for seg in range(n_segments):
+        mask = segment_idx == seg
+        base = seg * 7
+        for day in range(7):
+            col_idx = base + day
+            if mask.any():
+                dow_data[mask, col_idx] = (weekday[mask] == day).astype(float)
+            columns.append(f"anchored_segment_{scheme_key}_segment{seg}_dow_{day}")
+    feature_arrays.append(dow_data)
+    # hourly gating when grains are hourly or faster
+    include_hour = False
+    if len(DTindex) > 1:
+        diffs = np.diff(DTindex.asi8) / 1e9
+        if diffs.size > 0:
+            delta = float(np.median(np.abs(diffs)))
+            include_hour = delta <= 3600 + 1e-6
+    if include_hour:
+        hours = DTindex.hour
+        hour_data = np.zeros((rows, n_segments * 24), dtype=float)
+        for seg in range(n_segments):
+            mask = segment_idx == seg
+            base = seg * 24
+            for hour in range(24):
+                col_idx = base + hour
+                if mask.any():
+                    hour_data[mask, col_idx] = (hours[mask] == hour).astype(float)
+                columns.append(
+                    f"anchored_segment_{scheme_key}_segment{seg}_hour_{hour}"
+                )
+        feature_arrays.append(hour_data)
+    if not feature_arrays:
+        return pd.DataFrame()
+    assembled = np.column_stack(feature_arrays)
+    return pd.DataFrame(assembled, columns=columns)
 
 
 def fourier_series(t, p=365.25, n=10):
@@ -753,6 +1054,53 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         )
 
 
+def _common_fourier_rw_lag_features(DTindex, lag_count=COMMON_FOURIER_RW_LAG_ORDER):
+    """Construct common_fourier_rw features with deterministic lags."""
+    lag_count = 0 if lag_count is None else int(max(0, lag_count))
+    base_length = len(DTindex)
+    if base_length == 0:
+        return pd.DataFrame(index=pd.RangeIndex(0))
+    if lag_count == 0:
+        return date_part(DTindex, method="common_fourier_rw", set_index=False)
+    # For small date ranges, fall back to shift-based lagging
+    if base_length < 3:
+        base_features = date_part(DTindex, method="common_fourier_rw", set_index=False)
+        lagged_frames = []
+        for lag in range(1, lag_count + 1):
+            lag_slice = base_features.shift(lag)
+            lag_slice = lag_slice.bfill().fillna(0.0)
+            lag_slice.columns = [f"{col}_lag{lag}" for col in lag_slice.columns]
+            lagged_frames.append(lag_slice)
+        return pd.concat([base_features] + lagged_frames, axis=1)
+    frequency = infer_frequency(DTindex)
+    tz = getattr(DTindex, 'tz', None)
+    if frequency is not None:
+        longer_idx = pd.date_range(
+            end=DTindex[-1],
+            periods=base_length + lag_count,
+            freq=frequency,
+            tz=tz,
+        )
+        extended = date_part(longer_idx, method="common_fourier_rw", set_index=False)
+        base_features = extended.iloc[lag_count:].reset_index(drop=True)
+        lagged_frames = []
+        for lag in range(1, lag_count + 1):
+            start = lag_count - lag
+            stop = start + base_length
+            lag_slice = extended.iloc[start:stop].reset_index(drop=True)
+            lag_slice.columns = [f"{col}_lag{lag}" for col in lag_slice.columns]
+            lagged_frames.append(lag_slice)
+        return pd.concat([base_features] + lagged_frames, axis=1)
+    base_features = date_part(DTindex, method="common_fourier_rw", set_index=False)
+    lagged_frames = []
+    for lag in range(1, lag_count + 1):
+        lag_slice = base_features.shift(lag)
+        lag_slice = lag_slice.bfill().fillna(0.0)
+        lag_slice.columns = [f"{col}_lag{lag}" for col in lag_slice.columns]
+        lagged_frames.append(lag_slice)
+    return pd.concat([base_features] + lagged_frames, axis=1)
+
+
 base_seasonalities = [  # this needs to be a list
     "recurring",
     "simple",
@@ -762,6 +1110,9 @@ base_seasonalities = [  # this needs to be a list
     "expanded_binarized",
     'common_fourier',
     'common_fourier_rw',
+    'common_fourier_rw_lag',
+    'anchored_warped_fourier:us_school',
+    'anchored_segment_fourier:us_school',
     "simple_poly",
     # it is critical for this to work with the fourier order option that the FLOAT COME second if the list is length 2
     [7, 365.25],
@@ -800,7 +1151,10 @@ def random_datepart(method='random'):
             0.4,
             0.35,
             0.45,
+            0.1,
             0.2,
+            0.25,
+            0.25,
             0.1,
             0.1,
             0.05,
@@ -977,60 +1331,3 @@ def seasonal_repeating_wavelet(DTindex, p, order=12, sigma=4.0, wavelet_type='mo
     return pd.DataFrame(wavelets, index=DTindex).rename(
         columns=lambda x: f"wavelet_{p}_" + str(x)
     )
-
-
-def create_changepoint_features(
-    DTindex, changepoint_spacing=60, changepoint_distance_end=120
-):
-    """
-    Creates a feature set for estimating trend changepoints using linear regression,
-    ensuring the final changepoint is at `changepoint_distance_end` from the last row.
-
-    Parameters:
-    DTindex (pd.DatetimeIndex): a datetimeindex
-    changepoint_spacing (int): Distance between consecutive changepoints.
-    changepoint_distance_end (int): Number of rows that belong to the final changepoint.
-
-    Returns:
-    pd.DataFrame: DataFrame containing changepoint features for linear regression.
-    """
-    n = len(DTindex)
-
-    # Calculate the number of data points available for changepoints
-    changepoint_range_end = n - changepoint_distance_end
-
-    # Calculate the number of changepoints based on changepoint_spacing
-    # Only place changepoints within the range [0, changepoint_range_end)
-    changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
-
-    # Ensure the last changepoint is exactly at changepoint_distance_end from the end
-    changepoints = np.append(changepoints, changepoint_range_end)
-
-    # Efficient concatenation approach to generate changepoint features
-    res = []
-    for i, cp in enumerate(changepoints):
-        feature_name = f'changepoint_{i+1}'
-        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
-
-    # Concatenate the changepoint features and set the index
-    changepoint_features = pd.concat(res, axis=1)
-    changepoint_features.index = DTindex
-
-    return changepoint_features
-
-
-def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
-    last_values = (
-        x_t_last_row.values.reshape(1, -1) + 1
-    )  # Shape it as 1 row, multiple columns
-
-    # Create a 2D array where each column starts from the corresponding value in last_values
-    forecast_steps = np.arange(n_forecast).reshape(
-        -1, 1
-    )  # Shape it as multiple rows, 1 column
-    extended_features = np.maximum(0, last_values + forecast_steps)
-    return pd.DataFrame(extended_features, columns=x_t_last_row.index)
-
-
-def half_yr_spacing(df):
-    return int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))

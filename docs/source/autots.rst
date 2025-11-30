@@ -9,6 +9,7 @@ Subpackages
 
    autots.datasets
    autots.evaluator
+   autots.mcp
    autots.models
    autots.templates
    autots.tools

@@ -71,11 +71,68 @@ from autots.models.sklearn import (
     WindowRegression,
     MultivariateRegression,
     DatepartRegression,
-    UnivariateRegression,
-    ComponentAnalysis,
     PreprocessingRegression,
 )
 from autots.models.composite import PreprocessingExperts
+from autots.models.deepssm import MambaSSM, pMLP
+from typing import Any, Dict, Tuple
+
+
+INTERRUPT_DOUBLE_PRESS_WINDOW = 1.4
+_INTERRUPT_STATE: Dict[str, Any] = {"last_press": None}
+
+
+def set_interrupt_double_press_window(seconds: float) -> None:
+    """Adjust global double-press window for Ctrl+C escalation."""
+    global INTERRUPT_DOUBLE_PRESS_WINDOW
+    try:
+        INTERRUPT_DOUBLE_PRESS_WINDOW = max(0.0, float(seconds))
+    except Exception:
+        INTERRUPT_DOUBLE_PRESS_WINDOW = 1.5
+
+
+def reset_interrupt_tracking() -> None:
+    """Clear interrupt tracking between runs."""
+    _INTERRUPT_STATE["last_press"] = None
+
+
+def _normalize_interrupt_mode(model_interrupt: Any) -> Tuple[str, float]:
+    """Return normalized interrupt mode and double press window."""
+    window = INTERRUPT_DOUBLE_PRESS_WINDOW
+    mode = model_interrupt
+    if isinstance(model_interrupt, dict):
+        mode = model_interrupt.get("mode", model_interrupt.get("value", True))
+        if "double_press_window" in model_interrupt:
+            try:
+                window = max(0.0, float(model_interrupt["double_press_window"]))
+            except Exception:
+                window = INTERRUPT_DOUBLE_PRESS_WINDOW
+    if mode in (False, None):
+        return "disabled", window
+    if isinstance(mode, str):
+        mode = mode.lower()
+        if mode in ("stop", "run"):
+            return "run", window
+        if mode in ("end_generation", "generation"):
+            return "generation", window
+        if mode in ("skip", "model"):
+            return "skip", window
+    if mode is True:
+        return "skip", window
+    return "skip", window
+
+
+def _register_interrupt_press(window: float) -> bool:
+    """Track Ctrl+C presses and return True if escalation threshold met."""
+    now = datetime.datetime.now()
+    last_press = _INTERRUPT_STATE.get("last_press")
+    if last_press is not None:
+        delta = (now - last_press).total_seconds()
+        if delta <= window:
+            _INTERRUPT_STATE["last_press"] = None
+            return True
+    _INTERRUPT_STATE["last_press"] = now
+    return False
 
 
 def create_model_id(
@@ -213,18 +270,6 @@ def ModelMonster(
             **parameters,
         )
         return model
-    elif model == 'UnivariateRegression':
-        model = UnivariateRegression(
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            n_jobs=n_jobs,
-            forecast_length=forecast_length,
-            **parameters,
-        )
-        return model
 
     elif model == 'MultivariateRegression':
         model = MultivariateRegression(
@@ -333,82 +378,6 @@ def ModelMonster(
             **parameters,
         )
         return model
-    elif model == 'TensorflowSTS':
-        from autots.models.tfp import TensorflowSTS
-
-        if parameters == {}:
-            model = TensorflowSTS(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-            )
-        else:
-            model = TensorflowSTS(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                seasonal_periods=parameters['seasonal_periods'],
-                ar_order=parameters['ar_order'],
-                trend=parameters['trend'],
-                fit_method=parameters['fit_method'],
-                num_steps=parameters['num_steps'],
-            )
-        return model
-    elif model == 'TFPRegression':
-        from autots.models.tfp import TFPRegression
-
-        if parameters == {}:
-            model = TFPRegression(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-            )
-        else:
-            model = TFPRegression(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                kernel_initializer=parameters['kernel_initializer'],
-                epochs=parameters['epochs'],
-                batch_size=parameters['batch_size'],
-                optimizer=parameters['optimizer'],
-                loss=parameters['loss'],
-                dist=parameters['dist'],
-                regression_type=parameters['regression_type'],
-            )
-        return model
-    elif model == 'ComponentAnalysis':
-        if parameters == {}:
-            model = ComponentAnalysis(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                forecast_length=forecast_length,
-            )
-        else:
-            model = ComponentAnalysis(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                model=parameters['model'],
-                model_parameters=parameters['model_parameters'],
-                decomposition=parameters['decomposition'],
-                n_components=parameters['n_components'],
-                forecast_length=forecast_length,
-            )
-        return model
     elif model == 'DatepartRegression':
         model = DatepartRegression(
             frequency=frequency,
@@ -417,20 +386,6 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             forecast_length=forecast_length,
-            n_jobs=n_jobs,
-            **parameters,
-        )
-
-        return model
-    elif model == 'Greykite':
-        from autots.models.greykite import Greykite
-
-        model = Greykite(
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
             n_jobs=n_jobs,
             **parameters,
         )
@@ -490,18 +445,6 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
-            **parameters,
-        )
-    elif model == 'NeuralProphet':
-        from autots.models.prophet import NeuralProphet
-
-        return NeuralProphet(
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            n_jobs=1,
             **parameters,
         )
     elif model == 'DynamicFactorMQ':
@@ -756,6 +699,28 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == 'MambaSSM':
+        return MambaSSM(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'pMLP':
+        return pMLP(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     elif model == "":
         raise AttributeError(
             ("Model name is empty. Likely this means AutoTS has not been fit.")
@@ -955,17 +920,8 @@ class ModelPrediction(ModelObject):
                 )
 
         transformationStartTime = datetime.datetime.now()
-        # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
-        # forecast inverse MUST come before upper and lower bounds inverse
-        df_forecast.forecast = self.transformer_object.inverse_transform(
-            df_forecast.forecast
-        )
-        df_forecast.lower_forecast = self.transformer_object.inverse_transform(
-            df_forecast.lower_forecast, fillzero=True, bounds=True
-        )
-        df_forecast.upper_forecast = self.transformer_object.inverse_transform(
-            df_forecast.upper_forecast, fillzero=True, bounds=True
-        )
+
+        df_forecast = self.transformer_object.inverse_transform(df_forecast)
 
         # CHECK Forecasts are proper length!
         if df_forecast.forecast.shape[0] < self.forecast_length:
@@ -1136,6 +1092,8 @@ class TemplateEvalObject(object):
         self.full_mae_errors = []
         self.full_pl_errors = []
         self.squared_errors = []
+        self.interrupted = False
+        self.interrupt_details: Dict[str, Any] = {}
 
     def __repr__(self):
         """Print."""
@@ -1227,6 +1185,13 @@ class TemplateEvalObject(object):
         self.full_mae_ids.extend(another_eval.full_mae_ids)
         self.full_mae_vals.extend(another_eval.full_mae_vals)
         self.model_count = self.model_count + another_eval.model_count
+        if another_eval.interrupted and not self.interrupted:
+            self.interrupted = True
+            self.interrupt_details = another_eval.interrupt_details
+        elif (
+            another_eval.interrupted and self.interrupted and not self.interrupt_details
+        ):
+            self.interrupt_details = another_eval.interrupt_details
         return self
 
     def save(self, filename='initial_results.pickle'):
@@ -1646,14 +1611,17 @@ def _eval_prediction_for_template(
         column_names=df_train.columns,
         custom_metric=custom_metric,
     )
+    total_runtime = datetime.datetime.now() - template_start_time
     if validation_round >= 1 and verbose > 0:
         round_smape = round(
             model_error.avg_metrics['smape'], 2
         )  # should work on both DF and single value
-        validation_accuracy_print = "{} - {} with avg smape {}: ".format(
+
+        validation_accuracy_print = "{} - {} with avg smape {} in {:.2f}s: ".format(
             str(template_result.model_count),
             model_str,
             round_smape,
+            total_runtime.total_seconds(),
         )
         if round_smape < best_smape:
             best_smape = round_smape
@@ -1687,7 +1655,7 @@ def _eval_prediction_for_template(
             'TransformationRuntime': df_forecast.transformation_runtime,
             'FitRuntime': df_forecast.fit_runtime,
             'PredictRuntime': df_forecast.predict_runtime,
-            'TotalRuntime': datetime.datetime.now() - template_start_time,
+            'TotalRuntime': total_runtime,
             'Ensemble': ensemble_input,
             'Exceptions': np.nan,
             'Runs': 1,
@@ -2212,6 +2180,7 @@ def TemplateWizard(
     diff_A = np.diff(np.concatenate([last_of_array, actuals]), axis=0)
 
     template_dict = template.to_dict('records')
+    interrupt_mode, interrupt_window = _normalize_interrupt_mode(model_interrupt)
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
@@ -2365,39 +2334,75 @@ def TemplateWizard(
                     )
 
         except KeyboardInterrupt:
-            if model_interrupt:
-                fit_runtime = datetime.datetime.now() - template_start_time
-                result = pd.DataFrame(
-                    {
-                        'ID': create_model_id(
-                            model_str, parameter_dict, transformation_dict
-                        ),
-                        'Model': model_str,
-                        'ModelParameters': json.dumps(parameter_dict),
-                        'TransformationParameters': json.dumps(transformation_dict),
-                        'Ensemble': ensemble_input,
-                        'TransformationRuntime': datetime.timedelta(0),
-                        'FitRuntime': fit_runtime,
-                        'PredictRuntime': datetime.timedelta(0),
-                        'TotalRuntime': fit_runtime,
-                        'Exceptions': "KeyboardInterrupt by user",
-                        'Runs': 1,
-                        'Generation': current_generation,
-                        'ValidationRound': validation_round,
-                    },
-                    index=[0],
-                )
-                template_result.model_results = pd.concat(
-                    [template_result.model_results, result],
-                    axis=0,
-                    ignore_index=True,
-                    sort=False,
-                ).reset_index(drop=True)
-                if model_interrupt == "end_generation" and current_generation > 0:
-                    break
-            else:
+            if interrupt_mode == "disabled":
                 sys.stdout.flush()
-                raise KeyboardInterrupt
+                raise
+            now = datetime.datetime.now()
+            escalate = False
+            if interrupt_mode == "run":
+                escalate = True
+            elif interrupt_mode in ("skip", "generation"):
+                escalate = _register_interrupt_press(interrupt_window)
+            if escalate:
+                if verbose >= 0:
+                    print(
+                        "KeyboardInterrupt received twice within {:.1f} seconds. Ending AutoTS run.".format(
+                            interrupt_window
+                        )
+                    )
+                template_result.interrupted = True
+                template_result.interrupt_details = {
+                    "level": "run",
+                    "timestamp": now.isoformat(),
+                    "reason": "KeyboardInterrupt",
+                }
+                reset_interrupt_tracking()
+                break
+            fit_runtime = datetime.datetime.now() - template_start_time
+            result = pd.DataFrame(
+                {
+                    'ID': create_model_id(
+                        model_str, parameter_dict, transformation_dict
+                    ),
+                    'Model': model_str,
+                    'ModelParameters': json.dumps(parameter_dict),
+                    'TransformationParameters': json.dumps(transformation_dict),
+                    'Ensemble': ensemble_input,
+                    'TransformationRuntime': datetime.timedelta(0),
+                    'FitRuntime': fit_runtime,
+                    'PredictRuntime': datetime.timedelta(0),
+                    'TotalRuntime': fit_runtime,
+                    'Exceptions': "KeyboardInterrupt by user",
+                    'Runs': 1,
+                    'Generation': current_generation,
+                    'ValidationRound': validation_round,
+                },
+                index=[0],
+            )
+            template_result.model_results = pd.concat(
+                [template_result.model_results, result],
+                axis=0,
+                ignore_index=True,
+                sort=False,
+            ).reset_index(drop=True)
+            if verbose >= 0:
+                if interrupt_mode == "generation" and current_generation > 0:
+                    print("KeyboardInterrupt caught. Ending current generation.")
+                else:
+                    print(
+                        "KeyboardInterrupt caught. Skipping current model. Press Ctrl+C again within {:.1f} seconds to end run.".format(
+                            interrupt_window
+                        )
+                    )
+            if interrupt_mode == "generation" and current_generation > 0:
+                template_result.interrupted = True
+                template_result.interrupt_details = {
+                    "level": "generation",
+                    "timestamp": now.isoformat(),
+                    "reason": "KeyboardInterrupt",
+                }
+                reset_interrupt_tracking()
+                break
         except Exception as e:
             if verbose >= 0:
                 if traceback:
@@ -3242,14 +3247,12 @@ def generate_score(
             score_dict['mage'] = mage_score * mage_weighting
             overall_score = overall_score + (mage_score * mage_weighting)
         if custom_weighting != 0:
-            custom_scaler = divisor_results['custom_weighted'][
-                divisor_results['custom_weighted'] != 0
-            ].min()
-            # potential edge case where weighting is > 0 but not custom metric is provided and is all zeroes
-            if not pd.isnull(custom_scaler):
-                custom_score = model_results['custom_weighted'] / custom_scaler
-            else:
-                custom_score = model_results['custom_weighted']
+            custom_values = model_results['custom_weighted'].copy()
+            # Replace NaN and infinite values with a large penalty (bad performance)
+            custom_values = custom_values.replace([np.inf, -np.inf, np.nan], 1e10)
+            min_val = custom_values.min()
+            custom_score = custom_values - min_val + 1.0
+
             score_dict['custom'] = custom_score * custom_weighting
             overall_score = overall_score + (custom_score * custom_weighting)
         if mle_weighting != 0:

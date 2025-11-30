@@ -20,8 +20,6 @@ all_models = [
     'WindowRegression',
     'VAR',
     'DatepartRegression',
-    "UnivariateRegression",
-    # "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
     'NVAR',
@@ -29,7 +27,6 @@ all_models = [
     'SectionalMotif',
     'Theta',
     'ARDL',
-    'NeuralProphet',
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
@@ -52,6 +49,8 @@ all_models = [
     "TVVAR",
     "BallTreeRegressionMotif",
     "PreprocessingExperts",
+    "MambaSSM",
+    "pMLP",
 ]
 # used for graphing, not for model selection
 model_classes = {
@@ -69,7 +68,6 @@ model_classes = {
     'SectionalMotif': 'motif',
     'Theta': 'stat',
     'UnivariateMotif': 'motif',
-    'UnivariateRegression': 'ML',
     'VAR': 'stat',
     'VECM': 'stat',
     'WindowRegression': 'ML',
@@ -88,7 +86,6 @@ model_classes = {
     "LATC": "stat",
     "MotifSimulation": "motif",
     "NeuralForecast": "DL",
-    "NeuralProphet": "DL",
     "PreprocessingRegression": "ML",
     "PytorchForecasting": "DL",
     "RollingRegression": "ML",
@@ -106,8 +103,25 @@ model_classes = {
     "PreprocessingExperts": "ensemble",
     "Ensemble": "ensemble",
     "MLEnsemble": "ensemble",
+    "MambaSSM": "DL",
+    "pMLP": "DL",
 }
-all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
+all_pragmatic = list(
+    (
+        set(all_models)
+        - set(
+            [
+                'MLEnsemble',
+                'VARMAX',
+                "MambaSSM",
+                "DynamicFactor",
+                "DynamicFactorMQ",
+                "TiDE",
+                "PytorchForecasting",
+            ]
+        )
+    )
+)
 # downweight slower models
 default = {
     'ConstantNaive': 1,
@@ -122,10 +136,9 @@ default = {
     'UnobservedComponents': 0.6,
     'VAR': 1,
     'VECM': 1,
-    'ARIMA': 0.3,
+    # 'ARIMA': 0.3,
     'WindowRegression': 0.8,
     'DatepartRegression': 1,
-    # 'UnivariateRegression': 0.1,
     'MultivariateRegression': 0.4,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
@@ -172,26 +185,27 @@ fast = {
     'UnivariateMotif': 1,
     # 'MultivariateMotif': 0.8,  # RAM issues at scale it seems
     'SectionalMotif': 1,
-    'NVAR': 0.3,
+    'NVAR': 0.25,
     'MAR': 0.25,
-    'RRVAR': 0.4,
+    'RRVAR': 0.5,
     'KalmanStateSpace': 0.4,
     'MetricMotif': 1,
-    'Cassandra': 0.6,
+    'Cassandra': 0.5,
     'SeasonalityMotif': 1.5,
     'FFT': 0.8,
     "BallTreeMultivariateMotif": 0.5,  # keep an eye on RAM, not the fastest at scale but works...
+    "BallTreeRegressionMotif": 0.6,
     "BasicLinearModel": 0.6,
+    "DMD": 0.5,
     # "TVVAR": 0.6,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
     'ETS': 1,
-    'FBProphet': 0.8,
+    'FBProphet': 0.6,
     'ARIMA': 0.2,  # slow
     'GLM': 1,
-    'UnobservedComponents': 1,
-    # "Greykite": 0.3,
+    'UnobservedComponents': 0.5,  # sometimes slow
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'Theta': 1,
@@ -214,6 +228,7 @@ scalable = fast_parallel_no_arima = {
         "VECM",
         "MAR",
         "BallTreeMultivariateMotif",  # might need sample_fraction tuning
+        "FBProphet",
         # "WindowRegression"  # same base shaping as BallTreeMM
     ]
 }
@@ -221,16 +236,13 @@ scalable = fast_parallel_no_arima = {
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'NeuralForecast', 'PytorchForecasting']
+        + ['MultivariateRegression', 'NeuralForecast']
     )
 )
 
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
-    'TensorflowSTS',
-    'ComponentAnalysis',
-    'TFPRegression',
 ]
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
@@ -241,7 +253,8 @@ gpu = [
     'PytorchForecasting',
     "TiDE",
     "NeuralForecast",
-    "NeuralProphet",
+    "MambaSSM",
+    "pMLP",
 ]
 # models with model-based upper/lower forecasts
 probabilistic = [
@@ -259,7 +272,7 @@ probabilistic = [
     'Theta',
     'ARDL',
     'UnobservedComponents',
-    'DynamicFactorMQ',
+    # 'DynamicFactorMQ',  # not trusted
     'PytorchForecasting',
     # 'MultivariateRegression',
     'ARCH',
@@ -272,6 +285,8 @@ probabilistic = [
     "TVVAR",
     "BallTreeRegressionMotif",
     # "PreprocessingExperts",
+    # "MambaSSM",  # insanely slow
+    "pMLP",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -279,7 +294,7 @@ multivariate = [
     'DynamicFactor',
     'GluonTS',
     # 'VARMAX',  # yes but so slow
-    'RollingRegression',
+    # 'RollingRegression',
     'WindowRegression',
     'VAR',
     "MultivariateMotif",
@@ -319,10 +334,6 @@ recombination_approved = [
     'RollingRegression',
     'VAR',
     # 'WindowRegression',
-    'TensorflowSTS',
-    'TFPRegression',
-    'UnivariateRegression',
-    "Greykite",
     'UnivariateMotif',
     "MultivariateMotif",
     'NVAR',
@@ -330,7 +341,6 @@ recombination_approved = [
     'SectionalMotif',
     'Theta',
     'ARDL',
-    'NeuralProphet',
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
@@ -351,6 +361,8 @@ recombination_approved = [
     "TVVAR",
     "BallTreeRegressionMotif",
     "PreprocessingExperts",
+    "MambaSSM",
+    "pMLP",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -363,14 +375,10 @@ no_shared = [
     'FBProphet',
     'SeasonalNaive',
     'UnobservedComponents',
-    'TensorflowSTS',
     "GLS",
-    "UnivariateRegression",
-    "Greykite",
     'UnivariateMotif',
     'Theta',
     'ARDL',
-    'NeuralProphet',
     'ARCH',
     'KalmanStateSpace',
     'MetricMotif',
@@ -383,7 +391,7 @@ regressor = [
     'GLM',
     'ARIMA',
     'FBProphet',
-    'RollingRegression',
+    # 'RollingRegression',
     'UnobservedComponents',
     'VECM',
     'DynamicFactor',
@@ -391,11 +399,9 @@ regressor = [
     'VAR',
     'DatepartRegression',
     "GluonTS",
-    "UnivariateRegression",
     'MultivariateRegression',
     'SectionalMotif',  # kinda
     'ARDL',
-    'NeuralProphet',
     'ARCH',
     'Cassandra',
     'PreprocessingRegression',
@@ -403,6 +409,8 @@ regressor = [
     "BasicLinearModel",
     "TVVAR",
     "BallTreeRegressionMotif",
+    "MambaSSM",
+    "pMLP",
 ]
 motifs = [
     'UnivariateMotif',
@@ -415,10 +423,9 @@ motifs = [
     "BallTreeRegressionMotif",
 ]
 regressions = [
-    'RollingRegression',
+    # 'RollingRegression',
     'WindowRegression',
     'DatepartRegression',
-    'UnivariateRegression',
     'MultivariateRegression',
     'PreprocessingRegression',
 ]
@@ -436,6 +443,7 @@ all_result_path = [
     "BallTreeRegressionMotif",
     "BallTreeMultivariateMotif",
     "PreprocessingExperts",
+    "Ensemble",  # BestN ensembles can provide result_windows
 ]
 # these are those that require a parameter, and return a dict
 diff_window_motif_list = [

@@ -173,14 +173,21 @@ class FFT(object):
     def generate_harmonics_dataframe(self, forecast_length=0):
         extended_m = self.m + forecast_length
         harmonics_data = np.zeros((extended_m, len(self.use_idx) * 2))
+        t_extended = np.arange(0, extended_m)
 
         for i, idx in enumerate(self.use_idx):
-            freq_component = np.fft.ifft(self.x_freqdom[idx], n=self.m, axis=0)
-            extended_freq_component = np.tile(
-                freq_component, (extended_m // self.m) + 1
-            )[:extended_m]
-            harmonics_data[:, 2 * i] = np.real(extended_freq_component).flatten()
-            harmonics_data[:, 2 * i + 1] = np.imag(extended_freq_component).flatten()
+            # Use the frequency domain information to generate harmonics
+            # for the extended time period, similar to predict method
+            ampli = np.abs(self.x_freqdom[idx]) / self.m
+            phase = np.angle(self.x_freqdom[idx])
+            # Generate the harmonic component for extended time, summed across series
+            # This creates a multivariate summary feature
+            harmonic_extended = ampli * np.exp(
+                2j * np.pi * self.f[idx] * t_extended[:, None] + 1j * phase
+            )
+            # Sum across all series to create a single feature per harmonic
+            harmonics_data[:, 2 * i] = np.sum(np.real(harmonic_extended), axis=1)
+            harmonics_data[:, 2 * i + 1] = np.sum(np.imag(harmonic_extended), axis=1)
 
         return harmonics_data
 

@@ -1,5 +1,5 @@
 """
-Constraint generation functions
+Constraint and adjustment generation functions
 """
 
 import random
@@ -525,3 +525,145 @@ def apply_constraint_single(
         train_min=train_min,
         train_max=train_max,
     )
+
+
+def _resolve_index_position(index, boundary, default_value):
+    """Safely convert a label-like boundary into a positional index."""
+    if boundary is None:
+        return default_value
+    try:
+        pos = index.get_loc(boundary)
+        if isinstance(pos, slice):
+            pos = pos.start if pos.start is not None else default_value
+        elif isinstance(pos, (list, np.ndarray, pd.Series)):
+            pos = pos[0]
+    except Exception:
+        try:
+            pos = int(index.searchsorted(boundary, side="left"))
+        except Exception:
+            pos = default_value
+    pos = max(0, min(pos, len(index) - 1))
+    return pos
+
+
+def _apply_ramp(df, cols, ramp_index, ramp_values, method):
+    """Apply additive/multiplicative ramp to a DataFrame slice."""
+    if df is None or not cols:
+        return df
+    if method == "multiplicative":
+        ramp_series = pd.Series(1 + ramp_values, index=ramp_index)
+        df.loc[ramp_index, cols] = df.loc[ramp_index, cols].multiply(
+            ramp_series, axis=0
+        )
+    else:
+        ramp_series = pd.Series(ramp_values, index=ramp_index)
+        df.loc[ramp_index, cols] = df.loc[ramp_index, cols].add(ramp_series, axis=0)
+    return df
+
+
+def apply_adjustment_single(
+    forecast: pd.DataFrame,
+    adjustment_method: str,
+    adjustment_params: dict = None,
+    df_train: pd.DataFrame = None,
+    series_ids=None,
+    lower_forecast: pd.DataFrame = None,
+    upper_forecast: pd.DataFrame = None,
+):
+    """Apply a single adjustment to forecast (and optional bounds).
+
+    adjustment_method:
+        - "basic": linear ramp between start/end values and dates
+            params: start_date, end_date, start_value, end_value, method ("additive"|"multiplicative")
+        - "align_last_value": align start of forecast to recent history, requires df_train
+            params: any AlignLastValue kwargs (rows, lag, method, strength, etc.)
+        - "smoothing": EWMA smoothing
+            params: span (int)
+    series_ids limits adjustment to specific columns; defaults to all columns.
+    """
+    adjustment_params = adjustment_params or {}
+    forecast_adj = forecast.copy()
+    lower_adj = lower_forecast.copy() if lower_forecast is not None else None
+    upper_adj = upper_forecast.copy() if upper_forecast is not None else None
+    cols = (
+        list(forecast.columns)
+        if series_ids is None
+        else [c for c in forecast.columns if c in series_ids]
+    )
+    if not cols:
+        return forecast_adj, lower_adj, upper_adj
+
+    if adjustment_method in ["basic", "linear", "ramp"]:
+        start_date = adjustment_params.get("start_date", None)
+        end_date = adjustment_params.get("end_date", None)
+        start_value = adjustment_params.get("start_value", None)
+        end_value = adjustment_params.get("end_value", None)
+        value = adjustment_params.get("value", None)
+        if start_value is None and end_value is None:
+            start_value = end_value = 0 if value is None else value
+        elif start_value is None:
+            start_value = (
+                end_value if end_value is not None else (0 if value is None else value)
+            )
+        elif end_value is None:
+            end_value = start_value
+        if (
+            value is not None
+            and adjustment_params.get("end_value", None) is None
+            and adjustment_params.get("start_value", None) is None
+        ):
+            start_value = end_value = value
+        method = adjustment_params.get("method", "additive")
+
+        start_idx = _resolve_index_position(forecast_adj.index, start_date, 0)
+        end_idx = _resolve_index_position(
+            forecast_adj.index, end_date, forecast_adj.shape[0] - 1
+        )
+        if end_idx < start_idx:
+            start_idx, end_idx = end_idx, start_idx
+        ramp_index = forecast_adj.index[start_idx : end_idx + 1]
+        ramp_values = np.linspace(start_value, end_value, len(ramp_index))
+
+        forecast_adj = _apply_ramp(forecast_adj, cols, ramp_index, ramp_values, method)
+        lower_adj = _apply_ramp(lower_adj, cols, ramp_index, ramp_values, method)
+        upper_adj = _apply_ramp(upper_adj, cols, ramp_index, ramp_values, method)
+    elif adjustment_method in ["align_last_value", "alignlastvalue"]:
+        if df_train is None:
+            raise ValueError("df_train is required for align_last_value adjustment")
+        try:
+            from autots.tools.transform import AlignLastValue
+        except Exception as ex:
+            raise ImportError(
+                "AlignLastValue could not be imported for adjustment use"
+            ) from ex
+        aligner = AlignLastValue(**adjustment_params)
+        aligner.fit(df_train[cols])
+        forecast_adj.loc[:, cols] = aligner.inverse_transform(forecast_adj[cols])
+        adjustment = aligner.adjustment
+        if lower_adj is not None:
+            lower_adj.loc[:, cols] = aligner.inverse_transform(
+                lower_adj[cols], adjustment=adjustment
+            )
+        if upper_adj is not None:
+            upper_adj.loc[:, cols] = aligner.inverse_transform(
+                upper_adj[cols], adjustment=adjustment
+            )
+    elif adjustment_method in ["smoothing", "ewma"]:
+        span = adjustment_params.get("span", 5)
+        forecast_adj.loc[:, cols] = (
+            forecast_adj.loc[:, cols].ewm(span=span, adjust=False).mean()
+        )
+        if lower_adj is not None:
+            lower_adj.loc[:, cols] = (
+                lower_adj.loc[:, cols].ewm(span=span, adjust=False).mean()
+            )
+        if upper_adj is not None:
+            upper_adj.loc[:, cols] = (
+                upper_adj.loc[:, cols].ewm(span=span, adjust=False).mean()
+            )
+    else:
+        raise ValueError(
+            f"adjustment_method {adjustment_method} not recognized, adjust arguments"
+        )
+
+    return forecast_adj, lower_adj, upper_adj

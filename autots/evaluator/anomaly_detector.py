@@ -14,8 +14,11 @@ from autots.tools.anomaly_utils import (
     anomaly_df_to_holidays,
     holiday_new_params,
     dates_to_holidays,
+    fit_anomaly_classifier,
+    score_to_anomaly,
 )
 from autots.tools.transform import RandomTransform, GeneralTransformer
+from autots.tools.impute import FillNA
 from autots.evaluator.auto_model import random_model
 from autots.evaluator.auto_model import back_forecast
 
@@ -76,15 +79,11 @@ class AnomalyDetector(object):
         self.isolated_only = isolated_only
         self.n_jobs = n_jobs
         self.anomaly_classifier = None
+        self.anomalies = None
+        self.scores = None
 
     def detect(self, df):
-        """All will return -1 for anomalies.
-
-        Args:
-            df (pd.DataFrame): pandas wide-style data
-        Returns:
-            pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)
-        """
+        """Shared anomaly detection routine."""
         self.df = df.copy()
         self.df_anomaly = df.copy()
         if self.transform_dict is not None:
@@ -92,7 +91,15 @@ class AnomalyDetector(object):
                 verbose=2, **self.transform_dict
             )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
             # the post selecting by columns is for CenterSplit and any similar renames or expansions
-            self.df_anomaly = model.fit_transform(self.df_anomaly)[self.df.columns]
+            transformed_df = model.fit_transform(self.df_anomaly)
+            # Only select columns that exist in both original and transformed data (from expanding transformers)
+            common_cols = [
+                col for col in self.df.columns if col in transformed_df.columns
+            ]
+            if common_cols:
+                self.df_anomaly = transformed_df[common_cols]
+            else:
+                self.df_anomaly = transformed_df
 
         if self.forecast_params is not None:
             backcast = back_forecast(
@@ -121,8 +128,11 @@ class AnomalyDetector(object):
             self.df_anomaly.columns = df.columns
 
         if self.method in ["prediction_interval"]:
+            df_for_limits = self.df_anomaly
+            if self.eval_period is not None:
+                df_for_limits = self.df_anomaly.tail(self.eval_period)
             self.anomalies, self.scores = limits_to_anomalies(
-                self.df_anomaly,
+                df_for_limits,
                 output=self.output,
                 method_params=self.method_params,
                 upper_limit=backcast.upper_forecast,
@@ -147,26 +157,61 @@ class AnomalyDetector(object):
             self.anomalies[mask_replace] = 1
         return self.anomalies, self.scores
 
-    def plot(self, series_name=None, title=None, marker_size=None, plot_kwargs={}):
+    def remove_anomalies(self, df=None, fillna=None):
+        """Detect and return a copy of the data with anomalies removed (set NaN or filled).
+
+        Args:
+            df (pd.DataFrame, optional): data to run detection on. If None, uses previous `detect` input.
+            fillna (str, optional): fill method passed to `autots.tools.impute.FillNA`.
+        """
+        if df is not None:
+            _, _ = self.detect(df)
+        elif not hasattr(self, "df"):
+            raise ValueError(
+                "Call `detect(df)` or provide `df` before removing anomalies."
+            )
+        df_clean = self.df.copy()
+        df_clean = df_clean[self.anomalies != -1]
+        if fillna is not None:
+            df_clean = FillNA(df_clean, method=fillna, window=10)
+        return df_clean
+
+    def plot(
+        self,
+        series_name=None,
+        title=None,
+        marker_size=None,
+        plot_kwargs={},
+        start_date=None,
+    ):
         import matplotlib.pyplot as plt
 
         if series_name is None:
             series_name = random.choice(self.df.columns)
         if title is None:
             title = series_name[0:50] + f" with {self.method} outliers"
+
+        # Filter data by start_date if provided
+        df_plot = self.df
+        anomalies_plot = self.anomalies
+        if start_date is not None:
+            start_date = pd.to_datetime(start_date)
+            df_plot = self.df.loc[self.df.index >= start_date]
+            anomalies_plot = self.anomalies.loc[self.anomalies.index >= start_date]
+
         fig, ax = plt.subplots()
-        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        df_plot[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if self.output == "univariate":
-            i_anom = self.anomalies.index[self.anomalies.iloc[:, 0] == -1]
+            i_anom = anomalies_plot.index[anomalies_plot.iloc[:, 0] == -1]
         else:
-            series_anom = self.anomalies[series_name]
+            series_anom = anomalies_plot[series_name]
             i_anom = series_anom[series_anom == -1].index
         if len(i_anom) > 0:
             if marker_size is None:
                 marker_size = max(20, fig.dpi * 0.45)
             ax.scatter(
                 i_anom.tolist(),
-                self.df.loc[i_anom, :][series_name],
+                df_plot.loc[i_anom, :][series_name],
                 c="red",
                 s=marker_size,
             )
@@ -176,46 +221,15 @@ class AnomalyDetector(object):
 
     def fit_anomaly_classifier(self):
         """Fit a model to predict if a score is an anomaly."""
-        # Using DecisionTree as it should almost handle nonparametric anomalies
-        from sklearn.tree import DecisionTreeClassifier
-
-        scores_flat = self.scores.melt(var_name='series', value_name="value")
-        categor = pd.Categorical(scores_flat['series'])
-        self.score_categories = categor.categories
-        scores_flat['series'] = categor
-        scores_flat = pd.concat(
-            [pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1
+        self.anomaly_classifier, self.score_categories = fit_anomaly_classifier(
+            self.anomalies, self.scores
         )
-        anomalies_flat = self.anomalies.melt(var_name='series', value_name="value")
-        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
-            scores_flat, anomalies_flat['value']
-        )
-        # anomaly_classifier.score(scores_flat, anomalies_flat['value'])
 
     def score_to_anomaly(self, scores):
         """A DecisionTree model, used as models are nonstandard (and nonparametric)."""
         if self.anomaly_classifier is None:
             self.fit_anomaly_classifier()
-        scores.index.name = 'date'
-        scores_flat = scores.reset_index(drop=False).melt(
-            id_vars="date", var_name='series', value_name="value"
-        )
-        scores_flat['series'] = pd.Categorical(
-            scores_flat['series'], categories=self.score_categories
-        )
-        res = self.anomaly_classifier.predict(
-            pd.concat(
-                [
-                    pd.get_dummies(scores_flat['series'], dtype=float),
-                    scores_flat['value'],
-                ],
-                axis=1,
-            )
-        )
-        res = pd.concat(
-            [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
-        ).pivot_table(index='date', columns='series', values="value")
-        return res[scores.columns]
+        return score_to_anomaly(scores, self.anomaly_classifier, self.score_categories)
 
     @staticmethod
     def get_new_params(method="random"):
@@ -327,6 +341,7 @@ class HolidayDetector(object):
             self.anomaly_model.anomalies,
             splash_threshold=self.splash_threshold,
             threshold=self.threshold,
+            min_occurrences=self.min_occurrences,
             actuals=df if self.output != "univariate" else None,
             anomaly_scores=(
                 self.anomaly_model.scores if self.output != "univariate" else None
@@ -343,6 +358,7 @@ class HolidayDetector(object):
         return self
 
     def plot_anomaly(self, kwargs={}):
+        # Extract start_date if provided in kwargs to pass to the anomaly detector plot method
         self.anomaly_model.plot(**kwargs)
 
     def plot(
@@ -353,6 +369,7 @@ class HolidayDetector(object):
         marker_size=None,
         plot_kwargs={},
         series=None,
+        start_date=None,
     ):
         import matplotlib.pyplot as plt
 
@@ -366,8 +383,15 @@ class HolidayDetector(object):
                 series_name[0:50]
                 + f" with {self.anomaly_detector_params['method']} holidays"
             )
+
+        # Filter data by start_date if provided
+        df_plot = self.df
+        if start_date is not None:
+            start_date = pd.to_datetime(start_date)
+            df_plot = self.df.loc[self.df.index >= start_date]
+
         fig, ax = plt.subplots()
-        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        df_plot[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if marker_size is None:
             marker_size = max(20, fig.dpi * 0.45)
         if include_anomalies:
@@ -379,20 +403,36 @@ class HolidayDetector(object):
             else:
                 series_anom = self.anomaly_model.anomalies[series_name]
                 i_anom = series_anom[series_anom == -1].index
+
+            # Filter anomalies by start_date if provided
+            if start_date is not None:
+                i_anom = i_anom[i_anom >= start_date]
+            # Ensure anomaly indices exist in filtered dataframe
+            i_anom = i_anom[i_anom.isin(df_plot.index)]
+
             if len(i_anom) > 0:
                 ax.scatter(
                     i_anom.tolist(),
-                    self.df.loc[i_anom, :][series_name],
+                    df_plot.loc[i_anom, :][series_name],
                     c="red",
                     s=marker_size,
                 )
         # now the actual holidays
-        i_anom = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
-        i_anom = i_anom.index[i_anom == 1]
+        holiday_dates = self.dates_to_holidays(self.df.index, style="series_flag")[
+            series_name
+        ]
+        i_anom = holiday_dates.index[holiday_dates == 1]
+
+        # Filter holidays by start_date if provided
+        if start_date is not None:
+            i_anom = i_anom[i_anom >= start_date]
+        # Ensure holiday indices exist in filtered dataframe
+        i_anom = i_anom[i_anom.isin(df_plot.index)]
+
         if len(i_anom) > 0:
             ax.scatter(
                 i_anom.tolist(),
-                self.df.loc[i_anom, :][series_name],
+                df_plot.loc[i_anom, :][series_name],
                 c="green",
                 s=marker_size,
             )

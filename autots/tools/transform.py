@@ -9,9 +9,9 @@ from autots.tools.seasonal import (
     date_part,
     seasonal_int,
     random_datepart,
-    half_yr_spacing,
 )
-from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.tools.changepoints import half_yr_spacing, ChangepointDetector
+from autots.tools.cointegration import btcd_decompose
 from autots.tools.constraint import (
     fit_constraint,
     apply_fit_constraint,
@@ -23,15 +23,19 @@ from autots.models.sklearn import (
     retrieve_classifier,
     generate_classifier_params,
 )
+from autots.models.base import PredictionObject
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
     detect_anomalies,
     anomaly_df_to_holidays,
     holiday_new_params,
     dates_to_holidays,
+    fit_anomaly_classifier,
+    score_to_anomaly,
 )
 from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
-from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
+from autots.tools.fast_kalman import KalmanFilter
+from autots.tools.fast_kalman_params import new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
 from autots.tools.fft import FFT as fft_class
@@ -40,6 +44,19 @@ from autots.tools.fir_filter import (
     generate_random_fir_params,
     fft_fir_filter_to_timeseries,
 )
+from autots.tools.g7xx_codec import (
+    G711Scaler,
+    G726Filter,
+)
+from autots.tools.g7xx_codec import _mu_law_compress, _a_law_compress
+from autots.tools.hierarchial import (
+    ledoit_wolf_covariance,
+    mint_reconcile,
+    erm_reconcile,
+    volatility_weighted_mint_reconcile,
+    iterative_mint_reconcile,
+    iterative_volatility_mint_reconcile,
+)
 
 try:
     from scipy.signal import butter, sosfiltfilt, savgol_filter
@@ -47,12 +64,16 @@ try:
     from scipy.stats import norm
     from scipy.signal import fftconvolve
 except Exception:
-    norm = lambda x: 0.05
-    curve_fit = lambda x: "scipy import failed"
-    butter = lambda x: "scipy import failed"
-    sosfiltfilt = lambda x: "scipy import failed"
-    savgol_filter = lambda x: "scipy import failed"
-    fftconvolve = lambda x: "scipy import failed"
+    from autots.tools.mocks import (
+        norm,
+        curve_fit,
+        butter,
+        sosfiltfilt,
+        savgol_filter,
+        fftconvolve,
+    )
+
+from autots.tools.mocks import StandardScaler
 
 try:
     from joblib import Parallel, delayed
@@ -211,7 +232,7 @@ class Detrend(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         window = random.choices(
-            [None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1]
+            [None, 365, 900, 30, 90, 10], [2.5, 0.05, 0.05, 0.15, 0.15, 0.1]
         )[0]
         if method == "fast":
             choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
@@ -828,7 +849,7 @@ class IntermittentOccurrence(EmptyTransformer):
     Does not inverse to original values!
 
     Args:
-        center (str): one of "mean", "median", "midhinge"
+        center (str): one of "mean", "median", "midhinge", "geometric_mean"
     """
 
     def __init__(self, center: str = "median", **kwargs):
@@ -845,8 +866,9 @@ class IntermittentOccurrence(EmptyTransformer):
                     "mean",
                     "median",
                     "midhinge",
+                    "geometric_mean",
                 ],
-                [0.4, 0.3, 0.3],
+                [0.4, 0.3, 0.25, 0.05],
                 k=1,
             )[0]
         return {
@@ -863,6 +885,20 @@ class IntermittentOccurrence(EmptyTransformer):
             self.df_med = df.mean(axis=0)
         elif self.center == "midhinge":
             self.df_med = (df.quantile(0.75, axis=0) + df.quantile(0.25, axis=0)) / 2
+        elif self.center == "geometric_mean":
+            # Vectorized geometric mean: handle negative/zero values
+            df_pos = df.copy()
+            # Replace non-positive values with NaN for geometric mean calculation
+            df_pos[df_pos <= 0] = np.nan
+            # Geometric mean: exp(mean(log(x)))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                log_vals = np.log(df_pos)
+                self.df_med = np.exp(np.nanmean(log_vals, axis=0))
+            # Fill NaN (from all non-positive columns) with regular mean as fallback
+            self.df_med = pd.Series(self.df_med, index=df.columns)
+            nan_mask = self.df_med.isna()
+            if nan_mask.any():
+                self.df_med[nan_mask] = df.loc[:, nan_mask].mean(axis=0)
         else:
             self.df_med = df.median(axis=0, skipna=True)
         self.upper_mean = df[df > self.df_med].mean(axis=0) - self.df_med
@@ -917,6 +953,7 @@ class RollingMeanTransformer(EmptyTransformer):
         window (int): number of periods to take mean over
         fixed (bool): if True, don't inverse to volatile state
         macro_micro (bool): if True, split on rolling trend vs remainder and later recombine. Overrides fixed arg.
+        mean_type (str): "arithmetic" or "geometric" - type of mean to compute
     """
 
     def __init__(
@@ -926,6 +963,7 @@ class RollingMeanTransformer(EmptyTransformer):
         macro_micro: bool = False,
         suffix: str = "_lltmicro",
         center: bool = False,
+        mean_type: str = "arithmetic",
         **kwargs,
     ):
         super().__init__(name="RollingMeanTransformer")
@@ -934,6 +972,7 @@ class RollingMeanTransformer(EmptyTransformer):
         self.macro_micro = macro_micro
         self.suffix = suffix
         self.center = center
+        self.mean_type = mean_type
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -951,6 +990,7 @@ class RollingMeanTransformer(EmptyTransformer):
             "window": choice,
             "macro_micro": macro_micro,
             "center": center,
+            "mean_type": random.choices(["arithmetic", "geometric"], [0.95, 0.05])[0],
         }
 
     def fit(self, df):
@@ -977,7 +1017,30 @@ class RollingMeanTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        macro = df.rolling(window=self.window, min_periods=1, center=self.center).mean()
+        if self.mean_type == "geometric":
+            # Vectorized geometric mean for rolling windows
+            # Handle non-positive values by replacing with NaN
+            df_pos = df.copy()
+            df_pos[df_pos <= 0] = np.nan
+            with np.errstate(divide='ignore', invalid='ignore'):
+                log_df = np.log(df_pos)
+                # Rolling mean of logs, then exponentiate
+                macro = log_df.rolling(
+                    window=self.window, min_periods=1, center=self.center
+                ).mean()
+                macro = np.exp(macro)
+            # For any NaN results (from all non-positive windows), fallback to arithmetic mean
+            nan_mask = macro.isna()
+            if nan_mask.any().any():
+                arith_macro = df.rolling(
+                    window=self.window, min_periods=1, center=self.center
+                ).mean()
+                macro = macro.where(~nan_mask, arith_macro)
+        else:
+            macro = df.rolling(
+                window=self.window, min_periods=1, center=self.center
+            ).mean()
+
         if self.macro_micro:
             self.columns = df.columns
             micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
@@ -1168,6 +1231,8 @@ class SeasonalDifference(EmptyTransformer):
 
 class DatepartRegressionTransformer(EmptyTransformer):
     """Remove a regression on datepart from the data. See tools.seasonal.date_part"""
+
+    # TODO: support passing in future_regressor via GeneralTransformer, use regression types like ARDL
 
     def __init__(
         self,
@@ -1713,7 +1778,9 @@ class ClipOutliers(EmptyTransformer):
             if method_c == "remove":
                 fillna_c = random.choice(["ffill", "mean", "rolling_mean_24"])
         choice = random.choices(
-            [1, 2, 3, 3.5, 4, 4.5, 5], [0.1, 0.2, 0.2, 0.2, 0.4, 0.1, 0.1], k=1
+            [1, 2, 3, 3.25, 3.5, 3.75, 4, 4.5, 5],
+            [0.1, 0.2, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.1],
+            k=1,
         )[0]
         return {
             "method": method_c,
@@ -2496,7 +2563,7 @@ class FastICA(EmptyTransformer):
         return {
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
-            "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
+            "max_iter": random.choices([100, 250, 500], [0.7, 0.2, 0.1])[0],
             "whiten": random.choices(
                 ['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1]
             )[0],
@@ -2662,73 +2729,355 @@ class MeanDifference(EmptyTransformer):
             return df
 
 
-class Cointegration(EmptyTransformer):
-    """Johansen Cointegration Decomposition."""
+class CointegrationTransformer(EmptyTransformer):
+    """Fast Cointegration Transformer using Residualized CCA/RRR with SVD and light shrinkage.
+
+    This transformer is designed for maximum speed and memory efficiency, with graceful error handling.
+    It expands the number of output columns by creating cointegrated combinations of the input series.
+
+    Args:
+        n_components (int): Number of cointegration vectors to use. If None, uses min(n_series, max_components)
+        max_components (int): Maximum number of components to extract
+        shrinkage (float): Regularization parameter for numerical stability (0.0 to 1.0)
+        method (str): Cointegration method - 'cca' for Canonical Correlation Analysis, 'rrr' for Reduced Rank Regression
+        min_periods (int): Minimum number of observations required
+        chunk_size (int): Process data in chunks for memory efficiency
+    """
 
     def __init__(
         self,
-        det_order: int = -1,
-        k_ar_diff: int = 1,
-        name: str = "Cointegration",
+        n_components=None,
+        max_components=10,
+        shrinkage=1e-4,
+        method='cca',
+        min_periods=20,
+        chunk_size=10000,
         **kwargs,
     ):
-        self.name = name
-        self.det_order = det_order
-        self.k_ar_diff = k_ar_diff
+        super().__init__(name="CointegrationTransformer")
+        self.n_components = n_components
+        self.max_components = max_components
+        self.shrinkage = shrinkage
+        self.method = method
+        self.min_periods = min_periods
+        self.chunk_size = chunk_size
+        self.components_ = None
+        self.mean_ = None
+        self.original_columns = None
+        self.n_features_out_ = None
+        self.failed_fit = False
+
+    def _safe_svd(self, X, n_components=None):
+        """Perform SVD with error handling and memory management."""
+        try:
+            # Use economic SVD for large matrices
+            full_matrices = False if X.shape[0] > X.shape[1] else True
+            U, s, Vt = np.linalg.svd(X, full_matrices=full_matrices)
+
+            # Apply light shrinkage to singular values for stability
+            s_shrunk = s / (s + self.shrinkage * s.max())
+
+            if n_components is not None:
+                n_comp = min(n_components, len(s_shrunk))
+                return U[:, :n_comp], s_shrunk[:n_comp], Vt[:n_comp, :]
+            else:
+                return U, s_shrunk, Vt
+
+        except (np.linalg.LinAlgError, MemoryError) as e:
+            return None, None, None
+
+    def _compute_cointegration_cca(self, X):
+        """Compute cointegration vectors using Canonical Correlation Analysis."""
+        try:
+            n_obs, n_vars = X.shape
+
+            # Center the data
+            X_centered = X - self.mean_
+
+            # Create first differences for CCA
+            dX = np.diff(X_centered, axis=0)
+            X_lag = X_centered[:-1, :]
+
+            # Compute cross-covariance matrices with regularization
+            reg = self.shrinkage * np.trace(np.cov(dX.T)) / n_vars
+
+            C00 = np.cov(dX.T) + reg * np.eye(n_vars)
+            C11 = np.cov(X_lag.T) + reg * np.eye(n_vars)
+            C01 = np.cov(dX.T, X_lag.T)[:n_vars, n_vars:]
+
+            # Solve generalized eigenvalue problem using SVD for stability
+            try:
+                # Use Cholesky decomposition when possible
+                L0 = np.linalg.cholesky(C00)
+                L1 = np.linalg.cholesky(C11)
+
+                # Transform to standard form
+                A = np.linalg.solve(L1, C01.T)
+                A = np.linalg.solve(L0, A.T).T
+
+                # SVD of the transformed matrix
+                U, s, Vt = self._safe_svd(A, self.n_components)
+                if U is None:
+                    return None
+
+                # Transform back to original space
+                components = np.linalg.solve(L1, U.T).T
+
+            except np.linalg.LinAlgError:
+                # Fallback to regularized pseudoinverse
+                try:
+                    C00_inv = np.linalg.pinv(C00)
+                    C11_inv = np.linalg.pinv(C11)
+
+                    # Compute the matrix for eigendecomposition
+                    M = C01 @ C11_inv @ C01.T @ C00_inv
+                    eigenvals, eigenvecs = np.linalg.eigh(M)
+
+                    # Sort by eigenvalues
+                    idx = np.argsort(eigenvals)[::-1]
+                    components = eigenvecs[:, idx[: self.n_components]].T
+
+                except:
+                    return None
+
+            return components
+
+        except Exception as e:
+            return None
+
+    def _compute_cointegration_rrr(self, X):
+        """Compute cointegration vectors using Reduced Rank Regression."""
+        try:
+            n_obs, n_vars = X.shape
+
+            # Center the data
+            X_centered = X - self.mean_
+
+            # Create regression setup: Y = X[1:], X = X[:-1]
+            Y = X_centered[1:, :]
+            X_reg = X_centered[:-1, :]
+
+            # Add regularization
+            reg = self.shrinkage * np.trace(np.cov(Y.T)) / n_vars
+
+            # Compute covariance matrices
+            Sigma_XX = np.cov(X_reg.T) + reg * np.eye(n_vars)
+            Sigma_YX = np.cov(Y.T, X_reg.T)[:n_vars, n_vars:]
+            Sigma_YY = np.cov(Y.T) + reg * np.eye(n_vars)
+
+            # Reduced rank regression via SVD
+            try:
+                Sigma_XX_inv_sqrt = np.linalg.inv(np.linalg.cholesky(Sigma_XX))
+                Sigma_YY_inv_sqrt = np.linalg.inv(np.linalg.cholesky(Sigma_YY))
+
+                # Transform the cross-covariance matrix
+                M = Sigma_YY_inv_sqrt @ Sigma_YX @ Sigma_XX_inv_sqrt
+
+                # SVD decomposition
+                U, s, Vt = self._safe_svd(M, self.n_components)
+                if U is None:
+                    return None
+
+                # Transform back to get cointegration vectors
+                components = Vt @ Sigma_XX_inv_sqrt
+
+            except np.linalg.LinAlgError:
+                # Fallback using pseudoinverse
+                try:
+                    Sigma_XX_pinv = np.linalg.pinv(Sigma_XX)
+                    M = Sigma_YX @ Sigma_XX_pinv
+
+                    U, s, Vt = self._safe_svd(M, self.n_components)
+                    if U is None:
+                        return None
+
+                    components = Vt
+
+                except:
+                    return None
+
+            return components
+
+        except Exception as e:
+            return None
 
     def fit(self, df):
-        """Learn behavior of data to change.
+        """Fit the cointegration transformer.
 
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Input dataframe with time series data
         """
-        if df.shape[1] < 2:
-            raise ValueError("Coint only works on multivarate series")
-        # might be helpful to add a fast test for correlation?
-        self.components_ = coint_johansen(df.values, self.det_order, self.k_ar_diff)
-        return self
+        try:
+            # Input validation
+            if df.shape[1] < 2:
+                self.failed_fit = True
+                return self
+
+            if df.shape[0] < self.min_periods:
+                self.failed_fit = True
+                return self
+
+            # Remove any infinite or extremely large values
+            df_clean = df.replace([np.inf, -np.inf], np.nan)
+            if df_clean.isnull().all().any():
+                self.failed_fit = True
+                return self
+
+            # Store metadata
+            self.original_columns = df.columns
+
+            # Determine number of components
+            n_vars = df.shape[1]
+            if self.n_components is None:
+                self.n_components = min(n_vars, self.max_components)
+            else:
+                self.n_components = min(self.n_components, n_vars, self.max_components)
+
+            self.n_features_out_ = self.n_components
+
+            # Compute mean for centering (use robust estimation for large datasets)
+            if df.shape[0] > self.chunk_size:
+                # Process in chunks for memory efficiency
+                chunk_means = []
+                chunk_sizes = []
+                for i in range(0, df.shape[0], self.chunk_size):
+                    chunk = df_clean.iloc[i : i + self.chunk_size]
+                    chunk_mean = chunk.mean()
+                    chunk_size = len(chunk)
+                    chunk_means.append(chunk_mean * chunk_size)
+                    chunk_sizes.append(chunk_size)
+
+                # Weighted average across chunks
+                total_size = sum(chunk_sizes)
+                self.mean_ = sum(chunk_means) / total_size
+            else:
+                self.mean_ = df_clean.mean()
+
+            self.mean_ = self.mean_.values
+
+            # Compute cointegration vectors
+            if self.method.lower() == 'cca':
+                components = self._compute_cointegration_cca(df_clean.values)
+            elif self.method.lower() == 'rrr':
+                components = self._compute_cointegration_rrr(df_clean.values)
+            else:
+                components = self._compute_cointegration_cca(df_clean.values)
+
+            if components is None:
+                self.failed_fit = True
+                return self
+            else:
+                self.components_ = components
+
+            # Ensure components have the right shape
+            if self.components_.shape[0] != self.n_components:
+                self.components_ = self.components_[: self.n_components, :]
+
+            if self.components_.shape[1] != n_vars:
+                self.failed_fit = True
+                return self
+
+            return self
+
+        except Exception as e:
+            # Graceful failure - set failed flag
+            self.failed_fit = True
+            return self
 
     def transform(self, df):
-        """Return changed data.
+        """Transform the data using cointegration vectors.
 
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Input dataframe to transform
+
+        Returns:
+            pandas.DataFrame: Transformed dataframe with cointegration features
         """
-        return pd.DataFrame(
-            np.matmul(self.components_, (df.values).T).T,
-            index=df.index,
-            columns=df.columns,
-        )
+        try:
+            if self.failed_fit or self.components_ is None:
+                # Return a dummy transformation to avoid breaking the pipeline
+                n_cols = min(df.shape[1], self.max_components)
+                return df.iloc[:, :n_cols].copy()
+
+            # Center the data
+            X_centered = df.values - self.mean_
+
+            # Apply cointegration transformation
+            transformed = X_centered @ self.components_.T
+
+            # Create column names
+            col_names = [f"coint_{i}" for i in range(self.n_components)]
+
+            return pd.DataFrame(transformed, index=df.index, columns=col_names)
+
+        except Exception as e:
+            # Graceful fallback
+            n_cols = min(df.shape[1], self.max_components)
+            return df.iloc[:, :n_cols].copy()
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
-        """Return data to original space.
+        """Inverse transform from cointegration space back to original space.
 
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Transformed dataframe to inverse transform
+            trans_method (str): Not used, kept for compatibility
+
+        Returns:
+            pandas.DataFrame: DataFrame in original feature space
         """
-        return pd.DataFrame(
-            # np.dot(np.linalg.pinv(df), self.components_),
-            np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
-            # np.linalg.solve(self.components_, df.T).T,
-            index=df.index,
-            columns=df.columns,
-        ).astype(float)
+        try:
+            if self.failed_fit or self.components_ is None:
+                # Return data as-is if fit failed
+                return df
+
+            # Use pseudoinverse for numerical stability
+            try:
+                components_pinv = np.linalg.pinv(self.components_)
+            except:
+                # Fallback to least squares
+                components_pinv = np.linalg.lstsq(
+                    self.components_.T, np.eye(self.components_.shape[0]), rcond=None
+                )[0].T
+
+            # Transform back to original space
+            X_reconstructed = df.values @ components_pinv.T
+
+            # Add back the mean
+            X_reconstructed += self.mean_
+
+            return pd.DataFrame(
+                X_reconstructed, index=df.index, columns=self.original_columns
+            )
+
+        except Exception as e:
+            # Graceful fallback - return input as-is
+            return df
 
     def fit_transform(self, df):
-        """Fits and Returns *Magical* DataFrame.
+        """Fit and transform the data.
 
         Args:
-            df (pandas.DataFrame): input dataframe
+            df (pandas.DataFrame): Input dataframe
+
+        Returns:
+            pandas.DataFrame: Transformed dataframe
         """
         return self.fit(df).transform(df)
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        """Generate new random parameters"""
-        return {
-            "det_order": random.choice([-1, 0, 1]),
-            "k_ar_diff": random.choice([0, 1, 2]),
+        """Generate new random parameters for the transformer."""
+        import random
+
+        params = {
+            "n_components": random.choice([None, 2, 3, 5, 8]),
+            "max_components": random.choice([5, 10, 15, 20]),
+            "shrinkage": random.choice([1e-6, 1e-5, 1e-4, 1e-3, 1e-2]),
+            "method": random.choice(["cca", "rrr"]),
+            "min_periods": random.choice([10, 15, 20, 30]),
         }
+
+        return params
 
 
 class BTCD(EmptyTransformer):
@@ -2832,6 +3181,7 @@ class AlignLastValue(EmptyTransformer):
         method (str): 'additive', 'multiplicative'
         strength (float): softening parameter [0, 1], 1.0 for full difference
         threshold (float): if below this threshold then the shift is not applied
+        mean_type (str): "arithmetic" or "geometric" - type of mean to compute for centering
     """
 
     def __init__(
@@ -2843,6 +3193,7 @@ class AlignLastValue(EmptyTransformer):
         first_value_only: bool = False,
         threshold: int = None,
         threshold_method: str = "max",
+        mean_type: str = "arithmetic",
         **kwargs,
     ):
         super().__init__(name="AlignLastValue")
@@ -2854,6 +3205,7 @@ class AlignLastValue(EmptyTransformer):
         self.adjustment = None
         self.threshold = threshold
         self.threshold_method = threshold_method
+        self.mean_type = mean_type
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2871,6 +3223,7 @@ class AlignLastValue(EmptyTransformer):
             'first_value_only': random.choices([True, False], [0.1, 0.9])[0],
             "threshold": random.choices([None, 1, 3, 10], [0.8, 0.9, 0.2, 0.9])[0],
             "threshold_method": random.choices(['max', 'mean'], [0.5, 0.5])[0],
+            "mean_type": random.choices(["arithmetic", "geometric"], [0.95, 0.05])[0],
         }
 
     def fit(self, df):
@@ -2883,9 +3236,11 @@ class AlignLastValue(EmptyTransformer):
             self.rows = df.shape[0]
         # fill NaN if present (up to a limit for slight speedup)
         if np.isnan(np.sum(np.array(df)[-50:])):
-            self.center = self.find_centerpoint(df.ffill(axis=0), self.rows, self.lag)
+            self.center = self.find_centerpoint(
+                df.ffill(axis=0), self.rows, self.lag, self.mean_type
+            )
         else:
-            self.center = self.find_centerpoint(df, self.rows, self.lag)
+            self.center = self.find_centerpoint(df, self.rows, self.lag, self.mean_type)
         if self.threshold is not None:
             if self.method == "multiplicative":
                 if self.threshold_method == "max":
@@ -2900,7 +3255,7 @@ class AlignLastValue(EmptyTransformer):
         return self
 
     @staticmethod
-    def find_centerpoint(df, rows, lag):
+    def find_centerpoint(df, rows, lag, mean_type="arithmetic"):
         if rows <= 1:
             if lag > 1:
                 center = df.iloc[-lag, :]
@@ -2908,9 +3263,24 @@ class AlignLastValue(EmptyTransformer):
                 center = df.iloc[-1, :]
         else:
             if lag > 1:
-                center = df.iloc[-(lag + rows - 1) : -(lag - 1), :].mean()
+                df_slice = df.iloc[-(lag + rows - 1) : -(lag - 1), :]
             else:
-                center = df.tail(rows).mean()
+                df_slice = df.tail(rows)
+
+            if mean_type == "geometric":
+                # Vectorized geometric mean
+                df_pos = df_slice.copy()
+                df_pos[df_pos <= 0] = np.nan
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    log_vals = np.log(df_pos)
+                    center = np.exp(np.nanmean(log_vals, axis=0))
+                # Fallback to arithmetic mean for columns with all non-positive values
+                center = pd.Series(center, index=df.columns)
+                nan_mask = center.isna()
+                if nan_mask.any():
+                    center[nan_mask] = df_slice.loc[:, nan_mask].mean(axis=0)
+            else:
+                center = df_slice.mean()
         return center
 
     def transform(self, df):
@@ -3071,9 +3441,14 @@ class AnomalyRemoval(EmptyTransformer):
         return self
 
     def transform(self, df):
-        df2 = df[self.anomalies != -1]
         if self.fillna is not None:
+            # Set anomalies to NaN, then fill them
+            df2 = df.copy()
+            df2[self.anomalies == -1] = np.nan
             df2 = FillNA(df2, method=self.fillna, window=10)
+        else:
+            # Remove anomaly rows only if no fillna method specified
+            df2 = df[self.anomalies != -1]
         return df2
 
     def fit_transform(self, df):
@@ -3082,47 +3457,15 @@ class AnomalyRemoval(EmptyTransformer):
 
     def fit_anomaly_classifier(self):
         """Fit a model to predict if a score is an anomaly."""
-        # Using DecisionTree as it should almost handle nonparametric anomalies
-        from sklearn.tree import DecisionTreeClassifier
-
-        scores_flat = self.scores.melt(var_name='series', value_name="value")
-        categor = pd.Categorical(scores_flat['series'])
-        self.score_categories = categor.categories
-        scores_flat['series'] = categor
-        scores_flat = pd.concat(
-            [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']],
-            axis=1,
+        self.anomaly_classifier, self.score_categories = fit_anomaly_classifier(
+            self.anomalies, self.scores
         )
-        anomalies_flat = self.anomalies.melt(var_name='series', value_name="value")
-        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
-            scores_flat, anomalies_flat['value']
-        )
-        # anomaly_classifier.score(scores_flat, anomalies_flat['value'])
 
     def score_to_anomaly(self, scores):
         """A DecisionTree model, used as models are nonstandard (and nonparametric)."""
         if self.anomaly_classifier is None:
             self.fit_anomaly_classifier()
-        scores.index.name = 'date'
-        scores_flat = scores.reset_index(drop=False).melt(
-            id_vars="date", var_name='series', value_name="value"
-        )
-        scores_flat['series'] = pd.Categorical(
-            scores_flat['series'], categories=self.score_categories
-        )
-        res = self.anomaly_classifier.predict(
-            pd.concat(
-                [
-                    pd.get_dummies(scores_flat['series'], dtype=float),
-                    scores_flat['value'],
-                ],
-                axis=1,
-            )
-        )
-        res = pd.concat(
-            [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
-        ).pivot_table(index='date', columns='series', values="value")
-        return res[scores.columns]
+        return score_to_anomaly(scores, self.anomaly_classifier, self.score_categories)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         if self.on_inverse:
@@ -3135,15 +3478,24 @@ class AnomalyRemoval(EmptyTransformer):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(
-                transformer_list="scalable", transformer_max_depth=2
+                transformer_list="scalable",
+                transformer_max_depth=2,
+                exclude_fillna=['fake_date'],
             )
 
         return {
             "method": method_choice,
             "method_params": method_params,
             "fillna": random.choices(
-                [None, "ffill", "mean", "rolling_mean_24", "linear", "fake_date"],
-                [0.01, 0.39, 0.1, 0.3, 0.15, 0.05],
+                [
+                    None,
+                    "ffill",
+                    "mean",
+                    "rolling_mean_24",
+                    "linear",
+                    "seasonal_linear_window_3",
+                ],
+                [0.01, 0.44, 0.1, 0.3, 0.15, 0.01],
             )[0],
             "transform_dict": transform_dict,
             "isolated_only": random.choices([True, False], [0.2, 0.8])[0],
@@ -3286,13 +3638,15 @@ class HolidayTransformer(EmptyTransformer):
             df2 = FillNA(df2, method=self.fillna, window=10)
 
         if self.impact == "datepart_regression":
-            self.holidays = self.dates_to_holidays(df.index, style='flag')
+            self.holidays = self.dates_to_holidays(df2.index, style='flag')
             self.regression_model = DatepartRegression(**self.regression_params)
             return self.regression_model.fit_transform(
                 df2, regressor=self.holidays.astype(float)
             )
         if self.impact == "regression":
-            self.holidays = self.dates_to_holidays(df.index, style='flag').clip(upper=1)
+            self.holidays = self.dates_to_holidays(df2.index, style='flag').clip(
+                upper=1
+            )
             self.holidays['intercept'] = 1
             weights = (np.arange(df2.shape[0]) ** 0.6)[..., None]
             self.model_coef = np.linalg.lstsq(
@@ -3301,14 +3655,14 @@ class HolidayTransformer(EmptyTransformer):
             return df2 - np.dot(self.holidays.iloc[:, 0:-1], self.model_coef[0:-1])
         elif self.impact == "median_value":
             holidays = self.dates_to_holidays(
-                df.index, style='impact', holiday_impacts="value"
+                df2.index, style='impact', holiday_impacts="value"
             )
             self.medians = df2.median()
             holidays = holidays.where(holidays == 0, holidays - self.medians)
             return df2 - holidays
         elif self.impact == "anomaly_score":
             holidays = self.dates_to_holidays(
-                df.index, style='impact', holiday_impacts="anomaly_score"
+                df2.index, style='impact', holiday_impacts="anomaly_score"
             )
             self.medians = self.anomaly_model.scores.median().fillna(1)
             return df2 * (holidays / self.medians).replace(0.0, 1.0)
@@ -3917,12 +4271,29 @@ class RegressionFilter(EmptyTransformer):
 
 
 class LevelShiftMagic(EmptyTransformer):
-    """Detects and corrects for level shifts. May seriously alter trend.
+    """Detects and corrects for level shifts. May seriously skew trend.
+
+    May look small, but is probably one of my most important contributions to time series tooling (so say I, Colin)
 
     Args:
-        method (str): "clip" or "remove"
-        std_threshold (float): number of std devs from mean to call an outlier
-        fillna (str): fillna method to use per tools.impute.FillNA
+        window_size (int): size of rolling window for detection
+        alpha (float): threshold multiplier for standard deviation
+        grouping_forward_limit (int): number of periods to group nearby shifts
+        max_level_shifts (int): maximum number of level shifts to detect
+        alignment (str): method for aligning level shift magnitudes
+        output (str): 'multivariate' (default, each series independent) or 'univariate'
+            (detect shared level shifts across series)
+        remove_at_shift (bool): if True, remove data points at detected level shifts and fill gaps
+        shift_remove_window (int): number of points to remove on each side of shift point (0, 1, or 2)
+        shift_fillna (str): fillna method to use for gaps created by shift removal
+        window_method (str): method for comparing forward and backward rolling windows
+            - "overlap" (default): both windows include current point i, then subtract means
+              backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward
+            - "exclusive": windows exclude current point with 1-point gap, then subtract means
+              backward=[i-N to i-1], forward=[i+1 to i+N], compare: rolling - rolling_forward
+            - "diff_overlap": diff data first, then overlapping windows, detect when BOTH exceed threshold
+              Apply diff first, then backward=[i-N+1 to i], forward=[i to i+N-1]
+              Point i is a shift if BOTH rolling and rolling_forward independently exceed threshold in same direction
     """
 
     def __init__(
@@ -3932,7 +4303,11 @@ class LevelShiftMagic(EmptyTransformer):
         grouping_forward_limit: int = 3,
         max_level_shifts: int = 20,
         alignment: str = "average",
-        old_way: bool = False,
+        output: str = "multivariate",
+        remove_at_shift: bool = False,
+        shift_remove_window: int = 0,
+        shift_fillna: str = "linear",
+        window_method: str = "overlap",
         **kwargs,
     ):
         super().__init__(name="LevelShiftMagic")
@@ -3941,14 +4316,31 @@ class LevelShiftMagic(EmptyTransformer):
         self.grouping_forward_limit = grouping_forward_limit
         self.max_level_shifts = max_level_shifts
         self.alignment = alignment
-        self.old_way = old_way
+        self.output = output
+        self.remove_at_shift = remove_at_shift
+        self.shift_remove_window = shift_remove_window
+        self.shift_fillna = shift_fillna
+        self.window_method = window_method
+
+        if output not in ['multivariate', 'univariate']:
+            raise ValueError(
+                f"output must be 'multivariate' or 'univariate', got '{output}'"
+            )
+        if shift_remove_window not in [0, 1, 2]:
+            raise ValueError(
+                f"shift_remove_window must be 0, 1, or 2, got {shift_remove_window}"
+            )
+        if window_method not in ['overlap', 'exclusive', 'diff_overlap']:
+            raise ValueError(
+                f"window_method must be 'overlap', 'exclusive', or 'diff_overlap', got '{window_method}'"
+            )
 
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
             "window_size": random.choices(
-                [4, 7, 14, 30, 70, 90, 120, 364],
-                [0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1],
+                [3, 4, 7, 14, 30, 70, 90, 120, 364],
+                [0.03, 0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1],
                 k=1,
             )[0],
             "alpha": random.choices(
@@ -3970,6 +4362,16 @@ class LevelShiftMagic(EmptyTransformer):
                 ],
                 [0.5, 0.2, 0.15, 0.25, 0.05],
             )[0],
+            "output": random.choices(['multivariate', 'univariate'], [0.8, 0.2])[0],
+            "remove_at_shift": random.choices([True, False], [0.4, 0.6])[0],
+            "shift_remove_window": random.choice([0, 1, 2]),
+            "shift_fillna": random.choices(
+                ['linear', 'ffill', 'mean', 'cubic', 'quadratic', "seasonal_linear"],
+                [0.4, 0.2, 0.1, 0.2, 0.1, 0.01],
+            )[0],
+            "window_method": random.choices(
+                ["overlap", "exclusive", "diff_overlap"], [0.6, 0.2, 0.2]
+            )[0],
         }
 
     def fit(self, df):
@@ -3978,29 +4380,111 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
-        # pandas 1.1.0 introduction, or thereabouts
-        try:
-            indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                window_size=self.window_size
+        if self.output == 'univariate':
+            self._fit_univariate(df)
+        else:
+            self._fit_multivariate(df)
+        return self
+
+    def _fit_multivariate(self, df):
+        """Fit multivariate mode - each series analyzed independently."""
+        if self.window_method == "diff_overlap":
+            # Diff overlap mode: diff data first, then check if BOTH rolling windows exceed threshold
+            # the idea is that average of diffs over a window will exclude short anomalies (up and down cancel out) leaving level shifts, shorter windows generally here
+            # works best on level shifts that occur suddenly on a single period, and after anomaly removal
+            df_diff = df.diff()
+            # Overlap windows on the diffed data: both include current point i
+            rolling = df_diff.rolling(
+                self.window_size, center=False, min_periods=1
+            ).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = df_diff.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    df_diff.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            # Calculate thresholds for both rolling windows independently
+            # could consider adjusting this with degrees of freedom accounting for the window size
+            threshold_back = rolling.std() * self.alpha
+            threshold_fwd = rolling_forward.std() * self.alpha
+
+            # Check if both exceed threshold in the same direction (both positive or both negative)
+            back_exceeds_pos = rolling > threshold_back
+            fwd_exceeds_pos = rolling_forward > threshold_fwd
+            back_exceeds_neg = rolling < -threshold_back
+            fwd_exceeds_neg = rolling_forward < -threshold_fwd
+
+            # Point is a shift if BOTH windows exceed threshold in same direction
+            diff_mask_0 = (back_exceeds_pos & fwd_exceeds_pos) | (
+                back_exceeds_neg & fwd_exceeds_neg
             )
-            rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
-        except Exception:
-            rolling_forward = (
-                df.loc[::-1]
+
+            # For alignment calculation later, use the average of the two rolling means
+            diff = (rolling + rolling_forward) / 2
+            diff_abs = diff.abs()
+        elif self.window_method == "exclusive":
+            # Exclusive mode: backward window ends at i-1, forward starts at i+1
+            # backward window: [i-N to i-1], forward window: [i+1 to i+N]
+            rolling = (
+                df.shift(1)
                 .rolling(self.window_size, center=False, min_periods=1)
-                .mean()[::-1]
+                .mean()
             )
-        # compare rolling forward and backwards diffs
-        diff = rolling - rolling_forward
-        threshold = diff.std() * self.alpha
-        diff_abs = diff.abs()
-        diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = (
+                    df.shift(-1).rolling(window=indexer, min_periods=1).mean()
+                )
+            except Exception:
+                rolling_forward = (
+                    df.shift(-1)
+                    .loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            # compare rolling forward and backwards diffs
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
+        else:  # "overlap" (default)
+            # Overlap mode: both windows include current point i
+            # backward window: [i-N+1 to i], forward window: [i to i+N-1]
+            rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
+            # pandas 1.1.0 introduction, or thereabouts
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    df.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            # compare rolling forward and backwards diffs
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
+
         # merge nearby groups
         diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
             limit=self.grouping_forward_limit
         )
-        diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+        # For diff_overlap, we use the mask directly; for others, apply threshold to smoothed values
+        if self.window_method == "diff_overlap":
+            diff_mask = diff_mask_0  # Already a boolean mask
+        else:
+            diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
         # the max of each changepoint group is the chosen changepoint of the level shift
         # doesn't handle identical maxes although that is unlikely with these floating point averages
         maxes = diff_abs.where(diff_mask, np.nan).max()
@@ -4012,62 +4496,81 @@ class LevelShiftMagic(EmptyTransformer):
         )
         group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
         max_mask = diff_abs == maxes
-        if not self.old_way:
-            # new way is from  gpt o1-preview which thought that the old way was leading to
-            # errors when doing the mean of the group ids
-            # I am too sleepy to be convinced for sure
-            # but this is undeniably faster, and still passes the previous unittest
-            # yielding only some (more) level shifts on a few edge cases it seems
-            group_ids_np = group_ids.to_numpy()
-            diff_abs_np = diff_abs.to_numpy()
-            diff_mask_np = diff_mask.to_numpy()
-            max_mask_np = max_mask.to_numpy()
 
-            # Initialize curr_diff_np
-            used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+        # Progressively identify level shifts up to max_level_shifts
+        group_ids_np = group_ids.to_numpy()
+        diff_abs_np = diff_abs.to_numpy()
+        diff_mask_np = diff_mask.to_numpy()
+        max_mask_np = max_mask.to_numpy()
+
+        # Initialize curr_diff_np
+        used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+        used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+        used_groups_unique = np.unique(used_groups_flat)
+        curr_diff_np = np.where(
+            (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
+            diff_abs_np,
+            np.nan,
+        )
+        curr_diff_sum = np.nansum(curr_diff_np)
+        count = 0
+
+        while curr_diff_sum != 0 and count < self.max_level_shifts:
+            curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
+            mask = curr_diff_np == curr_maxes_np
+            max_mask_np |= mask
+            used_groups_np = np.where(mask, group_ids_np, np.nan)
             used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
             used_groups_unique = np.unique(used_groups_flat)
-            curr_diff_np = np.where(
-                (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
-                diff_abs_np,
-                np.nan,
-            )
-            curr_diff_sum = np.nansum(curr_diff_np)
-            count = 0
+            mask_to_update = np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+            curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
+            curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
+            count += 1
 
-            while curr_diff_sum != 0 and count < self.max_level_shifts:
-                curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
-                mask = curr_diff_np == curr_maxes_np
-                max_mask_np |= mask
-                used_groups_np = np.where(mask, group_ids_np, np.nan)
-                used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
-                used_groups_unique = np.unique(used_groups_flat)
-                mask_to_update = (
-                    np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+        # Convert back to DataFrame for shift mask storage
+        max_mask = pd.DataFrame(max_mask_np, index=df.index, columns=df.columns)
+
+        # Store the shift mask for later use in transform
+        self.shift_mask_ = max_mask.copy()
+
+        # If remove_at_shift is enabled, create an expanded mask and apply fillna
+        if self.remove_at_shift:
+            # Expand the mask to include neighboring points
+            expanded_mask = max_mask.copy()
+            if self.shift_remove_window >= 1:
+                expanded_mask = expanded_mask | max_mask.shift(1).fillna(False).astype(
+                    bool
                 )
-                curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
-                curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
-                count += 1
+                expanded_mask = expanded_mask | max_mask.shift(-1).fillna(False).astype(
+                    bool
+                )
+            if self.shift_remove_window >= 2:
+                expanded_mask = expanded_mask | max_mask.shift(2).fillna(False).astype(
+                    bool
+                )
+                expanded_mask = expanded_mask | max_mask.shift(-2).fillna(False).astype(
+                    bool
+                )
+
+            # Create a copy of df with NaN at shift points
+            df_with_gaps = df.copy()
+            df_with_gaps[expanded_mask] = np.nan
+
+            # Fill the gaps using FillNA
+            df_filled = FillNA(df_with_gaps, method=self.shift_fillna, window=10)
+
+            # Use the filled data for alignment calculation
+            df_for_alignment = df_filled
         else:
-            self.used_groups = group_ids[max_mask].mean()
-            curr_diff = diff_abs.where(
-                ((group_ids != self.used_groups) & diff_mask), np.nan
-            )
-            curr_diff_sum = np.nansum(curr_diff.to_numpy())
-            count = 0
-            while curr_diff_sum != 0 and count < self.max_level_shifts:
-                curr_maxes = curr_diff.max()
-                max_mask = max_mask | (curr_diff == curr_maxes)
-                used_groups = group_ids[curr_diff == curr_maxes].mean()
-                curr_diff = curr_diff.where(
-                    ((group_ids != used_groups) & diff_mask), np.nan
-                )
-                curr_diff_sum = np.sum(~curr_diff.isnull().to_numpy())
-                count += 1
+            df_for_alignment = df
+
         # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
         if self.alignment == "last_value":
             self.lvlshft = (
-                (df[max_mask] - df[max_mask.shift(1)].shift(-1))
+                (
+                    df_for_alignment[max_mask]
+                    - df_for_alignment[max_mask.shift(1)].shift(-1)
+                )
                 .fillna(0)
                 .loc[::-1]
                 .cumsum()[::-1]
@@ -4075,7 +4578,10 @@ class LevelShiftMagic(EmptyTransformer):
         elif self.alignment == "average":
             # average the two other approaches
             lvlshft1 = (
-                (df[max_mask] - df[max_mask.shift(1)].shift(-1))
+                (
+                    df_for_alignment[max_mask]
+                    - df_for_alignment[max_mask.shift(1)].shift(-1)
+                )
                 .fillna(0)
                 .loc[::-1]
                 .cumsum()[::-1]
@@ -4115,6 +4621,266 @@ class LevelShiftMagic(EmptyTransformer):
         else:
             self.lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
 
+    def _fit_univariate(self, df):
+        """Fit univariate mode - detect level shifts common across series.
+
+        Strategy: Scale all series to comparable ranges, detect shifts on the
+        average signal, then apply shifts back to original scales.
+        """
+        # Store original data info for unscaling
+        self.series_mean_ = df.mean(axis=0)
+        self.series_std_ = df.std(axis=0).replace(0, 1)  # Avoid division by zero
+
+        # Standardize each series to make them comparable
+        df_scaled = (df - self.series_mean_) / self.series_std_
+
+        # Create aggregate signal (mean across all standardized series)
+        agg_signal = df_scaled.mean(axis=1)
+
+        # Convert to DataFrame for rolling operations
+        agg_df = pd.DataFrame(agg_signal, columns=['aggregate'], index=df.index)
+
+        # Detect level shifts on the aggregate signal
+        if self.window_method == "diff_overlap":
+            # Diff overlap mode: diff data first, then check if BOTH rolling windows exceed threshold
+            agg_df_diff = agg_df.diff()
+            # Overlap windows on the diffed data
+            rolling = agg_df_diff.rolling(
+                self.window_size, center=False, min_periods=1
+            ).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = agg_df_diff.rolling(
+                    window=indexer, min_periods=1
+                ).mean()
+            except Exception:
+                rolling_forward = (
+                    agg_df_diff.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            # Calculate thresholds for both rolling windows independently
+            threshold_back = rolling.std() * self.alpha
+            threshold_fwd = rolling_forward.std() * self.alpha
+
+            # Check if both exceed threshold in the same direction
+            back_exceeds_pos = rolling > threshold_back
+            fwd_exceeds_pos = rolling_forward > threshold_fwd
+            back_exceeds_neg = rolling < -threshold_back
+            fwd_exceeds_neg = rolling_forward < -threshold_fwd
+
+            # Point is a shift if BOTH windows exceed threshold in same direction
+            diff_mask_0 = (back_exceeds_pos & fwd_exceeds_pos) | (
+                back_exceeds_neg & fwd_exceeds_neg
+            )
+
+            # For alignment calculation later, use the average of the two rolling means
+            diff = (rolling + rolling_forward) / 2
+            diff_abs = diff.abs()
+        elif self.window_method == "exclusive":
+            # Exclusive mode: backward window ends at i-1, forward starts at i+1
+            rolling = (
+                agg_df.shift(1)
+                .rolling(self.window_size, center=False, min_periods=1)
+                .mean()
+            )
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = (
+                    agg_df.shift(-1).rolling(window=indexer, min_periods=1).mean()
+                )
+            except Exception:
+                rolling_forward = (
+                    agg_df.shift(-1)
+                    .loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold
+        else:  # "overlap" (default)
+            # Overlap mode: both windows include current point
+            rolling = agg_df.rolling(
+                self.window_size, center=False, min_periods=1
+            ).mean()
+            try:
+                indexer = pd.api.indexers.FixedForwardWindowIndexer(
+                    window_size=self.window_size
+                )
+                rolling_forward = agg_df.rolling(window=indexer, min_periods=1).mean()
+            except Exception:
+                rolling_forward = (
+                    agg_df.loc[::-1]
+                    .rolling(self.window_size, center=False, min_periods=1)
+                    .mean()[::-1]
+                )
+            diff = rolling - rolling_forward
+            threshold = diff.std() * self.alpha
+            diff_abs = diff.abs()
+            diff_mask_0 = diff_abs > threshold
+
+        # Merge nearby groups
+        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
+            limit=self.grouping_forward_limit
+        )
+        # For diff_overlap, we use the mask directly; for others, apply threshold to smoothed values
+        if self.window_method == "diff_overlap":
+            diff_mask = diff_mask_0  # Already a boolean mask
+        else:
+            diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+
+        # Find max of each group
+        maxes = diff_abs.where(diff_mask, np.nan).max()
+        range_arr = pd.DataFrame(
+            np.arange(len(agg_df)),
+            index=agg_df.index,
+            columns=agg_df.columns,
+        )
+        group_ids = range_arr[~diff_mask].ffill()
+        max_mask = diff_abs == maxes
+
+        # Progressively identify level shifts
+        max_mask_np = max_mask.to_numpy()
+        group_ids_np = group_ids.to_numpy()
+        diff_abs_np = diff_abs.to_numpy()
+        diff_mask_np = diff_mask.to_numpy()
+
+        used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
+        used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+        used_groups_unique = np.unique(used_groups_flat)
+        curr_diff_np = np.where(
+            (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
+            diff_abs_np,
+            np.nan,
+        )
+        curr_diff_sum = np.nansum(curr_diff_np)
+        count = 0
+
+        while curr_diff_sum != 0 and count < self.max_level_shifts:
+            curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
+            mask = curr_diff_np == curr_maxes_np
+            max_mask_np |= mask
+            used_groups_np = np.where(mask, group_ids_np, np.nan)
+            used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
+            used_groups_unique = np.unique(used_groups_flat)
+            mask_to_update = np.isin(group_ids_np, used_groups_unique) & diff_mask_np
+            curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
+            curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
+            count += 1
+
+        # Convert back to DataFrame mask
+        max_mask = pd.DataFrame(max_mask_np, index=agg_df.index, columns=agg_df.columns)
+
+        # Store the shift mask - broadcast to all series in univariate mode
+        self.shift_mask_ = pd.DataFrame(
+            np.broadcast_to(max_mask.values, (len(df), len(df.columns))),
+            index=df.index,
+            columns=df.columns,
+        )
+
+        # If remove_at_shift is enabled, create an expanded mask and apply fillna
+        if self.remove_at_shift:
+            # Expand the mask to include neighboring points
+            expanded_mask = max_mask.copy()
+            if self.shift_remove_window >= 1:
+                expanded_mask = expanded_mask | max_mask.shift(1).fillna(False).astype(
+                    bool
+                )
+                expanded_mask = expanded_mask | max_mask.shift(-1).fillna(False).astype(
+                    bool
+                )
+            if self.shift_remove_window >= 2:
+                expanded_mask = expanded_mask | max_mask.shift(2).fillna(False).astype(
+                    bool
+                )
+                expanded_mask = expanded_mask | max_mask.shift(-2).fillna(False).astype(
+                    bool
+                )
+
+            # Create a copy of agg_df with NaN at shift points
+            agg_df_with_gaps = agg_df.copy()
+            agg_df_with_gaps[expanded_mask] = np.nan
+
+            # Fill the gaps using FillNA
+            agg_df_filled = FillNA(
+                agg_df_with_gaps, method=self.shift_fillna, window=10
+            )
+
+            # Use the filled data for alignment calculation
+            agg_df_for_alignment = agg_df_filled
+        else:
+            agg_df_for_alignment = agg_df
+
+        # Calculate level shift magnitudes on aggregate
+        if self.alignment == "last_value":
+            agg_lvlshft = (
+                (
+                    agg_df_for_alignment[max_mask]
+                    - agg_df_for_alignment[max_mask.shift(1)].shift(-1)
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        elif self.alignment == "average":
+            lvlshft1 = (
+                (
+                    agg_df_for_alignment[max_mask]
+                    - agg_df_for_alignment[max_mask.shift(1)].shift(-1)
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+            lvlshft2 = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+            agg_lvlshft = (lvlshft1 + lvlshft2) / 2
+        elif self.alignment == "rolling_diff_3nn":
+            agg_lvlshft = (
+                (
+                    (
+                        diff[max_mask.shift(1)].shift(-1).fillna(0)
+                        + diff[max_mask]
+                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
+                    )
+                    / 3
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        elif self.alignment == "rolling_diff_5nn":
+            agg_lvlshft = (
+                (
+                    (
+                        diff[max_mask.shift(2)].shift(-2).fillna(0)
+                        + diff[max_mask.shift(1)].shift(-1).fillna(0)
+                        + diff[max_mask]
+                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
+                        + diff[max_mask.shift(-2)].shift(2).fillna(0)
+                    )
+                    / 5
+                )
+                .fillna(0)
+                .loc[::-1]
+                .cumsum()[::-1]
+            )
+        else:
+            agg_lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+
+        # Apply the same shift pattern to all series, scaled appropriately
+        # The shift magnitudes are in standardized units, convert back to original scale for each series
+        self.lvlshft = pd.DataFrame(index=df.index, columns=df.columns, dtype=float)
+
+        for col in df.columns:
+            # Scale the aggregate shift by this series' std deviation
+            self.lvlshft[col] = agg_lvlshft['aggregate'] * self.series_std_[col]
+
         return self
 
     def transform(self, df):
@@ -4123,6 +4889,36 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        # Apply shift removal and filling if enabled
+        if self.remove_at_shift and hasattr(self, 'shift_mask_'):
+            # Expand the mask to include neighboring points
+            expanded_mask = (
+                self.shift_mask_.reindex(index=df.index, columns=df.columns)
+                .fillna(False)
+                .astype(bool)
+            )
+            if self.shift_remove_window >= 1:
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(
+                    index=df.index, columns=df.columns
+                ).shift(1).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(
+                    index=df.index, columns=df.columns
+                ).shift(-1).fillna(False).astype(bool)
+            if self.shift_remove_window >= 2:
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(
+                    index=df.index, columns=df.columns
+                ).shift(2).fillna(False).astype(bool)
+                expanded_mask = expanded_mask | self.shift_mask_.reindex(
+                    index=df.index, columns=df.columns
+                ).shift(-2).fillna(False).astype(bool)
+
+            # Create a copy of df with NaN at shift points
+            df_with_gaps = df.copy()
+            df_with_gaps[expanded_mask] = np.nan
+
+            # Fill the gaps using FillNA
+            df = FillNA(df_with_gaps, method=self.shift_fillna, window=10)
+
         return df - self.lvlshft.reindex(
             index=df.index, columns=df.columns
         ).bfill().fillna(0)
@@ -4145,6 +4941,51 @@ class LevelShiftMagic(EmptyTransformer):
         """
         self.fit(df)
         return self.transform(df)
+
+    def extract_level_shift_dates(self, df=None):
+        """Extract detected level shift dates and magnitudes.
+
+        This utility method extracts the exact dates and magnitudes of detected
+        level shifts from the fitted lvlshft component by finding where the
+        cumulative shift changes (via diff).
+
+        Args:
+            df (pandas.DataFrame, optional): DataFrame with same index/columns as fitted data.
+                If None, uses the index from lvlshft.
+
+        Returns:
+            dict: Dictionary mapping column names to lists of dicts with keys:
+                - 'date': pd.Timestamp of the level shift
+                - 'magnitude': float magnitude of the shift
+
+        Example:
+            >>> lsm = LevelShiftMagic()
+            >>> lsm.fit(df)
+            >>> shifts = lsm.extract_level_shift_dates()
+            >>> shifts['series1']
+            [{'date': Timestamp('2020-01-15'), 'magnitude': 2.5}, ...]
+        """
+        if not hasattr(self, 'lvlshft'):
+            raise ValueError("Model must be fitted before extracting level shift dates")
+
+        lvlshft = self.lvlshft
+        if df is not None:
+            lvlshft = lvlshft.reindex(df.index, columns=df.columns).fillna(0.0)
+
+        # Find where the cumulative shift changes (these are the actual shift points)
+        diff = lvlshft.diff().fillna(0.0)
+
+        candidates = {}
+        for col in lvlshft.columns:
+            col_diff = diff[col]
+            entries = []
+            for date, magnitude in col_diff[col_diff != 0].items():
+                entries.append(
+                    {'date': pd.Timestamp(date), 'magnitude': float(magnitude)}
+                )
+            candidates[col] = entries
+
+        return candidates
 
 
 LevelShiftTransformer = LevelShiftMagic
@@ -4398,6 +5239,7 @@ class FFTDecomposition(EmptyTransformer):
         self.df_columns = df.columns
         self.df_index = df.index
         self.freq = infer_frequency(df)
+        # TODO: consider adding changepoint detrend to fft_class
         self.fft = fft_class(n_harm=self.n_harmonics, detrend=self.detrend)
         self.fft.fit(df.to_numpy())
         self.start_forecast_len = df.shape[0]
@@ -4488,6 +5330,14 @@ class ReplaceConstant(EmptyTransformer):
         self.fillna = fillna
         self.reintroduction_model = reintroduction_model
         self.n_jobs = n_jobs
+        self.dominant_threshold = kwargs.pop("dominant_threshold", 0.99)
+        self._dominant_columns = None
+        self._vectorized = False
+        self._weight_matrix = None
+        self._model_columns = []
+        self._probability_threshold = 0.5
+        self._column_batch_size = None
+        self.model = None
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -4495,28 +5345,100 @@ class ReplaceConstant(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        self.model = None
+        self._vectorized = False
+        self._weight_matrix = None
+        self._model_columns = []
+        self._probability_threshold = 0.5
+        self._column_batch_size = None
+        self._dominant_columns = None
+        filler = FillNA(
+            df.replace(self.constant, np.nan), method=self.fillna, window=10
+        )
         if self.reintroduction_model is None:
-            return FillNA(
-                df.replace(self.constant, np.nan), method=self.fillna, window=10
-            )
-        else:
-            # goal is for y to be 0 for constant and 1 for everything else
-            y = 1 - np.where(df != self.constant, 0, 1)
-            X = date_part(
-                df.index,
-                method=self.reintroduction_model.get(
-                    "datepart_method", "simple_binarized"
-                ),
-            )
-            if y.ndim < 2:
-                multioutput = False
-            elif y.shape[1] < 2:
-                multioutput = False
-            else:
-                multioutput = True
+            return filler
 
+        const_mask = df == self.constant
+        const_ratio = const_mask.sum(axis=0) / len(df)  # More efficient than mean
+        # store which columns are overwhelmingly constant to avoid model training
+        self._dominant_columns = const_ratio >= self.dominant_threshold
+        candidate_columns = const_ratio[
+            (const_ratio > 0) & (const_ratio < self.dominant_threshold)
+        ].index
+        if len(candidate_columns) == 0:
+            return filler
+
+        X = date_part(
+            df.index,
+            method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
+        )
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, index=df.index)
+        X = X.astype(np.float32, copy=False)
+        X_array = X.to_numpy(copy=False)
+
+        model_name = self.reintroduction_model.get("model", "SGD")
+        model_params = self.reintroduction_model.get("model_params", {}) or {}
+        vectorized_flag = self.reintroduction_model.get(
+            "vectorized",
+            self.reintroduction_model.get("method", "").lower() == "fast",
+        )
+        model_columns = list(candidate_columns)
+        if len(model_columns) == 0:
+            return filler
+
+        if model_name == "SGD" and vectorized_flag:
+            learning_rate = float(model_params.get("learning_rate", 0.1))
+            max_iter = int(model_params.get("max_iter", 5))
+            l2 = float(model_params.get("l2", 0.0))
+            self._probability_threshold = float(
+                model_params.get("probability_threshold", 0.5)
+            )
+            batch_size = int(model_params.get("column_batch_size", 256))
+            if batch_size <= 0:
+                batch_size = 256
+            self._column_batch_size = batch_size
+            self._vectorized = True
+            n_samples = X_array.shape[0]
+            bias = np.ones((n_samples, 1), dtype=np.float32)
+            X_aug = np.concatenate([X_array, bias], axis=1)
+            n_features_aug = X_aug.shape[1]
+            self._model_columns = model_columns
+            self._weight_matrix = np.zeros(
+                (n_features_aug, len(model_columns)), dtype=np.float32
+            )
+
+            # Pre-compute X_aug.T once
+            X_aug_T = X_aug.T
+
+            for start in range(0, len(model_columns), batch_size):
+                stop = min(start + batch_size, len(model_columns))
+                cols = model_columns[start:stop]
+                target_raw = df[cols].to_numpy(copy=False)
+                target = np.not_equal(target_raw, self.constant).astype(
+                    np.float32, copy=False
+                )
+                weights = np.zeros((n_features_aug, len(cols)), dtype=np.float32)
+                for _ in range(max_iter):
+                    logits = X_aug @ weights
+                    np.clip(logits, -20, 20, out=logits)
+                    preds = 1.0 / (1.0 + np.exp(-logits))
+                    error = preds - target
+                    gradient = (X_aug_T @ error) / n_samples
+                    if l2 > 0:
+                        gradient += l2 * weights
+                    weights -= learning_rate * gradient
+                self._weight_matrix[:, start:stop] = weights
+        else:
+            y = (df[model_columns] != self.constant).astype(int)
+            if y.shape[1] == 0:
+                return filler
+            multioutput = y.shape[1] > 1
             self.model = retrieve_classifier(
-                regression_model=self.reintroduction_model,
+                regression_model={
+                    "model": model_name,
+                    "model_params": dict(model_params),
+                },
                 verbose=0,
                 verbose_bool=False,
                 random_seed=2023,
@@ -4524,11 +5446,8 @@ class ReplaceConstant(EmptyTransformer):
                 n_jobs=self.n_jobs,
             )
             self.model.fit(X, y)
-            if False:
-                print(self.model.score(X, y))
-            return FillNA(
-                df.replace(self.constant, np.nan), method=self.fillna, window=10
-            )
+            self._model_columns = list(y.columns)
+        return filler
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -4555,20 +5474,86 @@ class ReplaceConstant(EmptyTransformer):
         """
         if self.reintroduction_model is None:
             return df
-        else:
-            X = date_part(
-                df.index,
-                method=self.reintroduction_model.get(
-                    "datepart_method", "simple_binarized"
-                ),
-            )
-            pred = pd.DataFrame(
-                self.model.predict(X), index=df.index, columns=df.columns
-            )
-            if self.constant == 0:
-                return df * pred
-            else:
-                return df.where(pred != 0, self.constant)
+        dominant = self._dominant_columns
+        has_vectorized_model = self._vectorized and self._weight_matrix is not None
+        has_sklearn_model = self.model is not None
+        if (not has_vectorized_model and not has_sklearn_model) and (
+            dominant is None or not dominant.any()
+        ):
+            return df
+
+        X = date_part(
+            df.index,
+            method=self.reintroduction_model.get("datepart_method", "simple_binarized"),
+        )
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, index=df.index)
+        X = X.astype(np.float32, copy=False)
+        X_array = X.to_numpy(copy=False)
+
+        # Start with original data, will modify in place
+        result = df.copy()
+
+        # Handle dominant columns (overwhelmingly constant)
+        if dominant is not None and dominant.any():
+            dominant_cols = dominant[dominant].index
+            # Only process columns that exist in the current dataframe
+            dominant_cols = [col for col in dominant_cols if col in df.columns]
+            if dominant_cols:
+                result[dominant_cols] = self.constant
+
+        # Handle model-predicted columns
+        if has_vectorized_model:
+            # Filter to only columns that exist in df
+            model_cols = [col for col in self._model_columns if col in df.columns]
+            if model_cols:
+                bias = np.ones((X_array.shape[0], 1), dtype=np.float32)
+                X_aug = np.concatenate([X_array, bias], axis=1)
+                batch_size = self._column_batch_size or len(model_cols)
+                threshold = self._probability_threshold
+
+                # Build mapping from model column name to index in weight matrix
+                col_to_idx = {col: idx for idx, col in enumerate(self._model_columns)}
+
+                for start in range(0, len(model_cols), batch_size):
+                    stop = min(start + batch_size, len(model_cols))
+                    cols = model_cols[start:stop]
+                    # Get the correct weight indices
+                    weight_indices = [col_to_idx[col] for col in cols]
+                    weights = self._weight_matrix[:, weight_indices]
+                    logits = X_aug @ weights
+                    np.clip(logits, -20, 20, out=logits)
+                    probs = 1.0 / (1.0 + np.exp(-logits))
+                    # pred == 0 means reintroduce constant, pred == 1 means keep value
+                    pred_matrix = (probs > threshold).astype(bool, copy=False)
+                    # Apply: where pred is False (< threshold), set to constant
+                    for i, col in enumerate(cols):
+                        result.loc[~pred_matrix[:, i], col] = self.constant
+
+        elif has_sklearn_model:
+            # Filter to only columns that exist in df
+            model_cols = [col for col in self._model_columns if col in df.columns]
+            if model_cols:
+                model_pred = self.model.predict(X)
+                if isinstance(model_pred, pd.DataFrame):
+                    pred_values = model_pred[model_cols].to_numpy(copy=False)
+                else:
+                    pred_values = np.asarray(model_pred, dtype=bool)
+                    if pred_values.ndim == 1:
+                        pred_values = pred_values.reshape(-1, 1)
+                    # If model was trained on more columns, subset
+                    if len(self._model_columns) != len(model_cols):
+                        col_to_idx = {
+                            col: idx for idx, col in enumerate(self._model_columns)
+                        }
+                        indices = [col_to_idx[col] for col in model_cols]
+                        pred_values = pred_values[:, indices]
+
+                # pred == 0 means reintroduce constant, pred == 1 means keep value
+                for i, col in enumerate(model_cols):
+                    result.loc[~pred_values[:, i].astype(bool), col] = self.constant
+
+        return result
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -4596,9 +5581,11 @@ class ReplaceConstant(EmptyTransformer):
                     'akima',
                     'mean',
                     'ffill',
-                    "SeasonalityMotifImputer1K",
+                    "seasonal_linear",
+                    "seasonal_linear_window_3",
+                    # "SeasonalityMotifImputer1K",
                 ],
-                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.0001],
+                [0.2, 0.3, 0.2, 0.2, 0.2, 0.2, 0.01, 0.01],
             )[0],
         }
 
@@ -4937,12 +5924,33 @@ class HistoricValues(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        # Handle edge cases
+        if df.empty:
+            self.df = df.copy()
+            return df
+
+        # Validate input
+        try:
+            # Ensure we have numeric data (convert if possible)
+            df_numeric = df.select_dtypes(include=[np.number])
+            if df_numeric.empty:
+                # Try to convert non-numeric columns
+                df_converted = df.apply(pd.to_numeric, errors='coerce')
+                if df_converted.isna().all().all():
+                    # If no numeric data can be extracted, store empty DataFrame
+                    self.df = pd.DataFrame(index=df.index[:0], columns=df.columns)
+                    return df
+                df_numeric = df_converted
+        except Exception:
+            # If conversion fails, store empty DataFrame as fallback
+            self.df = pd.DataFrame(index=df.index[:0], columns=df.columns)
+            return df
 
         # I am not sure a copy is necessary, but certainly is safer
         if self.window is None:
-            self.df = df
+            self.df = df_numeric.copy()
         else:
-            self.df = df.tail(self.window).copy()
+            self.df = df_numeric.tail(self.window).copy()
 
         return df
 
@@ -4952,7 +5960,15 @@ class HistoricValues(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self._fit(df)
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("Input must be a pandas DataFrame")
+
+        try:
+            self._fit(df)
+        except Exception as e:
+            # Provide more informative error message
+            raise Exception(f"HistoricValues failed to fit: {str(e)}") from e
+
         return self
 
     def transform(self, df):
@@ -4969,21 +5985,74 @@ class HistoricValues(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        # Handle edge cases gracefully
+        if df.empty:
+            return df.copy()
+
+        if not hasattr(self, 'df') or self.df is None or self.df.empty:
+            # If no fit data available, return unchanged
+            return df.copy()
+
+        # Check for dimension compatibility
+        forecast_cols = df.shape[1]
+        fitted_cols = self.df.shape[1]
+
+        if forecast_cols != fitted_cols:
+            # Handle dimension mismatch gracefully
+            if forecast_cols < fitted_cols:
+                # Use only the first N columns of fitted data
+                m_arr = np.asarray(self.df.iloc[:, :forecast_cols])
+            else:
+                # Repeat/extend fitted data columns to match forecast
+                # Take first column pattern and repeat as needed
+                fitted_data = self.df.values
+                repeats_needed = (forecast_cols + fitted_cols - 1) // fitted_cols
+                extended_data = np.tile(fitted_data, (1, repeats_needed))[
+                    :, :forecast_cols
+                ]
+                m_arr = extended_data
+        else:
+            m_arr = np.asarray(self.df)
+
+        # Handle NaN values in fitted data
+        if np.any(np.isnan(m_arr)):
+            # For NaN values, we'll skip the historic matching and return original values
+            return df.copy()
+
         # using loop because experience with vectorized has been high memory usage
         # also usually forecast length is relatively short
         result = []
-        m_arr = np.asarray(self.df)
-        for row in np.asarray(df):
-            # find the closest historic value and select those values
-            result.append(
-                m_arr[np.abs(m_arr - row).argmin(axis=0), range(df.shape[1])][
-                    ..., np.newaxis
-                ]
-            )
+        df_values = np.asarray(df)
 
-        return pd.DataFrame(
-            np.concatenate(result, axis=1).T, index=df.index, columns=df.columns
-        )
+        try:
+            for row in df_values:
+                # Handle NaN values in forecast data
+                if np.any(np.isnan(row)):
+                    # For rows with NaN, just return the original row
+                    result.append(row[..., np.newaxis])
+                else:
+                    # find the closest historic value and select those values
+                    result.append(
+                        m_arr[np.abs(m_arr - row).argmin(axis=0), range(len(row))][
+                            ..., np.newaxis
+                        ]
+                    )
+
+            if not result:
+                return df.copy()
+
+            final_result = np.concatenate(result, axis=1).T
+            return pd.DataFrame(final_result, index=df.index, columns=df.columns)
+
+        except Exception as e:
+            # If anything goes wrong, fall back to returning original data
+            # This ensures the transformer doesn't break the pipeline
+            import warnings
+
+            warnings.warn(
+                f"HistoricValues inverse_transform failed: {e}. Returning original data."
+            )
+            return df.copy()
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -5025,11 +6094,22 @@ def bkfilter_st(x, low=6, high=32, K=12, lanczos_factor=False):
 
 
 class BKBandpassFilter(EmptyTransformer):
-    """More complete implentation of Baxter King Bandpass Filter
+    """More complete implementation of Baxter King Bandpass Filter
     based off the successful but somewhat confusing statmodelsfilter transformer.
 
+    The filter extracts cyclical components in the frequency band [low, high].
+    Requires minimum data length of 2*K+1 to operate.
+
     Args:
-        window (int): or None, the most recent n history to use for alignment
+        low (int): Lower bound of the frequency band (in periods). Must be > 0 and < high.
+        high (int): Upper bound of the frequency band (in periods). Must be > low.
+        K (int): Number of filter coefficients on each side (window size = 2*K+1).
+                 Larger K provides better frequency resolution but requires more data.
+        lanczos_factor (bool): Whether to apply Lanczos sigma factors for improved filter characteristics.
+        return_diff (bool): If True, returns the detrended series (original - cycles).
+                           If False, returns only the cyclical component.
+        on_transform (bool): Whether to apply filtering during transform().
+        on_inverse (bool): Whether to apply filtering during inverse_transform().
     """
 
     def __init__(
@@ -5037,8 +6117,8 @@ class BKBandpassFilter(EmptyTransformer):
         low: int = 6,
         high: int = 32,
         K: int = 1,
-        lanczos_factor: int = False,
-        return_diff: int = True,
+        lanczos_factor: bool = False,
+        return_diff: bool = True,
         on_transform: bool = True,
         on_inverse: bool = False,
         **kwargs,
@@ -5071,6 +6151,28 @@ class BKBandpassFilter(EmptyTransformer):
         return self
 
     def filter(self, df):
+        """Apply the Baxter-King bandpass filter.
+
+        Args:
+            df (pandas.DataFrame): Input dataframe
+
+        Returns:
+            pandas.DataFrame: Filtered dataframe
+
+        Raises:
+            ValueError: If parameters are invalid or data is too short
+        """
+        # Validate parameters
+        if self.low <= 0:
+            raise ValueError(f"Parameter 'low' must be positive, got {self.low}")
+        if self.high <= self.low:
+            raise ValueError(
+                f"Parameter 'high' ({self.high}) must be greater than 'low' ({self.low})"
+            )
+        if self.K < 1:
+            raise ValueError(f"Parameter 'K' must be at least 1, got {self.K}")
+
+        # Apply the filter
         cycles = bkfilter_st(
             np.asarray(df),
             low=self.low,
@@ -5088,9 +6190,11 @@ class BKBandpassFilter(EmptyTransformer):
             return (df - cycles).ffill().bfill()
         else:
             # so the output is actually centered but using the tail axis for forecasting effectiveness
-            return pd.DataFrame(
+            # reindex to maintain same shape as input
+            cycles_df = pd.DataFrame(
                 cycles, columns=df.columns, index=df.index[-cycles.shape[0] :]
             )
+            return cycles_df.reindex(df.index, method='bfill')
 
     def transform(self, df):
         """Return changed data.
@@ -5706,15 +6810,29 @@ class ChangepointDetrend(Detrend):
 class MeanPercentSplitter(EmptyTransformer):
     """Splits data into rolling means and percentages. Designed to help with intermittent demand forecasting.
 
+    The transformer separates the level (rolling mean) from the relative magnitude (percentage).
+    This can help models better predict intermittent patterns by learning the baseline level
+    separately from the spikes/variations around that level.
+
+    For truly intermittent data with many zeros, the percentage becomes the actual value when
+    the rolling mean is zero, which preserves information but loses the percentage interpretation.
+    Consider using CenterSplit transformer for explicit zero-handling or ReplaceConstant for
+    more sophisticated intermittent demand modeling.
+
     Args:
         window (int or str): Rolling window size. If 'forecast_length', uses forecast_length as window.
         forecast_length (int): The forecast length to use if window == 'forecast_length'.
+        min_mean_threshold (float): Minimum mean value to avoid division issues. When rolling mean
+            is below this threshold, percentage will be set to the original value. Default 1e-10.
     """
 
-    def __init__(self, window=10, forecast_length=None, **kwargs):
+    def __init__(
+        self, window=10, forecast_length=None, min_mean_threshold=1e-10, **kwargs
+    ):
         super().__init__(name="MeanPercentSplitter")
         self.window = window
         self.forecast_length = forecast_length
+        self.min_mean_threshold = min_mean_threshold
 
     def fit(self, df):
         """Fit the transformer to the data.
@@ -5745,23 +6863,41 @@ class MeanPercentSplitter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): Input DataFrame with pd.DatetimeIndex.
         """
-        if self.window == "forecast_length":
-            window_size = self.forecast_length
-        else:
-            window_size = int(self.window)
+        # Use pre-computed window_size from fit()
+        rolling_means = df.rolling(window=self.window_size, min_periods=1).mean()
 
-        rolling_means = df.rolling(window=window_size, min_periods=1).mean()
-        percentages = df / rolling_means.replace(0, 1)
+        # Use .copy() to ensure we don't modify the original dataframe's memory
+        rolling_means_values = rolling_means.to_numpy().copy()
+        df_values = df.to_numpy().copy()
 
-        # Rename columns to distinguish between means and percentages
-        # the X in there is to try to assure uniqueness from input column names
+        # Calculate percentages, handling near-zero means more explicitly
+        # When mean is very small (below threshold), use a safe fallback
+        # This avoids extreme percentages while preserving information
+        with np.errstate(divide='ignore', invalid='ignore'):
+            percentages_values = np.where(
+                np.abs(rolling_means_values) >= self.min_mean_threshold,
+                df_values / rolling_means_values,
+                df_values,  # When mean ≈ 0, store actual value (essentially percentage of 1)
+            )
+
+        # Handle any remaining NaN or Inf values that might slip through
+        percentages_values = np.nan_to_num(
+            percentages_values, nan=1.0, posinf=1.0, neginf=1.0
+        )
+
+        # Create column names more efficiently
         mean_cols = [f"{col}_Xmean" for col in df.columns]
         percentage_cols = [f"{col}_Xpercentage" for col in df.columns]
 
-        rolling_means.columns = mean_cols
-        percentages.columns = percentage_cols
+        # Build result directly from numpy arrays to avoid intermediate DataFrames
+        all_cols = mean_cols + percentage_cols
+        result = pd.DataFrame(
+            np.column_stack([rolling_means_values, percentages_values]),
+            index=df.index,
+            columns=all_cols,
+        )
 
-        return pd.concat([rolling_means, percentages], axis=1)
+        return result
 
     def inverse_transform(self, df):
         """Inverse transform the data back to original space.
@@ -5769,13 +6905,15 @@ class MeanPercentSplitter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): Transformed DataFrame with rolling means and percentages.
         """
-        mean_cols = [f"{col}_Xmean" for col in self.columns]
-        percentage_cols = [f"{col}_Xpercentage" for col in self.columns]
+        # Extract values directly as numpy arrays to avoid intermediate DataFrame operations
+        # Use .copy() to ensure we don't modify the input dataframe's memory
+        n_cols = len(self.columns)
+        all_values = df.to_numpy().copy()
+        rolling_means_values = all_values[:, :n_cols]
+        percentages_values = all_values[:, n_cols:]
 
-        rolling_means = df[mean_cols]
-        percentages = df[percentage_cols]
-
-        original_values = rolling_means.to_numpy() * percentages.to_numpy()
+        # Direct multiplication on numpy arrays (creates a new array)
+        original_values = rolling_means_values * percentages_values
 
         original_df = pd.DataFrame(
             original_values, index=df.index, columns=self.columns
@@ -5790,15 +6928,17 @@ class MeanPercentSplitter(EmptyTransformer):
                 # so that the mean of the inverse transformed components for each time series is equal to that final rolling mean value.
 
                 # Compute mean of the inverse transformed components for each time series
-                mean_values = original_df.mean()
+                mean_values = original_values.mean(axis=0)
 
-                # Compute normalization factor
-                finale = rolling_means.iloc[-1, :]
-                finale.index = self.columns
-                normalization_factor = finale / mean_values.replace(0, 1)
+                # Compute normalization factor using the last row of rolling means
+                finale = rolling_means_values[-1, :]
+                # Avoid division by zero
+                normalization_factor = np.where(
+                    mean_values != 0, finale / mean_values, 1.0
+                )
 
                 # Multiply original_df by normalization_factor
-                original_df = original_df.multiply(normalization_factor, axis=1)
+                original_df = original_df * normalization_factor
 
         return original_df
 
@@ -5816,6 +6956,7 @@ class MeanPercentSplitter(EmptyTransformer):
         """Generate new random parameters"""
         params = {
             "window": random.choice([3, 7, 10, 24, "forecast_length"]),
+            "min_mean_threshold": random.choice([1e-10, 1e-6, 1e-3, 0.01, 0.1]),
         }
         return params
 
@@ -5865,6 +7006,7 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             raise ValueError("factor must be at least 1")
         self.mode = mode
         self.factor = factor
+        self.block_size = self.factor + 1
         self.down_method = down_method
         self.fill_method = fill_method
         self.forecast_length = forecast_length
@@ -5888,8 +7030,43 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
 
         # When upscaling: we will insert self.factor additional rows per original interval.
         # (factor + 1) points will now represent the same interval.
-        self.new_delta = self.orig_delta / (self.factor + 1)
+        self.new_delta = self.orig_delta / self.block_size
         return self
+
+    def _safe_fill_na(self, df, method='linear'):
+        """
+        Safely fill NA values with fallback strategies to prevent failures.
+
+        Args:
+            df (pandas.DataFrame): DataFrame with potential NA values
+            method (str): Interpolation method to try first
+
+        Returns:
+            pandas.DataFrame: DataFrame with filled values
+        """
+        try:
+            # Try the requested method first
+            result = FillNA(df, method=method)
+
+            # Verify the result is valid
+            if result.isnull().any().any():
+                # If still has NaNs, try fallback
+                result = FillNA(result, method='ffill')
+                if result.isnull().any().any():
+                    # Final fallback
+                    result = FillNA(result, method='zero')
+
+            return result
+        except Exception:
+            # If the requested method fails, use safer alternatives
+            try:
+                return FillNA(df, method='linear')
+            except Exception:
+                try:
+                    return FillNA(df, method='ffill')
+                except Exception:
+                    # Last resort - fill with zeros
+                    return FillNA(df, method='zero')
 
     def transform(self, df):
         """
@@ -5913,8 +7090,8 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
             new_index = self._create_upscaled_index(self.original_index, self.new_delta)
             # Reindex the original data to the new index. This introduces NaNs where data did not exist.
             df_up = df.reindex(new_index)
-            # Use the FillNA function to interpolate the missing rows.
-            df_up_filled = FillNA(df_up, method=self.fill_method)
+            # Use the FillNA function to interpolate the missing rows with fallback
+            df_up_filled = self._safe_fill_na(df_up, method=self.fill_method)
             # Save the new index so that inverse_transform() knows how to go back.
             self.transformed_index = new_index
             return df_up_filled
@@ -5922,23 +7099,40 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         elif self.mode == 'downscale':
             # In downscale mode, we expect the input df to be high-resolution.
             # Compute a downsampled index: select every (factor+1)-th timestamp from the original.
-            downsampled_index = self.original_index[:: (self.factor + 1)]
+            downsampled_index = self.original_index[:: self.block_size]
 
             if self.down_method == 'decimate':
                 # Simple decimation: select rows that exactly match the downsampled index.
-                df_down = df.loc[downsampled_index]
+                # Use intersection to handle missing indices gracefully
+                available_indices = df.index.intersection(downsampled_index)
+                if len(available_indices) == 0:
+                    raise ValueError("No matching indices found for decimation")
+                df_down = df.loc[available_indices]
+                # Reindex to full downsampled_index, filling gaps if needed
+                if len(available_indices) < len(downsampled_index):
+                    df_down = df_down.reindex(downsampled_index)
+                    df_down = self._safe_fill_na(df_down, method='ffill')
             elif self.down_method == 'mean':
                 # Aggregate blocks of (factor+1) rows using the mean.
                 # (If the number of rows isn’t exactly divisible, the trailing rows are dropped.)
                 arr = df.to_numpy()
                 n_rows = arr.shape[0]
-                block_size = self.factor + 1
+                block_size = self.block_size
                 n_complete_blocks = n_rows // block_size
+
+                if n_complete_blocks == 0:
+                    raise ValueError("Insufficient data for block aggregation")
+
                 arr = arr[: n_complete_blocks * block_size, :]
                 # Reshape so that each block is along axis 1.
                 arr_reshaped = arr.reshape(n_complete_blocks, block_size, -1)
-                # Compute the mean over each block (axis=1).
-                arr_down = arr_reshaped.mean(axis=1)
+                # Compute the mean over each block (axis=1) with error handling.
+                with np.errstate(all='raise'):
+                    try:
+                        arr_down = arr_reshaped.mean(axis=1)
+                    except (FloatingPointError, RuntimeWarning):
+                        # Fallback to nanmean if regular mean fails
+                        arr_down = np.nanmean(arr_reshaped, axis=1)
                 df_down = pd.DataFrame(
                     arr_down,
                     index=downsampled_index[:n_complete_blocks],
@@ -5973,36 +7167,51 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
 
         # Check if the training original timestamps are present in the input index.
         # (This is typically true for in-sample data but not for forecasts.)
-        if df.index.max() > self.original_index[-1]:
-            # Forecast scenario: generate a new index at the original frequency.
-            # We use the training anchor so that the new index remains aligned.
-            if self.mode == 'downscale':
+        try:
+            if df.index.max() > self.original_index[-1]:
+                # Forecast scenario: generate a new index at the original frequency.
+                # Start one original delta after the last training timestamp.
                 new_start = self.original_index[-1] + self.orig_delta
-                print(new_start)
+                if self.forecast_length is not None:
+                    periods = self.forecast_length
+                else:
+                    if self.mode == 'upscale':
+                        periods = int(np.ceil(len(df) / self.block_size))
+                    else:
+                        # In downscale mode, df is at reduced frequency, so we need
+                        # len(df) * block_size periods at original frequency
+                        periods = len(df) * self.block_size
+                    periods = max(periods, 1)
+                new_index = pd.date_range(
+                    start=new_start, periods=periods, freq=self.orig_delta
+                )
             else:
-                start_anchor = self.original_index[0]
-                offset = int(np.ceil((df.index[0] - start_anchor) / self.orig_delta))
-                new_start = start_anchor + offset * self.orig_delta
-            new_index = pd.date_range(
-                start=new_start, end=df.index[-1], freq=self.orig_delta
-            )
-        else:
-            trans_method = "original"
-            new_index = self.original_index
+                trans_method = "original"
+                new_index = self.original_index
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate target index: {e}")
 
         if self.mode == 'upscale':
             # For upscale mode, sample the high-resolution data to the new original frequency.
             # We use nearest neighbor selection.
-            df_inv = df.reindex(new_index, method='nearest')
-            return df_inv
+            try:
+                df_inv = df.reindex(new_index, method='nearest')
+                if self.forecast_length is not None and trans_method != "original":
+                    df_inv = df_inv.iloc[: self.forecast_length]
+                return df_inv
+            except Exception as e:
+                raise RuntimeError(f"Failed to inverse transform upscaled data: {e}")
 
         elif self.mode == 'downscale':
             # For downscale mode, upsample the low-resolution data to the new index and fill gaps.
-            df_up = df.reindex(new_index)
-            df_up_filled = FillNA(df_up, method=self.fill_method)
-            if self.forecast_length is not None and trans_method != "original":
-                df_up_filled = df_up_filled.head(self.forecast_length)
-            return df_up_filled
+            try:
+                df_up = df.reindex(new_index)
+                df_up_filled = self._safe_fill_na(df_up, method=self.fill_method)
+                if self.forecast_length is not None and trans_method != "original":
+                    df_up_filled = df_up_filled.head(self.forecast_length)
+                return df_up_filled
+            except Exception as e:
+                raise RuntimeError(f"Failed to inverse transform downscaled data: {e}")
 
     def _create_upscaled_index(self, original_index, new_delta):
         """
@@ -6019,19 +7228,34 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         Returns:
             pd.DatetimeIndex: The upscaled index.
         """
+        if len(original_index) < 2:
+            raise ValueError("Original index must have at least 2 timestamps")
+
         start = original_index[0]
         end = original_index[-1]
+
         # Total seconds between start and end
         total_seconds = (end - start).total_seconds()
         new_delta_seconds = new_delta.total_seconds()
         # Compute number of periods (ensure we include both endpoints)
         periods = int(np.floor(total_seconds / new_delta_seconds) + 1)
-        new_index = pd.date_range(
-            start=start, periods=periods, freq=pd.Timedelta(seconds=new_delta_seconds)
-        )
+        try:
+            new_index = pd.date_range(
+                start=start,
+                periods=periods,
+                freq=pd.Timedelta(seconds=new_delta_seconds),
+            )
+        except (OverflowError, ValueError) as e:
+            raise ValueError(f"Failed to create date range: {e}")
+
         # Guarantee that the original end timestamp is included
         if new_index[-1] < end:
-            new_index = new_index.append(pd.DatetimeIndex([end]))
+            try:
+                new_index = new_index.append(pd.DatetimeIndex([end]))
+            except Exception:
+                # Use union as fallback if append fails
+                new_index = new_index.union(pd.DatetimeIndex([end]))
+
         return new_index
 
     def fit_transform(self, df):
@@ -6058,54 +7282,518 @@ class UpscaleDownscaleTransformer(EmptyTransformer):
         Returns:
             dict: Dictionary of transformer parameters.
         """
+        mode = random.choice(["upscale", "downscale"])
+        if mode == "upscale":
+            factor = random.choice([1, 2])
+        else:
+            factor = random.choice([1, 2, 3, 4])
         params = {
-            "mode": random.choice(["upscale", "downscale"]),
-            "factor": random.choice([1, 2, 3, 4, 6]),
+            "mode": mode,
+            "factor": factor,
             "down_method": random.choice(["decimate", "mean"]),
-            "fill_method": random.choice(["linear", "cubic", "pchip", "akima"]),
+            "fill_method": random.choice(
+                ["linear", "nearest", "ffill", "pchip", "seasonal_linear"]
+            ),
         }
         return params
 
 
-class StandardScaler(EmptyTransformer):
-    def __init__(self):
-        self.means = None
-        self.stds = None
-        self.skip_columns = None
+class ReconciliationTransformer(EmptyTransformer):
+    """
+    A transformer that:
+      - Builds (or uses provided) hierarchical groupings of bottom-level columns.
+      - Fills NaN with 0 before computations.
+      - In transform(), aggregates bottom-level series into middle + top levels,
+        appending them as new columns.
+      - In inverse_transform(), reconciles forecasts (MinT or ERM) using either
+        historical or forecast-based covariance, with optional Ledoit-Wolf or manual shrink,
+        plus a small ridge to ensure numerical stability.
+      - Returns only the reconciled bottom-level columns.
 
-    def fit(self, df: pd.DataFrame):
-        """Compute the mean and standard deviation for each feature."""
-        self.means = df.mean()
-        self.stds = df.std(ddof=0).replace(
-            0, 1
-        )  # Use population standard deviation (ddof=0)
-        # Identify columns to skip (constant or zero std)
-        self.skip_columns = (
-            self.stds == 1
-        )  # 0 replace with 1, exact 1 unlikely in real data
+    Parameters
+    ----------
+    group_size : int
+        Number of bottom-level series to combine into one middle-level aggregator
+        if no hierarchy_map is provided.
+    hierarchy_map : dict or None
+        If provided, describes aggregator sums for top/middle levels. E.g.,
+          { "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }.
+        If None, automatically creates groups of size group_size plus a single "TOP".
+    reconciliation_params : dict
+        Dict of parameters for reconciliation. Structure:
+          - "method": str, one of ["mint", "erm", "volatility_mint", "iterative_mint",
+                                   "iterative_volatility_mint", "none"]. (default "mint")
+          - "cov_source": str, one of ["historical", "forecasts"]. (default "historical")
+          - "weighting": str, one of ["identity", "diagonal", "full"]. (default "diagonal")
+          - "shrinkage": float in [0,1], manual shrink to diagonal. (0 => none)
+          - "ledoit_wolf": bool => if True, use Ledoit-Wolf (default False)
+          - "ridge": float or None => if not None, adds ridge * I to W before inversion. (default 1e-9)
+          - "volatility_params": dict, parameters for volatility-weighted methods:
+            * "method": str, volatility computation ("variance", "std", "cv")
+            * "power": float, power for volatility weights (default 1.0)
+            * "mix": float in [0,1], mixing parameter for volatility weights (default 0.5)
+          - "iterative_params": dict, parameters for iterative methods:
+            * "max_iterations": int, maximum iterations (default 10)
+            * "convergence_threshold": float, convergence threshold (default 1e-6)
+            * "damping_factor": float in (0,1), damping factor for updates (default 0.7)
+    """
+
+    def __init__(
+        self,
+        group_size: int = 10,
+        hierarchy_map=None,
+        reconciliation_params=None,
+        max_memory=16,  # in GB
+    ):
+        super().__init__(name="ReconciliationTransformer")
+        self.group_size = group_size
+        self.hierarchy_map = hierarchy_map
+        self.max_memory = max_memory
+
+        # Default reconciliation params
+        default_recon = {
+            "method": "mint",  # "mint", "erm", "volatility_mint", "iterative_mint", "iterative_volatility_mint", or "none"
+            "cov_source": "historical",  # "historical" or "forecasts"
+            "weighting": "diagonal",  # "identity", "diagonal", "full"
+            "shrinkage": 0.02,  # manual linear shrink
+            "ledoit_wolf": False,  # if True, apply Ledoit-Wolf
+            "ridge": 1e-9,  # small ridge for numerical stability (None => no ridge)
+            # Parameters for volatility-weighted methods
+            "volatility_params": {
+                "method": "variance",  # "variance", "std", "cv"
+                "power": 1.0,  # power to raise volatility weights
+                "mix": 0.5,  # mixing parameter for volatility weights [0, 1]
+            },
+            # Parameters for iterative methods
+            "iterative_params": {
+                "max_iterations": 10,  # maximum iterations for iterative methods
+                "convergence_threshold": 1e-6,  # convergence threshold for iterative methods
+                "damping_factor": 0.7,  # damping factor for iterative weight updates
+            },
+        }
+        if reconciliation_params is None:
+            reconciliation_params = {}
+
+        self.reconciliation_params = {**default_recon, **reconciliation_params}
+
+        self.bottom_level_cols_ = None
+        self.all_level_cols_ = None
+        self.agg_matrix_ = (
+            None  # The S matrix for the hierarchy: shape (n_levels_, n_bottom_)
+        )
+        self.n_bottom_ = None
+        self.n_levels_ = None
+        self.col_index_map_ = None
+        self.fitted_ = False
+
+        # We'll store historical covariance of bottom-level data
+        self.cov_bottom_ = None  # shape (n_bottom_, n_bottom_)
+
+    def fit(self, df: pd.DataFrame) -> "ReconciliationTransformer":
+        """
+        - Fills NaNs with 0.
+        - Builds aggregator matrix S based on bottom-level columns + hierarchy map.
+        - Estimates bottom-level historical covariance for future use.
+
+        About the S matrix:
+          - Suppose we have M bottom-level time series (columns).
+          - We define aggregator rows for each top or middle-level aggregator. Each aggregator row
+            contains 1's in the columns that belong to that aggregator, 0 otherwise.
+          - Then we append the M identity rows (one per bottom-level column) at the bottom of S,
+            forming a final matrix of shape (L_agg + M, M).
+            => The row ordering is [ aggregator_1, aggregator_2, ..., aggregator_L_agg, bottom_1, bottom_2, ..., bottom_M ].
+          - If we multiply S by a vector of bottom-level forecasts, we get a vector of length L_agg+M
+            which includes top+middle aggregator sums and the original bottom-level values.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Input DataFrame with each column as a bottom-level series (wide format).
+
+        Returns
+        -------
+        self : ReconciliationTransformer
+            Fitted transformer.
+        """
+        import warnings
+
+        # 1) Fill NaNs with 0
+        df = df.fillna(0.0)
+
+        # 2) Identify bottom-level columns
+        self.bottom_level_cols_ = list(df.columns)
+        n_series = len(self.bottom_level_cols_)
+        n_time = len(df)
+
+        # 3) Build or use given hierarchy
+        if self.hierarchy_map is None:
+            # Auto-create artificial hierarchy in groups of self.group_size
+            bottom_cols = self.bottom_level_cols_
+            chunked = [
+                bottom_cols[i : i + self.group_size]
+                for i in range(0, len(bottom_cols), self.group_size)
+            ]
+            hierarchy_map_auto = {}
+            for i, chunk in enumerate(chunked):
+                mid_name = f"MID_{i}"
+                hierarchy_map_auto[mid_name] = chunk
+            # Also define a top aggregator name
+            top_name = "TOP"
+            hierarchy_map_auto[top_name] = bottom_cols
+            self.generated_hierarchy_map_ = hierarchy_map_auto
+        else:
+            self.generated_hierarchy_map_ = self.hierarchy_map
+
+        # 4) Create aggregator matrix S
+        all_agg_names = list(
+            self.generated_hierarchy_map_.keys()
+        )  # top+middle aggregator names
+        L_agg = len(all_agg_names)
+        M_bot = len(self.bottom_level_cols_)
+
+        # Set dimensions first
+        self.n_bottom_ = M_bot
+        self.n_levels_ = L_agg + M_bot
+
+        # 5) Performance check (after n_levels_ is set)
+        method = self.reconciliation_params.get("method", "mint")
+        self._check_performance_limits(n_series, n_time, method)
+
+        # 6) Build aggregator matrix S
+        # aggregator part => shape (L_agg, M_bot)
+        S_agg = np.zeros((L_agg, M_bot), dtype=float)
+        for row_idx, agg_name in enumerate(all_agg_names):
+            bottom_list = self.generated_hierarchy_map_[agg_name]
+            for b_col in bottom_list:
+                col_j = self.bottom_level_cols_.index(b_col)
+                S_agg[row_idx, col_j] = 1.0
+
+        # Identity for bottom => shape (M_bot, M_bot)
+        I_bottom = np.eye(M_bot)
+        # Final aggregator matrix => shape (L_agg + M_bot, M_bot)
+        S = np.vstack([S_agg, I_bottom])
+
+        row_names = all_agg_names + self.bottom_level_cols_
+        self.col_index_map_ = {row_names[i]: i for i in range(self.n_levels_)}
+        self.agg_matrix_ = S
+        self.all_level_cols_ = row_names
+
+        # 7) Estimate bottom-level covariance from historical data:
+        #    The user might choose to use it in "historical" mode in inverse_transform.
+        #    shape => (M_bot, M_bot).
+        bottom_data = df[self.bottom_level_cols_].values  # shape (T, M_bot)
+        if self.reconciliation_params.get("ledoit_wolf", False):
+            self.cov_bottom_ = ledoit_wolf_covariance(
+                bottom_data, assume_centered=False
+            )
+        else:
+            self.cov_bottom_ = np.cov(bottom_data, rowvar=False)
+
+        self.fitted_ = True
+        return self
+
+    def _check_performance_limits(self, n_series: int, n_time: int, method: str):
+        """Check if dataset size might cause performance issues and warn user."""
+        # might be better to generalize this function and use for all transformers at risk of high memory use
+        import warnings
+
+        # Estimate memory usage (in MB)
+        matrix_size_mb = (self.n_levels_**2 * 8) / (1024**2)  # 8 bytes per float64
+        time_matrix_mb = (n_time * self.n_levels_ * 8) / (1024**2)
+
+        if method in ["iterative_mint", "iterative_volatility_mint"]:
+            # Iterative methods use ~3x more memory due to temporary matrices
+            estimated_memory_mb = matrix_size_mb * 3 + time_matrix_mb
+            max_recommended_series = 300
+        else:
+            estimated_memory_mb = matrix_size_mb + time_matrix_mb
+            max_recommended_series = 1000
+
+        estimated_memory_gb = estimated_memory_mb / 1024
+
+        # Hard limit for very large datasets
+        if estimated_memory_gb > self.max_memory:
+            raise ValueError(
+                f"Dataset too large ({estimated_memory_gb:.1f}GB estimated memory). "
+                f"Reduce group_size (current: {self.group_size}) or number of series."
+            )
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Scale the dataset using the stored mean and standard deviation."""
-        X_copy = df.copy()  # Create a safe copy of the DataFrame
-        # print(self.means.index.difference(df.columns))
-        # print(df.columns.difference(self.stds.index))
-        X_scaled = (X_copy - self.means) / self.stds
-        # Restore original values for columns that should not be scaled
-        X_scaled.loc[:, self.skip_columns] = X_copy.loc[:, self.skip_columns]
-        return X_scaled
+        """
+        Fills NaNs with 0, then aggregates bottom-level series into
+        middle/top levels, appending them as new columns.
 
-    def inverse_transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Revert the scaled data back to the original scale."""
-        X_copy = df.copy()  # Create a safe copy of the DataFrame
-        X_original = (X_copy * self.stds) + self.means
-        # Restore original values for columns that were not scaled
-        X_original.loc[:, self.skip_columns] = X_copy.loc[:, self.skip_columns]
-        return X_original
+        Parameters
+        ----------
+        df : pd.DataFrame
+            A DataFrame with the bottom-level columns.
+
+        Returns
+        -------
+        df_transformed : pd.DataFrame
+            A DataFrame with columns for top, middle, and bottom levels.
+        """
+        if not self.fitted_:
+            raise ValueError("Transformer has not been fitted yet.")
+
+        df = df.fillna(0.0)
+
+        # Y_bottom => shape (T, M_bottom)
+        Y_bottom = df[self.bottom_level_cols_].values
+        # Y_all => shape (T, n_levels_)
+        Y_all = Y_bottom @ self.agg_matrix_.T
+
+        df_agg = pd.DataFrame(
+            Y_all,
+            index=df.index,
+            columns=self.all_level_cols_,
+        )
+
+        # Avoid duplicating bottom columns: keep the original bottom from df
+        # and only add aggregator columns
+        top_mid_cols = self.all_level_cols_[: -self.n_bottom_]
+        new_agg_cols = [c for c in top_mid_cols if c not in df.columns]
+
+        df_out = pd.concat([df, df_agg[new_agg_cols]], axis=1)
+        return df_out
+
+    def inverse_transform(
+        self, df: pd.DataFrame, trans_method="forecast"
+    ) -> pd.DataFrame:
+        """
+        Reconcile the forecasts in df (which must include top, middle, and bottom levels)
+        using the method in self.reconciliation_params["method"] => "mint", "erm", or "none".
+
+        Covariance matrix W is built depending on:
+          - "cov_source" => "historical" or "forecasts"
+          - "weighting" => "identity", "diagonal", or "full"
+          - "ledoit_wolf" => whether to apply Ledoit-Wolf
+          - "shrinkage" => scalar in [0,1] (manual shrink to diagonal)
+          - "ridge" => optional float to add to diagonal for stability
+
+        Returns only the reconciled bottom-level columns.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            A DataFrame with columns for all levels (the same columns transform() produces).
+
+        Returns
+        -------
+        df_reconciled_bottom : pd.DataFrame
+            A DataFrame with only the bottom-level columns, reconciled to ensure hierarchical consistency.
+        """
+        if not self.fitted_:
+            raise ValueError("Transformer has not been fitted yet.")
+
+        df = df.fillna(0.0)
+
+        method = self.reconciliation_params.get("method", "mint").lower()
+        if method == "none":
+            # No reconciliation => just return bottom portion
+            return df[self.bottom_level_cols_]
+        elif method not in [
+            "mint",
+            "erm",
+            "volatility_mint",
+            "iterative_mint",
+            "iterative_volatility_mint",
+        ]:
+            raise NotImplementedError(f"Method '{method}' is not implemented.")
+
+        # Collect other parameters
+        cov_source = self.reconciliation_params.get("cov_source", "historical")
+        weighting = self.reconciliation_params.get("weighting", "diagonal")
+        manual_shrink = self.reconciliation_params.get("shrinkage", 0.0)
+        ledoit_wolf_flag = self.reconciliation_params.get("ledoit_wolf", False)
+        ridge_val = self.reconciliation_params.get("ridge", 1e-9)  # can be None
+
+        # Collect parameters for volatility-weighted methods
+        vol_params = self.reconciliation_params.get("volatility_params", {})
+        volatility_method = vol_params.get("method", "variance")
+        volatility_power = vol_params.get("power", 1.0)
+        volatility_mix = vol_params.get("mix", 0.5)
+
+        # Collect parameters for iterative methods
+        iter_params = self.reconciliation_params.get("iterative_params", {})
+        max_iterations = iter_params.get("max_iterations", 10)
+        convergence_threshold = iter_params.get("convergence_threshold", 1e-6)
+        damping_factor = iter_params.get("damping_factor", 0.7)
+
+        # 1) Extract forecast matrix in correct order
+        missing_cols = [c for c in self.all_level_cols_ if c not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"The provided DataFrame is missing these hierarchy columns: {missing_cols}"
+            )
+        y_all_forecast = df[self.all_level_cols_].values  # (T, n_levels_)
+
+        # 2) Build base covariance from either historical or forecast data
+        S = self.agg_matrix_  # shape => (n_levels_, n_bottom_)
+
+        if cov_source == "historical":
+            # Use S cov_bottom S'
+            # self.cov_bottom_ is (M_bottom x M_bottom)
+            cov_all_base = S @ self.cov_bottom_ @ S.T
+        elif cov_source == "forecasts":
+            # Re-estimate from forecast data => shape (T, n_levels_)
+            if ledoit_wolf_flag:
+                cov_all_base = ledoit_wolf_covariance(
+                    y_all_forecast, assume_centered=False
+                )
+            else:
+                cov_all_base = np.cov(y_all_forecast, rowvar=False)
+        else:
+            raise ValueError(f"Unknown cov_source: {cov_source}")
+
+        # 3) Apply weighting mode
+        n_levels = self.n_levels_
+        if weighting == "identity":
+            W = np.eye(n_levels)
+        elif weighting == "diagonal":
+            diag_vals = np.diag(cov_all_base)
+            W = np.diag(diag_vals)
+        elif weighting == "full":
+            W = cov_all_base.copy()
+        else:
+            raise ValueError(f"Unknown weighting: {weighting}")
+
+        # 4) Manual shrink => W_shrunk = alpha*diag(W) + (1 - alpha)*W
+        if manual_shrink > 0.0:
+            diagW = np.diag(np.diag(W))
+            W = manual_shrink * diagW + (1.0 - manual_shrink) * W
+
+        # 5) Optional ridge for stability
+        # For ERM with full weighting, enforce a minimum ridge to prevent
+        # ill-conditioned matrices that cause extremely slow solve operations
+        if method == "erm" and weighting == "full":
+            min_ridge = 1e-8
+            if ridge_val is None or ridge_val < min_ridge:
+                ridge_val = min_ridge
+
+        if ridge_val is not None and ridge_val > 0.0:
+            W += np.eye(n_levels) * ridge_val
+
+        # 6) Reconcile with MinT, ERM, or enhanced methods
+        if method == "mint":
+            y_all_reconciled = mint_reconcile(S, y_all_forecast, W)
+        elif method == "erm":
+            y_all_reconciled = erm_reconcile(S, y_all_forecast, W)
+        elif method == "volatility_mint":
+            y_all_reconciled = volatility_weighted_mint_reconcile(
+                S,
+                y_all_forecast,
+                W,
+                self.cov_bottom_,
+                volatility_method,
+                volatility_power,
+                volatility_mix,
+            )
+        elif method == "iterative_mint":
+            y_all_reconciled = iterative_mint_reconcile(
+                S,
+                y_all_forecast,
+                W,
+                max_iterations,
+                convergence_threshold,
+                damping_factor,
+            )
+        elif method == "iterative_volatility_mint":
+            y_all_reconciled = iterative_volatility_mint_reconcile(
+                S,
+                y_all_forecast,
+                W,
+                self.cov_bottom_,
+                volatility_method,
+                volatility_power,
+                volatility_mix,
+                max_iterations,
+                convergence_threshold,
+                damping_factor,
+            )
+
+        # 7) Slice out the bottom portion => last M_bottom columns
+        bottom_start_idx = n_levels - self.n_bottom_
+        y_bottom_reconciled = y_all_reconciled[:, bottom_start_idx:]
+
+        # Build DataFrame
+        df_bottom_reconciled = pd.DataFrame(
+            y_bottom_reconciled,
+            index=df.index,
+            columns=self.bottom_level_cols_,
+        )
+        return df_bottom_reconciled
 
     def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Fit the scaler and transform the dataset."""
+        """Convenience method to fit and then transform."""
         self.fit(df)
         return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """
+        Returns new random parameters for demonstration, with organized parameter structure:
+         - method="mint"/"erm"/"volatility_mint"/"iterative_mint"/"iterative_volatility_mint"/"none"
+         - cov_source="historical"/"forecasts"
+         - weighting="identity"/"diagonal"/"full"
+         - shrinkage in [0.0, 0.5]
+         - ledoit_wolf in [True, False]
+         - ridge in [None, 1e-9, 1e-8, 1e-5, ...]
+         - volatility_params: dict with method-specific parameters
+         - iterative_params: dict with method-specific parameters
+
+        This can be adapted for random or grid-search hyperparameter tuning.
+        """
+        group_size = random.choice([5, 10, 20, 30])
+
+        rec_method = random.choices(
+            [
+                "mint",
+                "erm",
+                "volatility_mint",
+                "iterative_mint",
+                "iterative_volatility_mint",
+                "none",
+            ],
+            [0.25, 0.1, 0.2, 0.2, 0.15, 0.1],
+        )[0]
+        cov_source = random.choices(["historical", "forecasts"], [0.7, 0.3])[0]
+        weighting_opts = ["identity", "diagonal", "full"]
+        weighting_choice = random.choice(weighting_opts)
+        led_wolf = random.choices([True, False], [0.3, 0.7])[0]
+        shrink_val = random.choices(
+            [0.0, 0.05, 0.1, 0.15, 0.3, 0.5, 0.7], [0.1, 0.2, 0.3, 0.2, 0.1, 0.2, 0.1]
+        )[0]
+        ridge_candidates = [None, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
+        ridge_val = random.choice(ridge_candidates)
+
+        params = {
+            "group_size": group_size,
+            "hierarchy_map": None,  # or generate a custom map
+            "reconciliation_params": {
+                "method": rec_method,
+                "cov_source": cov_source,
+                "weighting": weighting_choice,
+                "shrinkage": shrink_val,
+                "ledoit_wolf": led_wolf,
+                "ridge": ridge_val,
+                # Volatility parameters (only used by volatility_mint and iterative_volatility_mint)
+                "volatility_params": {
+                    "method": random.choice(["variance", "std", "cv"]),
+                    "power": random.uniform(0.5, 2.0),
+                    "mix": random.uniform(0.0, 1.0),
+                },
+                # Iterative parameters (only used by iterative_mint and iterative_volatility_mint)
+                "iterative_params": {
+                    "max_iterations": random.choice([5, 10, 15, 20]),
+                    "convergence_threshold": random.choice(
+                        [1e-8, 1e-7, 1e-6, 1e-5, 1e-4]
+                    ),
+                    "damping_factor": random.uniform(0.3, 0.9),
+                },
+            },
+        }
+        return params
 
 
 # lookup dict for all non-parameterized transformers
@@ -6171,7 +7859,6 @@ have_params = {
     "FastICA": FastICA,
     "PCA": PCA,
     "BTCD": BTCD,
-    "Cointegration": Cointegration,
     "AlignLastValue": AlignLastValue,
     "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
     "HolidayTransformer": HolidayTransformer,
@@ -6193,10 +7880,16 @@ have_params = {
     "DifferencedTransformer": DifferencedTransformer,
     "Constraint": Constraint,
     "FIRFilter": FIRFilter,
+    "G726Filter": G726Filter,
+    "G711Scaler": G711Scaler,
     "ThetaTransformer": ThetaTransformer,
+    "ChangepointDetector": ChangepointDetector,
     "ChangepointDetrend": ChangepointDetrend,
     "MeanPercentSplitter": MeanPercentSplitter,
     "UpscaleDownscaleTransformer": UpscaleDownscaleTransformer,
+    "ReconciliationTransformer": ReconciliationTransformer,
+    "CointegrationTransformer": CointegrationTransformer,
+    "Cointegration": CointegrationTransformer,  # alias for replacement of old Cointegration
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -6205,9 +7898,11 @@ shared_trans = [
     "DatepartRegression",
     "MeanDifference",
     "BTCD",
-    "Cointegration",
     "HolidayTransformer",  # confirmed
     "RegressionFilter",
+    "ReconciliationTransformer",
+    "CointegrationTransformer",
+    "ChangepointDetector",  # only in some cases
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -6223,7 +7918,7 @@ external_transformers = [
 
 
 class GeneralTransformer(object):
-    """Remove fillNA and then mathematical transformations.
+    """Remove fillNA and then mathematical transformations. Has .fit(), .fit_transform(), and inverse_transform() primary methods.
 
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
 
@@ -6283,7 +7978,6 @@ class GeneralTransformer(object):
             "STLFilter" - seasonal decompose and keep just one part of decomposition
             "EWMAFilter" - use an exponential weighted moving average to smooth data
             "MeanDifference" - joint version of differencing
-            "Cointegration" - VECM but just the vectors
             "BTCD" - Box Tiao decomposition
             'AlignLastValue': align forecast start to end of training data
             'AnomalyRemoval': more tailored anomaly removal options
@@ -6305,8 +7999,11 @@ class GeneralTransformer(object):
             "ShiftFirstValue": similar to positive shift but uses the first values as the basis of zero
             "ThetaTransformer": decomposes into theta lines, then recombines
             "ChangepointDetrend": detrend but with changepoints, and seasonality thrown in for fun
+            "ChangepointDetector": detect changepoints using advanced detector and remove associated trend
             "MeanPercentSplitter": split data into rolling mean and percent of rolling mean
             "UpscaleDownscaleTransformer": upscales and downscales
+            "ReconciliationTransformer": creates hierarchies then reconciles on the way back
+            "CointegrationTransformer": creates stationary features from cointegrated sets of series
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -6376,6 +8073,9 @@ class GeneralTransformer(object):
             "Constraint",
             "FIRFilter",
         ]
+
+    def __repr__(self):
+        return f"AutoTS general purpose transformer with transformers {self.transformations}."
 
     @staticmethod
     def get_new_params(method="fast", **kwargs):
@@ -6483,8 +8183,7 @@ class GeneralTransformer(object):
                 from sklearn.preprocessing import StandardScaler as SS
 
                 return SS(copy=True)
-            except Exception as e:
-                print(f"sklearn standardscaler import failed with {repr(e)}")
+            except Exception:
                 return StandardScaler()
 
         elif transformation == "MaxAbsScaler":
@@ -6666,7 +8365,9 @@ class GeneralTransformer(object):
             df = self.transformers[i].inverse_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-        elif self.c_trans_n in expanding_transformers:
+        if self.c_trans_n in expanding_transformers:
+            # Expanding transformers can alter index length/order, so keep references in sync
+            self.df_index = df.index
             self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)
         return df
@@ -6682,11 +8383,42 @@ class GeneralTransformer(object):
         """Undo the madness.
 
         Args:
-            df (pandas.DataFrame): Datetime Indexed
+            df (pandas.DataFrame or PredictionObject): Datetime Indexed data or
+                AutoTS prediction container
             trans_method (str): 'forecast' or 'original' passed through
             fillzero (bool): if inverse returns NaN, fill with zero
             bounds (bool): currently ignores AlignLastValue transform if True (also used in process_components of Cassandra)
         """
+        if isinstance(df, PredictionObject):
+            prediction = df
+            # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
+            # forecast inverse MUST come before upper and lower bounds inverse
+            if isinstance(prediction.forecast, pd.DataFrame):
+                prediction.forecast = self.inverse_transform(
+                    prediction.forecast.copy(),
+                    trans_method=trans_method,
+                    fillzero=fillzero,
+                    bounds=bounds,
+                    start=start,
+                )
+            if isinstance(prediction.lower_forecast, pd.DataFrame):
+                prediction.lower_forecast = self.inverse_transform(
+                    prediction.lower_forecast.copy(),
+                    trans_method=trans_method,
+                    fillzero=True,
+                    bounds=True,
+                    start=start,
+                )
+            if isinstance(prediction.upper_forecast, pd.DataFrame):
+                prediction.upper_forecast = self.inverse_transform(
+                    prediction.upper_forecast.copy(),
+                    trans_method=trans_method,
+                    fillzero=True,
+                    bounds=True,
+                    start=start,
+                )
+            return prediction
+
         self.df_index = df.index
         self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -6737,7 +8469,7 @@ transformer_dict = {
     "StandardScaler": 0.04,
     "RobustScaler": 0.03,
     "PCA": 0.01,
-    "FastICA": 0.01,
+    "FastICA": 0.005,
     "Detrend": 0.02,  # slow with some params, but that's handled in get_params
     "RollingMeanTransformer": 0.02,
     "RollingMean100thN": 0.01,  # old
@@ -6764,8 +8496,7 @@ transformer_dict = {
     "STLFilter": 0.01,
     "EWMAFilter": 0.02,
     "MeanDifference": 0.002,
-    "BTCD": 0.01,
-    "Cointegration": 0.01,
+    "BTCD": 0.005,
     "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
@@ -6783,10 +8514,15 @@ transformer_dict = {
     "BKBandpassFilter": 0.01,
     "Constraint": 0.01,  # 52
     "FIRFilter": 0.01,
+    "G726Filter": 0.01,
+    "G711Scaler": 0.01,
     "ThetaTransformer": 0.01,
+    "ChangepointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
-    "UpscaleDownscaleTransformer": 0.01,
+    "UpscaleDownscaleTransformer": 0.005,  # Reduced from 0.01 to reduce selection of potentially slow transformer
+    "ReconciliationTransformer": 0.01,
+    "CointegrationTransformer": 0.01,
 }
 
 # and even more, not just removing slow but also less commonly useful ones
@@ -6818,6 +8554,8 @@ superfast_transformer_dict = {
     "Constraint": 0.005,  # not well tested yet on speed/ram
     "BKBandpassFilter": 0.01,  # seems feasible, untested
     "DiffSmoother": 0.005,  # seems feasible, untested
+    # "G726Filter": 0.01,
+    # "G711Scaler": 0.01,
     # "FIRFilter": 0.005,  # seems feasible, untested
     # "FFTFilter": 0.01,  # seems feasible, untested
     # "FFTDecomposition": 0.01,  # seems feasible, untested
@@ -6844,6 +8582,7 @@ filters = {
     "RollingMean100thN": 0.005,
     "DiffSmoother": 0.005,
     "convolution_filter": 0.005,
+    "G726Filter": 0.02,
 }
 scalers = {
     "MinMaxScaler": 0.05,
@@ -6856,6 +8595,7 @@ scalers = {
     "PowerTransformer": 0.02,
     "PctChangeTransformer": 0.005,
     "CenterLastValue": 0.005,
+    "G711Scaler": 0.02,
 }
 # intended to clean up external regressors
 decompositions = {
@@ -6871,6 +8611,7 @@ decompositions = {
     "IntermittentOccurrence": 0.005,
     "PCA": 0.005,
     "ThetaTransformer": 0.005,
+    "ChangepointDetector": 0.01,
     "ChangepointDetrend": 0.01,
     "MeanPercentSplitter": 0.01,
 }
@@ -6878,11 +8619,12 @@ postprocessing = {
     "Round": 0.1,
     "HistoricValues": 0.1,
     "BKBandpassFilter": 0.1,
-    "KalmanSmoothing": 0.01,
+    "KalmanSmoothing": 0.001,
+    "G726Filter": 0.01,
     "AlignLastDiff": 0.1,
     "AlignLastValue": 0.1,
     "Constraint": 0.1,
-    "FIRFilter": 0.1,
+    "FIRFilter": 0.01,
 }
 # transformers that may change the number of columns/index
 expanding_transformers = [
@@ -6895,6 +8637,8 @@ expanding_transformers = [
     "ThetaTransformer",
     "MeanPercentSplitter",
     "UpscaleDownscaleTransformer",
+    "ReconciliationTransformer",
+    "CointegrationTransformer",
 ]  # note there is also prob_trans below for preventing reuse of these in one transformer
 
 transformer_class = {}
@@ -6914,10 +8658,12 @@ na_probs = {
     "interpolate": 0.4,
     "KNNImputer": 0.02,  # can get a bit slow
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
-    "SeasonalityMotifImputer": 0.005,  # apparently this is too memory hungry at scale
+    # "SeasonalityMotifImputer": 0.005,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputerLinMix": 0.005,  # apparently this is too memory hungry at scale
     "SeasonalityMotifImputer1K": 0.005,  # apparently this is too memory hungry at scale
     "DatepartRegressionImputer": 0.01,  # also slow
+    "seasonal_linear_window_3": 0.01,  # seems fine, but low probability because not well tested yet
+    "seasonal_linear": 0.01,
 }
 
 
@@ -6939,10 +8685,13 @@ def transformer_list_to_dict(transformer_list):
         fast_transformer_dict['ReplaceConstant'] = 0.002
         # del fast_transformer_dict["SinTrend"]
         del fast_transformer_dict["FastICA"]
-        del fast_transformer_dict["Cointegration"]
+        # del fast_transformer_dict["CointegrationTransformer"]  # might be fine, needs more testing
         del fast_transformer_dict["BTCD"]
         del fast_transformer_dict["LocalLinearTrend"]
         del fast_transformer_dict["KalmanSmoothing"]  # potential kernel/RAM issues
+        del fast_transformer_dict[
+            "ChangepointDetector"
+        ]  # some methods are slow, with tuning this might be fine eventually
 
     if transformer_list is None:
         transformer_list = "superfast"
@@ -7001,10 +8750,14 @@ def RandomTransform(
     transformer_min_depth: int = 1,
     allow_none: bool = True,
     no_nan_fill: bool = False,
+    exclude_fillna: list = None,
 ):
     """Return a dict of randomly choosen transformation selections.
 
     BTCD is used as a signal that slow parameters are allowed.
+
+    Args:
+        exclude_fillna (list): list of fillna methods to exclude from selection (e.g., ['fake_date'])
     """
     transformer_actual_list, transformer_prob = transformer_list_to_dict(
         transformer_list
@@ -7041,7 +8794,7 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
         # throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
         # throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
-        throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
+        # throw_away = na_prob_dict.pop("SeasonalityMotifImputer", None)  # noqa
         throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
     # in addition to the above, also remove
     if superfast_params:
@@ -7049,6 +8802,11 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputer1K", None)  # noqa
         throw_away = na_prob_dict.pop("SeasonalityMotifImputerLinMix", None)  # noqa
+
+    # exclude specific fillna methods if requested
+    if exclude_fillna is not None:
+        for method in exclude_fillna:
+            throw_away = na_prob_dict.pop(method, None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
@@ -7220,6 +8978,8 @@ def random_cleaners():
     )[0]
     if transform_dict == "random":
         transform_dict = RandomTransform(
-            transformer_list="scalable", transformer_max_depth=2
+            transformer_list="scalable",
+            transformer_max_depth=2,
+            exclude_fillna=['fake_date'],
         )
     return transform_dict

@@ -12,10 +12,34 @@ autots.tools.anomaly\_utils module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.autoencoder module
+-------------------------------
+
+.. automodule:: autots.tools.autoencoder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.bayesian\_regression module
+----------------------------------------
+
+.. automodule:: autots.tools.bayesian_regression
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.calendar module
 ----------------------------
 
 .. automodule:: autots.tools.calendar
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.changepoints module
+--------------------------------
+
+.. automodule:: autots.tools.changepoints
    :members:
    :undoc-members:
    :show-inheritance:
@@ -52,6 +76,14 @@ autots.tools.fast\_kalman module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.fast\_kalman\_params module
+----------------------------------------
+
+.. automodule:: autots.tools.fast_kalman_params
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.fft module
 -----------------------
 
@@ -64,6 +96,14 @@ autots.tools.fir\_filter module
 -------------------------------
 
 .. automodule:: autots.tools.fir_filter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.g7xx\_codec module
+-------------------------------
+
+.. automodule:: autots.tools.g7xx_codec
    :members:
    :undoc-members:
    :show-inheritance:
@@ -108,10 +148,26 @@ autots.tools.lunar module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.mocks module
+-------------------------
+
+.. automodule:: autots.tools.mocks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.percentile module
 ------------------------------
 
 .. automodule:: autots.tools.percentile
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.plotting module
+----------------------------
+
+.. automodule:: autots.tools.plotting
    :members:
    :undoc-members:
    :show-inheritance:

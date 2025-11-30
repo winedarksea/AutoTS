@@ -38,6 +38,7 @@ from autots.evaluator.auto_model import (
     create_model_id,
     ModelPrediction,
     all_valid_weightings,
+    reset_interrupt_tracking,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -61,6 +62,16 @@ from autots.evaluator.validation import (
 )
 from autots.tools.constraint import constraint_new_params
 from autots.tools.profile import profile_time_series
+from autots.tools.plotting import (
+    plot_forecast_with_intervals,
+    colors_list,
+    ancient_roman,
+)
+
+try:
+    from sklearn.preprocessing import StandardScaler
+except Exception:
+    from autots.tools.mocks import StandardScaler
 
 
 class AutoTS(object):
@@ -117,6 +128,7 @@ class AutoTS(object):
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
+        skip_slow_models_seconds (float): if not None, skip models from the initial round that took longer than this many seconds during validation. Does not apply to ensemble models. Defaults to None (no skipping). If too small a number is chosen, can cause an error in validation when all models are too slow.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
@@ -137,10 +149,12 @@ class AutoTS(object):
         preclean (dict): if not None, a dictionary of Transformer params to be applied to input data
             {"fillna": "median", "transformations": {}, "transformation_params": {}}
             This will change data used in model inputs for fit and predict, and for accuracy evaluation in cross validation!
-        model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
-            if True, KeyboardInterrupts attempt to only quit current model.
-            if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
-            if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
+        model_interrupt (bool | str | dict): configure how KeyboardInterrupts are handled.
+            False keeps default Python behaviour (immediate termination).
+            True or "skip" skips only the current model; press Ctrl+C twice within 1.5 seconds to stop the entire run.
+            "end_generation" skips the current model and ends the rest of the active generation; a second Ctrl+C within 1.5 seconds still stops the run.
+            "stop" or "run" ends the whole run on the first interrupt.
+            Provide a dict such as {"mode": "skip", "double_press_window": 1.2} to change the mode and double-press window.
         generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
             This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching. It is an overall cap for total generation search time, not per generation.
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
@@ -209,13 +223,14 @@ class AutoTS(object):
         num_validations: int = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
+        skip_slow_models_seconds: float = None,
         validation_method: str = 'backwards',
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
         prefill_na: str = None,
         introduce_na: bool = None,
         preclean: dict = None,
-        model_interrupt: bool = True,
+        model_interrupt: bool = "stop",
         generation_timeout: int = None,
         current_model_file: str = None,
         force_gc: bool = False,
@@ -247,6 +262,7 @@ class AutoTS(object):
         self.num_validations = num_validations
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
+        self.skip_slow_models_seconds = skip_slow_models_seconds
         self.validation_method = str(validation_method).lower()
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
@@ -266,6 +282,9 @@ class AutoTS(object):
         self.validate_import = None
         self.best_model_original = None
         self.best_model_original_id = None
+        self._interrupt_run = False
+        self.run_was_interrupted = False
+        self.run_interrupt_details = {}
         # do not add 'ID' to the below unless you want to refactor things.
         self.template_cols = [
             'Model',
@@ -447,7 +466,7 @@ class AutoTS(object):
         self.regressor_used = False
         self.subset_flag = False
         self.grouping_ids = None
-        self.validation_results = self.initial_results = TemplateEvalObject()
+        self.initial_results = TemplateEvalObject()
         self.best_model = pd.DataFrame()
         self.best_model_id = ""
         self.best_model_name = ""
@@ -460,6 +479,9 @@ class AutoTS(object):
         self.validation_test_indexes = []
         self.preclean_transformer = None
         self.score_per_series = None
+        self.startTimeStamps = None
+        self.h_ens_used = False
+        self.mosaic_used = False
         self.best_model_non_horizontal = None
         self.best_model_non_ensemble = None
         self.best_model_unpredictability_adjusted = None
@@ -467,6 +489,8 @@ class AutoTS(object):
         self.validation_forecasts = {}
         self.validation_results = None
         self.validation_indexes = None
+        self.score_breakdown = pd.DataFrame()
+        self.series_profiles = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -985,21 +1009,33 @@ class AutoTS(object):
             "horizontal_ensemble_validation": horizontal_ensemble_validation,
         }
 
+    def best_model_str_val_results(self):
+        """Generate a readable string of validation results for the best model.
+
+        Returns:
+            str: Formatted string containing validation results for key metrics (SMAPE, MAE, SPL)
+        """
+        try:
+            base_res = self.initial_results.model_results[
+                self.initial_results.model_results['ID'] == self.best_model_id
+            ]
+            res = ", ".join(base_res['smape'].astype(str).tolist())
+            res2 = ", ".join(base_res['mae'].astype(str).tolist())
+            res3 = ", ".join(base_res['spl'].astype(str).tolist())
+            len_list = list(range(base_res.shape[0]))
+            res_len = ", ".join([str(x) for x in len_list])
+            return f"Validation: {res_len}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
+        except Exception:
+            return "Validation results unavailable"
+
     def __repr__(self):
         """Print."""
         if self.best_model.empty:
             return "Uninitiated AutoTS object"
         else:
             try:
-                base_res = self.initial_results.model_results[
-                    self.initial_results.model_results['ID'] == self.best_model_id
-                ]
-                res = ", ".join(base_res['smape'].astype(str).tolist())
-                res2 = ", ".join(base_res['mae'].astype(str).tolist())
-                res3 = ", ".join(base_res['spl'].astype(str).tolist())
-                len_list = list(range(base_res.shape[0]))
-                res_len = ", ".join([str(x) for x in len_list])
-                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nValidation: {res_len}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
+                val_results = self.best_model_str_val_results()
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\n{val_results}"
             except Exception:
                 return "Initiated AutoTS object"
 
@@ -1131,6 +1167,15 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
+        try:
+            profile_df = profile_time_series(self.df_wide_numeric)
+            self.series_profiles = (
+                profile_df.set_index("SERIES").to_dict().get("PROFILE", {})
+            )
+        except Exception as e:
+            if self.verbose >= 0:
+                print(f"profile_time_series failed during fit_data: {repr(e)}")
+            self.series_profiles = {}
 
         if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
@@ -1146,6 +1191,9 @@ class AutoTS(object):
             if future_regressor.shape[0] != self.df_wide_numeric.shape[0]:
                 print(
                     "future_regressor row count does not match length of training data"
+                )
+                future_regressor = future_regressor.reindex(
+                    self.df_wide_numeric.index, fill_value=0
                 )
                 time.sleep(2)
 
@@ -1229,6 +1277,10 @@ class AutoTS(object):
         self.model = None
         self.grouping_ids = grouping_ids
         self.fitStart = pd.Timestamp.now()
+        reset_interrupt_tracking()
+        self._interrupt_run = False
+        self.run_was_interrupted = False
+        self.run_interrupt_details = {}
 
         # convert class variables to local variables (makes testing easier)
         if self.validation_method == "custom":
@@ -1364,6 +1416,8 @@ class AutoTS(object):
             current_generation=0,
             result_file=result_file,
         )
+        if self._interrupt_run:
+            return self._handle_interrupt_exit()
 
         # now run new generations, trying more models based on past successes.
         current_generation = 0
@@ -1435,6 +1489,8 @@ class AutoTS(object):
                 current_generation=current_generation,
                 result_file=result_file,
             )
+            if self._interrupt_run:
+                return self._handle_interrupt_exit()
 
             passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
 
@@ -1452,7 +1508,7 @@ class AutoTS(object):
                 )
                 if not ensemble_templates.empty:
                     self._run_template(
-                        self.ensemble_templates,
+                        ensemble_templates,
                         df_train,
                         df_test,
                         future_regressor_train=future_regressor_train,
@@ -1463,6 +1519,8 @@ class AutoTS(object):
                         current_generation=(current_generation + 1),
                         result_file=result_file,
                     )
+                    if self._interrupt_run:
+                        return self._handle_interrupt_exit()
                 elif "simple" in self.ensemble:
                     print("Simple ensemble missing, error unclear")
             except Exception as e:
@@ -1480,6 +1538,8 @@ class AutoTS(object):
                 validation_template=self.validation_template,
                 future_regressor=self.future_regressor_train,
             )
+            if self._interrupt_run:
+                return self._handle_interrupt_exit()
             # ensembles built on validation results
             if self.ensemble:
                 try:
@@ -1509,7 +1569,7 @@ class AutoTS(object):
                         ensemble=self.ensemble,
                         score_per_series=self.score_per_series,
                     )
-                    self.ensemble_templates2 = ensemble_templates
+                    self.ensemble_templates = ensemble_templates
                     if not ensemble_templates.empty:
                         self._run_template(
                             ensemble_templates,
@@ -1523,6 +1583,8 @@ class AutoTS(object):
                             current_generation=(current_generation + 2),
                             result_file=result_file,
                         )
+                        if self._interrupt_run:
+                            return self._handle_interrupt_exit()
                         self._run_validations(
                             df_wide_numeric=self.df_wide_numeric,
                             num_validations=self.num_validations,
@@ -1530,6 +1592,8 @@ class AutoTS(object):
                             future_regressor=self.future_regressor_train,
                             first_validation=False,
                         )
+                        if self._interrupt_run:
+                            return self._handle_interrupt_exit()
                 except Exception as e:
                     print(
                         f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
@@ -1555,6 +1619,7 @@ class AutoTS(object):
                     forecast_length=self.forecast_length,
                     ensemble=self.ensemble,
                     subset_flag=self.subset_flag,
+                    series_profiles=self.series_profiles,
                 )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
@@ -1591,6 +1656,8 @@ class AutoTS(object):
                         additional_msg=" horizontal ensemble validations",
                         shifted_starts=True,  # this is to try and reduce choice based on overfitting
                     )
+                    if self._interrupt_run:
+                        return self._handle_interrupt_exit()
                 else:
                     # test on initial test split to make sure they work
                     self._run_template(
@@ -1606,6 +1673,8 @@ class AutoTS(object):
                         current_generation=0,
                         result_file=result_file,
                     )
+                    if self._interrupt_run:
+                        return self._handle_interrupt_exit()
             except Exception as e:
                 if self.verbose >= 0:
                     print(
@@ -1646,6 +1715,26 @@ class AutoTS(object):
             self.initial_results.model_results['Exceptions'].isna()
         ]
         validation_template = validation_template[validation_template['Ensemble'] <= 1]
+
+        # filter out slow models if skip_slow_models_seconds is specified
+        # only apply to non-ensemble models during validation
+        if (
+            self.skip_slow_models_seconds is not None
+            and 'TotalRuntimeSeconds' in validation_template.columns
+        ):
+            # Keep ensemble models (Ensemble > 0) regardless of runtime
+            # Filter non-ensemble models (Ensemble == 0) based on runtime
+            slow_models_mask = (validation_template['Ensemble'] == 0) & (
+                validation_template['TotalRuntimeSeconds']
+                > self.skip_slow_models_seconds
+            )
+            if self.verbose > 0:
+                num_slow = slow_models_mask.sum()
+                if num_slow > 0:
+                    print(
+                        f"Skipping {num_slow} models that took longer than {self.skip_slow_models_seconds} seconds"
+                    )
+            validation_template = validation_template[~slow_models_mask]
         validation_template = validation_template.drop_duplicates(
             subset=self.template_cols, keep='first'
         )
@@ -1985,6 +2074,9 @@ class AutoTS(object):
             template["TransformationParameters"].replace("null", "{}").fillna('{}')
         )
         model_count = self.model_count if model_count is None else model_count
+        if self.startTimeStamps is None and isinstance(df_train, pd.DataFrame):
+            # minimal fallback for tests or edge cases that call _run_template before fit()
+            self.startTimeStamps = df_train.notna().idxmax()
         template_result = TemplateWizard(
             template,
             df_train=df_train,
@@ -2017,6 +2109,13 @@ class AutoTS(object):
             additional_msg=additional_msg,
             custom_metric=self.custom_metric,
         )
+        if template_result.interrupted:
+            details = template_result.interrupt_details.copy()
+            if details:
+                self.run_interrupt_details = details
+            if details.get("level") == "run":
+                self.run_was_interrupted = True
+                self._interrupt_run = True
         if model_count == 0:
             self.model_count += template_result.model_count
         else:
@@ -2061,6 +2160,28 @@ class AutoTS(object):
         if result_file is not None:
             self.initial_results.save(result_file)
         return None
+
+    def _handle_interrupt_exit(self):
+        """Finalize state after a run-level interrupt."""
+        self.run_was_interrupted = True
+        if not self.run_interrupt_details:
+            self.run_interrupt_details = {
+                "level": "run",
+                "reason": "KeyboardInterrupt",
+            }
+        if self.validation_results is None:
+            self.validation_results = copy.copy(self.initial_results)
+        try:
+            self = self.validation_agg()
+        except Exception:
+            pass
+        try:
+            self._set_best_model()
+        except Exception:
+            pass
+        sys.stdout.flush()
+        self.fitRuntime = pd.Timestamp.now() - self.fitStart
+        return self
 
     def _run_validations(
         self,
@@ -2182,6 +2303,10 @@ class AutoTS(object):
                 return_template=return_template,
                 additional_msg=additional_msg,
             )
+            if self._interrupt_run:
+                if return_template:
+                    return result_overall
+                return None
             if return_template:
                 result_overall = result_overall.concat(result)
         if return_template:
@@ -2486,8 +2611,11 @@ class AutoTS(object):
             else:
                 export_template = self.validation_results.model_results.copy()
                 # all validated models + horizontal ensembles
+                expected_runs = self.num_validations + 1
+                max_vals = self.validation_results.model_results['Runs'].max()
+                expected_runs = max_vals if max_vals < expected_runs else expected_runs
                 export_template = export_template[
-                    (export_template['Runs'] >= (self.num_validations + 1))
+                    (export_template['Runs'] >= expected_runs)
                     | (export_template['Ensemble'] >= 2)
                 ]
                 if not include_ensemble:
@@ -3038,6 +3166,7 @@ class AutoTS(object):
                 forecast_length=self.forecast_length,
                 ensemble=self.ensemble,
                 subset_flag=self.subset_flag,
+                series_profiles=self.series_profiles,
                 only_specified=True,
             )
             reg_tr = (
@@ -3170,6 +3299,7 @@ class AutoTS(object):
                     forecast_length=self.forecast_length,
                     ensemble=['horizontal-max'],
                     subset_flag=False,
+                    series_profiles=self.series_profiles,
                     only_specified=True,
                 )
             else:
@@ -3459,29 +3589,39 @@ class AutoTS(object):
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         plot_df = remove_leading_zeros(plot_df)
+        interval_label = f"{self.prediction_interval * 100}% upper/lower forecast"
+        if plot_df.shape[1] < 4:
+            return plot_df.plot(title=title, **kwargs)
+        renamed_df = plot_df.rename(
+            columns={
+                plot_df.columns[0]: 'actuals',
+                plot_df.columns[1]: 'forecast',
+                plot_df.columns[2]: 'up_forecast',
+                plot_df.columns[3]: 'low_forecast',
+            }
+        )
         try:
-            import matplotlib.pyplot as plt
-
-            ax = plt.subplot()
-            ax.set_title(title)
-            ax.fill_between(
-                plot_df.index,
-                plot_df.iloc[:, 3],
-                plot_df.iloc[:, 2],
-                facecolor=facecolor,
+            ax = plot_forecast_with_intervals(
+                renamed_df,
+                actual_col='actuals',
+                forecast_col='forecast',
+                lower_col='low_forecast',
+                upper_col='up_forecast',
+                title=title,
+                include_bounds=True,
                 alpha=alpha,
-                interpolate=True,
-                label=f"{self.prediction_interval * 100}% upper/lower forecast",
+                band_color=facecolor,
+                interval_label=interval_label,
+                band_kwargs={'interpolate': True},
+                **kwargs,
             )
-            ax.plot(plot_df.index, plot_df.iloc[:, 1], label="forecast", **kwargs)
-            ax.plot(plot_df.index, plot_df.iloc[:, 0], label="actuals")
             ax.legend(loc=loc)
             for label in ax.get_xticklabels():
                 label.set_ha("right")
                 label.set_rotation(45)
             return ax
         except Exception:
-            plot_df.plot(title=title, **kwargs)
+            return plot_df.plot(title=title, **kwargs)
 
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
@@ -3745,26 +3885,80 @@ class AutoTS(object):
                 title = f"Validation Forecasts for {series}"
         # actual plotting section
         colb = [x for x in plot_df.columns if "_lower" not in x and "_upper" not in x]
+        plot_kwargs = kwargs.copy()
+        ax_param = plot_kwargs.pop('ax', None)
+        user_color = plot_kwargs.pop('color', None)
+
         if colors is not None:
-            # this will need to change if users are allowed to input colors
             new_colors = {x: random.choice(colors_list) for x in colb}
             colors = {**new_colors, **colors}
-            ax = plot_df[colb].plot(title=title, color=colors, **kwargs)
-            if include_bounds:
-                ax.fill_between(
-                    plot_df.index,
-                    plot_df['chosen_upper'],
-                    plot_df['chosen_lower'],
-                    alpha=alpha,
-                    color="#A5ADAF",
+            color_mapping = {col: colors[col] for col in colb if col in colors}
+            if color_mapping:
+                ax = plot_df[colb].plot(
+                    title=title, color=color_mapping, ax=ax_param, **plot_kwargs
                 )
+            elif user_color is not None:
+                ax = plot_df[colb].plot(
+                    title=title, color=user_color, ax=ax_param, **plot_kwargs
+                )
+            else:
+                ax = plot_df[colb].plot(title=title, ax=ax_param, **plot_kwargs)
         else:
-            # path currently active in the compare_horizontal case
             if not include_bounds:
                 renaming = {x: x[:8] for x in colb}
-                ax = plot_df[colb].rename(columns=renaming).plot(title=title, **kwargs)
+                renamed = plot_df[colb].rename(columns=renaming)
+                if user_color is not None:
+                    ax = renamed.plot(
+                        title=title, color=user_color, ax=ax_param, **plot_kwargs
+                    )
+                else:
+                    ax = renamed.plot(title=title, ax=ax_param, **plot_kwargs)
             else:
-                ax = plot_df.plot(title=title, **kwargs)
+                if user_color is not None:
+                    ax = plot_df.plot(
+                        title=title, color=user_color, ax=ax_param, **plot_kwargs
+                    )
+                else:
+                    ax = plot_df.plot(title=title, ax=ax_param, **plot_kwargs)
+
+        if include_bounds and {'chosen_upper', 'chosen_lower', 'chosen'}.issubset(
+            plot_df.columns
+        ):
+            shading_cols = ['chosen', 'chosen_lower', 'chosen_upper']
+            if 'actuals' in plot_df.columns:
+                shading_cols.insert(0, 'actuals')
+            shading_df = plot_df[shading_cols].rename(
+                columns={
+                    'chosen': 'forecast',
+                    'chosen_lower': 'low_forecast',
+                    'chosen_upper': 'up_forecast',
+                }
+            )
+            color_subset = None
+            if colors is not None:
+                color_subset = {}
+                if 'actuals' in shading_df.columns and 'actuals' in colors:
+                    color_subset['actuals'] = colors['actuals']
+                if 'chosen' in colors:
+                    color_subset['forecast'] = colors['chosen']
+            band_color = "#A5ADAF"
+            if colors is not None and 'chosen_lower' in colors:
+                band_color = colors['chosen_lower']
+            plot_forecast_with_intervals(
+                shading_df,
+                actual_col='actuals' if 'actuals' in shading_df.columns else None,
+                forecast_col='forecast',
+                lower_col='low_forecast',
+                upper_col='up_forecast',
+                title=None,
+                colors=color_subset,
+                include_bounds=True,
+                alpha=alpha,
+                band_color=band_color,
+                interval_label=f"{self.prediction_interval * 100}% upper/lower forecast",
+                plot_lines=False,
+                ax=ax,
+            )
         if end_color is not None:
             ax.vlines(
                 x=self.validation_forecast_cuts_ends,
@@ -4306,6 +4500,20 @@ class AutoTS(object):
 
             plt.title(f'{col} Unpredictability Score')
 
+            # subtle watermark
+            ax2.text(
+                0.98,
+                0.02,
+                "AutoTS",
+                transform=ax2.transAxes,
+                ha='left',
+                va='bottom',
+                fontsize=7,
+                alpha=0.08,
+                style='italic',
+                color='gray',
+            )
+
             fig.legend(loc="upper right", bbox_to_anchor=(0.9, 0.9))
 
             return fig
@@ -4818,7 +5026,6 @@ class AutoTS(object):
 
         from autots.tools.transform import transformer_dict
         from sklearn.linear_model import Lasso, ElasticNet
-        from sklearn.preprocessing import StandardScaler
 
         initial_results = self.results()
         all_trans = list(transformer_dict.keys())
@@ -5060,274 +5267,154 @@ class AutoTS(object):
             param_impact['elastic_value'] = lasso2.coef_.flatten()
         return param_impact.copy().rename(columns=lambda x: f"{target}_" + str(x))
 
+    def diagnose_params_new(self, target='runtime', min_occurrences: int = 3):
+        """Summarize which parameter choices are linked to slow runtimes or errors.
 
-colors_list = [
-    '#FF00FF',
-    '#7FFFD4',
-    '#00FFFF',
-    '#F5DEB3',
-    '#FF6347',
-    '#8B008B',
-    '#696969',
-    '#FFC0CB',
-    '#C71585',
-    '#008080',
-    '#663399',
-    '#32CD32',
-    '#66CDAA',
-    '#A9A9A9',
-    '#2F4F4F',
-    '#FFDEAD',
-    '#800000',
-    '#FFDAB9',
-    '#D3D3D3',
-    '#98FB98',
-    '#87CEEB',
-    '#A52A2A',
-    '#FFA07A',
-    '#7FFF00',
-    '#E9967A',
-    '#1E90FF',
-    '#FF69B4',
-    '#ADD8E6',
-    '#008B8B',
-    '#FF7F50',
-    '#00FA9A',
-    '#9370DB',
-    '#4682B4',
-    '#006400',
-    '#AFEEEE',
-    '#CD853F',
-    '#9400D3',
-    '#EE82EE',
-    '#00008B',
-    '#4B0082',
-    '#0403A7',
-    '#000000',
-    '#B0C4DE',
-    '#5F9EA0',
-    '#708090',
-    '#556B2F',
-    '#FF4500',
-    '#FA8072',
-    '#FFD700',
-    '#DA70D6',
-    '#DC143C',
-    '#B22222',
-    '#00CED1',
-    '#40E0D0',
-    '#FF1493',
-    '#483D8B',
-    '#2E8B57',
-    '#D2691E',
-    '#8FBC8F',
-    '#FF8C00',
-    '#FFB6C1',
-    '#8A2BE2',
-    '#D8BFD8',
-]
+        Args:
+            target (str): one of runtime, smape, mae, oda, exception, or a column in
+                the results DataFrame.
+            min_occurrences (int): minimum number of rows a parameter/value pair must
+                appear in to be included.
 
-# colors you might see in a mosaic or fresco, llm based and only partially accurate but want to do more depth on this later
-ancient_roman = [
-    '#66023C',  # Tyrian Purple (Murex snail secretion - corrected to a more authentic red-purple)
-    '#D4AF37',  # Gold (Gold leaf or gold powder)
-    '#B55A30',  # Terracotta (Clay-based pigments)
-    '#5E503F',  # Taupe (Earthy brown pigments)
-    '#DC143C',  # Crimson (Kermes red, extracted from scale insects)
-    '#D8C3A5',  # Pale Sand (Limestone-based pigments)
-    '#BAA378',  # Olive Tan (Natural ochre)
-    '#3A5F3F',  # Dark Green Serpentine (stone)
-    '#2E4057',  # Deep Slate Blue (Copper)
-    '#6A7B76',  # Muted Teal (Malachite or copper-based pigments)
-    '#965D62',  # Burnt Rose (Red ochre or iron oxide)
-    '#7F9B9B',  # Grayish Blue (Indigo or woad mixed with white)
-    '#7C0A02',  # Cinnabar Red (Mercury sulfide, known as vermilion)
-    '#8A3324',  # Burnt Umber (Natural iron oxide)
-    '#4682B4',  # Steel Blue (Egyptian Blue - a silicate of copper and calcium)
-    '#CD5C5C',  # Indian Red (Red ochre)
-    '#B8860B',  # Dark Goldenrod (Orpiment, arsenic trisulfide)
-    '#6B8E23',  # Olive Drab (Plant-based green pigments like verdigris)
-    '#2E8B57',  # Sea Green (Verdigris or malachite)
-    '#9932CC',  # Dark Orchid (Could represent a more intense version of murex purple)
-    '#9400D3',  # Dark Violet (A possible representation of Tyrian purple)
-    '#4B0082',  # Indigo (Indigo plant dye)
-    '#6A5ACD',  # Slate Blue (Cobalt blue mixed with white)
-    '#483D8B',  # Dark Slate Blue (Natural mineral blue)
-    '#DA70D6',  # Orchid (Similar to a diluted murex purple)
-    '#1C1C1C',  # Obsidian Black (stone)
-    '#D8BFD8',  # Thistle (Light violet)
-    '#FF2400',  # Cinnabar Red (Mercury sulfide)
-    '#1F75FE',  # Egyptian Blue (Silicate of copper and calcium)
-    '#FFD700',  # Bright Gold (Orpiment or actual gold leaf)
-    '#32CD32',  # Bright Verdigris Green (Copper acetate-based)
-    '#FFA07A',  # Light Coral (Madder Lake - derived from madder plant)
-    '#FF4500',  # Bright Orange (Ochre or plant-based)
-    '#ADD8E6',  # Light Blue (Sky blue fresco made with calcium-based pigments)
-    '#FFFFE0',  # Light Yellow (Lead-tin yellow)
-    '#00FA9A',  # Medium Spring Green (Copper-based greens)
-    '#F4A460',  # Sandy Brown (Saffron)
-    '#FFFACD',  # Lemon Chiffon (Lighter ochre)
-    '#E9967A',  # Dark Salmon (in accents for walls)
-    '#8B0000',  # Dark Red (Alizarin, a plant dye)
-    '#2B2B2B',  # Basalt Gray (stone)
-    '#FF6347',  # Tomato (Bright red accent, also achievable with madder dye)
-    '#FF8C00',  # Dark Orange (Bright ochre)
-    '#40E0D0',  # Turquoise (Copper-based turquoise pigment)
-    '#FA8072',  # Salmon (Warm pinks used in fresco detailing)
-    '#D5C3AA',  # Travertine Beige (stone)
-    '#EAE6DA',  # Carrara White Marble (stone)
-]
+        Returns:
+            pandas.DataFrame: aggregated statistics per parameter/value pair.
+        """
 
+        results = self.results()
+        if results.empty:
+            raise ValueError("No results available to diagnose.")
 
-def fake_regressor(
-    df,
-    forecast_length: int = 14,
-    date_col: str = None,
-    value_col: str = None,
-    id_col: str = None,
-    frequency: str = 'infer',
-    aggfunc: str = 'first',
-    drop_most_recent: int = 0,
-    na_tolerance: float = 0.95,
-    drop_data_older_than_periods: int = 100000,
-    dimensions: int = 1,
-    verbose: int = 0,
-):
-    """Create a fake regressor of random numbers for testing purposes."""
+        metric_lookup = {
+            'runtime': 'TotalRuntimeSeconds',
+            'smape': 'smape',
+            'mae': 'mae',
+            'oda': 'oda',
+            'exception': 'exception',
+        }
 
-    if date_col is None and value_col is None:
-        df_wide = pd.DataFrame(df)
-        assert (
-            type(df_wide.index) is pd.DatetimeIndex
-        ), "df index is not pd.DatetimeIndex"
-    else:
-        df_wide = long_to_wide(
-            df,
-            date_col=date_col,
-            value_col=value_col,
-            id_col=id_col,
-            aggfunc=aggfunc,
+        if target not in metric_lookup and target not in results.columns:
+            raise ValueError(
+                f"Target '{target}' not found. "
+                f"Valid options: {list(metric_lookup.keys())} or a results column."
+            )
+
+        if target == 'exception':
+            metric_series = results['Exceptions'].notna().astype(int)
+        else:
+            metric_col = metric_lookup.get(target, target)
+            if metric_col not in results.columns:
+                raise ValueError(
+                    f"Column '{metric_col}' not available in results for target '{target}'."
+                )
+            metric_series = pd.to_numeric(results[metric_col], errors='coerce')
+
+        mask = metric_series.notna() & (results['Model'] != 'Ensemble')
+        results = results.loc[mask].copy()
+        metric_series = metric_series.loc[results.index]
+
+        if results.empty:
+            raise ValueError(
+                "No usable rows left after filtering; nothing to diagnose."
+            )
+
+        overall_mean = float(metric_series.mean())
+
+        def _flatten_dict(prefix, data, container):
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    nested_key = f"{prefix}.{key}" if prefix else str(key)
+                    _flatten_dict(nested_key, value, container)
+            else:
+                container[prefix] = data
+
+        def _stringify(value):
+            if isinstance(value, (list, tuple, set)):
+                return ', '.join(map(str, value))
+            if isinstance(value, dict):
+                try:
+                    return json.dumps(value, sort_keys=True)
+                except TypeError:
+                    return str(value)
+            if value is None:
+                return 'None'
+            if isinstance(value, (float, int)) and pd.isna(value):
+                return 'None'
+            return str(value)
+
+        impact = {}
+
+        for idx, row in results.iterrows():
+            metric_value = float(metric_series.loc[idx])
+            entries = [('model_name', _stringify(row['Model']))]
+
+            try:
+                model_params_raw = row.get('ModelParameters', '{}')
+                model_params = json.loads(model_params_raw or '{}')
+            except (TypeError, json.JSONDecodeError):
+                model_params = {}
+
+            flat_params = {}
+            _flatten_dict('', model_params, flat_params)
+            for key, value in flat_params.items():
+                if not key:
+                    continue
+                entries.append((f"model.{key}", _stringify(value)))
+
+            try:
+                transform_params_raw = row.get('TransformationParameters', '{}')
+                transform_dict = json.loads(transform_params_raw or '{}')
+            except (TypeError, json.JSONDecodeError):
+                transform_dict = {}
+
+            fillna_value = transform_dict.get('fillna', None)
+            if fillna_value is not None:
+                entries.append(('transform.fillna', _stringify(fillna_value)))
+
+            transforms = transform_dict.get('transformations', {}) or {}
+            for transform in transforms.values():
+                if transform is not None:
+                    entries.append(('transformer', _stringify(transform)))
+
+            for name, value in entries:
+                impact.setdefault(name, {}).setdefault(value, []).append(metric_value)
+
+        rows = []
+        min_occurrences = max(1, int(min_occurrences))
+        for name, value_map in impact.items():
+            for value, values in value_map.items():
+                count = len(values)
+                if count < min_occurrences:
+                    continue
+                metrics_arr = np.array(values, dtype=float)
+                mean_value = float(metrics_arr.mean())
+                rows.append(
+                    {
+                        'parameter': name,
+                        'value': value,
+                        'count': count,
+                        'metric_mean': mean_value,
+                        'metric_median': float(np.median(metrics_arr)),
+                        'metric_std': float(np.std(metrics_arr, ddof=0)),
+                        'relative_change': mean_value - overall_mean,
+                    }
+                )
+
+        summary = pd.DataFrame(rows)
+        if summary.empty:
+            return summary
+
+        summary = summary.sort_values('relative_change', ascending=False).reset_index(
+            drop=True
         )
 
-    df_wide = df_cleanup(
-        df_wide,
-        frequency=frequency,
-        na_tolerance=na_tolerance,
-        drop_data_older_than_periods=drop_data_older_than_periods,
-        aggfunc=aggfunc,
-        drop_most_recent=drop_most_recent,
-        verbose=verbose,
-    )
-    if frequency == 'infer':
-        frequency = infer_frequency(df_wide)
-
-    forecast_index = pd.date_range(
-        freq=frequency, start=df_wide.index[-1], periods=forecast_length + 1
-    )[1:]
-
-    if dimensions <= 1:
-        future_regressor_train = pd.Series(
-            np.random.randint(0, 100, size=len(df_wide.index)), index=df_wide.index
+        metric_name = (
+            'failure rate'
+            if target == 'exception'
+            else metric_lookup.get(target, target)
         )
-        future_regressor_forecast = pd.Series(
-            np.random.randint(0, 100, size=(forecast_length)), index=forecast_index
+        print(f"Overall {metric_name}: {overall_mean:.4f}")
+        print(
+            "Positive relative_change values suggest the parameter is associated with worse outcomes."
         )
-    else:
-        future_regressor_train = pd.DataFrame(
-            np.random.randint(0, 100, size=(len(df_wide.index), dimensions)),
-            index=df_wide.index,
-        )
-        future_regressor_forecast = pd.DataFrame(
-            np.random.randint(0, 100, size=(forecast_length, dimensions)),
-            index=forecast_index,
-        )
-    return future_regressor_train, future_regressor_forecast
 
-
-def error_correlations(all_result, result: str = 'corr'):
-    """
-    Onehot encode AutoTS result df and return df or correlation with errors.
-
-    Args:
-        all_results (pandas.DataFrame): AutoTS model_results df
-        result (str): whether to return 'df', 'corr', 'poly corr' with errors
-    """
-    import json
-    from sklearn.preprocessing import OneHotEncoder
-
-    all_results = all_result.copy()
-    all_results = all_results.drop_duplicates()
-    all_results['ExceptionFlag'] = (~all_results['Exceptions'].isna()).astype(int)
-    all_results = all_results[all_results['ExceptionFlag'] > 0]
-    all_results = all_results.reset_index(drop=True)
-
-    trans_df = all_results['TransformationParameters'].apply(json.loads)
-    try:
-        trans_df = pd.json_normalize(trans_df)  # .fillna(value='NaN')
-    except Exception:
-        trans_df = pd.io.json.json_normalize(trans_df)
-    trans_cols1 = trans_df.columns
-    trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
-    trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
-    trans_df = pd.DataFrame(trans_transformer.transform(trans_df))
-    trans_cols = np.array(
-        [x1 + x2 for x1, x2 in zip(trans_cols1, trans_transformer.categories_)]
-    )
-    trans_cols = [item for sublist in trans_cols for item in sublist]
-    trans_df.columns = trans_cols
-
-    model_df = all_results['ModelParameters'].apply(json.loads)
-    try:
-        model_df = pd.json_normalize(model_df)  # .fillna(value='NaN')
-    except Exception:
-        model_df = pd.io.json.json_normalize(model_df)
-    model_cols1 = model_df.columns
-    model_df = model_df.astype(str).replace('nan', 'NaNZ')
-    model_transformer = OneHotEncoder(sparse=False).fit(model_df)
-    model_df = pd.DataFrame(model_transformer.transform(model_df))
-    model_cols = np.array(
-        [x1 + x2 for x1, x2 in zip(model_cols1, model_transformer.categories_)]
-    )
-    model_cols = [item for sublist in model_cols for item in sublist]
-    model_df.columns = model_cols
-
-    modelstr_df = all_results['Model']
-    modelstr_transformer = OneHotEncoder(sparse=False).fit(
-        modelstr_df.values.reshape(-1, 1)
-    )
-    modelstr_df = pd.DataFrame(
-        modelstr_transformer.transform(modelstr_df.values.reshape(-1, 1))
-    )
-    modelstr_df.columns = modelstr_transformer.categories_[0]
-
-    except_df = all_results['Exceptions'].copy()
-    except_df = except_df.where(except_df.duplicated(), 'UniqueError')
-    except_transformer = OneHotEncoder(sparse=False).fit(
-        except_df.values.reshape(-1, 1)
-    )
-    except_df = pd.DataFrame(
-        except_transformer.transform(except_df.values.reshape(-1, 1))
-    )
-    except_df.columns = except_transformer.categories_[0]
-
-    test = pd.concat(
-        [except_df, all_results[['ExceptionFlag']], modelstr_df, model_df, trans_df],
-        axis=1,
-    )
-
-    if result == 'corr':
-        test_corr = test.corr()[except_df.columns]
-        return test_corr
-    if result == 'poly corr':
-        from sklearn.preprocessing import PolynomialFeatures
-
-        poly = PolynomialFeatures(interaction_only=True, include_bias=False)
-        poly = poly.fit(test)
-        col_names = poly.get_feature_names(input_features=test.columns)
-        test = pd.DataFrame(poly.transform(test), columns=col_names)
-        test_corr = test.corr()[except_df.columns]
-        return test_corr
-    elif result == 'df':
-        return test
-    else:
-        raise ValueError("arg 'result' not recognized")
+        return summary

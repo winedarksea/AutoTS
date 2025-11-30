@@ -34,7 +34,11 @@ class CassandraTest(unittest.TestCase):
         }
         df_daily = load_daily(long=False)
         # so it expects these first in the column order for the tests
-        cols = ['wiki_United_States', 'wiki_Germany'] + [col for col in df_daily.columns if col not in ['wiki_United_States', 'wiki_Germany']]
+        cols = ['wiki_United_States', 'wiki_Germany'] + [
+            col
+            for col in df_daily.columns
+            if col not in ['wiki_United_States', 'wiki_Germany']
+        ]
         df_daily = df_daily[cols]
         forecast_length = 180
         include_history = True
@@ -61,7 +65,8 @@ class CassandraTest(unittest.TestCase):
             )
         }
         constraint = {
-            "constraints": [{
+            "constraints": [
+                {
                     "constraint_method": "last_window",
                     "constraint_value": 0.5,
                     "constraint_direction": "upper",
@@ -244,7 +249,9 @@ class CassandraTest(unittest.TestCase):
                 mod.plot_components(
                     pred, series=series, to_origin_space=True, start_date=start_date
                 )
-                mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
+                mod.plot_trend(
+                    series=series, vline=df_test.index[0], start_date=start_date
+                )
         pred.evaluate(
             df_daily.reindex(result.index)[df_train.columns]
             if include_history
@@ -279,75 +286,199 @@ class CassandraTest(unittest.TestCase):
         df = load_daily(long=False)
         params = {
             'frequency': 'D',
-          'preprocessing_transformation': {'fillna': 'ffill',
-           'transformations': {'0': 'AlignLastValue', '1': 'ClipOutliers'},
-           'transformation_params': {'0': {'rows': 1,
-             'lag': 1,
-             'method': 'additive',
-             'strength': 1.0,
-             'first_value_only': False},
-            '1': {'method': 'clip', 'std_threshold': 4, 'fillna': None}}},
-          'scaling': 'BaseScaler',
-          'past_impacts_intervention': 'remove',
-          'seasonalities': ['month', 'dayofweek', 'weekdayofmonth'],
-          'ar_lags': None,
-          'ar_interaction_seasonality': None,
-          'anomaly_detector_params': {'method': 'zscore',
-           'transform_dict': {'transformations': {'0': 'DatepartRegression'},
-            'transformation_params': {'0': {'datepart_method': 'simple_3',
-              'regression_model': {'model': 'ElasticNet', 'model_params': {}}}}},
-           'method_params': {'distribution': 'gamma', 'alpha': 0.05},
-           'fillna': 'rolling_mean_24'},
-          'anomaly_intervention': None,
-          'holiday_detector_params': None,
-          'holiday_countries_used': True,
-          'multivariate_feature': None,
-          'multivariate_transformation': None,
-          'regressor_transformation': None,
-          'regressors_used': False,
-          'linear_model': {'model': 'l1_positive',
-           'recency_weighting': None,
-           'maxiter': 15000},
-          'randomwalk_n': 10,
-          'trend_window': None,
-          'trend_standin': None,
-          'trend_anomaly_detector_params': {'method': 'LOF',
-           'method_params': {'contamination': 'auto',
-            'n_neighbors': 10,
-            'metric': 'minkowski'},
-           'fillna': 'mean',
-           'transform_dict': None},
-          'trend_transformation2': {'fillna': 'zero',
-           'transformations': {'0': 'HPFilter', '1': 'ClipOutliers'},
-           'transformation_params': {'0': {'part': 'trend', 'lamb': 6.25},
-            '1': {'method': 'clip', 'std_threshold': 2, 'fillna': None}}},
-          'trend_model2': {'Model': 'WindowRegression',
-           'ModelParameters': {'window_size': 12,
-            'input_dim': 'univariate',
-            'output_dim': '1step',
-            'normalize_window': False,
-            'max_windows': 8000,
-            'regression_type': None,
-            'regression_model': {'model': 'ExtraTrees',
-             'model_params': {'n_estimators': 100,
-              'min_samples_leaf': 1,
-              'max_depth': 20}}}},
-          'trend_transformation': {'fillna': 'zero',
-           'transformations': {'0': 'HPFilter', '1': 'ClipOutliers'},
-           'transformation_params': {'0': {'part': 'trend', 'lamb': 6.25},
-            '1': {'method': 'clip', 'std_threshold': 2, 'fillna': None}}},
-          'trend_model': {'Model': 'SeasonalityMotif',
-           'ModelParameters': {'window': 10,
-            'point_method': 'weighted_mean',
-            'distance_metric': 'mqae',
-            'k': 10,
-            'datepart_method': 'expanded_binarized'}},
-          'trend_phi': None
+            'preprocessing_transformation': {
+                'fillna': 'ffill',
+                'transformations': {'0': 'AlignLastValue', '1': 'ClipOutliers'},
+                'transformation_params': {
+                    '0': {
+                        'rows': 1,
+                        'lag': 1,
+                        'method': 'additive',
+                        'strength': 1.0,
+                        'first_value_only': False,
+                    },
+                    '1': {'method': 'clip', 'std_threshold': 4, 'fillna': None},
+                },
+            },
+            'scaling': 'BaseScaler',
+            'past_impacts_intervention': 'remove',
+            'seasonalities': ['month', 'dayofweek', 'weekdayofmonth'],
+            'ar_lags': None,
+            'ar_interaction_seasonality': None,
+            'anomaly_detector_params': {
+                'method': 'zscore',
+                'transform_dict': {
+                    'transformations': {'0': 'DatepartRegression'},
+                    'transformation_params': {
+                        '0': {
+                            'datepart_method': 'simple_3',
+                            'regression_model': {
+                                'model': 'ElasticNet',
+                                'model_params': {},
+                            },
+                        }
+                    },
+                },
+                'method_params': {'distribution': 'gamma', 'alpha': 0.05},
+                'fillna': 'rolling_mean_24',
+            },
+            'anomaly_intervention': None,
+            'holiday_detector_params': None,
+            'holiday_countries_used': True,
+            'multivariate_feature': None,
+            'multivariate_transformation': None,
+            'regressor_transformation': None,
+            'regressors_used': False,
+            'linear_model': {
+                'model': 'l1_positive',
+                'recency_weighting': None,
+                'maxiter': 15000,
+            },
+            'randomwalk_n': 10,
+            'trend_window': None,
+            'trend_standin': None,
+            'trend_anomaly_detector_params': {
+                'method': 'LOF',
+                'method_params': {
+                    'contamination': 'auto',
+                    'n_neighbors': 10,
+                    'metric': 'minkowski',
+                },
+                'fillna': 'mean',
+                'transform_dict': None,
+            },
+            'trend_transformation2': {
+                'fillna': 'zero',
+                'transformations': {'0': 'HPFilter', '1': 'ClipOutliers'},
+                'transformation_params': {
+                    '0': {'part': 'trend', 'lamb': 6.25},
+                    '1': {'method': 'clip', 'std_threshold': 2, 'fillna': None},
+                },
+            },
+            'trend_model2': {
+                'Model': 'WindowRegression',
+                'ModelParameters': {
+                    'window_size': 12,
+                    'input_dim': 'univariate',
+                    'output_dim': '1step',
+                    'normalize_window': False,
+                    'max_windows': 8000,
+                    'regression_type': None,
+                    'regression_model': {
+                        'model': 'ExtraTrees',
+                        'model_params': {
+                            'n_estimators': 100,
+                            'min_samples_leaf': 1,
+                            'max_depth': 20,
+                        },
+                    },
+                },
+            },
+            'trend_transformation': {
+                'fillna': 'zero',
+                'transformations': {'0': 'HPFilter', '1': 'ClipOutliers'},
+                'transformation_params': {
+                    '0': {'part': 'trend', 'lamb': 6.25},
+                    '1': {'method': 'clip', 'std_threshold': 2, 'fillna': None},
+                },
+            },
+            'trend_model': {
+                'Model': 'SeasonalityMotif',
+                'ModelParameters': {
+                    'window': 10,
+                    'point_method': 'weighted_mean',
+                    'distance_metric': 'mqae',
+                    'k': 10,
+                    'datepart_method': 'expanded_binarized',
+                },
+            },
+            'trend_phi': None,
         }
         mod = Cassandra(**params)
-        
+
         mod.fit(df)
         pred = mod.predict(forecast_length=10)
 
         self.assertFalse(pred.forecast.isna().all().all())
         self.assertEqual(pred.forecast.shape[0], 10)
+
+    def test_fft_multivariate_feature(self):
+        """Test Cassandra with FFT multivariate feature to ensure no NaN values in harmonics."""
+        print("Starting Cassandra FFT multivariate feature test")
+        from autots import load_daily
+
+        df = load_daily(long=False)
+        forecast_length = 30
+        df_train = df.iloc[:-forecast_length]
+        df_test = df.iloc[-forecast_length:]
+
+        # Test with FFT multivariate feature
+        params = {
+            'multivariate_feature': 'fft',
+            'scaling': 'BaseScaler',
+            'seasonalities': [7, 30.5],
+            'linear_model': {'model': 'lstsq'},
+            'trend_model': {'Model': 'LastValueNaive', 'ModelParameters': {}},
+            'regressors_used': False,
+            'n_jobs': 1,
+        }
+
+        mod = Cassandra(**params)
+        mod.fit(df_train)
+
+        # Verify X array has no NaN during fit
+        if hasattr(mod, 'x_array'):
+            self.assertFalse(
+                np.isnan(mod.x_array.values).any(),
+                "Training X array contains NaN values",
+            )
+            # Check for FFT harmonic columns
+            fft_cols = [col for col in mod.x_array.columns if 'fft' in str(col).lower()]
+            self.assertGreater(
+                len(fft_cols), 0, "No FFT harmonic columns found in X array"
+            )
+            print(f"Found {len(fft_cols)} FFT harmonic features")
+
+        # Test prediction without history
+        pred = mod.predict(forecast_length=forecast_length, include_history=False)
+
+        # Verify forecast has no NaN
+        self.assertFalse(
+            pred.forecast.isna().any().any(), "Forecast contains NaN values"
+        )
+        self.assertEqual(pred.forecast.shape[0], forecast_length)
+
+        # Verify predict X array has no NaN
+        if hasattr(mod, 'predict_x_array'):
+            x_arr = mod.predict_x_array
+            if isinstance(x_arr, pd.DataFrame):
+                self.assertFalse(
+                    x_arr.isna().any().any(), "Predict X array contains NaN values"
+                )
+                # Specifically check FFT columns
+                fft_cols = [col for col in x_arr.columns if 'fft' in str(col).lower()]
+                for col in fft_cols:
+                    self.assertFalse(
+                        x_arr[col].isna().any(),
+                        f"FFT column '{col}' contains NaN values in predict X array",
+                    )
+
+        # Test prediction with history
+        pred_with_hist = mod.predict(
+            forecast_length=forecast_length, include_history=True
+        )
+        self.assertFalse(
+            pred_with_hist.forecast.isna().any().any(),
+            "Forecast with history contains NaN values",
+        )
+
+        # Test with different forecast lengths
+        for fl in [10, 50, 100]:
+            pred_fl = mod.predict(forecast_length=fl, include_history=False)
+            self.assertFalse(
+                pred_fl.forecast.isna().any().any(),
+                f"Forecast with length {fl} contains NaN values",
+            )
+            self.assertEqual(pred_fl.forecast.shape[0], fl)
+
+        print("FFT multivariate feature test completed successfully")

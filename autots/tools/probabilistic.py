@@ -11,6 +11,7 @@ try:
     from scipy.stats import percentileofscore
 except Exception:
     pass
+# TODO: consider a seasonal aware version of inferred normal
 
 
 def percentileofscore_appliable(x, a, kind='rank'):

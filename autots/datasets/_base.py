@@ -265,12 +265,14 @@ def load_live_daily(
     weather_data_types: list = ["AWND", "WSF2", "TAVG", "PRCP"],
     weather_stations: list = ["USW00094846", "USW00014925", "USW00014771"],
     weather_years: int = 5,
+    noaa_cdo_token: str = None,  # https://www.ncdc.noaa.gov/cdo-web/token
     london_air_stations: list = ['CT3', 'SK8'],
     london_air_species: str = "PM25",
     london_air_days: int = 180,
     earthquake_days: int = 180,
     earthquake_min_magnitude: int = 5,
     gsa_key: str = None,  # https://open.gsa.gov/api/dap/
+    nasa_api_key: str = "DEMO_KEY",
     gov_domain_list=['nasa.gov'],
     gov_domain_limit: int = 600,
     wikipedia_pages: list = ['Microsoft_Office', "List_of_highest-grossing_films"],
@@ -280,7 +282,7 @@ def load_live_daily(
     eia_key: str = None,
     eia_respondents: list = ["MISO", "PJM", "TVA", "US48"],
     timeout: float = 300.05,
-    sleep_seconds: int = 2,
+    sleep_seconds: int = 10,
     **kwargs,
 ):
     """Generates a dataframe of data up to the present day. Requires active internet connection.
@@ -299,10 +301,12 @@ def load_live_daily(
         weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
             PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
         weather_stations (list): from NCEI NOAA api station ids. Pass empty list to skip.
+        noaa_cdo_token (str): API token from https://www.ncdc.noaa.gov/cdo-web/token (free, required for weather data)
         london_air_stations (list): londonair.org.uk source station IDs. Pass empty list to skip.
         london_species (str): what measurement to pull from London Air. Not all stations have all metrics.
         earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.
         gsa_key (str): api key from https://open.gsa.gov/api/dap/
+        nasa_api_key (str): API key for https://api.nasa.gov/. Set to None to skip NASA DONKI data.
         gov_domain_list (list): dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
             some examples: ['usps.com', 'ncbi.nlm.nih.gov', 'cdc.gov', 'weather.gov', 'irs.gov', "usajobs.gov", "studentaid.gov", 'nasa.gov', "uk.usembassy.gov", "tsunami.gov"]
         gov_domain_limit (int): max number of records. Smaller will be faster. Max is currently 10000.
@@ -312,6 +316,7 @@ def load_live_daily(
         timeout (float): used by some queries
         sleep_seconds (int): increasing this may reduce probability of server download failures
     """
+    # TODO: add a proper unittest for this, minimal for each just to test that each API is not broken
     assert sleep_seconds >= 0.5, "sleep_seconds must be >=0.5"
 
     dataset_lists = []
@@ -362,7 +367,23 @@ def load_live_daily(
                 msft_hist = msft_hist.rename(
                     columns=lambda x: x.lower().replace(" ", "_")
                 )
-                msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
+                ticker_lower = ticker.lower()
+                msft_hist = msft_hist.rename(columns=lambda x: ticker_lower + "_" + x)
+                close_col = f"{ticker_lower}_close"
+                if close_col in msft_hist.columns:
+                    prev_close = msft_hist[close_col].ffill().shift(1)
+                    pct_col = f"{ticker_lower}_close_pct_change"
+                    msft_hist[pct_col] = (
+                        msft_hist[close_col] - prev_close
+                    ) / prev_close
+                    direction_col = f"{ticker_lower}_close_direction"
+                    delta = msft_hist[close_col] - prev_close
+                    direction = np.select(
+                        [delta > 0, delta < 0, delta == 0],
+                        [1, -1, 0],
+                        default=np.nan,
+                    )
+                    msft_hist[direction_col] = direction
                 try:
                     msft_hist.index = msft_hist.index.tz_localize(None)
                 except Exception:
@@ -375,28 +396,137 @@ def load_live_daily(
                 print(f"yfinance data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%Y-%m-%d")
-    start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime(
-        "%Y-%m-%d"
-    )
+    weather_start_date = current_date - datetime.timedelta(days=360 * weather_years)
+
     if weather_stations is not None:
         for wstation in weather_stations:
             try:
-                wbase = "https://www.ncei.noaa.gov/access/services/data/v1/?dataset=daily-summaries"
-                wargs = f"&dataTypes={','.join(weather_data_types)}&stations={wstation}"
-                wargs = (
-                    wargs
-                    + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
-                )
-                wdf = pd.read_csv(
-                    io.StringIO(s.get(wbase + wargs, timeout=timeout).text)
-                )
-                wdf['DATE'] = pd.to_datetime(wdf['DATE'])
-                wdf = wdf.set_index('DATE').drop(columns=['STATION'])
-                wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
-                dataset_lists.append(wdf)
-                time.sleep(sleep_seconds)
+                # NOAA CDO Web Services v2 API
+                # Documentation: https://www.ncdc.noaa.gov/cdo-web/webservices/v2
+                # Request token: https://www.ncdc.noaa.gov/cdo-web/token
+                if noaa_cdo_token is None:
+                    print(
+                        f"weather data skipped for {wstation}: noaa_cdo_token required. Get free token at https://www.ncdc.noaa.gov/cdo-web/token"
+                    )
+                    continue
+
+                # Use v2 API endpoint
+                wbase = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
+                headers = {'token': noaa_cdo_token}
+
+                # API requires date ranges to be less than 1 year, so we need to chunk requests
+                station_data = []
+
+                for dtype in weather_data_types:
+                    # Split date range into chunks of less than 1 year (use 360 days to be safe)
+                    chunk_size_days = 360
+                    all_results = []
+
+                    current_chunk_start = weather_start_date
+                    while current_chunk_start < current_date:
+                        current_chunk_end = min(
+                            current_chunk_start
+                            + datetime.timedelta(days=chunk_size_days),
+                            current_date,
+                        )
+
+                        start_date_str = current_chunk_start.strftime("%Y-%m-%d")
+                        end_date_str = current_chunk_end.strftime("%Y-%m-%d")
+
+                        # Paginate within each chunk if needed
+                        offset = 1
+                        max_requests_per_chunk = 10
+                        request_count = 0
+
+                        while request_count < max_requests_per_chunk:
+                            params = {
+                                'datasetid': 'GHCND',  # Global Historical Climatology Network - Daily
+                                'stationid': f'GHCND:{wstation}',
+                                'datatypeid': dtype,
+                                'startdate': start_date_str,
+                                'enddate': end_date_str,
+                                'units': 'standard',
+                                'limit': 1000,
+                                'offset': offset,
+                            }
+
+                            response = s.get(
+                                wbase, headers=headers, params=params, timeout=timeout
+                            )
+
+                            if response.status_code != 200:
+                                if (
+                                    offset == 1
+                                ):  # Only print error on first request for this chunk
+                                    print(
+                                        f"weather data failed for {wstation} ({dtype}, {start_date_str} to {end_date_str}): HTTP {response.status_code}"
+                                    )
+                                break
+
+                            try:
+                                data_json = response.json()
+                                if (
+                                    'results' not in data_json
+                                    or len(data_json['results']) == 0
+                                ):
+                                    # No more results for this chunk
+                                    break
+
+                                results = data_json['results']
+                                all_results.extend(results)
+
+                                # If we got fewer than 1000 results, we've reached the end of this chunk
+                                if len(results) < 1000:
+                                    break
+
+                                # Move to next page
+                                offset += len(results)
+                                request_count += 1
+                                time.sleep(
+                                    sleep_seconds * 0.5
+                                )  # Shorter sleep within chunk pagination
+
+                            except Exception as parse_error:
+                                print(
+                                    f"weather data parsing failed for {wstation} ({dtype}): {repr(parse_error)}"
+                                )
+                                break
+
+                        # Move to next chunk
+                        current_chunk_start = current_chunk_end + datetime.timedelta(
+                            days=1
+                        )
+                        time.sleep(sleep_seconds)  # Respect rate limits between chunks
+
+                    # Convert all results to DataFrame
+                    if len(all_results) > 0:
+                        dtype_df = pd.DataFrame(all_results)
+                        dtype_df['date'] = pd.to_datetime(dtype_df['date'])
+                        dtype_df = dtype_df.set_index('date')[['value']].rename(
+                            columns={'value': f'{wstation}_{dtype}'}
+                        )
+                        if dtype.upper() == "PRCP":
+                            precip_col = f'{wstation}_{dtype}'
+                            binary_name = f'{wstation}_PRCP_binary'
+                            dtype_df[binary_name] = (
+                                dtype_df[precip_col].gt(0).astype(int)
+                            )
+                        station_data.append(dtype_df)
+
+                # Combine all data types for this station
+                if len(station_data) > 0:
+                    from functools import reduce
+
+                    wdf = reduce(
+                        lambda x, y: pd.merge(
+                            x, y, left_index=True, right_index=True, how="outer"
+                        ),
+                        station_data,
+                    )
+                    dataset_lists.append(wdf)
+
             except Exception as e:
-                print(f"weather data failed: {repr(e)}")
+                print(f"weather data failed for {wstation}: {repr(e)}")
 
     str_end_time = current_date.strftime("%d-%b-%Y")
     start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime(
@@ -448,6 +578,176 @@ def load_live_daily(
             dataset_lists.append(global_earthquakes)
         except Exception as e:
             print(f"earthquake data failed: {repr(e)}")
+
+    if nasa_api_key is not None:
+        try:
+            nasa_key = nasa_api_key if nasa_api_key else "DEMO_KEY"
+            # convert observation window to NASA-compatible YYYY-MM-DD strings
+            nasa_start_dt = pd.to_datetime(observation_start, errors="coerce")
+            nasa_end_dt = pd.to_datetime(current_date, errors="coerce")
+            if pd.isna(nasa_start_dt) or pd.isna(nasa_end_dt):
+                raise ValueError(
+                    "Unable to resolve observation window for NASA DONKI request."
+                )
+            nasa_start_str = nasa_start_dt.strftime("%Y-%m-%d")
+            nasa_end_str = nasa_end_dt.strftime("%Y-%m-%d")
+            nasa_end_day = nasa_end_dt.normalize()
+
+            def _extract_datetime(record, candidate_keys):
+                """Return first valid timestamp from record using candidate keys."""
+                if not isinstance(record, dict):
+                    return None
+                for key in candidate_keys:
+                    value = record.get(key)
+                    if not value:
+                        continue
+                    ts = pd.to_datetime(value, errors="coerce")
+                    if pd.isna(ts):
+                        continue
+                    if isinstance(ts, pd.Timestamp):
+                        return ts.tz_localize(None)
+                return None
+
+            def _fill_after_first_valid(series, end_day, fill_value=0):
+                """Fill missing values to zero once data starts, leaving leading NaNs."""
+                if series is None or series.empty:
+                    return series
+                first_valid = series.first_valid_index()
+                if first_valid is None:
+                    return series
+                end_day = pd.Timestamp(end_day).normalize()
+                if first_valid > end_day:
+                    return series
+                new_index = pd.date_range(first_valid, end_day, freq="D")
+                filled = series.reindex(new_index).fillna(fill_value)
+                filled.index.name = series.index.name
+                return filled
+
+            base_url = "https://api.nasa.gov/DONKI/"
+            common_params = {
+                "startDate": nasa_start_str,
+                "endDate": nasa_end_str,
+                "api_key": nasa_key,
+            }
+
+            # Daily Solar Flare Count
+            response = s.get(base_url + "FLR", params=common_params, timeout=timeout)
+            if response.status_code == 200:
+                flare_json = response.json()
+                flare_dates = []
+                if isinstance(flare_json, list):
+                    for item in flare_json:
+                        flare_dt = _extract_datetime(
+                            item, ["beginTime", "peakTime", "endTime"]
+                        )
+                        if flare_dt is not None:
+                            flare_dates.append(flare_dt.normalize())
+                    if flare_dates:
+                        flare_series = (
+                            pd.Series(
+                                1,
+                                index=pd.DatetimeIndex(flare_dates, name="datetime"),
+                            )
+                            .groupby(level=0)
+                            .sum()
+                            .rename("nasa_solar_flare_count")
+                        )
+                        flare_series = _fill_after_first_valid(
+                            flare_series, nasa_end_day, fill_value=0
+                        )
+                        dataset_lists.append(flare_series.to_frame())
+            else:
+                print(f"NASA FLR request failed with status {response.status_code}")
+            time.sleep(sleep_seconds)
+
+            # Daily Geomagnetic Storm Maximum Intensity (Kp Index)
+            response = s.get(base_url + "GST", params=common_params, timeout=timeout)
+            if response.status_code == 200:
+                gst_json = response.json()
+                kp_records = []
+                if isinstance(gst_json, list):
+                    for item in gst_json:
+                        kp_entries = item.get("allKpIndex") or []
+                        if not isinstance(kp_entries, list):
+                            kp_entries = []
+                        if not kp_entries and item.get("kpIndex") is not None:
+                            kp_entries = [
+                                {
+                                    "kpIndex": item.get("kpIndex"),
+                                    "observedTime": item.get("startTime"),
+                                }
+                            ]
+                        for kp_entry in kp_entries:
+                            kp_val = kp_entry.get("kpIndex")
+                            obs_time = (
+                                kp_entry.get("observedTime")
+                                or kp_entry.get("sourceTime")
+                                or item.get("startTime")
+                            )
+                            if kp_val is None or obs_time is None:
+                                continue
+                            try:
+                                kp_float = float(kp_val)
+                            except Exception:
+                                continue
+                            obs_dt = pd.to_datetime(obs_time, errors="coerce")
+                            if pd.isna(obs_dt):
+                                continue
+                            obs_dt = obs_dt.tz_localize(None).normalize()
+                            kp_records.append((obs_dt, kp_float))
+                    if kp_records:
+                        kp_df = pd.DataFrame(kp_records, columns=["datetime", "kp"])
+                        kp_series = (
+                            kp_df.groupby("datetime")["kp"]
+                            .max()
+                            .rename("nasa_geomagnetic_kp_max")
+                        )
+                        kp_series = _fill_after_first_valid(
+                            kp_series, nasa_end_day, fill_value=0
+                        )
+                        dataset_lists.append(kp_series.to_frame())
+            else:
+                print(f"NASA GST request failed with status {response.status_code}")
+            time.sleep(sleep_seconds)
+
+            # Daily Coronal Mass Ejection Count
+            response = s.get(base_url + "CME", params=common_params, timeout=timeout)
+            if response.status_code == 200:
+                cme_json = response.json()
+                cme_dates = []
+                if isinstance(cme_json, list):
+                    for item in cme_json:
+                        cme_dt = _extract_datetime(item, ["startTime"])
+                        if cme_dt is None:
+                            analyses = item.get("cmeAnalyses") or []
+                            if isinstance(analyses, list):
+                                for analysis in analyses:
+                                    cme_dt = _extract_datetime(
+                                        analysis, ["time21_5", "time18_5"]
+                                    )
+                                    if cme_dt is not None:
+                                        break
+                        if cme_dt is not None:
+                            cme_dates.append(cme_dt.normalize())
+                    if cme_dates:
+                        cme_series = (
+                            pd.Series(
+                                1,
+                                index=pd.DatetimeIndex(cme_dates, name="datetime"),
+                            )
+                            .groupby(level=0)
+                            .sum()
+                            .rename("nasa_coronal_mass_ejection_count")
+                        )
+                        cme_series = _fill_after_first_valid(
+                            cme_series, nasa_end_day, fill_value=0
+                        )
+                        dataset_lists.append(cme_series.to_frame())
+            else:
+                print(f"NASA CME request failed with status {response.status_code}")
+            time.sleep(sleep_seconds)
+        except Exception as e:
+            print(f"NASA DONKI download failed with error {repr(e)}")
 
     if gov_domain_list is not None:
         try:
@@ -800,6 +1100,7 @@ def load_artificial(long=False, date_start=None, date_end=None):
     """
     import scipy.signal
     from scipy.ndimage import maximum_filter1d
+    from autots.tools.wavelet import create_mexican_hat_wavelet, create_morlet_wavelet
 
     if date_end is None:
         date_end = datetime.datetime.now().date()
@@ -890,10 +1191,10 @@ def load_artificial(long=False, date_start=None, date_end=None):
                 + rng.normal(0, 0.15, size)
             ),
             "wavelet_ricker": np.tile(
-                scipy.signal.ricker(33, 1), int(np.ceil(size / 33))
+                create_mexican_hat_wavelet(33, sigma=1.0), int(np.ceil(size / 33))
             )[:size],
             "wavelet_morlet": np.real(
-                np.tile(scipy.signal.morlet2(100, 6.0, 6.0), int(np.ceil(size / 100)))[
+                np.tile(create_morlet_wavelet(100, 6.0, 6.0), int(np.ceil(size / 100)))[
                     :size
                 ]
                 * 10
@@ -960,13 +1261,13 @@ def load_artificial(long=False, date_start=None, date_end=None):
                 np.arange(size) < (4 * size) / 5,
                 np.real(
                     np.tile(
-                        scipy.signal.morlet2(50, 6.0, 6.0), int(np.ceil(size / 50))
+                        create_morlet_wavelet(50, 6.0, 6.0), int(np.ceil(size / 50))
                     )[:size]
                     * 10
                 ),
                 np.real(
                     np.tile(
-                        scipy.signal.morlet2(50, 6.0, 0.0), int(np.ceil(size / 50))
+                        create_morlet_wavelet(50, 6.0, 0.0), int(np.ceil(size / 50))
                     )[:size]
                     * 10
                 ),

@@ -6,18 +6,26 @@ from math import ceil
 import warnings
 import random
 import datetime
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
-from autots.models.base import ModelObject, PredictionObject
+from autots.models.base import (
+    ModelObject,
+    PredictionObject,
+    stack_component_frames,
+    sum_component_frames,
+)
 from autots.tools.seasonal import (
     seasonal_int,
     seasonal_window_match,
     seasonal_independent_match,
     date_part,
     base_seasonalities,
+    random_datepart,
+)
+from autots.tools.changepoints import (
     create_changepoint_features,
     changepoint_fcst_from_last_row,
-    random_datepart,
     half_yr_spacing,
 )
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
@@ -27,7 +35,8 @@ from autots.tools.window_functions import (
     chunk_reshape,
 )
 from autots.tools.percentile import nan_quantile, trimmed_mean
-from autots.tools.fast_kalman import KalmanFilter, new_kalman_params
+from autots.tools.fast_kalman import KalmanFilter
+from autots.tools.fast_kalman_params import new_kalman_params
 from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
@@ -1379,24 +1388,55 @@ class Motif(ModelObject):
             'yule',
             'kdtree',
         ]
+        metric_weights = [
+            1.0,  # braycurtis
+            1.0,  # canberra
+            0.5,  # chebyshev - downweighted
+            1.0,  # cityblock
+            1.0,  # correlation
+            1.0,  # cosine
+            1.0,  # dice
+            1.0,  # euclidean
+            1.0,  # hamming
+            1.0,  # jaccard
+            1.0,  # jensenshannon
+            1.0,  # mahalanobis
+            1.0,  # matching
+            1.0,  # minkowski
+            1.0,  # rogerstanimoto
+            1.0,  # russellrao
+            1.0,  # sokalmichener
+            1.0,  # sokalsneath
+            1.0,  # sqeuclidean
+            1.0,  # yule
+            1.0,  # kdtree
+        ]
         if method == "event_risk":
             k_choice = random.choices(
-                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.03]
             )[0]
         else:
             k_choice = random.choices(
                 [1, 3, 5, 10, 15, 20, 100], [0.02, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
+        if k_choice <= 50:
+            point_method = random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.1, 0.2, 0.2],
+            )[0]
+        else:
+            # redue median probability with large k
+            point_method = random.choices(
+                ["weighted_mean", "mean", "median", "midhinge", "closest"],
+                [0.4, 0.2, 0.03, 0.2, 0.2],
             )[0]
         return {
             "window": random.choices(
                 [2, 3, 5, 7, 10, 14, 28, 60],
                 [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
-            "point_method": random.choices(
-                ["weighted_mean", "mean", "median", "midhinge", "closest"],
-                [0.4, 0.2, 0.2, 0.2, 0.2],
-            )[0],
-            "distance_metric": random.choice(metric_list),
+            "point_method": point_method,
+            "distance_metric": random.choices(metric_list, weights=metric_weights)[0],
             "k": k_choice,
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
         }
@@ -1445,9 +1485,15 @@ def predict_reservoir(
             if > 10, also increases search space of probabilistic forecast
         seed_weighted (str): how to summarize most recent points if seed_pts > 1
     """
-    assert k > 0, "nvar `k` must be > 0"
-    assert warmup_pts > 0, "nvar `warmup_pts` must be > 0"
-    assert df.shape[1] > k, "nvar input data must contain at least k+1 records"
+    # Input validation with proper exceptions instead of assertions
+    if k <= 0:
+        raise ValueError("nvar `k` must be > 0")
+    if warmup_pts <= 0:
+        raise ValueError("nvar `warmup_pts` must be > 0")
+    if df.shape[1] <= k:
+        raise ValueError(
+            f"nvar input data must contain at least {k+1} records, got {df.shape[1]}"
+        )
 
     n_pts = df.shape[1]
     # handle short data edge case
@@ -1474,9 +1520,9 @@ def predict_reservoir(
     x = np.zeros((dlin, maxtime_pts))
 
     # fill in the linear part of the feature vector for all times
+    # Vectorized version - much faster than nested loops
     for delay in range(k):
-        for j in range(delay, maxtime_pts):
-            x[d * delay : d * (delay + 1), j] = df[:, j - delay]
+        x[d * delay : d * (delay + 1), delay:] = df[:, : maxtime_pts - delay]
 
     # create an array to hold the full feature vector for training time
     # (use ones so the constant term is already 1)
@@ -1485,25 +1531,59 @@ def predict_reservoir(
     # copy over the linear part (shift over by one to account for constant)
     out_train[1 : dlin + 1, :] = x[:, warmup_pts - 1 : warmtrain_pts - 1]
 
-    # fill in the non-linear part
-    cnt = 0
+    # Vectorized polynomial feature creation - replaces nested loops
+    # This is much faster: O(dlin^2) vs O(dlin^2 * traintime_pts)
+    x_train = x[:, warmup_pts - 1 : warmtrain_pts - 1]
+    # Use broadcasting to create all pairwise products at once
+    idx = 0
     for row in range(dlin):
-        for column in range(row, dlin):
-            # shift by one for constant
-            out_train[dlin + 1 + cnt] = (
-                x[row, warmup_pts - 1 : warmtrain_pts - 1]
-                * x[column, warmup_pts - 1 : warmtrain_pts - 1]
-            )
-            cnt += 1
-
-    # ridge regression: train W_out to map out_train to Lorenz[t] - Lorenz[t - 1]
-    W_out = (
-        (x[0:d, warmup_pts:warmtrain_pts] - x[0:d, warmup_pts - 1 : warmtrain_pts - 1])
-        @ out_train[:, :].T
-        @ np.linalg.pinv(
-            out_train[:, :] @ out_train[:, :].T + ridge_param * np.identity(dtot)
+        # Only compute upper triangle (including diagonal) since symmetric
+        out_train[dlin + 1 + idx : dlin + 1 + idx + (dlin - row)] = (
+            x_train[row : row + 1, :] * x_train[row:, :]
         )
+        idx += dlin - row
+
+    # ridge regression: train W_out to map out_train to df[t] - df[t - 1]
+    y_train = (
+        x[0:d, warmup_pts:warmtrain_pts] - x[0:d, warmup_pts - 1 : warmtrain_pts - 1]
     )
+
+    # Use more numerically stable ridge regression computation
+    # Instead of: W_out = (A^T A + λI)^-1 A^T b
+    # We use Cholesky decomposition for better numerical stability
+    # A = out_train @ out_train.T + ridge_param * I
+    # Can be factored as A = L @ L.T where L is lower triangular
+    # Then solve: L @ L.T @ W_out.T = b.T
+    # First solve: L @ y = b.T  (forward substitution)
+    # Then solve: L.T @ W_out.T = y  (backward substitution)
+
+    try:
+        # Compute the Gram matrix with ridge regularization
+        A = out_train @ out_train.T
+        # Add ridge parameter to diagonal for regularization
+        # Use np.eye instead of np.identity for better precision control
+        A.flat[:: dtot + 1] += ridge_param
+
+        # Compute right-hand side
+        b = y_train @ out_train.T
+
+        # Use Cholesky decomposition for more stable solve
+        # This is more numerically stable than direct solve for symmetric positive definite matrices
+        try:
+            L = np.linalg.cholesky(A)
+            # Solve L @ y = b.T
+            y_temp = np.linalg.solve(L, b.T)
+            # Solve L.T @ W_out.T = y_temp
+            W_out = np.linalg.solve(L.T, y_temp).T
+        except np.linalg.LinAlgError:
+            # If Cholesky fails (matrix not positive definite), fall back to lstsq
+            # This can happen with very small ridge_param or ill-conditioned data
+            W_out = np.linalg.lstsq(A, b.T, rcond=None)[0].T
+    except Exception:
+        # Final fallback: use lstsq which is most robust but slower
+        A = out_train @ out_train.T + ridge_param * np.eye(dtot)
+        b = y_train @ out_train.T
+        W_out = np.linalg.lstsq(A, b.T, rcond=None)[0].T
 
     # create a place to store feature vectors for prediction
     out_test = np.ones(dtot)  # full feature vector
@@ -1512,21 +1592,55 @@ def predict_reservoir(
     # copy over initial linear feature vector
     x_test[:, 0] = x[:, warmtrain_pts - 1]
 
-    # do prediction
+    # Calculate divergence thresholds based on training data statistics
+    # Use training data range to set reasonable bounds
+    train_range = np.max(np.abs(df), axis=1)  # Max absolute value per series
+    train_std = np.std(df, axis=1)
+    # Threshold: allow values up to 100x the max training range or 1000x std
+    # This is generous enough for legitimate growth but catches exponential divergence
+    divergence_threshold = np.maximum(100 * train_range, 1000 * train_std)
+    # Also set an absolute threshold to catch extreme cases
+    absolute_threshold = 1e12
+
+    # Track if we've stopped early
+    stopped_early = False
+
+    # do prediction with vectorized polynomial feature creation
     for j in range(testtime_pts - 1):
         # copy linear part into whole feature vector
         out_test[1 : dlin + 1] = x_test[:, j]  # shift by one for constant
-        # fill in the non-linear part
-        cnt = 0
+
+        # Vectorized polynomial feature creation - much faster
+        x_j = x_test[:, j]
+        idx = 0
         for row in range(dlin):
-            for column in range(row, dlin):
-                # shift by one for constant
-                out_test[dlin + 1 + cnt] = x_test[row, j] * x_test[column, j]
-                cnt += 1
+            out_test[dlin + 1 + idx : dlin + 1 + idx + (dlin - row)] = (
+                x_j[row] * x_j[row:]
+            )
+            idx += dlin - row
+
         # fill in the delay taps of the next state
         x_test[d:dlin, j + 1] = x_test[0 : (dlin - d), j]
         # do a prediction
         x_test[0:d, j + 1] = x_test[0:d, j] + W_out @ out_test[:]
+
+        # Early stopping: check for divergence
+        # Only check after first few steps to allow initial adjustment
+        if j >= 2:
+            current_values = x_test[0:d, j + 1]
+            # Check if any value exceeds threshold or is NaN/Inf
+            if (
+                np.any(np.abs(current_values) > divergence_threshold)
+                or np.any(np.abs(current_values) > absolute_threshold)
+                or np.any(~np.isfinite(current_values))
+            ):
+                # Forecast is diverging - use last stable value for remaining steps
+                # This prevents wasted computation and Inf/NaN propagation
+                for remaining_j in range(j + 2, testtime_pts):
+                    x_test[:, remaining_j] = x_test[:, j]
+                stopped_early = True
+                break
+
     pred = x_test[0:d, 1:]
 
     if prediction_interval is not None or seed_pts > 1:
@@ -1540,26 +1654,47 @@ def predict_reservoir(
             x_int = np.zeros((dlin, testtime_pts + n_samples))  # linear part
             # copy over initial linear feature vector
             x_int[:, 0] = x[:, warmtrain_pts - 2 - ns]
+            # Track early stopping for this interval sample
+            interval_stopped_early = False
             # do prediction
             for j in range(testtime_pts - 1 + n_samples):
                 # copy linear part into whole feature vector
                 out_test[1 : dlin + 1] = x_int[:, j]  # shift by one for constant
-                # fill in the non-linear part
-                cnt = 0
+
+                # Vectorized polynomial feature creation
+                x_j = x_int[:, j]
+                idx = 0
                 for row in range(dlin):
-                    for column in range(row, dlin):
-                        # shift by one for constant
-                        out_test[dlin + 1 + cnt] = x_int[row, j] * x_int[column, j]
-                        cnt += 1
+                    out_test[dlin + 1 + idx : dlin + 1 + idx + (dlin - row)] = (
+                        x_j[row] * x_j[row:]
+                    )
+                    idx += dlin - row
+
                 # fill in the delay taps of the next state
                 x_int[d:dlin, j + 1] = x_int[0 : (dlin - d), j]
                 # do a prediction
                 x_int[0:d, j + 1] = x_int[0:d, j] + W_out @ out_test[:]
-            start_slice = ns + 2
-            end_slice = start_slice + testtime_pts - 1
-            interval_list.append(x_int[:, start_slice:end_slice])
+
+                # Early stopping for interval predictions (same logic as main prediction)
+                if j >= 2:
+                    current_values = x_int[0:d, j + 1]
+                    if (
+                        np.any(np.abs(current_values) > divergence_threshold)
+                        or np.any(np.abs(current_values) > absolute_threshold)
+                        or np.any(~np.isfinite(current_values))
+                    ):
+                        # Use last stable value for remaining steps
+                        for remaining_j in range(j + 2, testtime_pts + n_samples):
+                            x_int[:, remaining_j] = x_int[:, j]
+                        interval_stopped_early = True
+                        break
+
+            # Extract forecast portion: skip ns+1 warmup points from historical seed, then take forecast_length steps
+            # This accounts for the offset in starting position (warmtrain_pts - 2 - ns)
+            interval_list.append(x_int[:, (ns + 1) : (ns + 1 + forecast_length)])
 
         interval_list = np.array(interval_list)
+
         if seed_pts > 1:
             pred_int = np.concatenate(
                 [np.expand_dims(x_test[:, 1:], axis=0), interval_list]
@@ -1575,6 +1710,7 @@ def predict_reservoir(
                 )[0:d]
             else:
                 pred = np.quantile(pred_int, q=0.5, axis=0)[0:d]
+
         pred_upper = nan_quantile(interval_list, q=prediction_interval, axis=0)[0:d]
         pred_upper = np.where(pred_upper < pred, pred, pred_upper)
         pred_lower = nan_quantile(interval_list, q=(1 - prediction_interval), axis=0)[
@@ -1602,7 +1738,7 @@ class NVAR(ModelObject):
         ridge_param (float): standard lambda for ridge regression
         warmup_pts (int): in reality, passing 1 here (no warmup) is fine
         batch_size (int): nvar scales exponentially, to scale linearly, series are split into batches of size n
-        batch_method (str): method for collecting series to make batches
+        batch_method (str): method for collecting series to make batches ('input_order', 'med_sorted', 'std_sorted', 'max_sorted')
     """
 
     def __init__(
@@ -1647,9 +1783,33 @@ class NVAR(ModelObject):
         """
         self.basic_profile(df)
         if self.batch_method == "med_sorted":
-            df = df.loc[:, df.median().sort_values(ascending=False).index]
+            # Use stable sort with column names as secondary key for deterministic ordering
+            stats = df.median()
+            # Create a DataFrame to enable multi-key sorting
+            sort_df = pd.DataFrame({'stat': stats, 'col': stats.index})
+            # Sort by statistic descending, then by column name ascending for stability
+            sort_df = sort_df.sort_values(
+                by=['stat', 'col'], ascending=[False, True], kind='stable'
+            )
+            df = df.loc[:, sort_df['col']]
         elif self.batch_method == "std_sorted":
-            df = df.loc[:, df.std().sort_values(ascending=False).index]
+            # Use stable sort with column names as secondary key for deterministic ordering
+            stats = df.std()
+            sort_df = pd.DataFrame({'stat': stats, 'col': stats.index})
+            sort_df = sort_df.sort_values(
+                by=['stat', 'col'], ascending=[False, True], kind='stable'
+            )
+            df = df.loc[:, sort_df['col']]
+        elif self.batch_method == "max_sorted":
+            # Use stable sort with column names as secondary key for deterministic ordering
+            stats = df.max()
+            sort_df = pd.DataFrame({'stat': stats, 'col': stats.index})
+            sort_df = sort_df.sort_values(
+                by=['stat', 'col'], ascending=[False, True], kind='stable'
+            )
+            df = df.loc[:, sort_df['col']]
+        # else: input_order - no sorting needed
+
         self.new_col_names = df.columns
         self.batch_steps = ceil(df.shape[1] / self.batch_size)
         self.df_train = df.to_numpy().T
@@ -2492,6 +2652,7 @@ class KalmanStateSpace(ModelObject):
             "process_noise": self.process_noise,
             "observation_model": self.observation_model,
             "observation_noise": self.observation_noise,
+            "em_iter": self.em_iter,
             "subset": self.subset,
         }
 
@@ -3080,6 +3241,7 @@ class FFT(ModelObject):
             n_harmonics (int): number of frequencies to include
             detrend (str): None, 'linear', or 'quadratic', use if no other detrending already done
         """
+        # TODO: add more detrend options (changepoint based)
         ModelObject.__init__(
             self,
             name,
@@ -3162,8 +3324,8 @@ class FFT(ModelObject):
         """Returns dict of new parameters for parameter tuning"""
         return {
             "n_harmonics": random.choices(
-                [2, 3, 4, 5, 6, 10, 20, 100, 1000, 5000],
-                [0.1, 0.02, 0.2, 0.02, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1],
+                [2, 3, 4, 5, 6, 10, 20, 100, 1000, 5000, 20000],
+                [0.1, 0.02, 0.2, 0.02, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.01],
             )[0],
             "detrend": random.choices([None, "linear", 'quadratic'], [0.2, 0.7, 0.1])[
                 0
@@ -3280,7 +3442,7 @@ class BallTreeMultivariateMotif(ModelObject):
             )
             Xa = x.reshape(-1, x.shape[-1])
             if self.sample_fraction is not None:
-                if 0 < self.sample_fration < 1:
+                if 0 < self.sample_fraction < 1:
                     sample_size = int(Xa.shape[0] * self.sample_fraction)
                 else:
                     sample_size = (
@@ -3494,9 +3656,9 @@ class BasicLinearModel(ModelObject):
         verbose: int = 0,
         regression_type: str = None,
         datepart_method: str = "common_fourier",
-        changepoint_spacing: int = None,
-        changepoint_distance_end: int = None,
-        lambda_: float = 0.01,
+        changepoint_spacing: int = 60,
+        changepoint_distance_end: int = 180,
+        lambda_: float = 2.0,
         trend_phi: float = None,
         holiday_countries_used: bool = True,
         **kwargs,
@@ -3677,11 +3839,20 @@ class BasicLinearModel(ModelObject):
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X = pd.concat([X, future_regressor.reindex(test_index)], axis=1)
+            X = pd.concat(
+                [
+                    X,
+                    future_regressor.reindex(test_index).rename(
+                        columns=lambda x: "regr_" + str(x)
+                    ),
+                ],
+                axis=1,
+            )
         X["constant"] = 1
         X_values = X.to_numpy().astype(float)
         self.X = X
 
+        # ORIGINAL FORECAST CALCULATION (not reconstructed from components)
         if self.trend_phi is None or self.trend_phi == 1 or len(test_index) < 2:
             forecast = pd.DataFrame(
                 X_values @ self.beta, columns=self.column_names, index=test_index
@@ -3712,6 +3883,81 @@ class BasicLinearModel(ModelObject):
                 components.sum(axis=1), columns=self.column_names, index=test_index
             )
 
+        # COMPONENT EXTRACTION (for analysis, not used in forecast)
+        beta_df = pd.DataFrame(
+            self.beta, index=self.X.columns, columns=self.column_names
+        )
+        component_frames = OrderedDict()
+        categorized_cols = set()
+
+        # Seasonal contributions
+        seasonal_cols = [col for col in self.seasonal_columns if col in X.columns]
+        if seasonal_cols:
+            season_matrix = X[seasonal_cols].to_numpy().astype(float)
+            season_beta = beta_df.loc[seasonal_cols].to_numpy()
+            season_contrib = season_matrix @ season_beta
+            component_frames['seasonality'] = pd.DataFrame(
+                season_contrib, index=test_index, columns=self.column_names
+            )
+            categorized_cols.update(seasonal_cols)
+
+        # Trend contributions with optional phi dampening
+        trend_cols = [col for col in self.trend_columns if col in X.columns]
+        if trend_cols:
+            trend_matrix = X[trend_cols].to_numpy().astype(float)
+            trend_beta = beta_df.loc[trend_cols].to_numpy()
+            trend_contrib = trend_matrix @ trend_beta
+            if (
+                self.trend_phi is not None
+                and self.trend_phi != 1
+                and len(test_index) >= 2
+            ):
+                req_len = len(test_index) - 1
+                phi_series = pd.Series(
+                    [self.trend_phi] * req_len,
+                    index=test_index[1:],
+                ).pow(range(req_len))
+                diff_array = np.diff(trend_contrib, axis=0)
+                diff_scaled_array = diff_array * phi_series.to_numpy()[:, np.newaxis]
+                first_row = trend_contrib[0:1, :]
+                combined_array = np.vstack([first_row, diff_scaled_array])
+                trend_contrib = np.cumsum(combined_array, axis=0)
+            component_frames['trend'] = pd.DataFrame(
+                trend_contrib, index=test_index, columns=self.column_names
+            )
+            categorized_cols.update(trend_cols)
+
+        # Regressor contributions
+        reg_cols = [col for col in self.regressor_columns if col in X.columns]
+        if reg_cols:
+            reg_matrix = X[reg_cols].to_numpy().astype(float)
+            reg_beta = beta_df.loc[reg_cols].to_numpy()
+            reg_contrib = reg_matrix @ reg_beta
+            component_frames['regressors'] = pd.DataFrame(
+                reg_contrib, index=test_index, columns=self.column_names
+            )
+            categorized_cols.update(reg_cols)
+
+        # Constant contribution
+        if "constant" in X.columns:
+            const_matrix = X[["constant"]].to_numpy().astype(float)
+            const_beta = beta_df.loc[["constant"]].to_numpy()
+            const_contrib = const_matrix @ const_beta
+            component_frames['constant'] = pd.DataFrame(
+                const_contrib, index=test_index, columns=self.column_names
+            )
+            categorized_cols.add("constant")
+
+        # Other (uncategorized) contributions
+        other_cols = [col for col in X.columns if col not in categorized_cols]
+        if other_cols:
+            other_matrix = X[other_cols].to_numpy().astype(float)
+            other_beta = beta_df.loc[other_cols].to_numpy()
+            other_contrib = other_matrix @ other_beta
+            component_frames['other'] = pd.DataFrame(
+                other_contrib, index=test_index, columns=self.column_names
+            )
+
         if just_point_forecast:
             return forecast
         else:
@@ -3734,6 +3980,7 @@ class BasicLinearModel(ModelObject):
             lower_forecast = forecast - margin_of_error
 
             predict_runtime = datetime.datetime.now() - predictStartTime
+            components_df = stack_component_frames(component_frames)
             prediction = PredictionObject(
                 model_name=self.name,
                 forecast_length=forecast_length,
@@ -3747,6 +3994,7 @@ class BasicLinearModel(ModelObject):
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
                 model_parameters=self.get_params(),
+                components=components_df,
             )
 
             return prediction
@@ -3887,20 +4135,14 @@ class TVVAR(BasicLinearModel):
 
     Notes:
         var_preprocessing will fail with many options, anything that scales/shifts the space
-        x_scaled=True seems to fail often when base_scaled=False and VAR components used
-    TODO:
-        # plot of feature impacts
-
-        # highly correlated, shared hidden factors
-        # groups / geos
-
-        # impulse response
-        # allow other regression models
-        # could run regression twice, setting to zero any X which had low coefficients for the second run
-
-        # feature summarization (dynamic factor is PCA)
-        # hierchial by GEO
+        x_scaled=True seems to fail often when base_scaled=False and VAR components use
     """
+
+    # TODO: add BayesianRegression as a model option (include uncertainty)
+    # TODO: add a plot of components
+    # TODO: add a function for impulse response analysis
+    # TODO: have an option for hierarchial coefficients (constrainted to same distribution)
+    # TODO: feature summarization for VAR components (PCA)
 
     def __init__(
         self,
@@ -4189,7 +4431,15 @@ class TVVAR(BasicLinearModel):
         x_t.index = test_index
         X_ext = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
-            X_ext = pd.concat([X_ext, future_regressor.reindex(test_index)], axis=1)
+            X_ext = pd.concat(
+                [
+                    X_ext,
+                    future_regressor.reindex(test_index).rename(
+                        columns=lambda x: "regr_" + str(x)
+                    ),
+                ],
+                axis=1,
+            )
         X_ext["constant"] = 1
 
         predictions = pd.DataFrame(
@@ -4322,6 +4572,32 @@ class TVVAR(BasicLinearModel):
             upper_forecast = forecast + margin_of_error
             lower_forecast = forecast - margin_of_error
             predict_runtime = datetime.datetime.now() - predictStartTime
+            components_df = None
+            try:
+                raw_components = self.process_components()
+                raw_components = raw_components.reindex(forecast.index)
+                component_features = raw_components.columns.get_level_values(1)
+                category_map = {}
+                for col in self.trend_columns:
+                    if col in component_features:
+                        category_map[col] = 'trend'
+                for col in self.seasonal_columns:
+                    if col in component_features:
+                        category_map[col] = 'seasonality'
+                if str(self.regression_type).lower() == "user":
+                    for col in self.regressor_columns:
+                        if col in component_features:
+                            category_map[col] = 'regressors'
+                if 'constant' in component_features:
+                    category_map['constant'] = 'constant'
+                if 'intercept' in component_features:
+                    category_map['intercept'] = 'constant'
+                component_frames = self._assemble_component_frames(
+                    raw_components, category_map, default_label='var'
+                )
+                components_df = stack_component_frames(component_frames)
+            except Exception:
+                components_df = None
             prediction = PredictionObject(
                 model_name=self.name,
                 forecast_length=forecast_length,
@@ -4334,6 +4610,7 @@ class TVVAR(BasicLinearModel):
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
                 model_parameters=self.get_params(),
+                components=components_df,
             )
             return prediction
 
@@ -4418,13 +4695,42 @@ class TVVAR(BasicLinearModel):
         for target_col in final_components:
             df = final_components[target_col]
             # Scale back to original feature space
-            df = df * self.scaler_std[target_col]  # + self.scaler_mean[target_col]
+            df = df * self.scaler_std[target_col]
+            # Add the mean to the constant term only (so components sum correctly)
+            if 'constant' in df.columns:
+                df['constant'] = df['constant'] + self.scaler_mean[target_col]
+            elif len(df.columns) > 0:
+                # If no constant, add mean to first component to ensure sum is correct
+                first_col = df.columns[0]
+                df[first_col] = df[first_col] + self.scaler_mean[target_col]
             if self.mode == 'multiplicative':
                 df = np.exp(df)
             df.columns = pd.MultiIndex.from_product([[target_col], df.columns])
             result[target_col] = df
         components_df_final = pd.concat(result.values(), axis=1)
         return components_df_final
+
+    def _assemble_component_frames(
+        self, raw_components, category_map, default_label='var'
+    ):
+        """Aggregate raw component dataframe into category DataFrames."""
+        idx = raw_components.index
+        frames = OrderedDict()
+        for series in self.column_names:
+            series_df = raw_components[series]
+            for feature in series_df.columns:
+                category = category_map.get(feature, default_label)
+                if category not in frames:
+                    frames[category] = pd.DataFrame(
+                        0.0, index=idx, columns=self.column_names
+                    )
+                frames[category][series] = frames[category][series] + series_df[feature]
+        ordered_frames = OrderedDict()
+        for cat in ['trend', 'seasonality', 'regressors', 'var', 'constant', 'other']:
+            if cat in frames:
+                ordered_frames[cat] = frames.pop(cat)
+        ordered_frames.update(frames)
+        return ordered_frames
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""

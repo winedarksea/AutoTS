@@ -1,12 +1,92 @@
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA
-from autots.tools.shaping import infer_frequency
+from autots.tools.shaping import infer_frequency, long_to_wide, df_cleanup
 from autots.tools.seasonal import date_part
 from autots.tools.holiday import holiday_flag
 from autots.tools.cointegration import coint_johansen
 from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.tools.transform import GeneralTransformer
+from autots.tools.fft import FFT
+
+try:
+    from sklearn.preprocessing import StandardScaler
+except Exception:
+    from autots.tools.mocks import StandardScaler
+
+
+def create_fft_features(
+    df,
+    forecast_length: int,
+    n_harmonics: int = 10,
+    detrend: str = "linear",
+    freq_range=None,
+):
+    """Create FFT (Fast Fourier Transform) harmonic features for regression.
+
+    Extracts frequency-domain features that can capture periodic patterns in the data.
+    These features are useful for models that can leverage fourier components.
+
+    Args:
+        df (pd.DataFrame): training data in wide format
+        forecast_length (int): length of forecasts
+        n_harmonics (int): number of harmonics to extract
+            Can be int, float (as percentage), or None for all harmonics
+        detrend (str): detrending method - None, 'linear', 'quadratic', 'cubic', 'quartic'
+        freq_range (tuple): optional (low, high) frequency range filter
+
+    Returns:
+        tuple: (fft_train_features, fft_forecast_features)
+            Both are DataFrames with harmonic features (real and imaginary components)
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("df must be a 'wide' dataframe with a pd.DatetimeIndex.")
+    if isinstance(df, pd.Series):
+        df = df.to_frame()
+
+    # Fill NaN values before FFT
+    df_filled = FillNA(df.copy(), method='ffill')
+
+    # Initialize and fit FFT
+    fft_model = FFT(n_harm=n_harmonics, detrend=detrend, freq_range=freq_range)
+    fft_model.fit(df_filled.to_numpy())
+
+    # Generate harmonics for train + forecast periods
+    harmonics_data = fft_model.generate_harmonics_dataframe(
+        forecast_length=forecast_length
+    )
+
+    # Split into train and forecast
+    train_harmonics = harmonics_data[: len(df)]
+    forecast_harmonics = harmonics_data[len(df) :]
+
+    # Create column names
+    n_harm_actual = len(fft_model.use_idx)
+    col_names = []
+    for i in range(n_harm_actual):
+        col_names.append(f"fft_harmonic_{i}_real")
+        col_names.append(f"fft_harmonic_{i}_imag")
+
+    # Convert to DataFrames with proper indices
+    fft_train = pd.DataFrame(train_harmonics, index=df.index, columns=col_names)
+
+    # Create forecast index
+    try:
+        from autots.tools.shaping import infer_frequency
+
+        freq = infer_frequency(df)
+        forecast_index = pd.date_range(
+            df.index[-1], periods=(forecast_length + 1), freq=freq
+        )[1:]
+    except Exception:
+        # Fallback if frequency inference fails
+        forecast_index = pd.RangeIndex(start=len(df), stop=len(df) + forecast_length)
+
+    fft_forecast = pd.DataFrame(
+        forecast_harmonics, index=forecast_index, columns=col_names
+    )
+
+    return fft_train, fft_forecast
 
 
 def create_regressor(
@@ -47,9 +127,11 @@ def create_regressor(
     },
     holiday_regr_style: str = "flag",
     preprocessing_params: dict = None,
+    fft_n_harmonics: int = 6,
+    fft_detrend: str = "linear",
 ):
     """Create a regressor from information available in the existing dataset.
-    Components: are lagged data, datepart information, and holiday.
+    Components: are lagged data, datepart information, holiday, and FFT harmonic features.
 
     This function has been confusing people. This is NOT necessary for machine learning models, in AutoTS they internally create more elaborate feature sets separately.
     This instead may help some other models (GLM, ARIMA) which accept regressors but won't build a regressor feature set internally.
@@ -69,7 +151,7 @@ def create_regressor(
         datepart_method (str): see date_part from seasonal
         scale (bool): if True, use the StandardScaler to standardize the features
         summarize (str): options to summarize the features, if large:
-            'pca', 'median', 'mean', 'mean+std', 'feature_agglomeration', 'gaussian_random_projection'
+            'pca', 'median', 'mean', 'mean+std', 'feature_agglomeration' (auto default when larger data), 'gaussian_random_projection'
         backfill (str): method to deal with the NaNs created by shifting
             "bfill"- backfill with last values
             "ETS" -backfill with ETS backwards forecast
@@ -80,6 +162,9 @@ def create_regressor(
         holiday_detector_params (dict): passed to HolidayDetector, or None
         holiday_regr_style (str): passed to detector's dates_to_holidays 'flag', 'series_flag', 'impact'
         preprocessing_params (dict): GeneralTransformer params to be applied before regressor creation
+        fft_n_harmonics (int): if not None, extract FFT harmonic features. Number of harmonics to extract (e.g., 10).
+            Can also be float for percentage or None to disable FFT features
+        fft_detrend (str): detrending method for FFT - None, 'linear', 'quadratic', 'cubic', 'quartic'
 
     Returns:
         regressor_train, regressor_forecast
@@ -125,6 +210,7 @@ def create_regressor(
         scale=scale,  # already done above
         backfill=backfill,
         fill_na=fill_na,
+        n_jobs=n_jobs,
     )
     # datepart
     if datepart_method is not None:
@@ -212,6 +298,20 @@ def create_regressor(
         except Exception as e:
             print("HolidayDetector failed with error: " + repr(e)[:180])
 
+    # FFT harmonic features
+    if fft_n_harmonics is not None:
+        try:
+            fft_train, fft_fcst = create_fft_features(
+                df,
+                forecast_length=forecast_length,
+                n_harmonics=fft_n_harmonics,
+                detrend=fft_detrend,
+            )
+            regr_train = pd.concat([regr_train, fft_train], axis=1)
+            regr_fcst = pd.concat([regr_fcst, fft_fcst], axis=1)
+        except Exception as e:
+            print("FFT feature extraction failed with error: " + repr(e)[:180])
+
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]
     regr_fcst.columns = [str(xc) for xc in regr_fcst.columns]
@@ -270,8 +370,6 @@ def create_lagged_regressor(
     df_inner = df.copy()
 
     if scale:
-        from sklearn.preprocessing import StandardScaler
-
         scaler = StandardScaler()
         df_inner = pd.DataFrame(
             scaler.fit_transform(df_inner), index=dates, columns=df_cols
@@ -376,3 +474,68 @@ def create_lagged_regressor(
             [add_on, regressor_train.tail(df_inner.shape[0] - forecast_length)]
         )
     return regressor_train, regressor_forecast
+
+
+def fake_regressor(
+    df,
+    forecast_length: int = 14,
+    date_col: str = None,
+    value_col: str = None,
+    id_col: str = None,
+    frequency: str = 'infer',
+    aggfunc: str = 'first',
+    drop_most_recent: int = 0,
+    na_tolerance: float = 0.95,
+    drop_data_older_than_periods: int = 100000,
+    dimensions: int = 1,
+    verbose: int = 0,
+):
+    """Create a fake regressor of random numbers for testing purposes."""
+
+    if date_col is None and value_col is None:
+        df_wide = pd.DataFrame(df)
+        assert (
+            type(df_wide.index) is pd.DatetimeIndex
+        ), "df index is not pd.DatetimeIndex"
+    else:
+        df_wide = long_to_wide(
+            df,
+            date_col=date_col,
+            value_col=value_col,
+            id_col=id_col,
+            aggfunc=aggfunc,
+        )
+
+    df_wide = df_cleanup(
+        df_wide,
+        frequency=frequency,
+        na_tolerance=na_tolerance,
+        drop_data_older_than_periods=drop_data_older_than_periods,
+        aggfunc=aggfunc,
+        drop_most_recent=drop_most_recent,
+        verbose=verbose,
+    )
+    if frequency == 'infer':
+        frequency = infer_frequency(df_wide)
+
+    forecast_index = pd.date_range(
+        freq=frequency, start=df_wide.index[-1], periods=forecast_length + 1
+    )[1:]
+
+    if dimensions <= 1:
+        future_regressor_train = pd.Series(
+            np.random.randint(0, 100, size=len(df_wide.index)), index=df_wide.index
+        )
+        future_regressor_forecast = pd.Series(
+            np.random.randint(0, 100, size=(forecast_length)), index=forecast_index
+        )
+    else:
+        future_regressor_train = pd.DataFrame(
+            np.random.randint(0, 100, size=(len(df_wide.index), dimensions)),
+            index=df_wide.index,
+        )
+        future_regressor_forecast = pd.DataFrame(
+            np.random.randint(0, 100, size=(forecast_length, dimensions)),
+            index=forecast_index,
+        )
+    return future_regressor_train, future_regressor_forecast

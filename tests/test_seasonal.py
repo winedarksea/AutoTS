@@ -10,13 +10,18 @@ Created on Sat May  4 21:43:02 2024
 import unittest
 import numpy as np
 import pandas as pd
-from autots.tools.seasonal import date_part, base_seasonalities, datepart_components, random_datepart, fourier_df
+from autots.tools.seasonal import (
+    date_part,
+    base_seasonalities,
+    datepart_components,
+    random_datepart,
+    fourier_df,
+)
 from autots.tools.holiday import holiday_flag
 from autots.tools.wavelet import create_narrowing_wavelets, offset_wavelet
 
 
 class TestSeasonal(unittest.TestCase):
-
     def test_date_part(self):
         DTindex = pd.date_range("2020-01-01", "2024-01-01", freq="D")
         for method in base_seasonalities:
@@ -106,10 +111,112 @@ class TestSeasonal(unittest.TestCase):
         # hourly being trickier
         train_index = pd.date_range("2020-01-01", "2023-01-01", freq="h")
         pred_index = pd.date_range("2023-01-02", "2024-01-01", freq="h")
-        
-        train_holiday = holiday_flag(train_index, country=["US", "CA"], encode_holiday_type=True)
-        pred_holiday = holiday_flag(pred_index, country=["US", "CA"], encode_holiday_type=True)
 
-        self.assertCountEqual(train_holiday.columns.tolist(), pred_holiday.columns.tolist())
+        train_holiday = holiday_flag(
+            train_index, country=["US", "CA"], encode_holiday_type=True
+        )
+        pred_holiday = holiday_flag(
+            pred_index, country=["US", "CA"], encode_holiday_type=True
+        )
+
+        self.assertCountEqual(
+            train_holiday.columns.tolist(), pred_holiday.columns.tolist()
+        )
         self.assertGreaterEqual(train_holiday.sum().sum(), 24)
         self.assertGreaterEqual(pred_holiday.sum().sum(), 24)
+
+    def test_anchored_warped_fourier_alignment(self):
+        DTindex = pd.date_range('2020-01-01', '2022-12-31', freq='D')
+        df = date_part(
+            DTindex,
+            method='anchored_warped_fourier:us_school:4',
+            set_index=True,
+        )
+        memorial_2020 = df.loc[pd.Timestamp('2020-05-25')]
+        memorial_2021 = df.loc[pd.Timestamp('2021-05-31')]
+        thanksgiving_2020 = df.loc[pd.Timestamp('2020-11-26')]
+        thanksgiving_2021 = df.loc[pd.Timestamp('2021-11-25')]
+
+        self.assertTrue(np.allclose(memorial_2020.values, memorial_2021.values))
+        self.assertTrue(np.allclose(thanksgiving_2020.values, thanksgiving_2021.values))
+
+    def test_anchored_segment_fourier_gating_daily(self):
+        DTindex = pd.date_range('2020-01-01', '2020-12-31', freq='D')
+        df = date_part(
+            DTindex,
+            method='anchored_segment_fourier:us_school:3',
+            set_index=True,
+        )
+
+        self.assertFalse(any('_hour_' in col for col in df.columns))
+
+        segment0_fourier = [col for col in df.columns if 'segment0_fourier' in col]
+        segment1_fourier = [col for col in df.columns if 'segment1_fourier' in col]
+        segment1_dow = [col for col in df.columns if 'segment1_dow' in col]
+        segment0_dow = [col for col in df.columns if 'segment0_dow' in col]
+
+        jan_row = df.loc[pd.Timestamp('2020-01-15')]
+        jun_row = df.loc[pd.Timestamp('2020-06-15')]
+
+        self.assertTrue(np.any(np.abs(jan_row[segment0_fourier]) > 1e-6))
+        self.assertTrue(
+            np.allclose(jan_row[[c for c in df.columns if 'segment1_' in c]], 0.0)
+        )
+        self.assertEqual(jan_row[segment0_dow].sum(), 1.0)
+        self.assertTrue(np.allclose(jan_row[segment1_dow], 0.0))
+
+        self.assertTrue(np.any(np.abs(jun_row[segment1_fourier]) > 1e-6))
+        self.assertEqual(jun_row[segment1_dow].sum(), 1.0)
+        self.assertTrue(
+            np.allclose(
+                jun_row[[c for c in df.columns if 'segment0_fourier' in c]],
+                0.0,
+            )
+        )
+
+    def test_anchored_segment_fourier_hourly(self):
+        DTindex = pd.date_range('2020-11-20', '2020-11-27 23:00', freq='h')
+        df = date_part(
+            DTindex,
+            method='anchored_segment_fourier:us_school:2',
+            set_index=True,
+        )
+
+        self.assertTrue(any('_hour_' in col for col in df.columns))
+        noon_row = df.loc[pd.Timestamp('2020-11-25 12:00')]
+        active_hour_col = 'anchored_segment_us_school_segment2_hour_12'
+        self.assertIn(active_hour_col, df.columns)
+        self.assertEqual(noon_row[active_hour_col], 1.0)
+        self.assertTrue(
+            np.allclose(
+                [
+                    noon_row[col]
+                    for col in df.columns
+                    if '_hour_' in col and col != active_hour_col
+                ],
+                0.0,
+            )
+        )
+
+    def test_anchored_warped_fourier_weekly(self):
+        DTindex = pd.date_range('2020-01-01', '2022-12-31', freq='W-WED')
+        df = date_part(
+            DTindex,
+            method='anchored_warped_fourier:us_school:3',
+            set_index=True,
+        )
+
+        self.assertEqual(df.shape[0], DTindex.shape[0])
+        self.assertGreater(df.shape[1], 0)
+        self.assertEqual(df.isna().sum().sum(), 0)
+
+    def test_anchored_segment_fourier_weekly(self):
+        DTindex = pd.date_range('2020-01-01', '2022-12-31', freq='W-WED')
+        df = date_part(
+            DTindex,
+            method='anchored_segment_fourier:us_school:2',
+            set_index=True,
+        )
+
+        self.assertEqual(df.isna().sum().sum(), 0)
+        self.assertFalse(any('_hour_' in col for col in df.columns))

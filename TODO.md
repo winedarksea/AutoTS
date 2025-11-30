@@ -11,14 +11,32 @@
 * Series will largely be consistent in period, or at least up-sampled to regular intervals
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
-* trimmed_mean to AverageValueNaive
 
-# 0.6.21 🇺🇦 🇺🇦 🇺🇦
-* Prophet and Cassandra bug fixes
+# 1.0.0 🇺🇦 🇺🇦 🇺🇦
+* added ReconciliationTransformer
+* updated cointegration code, replaced Cointegration with CointegrationTransformer
+* added mocks for dependency fallbacks
+* added variational autoencoder anomaly detection method
+* some fixes for breaking changes in dependencies
+* adjustment to how custom_metric is scaled so it can work with negatives
+* improvements to the calendars, Hindu calendar should be working now
+* changes to HistoricValues which hopefully makes it more reliable
+* added pMLP and MambaSSM models (painfully slow)
+* deleted old models ComponentAnalysis, TFPRegression, TensorflowSTS, Greykite, NeuralProphet, UnivariateRegression
+* improvements to model_interrupt
+* synthetic data generation and feature extractor new, very much in beta
+* updated weather data to CDO v2 (requires API key)
+* added NASA solar data to load_live_daily
+* new methods to LevelShiftTransformer
+* created the seasonal_linear interpolation which is quite promisiing for seasonal data
+* added apply_adjustments
+* added G726Filter and G711Scaler
+* created an MCP server for AutoTS (tool naming and pattern still in beta)
+* many bug fixes, tweaks, reorganizations, and added unittests
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
-* Neural Prophet
+* NeuralForecast
 * GluonTS
 
 ### New Model Checklist:

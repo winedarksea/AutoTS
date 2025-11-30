@@ -4,6 +4,7 @@ Complicated
 
 import random
 import datetime
+import copy
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
@@ -35,7 +36,7 @@ class PreprocessingExperts(ModelObject):
         random_seed: int = 2023,
         verbose: int = 0,
         model_params: dict = {
-            "model_str": 'DatepartRegresion',
+            "model_str": 'DatepartRegression',
             "parameter_dict": {
                 'regression_model': {
                     'model': 'ElasticNet',
@@ -75,10 +76,66 @@ class PreprocessingExperts(ModelObject):
             verbose=verbose,
             n_jobs=n_jobs,
         )
-        self.model_params = model_params
-        self.transformation_dict = transformation_dict
+        self.model_params = copy.deepcopy(model_params)
+        self.transformation_dict = (
+            copy.deepcopy(transformation_dict)
+            if transformation_dict is not None
+            else None
+        )
         self.point_method = point_method
         self.forecast_length = forecast_length
+        self._ordered_trans_keys = ()
+
+    @staticmethod
+    def _coerce_transform_key(key):
+        key_str = str(key)
+        if isinstance(key, (int, np.integer)):
+            return int(key)
+        if key_str.lstrip('-').isdigit():
+            return int(key_str)
+        return key
+
+    @staticmethod
+    def _sort_key(value):
+        if isinstance(value, (int, np.integer)):
+            return (0, int(value))
+        value_str = str(value)
+        if value_str.lstrip('-').isdigit():
+            return (0, int(value_str))
+        return (1, value_str)
+
+    @staticmethod
+    def _lookup_param(params, key):
+        checked = set()
+        for candidate in (key, str(key)):
+            if candidate not in checked and candidate in params:
+                return params[candidate]
+            checked.add(candidate)
+        key_str = str(key)
+        if key_str.lstrip('-').isdigit():
+            coerced = int(key_str)
+            if coerced not in checked and coerced in params:
+                return params[coerced]
+        return None
+
+    @classmethod
+    def _normalize_transformation_dict(cls, transform_dict):
+        if not transform_dict:
+            return transform_dict
+        normalized = copy.deepcopy(transform_dict)
+        transformations = normalized.get('transformations', {})
+        params = normalized.get('transformation_params', {})
+        ordered_keys = sorted(transformations.keys(), key=cls._sort_key)
+        norm_trans = {}
+        norm_params = {}
+        for original_key in ordered_keys:
+            coerced_key = cls._coerce_transform_key(original_key)
+            norm_trans[coerced_key] = transformations[original_key]
+            param_value = cls._lookup_param(params, original_key)
+            norm_params[coerced_key] = param_value if param_value is not None else {}
+        normalized['transformations'] = norm_trans
+        normalized['transformation_params'] = norm_params
+        return normalized
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -93,6 +150,10 @@ class PreprocessingExperts(ModelObject):
             raise ValueError(
                 "transformation_dict cannot be None with PreprocessingRegression"
             )
+
+        self.transformation_dict = self._normalize_transformation_dict(
+            self.transformation_dict
+        )
 
         self.transformer_object = GeneralTransformer(
             n_jobs=self.n_jobs,
@@ -110,22 +171,21 @@ class PreprocessingExperts(ModelObject):
 
         new_df = df
         self.model = {}
-        trans_keys = sorted(list(self.transformer_object.transformations.keys()))
+        self._ordered_trans_keys = tuple(self.transformer_object.transformations.keys())
 
         self.model[0] = ModelPrediction(
             forecast_length=self.forecast_length,
             frequency=self.frequency,
-            **self.model_params,
+            **copy.deepcopy(self.model_params),
         ).fit(new_df, future_regressor=future_regressor)
-        for i in trans_keys:
-            trans_name = self.transformer_object.transformations[i]
-            # assumes first i is always 0
+        for index, trans_key in enumerate(self._ordered_trans_keys, start=1):
+            trans_name = self.transformer_object.transformations[trans_key]
             if trans_name not in ['Slice']:
-                new_df = self.transformer_object._fit_one(new_df, i)
-            self.model[int(i) + 1] = ModelPrediction(
+                new_df = self.transformer_object._fit_one(new_df, trans_key)
+            self.model[index] = ModelPrediction(
                 forecast_length=self.forecast_length,
                 frequency=self.frequency,
-                **self.model_params,
+                **copy.deepcopy(self.model_params),
             ).fit(new_df, future_regressor=future_regressor)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -164,29 +224,27 @@ class PreprocessingExperts(ModelObject):
 
         df_list = []
         self.saved = {}
-        trans_keys = sorted(list(self.transformer_object.transformations.keys()))
         # first one is on no preprocessing
         rfPred = self.model[0].predict(
             forecast_length, future_regressor=future_regressor
         )
         self.saved[0] = rfPred.forecast.copy()
         df_list.append(rfPred.forecast)
-        for i in trans_keys:
-            key = int(i) + 1
-            rfPred = self.model[key].predict(
+        for model_idx, trans_key in enumerate(self._ordered_trans_keys, start=1):
+            rfPred = self.model[model_idx].predict(
                 forecast_length, future_regressor=future_regressor
             )
-            self.saved[key] = rfPred.forecast.copy()
-            # rfPred_upper = self.transformer_object.inverse_transform(rfPred.upper_forecast, start=i)
-            # rfPred_lower = self.transformer_object.inverse_transform(rfPred.lower_forecast, start=i)
-            rfPred = self.transformer_object.inverse_transform(rfPred.forecast, start=i)
+            self.saved[model_idx] = rfPred.forecast.copy()
+            rfPred = self.transformer_object.inverse_transform(
+                rfPred.forecast, start=trans_key
+            )
             df_list.append(rfPred)
         # (num_windows, forecast_length, num_series)
         self.result_windows = np.asarray(df_list)
 
         if self.point_method == "weighted_mean":
             # weighted by later (more preprocessing higher)
-            weights = np.arange(len(trans_keys) + 1) + 1
+            weights = np.arange(len(self._ordered_trans_keys) + 1) + 1
             forecast = np.average(self.result_windows, axis=0, weights=weights)
         elif self.point_method == "mean":
             forecast = np.nanmean(self.result_windows, axis=0)
@@ -240,6 +298,8 @@ class PreprocessingExperts(ModelObject):
                 predict_runtime=predict_runtime,
                 fit_runtime=self.fit_runtime,
                 model_parameters=self.get_params(),
+                model=self,
+                result_windows=self.result_windows,
             )
             return prediction
 

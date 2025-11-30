@@ -16,15 +16,17 @@ from autots.evaluator.validation import (
     generate_validation_indices,
 )
 
+
 # Create a dummy DataFrame to use in tests.
 def create_dummy_df(n_rows=10, n_cols=1):
     # Using a simple integer index here for clarity.
     data = np.random.randn(n_rows, n_cols)
-    return pd.DataFrame(data, index=pd.date_range("2020-01-01", freq='D', periods=n_rows))
+    return pd.DataFrame(
+        data, index=pd.date_range("2020-01-01", freq='D', periods=n_rows)
+    )
 
 
 class TestValidationSegments(unittest.TestCase):
-
     def test_extract_seasonal_val_periods(self):
         # A string with digits should return the integer value
         self.assertEqual(extract_seasonal_val_periods("seasonal 364"), 364)

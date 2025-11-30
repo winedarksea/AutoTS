@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from autots.tools.seasonal import seasonal_independent_match
+from autots.tools.seasonal import seasonal_independent_match, date_part
 
 try:
     from sklearn.impute import KNNImputer
@@ -15,6 +15,156 @@ try:
     from sklearn.impute import IterativeImputer
 except Exception:
     pass
+
+
+def seasonal_linear_imputer(
+    df,
+    datepart_method: str = "common_fourier",
+    window: int = 5,
+    lambda_: float = 0.01,
+):
+    """Seasonally-aware linear interpolation using multioutput linear regression.
+
+    This method creates a feature set consisting of local linear trend features (changepoints)
+    and datetime features (seasonal patterns). It trains a ridge regression model on all
+    non-missing points, then predicts on all missing points to fill them.
+
+    This is fully vectorized for speed on large datasets and uses matrix operations
+    across the entire dataframe. Unlike BasicLinearModel, this handles missing data by
+    training only on non-NaN rows.
+
+    Args:
+        df (pd.DataFrame): DataFrame with datetime index and potential missing values
+        datepart_method (str): Method for generating seasonal features. Default is 'common_fourier'
+        window (int): Controls changepoint spacing for local linear trend features. Default is 5
+        lambda_ (float): Ridge regression regularization parameter. Default is 0.01
+
+    Returns:
+        pd.DataFrame: DataFrame with missing values filled
+
+    Example:
+        >>> df_filled = seasonal_linear_imputer(df, window=7)
+        >>> # Or via FillNA:
+        >>> df_filled = FillNA(df, method='seasonal_linear', window=10)
+    """
+    # Quick exit if no NaN values
+    if not df.isnull().any().any():
+        return df
+
+    # Quick exit if too few rows
+    if len(df) < 3:
+        return fill_forward(df)
+
+    # Create datetime features using date_part (seasonal patterns)
+    X_seasonal = date_part(
+        df.index,
+        method=datepart_method,
+        set_index=False,
+    )
+
+    # Create local linear trend features using changepoint-style features
+    # This is more robust than lag/lead features
+    n = len(df)
+
+    # Adaptive changepoint spacing based on dataset size
+    # For very long series, use wider spacing to keep feature count manageable
+    if n < 1000:
+        changepoint_spacing = max(3, min(window, n // 4))
+    elif n < 10000:
+        changepoint_spacing = max(10, min(window * 2, n // 8))
+    else:
+        changepoint_spacing = max(20, min(window * 3, n // 12))
+
+    # Limit total number of changepoints to avoid excessive features
+    max_changepoints = min(50, n // 3)
+
+    # Create piecewise linear trend features (like BasicLinearModel)
+    # These capture local linear trends without the fragility of lag features
+    changepoints = np.arange(0, n, changepoint_spacing)
+    if len(changepoints) > max_changepoints:
+        # Subsample to stay within limit
+        indices = np.linspace(0, len(changepoints) - 1, max_changepoints, dtype=int)
+        changepoints = changepoints[indices]
+    if changepoints[-1] != n - 1:
+        changepoints = np.append(changepoints, n - 1)
+
+    trend_features = []
+    for i, cp in enumerate(changepoints):
+        # Each changepoint creates a "ramp" feature: 0 before cp, increasing after
+        trend_features.append(np.maximum(0, np.arange(n) - cp))
+
+    X_trend = pd.DataFrame(
+        np.column_stack(trend_features),
+        columns=[f'trend_{i}' for i in range(len(changepoints))],
+    )
+
+    # Combine seasonal and trend features
+    X = pd.concat(
+        [X_seasonal.reset_index(drop=True), X_trend.reset_index(drop=True)], axis=1
+    )
+
+    # Add constant term
+    X['constant'] = 1
+
+    # Convert to numpy for speed
+    X_values = X.to_numpy().astype(float)
+    Y_values = df.to_numpy().astype(float)
+
+    # Create mask for missing values
+    nan_mask = np.isnan(Y_values)
+
+    # If all values are NaN in a column, fill with zero and skip
+    all_nan_cols = np.all(nan_mask, axis=0)
+    if np.any(all_nan_cols):
+        Y_values[:, all_nan_cols] = 0
+        nan_mask[:, all_nan_cols] = False
+
+    # Identify rows where we have at least one valid observation
+    has_any_valid = ~np.all(nan_mask, axis=1)
+
+    # If no valid data at all, return forward filled
+    if not np.any(has_any_valid):
+        return fill_forward(df)
+
+    # For multioutput regression, we need rows where ALL outputs are non-NaN
+    # This is the key difference from the per-column approach
+    all_valid_mask = ~np.any(nan_mask, axis=1)
+
+    # Use only fully-valid rows for training
+    # If we don't have enough, the model will use what's available
+    min_rows_needed = max(3, min(X_values.shape[1] // 2, 20))
+    if np.sum(all_valid_mask) < min_rows_needed:
+        # If too few complete rows, use linear interpolation as fallback
+        return df.interpolate(method='linear').bfill().ffill().fillna(0)
+
+    X_train = X_values[all_valid_mask]
+    Y_train = Y_values[all_valid_mask]
+
+    # TRUE MULTIOUTPUT REGRESSION (like BasicLinearModel)
+    # Train on all columns simultaneously without any looping
+    I = np.eye(X_train.shape[1])
+
+    # Adaptive lambda
+    if lambda_ is None or lambda_ == 0:
+        XtX = X_train.T @ X_train
+        lambda_use = np.trace(XtX) / XtX.shape[0] * 0.01
+    else:
+        lambda_use = lambda_
+
+    # Multioutput ridge regression: beta has shape (n_features, n_outputs)
+    # This is the key - we solve for ALL columns at once!
+    beta = np.linalg.inv(X_train.T @ X_train + lambda_use * I) @ X_train.T @ Y_train
+
+    # Predict on ALL rows (predictions will only be used for missing values)
+    Y_pred = X_values @ beta
+
+    # Fill in missing values with predictions
+    result = np.where(nan_mask, Y_pred, Y_values)
+
+    # Convert back to DataFrame
+    result_df = pd.DataFrame(result, index=df.index, columns=df.columns)
+
+    return result_df
 
 
 def fill_zero(df):
@@ -212,6 +362,9 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             'rolling mean' - fill with last n (window) values
             'ffill mean biased' - simple avg of ffill and mean
             'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
+            'seasonal_linear' - seasonally-aware linear regression imputation using datetime and local features
+            'seasonal_linear_window_3' - seasonal linear with window=3
+            'seasonal_linear_window_10' - seasonal linear with window=10
             also most `method` values of pd.DataFrame.interpolate()
         window (int): length of rolling windows for filling na, for rolling methods
     """
@@ -246,6 +399,15 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
 
     elif method == 'fake_date_slice':
         return fake_date_fill(df, back_method='slice_all')
+
+    elif method == 'seasonal_linear':
+        return seasonal_linear_imputer(df, window=window)
+
+    elif method == 'seasonal_linear_window_3':
+        return seasonal_linear_imputer(df, window=3)
+
+    elif method == 'seasonal_linear_window_10':
+        return seasonal_linear_imputer(df, window=10)
 
     elif method in df_interpolate_full:
         df = df.interpolate(method=method, order=5).bfill()
@@ -291,8 +453,8 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return df_knn
 
     elif method == 'SeasonalityMotifImputer':
-        s_imputer = SeasonalityMotifImputer(
-            k=3,
+        # Use SimpleSeasonalityMotifImputer to avoid memory explosion
+        s_imputer = SimpleSeasonalityMotifImputer(
             datepart_method="common_fourier",
             distance_metric="canberra",
             linear_mixed=False,

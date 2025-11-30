@@ -44,6 +44,14 @@ autots.evaluator.event\_forecasting module
    :undoc-members:
    :show-inheritance:
 
+autots.evaluator.feature\_detector module
+-----------------------------------------
+
+.. automodule:: autots.evaluator.feature_detector
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.evaluator.metrics module
 -------------------------------
 

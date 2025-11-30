@@ -492,3 +492,75 @@ def wide_to_3d(wide_arr, seasonality=7, output_shape="gst"):
         shifted = np.array(np.vsplit(wide_arr[excess:], cuts))
         shifted = np.moveaxis(shifted, 0, -1)
     return shifted
+
+
+def drop_leading_na_block(
+    df: pd.DataFrame,
+    threshold: float = 0.75,
+    window: int = 7,
+    max_drop_fraction: float = 0.5,
+    warn: bool = True,
+) -> pd.DataFrame:
+    """
+    Drop an initial leading block of rows if:
+      - Those rows are 'bad' (row NaN proportion > threshold), AND
+      - There are at least `window` consecutive bad rows starting from the top.
+    Will warn or raise if more than `max_drop_fraction` of rows would be dropped.
+
+    Args:
+        df: pandas DataFrame with a DatetimeIndex.
+        threshold: Proportion of NaNs to classify a row as bad.
+        window: Number of consecutive leading bad rows required.
+        max_drop_fraction: Maximum allowed fraction of rows to drop.
+        warn: If True, raises a UserWarning on excessive drop;
+              if False, proceeds with printed warning.
+
+    Returns:
+        Trimmed DataFrame (or identical DataFrame if no qualifying block found).
+    """
+
+    if df.empty:
+        return df
+
+    na_prop = df.isna().mean(axis=1)
+    bad = na_prop > threshold
+
+    # Find first good row
+    all_bad = bad.all()
+    if all_bad:
+        drop_len = len(df)
+        if drop_len >= window:
+            drop_fraction = drop_len / len(df)
+            if drop_fraction > max_drop_fraction:
+                msg = (
+                    f"Drop would remove {drop_fraction:.1%} of rows "
+                    f"(>{max_drop_fraction:.1%} limit). Data quality concern."
+                )
+                if warn:
+                    raise ValueError(msg)
+                else:
+                    print(msg)
+            return df.iloc[0:0]
+        else:
+            return df
+
+    first_good_pos = (~bad).to_numpy().argmax()
+    leading_bad_len = first_good_pos
+
+    if leading_bad_len == 0:
+        return df
+
+    if leading_bad_len >= window:
+        drop_fraction = leading_bad_len / len(df)
+        if drop_fraction > max_drop_fraction:
+            msg = (
+                f"Drop would remove {drop_fraction:.1%} of rows "
+                f"(>{max_drop_fraction:.1%} limit). Data quality concern."
+            )
+            if warn:
+                raise ValueError(msg)
+            else:
+                print(msg)
+        return df.iloc[first_good_pos:]
+    else:
+        return df

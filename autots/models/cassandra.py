@@ -9,6 +9,7 @@ import json
 from operator import itemgetter
 from itertools import groupby
 import random
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
@@ -18,8 +19,8 @@ from autots.tools.seasonal import (
     seasonal_int,
     datepart_components,
     date_part_methods,
-    create_changepoint_features,
 )
+from autots.tools.changepoints import create_changepoint_features
 from autots.tools.fft import FFT
 from autots.tools.transform import (
     GeneralTransformer,
@@ -32,12 +33,17 @@ from autots.tools.transform import (
     StandardScaler,
 )
 from autots.tools import cpu_count
-from autots.models.base import ModelObject, PredictionObject
+from autots.models.base import (
+    ModelObject,
+    PredictionObject,
+    stack_component_frames,
+)
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
 from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_arange
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 from autots.models.model_list import model_list_to_dict
+from autots.tools.bayesian_regression import BayesianMultiOutputRegression
 
 # scipy is technically optional but most likely is present
 try:
@@ -1274,6 +1280,76 @@ class Cassandra(ModelObject):
             comp_list.append(comp_df)
         return pd.pivot(pd.concat(comp_list, axis=0), columns='csmod_component')
 
+    def _aggregate_component_frames(self, raw_components, category_func):
+        """Aggregate detailed component DataFrame into high-level categories."""
+        idx = raw_components.index
+        frames = OrderedDict()
+        for series in self.column_names:
+            series_df = raw_components[series]
+            for feature in series_df.columns:
+                category = category_func(feature)
+                if category not in frames:
+                    frames[category] = pd.DataFrame(
+                        0.0, index=idx, columns=self.column_names
+                    )
+                frames[category][series] = frames[category][series] + series_df[feature]
+        ordered = OrderedDict()
+        order = [
+            'trend_linear',
+            'seasonality',
+            'holiday',
+            'regressors',
+            'lags',
+            'impacts_linear',
+            'bias',
+            'linear',
+        ]
+        for cat in order:
+            if cat in frames:
+                ordered[cat] = frames.pop(cat)
+        ordered.update(frames)
+        return ordered
+
+    def _build_component_output(self, trend_component, dates):
+        """Create standardized component DataFrame for forecast horizon."""
+        component_frames = OrderedDict()
+        trend_df = trend_component.forecast.reindex(dates)
+        component_frames['trend'] = trend_df
+        try:
+            linear_components = self.process_components(to_origin_space=True)
+            linear_components = linear_components.reindex(dates)
+
+            def category_func(name):
+                lower = str(name).lower()
+                if 'trend' in lower:
+                    return 'trend_linear'
+                if any(
+                    term in lower
+                    for term in ['fourier', 'season', 'sin', 'cos', 'datepart']
+                ):
+                    return 'seasonality'
+                if 'holiday' in lower:
+                    return 'holiday'
+                if 'regress' in lower:
+                    return 'regressors'
+                if 'impact' in lower:
+                    return 'impacts_linear'
+                if any(
+                    term in lower for term in ['lag', 'randomwalk', 'ar', 'rolling']
+                ):
+                    return 'lags'
+                if any(term in lower for term in ['intercept', 'bias']):
+                    return 'bias'
+                return 'linear'
+
+            linear_frames = self._aggregate_component_frames(
+                linear_components, category_func
+            )
+            component_frames.update(linear_frames)
+        except Exception:
+            pass
+        return stack_component_frames(component_frames)
+
     def _predict_step(
         self,
         dates,
@@ -1331,6 +1407,10 @@ class Cassandra(ModelObject):
             prediction_interval=self.prediction_interval,
             fit_runtime=self.fit_runtime,
             model_parameters=self.get_params(),
+            components=self._build_component_output(
+                trend_component=trend_component,
+                dates=dates,
+            ),
         )
         return df_forecast
 
@@ -1980,15 +2060,15 @@ class Cassandra(ModelObject):
             trend_base = 'deep'
             trend_standin = random.choices(
                 [None, 'random_normal', 'rolling_trend', "changepoints"],
-                [0.7, 0.3, 0.1, 0.2],
+                [0.8, 0.3, 0.05, 0.05],
             )[0]
         else:
             trend_base = random.choices(
-                ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
+                ['pb1', 'pb2', 'pb3', 'random'], [0.15, 0.02, 0.0, 0.83]
             )[0]
             trend_standin = random.choices(
                 [None, 'random_normal', 'changepoints'],
-                [0.7, 0.2, 0.2],
+                [0.8, 0.15, 0.05],
             )[0]
         if trend_base == "random":
             model_str = random.choices(
@@ -2003,11 +2083,24 @@ class Cassandra(ModelObject):
                     'VAR',
                     'UnivariateMotif',
                     # 'UnobservedComponents',
-                    # "KalmanStateSpace",
+                    "KalmanStateSpace",
                     'RRVAR',
                     "NeuralForecast",
                 ],
-                [0.05, 0.05, 0.2, 0.05, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.01],
+                [
+                    0.05,
+                    0.05,
+                    0.1,
+                    0.05,
+                    0.02,
+                    0.05,
+                    0.4,
+                    0.05,
+                    0.05,
+                    0.005,
+                    0.05,
+                    0.0005,
+                ],
                 k=1,
             )[0]
             trend_model = {'Model': model_str}
@@ -2123,7 +2216,7 @@ class Cassandra(ModelObject):
                     'l1_positive',
                     'bayesian_linear',
                 ],  # the minimize based norms get slow and memory hungry at scale
-                [0.9, 0.2, 0.01, 0.01, 0.005, 0.01, 0.05],
+                [0.95, 0.22, 0.008, 0.008, 0.004, 0.005, 0.01],
             )[0]
         else:
             linear_model = random.choices(
@@ -2133,7 +2226,7 @@ class Cassandra(ModelObject):
                     'bayesian_linear',
                     'l1_positive',
                 ],
-                [0.8, 0.15, 0.05, 0.01],
+                [0.88, 0.12, 0.005, 0.005],
             )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25, 0.5], [0.7, 0.1, 0.1, 0.1, 0.05]
@@ -2157,7 +2250,7 @@ class Cassandra(ModelObject):
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
                 'maxiter': random.choices(
-                    [250, 5000, 15000, 25000], [0.2, 0.6, 0.1, 0.1]
+                    [250, 2500, 5000, 10000], [0.4, 0.4, 0.15, 0.05]
                 )[0],
                 'method': random.choices(
                     [None, 'L-BFGS-B', 'Nelder-Mead', 'TNC', 'Powell'],
@@ -2182,7 +2275,7 @@ class Cassandra(ModelObject):
             regressors_used = random.choices([True, False], [0.5, 0.5])[0]
         ar_lags = random.choices(
             [None, [1], [1, 7], [7], [seasonal_int(small=True)]],
-            [0.9, 0.025, 0.025, 0.05, 0.05],
+            [0.95, 0.025, 0.025, 0.05, 0.025],
         )[0]
         ar_interaction_seasonality = None
         if ar_lags is not None:
@@ -2204,6 +2297,8 @@ class Cassandra(ModelObject):
             ],
             [0.1, 0.1, 0.05, 0.1, 0.05, 0.1, 0.04, 0.04, 0.01, 0.1],
         )[0]
+        if seasonalities is not None and "hourlydayofweek" in seasonalities:
+            ar_lags = None
         if seasonalities == "other":
             predefined = random.choices([True, False], [0.5, 0.5])[0]
             if predefined:
@@ -2695,8 +2790,18 @@ def cost_function_l2(params, X, y):
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
 def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
     """Any cost function version of lin reg."""
-    # start with lstsq fit as estimated point
-    x0 = lstsq_solve(X, y).flatten()
+    # Check for ill-conditioned matrix
+    try:
+        # start with lstsq fit as estimated point
+        x0 = lstsq_solve(X, y).flatten()
+    except (np.linalg.LinAlgError, ValueError):
+        # If matrix is ill-conditioned, fall back to lstsq with rcond
+        x0 = np.linalg.lstsq(X, y, rcond=1e-6)[0].flatten()
+
+    # Check if initial solution has issues (NaN or Inf)
+    if not np.all(np.isfinite(x0)):
+        x0 = np.zeros(X.shape[1])
+
     # assuming scaled, these should be reasonable bounds
     bounds = [(-10, 10) for x in x0]
     if cost_function == "dwae":
@@ -2712,14 +2817,32 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1", method=None):
         x0[x0 > max_bound] = max_bound - 0.0001
     else:
         cost_func = cost_function_l1
-    return minimize(
-        cost_func,
-        x0,
-        args=(X, y),
-        bounds=bounds,
-        method=method,
-        options={'maxiter': maxiter},
-    ).x.reshape(X.shape[1], y.shape[1])
+
+    # Add early stopping via ftol and gtol for faster convergence
+    options = {
+        'maxiter': maxiter,
+        'ftol': 1e-6,  # function value tolerance
+        'gtol': 1e-5,  # gradient tolerance
+    }
+
+    try:
+        result = minimize(
+            cost_func,
+            x0,
+            args=(X, y),
+            bounds=bounds,
+            method=method,
+            options=options,
+        )
+        # Check if optimization succeeded or at least is finite
+        if np.all(np.isfinite(result.x)):
+            return result.x.reshape(X.shape[1], y.shape[1])
+        else:
+            # Fall back to initial solution
+            return x0.reshape(X.shape[1], y.shape[1])
+    except Exception:
+        # If minimize fails entirely, return initial lstsq solution
+        return x0.reshape(X.shape[1], y.shape[1])
 
 
 def fit_linear_model(x, y, params=None):
@@ -2728,6 +2851,21 @@ def fit_linear_model(x, y, params=None):
     model_type = params.get("model", "lstsq")
     lambd = params.get("lambda", None)
     rec = params.get("recency_weighting", None)
+
+    # Check condition number to detect ill-conditioned matrices
+    # and automatically add regularization if needed
+    try:
+        cond_num = np.linalg.cond(x)
+        # If condition number is very high (>1e10), force regularization
+        if (
+            cond_num > 1e10
+            and lambd is None
+            and model_type in ['lstsq', 'linalg_solve']
+        ):
+            lambd = 1.0  # Add modest regularization
+    except Exception:
+        pass  # If condition number check fails, proceed normally
+
     if lambd is not None:
         id_mat = np.zeros((x.shape[1], x.shape[1]))
         np.fill_diagonal(id_mat, 1)
@@ -2772,15 +2910,20 @@ def fit_linear_model(x, y, params=None):
             cost_function="dwae",
         )
     elif model_type == "l1_positive":
+        # Scale down maxiter if feature space is large to avoid excessive runtime
+        maxiter = params.get("maxiter", 15000)
+        if x.shape[1] > 50:  # many features
+            maxiter = min(maxiter, 5000)  # cap at 5000 iterations
+        elif x.shape[1] > 100:
+            maxiter = min(maxiter, 2500)  # cap at 2500 for very large feature space
         return lstsq_minimize(
             np.asarray(x),
             np.asarray(y),
-            maxiter=params.get("maxiter", 15000),
+            maxiter=maxiter,
             method=params.get("method", None),
             cost_function="l1_positive",
         )
     elif model_type == "bayesian_linear":
-        # this could support better probabilistic bounds but that is not yet done
         model = BayesianMultiOutputRegression(
             alpha=params.get("alpha", 1),
             gaussian_prior_mean=params.get("gaussian_prior_mean", 0),
@@ -2791,93 +2934,6 @@ def fit_linear_model(x, y, params=None):
         return model.params
     else:
         raise ValueError("linear model not recognized")
-
-
-class BayesianMultiOutputRegression:
-    """Bayesian Linear Regression, conjugate prior update.
-
-    Args:
-        gaussian_prior_mean (float): mean of prior, a small positive value can encourage positive coefs which make better component plots
-        alpha (float): prior scale of gaussian covariance, effectively a regularization term
-        wishart_dof_excess (int): Larger values make the prior more peaked around the scale matrix.
-        wishart_prior_scale (float): A larger value means a smaller prior variance on the noise covariance, while a smaller value means more prior uncertainty about it.
-    """
-
-    def __init__(
-        self,
-        gaussian_prior_mean=0,
-        alpha=1.0,
-        wishart_prior_scale=1.0,
-        wishart_dof_excess=0,
-    ):
-        self.gaussian_prior_mean = gaussian_prior_mean
-        self.alpha = alpha
-        self.wishart_prior_scale = wishart_prior_scale
-        self.wishart_dof_excess = wishart_dof_excess
-
-    def fit(self, X, Y):
-        n_samples, n_features = X.shape
-        n_outputs = Y.shape[1]
-
-        # Prior for the regression coefficients: Gaussian
-        # For Ridge regularization: Set the diagonal elements to alpha
-        self.m_0 = (
-            np.zeros((n_features, n_outputs)) + self.gaussian_prior_mean
-        )  # Prior mean
-        self.S_0 = self.alpha * np.eye(n_features)  # Prior covariance
-
-        # Prior for the precision matrix (inverse covariance): Wishart
-        self.nu_0 = n_features + self.wishart_dof_excess  # Degrees of freedom
-        self.W_0_inv = self.wishart_prior_scale * np.eye(
-            n_outputs
-        )  # Scale matrix (inverse)
-
-        # Posterior for the regression coefficients
-        S_0_inv = np.linalg.inv(self.S_0)
-        S_n_inv = S_0_inv + X.T @ X
-        S_n = np.linalg.inv(S_n_inv)
-        m_n = S_n @ (S_0_inv @ self.m_0 + X.T @ Y)
-
-        # Posterior for the precision matrix
-        nu_n = self.nu_0 + n_samples
-        W_n_inv = (
-            self.W_0_inv
-            + Y.T @ Y
-            + self.m_0.T @ S_0_inv @ self.m_0
-            - m_n.T @ S_n_inv @ m_n
-        )
-
-        self.m_n = self.params = m_n
-        self.S_n = S_n
-        self.nu_n = nu_n
-        self.W_n_inv = W_n_inv
-
-    def predict(self, X, return_std=False):
-        Y_pred = X @ self.m_n
-        if return_std:
-            # Average predictive variance for each output dimension
-            Y_var = (
-                np.einsum('ij,jk,ik->i', X, self.S_n, X)
-                + np.trace(np.linalg.inv(self.nu_n * self.W_n_inv))
-                / self.W_n_inv.shape[0]
-            )
-            return Y_pred, np.sqrt(Y_var)
-        return Y_pred
-
-    def sample_posterior(self, n_samples=1):
-        # from scipy.stats import wishart
-        # Sample from the posterior distribution of the coefficients
-        # beta_samples = np.random.multivariate_normal(self.m_n.ravel(), self.S_n, size=n_samples)
-        # Sample from the posterior distribution of the precision matrix
-        # precision_samples = wishart(df=self.nu_n, scale=np.linalg.inv(self.W_n_inv)).rvs(n_samples)
-        # return beta_samples, precision_samples
-
-        sampled_weights = np.zeros((n_samples, self.m_n.shape[0], self.m_n.shape[1]))
-        for i in range(self.m_n.shape[1]):
-            sampled_weights[:, :, i] = np.random.multivariate_normal(
-                self.m_n[:, i], self.S_n, n_samples
-            )
-        return sampled_weights
 
 
 # Seasonalities

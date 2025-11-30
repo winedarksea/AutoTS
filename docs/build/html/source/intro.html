@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Intro &#8212; AutoTS 0.6.21 documentation</title>
+    <title>Intro &#8212; AutoTS 1.0.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=cf809ea3"></script>
+    <script src="../_static/documentation_options.js?v=8d563738"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -162,7 +162,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li><p>if limited by RAM, it can be distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.</p></li>
 </ul>
 </li>
-<li><p>Set <code class="docutils literal notranslate"><span class="pre">model_interrupt=True</span></code> which passes over the current model when a <code class="docutils literal notranslate"><span class="pre">KeyboardInterrupt</span></code> ie <code class="docutils literal notranslate"><span class="pre">crtl+c</span></code> is pressed (although if the interrupt falls between generations it will stop the entire training).</p></li>
+<li><p>Set <code class="docutils literal notranslate"><span class="pre">model_interrupt=True</span></code> to skip only the current model when you hit <code class="docutils literal notranslate"><span class="pre">Ctrl+C</span></code>. Tap <code class="docutils literal notranslate"><span class="pre">Ctrl+C</span></code> a second time within 1.5 seconds to end the entire run, or pass something like <code class="docutils literal notranslate"><span class="pre">model_interrupt={&quot;mode&quot;:</span> <span class="pre">&quot;skip&quot;,</span> <span class="pre">&quot;double_press_window&quot;:</span> <span class="pre">1.2}</span></code> to tighten/loosen the window.</p></li>
 <li><p>Use the <code class="docutils literal notranslate"><span class="pre">result_file</span></code> method of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> which will save progress after each generation - helpful to save progress if a long training is being done. Use <code class="docutils literal notranslate"><span class="pre">import_results</span></code> to recover.</p></li>
 <li><p>While Transformations are pretty fast, setting <code class="docutils literal notranslate"><span class="pre">transformer_max_depth</span></code> to a lower number (say, 2) will increase speed. Also utilize <code class="docutils literal notranslate"><span class="pre">transformer_list</span></code> == ‘fast’ or ‘superfast’.</p></li>
 <li><p>Check out <a class="reference external" href="https://github.com/winedarksea/AutoTS/discussions/76">this example</a> of using AutoTS with pandas UDF.</p></li>
@@ -181,6 +181,20 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li><p>Set <code class="docutils literal notranslate"><span class="pre">runtime_weighting</span></code> in <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy.</p></li>
 <li><p>Memory shortage is the most common cause of random process/kernel crashes. Try testing a data subset and using a different model list if issues occur. Please also report crashes if found to be linked to a specific set of model parameters (not AutoTS parameters but the underlying forecasting model params). Also crashes vary significantly by setup such as underlying linpack/blas so seeing crash differences between environments can be expected.</p></li>
 </ul>
+</section>
+<section id="mcp-server">
+<h2>MCP Server<a class="headerlink" href="#mcp-server" title="Link to this heading">¶</a></h2>
+<p>See the README.md in ./autots/mcp</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;autots&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;autots-mcp&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>mcp-name: io.github.winedarksea/AutoTS</p>
 </section>
 <section id="how-to-contribute">
 <h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Link to this heading">¶</a></h2>
@@ -229,6 +243,15 @@ Many models also support passing in user-defined exogenous regressors.</p>
     R --&gt; B[Import Best Models Template]
 </pre></div>
 </div>
+</section>
+<section id="citation">
+<h2>Citation<a class="headerlink" href="#citation" title="Link to this heading">¶</a></h2>
+<p>If you wish to cite AutoTS in an academic work, the following paper may be used.</p>
+<p>Colin Catlin,
+Adaptive forecasting in dynamic markets: An evaluation of AutoTS within the M6 competition,
+International Journal of Forecasting,
+Volume 41, Issue 4, 2025, Pages 1485-1493, ISSN 0169-2070,
+<a class="reference external" href="https://doi.org/10.1016/j.ijforecast.2025.08.004">https://doi.org/10.1016/j.ijforecast.2025.08.004</a>.</p>
 <p><em>Also known as Project CATS (Catlin’s Automated Time Series) hence the logo.</em></p>
 </section>
 </section>
@@ -271,8 +294,10 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li class="toctree-l2"><a class="reference internal" href="#id1">Installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#id2">Basic Use</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#id3">Tips for Speed and Large Data:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mcp-server">MCP Server</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#autots-process">AutoTS Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#citation">Citation</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>

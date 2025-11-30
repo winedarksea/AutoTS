@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autots"
-version = "0.6.21"
+version = "1.0.0"
 authors = [
   { name="Colin Catlin", email="colin.catlin@gmail.com" },
 ]
@@ -18,15 +18,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "numpy>=1.14.6",
-    "pandas>=0.25.0",
-    "statsmodels>=0.10.0",
-    "scikit-learn>=0.20.0",
+    "numpy>=1.21.6",
+    "pandas>=1.1.0",
+    "statsmodels>=0.13.0",
+    "scikit-learn>=1.0.0",
 ]
 [project.optional-dependencies]
 additional = [
 	"holidays>=0.9",
-	'prophet>=0.4.0',
+	'prophet>=1.0.0',
 	'fredapi',
 	'tensorflow',
 	'xgboost>=1.6',
@@ -42,6 +42,24 @@ additional = [
 	'requests',
 	'seaborn',
 ]
+mcp = [
+	"holidays>=0.9",
+	'fredapi',
+	'lightgbm',
+	'joblib',
+	'scipy',
+	'numexpr',
+	'bottleneck',
+	'yfinance',
+	'pytrends',
+	'matplotlib',
+	'requests',
+	'seaborn',
+	"mcp>=1.0.0",
+]
+
+[project.scripts]
+autots-mcp = "autots.mcp.server:serve"
 
 [project.urls]
 "Homepage" = "https://github.com/winedarksea/AutoTS"
@@ -49,5 +67,9 @@ additional = [
 
 [tool.setuptools.packages]
 find = {}  # Scan the project directory with the default parameters
+
+[tool.setuptools.package-data]
+"autots.mcp" = ["*.json", "*.md"]
+
 [tool.setuptools]
 include-package-data = true

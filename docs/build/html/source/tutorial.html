@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Tutorial &#8212; AutoTS 0.6.21 documentation</title>
+    <title>Tutorial &#8212; AutoTS 1.0.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=cf809ea3"></script>
+    <script src="../_static/documentation_options.js?v=8d563738"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -308,6 +308,7 @@ Accordingly it may be better to reduce the use of<code class="docutils literal n
 <p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. It is more human-readable than MADE for this information.
 This is similar to but faster than MDA (mean directional accuracy) as contour evaluates no change as a positive case.</p>
 <p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is <em>(Scaled) Mean Absolute Differential Error</em>. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to ‘MAE’ when forecast_length=1. It is better for optimization than contour.</p>
+<p>There are also shape and direction focused weightings such as <code class="docutils literal notranslate"><span class="pre">oda_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">dwae_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">ewmae_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">uwmse_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">smoothness_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">dwd_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">maxe_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">mqae_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">mate_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">matse_weighting</span></code>, and <code class="docutils literal notranslate"><span class="pre">wasserstein_weighting</span></code> that can be mixed in when those behaviors need emphasis.</p>
 <p>The contour and MADE metrics are useful as they encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.</p>
 <p>If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.</p>
 <p>It may be worth viewing something like: <code class="docutils literal notranslate"><span class="pre">model.score_breakdown[model.score_breakdown.index</span> <span class="pre">==</span> <span class="pre">model.best_model_id].iloc[0]</span></code> to see if any one score is skewing selection.
@@ -415,12 +416,11 @@ Linux may also require <code class="docutils literal notranslate"><span class="p
 <p>You can check if your system is using mkl, OpenBLAS, or none with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>. Generally recommended that you double-check this after installing new packages to make sure you haven’t broken the LINPACK connection.</p>
 <section id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h3>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.9
 numpy
     &gt;= 1.20 (Sliding Window in Motif and WindowRegression)
 pandas
     &gt;= 1.1.0 (prediction.long_form_results())
-    gluonts incompatible with 1.1, 1.2, 1.3
 sklearn
     &gt;= 0.23.0 (PoissonReg)
     &gt;= 0.24.0 (OrdinalEncoder handle_unknown)
@@ -440,7 +440,7 @@ Limited functionality should exist without scikit-learn.</p>
 </pre></div>
 </div>
 <p>Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
-<p>Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.</p>
+<p>Prophet and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.</p>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
 </section>
 <section id="optional-packages">
@@ -456,10 +456,8 @@ Limited functionality should exist without scikit-learn.</p>
 <span class="n">xgboost</span>
 <span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
 <span class="n">fredapi</span>
-<span class="n">greykite</span>
 <span class="n">matplotlib</span>
 <span class="n">pytorch</span><span class="o">-</span><span class="n">forecasting</span>
-<span class="n">neuralprophet</span>
 <span class="n">scipy</span>
 <span class="n">arch</span>
 </pre></div>
@@ -467,69 +465,12 @@ Limited functionality should exist without scikit-learn.</p>
 <p>Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs.</p>
 <section id="safest-bet-for-installation">
 <h4>Safest bet for installation:<a class="headerlink" href="#safest-bet-for-installation" title="Link to this heading">¶</a></h4>
-<p>venv, Anaconda, or <a class="reference external" href="https://github.com/conda-forge/miniforge/">Miniforge</a> with some more tips <a class="reference external" href="https://syllepsis.live/2022/01/17/setting-up-and-optimizing-python-for-data-science-on-intel-amd-and-arm-including-apple-computers/">here</a>.</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a conda or venv environment</span>
-conda<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>timeseries<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
+<p>venv, Anaconda, or <a class="reference external" href="https://github.com/conda-forge/miniforge/">Miniforge</a> with some more tips.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a mamba, conda, or venv environment</span>
+mamba<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>timeseries<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span>scikit-learn<span class="w"> </span>statsmodels<span class="w"> </span>matplotlib<span class="w"> </span>tqdm<span class="w"> </span>prophet<span class="w"> </span>holidays<span class="w"> </span>lightgbm<span class="w"> </span>xgboost<span class="w"> </span>numexpr<span class="w"> </span>bottleneck<span class="w"> </span>seaborn<span class="w"> </span>autots<span class="w"> </span>pytorch<span class="w"> </span>torchvision<span class="w"> </span>torchaudio<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>pytorch
 conda<span class="w"> </span>activate<span class="w"> </span>timeseries
-
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>numpy<span class="w"> </span>scipy<span class="w"> </span>scikit-learn<span class="w"> </span>statsmodels<span class="w"> </span>lightgbm<span class="w"> </span>xgboost<span class="w"> </span>numexpr<span class="w"> </span>bottleneck<span class="w"> </span>yfinance<span class="w"> </span>pytrends<span class="w"> </span>fredapi<span class="w"> </span>--exists-action<span class="w"> </span>i
-
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>pystan<span class="w"> </span>prophet<span class="w"> </span>--exists-action<span class="w"> </span>i<span class="w">  </span><span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>tensorflow
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>mxnet<span class="w"> </span>--no-deps<span class="w">     </span><span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>gluonts<span class="w"> </span>arch
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>holidays-ext<span class="w"> </span>pmdarima<span class="w"> </span>dill<span class="w"> </span>greykite<span class="w"> </span>--exists-action<span class="w"> </span>i<span class="w"> </span>--no-deps
-<span class="c1"># install pytorch</span>
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span>--exists-action<span class="w"> </span>i<span class="w">  </span><span class="c1"># mxnet likes to (pointlessly seeming) install old versions of numpy</span>
-
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>autots<span class="w"> </span>--exists-action<span class="w"> </span>i
-</pre></div>
-</div>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mamba<span class="w"> </span>install<span class="w"> </span>scikit-learn<span class="w"> </span>pandas<span class="w"> </span>statsmodels<span class="w"> </span>prophet<span class="w"> </span>numexpr<span class="w"> </span>bottleneck<span class="w"> </span>tqdm<span class="w"> </span>holidays<span class="w"> </span>lightgbm<span class="w"> </span>matplotlib<span class="w"> </span>requests<span class="w"> </span>xgboost<span class="w"> </span>-c<span class="w"> </span>conda-forge
-pip<span class="w"> </span>install<span class="w"> </span>mxnet<span class="w"> </span>--no-deps
-pip<span class="w"> </span>install<span class="w"> </span>yfinance<span class="w"> </span>pytrends<span class="w"> </span>fredapi<span class="w"> </span>gluonts<span class="w"> </span>arch
-pip<span class="w"> </span>install<span class="w"> </span>intel-tensorflow<span class="w"> </span>scikit-learn-intelex
-mamba<span class="w"> </span>install<span class="w"> </span>spyder
-mamba<span class="w"> </span>install<span class="w"> </span>autots<span class="w"> </span>-c<span class="w"> </span>conda-forge
-</pre></div>
-</div>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>pytorch<span class="w"> </span>torchvision<span class="w"> </span>torchaudio<span class="w"> </span>cpuonly<span class="w"> </span>-c<span class="w"> </span>pytorch
-conda<span class="w"> </span>install<span class="w"> </span>pytorch-forecasting<span class="w"> </span>-c<span class="w"> </span>conda-forge
-pip<span class="w"> </span>install<span class="w"> </span>neuralprophet
-</pre></div>
-</div>
-<p>GPU support, Linux only. CUDA versions will need to match package requirements. Mixed CUDA versions may cause crashes if run in same session.</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>nvidia-smi
-mamba<span class="w"> </span>activate<span class="w"> </span>base
-mamba<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span><span class="nv">cudatoolkit</span><span class="o">=</span><span class="m">11</span>.2<span class="w"> </span><span class="nv">cudnn</span><span class="o">=</span><span class="m">8</span>.1.0<span class="w"> </span>nccl<span class="w">  </span><span class="c1"># install in conda base</span>
-<span class="nb">export</span><span class="w"> </span><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="nv">$LD_LIBRARY_PATH</span>:<span class="nv">$CONDA_PREFIX</span>/lib/<span class="w">  </span><span class="c1"># NOT PERMANENT unless add to ./bashrc make sure is for base env, mine /home/colin/mambaforge/lib</span>
-mamba<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>gpu<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.8<span class="w"> </span>scikit-learn<span class="w"> </span>pandas<span class="w"> </span>statsmodels<span class="w"> </span>prophet<span class="w"> </span>numexpr<span class="w"> </span>bottleneck<span class="w"> </span>tqdm<span class="w"> </span>holidays<span class="w"> </span>lightgbm<span class="w"> </span>matplotlib<span class="w"> </span>requests<span class="w"> </span>-c<span class="w"> </span>conda-forge
-mamba<span class="w"> </span>activate<span class="w"> </span>gpu
-pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> </span>torchvision<span class="w"> </span>torchaudio<span class="w"> </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cu113
-pip<span class="w"> </span>install<span class="w"> </span>mxnet-cu112<span class="w"> </span>--no-deps
-pip<span class="w"> </span>install<span class="w"> </span>gluonts<span class="w"> </span>tensorflow<span class="w"> </span>neuralprophet<span class="w"> </span>pytorch-lightning<span class="w"> </span>pytorch-forecasting
-mamba<span class="w"> </span>install<span class="w"> </span>spyder
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">mamba</span></code> and <code class="docutils literal notranslate"><span class="pre">conda</span></code> commands are generally interchangeable. <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">env</span> <span class="pre">remove</span> <span class="pre">-n</span> <span class="pre">env_name</span></code></p>
-</section>
-<section id="intel-conda-channel-installation-sometime-faster-also-more-prone-to-bugs">
-<h4>Intel conda channel installation (sometime faster, also, more prone to bugs)<a class="headerlink" href="#intel-conda-channel-installation-sometime-faster-also-more-prone-to-bugs" title="Link to this heading">¶</a></h4>
-<p><a class="reference external" href="https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html">https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html</a></p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the environment</span>
-mamba<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>aikit37<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7<span class="w"> </span>intel-aikit-modin<span class="w"> </span>pandas<span class="w"> </span>statsmodels<span class="w"> </span>prophet<span class="w"> </span>numexpr<span class="w"> </span>bottleneck<span class="w"> </span>tqdm<span class="w"> </span>holidays<span class="w"> </span>lightgbm<span class="w"> </span>matplotlib<span class="w"> </span>requests<span class="w"> </span>tensorflow<span class="w"> </span>dpctl<span class="w"> </span>-c<span class="w"> </span>intel
-conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--add<span class="w"> </span>channels<span class="w"> </span>conda-forge
-conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--add<span class="w"> </span>channels<span class="w"> </span>intel
-conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--get<span class="w"> </span>channels
-
-<span class="c1"># install additional packages as desired</span>
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>mxnet<span class="w"> </span>--no-deps
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>gluonts<span class="w"> </span>yfinance<span class="w"> </span>pytrends<span class="w"> </span>fredapi
-mamba<span class="w"> </span>update<span class="w"> </span>-c<span class="w"> </span>intel<span class="w"> </span>intel-aikit-modin
-
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>autots
-
-<span class="c1"># OMP_NUM_THREADS, USE_DAAL4PY_SKLEARN=1</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>tensorflow<span class="w"> </span>yfinance<span class="w"> </span>pytrends<span class="w"> </span>fredapi<span class="w"> </span>arch<span class="w"> </span>neuralforecast<span class="w"> </span>--exists-action<span class="w"> </span>i
+<span class="c1"># OMP_NUM_THREADS</span>
 </pre></div>
 </div>
 </section>
@@ -548,8 +489,7 @@ python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </sp
 <h2>Caveats and Advice<a class="headerlink" href="#caveats-and-advice" title="Link to this heading">¶</a></h2>
 <section id="mysterious-crashes">
 <h3>Mysterious crashes<a class="headerlink" href="#mysterious-crashes" title="Link to this heading">¶</a></h3>
-<p>Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded.
-<code class="docutils literal notranslate"><span class="pre">UnivariateRegression</span></code> is usually the most prone to these issues, removing it from the model_list may help (by default it is not included in most lists for this reason).</p>
+<p>Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded.</p>
 <p>Try setting <code class="docutils literal notranslate"><span class="pre">n_jobs=1</span></code> or an otherwise low number, which should reduce the load. Also test the ‘superfast’ naive models, which are generally low resource consumption.
 GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used.
 If problems persist, post to the GitHub Discussion or Issues.</p>
@@ -583,7 +523,7 @@ Some models here can utilize the additional information they provide to help imp
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.</p>
 <p><em>an example of regressors:</em></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
-<span class="kn">from</span> <span class="nn">autots.evaluator.auto_ts</span> <span class="kn">import</span> <span class="n">fake_regressor</span>
+<span class="kn">from</span> <span class="nn">autots.tools.regressor</span> <span class="kn">import</span> <span class="n">fake_regressor</span>
 <span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
 
 <span class="n">long</span> <span class="o">=</span> <span class="kc">False</span>
@@ -632,7 +572,7 @@ This is done here by passing known values of a <code class="docutils literal not
 By default in AutoTS, when a <code class="docutils literal notranslate"><span class="pre">future_regressor</span></code> is supplied, models that can utilize it are tried both with and without the regressor.
 To enforce the use of future_regressor for simulation forecasting, a few parameters must be supplied as below. They are: <code class="docutils literal notranslate"><span class="pre">model_list,</span> <span class="pre">models_mode,</span> <span class="pre">initial_template</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
-<span class="kn">from</span> <span class="nn">autots.evaluator.auto_ts</span> <span class="kn">import</span> <span class="n">fake_regressor</span>
+<span class="kn">from</span> <span class="nn">autots.tools.regressor</span> <span class="kn">import</span> <span class="n">fake_regressor</span>
 <span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
 
 <span class="n">df</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -925,7 +865,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 </div>
 <section id="note-on-regression-models">
 <h3>Note on ~Regression Models<a class="headerlink" href="#note-on-regression-models" title="Link to this heading">¶</a></h3>
-<p>The Regression models are WindowRegression, RollingRegression, UnivariateRegression, MultivariateRegression, and DatepartRegression.
+<p>The Regression models are WindowRegression, RollingRegression, MultivariateRegression, and DatepartRegression.
 They are all different ways of reshaping the time series into X and Y for traditional ML and Deep Learning approaches.
 All draw from the same potential pool of models, mostly sklearn and tensorflow models.</p>
 <ul class="simple">
@@ -933,7 +873,6 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li><p>WindowRegression takes an <code class="docutils literal notranslate"><span class="pre">n</span></code> preceeding data points as X to predict the future value or values of the series.</p></li>
 <li><p>RollingRegression takes all time series and summarized rolling values of those series in one massive dataframe as X. Works well for a small number of series but scales poorly.</p></li>
 <li><p>MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series <code class="docutils literal notranslate"><span class="pre">i</span></code> are used to predict next step for series <code class="docutils literal notranslate"><span class="pre">i</span></code>, with a model trained on all data from all series. This model is now often called by the community a “global forecasting ML model”.</p></li>
-<li><p>UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series.</p></li>
 </ul>
 <p>Currently <code class="docutils literal notranslate"><span class="pre">MultivariateRegression</span></code> has the (slower) option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.</p>
 </section>
@@ -1174,17 +1113,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>UnivariateRegression</p></td>
-<td><p>sklearn</p></td>
-<td><p>lightgbm, tensorflow</p></td>
-<td></td>
-<td><p>sklearn</p></td>
-<td><p>some</p></td>
-<td></td>
-<td></td>
-<td><p>True</p></td>
-</tr>
-<tr class="row-odd"><td><p>PreprocessingRegression</p></td>
+<tr class="row-even"><td><p>PreprocessingRegression</p></td>
 <td><p>sklearn</p></td>
 <td></td>
 <td><p>False</p></td>
@@ -1194,7 +1123,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>Univariate/MultivariateMotif</p></td>
+<tr class="row-odd"><td><p>Univariate/MultivariateMotif</p></td>
 <td><p>scipy.distance.cdist</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1207,7 +1136,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>SectionalMotif</p></td>
+<tr class="row-even"><td><p>SectionalMotif</p></td>
 <td><p>scipy.distance.cdist</p></td>
 <td><p>sklearn</p></td>
 <td><p>True</p></td>
@@ -1217,7 +1146,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>MetricMotif, SeasonalityMotif</p></td>
+<tr class="row-odd"><td><p>MetricMotif, SeasonalityMotif</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -1227,7 +1156,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>BallTreeMultivariateMotif</p></td>
+<tr class="row-even"><td><p>BallTreeMultivariateMotif</p></td>
 <td><p>sklearn, scipy</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1237,7 +1166,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>NVAR</p></td>
+<tr class="row-odd"><td><p>NVAR</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -1247,7 +1176,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>RRVAR, MAR, TMF</p></td>
+<tr class="row-even"><td><p>RRVAR, MAR, TMF</p></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1257,7 +1186,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>LATC</p></td>
+<tr class="row-odd"><td><p>LATC</p></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1266,16 +1195,6 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 <td></td>
-</tr>
-<tr class="row-odd"><td><p>NeuralProphet</p></td>
-<td><p>neuralprophet</p></td>
-<td></td>
-<td><p>nyi</p></td>
-<td><p>pytorch</p></td>
-<td><p>yes</p></td>
-<td></td>
-<td></td>
-<td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>PytorchForecasting</p></td>
 <td><p>pytorch-forecasting</p></td>
@@ -1397,6 +1316,26 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
+<tr class="row-even"><td><p>MambaSSM</p></td>
+<td><p>pytorch</p></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td><p>yes</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-odd"><td><p>pMLP</p></td>
+<td><p>pytorch</p></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td><p>yes</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>True</p></td>
+</tr>
 <tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
@@ -1405,47 +1344,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 <td><p>True</p></td>
-<td></td>
-</tr>
-<tr class="row-odd"><td><p>Greykite</p></td>
-<td><p>(deprecated)</p></td>
-<td></td>
 <td><p>True</p></td>
-<td><p>joblib</p></td>
-<td></td>
-<td></td>
-<td><p>True</p></td>
-<td></td>
-</tr>
-<tr class="row-even"><td><p>TensorflowSTS</p></td>
-<td><p>(deprecated)</p></td>
-<td></td>
-<td><p>True</p></td>
-<td></td>
-<td><p>yes</p></td>
-<td><p>True</p></td>
-<td><p>True</p></td>
-<td></td>
-</tr>
-<tr class="row-odd"><td><p>TFPRegression</p></td>
-<td><p>(deprecated)</p></td>
-<td></td>
-<td><p>True</p></td>
-<td></td>
-<td><p>yes</p></td>
-<td><p>True</p></td>
-<td><p>True</p></td>
-<td><p>True</p></td>
-</tr>
-<tr class="row-even"><td><p>ComponentAnalysis</p></td>
-<td><p>(deprecated)</p></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td><p>True</p></td>
-<td><p>True</p></td>
-<td><p>_</p></td>
 </tr>
 </tbody>
 </table>
