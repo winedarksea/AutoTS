@@ -12,7 +12,7 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.6.22 🇺🇦 🇺🇦 🇺🇦
+# 1.0.0 🇺🇦 🇺🇦 🇺🇦
 * added ReconciliationTransformer
 * updated cointegration code, replaced Cointegration with CointegrationTransformer
 * added mocks for dependency fallbacks

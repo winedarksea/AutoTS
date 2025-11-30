@@ -1388,6 +1388,29 @@ class Motif(ModelObject):
             'yule',
             'kdtree',
         ]
+        metric_weights = [
+            1.0,  # braycurtis
+            1.0,  # canberra
+            0.5,  # chebyshev - downweighted
+            1.0,  # cityblock
+            1.0,  # correlation
+            1.0,  # cosine
+            1.0,  # dice
+            1.0,  # euclidean
+            1.0,  # hamming
+            1.0,  # jaccard
+            1.0,  # jensenshannon
+            1.0,  # mahalanobis
+            1.0,  # matching
+            1.0,  # minkowski
+            1.0,  # rogerstanimoto
+            1.0,  # russellrao
+            1.0,  # sokalmichener
+            1.0,  # sokalsneath
+            1.0,  # sqeuclidean
+            1.0,  # yule
+            1.0,  # kdtree
+        ]
         if method == "event_risk":
             k_choice = random.choices(
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.03]
@@ -1413,7 +1436,7 @@ class Motif(ModelObject):
                 [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
             "point_method": point_method,
-            "distance_metric": random.choice(metric_list),
+            "distance_metric": random.choices(metric_list, weights=metric_weights)[0],
             "k": k_choice,
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
         }
