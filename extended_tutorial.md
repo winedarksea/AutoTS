@@ -913,7 +913,7 @@ Currently `MultivariateRegression` has the (slower) option to utilize a stock Gr
 |  PreprocessingExperts   |              |                         |    True       |                 |       |              | True         |               |
 |  MambaSSM               | pytorch      |                         |    True       |                 | yes   |              | True         | True          |
 |  pMLP                   | pytorch      |                         |    True       |                 | yes   |              | True         | True          |
-|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         | True          |
 
 *nyi = not yet implemented*
 * deprecated models are not actively maintained but updates may be requested in issues

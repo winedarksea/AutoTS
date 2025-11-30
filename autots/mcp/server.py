@@ -716,7 +716,7 @@ if MCP_AVAILABLE:
                         "data": {"type": "object", "description": "Wide format data"},
                         "data_id": {"type": "string", "description": "Cached data ID"},
                         "forecast_length": {"type": "integer", "default": 30, "description": "Periods to forecast"},
-                        "threshold": {"type": "number", "description": "Threshold value (required)"},
+                        "threshold": {"type": ["number", "array", "object"], "description": "Threshold value (required). Float in range [0, 1] represents historic quantile (0=minimum, 0.5=median, 1=maximum). Values outside [0,1] are treated as absolute thresholds. Can also be a 2D array of shape (forecast_length, num_series) for per-timestep, per-series thresholds, or a dict with forecast algorithm parameters."},
                         "direction": {
                             "type": "string",
                             "enum": ["upper", "lower"],
