@@ -80,6 +80,41 @@ EVENT_RISK_CACHE: Dict[str, Dict[str, Any]] = {}
 FEATURE_DETECTOR_CACHE: Dict[str, Dict[str, Any]] = {}
 DATA_CACHE: Dict[str, Dict[str, Any]] = {}
 
+try:
+    CACHE_MAX_OBJECTS = max(1, int(os.environ.get("AUTOTS_MCP_CACHE_MAX", 60)))
+except (TypeError, ValueError):
+    CACHE_MAX_OBJECTS = 60
+
+CACHE_REGISTRY: Dict[str, Dict[str, Dict[str, Any]]] = {
+    'prediction': PREDICTION_CACHE,
+    'autots': AUTOTS_CACHE,
+    'event_risk': EVENT_RISK_CACHE,
+    'feature_detector': FEATURE_DETECTOR_CACHE,
+    'data': DATA_CACHE,
+}
+
+CACHE_SUMMARY_KEYS = {
+    'prediction': 'predictions',
+    'autots': 'autots_models',
+    'event_risk': 'event_risk',
+    'feature_detector': 'feature_detectors',
+    'data': 'data',
+}
+
+
+def _resolve_cache(cache_type: str) -> Dict[str, Dict[str, Any]]:
+    try:
+        return CACHE_REGISTRY[cache_type]
+    except KeyError:
+        raise ValueError(f"Unknown cache type: {cache_type}") from None
+
+
+def _enforce_cache_limit(cache: Dict[str, Dict[str, Any]]):
+    while len(cache) > CACHE_MAX_OBJECTS:
+        oldest_id = next(iter(cache))
+        logger.debug(f"Cache limit ({CACHE_MAX_OBJECTS}) reached, evicting oldest entry: {oldest_id[:8]}. Increase cache size with env var AUTOTS_MCP_CACHE_MAX")
+        cache.pop(oldest_id, None)
+
 
 # ============================================================================
 # Cache Management Functions
@@ -104,36 +139,16 @@ def cache_object(obj: Any, cache_type: str, metadata: dict = None) -> str:
         'created_at': datetime.now().isoformat()
     }
     
-    if cache_type == 'prediction':
-        PREDICTION_CACHE[obj_id] = cache_entry
-    elif cache_type == 'autots':
-        AUTOTS_CACHE[obj_id] = cache_entry
-    elif cache_type == 'event_risk':
-        EVENT_RISK_CACHE[obj_id] = cache_entry
-    elif cache_type == 'feature_detector':
-        FEATURE_DETECTOR_CACHE[obj_id] = cache_entry
-    elif cache_type == 'data':
-        DATA_CACHE[obj_id] = cache_entry
-    else:
-        raise ValueError(f"Unknown cache type: {cache_type}")
+    cache = _resolve_cache(cache_type)
+    cache[obj_id] = cache_entry
+    _enforce_cache_limit(cache)
     
     return obj_id
 
 
 def get_cached_object(obj_id: str, cache_type: str) -> Dict[str, Any]:
     """Retrieve a cached object by ID and type."""
-    if cache_type == 'prediction':
-        cache = PREDICTION_CACHE
-    elif cache_type == 'autots':
-        cache = AUTOTS_CACHE
-    elif cache_type == 'event_risk':
-        cache = EVENT_RISK_CACHE
-    elif cache_type == 'feature_detector':
-        cache = FEATURE_DETECTOR_CACHE
-    elif cache_type == 'data':
-        cache = DATA_CACHE
-    else:
-        raise ValueError(f"Unknown cache type: {cache_type}")
+    cache = _resolve_cache(cache_type)
     
     if obj_id not in cache:
         raise ValueError(f"{cache_type} ID {obj_id} not found in cache")
@@ -143,31 +158,13 @@ def get_cached_object(obj_id: str, cache_type: str) -> Dict[str, Any]:
 def list_all_cached_objects() -> dict:
     """List all cached objects across all cache types."""
     result = {}
-    
-    if PREDICTION_CACHE:
-        result['predictions'] = [
+    for cache_type, cache in CACHE_REGISTRY.items():
+        if not cache:
+            continue
+        summary_key = CACHE_SUMMARY_KEYS[cache_type]
+        result[summary_key] = [
             {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
-            for k, v in PREDICTION_CACHE.items()
-        ]
-    if AUTOTS_CACHE:
-        result['autots_models'] = [
-            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
-            for k, v in AUTOTS_CACHE.items()
-        ]
-    if EVENT_RISK_CACHE:
-        result['event_risk'] = [
-            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
-            for k, v in EVENT_RISK_CACHE.items()
-        ]
-    if FEATURE_DETECTOR_CACHE:
-        result['feature_detectors'] = [
-            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
-            for k, v in FEATURE_DETECTOR_CACHE.items()
-        ]
-    if DATA_CACHE:
-        result['data'] = [
-            {'id': k, 'created_at': v['created_at'], 'metadata': v['metadata']}
-            for k, v in DATA_CACHE.items()
+            for k, v in cache.items()
         ]
     
     return result
@@ -176,32 +173,13 @@ def list_all_cached_objects() -> dict:
 def clear_cache(obj_id: Optional[str] = None, cache_type: Optional[str] = None):
     """Clear cache - specific ID, specific type, or all if both None."""
     if obj_id and cache_type:
-        cache = {
-            'prediction': PREDICTION_CACHE,
-            'autots': AUTOTS_CACHE,
-            'event_risk': EVENT_RISK_CACHE,
-            'feature_detector': FEATURE_DETECTOR_CACHE,
-            'data': DATA_CACHE
-        }.get(cache_type)
-        if cache and obj_id in cache:
-            del cache[obj_id]
+        cache = _resolve_cache(cache_type)
+        cache.pop(obj_id, None)
     elif cache_type:
-        if cache_type == 'prediction':
-            PREDICTION_CACHE.clear()
-        elif cache_type == 'autots':
-            AUTOTS_CACHE.clear()
-        elif cache_type == 'event_risk':
-            EVENT_RISK_CACHE.clear()
-        elif cache_type == 'feature_detector':
-            FEATURE_DETECTOR_CACHE.clear()
-        elif cache_type == 'data':
-            DATA_CACHE.clear()
+        _resolve_cache(cache_type).clear()
     else:
-        PREDICTION_CACHE.clear()
-        AUTOTS_CACHE.clear()
-        EVENT_RISK_CACHE.clear()
-        FEATURE_DETECTOR_CACHE.clear()
-        DATA_CACHE.clear()
+        for cache in CACHE_REGISTRY.values():
+            cache.clear()
 
 
 # ============================================================================
@@ -719,17 +697,6 @@ if MCP_AVAILABLE:
             Tool(
                 name="plot_validation",
                 description="Plot validation forecasts from AutoTS search. Returns base64 PNG",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "autots_id": {"type": "string", "description": "Cached AutoTS ID"}
-                    },
-                    "required": ["autots_id"]
-                }
-            ),
-            Tool(
-                name="plot_generation_loss",
-                description="Plot unpredictability score from AutoTS search. Returns base64 PNG",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -1339,7 +1306,7 @@ if MCP_AVAILABLE:
                 
                 # Plot forecast
                 for col in series_names:
-                    ax.plot(forecast_df.index, forecast_df[col], label=f'{col} (forecast)', linestyle='--', linewidth=2)
+                    ax.plot(forecast_df.index, forecast_df[col], label=f'{col} (forecast)', linewidth=2)
                 
                 # Plot prediction intervals
                 if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None:
@@ -1607,22 +1574,6 @@ if MCP_AVAILABLE:
                 model = cached['object']
                 
                 fig = model.plot_validations()
-                
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png', dpi=100)
-                buf.seek(0)
-                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-                plt.close(fig)
-                
-                return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
-            
-            elif name == "plot_generation_loss":
-                autots_id = arguments.get("autots_id")
-                
-                cached = get_cached_object(autots_id, 'autots')
-                model = cached['object']
-                
-                fig = model.plot_generation_loss()
                 
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png', dpi=100)
