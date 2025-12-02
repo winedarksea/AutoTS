@@ -458,7 +458,7 @@ def BestNEnsemble(
         # np.average(l_forecast_array, axis=0, weights=model_weights.values())
         # np.average(u_forecast_array, axis=0, weights=model_weights.values())
 
-        # Initialize with NaN so missing values don't contribute
+        # Initialize with 0
         ens_df = pd.DataFrame(0.0, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(0.0, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(0.0, index=indices, columns=columnz)

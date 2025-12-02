@@ -126,7 +126,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * Memory shortage is the most common cause of random process/kernel crashes. Try testing a data subset and using a different model list if issues occur. Please also report crashes if found to be linked to a specific set of model parameters (not AutoTS parameters but the underlying forecasting model params). Also crashes vary significantly by setup such as underlying linpack/blas so seeing crash differences between environments can be expected. 
 
 ## MCP Server
-See the README.md in ./autots/mcp
+See the README.md in ./autots/mcp. Note install with `pip install autots[mcp]` for full dependencies, or the equivalent `pip install autots-mcp`.
 ```json
 {
   "mcpServers": {

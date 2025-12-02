@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.winedarksea/AutoTS",
+  "tags": [
+    "forecasting",
+    "time-series",
+    "python"
+  ],
+  "description": "Automated time series forecasting with model search, anomaly detection, and event risk analysis",
+  "repository": {
+    "url": "https://github.com/winedarksea/AutoTS",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "autots[mcp]",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

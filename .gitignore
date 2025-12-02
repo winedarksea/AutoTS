@@ -111,6 +111,7 @@ venv.bak/
 # Visual Studio
 *.DS_Store
 .vscode/
+!server.json
 
 # old stuff and diagnostic
 archive/

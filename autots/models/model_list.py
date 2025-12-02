@@ -182,7 +182,7 @@ fast = {
     'VECM': 0.8,  # a bit on the higher side for memory usage
     'WindowRegression': 0.5,  # this gets slow with Transformer, KerasRNN
     'DatepartRegression': 0.8,
-    'UnivariateMotif': 1,
+    'UnivariateMotif': 0.6,
     # 'MultivariateMotif': 0.8,  # RAM issues at scale it seems
     'SectionalMotif': 1,
     'NVAR': 0.25,

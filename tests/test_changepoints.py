@@ -279,6 +279,85 @@ class TestChangepointDetector(unittest.TestCase):
         self.assertIn("series1", results["individual_changepoints"])
         self.assertIn("series2", results["individual_changepoints"])
 
+    def test_changepoint_detector_transformer_edge_cases(self):
+        """Test transformer functionality with edge cases that previously caused failures."""
+        dates = pd.date_range("2020-01-01", periods=100, freq="D")
+        values = np.concatenate([np.ones(50) * 10, np.ones(50) * 15])
+        df = pd.DataFrame({"series1": values}, index=dates)
+
+        # Test 1: Transform with future index
+        dates_train = pd.date_range("2020-01-01", periods=50, freq="D")
+        dates_test = pd.date_range("2020-02-20", periods=30, freq="D")
+        df_train = pd.DataFrame({"series1": values[:50]}, index=dates_train)
+        df_test = pd.DataFrame({"series1": np.ones(30) * 12}, index=dates_test)
+
+        detector = ChangepointDetector(method="pelt", aggregate_method="mean")
+        detector.fit(df_train)
+        transformed = detector.transform(df_test)
+        inverse = detector.inverse_transform(transformed)
+
+        self.assertEqual(transformed.shape, df_test.shape)
+        self.assertEqual(inverse.shape, df_test.shape)
+
+        # Test 2: Transform with different columns (should use defaults)
+        df_fit = pd.DataFrame({"A": np.arange(100), "B": np.arange(100) * 2}, index=dates)
+        df_transform = pd.DataFrame(
+            {"C": np.arange(100) * 3, "D": np.arange(100) * 4}, index=dates
+        )
+
+        detector2 = ChangepointDetector(method="pelt", aggregate_method="mean")
+        detector2.fit(df_fit)
+        transformed2 = detector2.transform(df_transform)
+        inverse2 = detector2.inverse_transform(transformed2)
+
+        self.assertEqual(transformed2.shape, df_transform.shape)
+        self.assertEqual(inverse2.shape, df_transform.shape)
+
+        # Test 3: Individual aggregate with new series in transform
+        df_fit3 = pd.DataFrame(
+            {"A": np.arange(100), "B": np.arange(100) * 2, "C": np.arange(100) * 3},
+            index=dates,
+        )
+        df_transform3 = pd.DataFrame(
+            {"A": np.arange(100), "D": np.arange(100) * 5}, index=dates
+        )
+
+        detector3 = ChangepointDetector(method="pelt", aggregate_method="individual")
+        detector3.fit(df_fit3)
+        transformed3 = detector3.transform(df_transform3)
+        inverse3 = detector3.inverse_transform(transformed3)
+
+        self.assertEqual(transformed3.shape, df_transform3.shape)
+        self.assertEqual(inverse3.shape, df_transform3.shape)
+
+        # Test 4: Very short series
+        dates_tiny = pd.date_range("2020-01-01", periods=5, freq="D")
+        df_tiny = pd.DataFrame({"series1": [1, 2, 3, 4, 5]}, index=dates_tiny)
+
+        detector4 = ChangepointDetector(
+            method="pelt", aggregate_method="mean", min_segment_length=5
+        )
+        detector4.fit(df_tiny)
+        transformed4 = detector4.transform(df_tiny)
+        inverse4 = detector4.inverse_transform(transformed4)
+
+        self.assertEqual(transformed4.shape, df_tiny.shape)
+        self.assertEqual(inverse4.shape, df_tiny.shape)
+
+        # Test 5: Constant series (no changepoints detected)
+        df_const = pd.DataFrame({"series1": np.ones(100) * 5}, index=dates)
+
+        detector5 = ChangepointDetector(method="pelt", aggregate_method="mean")
+        detector5.fit(df_const)
+        transformed5 = detector5.transform(df_const)
+        inverse5 = detector5.inverse_transform(transformed5)
+
+        self.assertEqual(transformed5.shape, df_const.shape)
+        self.assertEqual(inverse5.shape, df_const.shape)
+        # Should return to approximately original values
+        diff = np.abs(df_const - inverse5).max().max()
+        self.assertLess(diff, 1e-10)
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
