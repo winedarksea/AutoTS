@@ -1647,7 +1647,7 @@ class AutoTS(object):
                     self._run_validations(
                         df_wide_numeric=self.df_wide_numeric,
                         num_validations=self.num_validations + 1,
-                        validation_template=ensemble_templates,
+                        validation_template=ensemble_templates,  # doesn't include postprocessing, so shouldn't repeat those
                         future_regressor=self.future_regressor_train,
                         first_validation=False,
                         skip_first_index=False,

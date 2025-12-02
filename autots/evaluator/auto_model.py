@@ -2284,54 +2284,103 @@ def TemplateWizard(
                 # INTERNAL VALIDATION ONLY, POST PROCESSING ONLY
                 # more efficent than rerunning the forecasts just to change transformers
                 for x in horizontal_post_processors:
-                    df_forecast2 = copy.copy(df_forecast)
-                    transformer_object = GeneralTransformer(
-                        **x,
-                        n_jobs=n_jobs,
-                        holiday_country=holiday_country,
-                        verbose=verbose,
-                        random_seed=random_seed,
-                        forecast_length=forecast_length,
-                    )
-                    transformer_object.fit(df_train)
-                    # forecast inverse MUST come before upper and lower bounds inverse
-                    df_forecast2.forecast = transformer_object.inverse_transform(
-                        df_forecast2.forecast
-                    )
-                    df_forecast2.lower_forecast = transformer_object.inverse_transform(
-                        df_forecast2.lower_forecast, fillzero=True, bounds=True
-                    )
-                    df_forecast2.upper_forecast = transformer_object.inverse_transform(
-                        df_forecast2.upper_forecast, fillzero=True, bounds=True
-                    )
-                    df_forecast2.transformation_parameters = x
-                    template_result.model_count += 1
-                    template_result, best_smape = _eval_prediction_for_template(
-                        df_forecast2,
-                        template_result,
-                        verbose,
-                        actuals,
-                        weights,
-                        df_trn_arr,
-                        ensemble,
-                        scaler,
-                        cumsum_A,
-                        diff_A,
-                        last_of_array,
-                        validation_round,
-                        model_str,
-                        best_smape,
-                        ensemble_input,
-                        parameter_dict,
-                        x,
-                        row,
-                        post_memory_percent,
-                        mosaic_used,
-                        template_start_time,
-                        current_generation,
-                        df_train,
-                        custom_metric,
-                    )
+                    try:
+                        df_forecast2 = copy.copy(df_forecast)
+                        transformer_object = GeneralTransformer(
+                            **x,
+                            n_jobs=n_jobs,
+                            holiday_country=holiday_country,
+                            verbose=verbose,
+                            random_seed=random_seed,
+                            forecast_length=forecast_length,
+                        )
+                        transformer_object.fit(df_train)
+                        # forecast inverse MUST come before upper and lower bounds inverse
+                        df_forecast2.forecast = transformer_object.inverse_transform(
+                            df_forecast2.forecast
+                        )
+                        df_forecast2.lower_forecast = transformer_object.inverse_transform(
+                            df_forecast2.lower_forecast, fillzero=True, bounds=True
+                        )
+                        df_forecast2.upper_forecast = transformer_object.inverse_transform(
+                            df_forecast2.upper_forecast, fillzero=True, bounds=True
+                        )
+                        df_forecast2.transformation_parameters = x
+                        template_result.model_count += 1
+                        template_result, best_smape = _eval_prediction_for_template(
+                            df_forecast2,
+                            template_result,
+                            verbose,
+                            actuals,
+                            weights,
+                            df_trn_arr,
+                            ensemble,
+                            scaler,
+                            cumsum_A,
+                            diff_A,
+                            last_of_array,
+                            validation_round,
+                            model_str,
+                            best_smape,
+                            ensemble_input,
+                            parameter_dict,
+                            x,
+                            row,
+                            post_memory_percent,
+                            mosaic_used,
+                            template_start_time,
+                            current_generation,
+                            df_train,
+                            custom_metric,
+                        )
+                    except Exception as e:
+                        # record failure but continue with other postprocessors
+                        if verbose >= 0:
+                            if traceback:
+                                print(
+                                    'Postprocessing Error: {} in model {} postprocessor {}: {}'.format(
+                                        ''.join(tb.format_exception(None, e, e.__traceback__)),
+                                        template_result.model_count,
+                                        str(current_generation),
+                                        model_str,
+                                    )
+                                )
+                            else:
+                                print(
+                                    'Postprocessing Error: {} in model {} postprocessor {}: {}'.format(
+                                        (repr(e)),
+                                        template_result.model_count,
+                                        str(current_generation),
+                                        model_str,
+                                    )
+                                )
+                        fit_runtime = datetime.datetime.now() - template_start_time
+                        result = pd.DataFrame(
+                            {
+                                'ID': create_model_id(
+                                    model_str, parameter_dict, x
+                                ),
+                                'Model': model_str,
+                                'ModelParameters': json.dumps(parameter_dict),
+                                'TransformationParameters': json.dumps(x),
+                                'Ensemble': ensemble_input,
+                                'TransformationRuntime': datetime.timedelta(0),
+                                'FitRuntime': fit_runtime,
+                                'PredictRuntime': datetime.timedelta(0),
+                                'TotalRuntime': fit_runtime,
+                                'Exceptions': repr(e),
+                                'Runs': 1,
+                                'Generation': current_generation,
+                                'ValidationRound': validation_round,
+                            },
+                            index=[0],
+                        )
+                        template_result.model_results = pd.concat(
+                            [template_result.model_results, result],
+                            axis=0,
+                            ignore_index=True,
+                            sort=False,
+                        ).reset_index(drop=True)
 
         except KeyboardInterrupt:
             if interrupt_mode == "disabled":
