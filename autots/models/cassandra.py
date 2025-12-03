@@ -2202,7 +2202,7 @@ class Cassandra(ModelObject):
             0
         ]
         if trend_anomaly_intervention is not None:
-            trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
+            trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method="fast")
         else:
             trend_anomaly_detector_params = None
         if method in ['deep', 'all_linear']:

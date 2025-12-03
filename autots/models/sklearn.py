@@ -1266,15 +1266,30 @@ def generate_regressor_params(
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.2])[0]
             else:
                 n_estimators = random.choices(
-                    [4, 300, 100, 1000], [0.1, 0.5, 0.5, 0.05]
+                    [4, 300, 100, 1000], [0.1, 0.5, 0.5, 0.025]
                 )[0]
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0]
+            max_depth = random.choices([None, 10, 20], [0.7, 0.2, 0.1])[0]
+            max_features = random.choices([1.0, 0.7, "sqrt"], [0.6, 0.2, 0.2])[0]
+            min_samples_split = random.choices([2, 4, 8], [0.7, 0.2, 0.1])[0]
+            max_leaf_nodes = random.choices([None, 32, 64], [0.7, 0.2, 0.1])[0]
+            bootstrap = random.choices([True, False], [0.9, 0.1])[0]
+            max_samples = (
+                random.choices([None, 0.8, 0.6], [0.6, 0.3, 0.1])[0]
+                if bootstrap
+                else None
+            )
             param_dict = {
                 "model": 'RandomForest',
                 "model_params": {
                     "n_estimators": n_estimators,
                     "min_samples_leaf": min_samples_leaf,
-                    "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
+                    "bootstrap": bootstrap,
+                    "max_depth": max_depth,
+                    "max_features": max_features,
+                    "min_samples_split": min_samples_split,
+                    "max_leaf_nodes": max_leaf_nodes,
+                    "max_samples": max_samples,
                 },
             }
         elif model == 'ExtraTrees':

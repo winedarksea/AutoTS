@@ -473,6 +473,18 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Constraint", "1": "AlignLastValue", "2": "HistoricValues", "3": "LocalLinearTrend"}, "transformation_params": {"0": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.2, "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"window": null}, "3": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
         'Ensemble': 0,
     },
+    "75": {  # pMLP anchored segment Fourier variant
+        'Model': 'pMLP',
+        'ModelParameters': '{"hidden_dims": [768, 256], "dropout_rate": 0.2, "use_batch_norm": true, "activation": "silu", "epochs": 20, "batch_size": 128, "lr": 0.002, "loss_function": "quantile", "nll_weight": 1.0, "wasserstein_weight": 0.2, "prediction_batch_size": 100, "num_cnn_blocks": 0, "cnn_params": {}, "datepart_method": "anchored_segment_fourier:us_school", "holiday_countries_used": true, "use_naive_feature": true, "changepoint_method": "basic", "changepoint_params": {"changepoint_spacing": 90, "changepoint_distance_end": 5040}, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Log", "1": "AlignLastValue", "2": "LocalLinearTrend"}, "transformation_params": {"0": {}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
+        'Ensemble': 0,
+    },
+    "76": {  # lowest SMAPE on mixed prod example, 33.9
+        'Model': 'BallTreeMultivariateMotif',
+        'ModelParameters': '{"window": 10, "point_method": "median", "distance_metric": "euclidean", "k": 15, "sample_fraction": null, "comparison_transformation": null, "combination_transformation": null}',
+        'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "HistoricValues", "1": "SinTrend", "2": "ChangepointDetrend"}, "transformation_params": {"0": {"window": 10}, "1": {}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
+        'Ensemble': 0,
+    },
     # Add a WindowRegression, add new UnobservedComponents, a new MultivariateRegression
 }
 

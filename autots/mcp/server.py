@@ -834,7 +834,7 @@ if MCP_AVAILABLE:
             # Event Risk tools
             Tool(
                 name="forecast_event_risk",
-                description="Forecast probability of crossing threshold. Must provide 'threshold' and either 'data' or 'data_id'. Returns event_risk_id",
+                description="Special type of forecasting for predicting the probability of crossing a threshold (such as out of stock for products or exceeding historic maximums on usage). Must provide 'threshold' and either 'data' or 'data_id'. Returns event_risk_id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -846,8 +846,11 @@ if MCP_AVAILABLE:
                             "description": "Periods to forecast",
                         },
                         "threshold": {
-                            "type": ["number", "array", "object"],
-                            "description": "Threshold value (required). Float in range [0, 1] represents historic quantile (0=minimum, 0.5=median, 1=maximum). Values outside [0,1] are treated as absolute thresholds. Can also be a 2D array of shape (forecast_length, num_series) for per-timestep, per-series thresholds, or a dict with forecast algorithm parameters.",
+                            "oneOf": [
+                                {"type": "number"},
+                                {"type": "array", "items": {"type": "number"}},
+                            ],
+                            "description": "Threshold value (required). Float in range [0, 1] represents historic quantile (0=minimum, 0.5=median, 1=maximum). Values outside [0,1] are treated as absolute thresholds. Can also be a 2D array of shape (forecast_length, num_series) for per-timestep, per-series thresholds.",
                         },
                         "direction": {
                             "type": "string",
