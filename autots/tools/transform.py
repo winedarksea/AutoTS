@@ -486,10 +486,61 @@ class StatsmodelsFilter(EmptyTransformer):
         return df - cycle
 
     def convolution_filter(self, df):
+        # delegate to standalone ConvolutionFilter class for backwards compatibility
+        return ConvolutionFilter().transform(df)
+
+
+class ConvolutionFilter(EmptyTransformer):
+    """Apply convolution filter for smoothing time series.
+
+    This is an irreversible filter that applies a weighted moving average
+    using statsmodels convolution_filter. Each output value is computed as:
+    output[t] = weight * input[t] + (1 - weight) * input[t-1]
+
+    Args:
+        weight (float): weight for current value, must be between 0 and 1.
+            The previous value gets weight (1 - weight).
+            Default is 0.75 (giving 0.25 to the previous value).
+    """
+
+    def __init__(self, weight: float = 0.75, **kwargs):
+        super().__init__(name="ConvolutionFilter")
+        self.weight = weight
+
+    def fit_transform(self, df):
+        """Fit and Return Filtered DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return filtered data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
         from statsmodels.tsa.filters.filtertools import convolution_filter
 
-        df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
-        return df.ffill().bfill()
+        complement = 1.0 - self.weight
+        result = convolution_filter(
+            df, [[self.weight] * df.shape[1], [complement] * df.shape[1]]
+        )
+        return result.ffill().bfill()
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters for ConvolutionFilter.
+
+        Args:
+            method (str): 'random' for random params, 'fast' for faster options
+        """
+        weight = random.choices(
+            [0.75, 0.9, 0.8, 0.6, 0.5, 0.7, 0.85, 0.95],
+            weights=[0.3, 0.15, 0.15, 0.1, 0.05, 0.1, 0.1, 0.05],
+        )[0]
+        return {"weight": weight}
 
 
 class HPFilter(EmptyTransformer):
@@ -7814,6 +7865,7 @@ trans_dict = {
     "bkfilter": StatsmodelsFilter(method="bkfilter"),
     "cffilter": StatsmodelsFilter(method="cffilter"),
     "convolution_filter": StatsmodelsFilter(method="convolution_filter"),
+    "ConvolutionFilter": ConvolutionFilter(),
     "Discretize": Discretize(discretization="center", n_bins=10),
     "DatepartRegressionLtd": DatepartRegressionTransformer(
         regression_model={
@@ -7878,6 +7930,7 @@ have_params = {
     "HistoricValues": HistoricValues,
     "BKBandpassFilter": BKBandpassFilter,
     "DifferencedTransformer": DifferencedTransformer,
+    "ConvolutionFilter": ConvolutionFilter,
     "Constraint": Constraint,
     "FIRFilter": FIRFilter,
     "G726Filter": G726Filter,
@@ -8484,6 +8537,7 @@ transformer_dict = {
     "cffilter": 0.01,
     "bkfilter": 0.05,
     "convolution_filter": 0.001,
+    "ConvolutionFilter": 0.01,
     "HPFilter": 0.01,
     "DatepartRegression": 0.01,
     "ClipOutliers": 0.03,
@@ -8582,6 +8636,7 @@ filters = {
     "RollingMean100thN": 0.005,
     "DiffSmoother": 0.005,
     "convolution_filter": 0.005,
+    "ConvolutionFilter": 0.01,
     "G726Filter": 0.02,
 }
 scalers = {
