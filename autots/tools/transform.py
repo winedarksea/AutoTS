@@ -73,6 +73,11 @@ except Exception:
         fftconvolve,
     )
 
+try:
+    from statsmodels.tsa.filters.filtertools import convolution_filter
+except Exception:
+    from autots.tools.mocks import convolution_filter
+
 from autots.tools.mocks import StandardScaler
 
 try:
@@ -494,16 +499,16 @@ class ConvolutionFilter(EmptyTransformer):
     """Apply convolution filter for smoothing time series.
 
     This is an irreversible filter that applies a weighted moving average
-    using statsmodels convolution_filter. Each output value is computed as:
-    output[t] = weight * input[t] + (1 - weight) * input[t-1]
+    using convolution_filter.
 
     Args:
-        weight (float): weight for current value, must be between 0 and 1.
-            The previous value gets weight (1 - weight).
+        weight (float or list): If float, weight for current value (previous gets 1 - weight).
+            If list, explicit weights for [current, lag1, lag2, ...] values.
+            Weights are auto-normalized to sum to 1.0.
             Default is 0.75 (giving 0.25 to the previous value).
     """
 
-    def __init__(self, weight: float = 0.75, **kwargs):
+    def __init__(self, weight=0.75, **kwargs):
         super().__init__(name="ConvolutionFilter")
         self.weight = weight
 
@@ -521,12 +526,16 @@ class ConvolutionFilter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        from statsmodels.tsa.filters.filtertools import convolution_filter
-
-        complement = 1.0 - self.weight
-        result = convolution_filter(
-            df, [[self.weight] * df.shape[1], [complement] * df.shape[1]]
-        )
+        if isinstance(self.weight, (list, tuple)):
+            weights = list(self.weight)
+            weight_sum = sum(weights)
+            if weight_sum != 1.0:
+                weights = [w / weight_sum for w in weights]
+            filt = [[w] * df.shape[1] for w in weights]
+        else:
+            complement = 1.0 - self.weight
+            filt = [[self.weight] * df.shape[1], [complement] * df.shape[1]]
+        result = convolution_filter(df, filt)
         return result.ffill().bfill()
 
     @staticmethod
@@ -536,10 +545,14 @@ class ConvolutionFilter(EmptyTransformer):
         Args:
             method (str): 'random' for random params, 'fast' for faster options
         """
-        weight = random.choices(
-            [0.75, 0.9, 0.8, 0.6, 0.5, 0.7, 0.85, 0.95],
-            weights=[0.3, 0.15, 0.15, 0.1, 0.05, 0.1, 0.1, 0.05],
-        )[0]
+        if random.random() < 0.8:
+            weight = random.choices(
+                [0.75, 0.9, 0.8, 0.6, 0.5, 0.7, 0.85, 0.95, 0.975],
+                weights=[0.3, 0.15, 0.15, 0.1, 0.05, 0.1, 0.1, 0.05, 0.025],
+            )[0]
+        else:
+            n_lags = random.choice([3, 4, 5, 7])
+            weight = [1.0 / (i + 1) for i in range(n_lags)]
         return {"weight": weight}
 
 

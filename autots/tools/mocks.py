@@ -77,6 +77,47 @@ savgol_filter = lambda x: "scipy import failed"
 fftconvolve = lambda x: "scipy import failed"
 
 
+def convolution_filter(x, filt, nsides=2):
+    """Local version of statsmodels.tsa.filters.filtertools.convolution_filter."""
+    is_pandas = isinstance(x, (pd.DataFrame, pd.Series))
+    if is_pandas:
+        index = x.index
+        columns = x.columns if isinstance(x, pd.DataFrame) else None
+        x = x.values
+
+    x = np.atleast_2d(x) if x.ndim == 1 else x
+    filt = np.atleast_2d(filt) if np.ndim(filt) == 1 else np.asarray(filt)
+
+    if nsides == 1:
+        trim_head = len(filt) - 1
+        trim_tail = None
+    else:
+        trim_head = int(np.ceil(len(filt) / 2.0) - 1) or None
+        trim_tail = int(np.ceil(len(filt) / 2.0) - len(filt) % 2) or None
+
+    if filt.ndim == 1 or min(filt.shape) == 1:
+        result = np.apply_along_axis(lambda m: np.convolve(m, filt.ravel(), mode='valid'), 0, x)
+    else:
+        nlags = filt.shape[0]
+        nvar = x.shape[1]
+        result = np.zeros((x.shape[0] - nlags + 1, nvar))
+        for i in range(nvar):
+            if nsides == 2:
+                result[:, i] = np.convolve(x[:, i], filt[:, i], mode='valid')
+            else:
+                result[:, i] = np.convolve(x[:, i], np.r_[0, filt[:, i]], mode='valid')
+
+    if trim_head or trim_tail:
+        head_nans = np.full((trim_head or 0, result.shape[1]), np.nan)
+        tail_nans = np.full((trim_tail or 0, result.shape[1]), np.nan)
+        result = np.vstack([p for p in [head_nans, result, tail_nans] if p.size])
+
+    if is_pandas:
+        result = pd.DataFrame(result, index=index, columns=columns) if columns is not None else pd.Series(result.ravel(), index=index)
+
+    return result
+
+
 class norm(object):  # fake version of scipy.stats.norm
     def __init__(self, loc=0, scale=1):
         self.loc = loc
