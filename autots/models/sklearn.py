@@ -89,6 +89,9 @@ def rolling_x_regressor(
     window: int = None,
     cointegration: str = None,
     cointegration_lag: int = 1,
+    rolling_skew_periods: int = None,
+    diff_periods: int = None,
+    rolling_range_periods: int = None,
 ):
     """
     Generate more features from initial time series.
@@ -167,6 +170,18 @@ def rolling_x_regressor(
         X.append(
             local_df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1)
         )
+    if str(rolling_skew_periods).isdigit():
+        temp = local_df.rolling(rolling_skew_periods, min_periods=3).skew()
+        temp.columns = ['rolling_skew_' + str(col) for col in temp.columns]
+        X.append(temp)
+    if str(diff_periods).isdigit():
+        temp = local_df.pct_change(periods=diff_periods).replace([np.inf, -np.inf], np.nan)
+        temp.columns = ['pct_change_' + str(col) for col in temp.columns]
+        X.append(temp)
+    if str(rolling_range_periods).isdigit():
+        temp = local_df.rolling(rolling_range_periods, min_periods=1).max() - local_df.rolling(rolling_range_periods, min_periods=1).min()
+        temp.columns = ['rolling_range_' + str(col) for col in temp.columns]
+        X.append(temp)
     if str(ewm_alpha).replace('.', '').isdigit():
         ewm_df = local_df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean()
         ewm_df.columns = ["ewm_alpha" for col in local_df.columns]
@@ -293,6 +308,9 @@ def rolling_x_regressor_regressor(
     series_id=None,
     slice_index=None,
     series_id_to_multiindex=None,
+    rolling_skew_periods: int = None,
+    diff_periods: int = None,
+    rolling_range_periods: int = None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -317,6 +335,9 @@ def rolling_x_regressor_regressor(
         window=window,
         cointegration=cointegration,
         cointegration_lag=cointegration_lag,
+        rolling_skew_periods=rolling_skew_periods,
+        diff_periods=diff_periods,
+        rolling_range_periods=rolling_range_periods,
     )
     if future_regressor is not None:
         X = pd.concat([X, future_regressor], axis=1)
@@ -1294,7 +1315,7 @@ def generate_regressor_params(
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
-                [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
+                [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.025]
             )[0]
             estimators_choice = random.choices(
                 [4, 50, 100, 500], [0.05, 0.1, 0.85, 0.02]
@@ -2431,7 +2452,7 @@ class WindowRegression(ModelObject):
             )[0]
         datepart_method = random.choices([None, "something"], [0.9, 0.1])[0]
         if datepart_method == "something":
-            datepart_method = random_datepart()
+            datepart_method = random_datepart(method=method)
 
         # ElasticNet's iterative solver is very slow for multi-output regression
         if (
@@ -2684,7 +2705,7 @@ class DatepartRegression(ModelObject):
             )
         else:
             model_choice = generate_regressor_params(model_dict=datepart_model_dict)
-        datepart_choice = random_datepart()
+        datepart_choice = random_datepart(method=method)
         if datepart_choice in ["simple", "simple_2", "recurring", "simple_binarized"]:
             polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
         else:
@@ -2786,6 +2807,9 @@ class MultivariateRegression(ModelObject):
         discard_data: float = None,
         n_jobs: int = -1,
         synthetic_boundary_ratio: float = 0.0,
+        rolling_skew_periods: int = None,
+        diff_periods: int = None,
+        rolling_range_periods: int = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2834,6 +2858,9 @@ class MultivariateRegression(ModelObject):
         self.transformation_dict = transformation_dict
         self.discard_data = discard_data
         self.synthetic_boundary_ratio = max(float(synthetic_boundary_ratio or 0.0), 0.0)
+        self.rolling_skew_periods = rolling_skew_periods
+        self.diff_periods = diff_periods
+        self.rolling_range_periods = rolling_range_periods
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2849,6 +2876,9 @@ class MultivariateRegression(ModelObject):
             rolling_autocorr_periods,
             nonzero_last_n,
             window,
+            rolling_skew_periods,
+            diff_periods,
+            rolling_range_periods,
             starting_min,
         ]
         self.min_threshold = max([x for x in list_o_vals if str(x).isdigit()])
@@ -2979,6 +3009,9 @@ class MultivariateRegression(ModelObject):
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
                         slice_index=self.slice_index,
+                        rolling_skew_periods=self.rolling_skew_periods,
+                        diff_periods=self.diff_periods,
+                        rolling_range_periods=self.rolling_range_periods,
                     )
                     for x_col in base.columns
                 )
@@ -3022,6 +3055,9 @@ class MultivariateRegression(ModelObject):
                             cointegration_lag=self.cointegration_lag,
                             series_id=x_col if self.series_hash else None,
                             slice_index=self.slice_index,
+                            rolling_skew_periods=self.rolling_skew_periods,
+                            diff_periods=self.diff_periods,
+                            rolling_range_periods=self.rolling_range_periods,
                         )
                         for x_col in base.columns
                     ]
@@ -3190,6 +3226,9 @@ class MultivariateRegression(ModelObject):
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
+                        rolling_skew_periods=self.rolling_skew_periods,
+                        diff_periods=self.diff_periods,
+                        rolling_range_periods=self.rolling_range_periods,
                     ).tail(1)
                     for x_col in current_x.columns
                 ]
@@ -3332,23 +3371,9 @@ class MultivariateRegression(ModelObject):
         nonzero_last_n = random.choices(
             [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]
         )[0]
-        add_date_part_choice = random.choices(
-            [
-                None,
-                'simple',
-                'expanded',
-                'recurring',
-                "simple_2",
-                "simple_2_poly",
-                "simple_binarized",
-                "common_fourier",
-                "expanded_binarized",
-                "common_fourier_rw",
-                ["dayofweek", 365.25],
-                "simple_binarized2_poly",
-            ],
-            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05, 0.05],
-        )[0]
+        add_date_part_choice = random.choices([None, "something"], [0.2, 0.8])[0]
+        if add_date_part_choice == "something":
+            add_date_part_choice = random_datepart(method=method)
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
         if "regressor" in method:
@@ -3412,6 +3437,15 @@ class MultivariateRegression(ModelObject):
                 [0.0, 0.01, 0.02, 0.05],
                 [0.7, 0.1, 0.1, 0.1],
             )[0],
+            "rolling_skew_periods": random.choices(
+                [None, 7, 14, 30, 90], [0.7, 0.1, 0.1, 0.05, 0.05]
+            )[0],
+            "diff_periods": random.choices(
+                [None, 1, 7, 14, 28], [0.6, 0.15, 0.1, 0.1, 0.05]
+            )[0],
+            "rolling_range_periods": random.choices(
+                [None, 7, 14, 30, 60], [0.6, 0.15, 0.1, 0.1, 0.05]
+            )[0],
         }
         return parameter_dict
 
@@ -3446,6 +3480,9 @@ class MultivariateRegression(ModelObject):
             "discard_data": self.discard_data,
             "transformation_dict": self.transformation_dict,
             "synthetic_boundary_ratio": self.synthetic_boundary_ratio,
+            "rolling_skew_periods": self.rolling_skew_periods,
+            "diff_periods": self.diff_periods,
+            "rolling_range_periods": self.rolling_range_periods,
         }
         return parameter_dict
 
