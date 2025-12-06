@@ -741,7 +741,7 @@ def retrieve_classifier(
 sklearn_model_dict = {
     # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
-    'MLP': 0.02,
+    'MLP': 0.001,  # slow but sometimes useful
     'DecisionTree': 0.02,
     'KNN': 0.05,
     'Adaboost': 0.01,
@@ -1020,7 +1020,7 @@ def generate_classifier_params(
             "model": 'ExtraTrees',
             "model_params": {
                 "n_estimators": random.choice([25, 50, 75]),
-                "max_depth": random.choice([None, 6, 10]),
+                "max_depth": random.choice([None, 6, 10, 14]),
                 "min_samples_split": random.choice([2, 4]),
                 "min_samples_leaf": random.choice([1, 2]),
                 "max_features": random.choice(['sqrt', 'log2', None]),
@@ -1315,7 +1315,7 @@ def generate_regressor_params(
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
-                [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.025]
+                [None, 5, 10, 20, 30, 34], [0.4, 0.1, 0.3, 0.4, 0.025, 0.001]
             )[0]
             estimators_choice = random.choices(
                 [4, 50, 100, 500], [0.05, 0.1, 0.85, 0.02]
