@@ -330,7 +330,7 @@ class ARCH(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        vol = random.choice(['GARCH', 'ARCH', 'EGARCH', 'FIGARCH', 'HARCH'])
+        vol = random.choices(['GARCH', 'ARCH', 'EGARCH', 'FIGARCH', 'HARCH'], [0.2, 0.2, 0.2, 0.05, 0.2])[0]
         if vol == "FIGARCH":
             p = random.choice([0, 1])
             q = random.choice([0, 1])
