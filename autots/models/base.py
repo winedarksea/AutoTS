@@ -804,11 +804,28 @@ class PredictionObject(object):
                         key_col = "ID"
                     else:
                         key_col = "SERIES"
-                    h_params = self.model_parameters['series'][
-                        profile[profile[key_col] == series]["PROFILE"].iloc[0]
-                    ]
+                    profiled = profile[profile[key_col] == series]["PROFILE"]
+                    prof_val = profiled.iloc[0] if not profiled.empty else None
+                    series_map = self.model_parameters.get('series', {})
+                    if prof_val in series_map:
+                        h_params = series_map[prof_val]
+                    elif 'overall' in series_map:
+                        h_params = series_map['overall']
+                    elif len(series_map) > 0:
+                        # fallback to first available mapping if profile missing
+                        h_params = next(iter(series_map.values()))
+                    else:
+                        h_params = None
                 else:
-                    h_params = self.model_parameters['series'][series]
+                    series_map = self.model_parameters.get('series', {})
+                    if series in series_map:
+                        h_params = series_map[series]
+                    elif 'overall' in series_map:
+                        h_params = series_map['overall']
+                    elif len(series_map) > 0:
+                        h_params = next(iter(series_map.values()))
+                    else:
+                        h_params = None
                 if isinstance(h_params, str):
                     model_name = self.model_parameters['models'][h_params]['Model']
 

@@ -1622,6 +1622,8 @@ def HorizontalTemplateGenerator(
     # horizontal-profile: choose best model per actual profile type
     if 'horizontal-profile' in ensemble:
         profile_to_model = {}
+        overall_model = None
+        unique_profiles = []
         if isinstance(series_profiles, dict) and series_profiles:
             filtered_profiles = {
                 series: series_profiles.get(series)
@@ -1630,6 +1632,10 @@ def HorizontalTemplateGenerator(
             }
             if filtered_profiles:
                 unique_profiles = sorted(set(filtered_profiles.values()))
+                overall_scores = per_series.mean(axis=1, skipna=True)
+                overall_scores = overall_scores[~overall_scores.isna()]
+                if not overall_scores.empty:
+                    overall_model = overall_scores.idxmin()
                 for profile_name in unique_profiles:
                     profile_series = [
                         series
@@ -1642,14 +1648,17 @@ def HorizontalTemplateGenerator(
                     profile_scores = profile_errors.mean(axis=1, skipna=True)
                     profile_scores = profile_scores[~profile_scores.isna()]
                     if profile_scores.empty:
+                        if overall_model is not None:
+                            profile_to_model[profile_name] = overall_model
                         continue
                     profile_to_model[profile_name] = profile_scores.idxmin()
+                if overall_model is not None:
+                    profile_to_model.setdefault('overall', overall_model)
+                    for profile_name in unique_profiles:
+                        profile_to_model.setdefault(profile_name, overall_model)
+        if not profile_to_model and overall_model is not None:
+            profile_to_model = {'overall': overall_model}
         if profile_to_model:
-            overall_scores = per_series.mean(axis=1, skipna=True)
-            overall_scores = overall_scores[~overall_scores.isna()]
-            if not overall_scores.empty:
-                profile_to_model.setdefault('overall', overall_scores.idxmin())
-
             mods = list(set(profile_to_model.values()))
             best_profile = (
                 model_results[model_results['ID'].isin(mods)]
