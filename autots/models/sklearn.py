@@ -1315,17 +1315,17 @@ def generate_regressor_params(
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
-                [None, 5, 10, 20, 30, 34], [0.4, 0.1, 0.3, 0.4, 0.025, 0.001]
+                [None, 5, 10, 20, 30, 34], [0.4, 0.1, 0.3, 0.4, 0.025, 0.01]
             )[0]
             estimators_choice = random.choices(
-                [4, 50, 100, 500], [0.05, 0.1, 0.85, 0.02]
+                [4, 50, 100, 120, 500], [0.05, 0.1, 0.85, 0.01, 0.01]
             )[0]
             param_dict = {
                 "model": 'ExtraTrees',
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([2, 4, 1.0], [0.8, 0.1, 0.1])[
+                    "min_samples_split": random.choices([1, 2, 3, 4, 1.0], [0.01, 0.8, 0.1, 0.1, 0.1])[
                         0
                     ],
                     "max_depth": max_depth_choice,
@@ -1338,7 +1338,7 @@ def generate_regressor_params(
                             0.05,
                         ],  # everything that isn't squared_error is slow
                     )[0],
-                    "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
+                    "max_features": random.choices([1, 0.6, 0.4, 0.3, 0.2], [0.8, 0.1, 0.05, 0.1, 0.05])[0],
                 },
             }
         elif model in ['KerasRNN']:
@@ -1629,7 +1629,7 @@ def generate_regressor_params(
             algorithm_choice = random.choices(
                 ["auto", "ball_tree", "kd_tree"], [0.7, 0.1, 0.1]
             )[0]
-            leaf_size_choice = random.choices([10, 20, 30, 50], [0.5, 0.3, 0.15, 0.05])[
+            leaf_size_choice = random.choices([10, 20, 30, 50], [0.5, 0.3, 0.05, 0.05])[
                 0
             ]
             param_dict = {
