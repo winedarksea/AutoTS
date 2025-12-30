@@ -509,6 +509,12 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "fake_date", "transformations": {"0": "Log", "1": "SeasonalDifference", "2": "HistoricValues", "3": "Constraint"}, "transformation_params": {"0": {}, "1": {"lag_1": 7, "method": "Mean"}, "2": {"window": 100}, "3": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.7, "constraint_value": {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}}}',
         'Ensemble': 0,
     },
+    "81": {
+        'Model': 'pMLP',
+        'ModelParameters': '{"hidden_dims": [512, 256], "dropout_rate": 0.2, "use_batch_norm": true, "activation": "silu", "epochs": 25, "batch_size": 48, "lr": 0.0015, "loss_function": "quantile", "nll_weight": 0.8, "wasserstein_weight": 0.1, "prediction_batch_size": 150, "num_cnn_blocks": 0, "cnn_params": {}, "datepart_method": "common_fourier_rw", "holiday_countries_used": false, "use_naive_feature": true, "changepoint_method": "none", "changepoint_params": {"changepoint_spacing": 90, "changepoint_distance_end": 5040}, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "QuantileTransformer", "1": "AlignLastValue", "2": "LocalLinearTrend"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 1000}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
+        'Ensemble': 0,
+    },
     # Add a WindowRegression, add new UnobservedComponents, a new MultivariateRegression
 }
 

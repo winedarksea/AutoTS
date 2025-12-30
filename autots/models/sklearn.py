@@ -179,7 +179,9 @@ def rolling_x_regressor(
         temp.columns = ['pct_change_' + str(col) for col in temp.columns]
         X.append(temp)
     if str(rolling_range_periods).isdigit():
-        temp = local_df.rolling(rolling_range_periods, min_periods=1).max() - local_df.rolling(rolling_range_periods, min_periods=1).min()
+        # compute max and min in single rolling pass for efficiency
+        rolling_obj = local_df.rolling(rolling_range_periods, min_periods=1)
+        temp = rolling_obj.max() - rolling_obj.min()
         temp.columns = ['rolling_range_' + str(col) for col in temp.columns]
         X.append(temp)
     if str(ewm_alpha).replace('.', '').isdigit():
@@ -191,15 +193,10 @@ def rolling_x_regressor(
     if str(additional_lag_periods).isdigit():
         X.append(local_df.shift(additional_lag_periods))
     if nonzero_last_n is not None:
-        full_index = local_df.index.union(
-            local_df.index.shift(-nonzero_last_n, freq=inferred_freq)
-        )
-        X.append(
-            (local_df.reindex(full_index).bfill() != 0)
-            .rolling(nonzero_last_n, min_periods=1)
-            .sum()
-            .reindex(local_df.index)
-        )
+        # count of non-zero values in rolling window - optimized version
+        temp = (local_df != 0).astype(float).rolling(nonzero_last_n, min_periods=1).sum()
+        temp.columns = ['nonzero_count_' + str(col) for col in temp.columns]
+        X.append(temp)
     if cointegration is not None:
         if str(cointegration).lower() == "btcd":
             X.append(
@@ -3180,7 +3177,18 @@ class MultivariateRegression(ModelObject):
         # need to copy else multiple predictions move every on...
         current_x = self.sktraindata.copy()
 
-        # and this is ridiculously slow, nested loop
+        # and this is slow, nested loop
+        if self.verbose > 0:
+            print(
+                f"MultivariateRegression predicting {forecast_length} steps for "
+                f"{len(current_x.columns)} series, history shape {current_x.shape}"
+            )
+        # determine if we should parallelize the per-series feature generation
+        predict_parallel = (
+            joblib_present
+            and self.n_jobs not in [0, 1]
+            and len(current_x.columns) >= 20
+        )
         for fcst_step in range(forecast_length):
             cur_regr = None
             if self.regression_type is not None:
@@ -3189,9 +3197,10 @@ class MultivariateRegression(ModelObject):
                 pred_x = self.transformer_object.fit_transform(current_x)
             else:
                 pred_x = current_x
-            self.X_pred = pd.concat(
-                [
-                    rolling_x_regressor_regressor(
+            # parallelize per-series feature generation if beneficial
+            if predict_parallel:
+                x_pred_list = Parallel(n_jobs=self.n_jobs, timeout=3600)(
+                    delayed(rolling_x_regressor_regressor)(
                         pred_x[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
@@ -3212,7 +3221,6 @@ class MultivariateRegression(ModelObject):
                         polynomial_degree=self.polynomial_degree,
                         window=self.window,
                         future_regressor=cur_regr,
-                        # these rely the if part not being run if None
                         regressor_per_series=(
                             regressor_per_series[x_col]
                             if self.regressor_per_series_train is not None
@@ -3229,10 +3237,55 @@ class MultivariateRegression(ModelObject):
                         rolling_skew_periods=self.rolling_skew_periods,
                         diff_periods=self.diff_periods,
                         rolling_range_periods=self.rolling_range_periods,
-                    ).tail(1)
+                    )
                     for x_col in current_x.columns
-                ]
-            )
+                )
+                self.X_pred = pd.concat([x.tail(1) for x in x_pred_list])
+            else:
+                self.X_pred = pd.concat(
+                    [
+                        rolling_x_regressor_regressor(
+                            pred_x[x_col].to_frame(),
+                            mean_rolling_periods=self.mean_rolling_periods,
+                            macd_periods=self.macd_periods,
+                            std_rolling_periods=self.std_rolling_periods,
+                            max_rolling_periods=self.max_rolling_periods,
+                            min_rolling_periods=self.min_rolling_periods,
+                            ewm_var_alpha=self.ewm_var_alpha,
+                            quantile90_rolling_periods=self.quantile90_rolling_periods,
+                            quantile10_rolling_periods=self.quantile10_rolling_periods,
+                            additional_lag_periods=self.additional_lag_periods,
+                            ewm_alpha=self.ewm_alpha,
+                            abs_energy=self.abs_energy,
+                            rolling_autocorr_periods=self.rolling_autocorr_periods,
+                            nonzero_last_n=self.nonzero_last_n,
+                            add_date_part=self.datepart_method,
+                            holiday=self.holiday,
+                            holiday_country=self.holiday_country,
+                            polynomial_degree=self.polynomial_degree,
+                            window=self.window,
+                            future_regressor=cur_regr,
+                            # these rely the if part not being run if None
+                            regressor_per_series=(
+                                regressor_per_series[x_col]
+                                if self.regressor_per_series_train is not None
+                                else None
+                            ),
+                            static_regressor=(
+                                self.static_regressor.loc[x_col].to_frame().T
+                                if self.static_regressor is not None
+                                else None
+                            ),
+                            cointegration=self.cointegration,
+                            cointegration_lag=self.cointegration_lag,
+                            series_id=x_col if self.series_hash else None,
+                            rolling_skew_periods=self.rolling_skew_periods,
+                            diff_periods=self.diff_periods,
+                            rolling_range_periods=self.rolling_range_periods,
+                        ).tail(1)
+                        for x_col in current_x.columns
+                    ]
+                )
             if self.scale_full_X:
                 c_x_pred = self.scale_data(self.X_pred).to_numpy()
                 rfPred = self.model.predict(c_x_pred)
