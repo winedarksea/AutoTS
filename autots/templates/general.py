@@ -515,6 +515,12 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "QuantileTransformer", "1": "AlignLastValue", "2": "LocalLinearTrend"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 1000}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
         'Ensemble': 0,
     },
+    "82": {  # not quite the best, but 3x faster than the best
+        'Model': 'MultivariateRegression',
+        'ModelParameters': '{"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 2, "max_depth": 30, "criterion": "friedman_mse", "max_features": 0.3}}, "mean_rolling_periods": 30, "macd_periods": null, "std_rolling_periods": 5, "max_rolling_periods": 24, "min_rolling_periods": 60, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": 90, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": null, "datepart_method": "recurring", "polynomial_degree": null, "regression_type": null, "window": 3, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": true, "frac_slice": 0.1, "discard_data": null, "transformation_dict": {"fillna": "ffill_mean_biased", "transformations": {"0": "AlignLastDiff"}, "transformation_params": {"0": {"rows": 1, "displacement_rows": 1, "quantile": 1.0, "decay_span": null}}}, "synthetic_boundary_ratio": 0.0, "rolling_skew_periods": null, "diff_periods": 7, "rolling_range_periods": null}',
+        'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "Log", "1": "Slice", "2": "ChangepointDetrend"}, "transformation_params": {"0": {}, "1": {"method": 0.5}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
+        'Ensemble': 0,
+    },
     # Add a WindowRegression, add new UnobservedComponents, a new MultivariateRegression
 }
 
