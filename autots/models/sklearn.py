@@ -1610,12 +1610,26 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'SVM',
                 "model_params": {
-                    'C': random.choices([1.0, 0.5, 2.0, 0.25], [0.6, 0.1, 0.1, 0.1])[0],
-                    'tol': random.choices([1e-4, 1e-3, 1e-5], [0.6, 0.1, 0.1])[0],
-                    "loss": random.choice(
-                        ['epsilon_insensitive', 'squared_epsilon_insensitive']
-                    ),
-                    "max_iter": random.choice([500, 1000]),
+                    'C': random.choices(
+                        [0.1, 0.25, 0.5, 1.0, 2.0],
+                        [0.1, 0.2, 0.4, 0.2, 0.1],
+                    )[0],
+                    'tol': random.choices(
+                        [1e-2, 1e-3, 1e-4],
+                        [0.2, 0.6, 0.2],
+                    )[0],
+                    "epsilon": random.choices(
+                        [0.0, 0.01, 0.05, 0.1, 0.2],
+                        [0.05, 0.1, 0.35, 0.35, 0.15],
+                    )[0],
+                    "loss": random.choices(
+                        ['epsilon_insensitive', 'squared_epsilon_insensitive'],
+                        [0.01, 0.8],
+                    )[0],
+                    "max_iter": random.choices(
+                        [50, 100, 200, 500],
+                        [0.2, 0.4, 0.3, 0.1],
+                    )[0],
                 },
             }
         elif model == 'RadiusNeighbors':
@@ -2748,6 +2762,8 @@ class MultivariateRegression(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
         holiday (bool): If true, include holiday flags
         regression_type (str): type of regression (None, 'User')
+        frac_slice (float): fraction of data to skip from the beginning.
+            A larger value (e.g., 0.98) filters OUT MORE data, keeping only the most recent fraction (the last 2%).
 
     """
 
@@ -3456,6 +3472,19 @@ class MultivariateRegression(ModelObject):
                 transformer_list, transformer_max_depth=1, allow_none=False
             )
 
+        scale_full_X_choice = random.choices([True, False], [0.2, 0.8])[0]
+        frac_slice_choice = random.choices(
+            [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
+        )[0]
+        # LinearSVR can be extremely slow on the stacked-sample design matrix;
+        # bias toward scaling + smaller training slices.
+        if model_choice.get("model", None) in ["SVM", "LinearSVR"]:
+            scale_full_X_choice = True
+            frac_slice_choice = random.choices(
+                [0.7, 0.8, 0.9, 0.98],
+                [0.5, 0.2, 0.1, 0.2],
+            )[0]
+
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -3477,13 +3506,11 @@ class MultivariateRegression(ModelObject):
             'window': window_choice,
             'holiday': holiday_choice,
             "probabilistic": probabilistic,
-            'scale_full_X': random.choices([True, False], [0.2, 0.8])[0],
+            'scale_full_X': scale_full_X_choice,
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
-            "frac_slice": random.choices(
-                [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
-            )[0],
+            "frac_slice": frac_slice_choice,
             "discard_data": random.choices([None, 50, 90, 98], [0.7, 0.1, 0.1, 0.1])[0],
             "transformation_dict": transform_choice,
             "synthetic_boundary_ratio": random.choices(
