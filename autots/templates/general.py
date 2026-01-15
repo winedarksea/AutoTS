@@ -523,11 +523,11 @@ general_template_dict = {
     },
     "83": {
         'Model': 'MultivariateRegression',
-        'ModelParameters': '{"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 2, "max_depth": 30, "criterion": "friedman_mse", "max_features": 0.3}}, "mean_rolling_periods": 90, "macd_periods": 7, "std_rolling_periods": null, "max_rolling_periods": 60, "min_rolling_periods": null, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": 30, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": 30, "datepart_method": "expanded_binarized", "polynomial_degree": null, "regression_type": null, "window": null, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": true, "frac_slice": null, "discard_data": null, "transformation_dict": null, "synthetic_boundary_ratio": 0.0, "rolling_skew_periods": null, "diff_periods": 28, "rolling_range_periods": 60}',
+        'ModelParameters': '{"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 2, "max_depth": 30, "criterion": "friedman_mse", "max_features": 0.3}}, "mean_rolling_periods": 90, "macd_periods": 12, "std_rolling_periods": 7, "max_rolling_periods": 89, "min_rolling_periods": 20, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": null, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": 30, "datepart_method": "common_fourier", "polynomial_degree": null, "regression_type": null, "window": null, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": true, "frac_slice": null, "discard_data": null, "transformation_dict": null, "synthetic_boundary_ratio": 0.0, "rolling_skew_periods": null, "diff_periods": 1, "rolling_range_periods": 60}',
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Log", "1": "ReplaceConstant"}, "transformation_params": {"0": {}, "1": {"constant": 0, "reintroduction_model": {"model": "DecisionTree", "model_params": {"max_depth": 4, "min_samples_split": 2, "min_samples_leaf": 3, "class_weight": "balanced"}, "datepart_method": "expanded"}, "fillna": "akima"}}}',
         'Ensemble': 0,
     },
-    # Add a WindowRegression, add new UnobservedComponents, a new MultivariateRegression
+    # Add a WindowRegression, add new UnobservedComponents
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
