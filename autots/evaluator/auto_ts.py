@@ -3720,6 +3720,7 @@ class AutoTS(object):
         value_name="Value",
         interval_name='PredictionInterval',
     ):
+        """Retrieve validation forecasts in long form dataframe. If a user is looking to do custom review of the holdout forecasts, this is the function to use."""
         self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
         needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []
