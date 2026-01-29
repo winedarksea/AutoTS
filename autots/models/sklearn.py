@@ -1274,7 +1274,7 @@ def generate_regressor_params(
                     "weights": random.choices(['uniform', 'distance'], [0.999, 0.001])[
                         0
                     ],
-                    'p': random.choices([2, 1, 1.5], [0.7, 0.1, 0.1])[0],
+                    'p': random.choices([2, 1], [0.85, 0.15])[0],
                     'leaf_size': random.choices([30, 10, 50], [0.8, 0.1, 0.1])[0],
                 },
             }
@@ -1312,7 +1312,7 @@ def generate_regressor_params(
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
-                [None, 5, 10, 20, 30, 34], [0.4, 0.1, 0.3, 0.4, 0.025, 0.01]
+                [None, 5, 10, 20, 30, 34], [0.4, 0.1, 0.3, 0.4, 0.005, 0.005]
             )[0]
             estimators_choice = random.choices(
                 [4, 50, 100, 120, 500], [0.05, 0.1, 0.85, 0.01, 0.01]
@@ -1322,7 +1322,7 @@ def generate_regressor_params(
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([1, 2, 3, 4, 1.0], [0.01, 0.8, 0.1, 0.1, 0.1])[
+                    "min_samples_split": random.choices([1, 2, 3, 4, 1.0], [0.005, 0.8, 0.1, 0.1, 0.1])[
                         0
                     ],
                     "max_depth": max_depth_choice,
@@ -1331,8 +1331,8 @@ def generate_regressor_params(
                         [
                             0.90,
                             0.0,
+                            0.005,
                             0.01,
-                            0.05,
                         ],  # everything that isn't squared_error is slow
                     )[0],
                     "max_features": random.choices([1, 0.6, 0.4, 0.3, 0.2], [0.8, 0.1, 0.05, 0.1, 0.05])[0],
@@ -2896,6 +2896,7 @@ class MultivariateRegression(ModelObject):
         ]
         self.min_threshold = max([x for x in list_o_vals if str(x).isdigit()])
         self.scaler_mean = None
+        self._nonzero_var_mask = None  # for filtering constant columns during fit
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -3113,21 +3114,53 @@ class MultivariateRegression(ModelObject):
 
             self._augment_with_synthetic_bounds()
 
+            # Remove zero-variance columns to prevent tree algorithms from wasting time
+            X_arr = self.X.to_numpy()
+            # Faster range-based check for zero variance
+            col_min = np.nanmin(X_arr, axis=0)
+            col_max = np.nanmax(X_arr, axis=0)
+            self._nonzero_var_mask = (col_max - col_min) > 1e-10
+
+            # Safeguard: ensure at least one column remains to prevent model failure
+            if not np.any(self._nonzero_var_mask):
+                self._nonzero_var_mask[0] = True
+
+            if not np.all(self._nonzero_var_mask):
+                if self.verbose > 1:
+                    n_removed = np.sum(~self._nonzero_var_mask)
+                    print(
+                        f"MultivariateRegression: removed {n_removed} zero-variance columns"
+                    )
+                X_arr = X_arr[:, self._nonzero_var_mask]
+            # Safeguard: ensure at least one column remains to prevent model failure
+            if not np.any(self._nonzero_var_mask):
+                self._nonzero_var_mask[0] = True
+
+            if not np.all(self._nonzero_var_mask):
+                if self.verbose > 1:
+                    n_removed = np.sum(~self._nonzero_var_mask)
+                    print(
+                        f"MultivariateRegression: removed {n_removed} zero-variance columns"
+                    )
+                X_arr = X_arr[:, self._nonzero_var_mask]
+            else:
+                self._nonzero_var_mask = None  # flag that no filtering was done
+
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
 
-            self.model.fit(self.X.to_numpy(), self.Y)
+            self.model.fit(X_arr, self.Y)
 
             if self.probabilistic and not self.multioutputgpr:
-                self.model_upper.fit(self.X.to_numpy(), self.Y)
-                self.model_lower.fit(self.X.to_numpy(), self.Y)
+                self.model_upper.fit(X_arr, self.Y)
+                self.model_lower.fit(X_arr, self.Y)
 
             if self.discard_data is not None:
-                pred_y = self.model.predict(self.X.to_numpy())
+                pred_y = self.model.predict(X_arr)
                 error = np.abs(pred_y - self.Y)
                 error_percentile = np.percentile(error, self.discard_data)
                 error_check = error < error_percentile
-                new_X = self.X[error_check]
+                new_X = X_arr[error_check]
                 new_Y = self.Y[error_check]
                 self.model.fit(new_X, new_Y)
             # we only need the N most recent points for predict
@@ -3304,10 +3337,12 @@ class MultivariateRegression(ModelObject):
                 )
             if self.scale_full_X:
                 c_x_pred = self.scale_data(self.X_pred).to_numpy()
-                rfPred = self.model.predict(c_x_pred)
             else:
                 c_x_pred = self.X_pred.to_numpy()
-                rfPred = self.model.predict(c_x_pred)
+            # Apply same zero-variance column filtering as during fit
+            if self._nonzero_var_mask is not None:
+                c_x_pred = c_x_pred[:, self._nonzero_var_mask]
+            rfPred = self.model.predict(c_x_pred)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
@@ -3417,10 +3452,10 @@ class MultivariateRegression(ModelObject):
             0
         ]
         quantile90_rolling_periods = random.choices(
-            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 30], [0.8, 0.1, 0.05, 0.05]
         )[0]
         quantile10_rolling_periods = random.choices(
-            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 30], [0.8, 0.1, 0.05, 0.05]
         )[0]
         max_rolling_periods_choice = random.choices(
             [None, seasonal_int(small=True)], [0.2, 0.5]
@@ -3511,7 +3546,7 @@ class MultivariateRegression(ModelObject):
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
             "frac_slice": frac_slice_choice,
-            "discard_data": random.choices([None, 50, 90, 98], [0.7, 0.1, 0.1, 0.1])[0],
+            "discard_data": random.choices([None, 50, 90, 98], [0.9, 0.03, 0.03, 0.04])[0],
             "transformation_dict": transform_choice,
             "synthetic_boundary_ratio": random.choices(
                 [0.0, 0.01, 0.02, 0.05],
@@ -3524,7 +3559,7 @@ class MultivariateRegression(ModelObject):
                 [None, 1, 7, 14, 28], [0.6, 0.15, 0.1, 0.1, 0.05]
             )[0],
             "rolling_range_periods": random.choices(
-                [None, 7, 14, 30, 60], [0.6, 0.15, 0.1, 0.1, 0.05]
+                [None, 7, 14, 30, 60], [0.6, 0.15, 0.1, 0.1, 0.005]
             )[0],
         }
         return parameter_dict
