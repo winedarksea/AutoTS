@@ -464,13 +464,17 @@ def BestNEnsemble(
         ens_df_upper = pd.DataFrame(0.0, index=indices, columns=columnz)
         # Track weight per column to handle missing series properly
         weight_df = pd.DataFrame(0.0, index=indices, columns=columnz)
-        
+
         for idx, x in forecasts.items():
             current_weight = float(model_weights.get(idx, 1))
             # Align forecasts to have consistent columns, using NaN for missing series
             x_aligned = x.reindex(columns=columnz, fill_value=np.nan)
-            lower_aligned = lower_forecasts[idx].reindex(columns=columnz, fill_value=np.nan)
-            upper_aligned = upper_forecasts[idx].reindex(columns=columnz, fill_value=np.nan)
+            lower_aligned = lower_forecasts[idx].reindex(
+                columns=columnz, fill_value=np.nan
+            )
+            upper_aligned = upper_forecasts[idx].reindex(
+                columns=columnz, fill_value=np.nan
+            )
 
             # Only add weighted values where data exists (not NaN)
             # Use fillna(0) after multiplication so NaN * weight = NaN, then NaN -> 0 for addition

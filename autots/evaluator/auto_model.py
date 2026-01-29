@@ -2299,11 +2299,15 @@ def TemplateWizard(
                         df_forecast2.forecast = transformer_object.inverse_transform(
                             df_forecast2.forecast
                         )
-                        df_forecast2.lower_forecast = transformer_object.inverse_transform(
-                            df_forecast2.lower_forecast, fillzero=True, bounds=True
+                        df_forecast2.lower_forecast = (
+                            transformer_object.inverse_transform(
+                                df_forecast2.lower_forecast, fillzero=True, bounds=True
+                            )
                         )
-                        df_forecast2.upper_forecast = transformer_object.inverse_transform(
-                            df_forecast2.upper_forecast, fillzero=True, bounds=True
+                        df_forecast2.upper_forecast = (
+                            transformer_object.inverse_transform(
+                                df_forecast2.upper_forecast, fillzero=True, bounds=True
+                            )
                         )
                         df_forecast2.transformation_parameters = x
                         template_result.model_count += 1
@@ -2339,7 +2343,11 @@ def TemplateWizard(
                             if traceback:
                                 print(
                                     'Postprocessing Error: {} in model {} postprocessor {}: {}'.format(
-                                        ''.join(tb.format_exception(None, e, e.__traceback__)),
+                                        ''.join(
+                                            tb.format_exception(
+                                                None, e, e.__traceback__
+                                            )
+                                        ),
                                         template_result.model_count,
                                         str(current_generation),
                                         model_str,
@@ -2357,9 +2365,7 @@ def TemplateWizard(
                         fit_runtime = datetime.datetime.now() - template_start_time
                         result = pd.DataFrame(
                             {
-                                'ID': create_model_id(
-                                    model_str, parameter_dict, x
-                                ),
+                                'ID': create_model_id(model_str, parameter_dict, x),
                                 'Model': model_str,
                                 'ModelParameters': json.dumps(parameter_dict),
                                 'TransformationParameters': json.dumps(x),

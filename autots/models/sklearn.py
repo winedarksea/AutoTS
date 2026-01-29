@@ -175,7 +175,9 @@ def rolling_x_regressor(
         temp.columns = ['rolling_skew_' + str(col) for col in temp.columns]
         X.append(temp)
     if str(diff_periods).isdigit():
-        temp = local_df.pct_change(periods=diff_periods).replace([np.inf, -np.inf], np.nan)
+        temp = local_df.pct_change(periods=diff_periods).replace(
+            [np.inf, -np.inf], np.nan
+        )
         temp.columns = ['pct_change_' + str(col) for col in temp.columns]
         X.append(temp)
     if str(rolling_range_periods).isdigit():
@@ -194,7 +196,9 @@ def rolling_x_regressor(
         X.append(local_df.shift(additional_lag_periods))
     if nonzero_last_n is not None:
         # count of non-zero values in rolling window - optimized version
-        temp = (local_df != 0).astype(float).rolling(nonzero_last_n, min_periods=1).sum()
+        temp = (
+            (local_df != 0).astype(float).rolling(nonzero_last_n, min_periods=1).sum()
+        )
         temp.columns = ['nonzero_count_' + str(col) for col in temp.columns]
         X.append(temp)
     if cointegration is not None:
@@ -1322,9 +1326,9 @@ def generate_regressor_params(
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([1, 2, 3, 4, 1.0], [0.005, 0.8, 0.1, 0.1, 0.1])[
-                        0
-                    ],
+                    "min_samples_split": random.choices(
+                        [1, 2, 3, 4, 1.0], [0.005, 0.8, 0.1, 0.1, 0.1]
+                    )[0],
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
@@ -1335,7 +1339,9 @@ def generate_regressor_params(
                             0.01,
                         ],  # everything that isn't squared_error is slow
                     )[0],
-                    "max_features": random.choices([1, 0.6, 0.4, 0.3, 0.2], [0.8, 0.1, 0.05, 0.1, 0.05])[0],
+                    "max_features": random.choices(
+                        [1, 0.6, 0.4, 0.3, 0.2], [0.8, 0.1, 0.05, 0.1, 0.05]
+                    )[0],
                 },
             }
         elif model in ['KerasRNN']:
@@ -3116,7 +3122,9 @@ class MultivariateRegression(ModelObject):
 
             # Remove near-constant columns to prevent tree algorithms from wasting time
             X_arr = self.X.to_numpy()
-            VARIANCE_THRESHOLD = 1e-10  # absolute range below this is considered constant
+            VARIANCE_THRESHOLD = (
+                1e-10  # absolute range below this is considered constant
+            )
             col_min = np.nanmin(X_arr, axis=0)
             col_max = np.nanmax(X_arr, axis=0)
             col_range = col_max - col_min
@@ -3539,7 +3547,9 @@ class MultivariateRegression(ModelObject):
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
             "frac_slice": frac_slice_choice,
-            "discard_data": random.choices([None, 50, 90, 98], [0.9, 0.03, 0.03, 0.04])[0],
+            "discard_data": random.choices([None, 50, 90, 98], [0.9, 0.03, 0.03, 0.04])[
+                0
+            ],
             "transformation_dict": transform_choice,
             "synthetic_boundary_ratio": random.choices(
                 [0.0, 0.01, 0.02, 0.05],

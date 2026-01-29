@@ -115,7 +115,7 @@ def _compute_segment_statistics(series, changepoints):
     if not segment_breaks:
         segment_breaks = [index[0]]
         segment_means = [float(np.nanmean(filtered_values))]
-    
+
     # BUGFIX: Check if index[0] is already in segment_breaks before overwriting
     # This prevents creating duplicates that could cause length mismatches
     if segment_breaks[0] != index[0]:
@@ -128,10 +128,7 @@ def _compute_segment_statistics(series, changepoints):
     # This maintains the invariant that len(segment_breaks) == len(segment_means)
     if segment_breaks.has_duplicates:
         # Create a DataFrame to keep breaks and means aligned during deduplication
-        temp_df = pd.DataFrame({
-            'breaks': segment_breaks,
-            'means': segment_means
-        })
+        temp_df = pd.DataFrame({'breaks': segment_breaks, 'means': segment_means})
         # Keep first occurrence of each break
         temp_df = temp_df[~temp_df['breaks'].duplicated(keep='first')]
         segment_breaks = pd.Index(temp_df['breaks'].values)
@@ -171,7 +168,7 @@ def _evaluate_segment_trend(index, segment_breaks, segment_values):
 
     segment_break_array = segment_breaks.values
     segment_values = np.asarray(segment_values, dtype=float)
-    
+
     # Defensive check: This should never happen with proper _compute_segment_statistics
     # but we validate to provide a clear error message if it does
     if len(segment_break_array) != len(segment_values):
@@ -180,7 +177,7 @@ def _evaluate_segment_trend(index, segment_breaks, segment_values):
             f"does not match segment_values length ({len(segment_values)}). "
             f"This indicates a bug in changepoint detection."
         )
-    
+
     order = np.argsort(segment_break_array)
     segment_break_array = segment_break_array[order]
     segment_values = segment_values[order]

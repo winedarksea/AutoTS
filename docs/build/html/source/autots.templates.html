@@ -45,11 +45,55 @@
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
 </section>
-<section id="autots-templates-general-module">
-<h2>autots.templates.general module<a class="headerlink" href="#autots-templates-general-module" title="Link to this heading">¶</a></h2>
+<section id="module-autots.templates.general">
+<span id="autots-templates-general-module"></span><h2>autots.templates.general module<a class="headerlink" href="#module-autots.templates.general" title="Link to this heading">¶</a></h2>
+<p>Starting templates for models.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="autots.templates.general.general_template">
+<span class="sig-prename descclassname"><span class="pre">autots.templates.general.</span></span><span class="sig-name descname"><span class="pre">general_template</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">Model</span>&#160; <span class="pre">...</span> <span class="pre">Ensemble</span> <span class="pre">1</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">ARIMA</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">2</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">AverageValueNaive</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">3</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">AverageValueNaive</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">4</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">AverageValueNaive</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">5</span>&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">DatepartRegression</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">..</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">...</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160; <span class="pre">...</span> <span class="pre">79</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">RRVAR</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">80</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">SeasonalNaive</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">81</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">pMLP</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">82</span>&#160; <span class="pre">MultivariateRegression</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span> <span class="pre">83</span>&#160; <span class="pre">MultivariateRegression</span>&#160; <span class="pre">...</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">0</span>&#160; <span class="pre">[83</span> <span class="pre">rows</span> <span class="pre">x</span> <span class="pre">4</span> <span class="pre">columns]</span></em><a class="headerlink" href="#autots.templates.general.general_template" title="Link to this definition">¶</a></dt>
+<dd><p># Basic Template Construction Code
+# transformer_max_depth = 6 and transformer_list = “fast”
+from autots.evaluator.auto_model import unpack_ensemble_models
+max_per_model_class = 1
+export_template = model.validation_results.model_results
+export_template = export_template[</p>
+<blockquote>
+<div><p>export_template[‘Runs’] &gt;= (model.num_validations + 1)</p>
+</div></blockquote>
+<p>]
+export_template = (</p>
+<blockquote>
+<div><p>export_template.sort_values(‘Score’, ascending=True)
+.groupby(‘Model’)
+.head(max_per_model_class)
+.reset_index()</p>
+</div></blockquote>
+<p>)
+import json
+export2 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
+export_final = pd.concat([export_template, export2])
+export_final = export_final[export_final[‘Ensemble’] &lt; 1]
+export_final[[“Model”, “ModelParameters”, “TransformationParameters”, “Ensemble”]].reset_index(drop=True).to_json(orient=’index’)</p>
+<p>import pprint
+import json</p>
+<p>imported = pd.read_csv(“autots_forecast_template_gen.csv”)
+export = unpack_ensemble_models(imported, keep_ensemble=False, recursive=True)
+export[export[‘Ensemble’] &lt; 1].to_json(“template.json”, orient=”records”)
+with open(“template.json”, “r”) as jsn:</p>
+<blockquote>
+<div><p>json_temp = json.loads(jsn.read())</p>
+</div></blockquote>
+<p>print(json_temp)
+with open(“template.txt”, “w”) as txt:</p>
+<blockquote>
+<div><p>txt.write(json.dumps(json_temp, indent=4, sort_keys=False))</p>
+</div></blockquote>
+</dd></dl>
+
 </section>
-<section id="module-contents">
-<h2>Module contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<section id="module-autots.templates">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.templates" title="Link to this heading">¶</a></h2>
+<p>Model Templates</p>
 </section>
 </section>
 
@@ -133,7 +177,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2025, Colin Catlin.
+      &copy;2026, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.templates.rst.txt"

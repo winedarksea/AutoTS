@@ -96,7 +96,9 @@ def convolution_filter(x, filt, nsides=2):
         trim_tail = int(np.ceil(len(filt) / 2.0) - len(filt) % 2) or None
 
     if filt.ndim == 1 or min(filt.shape) == 1:
-        result = np.apply_along_axis(lambda m: np.convolve(m, filt.ravel(), mode='valid'), 0, x)
+        result = np.apply_along_axis(
+            lambda m: np.convolve(m, filt.ravel(), mode='valid'), 0, x
+        )
     else:
         nlags = filt.shape[0]
         nvar = x.shape[1]
@@ -113,7 +115,11 @@ def convolution_filter(x, filt, nsides=2):
         result = np.vstack([p for p in [head_nans, result, tail_nans] if p.size])
 
     if is_pandas:
-        result = pd.DataFrame(result, index=index, columns=columns) if columns is not None else pd.Series(result.ravel(), index=index)
+        result = (
+            pd.DataFrame(result, index=index, columns=columns)
+            if columns is not None
+            else pd.Series(result.ravel(), index=index)
+        )
 
     return result
 
