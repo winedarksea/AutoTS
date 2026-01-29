@@ -3114,33 +3114,26 @@ class MultivariateRegression(ModelObject):
 
             self._augment_with_synthetic_bounds()
 
-            # Remove zero-variance columns to prevent tree algorithms from wasting time
+            # Remove near-constant columns to prevent tree algorithms from wasting time
             X_arr = self.X.to_numpy()
-            # Faster range-based check for zero variance
+            VARIANCE_THRESHOLD = 1e-10  # absolute range below this is considered constant
             col_min = np.nanmin(X_arr, axis=0)
             col_max = np.nanmax(X_arr, axis=0)
-            self._nonzero_var_mask = (col_max - col_min) > 1e-10
+            col_range = col_max - col_min
+            self._nonzero_var_mask = col_range > VARIANCE_THRESHOLD
 
-            # Safeguard: ensure at least one column remains to prevent model failure
+            # Safeguard: if all columns are near-constant or all-NaN
             if not np.any(self._nonzero_var_mask):
-                self._nonzero_var_mask[0] = True
+                raise ValueError(
+                    "MultivariateRegression: all features are near-constant or NaN; "
+                )
 
             if not np.all(self._nonzero_var_mask):
+                n_removed = np.sum(~self._nonzero_var_mask)
                 if self.verbose > 1:
-                    n_removed = np.sum(~self._nonzero_var_mask)
                     print(
-                        f"MultivariateRegression: removed {n_removed} zero-variance columns"
-                    )
-                X_arr = X_arr[:, self._nonzero_var_mask]
-            # Safeguard: ensure at least one column remains to prevent model failure
-            if not np.any(self._nonzero_var_mask):
-                self._nonzero_var_mask[0] = True
-
-            if not np.all(self._nonzero_var_mask):
-                if self.verbose > 1:
-                    n_removed = np.sum(~self._nonzero_var_mask)
-                    print(
-                        f"MultivariateRegression: removed {n_removed} zero-variance columns"
+                        f"MultivariateRegression: removed {n_removed} near-constant columns "
+                        f"(range <= {VARIANCE_THRESHOLD})"
                     )
                 X_arr = X_arr[:, self._nonzero_var_mask]
             else:
