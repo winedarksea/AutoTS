@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime
+from typing import Optional
 
 from autots.tools.seasonal import date_part
 from autots.models.base import ModelObject, PredictionObject
@@ -2093,7 +2094,7 @@ class pMLP(ModelObject):
         changepoint_method: str = "basic",
         changepoint_params: dict = None,
         regression_type: str = None,
-        num_cnn_blocks: int | None = 0,
+        num_cnn_blocks: Optional[int] = 0,
         cnn_params: dict = None,
         **kwargs,
     ):

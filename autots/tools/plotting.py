@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Iterable, Mapping, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -188,8 +188,8 @@ def plot_distributions(
     runtimes_data: pd.DataFrame,
     group_col: str = 'Model',
     y_col: str = 'TotalRuntimeSeconds',
-    xlim: float | None = None,
-    xlim_right: float | None = None,
+    xlim: Optional[float] = None,
+    xlim_right: Optional[float] = None,
     title_suffix: str = "",
 ):
     """Plot runtime density per group with custom palette."""
@@ -261,17 +261,17 @@ def plot_distributions(
 
 def plot_forecast_with_intervals(
     plot_df: pd.DataFrame,
-    actual_col: str | None = 'actuals',
+    actual_col: Optional[str] = 'actuals',
     forecast_col: str = 'forecast',
     lower_col: str = 'low_forecast',
     upper_col: str = 'up_forecast',
-    title: str | None = None,
-    colors: Mapping[str, str] | None = None,
+    title: Optional[str] = None,
+    colors: Optional[Mapping[str, str]] = None,
     include_bounds: bool = True,
     alpha: float = 0.3,
-    band_color: str | None = None,
-    interval_label: str | None = "Prediction Interval",
-    band_kwargs: Mapping[str, Any] | None = None,
+    band_color: Optional[str] = None,
+    interval_label: Optional[str] = "Prediction Interval",
+    band_kwargs: Optional[Mapping[str, Any]] = None,
     plot_lines: bool = True,
     ax=None,
     **plot_kwargs,
@@ -284,7 +284,7 @@ def plot_forecast_with_intervals(
         _, ax = plt.subplots()
 
     if plot_lines:
-        columns_to_plot: list[str] = []
+        columns_to_plot: List[str] = []
         if actual_col and actual_col in plot_df.columns:
             columns_to_plot.append(actual_col)
         if forecast_col and forecast_col in plot_df.columns:
@@ -364,15 +364,15 @@ def _component_array(components: Mapping[str, Iterable[float]], name: str, lengt
 def plot_feature_panels(
     series_name: str,
     date_index: pd.DatetimeIndex,
-    series_data: pd.Series | np.ndarray,
+    series_data: Union[pd.Series, np.ndarray],
     components: Mapping[str, Iterable[float]],
     labels: Mapping[str, Iterable],
-    series_type_description: str | None = None,
-    scale: float | None = None,
-    noise_to_signal: float | None = None,
+    series_type_description: Optional[str] = None,
+    scale: Optional[float] = None,
+    noise_to_signal: Optional[float] = None,
     figsize=(16, 12),
     title_prefix: str = "Feature Analysis",
-    save_path: str | None = None,
+    save_path: Optional[str] = None,
     show: bool = True,
 ):
     """Create a four-panel diagnostic plot shared by generator and detector."""
@@ -675,10 +675,10 @@ def plot_feature_panels(
 
 
 def plot_risk_score_bar(
-    risk_data: pd.Series | np.ndarray,
+    risk_data: Union[pd.Series, np.ndarray],
     index=None,
     bar_color: str = "#6495ED",
-    bar_ylim: tuple | list | None = None,
+    bar_ylim: Union[tuple, list, None] = None,
     title: str = "Risk Score",
     ylabel: str = "Risk",
     xlabel: str = "Forecast Horizon",
@@ -745,7 +745,7 @@ def plot_risk_score_bar(
 def plot_simulation_paths(
     simulations: np.ndarray,
     index=None,
-    colors: list | None = None,
+    colors: Optional[list] = None,
     alpha: float = 0.9,
     linewidth: float = 1.2,
     ax=None,

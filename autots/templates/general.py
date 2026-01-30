@@ -473,7 +473,61 @@ general_template_dict = {
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Constraint", "1": "AlignLastValue", "2": "HistoricValues", "3": "LocalLinearTrend"}, "transformation_params": {"0": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.2, "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"window": null}, "3": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
         'Ensemble': 0,
     },
-    # Add a WindowRegression, add new UnobservedComponents, a new MultivariateRegression
+    "75": {  # pMLP anchored segment Fourier variant
+        'Model': 'pMLP',
+        'ModelParameters': '{"hidden_dims": [768, 256], "dropout_rate": 0.2, "use_batch_norm": true, "activation": "silu", "epochs": 20, "batch_size": 128, "lr": 0.002, "loss_function": "quantile", "nll_weight": 1.0, "wasserstein_weight": 0.2, "prediction_batch_size": 100, "num_cnn_blocks": 0, "cnn_params": {}, "datepart_method": "anchored_segment_fourier:us_school", "holiday_countries_used": true, "use_naive_feature": true, "changepoint_method": "basic", "changepoint_params": {"changepoint_spacing": 90, "changepoint_distance_end": 5040}, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Log", "1": "AlignLastValue", "2": "LocalLinearTrend"}, "transformation_params": {"0": {}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
+        'Ensemble': 0,
+    },
+    "76": {  # lowest SMAPE on mixed prod example, 33.9
+        'Model': 'BallTreeMultivariateMotif',
+        'ModelParameters': '{"window": 10, "point_method": "median", "distance_metric": "euclidean", "k": 15, "sample_fraction": null, "comparison_transformation": null, "combination_transformation": null}',
+        'TransformationParameters': '{"fillna": "linear", "transformations": {"0": "HistoricValues", "1": "SinTrend", "2": "ChangepointDetrend"}, "transformation_params": {"0": {"window": 10}, "1": {}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
+        'Ensemble': 0,
+    },
+    "77": {  # ARDL from horizontal ensemble
+        'Model': 'ARDL',
+        'ModelParameters': '{"lags": 1, "trend": "c", "order": 1, "causal": false, "regression_type": "common_fourier_rw"}',
+        'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "Log", "1": "Slice", "2": "ChangepointDetrend", "3": "Slice"}, "transformation_params": {"0": {}, "1": {"method": 0.5}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}, "3": {"method": 0.5}}}',
+        'Ensemble': 0,
+    },
+    "78": {  # MultivariateRegression from horizontal ensemble
+        'Model': 'MultivariateRegression',
+        'ModelParameters': '{"regression_model": {"model": "LightGBM", "model_params": {"colsample_bytree": 0.1645, "learning_rate": 0.0203, "max_bin": 1023, "min_child_samples": 16, "n_estimators": 1794, "num_leaves": 15, "reg_alpha": 0.00098, "reg_lambda": 0.686}}, "mean_rolling_periods": 30, "macd_periods": null, "std_rolling_periods": 30, "max_rolling_periods": null, "min_rolling_periods": null, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": null, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": 14, "datepart_method": "common_fourier", "polynomial_degree": null, "regression_type": null, "window": 7, "holiday": false, "probabilistic": false, "scale_full_X": false, "cointegration": null, "cointegration_lag": 1, "series_hash": true, "frac_slice": null, "discard_data": null, "transformation_dict": {"fillna": "rolling_mean", "transformations": {"0": "HistoricValues"}, "transformation_params": {"0": {"window": 28}}}, "synthetic_boundary_ratio": 0.0}',
+        'TransformationParameters': '{"fillna": "fake_date", "transformations": {"0": "AlignLastValue", "1": "SeasonalDifference", "2": "StandardScaler", "3": "Constraint", "4": "convolution_filter"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false, "threshold": 10, "threshold_method": "mean"}, "1": {"lag_1": 12, "method": 2}, "2": {}, "3": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.7, "constraint_value": {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}, "4": {}}}',
+        'Ensemble': 0,
+    },
+    "79": {  # RRVAR from horizontal ensemble
+        'Model': 'RRVAR',
+        'ModelParameters': '{"method": "als", "rank": 2, "maxiter": 200}',
+        'TransformationParameters': '{"fillna": "fake_date", "transformations": {"0": "SeasonalDifference", "1": "AlignLastDiff", "2": "convolution_filter"}, "transformation_params": {"0": {"lag_1": 364, "method": "LastValue"}, "1": {"rows": 1, "displacement_rows": 1, "quantile": 1.0, "decay_span": 3}, "2": {}}}',
+        'Ensemble': 0,
+    },
+    "80": {  # SeasonalNaive from horizontal ensemble
+        'Model': 'SeasonalNaive',
+        'ModelParameters': '{"method": "lastvalue", "lag_1": 420, "lag_2": 364}',
+        'TransformationParameters': '{"fillna": "fake_date", "transformations": {"0": "Log", "1": "SeasonalDifference", "2": "HistoricValues", "3": "Constraint"}, "transformation_params": {"0": {}, "1": {"lag_1": 7, "method": "Mean"}, "2": {"window": 100}, "3": {"constraint_method": "slope", "constraint_direction": "upper", "constraint_regularization": 0.7, "constraint_value": {"slope": 0.1, "window": 30, "window_agg": "max", "threshold": 0.01}, "bounds_only": false, "fillna": null}}}',
+        'Ensemble': 0,
+    },
+    "81": {
+        'Model': 'pMLP',
+        'ModelParameters': '{"hidden_dims": [512, 256], "dropout_rate": 0.2, "use_batch_norm": true, "activation": "silu", "epochs": 25, "batch_size": 48, "lr": 0.0015, "loss_function": "quantile", "nll_weight": 0.8, "wasserstein_weight": 0.1, "prediction_batch_size": 150, "num_cnn_blocks": 0, "cnn_params": {}, "datepart_method": "common_fourier_rw", "holiday_countries_used": false, "use_naive_feature": true, "changepoint_method": "none", "changepoint_params": {"changepoint_spacing": 90, "changepoint_distance_end": 5040}, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "QuantileTransformer", "1": "AlignLastValue", "2": "LocalLinearTrend"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 1000}, "1": {"rows": 1, "lag": 2, "method": "additive", "strength": 0.9, "first_value_only": false, "threshold": 10, "threshold_method": "mean", "mean_type": "arithmetic"}, "2": {"rolling_window": 0.1, "n_tails": 90, "n_future": 0.2, "method": "mean", "macro_micro": false}}}',
+        'Ensemble': 0,
+    },
+    "82": {  # not quite the best, but 3x faster than the best
+        'Model': 'MultivariateRegression',
+        'ModelParameters': '{"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 2, "max_depth": 30, "criterion": "friedman_mse", "max_features": 0.3}}, "mean_rolling_periods": 30, "macd_periods": null, "std_rolling_periods": 5, "max_rolling_periods": 24, "min_rolling_periods": 60, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": 90, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": null, "datepart_method": "recurring", "polynomial_degree": null, "regression_type": null, "window": 3, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": true, "frac_slice": 0.1, "discard_data": null, "transformation_dict": {"fillna": "ffill_mean_biased", "transformations": {"0": "AlignLastDiff"}, "transformation_params": {"0": {"rows": 1, "displacement_rows": 1, "quantile": 1.0, "decay_span": null}}}, "synthetic_boundary_ratio": 0.0, "rolling_skew_periods": null, "diff_periods": 7, "rolling_range_periods": null}',
+        'TransformationParameters': '{"fillna": "akima", "transformations": {"0": "Log", "1": "Slice", "2": "ChangepointDetrend"}, "transformation_params": {"0": {}, "1": {"method": 0.5}, "2": {"model": "Linear", "changepoint_spacing": 5040, "changepoint_distance_end": 520, "datepart_method": "common_fourier"}}}',
+        'Ensemble': 0,
+    },
+    "83": {
+        'Model': 'MultivariateRegression',
+        'ModelParameters': '{"regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "min_samples_split": 2, "max_depth": 30, "criterion": "friedman_mse", "max_features": 0.3}}, "mean_rolling_periods": 90, "macd_periods": 12, "std_rolling_periods": 7, "max_rolling_periods": 89, "min_rolling_periods": 20, "quantile90_rolling_periods": 10, "quantile10_rolling_periods": null, "ewm_alpha": null, "ewm_var_alpha": null, "additional_lag_periods": null, "abs_energy": false, "rolling_autocorr_periods": null, "nonzero_last_n": 30, "datepart_method": "common_fourier", "polynomial_degree": null, "regression_type": null, "window": null, "holiday": false, "probabilistic": false, "scale_full_X": true, "cointegration": null, "cointegration_lag": 1, "series_hash": true, "frac_slice": null, "discard_data": null, "transformation_dict": null, "synthetic_boundary_ratio": 0.0, "rolling_skew_periods": null, "diff_periods": 1, "rolling_range_periods": 60}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "Log", "1": "ReplaceConstant"}, "transformation_params": {"0": {}, "1": {"constant": 0, "reintroduction_model": {"model": "DecisionTree", "model_params": {"max_depth": 4, "min_samples_split": 2, "min_samples_leaf": 3, "class_weight": "balanced"}, "datepart_method": "expanded"}, "fillna": "akima"}}}',
+        'Ensemble': 0,
+    },
+    # Add a WindowRegression, add new UnobservedComponents
 }
 
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')

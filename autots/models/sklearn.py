@@ -89,6 +89,9 @@ def rolling_x_regressor(
     window: int = None,
     cointegration: str = None,
     cointegration_lag: int = 1,
+    rolling_skew_periods: int = None,
+    diff_periods: int = None,
+    rolling_range_periods: int = None,
 ):
     """
     Generate more features from initial time series.
@@ -167,6 +170,22 @@ def rolling_x_regressor(
         X.append(
             local_df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1)
         )
+    if str(rolling_skew_periods).isdigit():
+        temp = local_df.rolling(rolling_skew_periods, min_periods=3).skew()
+        temp.columns = ['rolling_skew_' + str(col) for col in temp.columns]
+        X.append(temp)
+    if str(diff_periods).isdigit():
+        temp = local_df.pct_change(periods=diff_periods).replace(
+            [np.inf, -np.inf], np.nan
+        )
+        temp.columns = ['pct_change_' + str(col) for col in temp.columns]
+        X.append(temp)
+    if str(rolling_range_periods).isdigit():
+        # compute max and min in single rolling pass for efficiency
+        rolling_obj = local_df.rolling(rolling_range_periods, min_periods=1)
+        temp = rolling_obj.max() - rolling_obj.min()
+        temp.columns = ['rolling_range_' + str(col) for col in temp.columns]
+        X.append(temp)
     if str(ewm_alpha).replace('.', '').isdigit():
         ewm_df = local_df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean()
         ewm_df.columns = ["ewm_alpha" for col in local_df.columns]
@@ -176,15 +195,12 @@ def rolling_x_regressor(
     if str(additional_lag_periods).isdigit():
         X.append(local_df.shift(additional_lag_periods))
     if nonzero_last_n is not None:
-        full_index = local_df.index.union(
-            local_df.index.shift(-nonzero_last_n, freq=inferred_freq)
+        # count of non-zero values in rolling window - optimized version
+        temp = (
+            (local_df != 0).astype(float).rolling(nonzero_last_n, min_periods=1).sum()
         )
-        X.append(
-            (local_df.reindex(full_index).bfill() != 0)
-            .rolling(nonzero_last_n, min_periods=1)
-            .sum()
-            .reindex(local_df.index)
-        )
+        temp.columns = ['nonzero_count_' + str(col) for col in temp.columns]
+        X.append(temp)
     if cointegration is not None:
         if str(cointegration).lower() == "btcd":
             X.append(
@@ -293,6 +309,9 @@ def rolling_x_regressor_regressor(
     series_id=None,
     slice_index=None,
     series_id_to_multiindex=None,
+    rolling_skew_periods: int = None,
+    diff_periods: int = None,
+    rolling_range_periods: int = None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -317,6 +336,9 @@ def rolling_x_regressor_regressor(
         window=window,
         cointegration=cointegration,
         cointegration_lag=cointegration_lag,
+        rolling_skew_periods=rolling_skew_periods,
+        diff_periods=diff_periods,
+        rolling_range_periods=rolling_range_periods,
     )
     if future_regressor is not None:
         X = pd.concat([X, future_regressor], axis=1)
@@ -720,7 +742,7 @@ def retrieve_classifier(
 sklearn_model_dict = {
     # 'RandomForest': 0.02,  # crashes sometimes at scale for unclear reasons
     'ElasticNet': 0.05,
-    'MLP': 0.02,
+    'MLP': 0.001,  # slow but sometimes useful
     'DecisionTree': 0.02,
     'KNN': 0.05,
     'Adaboost': 0.01,
@@ -999,7 +1021,7 @@ def generate_classifier_params(
             "model": 'ExtraTrees',
             "model_params": {
                 "n_estimators": random.choice([25, 50, 75]),
-                "max_depth": random.choice([None, 6, 10]),
+                "max_depth": random.choice([None, 6, 10, 14]),
                 "min_samples_split": random.choice([2, 4]),
                 "min_samples_leaf": random.choice([1, 2]),
                 "max_features": random.choice(['sqrt', 'log2', None]),
@@ -1256,7 +1278,7 @@ def generate_regressor_params(
                     "weights": random.choices(['uniform', 'distance'], [0.999, 0.001])[
                         0
                     ],
-                    'p': random.choices([2, 1, 1.5], [0.7, 0.1, 0.1])[0],
+                    'p': random.choices([2, 1], [0.85, 0.15])[0],
                     'leaf_size': random.choices([30, 10, 50], [0.8, 0.1, 0.1])[0],
                 },
             }
@@ -1266,43 +1288,60 @@ def generate_regressor_params(
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.2])[0]
             else:
                 n_estimators = random.choices(
-                    [4, 300, 100, 1000], [0.1, 0.5, 0.5, 0.05]
+                    [4, 300, 100, 1000], [0.1, 0.5, 0.5, 0.025]
                 )[0]
                 min_samples_leaf = random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0]
+            max_depth = random.choices([None, 10, 20], [0.7, 0.2, 0.1])[0]
+            max_features = random.choices([1.0, 0.7, "sqrt"], [0.6, 0.2, 0.2])[0]
+            min_samples_split = random.choices([2, 4, 8], [0.7, 0.2, 0.1])[0]
+            max_leaf_nodes = random.choices([None, 32, 64], [0.7, 0.2, 0.1])[0]
+            bootstrap = random.choices([True, False], [0.9, 0.1])[0]
+            max_samples = (
+                random.choices([None, 0.8, 0.6], [0.6, 0.3, 0.1])[0]
+                if bootstrap
+                else None
+            )
             param_dict = {
                 "model": 'RandomForest',
                 "model_params": {
                     "n_estimators": n_estimators,
                     "min_samples_leaf": min_samples_leaf,
-                    "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
+                    "bootstrap": bootstrap,
+                    "max_depth": max_depth,
+                    "max_features": max_features,
+                    "min_samples_split": min_samples_split,
+                    "max_leaf_nodes": max_leaf_nodes,
+                    "max_samples": max_samples,
                 },
             }
         elif model == 'ExtraTrees':
             max_depth_choice = random.choices(
-                [None, 5, 10, 20, 30], [0.4, 0.1, 0.3, 0.4, 0.1]
+                [None, 5, 10, 20, 30, 34], [0.4, 0.1, 0.3, 0.4, 0.005, 0.005]
             )[0]
             estimators_choice = random.choices(
-                [4, 50, 100, 500], [0.05, 0.1, 0.85, 0.02]
+                [4, 50, 100, 120, 500], [0.05, 0.1, 0.85, 0.01, 0.01]
             )[0]
             param_dict = {
                 "model": 'ExtraTrees',
                 "model_params": {
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
-                    "min_samples_split": random.choices([2, 4, 1.0], [0.8, 0.1, 0.1])[
-                        0
-                    ],
+                    "min_samples_split": random.choices(
+                        [1, 2, 3, 4, 1.0], [0.005, 0.8, 0.1, 0.1, 0.1]
+                    )[0],
                     "max_depth": max_depth_choice,
                     "criterion": random.choices(
                         ["squared_error", "absolute_error", "friedman_mse", "poisson"],
                         [
                             0.90,
                             0.0,
+                            0.005,
                             0.01,
-                            0.05,
                         ],  # everything that isn't squared_error is slow
                     )[0],
-                    "max_features": random.choices([1, 0.6, 0.3], [0.8, 0.1, 0.1])[0],
+                    "max_features": random.choices(
+                        [1, 0.6, 0.4, 0.3, 0.2], [0.8, 0.1, 0.05, 0.1, 0.05]
+                    )[0],
                 },
             }
         elif model in ['KerasRNN']:
@@ -1577,12 +1616,26 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'SVM',
                 "model_params": {
-                    'C': random.choices([1.0, 0.5, 2.0, 0.25], [0.6, 0.1, 0.1, 0.1])[0],
-                    'tol': random.choices([1e-4, 1e-3, 1e-5], [0.6, 0.1, 0.1])[0],
-                    "loss": random.choice(
-                        ['epsilon_insensitive', 'squared_epsilon_insensitive']
-                    ),
-                    "max_iter": random.choice([500, 1000]),
+                    'C': random.choices(
+                        [0.1, 0.25, 0.5, 1.0, 2.0],
+                        [0.1, 0.2, 0.4, 0.2, 0.1],
+                    )[0],
+                    'tol': random.choices(
+                        [1e-2, 1e-3, 1e-4],
+                        [0.2, 0.6, 0.2],
+                    )[0],
+                    "epsilon": random.choices(
+                        [0.0, 0.01, 0.05, 0.1, 0.2],
+                        [0.05, 0.1, 0.35, 0.35, 0.15],
+                    )[0],
+                    "loss": random.choices(
+                        ['epsilon_insensitive', 'squared_epsilon_insensitive'],
+                        [0.01, 0.8],
+                    )[0],
+                    "max_iter": random.choices(
+                        [50, 100, 200, 500],
+                        [0.2, 0.4, 0.3, 0.1],
+                    )[0],
                 },
             }
         elif model == 'RadiusNeighbors':
@@ -1593,7 +1646,7 @@ def generate_regressor_params(
             algorithm_choice = random.choices(
                 ["auto", "ball_tree", "kd_tree"], [0.7, 0.1, 0.1]
             )[0]
-            leaf_size_choice = random.choices([10, 20, 30, 50], [0.5, 0.3, 0.15, 0.05])[
+            leaf_size_choice = random.choices([10, 20, 30, 50], [0.5, 0.3, 0.05, 0.05])[
                 0
             ]
             param_dict = {
@@ -2416,7 +2469,7 @@ class WindowRegression(ModelObject):
             )[0]
         datepart_method = random.choices([None, "something"], [0.9, 0.1])[0]
         if datepart_method == "something":
-            datepart_method = random_datepart()
+            datepart_method = random_datepart(method=method)
 
         # ElasticNet's iterative solver is very slow for multi-output regression
         if (
@@ -2669,7 +2722,7 @@ class DatepartRegression(ModelObject):
             )
         else:
             model_choice = generate_regressor_params(model_dict=datepart_model_dict)
-        datepart_choice = random_datepart()
+        datepart_choice = random_datepart(method=method)
         if datepart_choice in ["simple", "simple_2", "recurring", "simple_binarized"]:
             polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
         else:
@@ -2715,6 +2768,8 @@ class MultivariateRegression(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
         holiday (bool): If true, include holiday flags
         regression_type (str): type of regression (None, 'User')
+        frac_slice (float): fraction of data to skip from the beginning.
+            A larger value (e.g., 0.98) filters OUT MORE data, keeping only the most recent fraction (the last 2%).
 
     """
 
@@ -2771,6 +2826,9 @@ class MultivariateRegression(ModelObject):
         discard_data: float = None,
         n_jobs: int = -1,
         synthetic_boundary_ratio: float = 0.0,
+        rolling_skew_periods: int = None,
+        diff_periods: int = None,
+        rolling_range_periods: int = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2819,6 +2877,9 @@ class MultivariateRegression(ModelObject):
         self.transformation_dict = transformation_dict
         self.discard_data = discard_data
         self.synthetic_boundary_ratio = max(float(synthetic_boundary_ratio or 0.0), 0.0)
+        self.rolling_skew_periods = rolling_skew_periods
+        self.diff_periods = diff_periods
+        self.rolling_range_periods = rolling_range_periods
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2834,10 +2895,14 @@ class MultivariateRegression(ModelObject):
             rolling_autocorr_periods,
             nonzero_last_n,
             window,
+            rolling_skew_periods,
+            diff_periods,
+            rolling_range_periods,
             starting_min,
         ]
         self.min_threshold = max([x for x in list_o_vals if str(x).isdigit()])
         self.scaler_mean = None
+        self._nonzero_var_mask = None  # for filtering constant columns during fit
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -2964,6 +3029,9 @@ class MultivariateRegression(ModelObject):
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
                         slice_index=self.slice_index,
+                        rolling_skew_periods=self.rolling_skew_periods,
+                        diff_periods=self.diff_periods,
+                        rolling_range_periods=self.rolling_range_periods,
                     )
                     for x_col in base.columns
                 )
@@ -3007,6 +3075,9 @@ class MultivariateRegression(ModelObject):
                             cointegration_lag=self.cointegration_lag,
                             series_id=x_col if self.series_hash else None,
                             slice_index=self.slice_index,
+                            rolling_skew_periods=self.rolling_skew_periods,
+                            diff_periods=self.diff_periods,
+                            rolling_range_periods=self.rolling_range_periods,
                         )
                         for x_col in base.columns
                     ]
@@ -3049,21 +3120,48 @@ class MultivariateRegression(ModelObject):
 
             self._augment_with_synthetic_bounds()
 
+            # Remove near-constant columns to prevent tree algorithms from wasting time
+            X_arr = self.X.to_numpy()
+            VARIANCE_THRESHOLD = (
+                1e-10  # absolute range below this is considered constant
+            )
+            col_min = np.nanmin(X_arr, axis=0)
+            col_max = np.nanmax(X_arr, axis=0)
+            col_range = col_max - col_min
+            self._nonzero_var_mask = col_range > VARIANCE_THRESHOLD
+
+            # Safeguard: if all columns are near-constant or all-NaN
+            if not np.any(self._nonzero_var_mask):
+                raise ValueError(
+                    "MultivariateRegression: all features are near-constant or NaN; "
+                )
+
+            if not np.all(self._nonzero_var_mask):
+                n_removed = np.sum(~self._nonzero_var_mask)
+                if self.verbose > 1:
+                    print(
+                        f"MultivariateRegression: removed {n_removed} near-constant columns "
+                        f"(range <= {VARIANCE_THRESHOLD})"
+                    )
+                X_arr = X_arr[:, self._nonzero_var_mask]
+            else:
+                self._nonzero_var_mask = None  # flag that no filtering was done
+
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
 
-            self.model.fit(self.X.to_numpy(), self.Y)
+            self.model.fit(X_arr, self.Y)
 
             if self.probabilistic and not self.multioutputgpr:
-                self.model_upper.fit(self.X.to_numpy(), self.Y)
-                self.model_lower.fit(self.X.to_numpy(), self.Y)
+                self.model_upper.fit(X_arr, self.Y)
+                self.model_lower.fit(X_arr, self.Y)
 
             if self.discard_data is not None:
-                pred_y = self.model.predict(self.X.to_numpy())
+                pred_y = self.model.predict(X_arr)
                 error = np.abs(pred_y - self.Y)
                 error_percentile = np.percentile(error, self.discard_data)
                 error_check = error < error_percentile
-                new_X = self.X[error_check]
+                new_X = X_arr[error_check]
                 new_Y = self.Y[error_check]
                 self.model.fit(new_X, new_Y)
             # we only need the N most recent points for predict
@@ -3129,7 +3227,18 @@ class MultivariateRegression(ModelObject):
         # need to copy else multiple predictions move every on...
         current_x = self.sktraindata.copy()
 
-        # and this is ridiculously slow, nested loop
+        # and this is slow, nested loop
+        if self.verbose > 0:
+            print(
+                f"MultivariateRegression predicting {forecast_length} steps for "
+                f"{len(current_x.columns)} series, history shape {current_x.shape}"
+            )
+        # determine if we should parallelize the per-series feature generation
+        predict_parallel = (
+            joblib_present
+            and self.n_jobs not in [0, 1]
+            and len(current_x.columns) >= 20
+        )
         for fcst_step in range(forecast_length):
             cur_regr = None
             if self.regression_type is not None:
@@ -3138,9 +3247,10 @@ class MultivariateRegression(ModelObject):
                 pred_x = self.transformer_object.fit_transform(current_x)
             else:
                 pred_x = current_x
-            self.X_pred = pd.concat(
-                [
-                    rolling_x_regressor_regressor(
+            # parallelize per-series feature generation if beneficial
+            if predict_parallel:
+                x_pred_list = Parallel(n_jobs=self.n_jobs, timeout=3600)(
+                    delayed(rolling_x_regressor_regressor)(
                         pred_x[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,
                         macd_periods=self.macd_periods,
@@ -3161,7 +3271,6 @@ class MultivariateRegression(ModelObject):
                         polynomial_degree=self.polynomial_degree,
                         window=self.window,
                         future_regressor=cur_regr,
-                        # these rely the if part not being run if None
                         regressor_per_series=(
                             regressor_per_series[x_col]
                             if self.regressor_per_series_train is not None
@@ -3175,16 +3284,66 @@ class MultivariateRegression(ModelObject):
                         cointegration=self.cointegration,
                         cointegration_lag=self.cointegration_lag,
                         series_id=x_col if self.series_hash else None,
-                    ).tail(1)
+                        rolling_skew_periods=self.rolling_skew_periods,
+                        diff_periods=self.diff_periods,
+                        rolling_range_periods=self.rolling_range_periods,
+                    )
                     for x_col in current_x.columns
-                ]
-            )
+                )
+                self.X_pred = pd.concat([x.tail(1) for x in x_pred_list])
+            else:
+                self.X_pred = pd.concat(
+                    [
+                        rolling_x_regressor_regressor(
+                            pred_x[x_col].to_frame(),
+                            mean_rolling_periods=self.mean_rolling_periods,
+                            macd_periods=self.macd_periods,
+                            std_rolling_periods=self.std_rolling_periods,
+                            max_rolling_periods=self.max_rolling_periods,
+                            min_rolling_periods=self.min_rolling_periods,
+                            ewm_var_alpha=self.ewm_var_alpha,
+                            quantile90_rolling_periods=self.quantile90_rolling_periods,
+                            quantile10_rolling_periods=self.quantile10_rolling_periods,
+                            additional_lag_periods=self.additional_lag_periods,
+                            ewm_alpha=self.ewm_alpha,
+                            abs_energy=self.abs_energy,
+                            rolling_autocorr_periods=self.rolling_autocorr_periods,
+                            nonzero_last_n=self.nonzero_last_n,
+                            add_date_part=self.datepart_method,
+                            holiday=self.holiday,
+                            holiday_country=self.holiday_country,
+                            polynomial_degree=self.polynomial_degree,
+                            window=self.window,
+                            future_regressor=cur_regr,
+                            # these rely the if part not being run if None
+                            regressor_per_series=(
+                                regressor_per_series[x_col]
+                                if self.regressor_per_series_train is not None
+                                else None
+                            ),
+                            static_regressor=(
+                                self.static_regressor.loc[x_col].to_frame().T
+                                if self.static_regressor is not None
+                                else None
+                            ),
+                            cointegration=self.cointegration,
+                            cointegration_lag=self.cointegration_lag,
+                            series_id=x_col if self.series_hash else None,
+                            rolling_skew_periods=self.rolling_skew_periods,
+                            diff_periods=self.diff_periods,
+                            rolling_range_periods=self.rolling_range_periods,
+                        ).tail(1)
+                        for x_col in current_x.columns
+                    ]
+                )
             if self.scale_full_X:
                 c_x_pred = self.scale_data(self.X_pred).to_numpy()
-                rfPred = self.model.predict(c_x_pred)
             else:
                 c_x_pred = self.X_pred.to_numpy()
-                rfPred = self.model.predict(c_x_pred)
+            # Apply same zero-variance column filtering as during fit
+            if self._nonzero_var_mask is not None:
+                c_x_pred = c_x_pred[:, self._nonzero_var_mask]
+            rfPred = self.model.predict(c_x_pred)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
@@ -3294,10 +3453,10 @@ class MultivariateRegression(ModelObject):
             0
         ]
         quantile90_rolling_periods = random.choices(
-            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 30], [0.8, 0.1, 0.05, 0.05]
         )[0]
         quantile10_rolling_periods = random.choices(
-            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 30], [0.8, 0.1, 0.05, 0.05]
         )[0]
         max_rolling_periods_choice = random.choices(
             [None, seasonal_int(small=True)], [0.2, 0.5]
@@ -3317,23 +3476,9 @@ class MultivariateRegression(ModelObject):
         nonzero_last_n = random.choices(
             [None, 2, 7, 14, 30], [0.6, 0.01, 0.1, 0.1, 0.01]
         )[0]
-        add_date_part_choice = random.choices(
-            [
-                None,
-                'simple',
-                'expanded',
-                'recurring',
-                "simple_2",
-                "simple_2_poly",
-                "simple_binarized",
-                "common_fourier",
-                "expanded_binarized",
-                "common_fourier_rw",
-                ["dayofweek", 365.25],
-                "simple_binarized2_poly",
-            ],
-            [0.2, 0.1, 0.025, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025, 0.05, 0.05],
-        )[0]
+        add_date_part_choice = random.choices([None, "something"], [0.2, 0.8])[0]
+        if add_date_part_choice == "something":
+            add_date_part_choice = random_datepart(method=method)
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
         if "regressor" in method:
@@ -3363,6 +3508,19 @@ class MultivariateRegression(ModelObject):
                 transformer_list, transformer_max_depth=1, allow_none=False
             )
 
+        scale_full_X_choice = random.choices([True, False], [0.2, 0.8])[0]
+        frac_slice_choice = random.choices(
+            [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
+        )[0]
+        # LinearSVR can be extremely slow on the stacked-sample design matrix;
+        # bias toward scaling + smaller training slices.
+        if model_choice.get("model", None) in ["SVM", "LinearSVR"]:
+            scale_full_X_choice = True
+            frac_slice_choice = random.choices(
+                [0.7, 0.8, 0.9, 0.98],
+                [0.5, 0.2, 0.1, 0.2],
+            )[0]
+
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -3384,18 +3542,27 @@ class MultivariateRegression(ModelObject):
             'window': window_choice,
             'holiday': holiday_choice,
             "probabilistic": probabilistic,
-            'scale_full_X': random.choices([True, False], [0.2, 0.8])[0],
+            'scale_full_X': scale_full_X_choice,
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
             "series_hash": random.choices([True, False], [0.5, 0.5])[0],
-            "frac_slice": random.choices(
-                [None, 0.8, 0.5, 0.2, 0.1], [0.6, 0.1, 0.1, 0.1, 0.1]
-            )[0],
-            "discard_data": random.choices([None, 50, 90, 98], [0.7, 0.1, 0.1, 0.1])[0],
+            "frac_slice": frac_slice_choice,
+            "discard_data": random.choices([None, 50, 90, 98], [0.9, 0.03, 0.03, 0.04])[
+                0
+            ],
             "transformation_dict": transform_choice,
             "synthetic_boundary_ratio": random.choices(
                 [0.0, 0.01, 0.02, 0.05],
                 [0.7, 0.1, 0.1, 0.1],
+            )[0],
+            "rolling_skew_periods": random.choices(
+                [None, 7, 14, 30, 90], [0.7, 0.1, 0.1, 0.05, 0.05]
+            )[0],
+            "diff_periods": random.choices(
+                [None, 1, 7, 14, 28], [0.6, 0.15, 0.1, 0.1, 0.05]
+            )[0],
+            "rolling_range_periods": random.choices(
+                [None, 7, 14, 30, 60], [0.6, 0.15, 0.1, 0.1, 0.005]
             )[0],
         }
         return parameter_dict
@@ -3431,6 +3598,9 @@ class MultivariateRegression(ModelObject):
             "discard_data": self.discard_data,
             "transformation_dict": self.transformation_dict,
             "synthetic_boundary_ratio": self.synthetic_boundary_ratio,
+            "rolling_skew_periods": self.rolling_skew_periods,
+            "diff_periods": self.diff_periods,
+            "rolling_range_periods": self.rolling_range_periods,
         }
         return parameter_dict
 

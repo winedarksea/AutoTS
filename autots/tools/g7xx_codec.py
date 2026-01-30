@@ -14,6 +14,7 @@ All operations are fully vectorized for efficient processing of multiple time se
 from __future__ import annotations
 
 import random
+from typing import Tuple, Union
 import numpy as np
 import pandas as pd
 
@@ -31,7 +32,7 @@ EPSILON = np.finfo(float).eps
 # ============================================================================
 
 
-def _prep_input(values: np.ndarray | pd.DataFrame) -> tuple[np.ndarray, bool]:
+def _prep_input(values: Union[np.ndarray, pd.DataFrame]) -> Tuple[np.ndarray, bool]:
     """Return a float64 array with shape (n_obs, n_series) and squeeze flag."""
     if isinstance(values, pd.DataFrame):
         arr = values.to_numpy(dtype=float, copy=True)
@@ -50,7 +51,7 @@ def _robust_center_scale(
     scale_method: str = "mad",
     scale_factor: float = 3.0,
     min_scale: float = 1e-6,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """Compute per-series center and scale using robust statistics.
 
     Parameters
@@ -134,7 +135,7 @@ def _a_law_expand(y: np.ndarray, A: float = 87.6) -> np.ndarray:
 
 
 def g711_encode(
-    values: np.ndarray | pd.DataFrame,
+    values: Union[np.ndarray, pd.DataFrame],
     mode: str = "mu",
     mu: float = 255.0,
     A: float = 87.6,
@@ -144,7 +145,7 @@ def g711_encode(
     min_scale: float = 1e-6,
     clip: bool = True,
     zero_offset: float = 0.0,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Encode values via G.711-style companding after robust normalization.
 
     Returns encoded array and the center/scale used so that decoding can
@@ -188,7 +189,7 @@ def g711_encode(
 
 
 def g711_decode(
-    encoded: np.ndarray | pd.DataFrame,
+    encoded: Union[np.ndarray, pd.DataFrame],
     center: np.ndarray,
     scale: np.ndarray,
     mode: str = "mu",
@@ -292,7 +293,7 @@ def _adaptive_predictor_step(
     sez_history: np.ndarray,
     dq: np.ndarray,
     leak: float = PREDICTOR_LEAK,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Update 2-pole/6-zero predictor coefficients and state.
 
     Parameters
@@ -393,7 +394,7 @@ def _quantize_uniform(residual: np.ndarray, scale: np.ndarray, bits: int) -> np.
 
 def _quantize_nonuniform(
     residual: np.ndarray, scale: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """Non-uniform quantization using decision levels.
 
     Returns
@@ -457,7 +458,7 @@ def _update_scale_factor(
 
 
 def g726_adpcm_filter(
-    values: np.ndarray | pd.DataFrame,
+    values: Union[np.ndarray, pd.DataFrame],
     quant_bits: int = 4,
     adaptation_rate: float = 0.96,
     prediction_alpha: float = 0.92,

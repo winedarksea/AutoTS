@@ -1647,7 +1647,7 @@ class AutoTS(object):
                     self._run_validations(
                         df_wide_numeric=self.df_wide_numeric,
                         num_validations=self.num_validations + 1,
-                        validation_template=ensemble_templates,
+                        validation_template=ensemble_templates,  # doesn't include postprocessing, so shouldn't repeat those
                         future_regressor=self.future_regressor_train,
                         first_validation=False,
                         skip_first_index=False,
@@ -3720,6 +3720,7 @@ class AutoTS(object):
         value_name="Value",
         interval_name='PredictionInterval',
     ):
+        """Retrieve validation forecasts in long form dataframe. If a user is looking to do custom review of the holdout forecasts, this is the function to use."""
         self._validation_forecasts(models=models, compare_horizontal=compare_horizontal)
         needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []

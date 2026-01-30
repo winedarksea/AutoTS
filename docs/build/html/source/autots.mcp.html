@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.mcp package &#8212; AutoTS 1.0.0 documentation</title>
+    <title>autots.mcp package &#8212; AutoTS 1.0.1 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../_static/documentation_options.js?v=292eb321"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -45,11 +45,150 @@
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
 </section>
-<section id="autots-mcp-server-module">
-<h2>autots.mcp.server module<a class="headerlink" href="#autots-mcp-server-module" title="Link to this heading">¶</a></h2>
+<section id="module-autots.mcp.server">
+<span id="autots-mcp-server-module"></span><h2>autots.mcp.server module<a class="headerlink" href="#module-autots.mcp.server" title="Link to this heading">¶</a></h2>
+<p>MCP Server for AutoTS Time Series Forecasting</p>
+<p>This server exposes AutoTS forecasting and analysis functions as MCP tools
+for integration with LLM environments like VS Code.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.build_csv_metadata">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">build_csv_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.mcp.server.build_csv_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Build metadata for CSV export with loading instructions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filepath</strong> – Path to CSV file</p></li>
+<li><p><strong>df</strong> – DataFrame that was saved</p></li>
+<li><p><strong>is_long</strong> – Whether CSV is in long format</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Metadata dictionary with loading instructions</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.cache_object">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">cache_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.server.cache_object" title="Link to this definition">¶</a></dt>
+<dd><p>Cache an object and return a unique ID.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obj</strong> – Object to cache</p></li>
+<li><p><strong>cache_type</strong> – Type of cache (‘prediction’, ‘autots’, ‘event_risk’, ‘feature_detector’, ‘data’)</p></li>
+<li><p><strong>metadata</strong> – Optional metadata</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Unique object ID</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.clear_cache">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">clear_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.server.clear_cache" title="Link to this definition">¶</a></dt>
+<dd><p>Clear cache - specific ID, specific type, or all if both None.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.dataframe_to_output">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">dataframe_to_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'json_wide'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.server.dataframe_to_output" title="Link to this definition">¶</a></dt>
+<dd><p>Convert DataFrame to requested output format (token-efficient).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> – DataFrame with DatetimeIndex</p></li>
+<li><p><strong>output_format</strong> – “json_wide”, “json_long”, “csv_wide”, “csv_long”</p></li>
+<li><p><strong>save_path</strong> – Optional path to save CSV (returns path)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary (JSON) or string (CSV path)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.get_cached_object">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">get_cached_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#autots.mcp.server.get_cached_object" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve a cached object by ID and type.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.list_all_cached_objects">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">list_all_cached_objects</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.mcp.server.list_all_cached_objects" title="Link to this definition">¶</a></dt>
+<dd><p>List all cached objects across all cache types.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.load_to_dataframe">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">load_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'wide'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#autots.mcp.server.load_to_dataframe" title="Link to this definition">¶</a></dt>
+<dd><p>Load data to pandas DataFrame from multiple sources.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – JSON dict, CSV file path, or URL. If None, must provide data_id</p></li>
+<li><p><strong>data_format</strong> – “wide” or “long” (for JSON input)</p></li>
+<li><p><strong>data_id</strong> – Optional cached data ID to load from cache</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame with DatetimeIndex</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.save_temp_csv">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">save_temp_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.server.save_temp_csv" title="Link to this definition">¶</a></dt>
+<dd><p>Save DataFrame to temporary CSV file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> – DataFrame to save</p></li>
+<li><p><strong>is_long</strong> – Convert to long format before saving</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Full path to saved CSV</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.serialize_timestamps">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">serialize_timestamps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.server.serialize_timestamps" title="Link to this definition">¶</a></dt>
+<dd><p>Recursively convert pandas Timestamp objects to strings for JSON serialization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>obj</strong> – Object that may contain Timestamp objects</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Object with Timestamps converted to strings</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.server.serve">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">serve</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.server.serve" title="Link to this definition">¶</a></dt>
+<dd><p>Start the MCP server.</p>
+</dd></dl>
+
 </section>
-<section id="module-contents">
-<h2>Module contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
+<section id="module-autots.mcp">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.mcp" title="Link to this heading">¶</a></h2>
+<p>Model Context Protocol (MCP) Server for AutoTS</p>
+<p>This package provides an MCP server interface for AutoTS forecasting capabilities,
+enabling LLM integration for time series forecasting tasks.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.serve">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.</span></span><span class="sig-name descname"><span class="pre">serve</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.serve" title="Link to this definition">¶</a></dt>
+<dd><p>Start the MCP server.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -133,7 +272,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2025, Colin Catlin.
+      &copy;2026, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.mcp.rst.txt"

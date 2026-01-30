@@ -522,6 +522,11 @@ def date_part(
                 longer_idx[lags - (laggy + 1) :][0 : len(DTindex)],
                 method=method,
                 polynomial_degree=polynomial_degree,
+                holiday_country=holiday_country,
+                holiday_countries_used=holiday_countries_used,
+                lags=None,
+                forward_lags=None,
+                set_index=False,
             ).rename(columns=lambda x: str(x) + f"_lag{laggy}")
             add_X.index = DTindex
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
@@ -535,6 +540,11 @@ def date_part(
                 longer_idx[laggy + 1 :][0 : len(DTindex)],
                 method=method,
                 polynomial_degree=polynomial_degree,
+                holiday_country=holiday_country,
+                holiday_countries_used=holiday_countries_used,
+                lags=None,
+                forward_lags=None,
+                set_index=False,
             ).rename(columns=lambda x: str(x) + f"_flag{laggy}")
             add_X.index = DTindex
             date_part_df = pd.concat([date_part_df, add_X], axis=1)

@@ -458,25 +458,37 @@ def BestNEnsemble(
         # np.average(l_forecast_array, axis=0, weights=model_weights.values())
         # np.average(u_forecast_array, axis=0, weights=model_weights.values())
 
-        model_divisor = 0
-        ens_df = pd.DataFrame(0, index=indices, columns=columnz)
-        ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
-        ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
+        # Initialize with 0
+        ens_df = pd.DataFrame(0.0, index=indices, columns=columnz)
+        ens_df_lower = pd.DataFrame(0.0, index=indices, columns=columnz)
+        ens_df_upper = pd.DataFrame(0.0, index=indices, columns=columnz)
+        # Track weight per column to handle missing series properly
+        weight_df = pd.DataFrame(0.0, index=indices, columns=columnz)
+
         for idx, x in forecasts.items():
             current_weight = float(model_weights.get(idx, 1))
-            # Align forecasts to have consistent columns
-            x_aligned = x.reindex(columns=columnz, fill_value=0)
-            lower_aligned = lower_forecasts[idx].reindex(columns=columnz, fill_value=0)
-            upper_aligned = upper_forecasts[idx].reindex(columns=columnz, fill_value=0)
+            # Align forecasts to have consistent columns, using NaN for missing series
+            x_aligned = x.reindex(columns=columnz, fill_value=np.nan)
+            lower_aligned = lower_forecasts[idx].reindex(
+                columns=columnz, fill_value=np.nan
+            )
+            upper_aligned = upper_forecasts[idx].reindex(
+                columns=columnz, fill_value=np.nan
+            )
 
-            ens_df = ens_df + (x_aligned * current_weight)
-            ens_df_lower = ens_df_lower + (lower_aligned * current_weight)
-            ens_df_upper = ens_df_upper + (upper_aligned * current_weight)
-            model_divisor = model_divisor + current_weight
+            # Only add weighted values where data exists (not NaN)
+            # Use fillna(0) after multiplication so NaN * weight = NaN, then NaN -> 0 for addition
+            ens_df = ens_df + (x_aligned * current_weight).fillna(0)
+            ens_df_lower = ens_df_lower + (lower_aligned * current_weight).fillna(0)
+            ens_df_upper = ens_df_upper + (upper_aligned * current_weight).fillna(0)
+            # Track cumulative weight only where we have actual values
+            weight_df = weight_df + (~x_aligned.isna() * current_weight)
 
-        ens_df = ens_df / model_divisor
-        ens_df_lower = ens_df_lower / model_divisor
-        ens_df_upper = ens_df_upper / model_divisor
+        # Divide by actual weights per column, avoiding division by zero
+        # Where weight is 0, result will be NaN (no models predicted that series)
+        ens_df = ens_df / weight_df.replace(0, np.nan)
+        ens_df_lower = ens_df_lower / weight_df.replace(0, np.nan)
+        ens_df_upper = ens_df_upper / weight_df.replace(0, np.nan)
 
     ens_runtime = datetime.timedelta(0)
     for x in forecasts_runtime.values():
@@ -1614,6 +1626,8 @@ def HorizontalTemplateGenerator(
     # horizontal-profile: choose best model per actual profile type
     if 'horizontal-profile' in ensemble:
         profile_to_model = {}
+        overall_model = None
+        unique_profiles = []
         if isinstance(series_profiles, dict) and series_profiles:
             filtered_profiles = {
                 series: series_profiles.get(series)
@@ -1622,6 +1636,10 @@ def HorizontalTemplateGenerator(
             }
             if filtered_profiles:
                 unique_profiles = sorted(set(filtered_profiles.values()))
+                overall_scores = per_series.mean(axis=1, skipna=True)
+                overall_scores = overall_scores[~overall_scores.isna()]
+                if not overall_scores.empty:
+                    overall_model = overall_scores.idxmin()
                 for profile_name in unique_profiles:
                     profile_series = [
                         series
@@ -1634,14 +1652,17 @@ def HorizontalTemplateGenerator(
                     profile_scores = profile_errors.mean(axis=1, skipna=True)
                     profile_scores = profile_scores[~profile_scores.isna()]
                     if profile_scores.empty:
+                        if overall_model is not None:
+                            profile_to_model[profile_name] = overall_model
                         continue
                     profile_to_model[profile_name] = profile_scores.idxmin()
+                if overall_model is not None:
+                    profile_to_model.setdefault('overall', overall_model)
+                    for profile_name in unique_profiles:
+                        profile_to_model.setdefault(profile_name, overall_model)
+        if not profile_to_model and overall_model is not None:
+            profile_to_model = {'overall': overall_model}
         if profile_to_model:
-            overall_scores = per_series.mean(axis=1, skipna=True)
-            overall_scores = overall_scores[~overall_scores.isna()]
-            if not overall_scores.empty:
-                profile_to_model.setdefault('overall', overall_scores.idxmin())
-
             mods = list(set(profile_to_model.values()))
             best_profile = (
                 model_results[model_results['ID'].isin(mods)]
