@@ -3228,11 +3228,6 @@ class MultivariateRegression(ModelObject):
         current_x = self.sktraindata.copy()
 
         # and this is slow, nested loop
-        if self.verbose > 0:
-            print(
-                f"MultivariateRegression predicting {forecast_length} steps for "
-                f"{len(current_x.columns)} series, history shape {current_x.shape}"
-            )
         # determine if we should parallelize the per-series feature generation
         predict_parallel = (
             joblib_present

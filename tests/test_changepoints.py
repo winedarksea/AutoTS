@@ -283,7 +283,7 @@ class TestChangepointDetector(unittest.TestCase):
         """Test transformer functionality with edge cases that previously caused failures."""
         dates = pd.date_range("2020-01-01", periods=100, freq="D")
         values = np.concatenate([np.ones(50) * 10, np.ones(50) * 15])
-        df = pd.DataFrame({"series1": values}, index=dates)
+        # df = pd.DataFrame({"series1": values}, index=dates)
 
         # Test 1: Transform with future index
         dates_train = pd.date_range("2020-01-01", periods=50, freq="D")
