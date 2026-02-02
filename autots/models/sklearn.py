@@ -3192,8 +3192,8 @@ class MultivariateRegression(ModelObject):
     def predict(
         self,
         forecast_length: int = None,
-        just_point_forecast: bool = False,
         future_regressor=None,
+        just_point_forecast: bool = False,
         df=None,
         regressor_per_series=None,
     ):
