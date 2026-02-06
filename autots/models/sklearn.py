@@ -3136,7 +3136,7 @@ class MultivariateRegression(ModelObject):
                 'RANSAC', 'FastRidge',
             }
             # Check if this is a linear model or has a linear estimator
-            self._is_linear_model = model_name in linear_models
+            self._is_linear_model = self.regression_model["model"] in linear_models
 
             if not np.any(self._nonzero_var_mask) and not self._is_linear_model:
                 raise ValueError(
