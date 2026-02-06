@@ -1675,9 +1675,9 @@ if MCP_AVAILABLE:
                     raise ValueError(f"Unknown output type: {output}")
 
                 if format_type.startswith("csv"):
-                    filepath = dataframe_to_output(df, format_type)
+                    filepath_out: str = str(dataframe_to_output(df, format_type))
                     is_long = format_type == "csv_long"
-                    metadata = build_csv_metadata(filepath, df, is_long)
+                    metadata = build_csv_metadata(filepath_out, df, is_long)
                     return [
                         TextContent(
                             type="text",
@@ -2110,17 +2110,15 @@ if MCP_AVAILABLE:
                 }
 
                 # Get training data info if available
-                if (
-                    hasattr(model, 'df_wide_numeric')
-                    and model.df_wide_numeric is not None
-                ):
+                df_wide: pd.DataFrame | None = getattr(model, "df_wide_numeric", None)
+                if df_wide is not None:
                     train_info['train_shape'] = {
-                        'rows': model.df_wide_numeric.shape[0],
-                        'columns': model.df_wide_numeric.shape[1],
+                        'rows': df_wide.shape[0],
+                        'columns': df_wide.shape[1],
                     }
                     train_info['date_range'] = {
-                        'start': model.df_wide_numeric.index[0].strftime('%Y-%m-%d'),
-                        'end': model.df_wide_numeric.index[-1].strftime('%Y-%m-%d'),
+                        'start': df_wide.index[0].strftime('%Y-%m-%d'),
+                        'end': df_wide.index[-1].strftime('%Y-%m-%d'),
                     }
 
                 result = {
@@ -2394,7 +2392,7 @@ if MCP_AVAILABLE:
                 detector = cached['object']
 
                 if series:
-                    fig = detector.plot(series=series[0])
+                    fig = detector.plot(series_name=series[0])
                 else:
                     fig = detector.plot()
 
