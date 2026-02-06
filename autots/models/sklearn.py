@@ -3131,12 +3131,19 @@ class MultivariateRegression(ModelObject):
             self._nonzero_var_mask = col_range > VARIANCE_THRESHOLD
 
             # Safeguard: if all columns are near-constant or all-NaN
-            if not np.any(self._nonzero_var_mask):
+            linear_models = {
+                'ElasticNet', 'Ridge', 'BayesianRidge', 'LinearRegression',
+                'RANSAC', 'FastRidge',
+            }
+            # Check if this is a linear model or has a linear estimator
+            self._is_linear_model = model_name in linear_models
+
+            if not np.any(self._nonzero_var_mask) and not self._is_linear_model:
                 raise ValueError(
                     "MultivariateRegression: all features are near-constant or NaN; "
                 )
 
-            if not np.all(self._nonzero_var_mask):
+            if not np.all(self._nonzero_var_mask) and not self._is_linear_model:
                 n_removed = np.sum(~self._nonzero_var_mask)
                 if self.verbose > 1:
                     print(
