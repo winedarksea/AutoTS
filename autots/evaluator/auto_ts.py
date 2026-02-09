@@ -1290,7 +1290,7 @@ class AutoTS(object):
             ), "validation_indexes needs to be filled with 'custom' validation"
             # if auto num_validation, use as many as provided in custom
             if self.num_validations in ["auto", 'max']:
-                self.num_validations == len(validation_indexes) - 1
+                self.num_validations = len(validation_indexes) - 1
             else:
                 assert len(validation_indexes) >= (
                     self.num_validations + 1

@@ -8568,7 +8568,7 @@ transformer_dict = {
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
-    'KalmanSmoothing': 0.02,
+    'KalmanSmoothing': 0.01,
     'RegressionFilter': 0.01,
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,

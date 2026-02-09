@@ -242,9 +242,10 @@ def rolling_x_regressor(
     if abs_energy:
         X.append(local_df.pow(other=([2] * len(local_df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
-        temp = local_df.rolling(rolling_autocorr_periods).apply(
-            lambda x: x.autocorr(), raw=False
-        )
+        # temp = local_df.rolling(rolling_autocorr_periods).apply(
+        #     lambda x: x.autocorr(), raw=False
+        # )  # old way, math preferred but slower
+        temp = local_df.rolling(rolling_autocorr_periods).corr(local_df.shift(1))
         temp.columns = ['rollautocorr' for col in temp.columns]
         X.append(temp)
     if add_date_part not in [None, "None", "none"]:
@@ -1249,12 +1250,13 @@ def generate_regressor_params(
                             (25, 50, 25),
                             (32, 64, 32),
                             (32, 32, 32),
+                            (100, 100, 100),
                         ],
-                        [0.1, 0.3, 0.3, 0.3, 0.1, 0.1, 0.1],
+                        [0.7, 0.05, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1],
                     )[0],
                     "max_iter": random.choices(
                         [250, 500, 1000],
-                        [0.8, 0.1, 0.1],
+                        [0.8, 0.1, 0.01],
                     )[0],
                     "activation": random.choices(
                         ['identity', 'logistic', 'tanh', 'relu'],
@@ -1335,8 +1337,8 @@ def generate_regressor_params(
                         [
                             0.90,
                             0.0,
+                            0.001,
                             0.005,
-                            0.01,
                         ],  # everything that isn't squared_error is slow
                     )[0],
                     "max_features": random.choices(
@@ -1406,7 +1408,7 @@ def generate_regressor_params(
                             256,
                             2560,
                         ],
-                        [0.1, 0.3, 0.3, 0.1, 0.3],
+                        [0.1, 0.3, 0.3, 0.1, 0.1],
                     )[0],
                     "l1": random.choices(
                         [0.0, 0.0001, 0.01, 0.02, 0.2], [0.5, 0.3, 0.15, 0.1, 0.1]
@@ -2883,6 +2885,15 @@ class MultivariateRegression(ModelObject):
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
+        def get_max_val(x):
+            if isinstance(x, (int, float)):
+                return x
+            if isinstance(x, (list, tuple)):
+                return max([get_max_val(i) for i in x])
+            if str(x).isdigit():
+                return int(x)
+            return 0
+
         list_o_vals = [
             mean_rolling_periods,
             macd_periods,
@@ -2900,7 +2911,7 @@ class MultivariateRegression(ModelObject):
             rolling_range_periods,
             starting_min,
         ]
-        self.min_threshold = max([x for x in list_o_vals if str(x).isdigit()])
+        self.min_threshold = int(max([get_max_val(x) for x in list_o_vals]))
         self.scaler_mean = None
         self._nonzero_var_mask = None  # for filtering constant columns during fit
 
@@ -2975,7 +2986,7 @@ class MultivariateRegression(ModelObject):
                 self.slice_index = None
                 self.Y = df[1:].to_numpy().ravel(order="F")
             # drop look ahead data
-            base = df[:-1]
+            base = df.iloc[:-1].astype(float)
             if self.regression_type is not None:
                 cut_regr = self.regressor_train[1:]
                 cut_regr.index = base.index
@@ -2995,7 +3006,7 @@ class MultivariateRegression(ModelObject):
                         n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600
                     )(
                         delayed(rolling_x_regressor_regressor)(
-                            base[x_col].to_frame().astype(float),
+                            base[x_col].to_frame(),
                             mean_rolling_periods=self.mean_rolling_periods,
                             macd_periods=self.macd_periods,
                             std_rolling_periods=self.std_rolling_periods,
@@ -3043,7 +3054,7 @@ class MultivariateRegression(ModelObject):
                 self.X = pd.concat(
                     [
                         rolling_x_regressor_regressor(
-                            base[x_col].to_frame().astype(float),
+                            base[x_col].to_frame(),
                             mean_rolling_periods=self.mean_rolling_periods,
                             macd_periods=self.macd_periods,
                             std_rolling_periods=self.std_rolling_periods,
@@ -3249,9 +3260,9 @@ class MultivariateRegression(ModelObject):
             if self.regression_type is not None:
                 cur_regr = base_regr.reindex(current_x.index)
             if self.transformation_dict:
-                pred_x = self.transformer_object.fit_transform(current_x)
+                pred_x = self.transformer_object.fit_transform(current_x).astype(float)
             else:
-                pred_x = current_x
+                pred_x = current_x.astype(float)
             # parallelize per-series feature generation if beneficial
             failed_flag = False
             if predict_parallel:
@@ -3448,7 +3459,7 @@ class MultivariateRegression(ModelObject):
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
-            [0.3, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
+            [0.3, 0.1, 0.1, 0.1, 0.1, 0.01, 0.05, 0.05],
         )[0]
         if mean_rolling_periods_choice is not None:
             macd_periods_choice = seasonal_int(small=True)
@@ -3457,7 +3468,7 @@ class MultivariateRegression(ModelObject):
         else:
             macd_periods_choice = None
         std_rolling_periods_choice = random.choices(
-            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.01]
         )[0]
         ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.95, 0.02, 0.02, 0.01])[
             0
@@ -3491,6 +3502,8 @@ class MultivariateRegression(ModelObject):
             add_date_part_choice = random_datepart(method=method)
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
+        if model_choice.get("model", None) in ["MLP", "ExtraTrees", "HistGradientBoost"]:
+            polynomial_degree_choice = None
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -3555,7 +3568,7 @@ class MultivariateRegression(ModelObject):
             'scale_full_X': scale_full_X_choice,
             "cointegration": coint_choice,
             "cointegration_lag": coint_lag,
-            "series_hash": random.choices([True, False], [0.5, 0.5])[0],
+            "series_hash": random.choices([True, False], [0.3, 0.7])[0],
             "frac_slice": frac_slice_choice,
             "discard_data": random.choices([None, 50, 90, 98], [0.9, 0.03, 0.03, 0.04])[
                 0
