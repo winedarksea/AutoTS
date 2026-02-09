@@ -2990,53 +2990,56 @@ class MultivariateRegression(ModelObject):
             # joblib multiprocessing to loop through series
             # this might be causing issues, TBD Key Error from Resource Tracker
             if parallel:
-                self.X = Parallel(
-                    n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600
-                )(
-                    delayed(rolling_x_regressor_regressor)(
-                        base[x_col].to_frame().astype(float),
-                        mean_rolling_periods=self.mean_rolling_periods,
-                        macd_periods=self.macd_periods,
-                        std_rolling_periods=self.std_rolling_periods,
-                        max_rolling_periods=self.max_rolling_periods,
-                        min_rolling_periods=self.min_rolling_periods,
-                        ewm_var_alpha=self.ewm_var_alpha,
-                        quantile90_rolling_periods=self.quantile90_rolling_periods,
-                        quantile10_rolling_periods=self.quantile10_rolling_periods,
-                        additional_lag_periods=self.additional_lag_periods,
-                        ewm_alpha=self.ewm_alpha,
-                        abs_energy=self.abs_energy,
-                        rolling_autocorr_periods=self.rolling_autocorr_periods,
-                        nonzero_last_n=self.nonzero_last_n,
-                        add_date_part=self.datepart_method,
-                        holiday=self.holiday,
-                        holiday_country=self.holiday_country,
-                        polynomial_degree=self.polynomial_degree,
-                        window=self.window,
-                        future_regressor=cut_regr,
-                        # these rely the if part not being run if None
-                        regressor_per_series=(
-                            self.regressor_per_series_train[x_col]
-                            if self.regressor_per_series_train is not None
-                            else None
-                        ),
-                        static_regressor=(
-                            static_regressor.loc[x_col].to_frame().T
-                            if self.static_regressor is not None
-                            else None
-                        ),
-                        cointegration=self.cointegration,
-                        cointegration_lag=self.cointegration_lag,
-                        series_id=x_col if self.series_hash else None,
-                        slice_index=self.slice_index,
-                        rolling_skew_periods=self.rolling_skew_periods,
-                        diff_periods=self.diff_periods,
-                        rolling_range_periods=self.rolling_range_periods,
+                try:
+                    self.X = Parallel(
+                        n_jobs=self.n_jobs, verbose=self.verbose, timeout=3600
+                    )(
+                        delayed(rolling_x_regressor_regressor)(
+                            base[x_col].to_frame().astype(float),
+                            mean_rolling_periods=self.mean_rolling_periods,
+                            macd_periods=self.macd_periods,
+                            std_rolling_periods=self.std_rolling_periods,
+                            max_rolling_periods=self.max_rolling_periods,
+                            min_rolling_periods=self.min_rolling_periods,
+                            ewm_var_alpha=self.ewm_var_alpha,
+                            quantile90_rolling_periods=self.quantile90_rolling_periods,
+                            quantile10_rolling_periods=self.quantile10_rolling_periods,
+                            additional_lag_periods=self.additional_lag_periods,
+                            ewm_alpha=self.ewm_alpha,
+                            abs_energy=self.abs_energy,
+                            rolling_autocorr_periods=self.rolling_autocorr_periods,
+                            nonzero_last_n=self.nonzero_last_n,
+                            add_date_part=self.datepart_method,
+                            holiday=self.holiday,
+                            holiday_country=self.holiday_country,
+                            polynomial_degree=self.polynomial_degree,
+                            window=self.window,
+                            future_regressor=cut_regr,
+                            # these rely the if part not being run if None
+                            regressor_per_series=(
+                                self.regressor_per_series_train[x_col]
+                                if self.regressor_per_series_train is not None
+                                else None
+                            ),
+                            static_regressor=(
+                                static_regressor.loc[x_col].to_frame().T
+                                if self.static_regressor is not None
+                                else None
+                            ),
+                            cointegration=self.cointegration,
+                            cointegration_lag=self.cointegration_lag,
+                            series_id=x_col if self.series_hash else None,
+                            slice_index=self.slice_index,
+                            rolling_skew_periods=self.rolling_skew_periods,
+                            diff_periods=self.diff_periods,
+                            rolling_range_periods=self.rolling_range_periods,
+                        )
+                        for x_col in base.columns
                     )
-                    for x_col in base.columns
-                )
-                self.X = pd.concat(self.X)
-            else:
+                    self.X = pd.concat(self.X)
+                except Exception as e:
+                    failure_flag = True
+            if not parallel or failure_flag:
                 self.X = pd.concat(
                     [
                         rolling_x_regressor_regressor(
@@ -3250,50 +3253,55 @@ class MultivariateRegression(ModelObject):
             else:
                 pred_x = current_x
             # parallelize per-series feature generation if beneficial
+            failed_flag = False
             if predict_parallel:
-                x_pred_list = Parallel(n_jobs=self.n_jobs, timeout=3600)(
-                    delayed(rolling_x_regressor_regressor)(
-                        pred_x[x_col].to_frame(),
-                        mean_rolling_periods=self.mean_rolling_periods,
-                        macd_periods=self.macd_periods,
-                        std_rolling_periods=self.std_rolling_periods,
-                        max_rolling_periods=self.max_rolling_periods,
-                        min_rolling_periods=self.min_rolling_periods,
-                        ewm_var_alpha=self.ewm_var_alpha,
-                        quantile90_rolling_periods=self.quantile90_rolling_periods,
-                        quantile10_rolling_periods=self.quantile10_rolling_periods,
-                        additional_lag_periods=self.additional_lag_periods,
-                        ewm_alpha=self.ewm_alpha,
-                        abs_energy=self.abs_energy,
-                        rolling_autocorr_periods=self.rolling_autocorr_periods,
-                        nonzero_last_n=self.nonzero_last_n,
-                        add_date_part=self.datepart_method,
-                        holiday=self.holiday,
-                        holiday_country=self.holiday_country,
-                        polynomial_degree=self.polynomial_degree,
-                        window=self.window,
-                        future_regressor=cur_regr,
-                        regressor_per_series=(
-                            regressor_per_series[x_col]
-                            if self.regressor_per_series_train is not None
-                            else None
-                        ),
-                        static_regressor=(
-                            self.static_regressor.loc[x_col].to_frame().T
-                            if self.static_regressor is not None
-                            else None
-                        ),
-                        cointegration=self.cointegration,
-                        cointegration_lag=self.cointegration_lag,
-                        series_id=x_col if self.series_hash else None,
-                        rolling_skew_periods=self.rolling_skew_periods,
-                        diff_periods=self.diff_periods,
-                        rolling_range_periods=self.rolling_range_periods,
+                try:
+                    x_pred_list = Parallel(n_jobs=self.n_jobs, timeout=3600)(
+                        delayed(rolling_x_regressor_regressor)(
+                            pred_x[x_col].to_frame(),
+                            mean_rolling_periods=self.mean_rolling_periods,
+                            macd_periods=self.macd_periods,
+                            std_rolling_periods=self.std_rolling_periods,
+                            max_rolling_periods=self.max_rolling_periods,
+                            min_rolling_periods=self.min_rolling_periods,
+                            ewm_var_alpha=self.ewm_var_alpha,
+                            quantile90_rolling_periods=self.quantile90_rolling_periods,
+                            quantile10_rolling_periods=self.quantile10_rolling_periods,
+                            additional_lag_periods=self.additional_lag_periods,
+                            ewm_alpha=self.ewm_alpha,
+                            abs_energy=self.abs_energy,
+                            rolling_autocorr_periods=self.rolling_autocorr_periods,
+                            nonzero_last_n=self.nonzero_last_n,
+                            add_date_part=self.datepart_method,
+                            holiday=self.holiday,
+                            holiday_country=self.holiday_country,
+                            polynomial_degree=self.polynomial_degree,
+                            window=self.window,
+                            future_regressor=cur_regr,
+                            regressor_per_series=(
+                                regressor_per_series[x_col]
+                                if self.regressor_per_series_train is not None
+                                else None
+                            ),
+                            static_regressor=(
+                                self.static_regressor.loc[x_col].to_frame().T
+                                if self.static_regressor is not None
+                                else None
+                            ),
+                            cointegration=self.cointegration,
+                            cointegration_lag=self.cointegration_lag,
+                            series_id=x_col if self.series_hash else None,
+                            rolling_skew_periods=self.rolling_skew_periods,
+                            diff_periods=self.diff_periods,
+                            rolling_range_periods=self.rolling_range_periods,
+                        )
+                        for x_col in current_x.columns
                     )
-                    for x_col in current_x.columns
-                )
-                self.X_pred = pd.concat([x.tail(1) for x in x_pred_list])
-            else:
+                    self.X_pred = pd.concat([x.tail(1) for x in x_pred_list])
+                except Exception:
+                    failed_flag = True
+
+            if not predict_parallel or failed_flag:
                 self.X_pred = pd.concat(
                     [
                         rolling_x_regressor_regressor(
