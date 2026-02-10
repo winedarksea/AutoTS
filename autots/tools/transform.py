@@ -6236,6 +6236,10 @@ class BKBandpassFilter(EmptyTransformer):
         if self.K < 1:
             raise ValueError(f"Parameter 'K' must be at least 1, got {self.K}")
 
+        # Guard: need at least 2*K+1 data points for convolution
+        if df.shape[0] <= 2 * self.K:
+            return df
+
         # Apply the filter
         cycles = bkfilter_st(
             np.asarray(df),
@@ -6301,7 +6305,7 @@ class BKBandpassFilter(EmptyTransformer):
             "high": random.choices(
                 [32, 40, 90, 28, 364, 728], [0.5, 0.1, 0.1, 0.1, 0.15, 0.05]
             )[0],
-            "K": random.choices([1, 3, 6, 12, 25], [0.6, 0.1, 0.1, 0.1, 0.1])[0],
+            "K": random.choices([1, 3, 6, 12, 25], [0.7, 0.15, 0.1, 0.03, 0.02])[0],
             "lanczos_factor": random.choices(
                 [True, False],
                 [0.2, 0.8],
@@ -8686,7 +8690,7 @@ decompositions = {
 postprocessing = {
     "Round": 0.1,
     "HistoricValues": 0.1,
-    "BKBandpassFilter": 0.1,
+    "BKBandpassFilter": 0.02,
     "KalmanSmoothing": 0.001,
     "G726Filter": 0.01,
     "AlignLastDiff": 0.1,

@@ -92,6 +92,7 @@ def rolling_x_regressor(
     rolling_skew_periods: int = None,
     diff_periods: int = None,
     rolling_range_periods: int = None,
+    precomputed_date_part=None,
 ):
     """
     Generate more features from initial time series.
@@ -249,9 +250,12 @@ def rolling_x_regressor(
         temp.columns = ['rollautocorr' for col in temp.columns]
         X.append(temp)
     if add_date_part not in [None, "None", "none"]:
-        ahead_index = local_df.index.shift(1, freq=inferred_freq)
-        date_part_df = date_part(ahead_index, method=add_date_part)
-        date_part_df.index = local_df.index
+        if precomputed_date_part is not None:
+            date_part_df = precomputed_date_part
+        else:
+            ahead_index = local_df.index.shift(1, freq=inferred_freq)
+            date_part_df = date_part(ahead_index, method=add_date_part)
+            date_part_df.index = local_df.index
         X.append(date_part_df)
     X = pd.concat(X, axis=1)
 
@@ -313,6 +317,7 @@ def rolling_x_regressor_regressor(
     rolling_skew_periods: int = None,
     diff_periods: int = None,
     rolling_range_periods: int = None,
+    precomputed_date_part=None,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -340,6 +345,7 @@ def rolling_x_regressor_regressor(
         rolling_skew_periods=rolling_skew_periods,
         diff_periods=diff_periods,
         rolling_range_periods=rolling_range_periods,
+        precomputed_date_part=precomputed_date_part,
     )
     if future_regressor is not None:
         X = pd.concat([X, future_regressor], axis=1)
@@ -2992,6 +2998,21 @@ class MultivariateRegression(ModelObject):
                 cut_regr.index = base.index
             else:
                 cut_regr = None
+
+            # precompute date part for minor speed boost
+            if self.datepart_method not in [None, "None", "none"]:
+                from autots.tools.seasonal import date_part
+
+                inferred_freq = infer_frequency(base.index)
+                # target index for these features
+                ahead_index = base.index.shift(1, freq=inferred_freq)
+                precomputed_date_part = date_part(
+                    ahead_index, method=self.datepart_method
+                )
+                precomputed_date_part.index = base.index
+            else:
+                precomputed_date_part = None
+
             # Create X, parallel and non-parallel versions
             parallel = True
             if self.n_jobs in [0, 1] or df.shape[1] < 20:
@@ -3000,6 +3021,7 @@ class MultivariateRegression(ModelObject):
                 parallel = False
             # joblib multiprocessing to loop through series
             # this might be causing issues, TBD Key Error from Resource Tracker
+            failure_flag = False
             if parallel:
                 try:
                     self.X = Parallel(
@@ -3044,6 +3066,7 @@ class MultivariateRegression(ModelObject):
                             rolling_skew_periods=self.rolling_skew_periods,
                             diff_periods=self.diff_periods,
                             rolling_range_periods=self.rolling_range_periods,
+                            precomputed_date_part=precomputed_date_part,
                         )
                         for x_col in base.columns
                     )
@@ -3092,6 +3115,7 @@ class MultivariateRegression(ModelObject):
                             rolling_skew_periods=self.rolling_skew_periods,
                             diff_periods=self.diff_periods,
                             rolling_range_periods=self.rolling_range_periods,
+                            precomputed_date_part=precomputed_date_part,
                         )
                         for x_col in base.columns
                     ]
@@ -3134,20 +3158,29 @@ class MultivariateRegression(ModelObject):
 
             self._augment_with_synthetic_bounds()
 
-            # Remove near-constant columns to prevent tree algorithms from wasting time
+            # Remove near-constant and duplicate columns to prevent slow optimization
             X_arr = self.X.to_numpy()
+            if np.any(np.isinf(X_arr)):
+                X_arr[np.isinf(X_arr)] = np.nan
+
             VARIANCE_THRESHOLD = (
                 1e-10  # absolute range below this is considered constant
             )
             col_min = np.nanmin(X_arr, axis=0)
             col_max = np.nanmax(X_arr, axis=0)
             col_range = col_max - col_min
-            self._nonzero_var_mask = col_range > VARIANCE_THRESHOLD
+            self._nonzero_var_mask = (col_range > VARIANCE_THRESHOLD) & (
+                np.isfinite(col_range)
+            )
 
             # Safeguard: if all columns are near-constant or all-NaN
             linear_models = {
-                'ElasticNet', 'Ridge', 'BayesianRidge', 'LinearRegression',
-                'RANSAC', 'FastRidge',
+                'ElasticNet',
+                'Ridge',
+                'BayesianRidge',
+                'LinearRegression',
+                'RANSAC',
+                'FastRidge',
             }
             # Check if this is a linear model or has a linear estimator
             self._is_linear_model = self.regression_model["model"] in linear_models
@@ -3157,16 +3190,31 @@ class MultivariateRegression(ModelObject):
                     "MultivariateRegression: all features are near-constant or NaN; "
                 )
 
+            # Additional removal: Duplicate columns
+            # Particularly important for models like GPR where duplicate columns cause singularity
+            if not self._is_linear_model and np.any(self._nonzero_var_mask):
+                if X_arr.shape[1] > 1 and X_arr.shape[1] < 10000:
+                    X_subset = X_arr[:, self._nonzero_var_mask]
+                    is_dupe = pd.DataFrame(X_subset).T.duplicated().to_numpy()
+                    if np.any(is_dupe):
+                        # update existing mask
+                        mask_indices = np.where(self._nonzero_var_mask)[0]
+                        self._nonzero_var_mask[mask_indices[is_dupe]] = False
+
             if not np.all(self._nonzero_var_mask) and not self._is_linear_model:
                 n_removed = np.sum(~self._nonzero_var_mask)
                 if self.verbose > 1:
                     print(
-                        f"MultivariateRegression: removed {n_removed} near-constant columns "
+                        f"MultivariateRegression: removed {n_removed} near-constant/duplicate/NaN columns "
                         f"(range <= {VARIANCE_THRESHOLD})"
                     )
                 X_arr = X_arr[:, self._nonzero_var_mask]
             else:
                 self._nonzero_var_mask = None  # flag that no filtering was done
+
+            # Final check to ensure no infs or nans remain, as assume_finite=True is used
+            if np.any(~np.isfinite(X_arr)):
+                X_arr = np.nan_to_num(X_arr, nan=0.0, posinf=0.0, neginf=0.0)
 
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
@@ -3263,8 +3311,16 @@ class MultivariateRegression(ModelObject):
                 pred_x = self.transformer_object.fit_transform(current_x).astype(float)
             else:
                 pred_x = current_x.astype(float)
+            # precompute date_part once per step (shared across all series)
+            if self.datepart_method not in [None, "None", "none"]:
+                _inferred_freq = infer_frequency(pred_x.index)
+                _ahead_idx = pred_x.index.shift(1, freq=_inferred_freq)
+                _precomp_dp = date_part(_ahead_idx, method=self.datepart_method)
+                _precomp_dp.index = pred_x.index
+            else:
+                _precomp_dp = None
             # parallelize per-series feature generation if beneficial
-            failed_flag = False
+            failure_flag = False
             if predict_parallel:
                 try:
                     x_pred_list = Parallel(n_jobs=self.n_jobs, timeout=3600)(
@@ -3305,14 +3361,15 @@ class MultivariateRegression(ModelObject):
                             rolling_skew_periods=self.rolling_skew_periods,
                             diff_periods=self.diff_periods,
                             rolling_range_periods=self.rolling_range_periods,
+                            precomputed_date_part=_precomp_dp,
                         )
                         for x_col in current_x.columns
                     )
                     self.X_pred = pd.concat([x.tail(1) for x in x_pred_list])
                 except Exception:
-                    failed_flag = True
+                    failure_flag = True
 
-            if not predict_parallel or failed_flag:
+            if not predict_parallel or failure_flag:
                 self.X_pred = pd.concat(
                     [
                         rolling_x_regressor_regressor(
@@ -3353,6 +3410,7 @@ class MultivariateRegression(ModelObject):
                             rolling_skew_periods=self.rolling_skew_periods,
                             diff_periods=self.diff_periods,
                             rolling_range_periods=self.rolling_range_periods,
+                            precomputed_date_part=_precomp_dp,
                         ).tail(1)
                         for x_col in current_x.columns
                     ]
@@ -3364,6 +3422,11 @@ class MultivariateRegression(ModelObject):
             # Apply same zero-variance column filtering as during fit
             if self._nonzero_var_mask is not None:
                 c_x_pred = c_x_pred[:, self._nonzero_var_mask]
+
+            # Ensure no NaNs or infs remain
+            if np.any(~np.isfinite(c_x_pred)):
+                c_x_pred = np.nan_to_num(c_x_pred, nan=0.0, posinf=0.0, neginf=0.0)
+
             rfPred = self.model.predict(c_x_pred)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
@@ -3504,6 +3567,10 @@ class MultivariateRegression(ModelObject):
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
         if model_choice.get("model", None) in ["MLP", "ExtraTrees", "HistGradientBoost"]:
             polynomial_degree_choice = None
+        # expanded_binarized creates 58+ features per series; too slow for MLP predict loop
+        if model_choice.get("model", None) == "MLP":
+            if isinstance(add_date_part_choice, str) and "expanded_binarized" in str(add_date_part_choice):
+                add_date_part_choice = "common_fourier"
         if "regressor" in method:
             regression_choice = "User"
         else:
