@@ -3158,8 +3158,11 @@ class MultivariateRegression(ModelObject):
 
             self._augment_with_synthetic_bounds()
 
-            # Remove near-constant and duplicate columns to prevent slow optimization
+            # Remove near-constant and redundant columns to prevent slow optimization
             X_arr = self.X.to_numpy()
+            
+            # Clip extreme values that cause precision/overflow issues in splitters
+            X_arr = np.clip(X_arr, -1e12, 1e12)
             if np.any(np.isinf(X_arr)):
                 X_arr[np.isinf(X_arr)] = np.nan
 
@@ -3191,21 +3194,34 @@ class MultivariateRegression(ModelObject):
                 )
 
             # Additional removal: Duplicate columns
-            # Particularly important for models like GPR where duplicate columns cause singularity
             if not self._is_linear_model and np.any(self._nonzero_var_mask):
                 if X_arr.shape[1] > 1 and X_arr.shape[1] < 10000:
+                    mask_indices = np.where(self._nonzero_var_mask)[0]
                     X_subset = X_arr[:, self._nonzero_var_mask]
-                    is_dupe = pd.DataFrame(X_subset).T.duplicated().to_numpy()
+                    
+                    # 1. Near-duplicate removal via rounding to catch floating point noise
+                    is_dupe = pd.DataFrame(X_subset).T.round(10).duplicated().to_numpy()
+                    
+                    # 2. Highly correlated feature removal (for non-linear models)
+                    # For moderate feature counts, remove almost perfectly correlated features (e.g. > 0.9999)
+                    if X_subset.shape[1] > 1 and X_subset.shape[1] < 2000:
+                        try:
+                            corr_matrix = np.abs(np.corrcoef(X_subset, rowvar=False))
+                            upper = np.triu(corr_matrix, k=1)
+                            is_corr = np.any(upper > 0.9999, axis=0)
+                            is_dupe = is_dupe | is_corr
+                        except Exception:
+                            pass
+                    
                     if np.any(is_dupe):
                         # update existing mask
-                        mask_indices = np.where(self._nonzero_var_mask)[0]
                         self._nonzero_var_mask[mask_indices[is_dupe]] = False
 
             if not np.all(self._nonzero_var_mask) and not self._is_linear_model:
                 n_removed = np.sum(~self._nonzero_var_mask)
                 if self.verbose > 1:
                     print(
-                        f"MultivariateRegression: removed {n_removed} near-constant/duplicate/NaN columns "
+                        f"MultivariateRegression: removed {n_removed} near-constant/duplicate/redundant columns "
                         f"(range <= {VARIANCE_THRESHOLD})"
                     )
                 X_arr = X_arr[:, self._nonzero_var_mask]
@@ -3215,6 +3231,13 @@ class MultivariateRegression(ModelObject):
             # Final check to ensure no infs or nans remain, as assume_finite=True is used
             if np.any(~np.isfinite(X_arr)):
                 X_arr = np.nan_to_num(X_arr, nan=0.0, posinf=0.0, neginf=0.0)
+
+            # Sanitizing target values to prevent internal loss function explosion
+            if self.Y.dtype == object:
+                self.Y = self.Y.astype(float)
+            self.Y = np.clip(self.Y, -1e12, 1e12)
+            if np.any(~np.isfinite(self.Y)):
+                self.Y = np.nan_to_num(self.Y, nan=0.0, posinf=0.0, neginf=0.0)
 
             # Remember the X datetime is for the previous day to the Y datetime here
             assert self.X.index[-1] == df.index[-2]
@@ -3419,6 +3442,10 @@ class MultivariateRegression(ModelObject):
                 c_x_pred = self.scale_data(self.X_pred).to_numpy()
             else:
                 c_x_pred = self.X_pred.to_numpy()
+            
+            # Apply same preprocessing as during fit
+            c_x_pred = np.clip(c_x_pred, -1e12, 1e12)
+            
             # Apply same zero-variance column filtering as during fit
             if self._nonzero_var_mask is not None:
                 c_x_pred = c_x_pred[:, self._nonzero_var_mask]
