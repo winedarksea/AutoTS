@@ -8,6 +8,7 @@ import json
 import random
 import warnings
 import datetime
+import functools
 import numpy as np
 import pandas as pd
 from collections import OrderedDict
@@ -88,6 +89,90 @@ class ModelObject(object):
     def __repr__(self):
         """Print."""
         return 'ModelObject of ' + self.name + ' uses standard .fit/.predict'
+
+    def __init_subclass__(cls, **kwargs):
+        """Wrap subclass fit/predict for optional MLflow autologging."""
+        super().__init_subclass__(**kwargs)
+
+        fit_method = cls.__dict__.get("fit")
+        if callable(fit_method) and not getattr(
+            fit_method, "_autots_mlflow_wrapped_fit", False
+        ):
+
+            @functools.wraps(fit_method)
+            def wrapped_fit(self, *args, **kwargs):
+                mlflow_ctx = None
+                fit_error = None
+                fit_result = None
+                try:
+                    from autots.tools.mlflow import modelobject_fit_start
+
+                    mlflow_ctx = modelobject_fit_start(
+                        self, args=args, kwargs=kwargs
+                    )
+                except Exception:
+                    mlflow_ctx = None
+                try:
+                    fit_result = fit_method(self, *args, **kwargs)
+                    return fit_result
+                except Exception as exc:
+                    fit_error = exc
+                    raise
+                finally:
+                    try:
+                        from autots.tools.mlflow import modelobject_fit_end
+
+                        modelobject_fit_end(
+                            self,
+                            context=mlflow_ctx,
+                            result=fit_result,
+                            error=fit_error,
+                        )
+                    except Exception:
+                        pass
+
+            wrapped_fit._autots_mlflow_wrapped_fit = True
+            setattr(cls, "fit", wrapped_fit)
+
+        predict_method = cls.__dict__.get("predict")
+        if callable(predict_method) and not getattr(
+            predict_method, "_autots_mlflow_wrapped_predict", False
+        ):
+
+            @functools.wraps(predict_method)
+            def wrapped_predict(self, *args, **kwargs):
+                mlflow_ctx = None
+                pred_error = None
+                pred_result = None
+                try:
+                    from autots.tools.mlflow import modelobject_predict_start
+
+                    mlflow_ctx = modelobject_predict_start(
+                        self, args=args, kwargs=kwargs
+                    )
+                except Exception:
+                    mlflow_ctx = None
+                try:
+                    pred_result = predict_method(self, *args, **kwargs)
+                    return pred_result
+                except Exception as exc:
+                    pred_error = exc
+                    raise
+                finally:
+                    try:
+                        from autots.tools.mlflow import modelobject_predict_end
+
+                        modelobject_predict_end(
+                            self,
+                            context=mlflow_ctx,
+                            result=pred_result,
+                            error=pred_error,
+                        )
+                    except Exception:
+                        pass
+
+            wrapped_predict._autots_mlflow_wrapped_predict = True
+            setattr(cls, "predict", wrapped_predict)
 
     def basic_profile(self, df):
         """Capture basic training details."""
