@@ -176,8 +176,11 @@ def _safe_mlflow_log_dataframe(mlflow, df: pd.DataFrame, artifact_file: str):
         file_name = f"{file_name}.csv"
     local_df = df.copy()
     for col in local_df.columns:
-        if pd.api.types.is_timedelta64_dtype(local_df[col]):
-            local_df[col] = local_df[col].astype(str)
+        try:
+            if hasattr(local_df[col].dtype, 'kind') and local_df[col].dtype.kind == 'm':
+                local_df[col] = local_df[col].astype(str)
+        except Exception:
+            pass
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = os.path.join(tmpdir, file_name)
@@ -390,7 +393,7 @@ def _log_autots_summary(mlflow, autots_obj):
             )
 
 
-def _log_autots_individual_model_runs(mlflow, autots_obj):
+def _log_autots_individual_model_runs(mlflow, autots_obj, max_runs: int = 400):
     rows = _extract_autots_results_df(autots_obj, "initial")
     if rows.empty:
         return
@@ -398,6 +401,8 @@ def _log_autots_individual_model_runs(mlflow, autots_obj):
     if "ValidationRound" in rows.columns:
         rows = rows[rows["ValidationRound"] == 0]
     rows = rows.reset_index(drop=True)
+    if len(rows) > max_runs:
+        rows = rows.head(max_runs)
 
     create_id = None
     try:
@@ -566,10 +571,9 @@ def _patch_autots_predict():
             _safe_mlflow_set_tag(mlflow, "autots.flavor", "AutoTS")
             _safe_mlflow_set_tag(mlflow, "autots.stage", "predict")
             _safe_mlflow_log_param(mlflow, "best_model_name", getattr(self, "best_model_name", None))
-            if "forecast_length" in kwargs:
-                _safe_mlflow_log_param(mlflow, "forecast_length", kwargs.get("forecast_length"))
-            elif args:
-                _safe_mlflow_log_param(mlflow, "forecast_length", args[0])
+            fl = kwargs.get("forecast_length") if "forecast_length" in kwargs else (args[0] if args else None)
+            if fl is not None and fl != "self":
+                _safe_mlflow_log_param(mlflow, "forecast_length", fl)
 
         _suppress_modelobject_logging()
         try:

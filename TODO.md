@@ -12,11 +12,10 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 1.0.1 🇺🇦 🇺🇦 🇺🇦
-* fixed issue with how MCP server is loaded
-* fixed issue with python 3.9
-* tuning and optimization of MultivariateRegression
-* expanded ConvolutionFilter
+# 1.0.2 🇺🇦 🇺🇦 🇺🇦
+* more tuning of MCP download install
+* more optimization of MultivariateRegression
+* MLFlow logging function added (limited testing done)
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
