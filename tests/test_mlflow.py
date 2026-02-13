@@ -598,5 +598,99 @@ class TestAutoTSModelAsCodePayload(unittest.TestCase):
         json.dumps(_to_jsonable(payload))
 
 
+class TestMLflowRoundTrip(unittest.TestCase):
+    """Tests for loading models from MLflow and verifying consistency."""
+
+    def setUp(self):
+        if mlflow is None:
+            self.skipTest("mlflow not installed")
+        try:
+            mlflow.end_run()
+        except Exception:
+            pass
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.tracking_uri = f"file://{os.path.abspath(self.tmp_dir.name)}"
+        mlflow.set_tracking_uri(self.tracking_uri)
+        mlflow.set_experiment("test_roundtrip")
+        autolog(tried_models_logging="single", silent=True)
+
+    def tearDown(self):
+        autolog(disable=True)
+        try:
+            mlflow.end_run()
+        except Exception:
+            pass
+        self.tmp_dir.cleanup()
+
+    def test_modelobject_roundtrip_consistency(self):
+        df = _make_df(30, 2)
+        # 1. Fit original (autolog will create the run)
+        original = LastValueNaive(frequency="D")
+        original.fit(df)
+
+        # 2. Get the run ID from MLflow
+        client = MlflowClient()
+        experiment = client.get_experiment_by_name("test_roundtrip")
+        runs = client.search_runs(
+            experiment.experiment_id, order_by=["attributes.start_time DESC"]
+        )
+        run_id = runs[0].info.run_id
+
+        # 3. Get original forecast
+        orig_forecast = original.predict(forecast_length=5).forecast
+
+        # 4. Load from MLflow
+        from autots.tools.mlflow import load_model
+
+        loaded = load_model(run_id)
+
+        # 5. Refit and predict loaded
+        loaded.fit(df)
+        loaded_forecast = loaded.predict(forecast_length=5).forecast
+
+        # 6. Assert consistency
+        pd.testing.assert_frame_equal(orig_forecast, loaded_forecast)
+        self.assertIsInstance(loaded, LastValueNaive)
+
+    def test_autots_roundtrip_consistency(self):
+        df = _make_df(30, 2)
+        # 1. Fit original AutoTS
+        model = AutoTS(
+            forecast_length=5,
+            frequency="D",
+            model_list=["LastValueNaive", "AverageValueNaive"],
+            max_generations=0,
+            num_validations=0,
+            random_seed=42,
+        )
+        model.fit(df)
+
+        # 2. Get the run ID from MLflow
+        client = MlflowClient()
+        experiment = client.get_experiment_by_name("test_roundtrip")
+        runs = client.search_runs(
+            experiment.experiment_id, order_by=["attributes.start_time DESC"]
+        )
+        # Note: AutoTS might have multiple runs if individual logging is on,
+        # but the top-most (summary) run should be most recent if nested correctly.
+        run_id = runs[0].info.run_id
+
+        # 3. Get original forecast
+        orig_forecast = model.predict().forecast
+
+        # 4. Load from MLflow
+        from autots.tools.mlflow import load_model
+
+        loaded = load_model(run_id)
+
+        # 5. Refit and predict with loaded
+        loaded.fit(df)
+        loaded_forecast = loaded.predict().forecast
+
+        # 6. Assert consistency
+        pd.testing.assert_frame_equal(orig_forecast, loaded_forecast)
+        self.assertEqual(loaded.best_model_name, model.best_model_name)
+
+
 if __name__ == "__main__":
     unittest.main()

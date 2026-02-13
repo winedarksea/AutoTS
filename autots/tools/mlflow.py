@@ -787,8 +787,102 @@ def modelobject_predict_end(model_obj, context=None, result=None, error=None):
             _end_run(mlflow, run_ctx, status=status)
 
 
+def load_model(run_id: str, artifact_path: str = None) -> Any:
+    """Load an AutoTS or ModelObject instance from an MLflow run.
+
+    Args:
+        run_id (str): MLflow run ID.
+        artifact_path (str): Path to the JSON artifact.
+            If None, tries 'autots/model_as_code.json' then 'modelobject/model_as_code.json'.
+
+    Returns:
+        AutoTS or ModelObject: The reconstructed model instance.
+    """
+    mlflow = _get_mlflow()
+    if mlflow is None:
+        raise ImportError("mlflow is required for load_model")
+
+    import json
+    import tempfile
+
+    # Selection logic for finding the right artifact
+    search_paths = (
+        [artifact_path]
+        if artifact_path
+        else ["autots/model_as_code.json", "modelobject/model_as_code.json"]
+    )
+
+    payload = None
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for p in search_paths:
+            try:
+                local_path = mlflow.artifacts.download_artifacts(
+                    run_id=run_id, artifact_path=p, dst_path=tmpdir
+                )
+                with open(local_path, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+                break
+            except Exception:
+                continue
+
+    if payload is None:
+        raise FileNotFoundError(f"No model artifact found for run {run_id}")
+
+    model_class = payload.get("model_class")
+    if model_class == "AutoTS":
+        from autots import AutoTS
+
+        # Get params from MLflow tracking to initialize correctly
+        try:
+            run = mlflow.get_run(run_id)
+            params = run.data.params
+        except Exception:
+            params = {}
+
+        def get_p(key, default, transform=lambda x: x):
+            val = params.get(key)
+            if val is None or val == "None":
+                return default
+            try:
+                return transform(val)
+            except Exception:
+                return default
+
+        # Start with original params, but default max_generations=0 to avoid search on refit
+        model = AutoTS(
+            forecast_length=get_p("forecast_length", 14, int),
+            frequency=get_p("frequency", "infer"),
+            prediction_interval=get_p("prediction_interval", 0.9, float),
+            max_generations=get_p("max_generations", 0, int),
+            num_validations=get_p("num_validations", 0, int),
+            ensemble=get_p("ensemble", None),
+            random_seed=get_p("random_seed", 2022, int),
+        )
+        # Restore winner state
+        model.best_model_name = payload.get("best_model_name")
+        model.best_model_params = payload.get("best_model_parameters")
+        model.best_model_transformation_params = payload.get(
+            "best_model_transformation_params",
+            payload.get("best_model_transformation_parameters"),
+        )
+        model.best_model_ensemble = payload.get("best_model_ensemble", 0)
+        model.best_model_id = payload.get("best_model_id")
+        return model
+    else:
+        from autots.evaluator.auto_model import ModelMonster
+
+        # Try to restore important top-level attributes
+        return ModelMonster(
+            model=model_class,
+            parameters=payload.get("model_parameters", {}),
+            frequency=payload.get("frequency", "infer"),
+            prediction_interval=payload.get("prediction_interval", 0.9),
+        )
+
+
 __all__ = [
     "autolog",
+    "load_model",
     "modelobject_fit_start",
     "modelobject_fit_end",
     "modelobject_predict_start",
