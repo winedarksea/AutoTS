@@ -892,8 +892,6 @@ class ModelPrediction(ModelObject):
 
         self.transformation_runtime = datetime.datetime.now() - transformationStartTime
         # from autots.evaluator.auto_model import ModelMonster
-        # reset startTime so fit_runtime is just for fit
-        self.model.startTime = datetime.datetime.now()
         self.model = self.model.fit(
             df_train_transformed, future_regressor=future_regressor
         )
