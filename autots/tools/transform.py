@@ -2460,12 +2460,22 @@ class ScipyFilter(EmptyTransformer):
         if self.method == "hilbert":
             from scipy.signal import hilbert
 
-            test = pd.DataFrame(hilbert(df.values), columns=df.columns, index=df.index)
+            test = pd.DataFrame(
+                hilbert(df.values, axis=0), columns=df.columns, index=df.index
+            )
             return np.abs(test)
         elif self.method == "wiener":
             from scipy.signal import wiener
 
-            return pd.DataFrame(wiener(df.values), columns=df.columns, index=df.index)
+            if self.method_args is None:
+                mysize = (3, 1)
+            else:
+                mysize = self.method_args.get("mysize", 3)
+                if isinstance(mysize, int):
+                    mysize = (mysize, 1)
+            return pd.DataFrame(
+                wiener(df.values, mysize=mysize), columns=df.columns, index=df.index
+            )
         elif self.method == "savgol_filter":
             # args = [5, 2]
             return pd.DataFrame(

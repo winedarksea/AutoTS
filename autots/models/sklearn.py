@@ -3256,11 +3256,15 @@ class MultivariateRegression(ModelObject):
                 new_X = X_arr[error_check]
                 new_Y = self.Y[error_check]
                 self.model.fit(new_X, new_Y)
+            # Capture fit runtime before fit_data(), because fit_data() calls
+            # basic_profile() and resets self.startTime.
+            self.fit_runtime = datetime.datetime.now() - self.startTime
+
             # we only need the N most recent points for predict
             # self.sktraindata = df.tail(self.min_threshold)
+            fit_data_start = datetime.datetime.now()
             self.fit_data(df)
-
-            self.fit_runtime = datetime.datetime.now() - self.startTime
+            self.fit_runtime += datetime.datetime.now() - fit_data_start
             return self
 
     def fit_data(
