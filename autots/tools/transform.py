@@ -3460,6 +3460,10 @@ class AnomalyRemoval(EmptyTransformer):
         fillna=None,
         isolated_only=False,
         on_inverse=False,
+        holiday_dates=None,
+        holiday_proximity_days=2,
+        two_pass=False,
+        liberal_alpha_multiplier=10.0,
         n_jobs=1,
     ):
         """Detect anomalies on a historic dataset. No inverse_transform available.
@@ -3471,6 +3475,11 @@ class AnomalyRemoval(EmptyTransformer):
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
             isolated_only (bool): if True, only removal standalone anomalies
+            holiday_dates (set or None): Optional set/list of known holiday dates.
+                Anomalies near these dates can be un-flagged.
+            holiday_proximity_days (int): +/- day window around holiday dates.
+            two_pass (bool): if True, run liberal candidate detection then local validation.
+            liberal_alpha_multiplier (float): alpha multiplier for first-pass detection.
             n_jobs (int): multiprocessing jobs, used by some methods
         """
         super().__init__(name="AnomalyRemoval")
@@ -3482,7 +3491,11 @@ class AnomalyRemoval(EmptyTransformer):
         self.fillna = fillna
         self.isolated_only = isolated_only
         self.anomaly_classifier = None
-        self.on_inverse = False
+        self.on_inverse = on_inverse
+        self.holiday_dates = holiday_dates
+        self.holiday_proximity_days = holiday_proximity_days
+        self.two_pass = two_pass
+        self.liberal_alpha_multiplier = liberal_alpha_multiplier
 
     def fit(self, df):
         """All will return -1 for anomalies.
@@ -3497,14 +3510,17 @@ class AnomalyRemoval(EmptyTransformer):
             model = GeneralTransformer(**self.transform_dict)
             self.df_anomaly = model.fit_transform(self.df_anomaly)
 
-        self.anomalies, self.scores = detect_anomalies(
-            self.df_anomaly,
-            output=self.output,
-            method=self.method,
-            transform_dict=self.transform_dict,
-            method_params=self.method_params,
-            n_jobs=self.n_jobs,
-        )
+        if self.two_pass:
+            self._fit_two_pass(df)
+        else:
+            self.anomalies, self.scores = detect_anomalies(
+                self.df_anomaly,
+                output=self.output,
+                method=self.method,
+                transform_dict=self.transform_dict,
+                method_params=self.method_params,
+                n_jobs=self.n_jobs,
+            )
         if self.isolated_only:
             # replace all anomalies (-1) except those which are isolated (1 before and after)
             mask_minus_one = self.anomalies == -1
@@ -3512,7 +3528,67 @@ class AnomalyRemoval(EmptyTransformer):
             mask_next_one = self.anomalies.shift(-1) == 1
             mask_replace = mask_minus_one & ~(mask_prev_one & mask_next_one)
             self.anomalies[mask_replace] = 1
+
+        if self.holiday_dates is not None:
+            self._filter_holiday_proximate_anomalies()
+
         return self
+
+    def _filter_holiday_proximate_anomalies(self):
+        """Clear anomaly flags that occur near known holiday dates."""
+        holiday_set = {pd.Timestamp(d) for d in self.holiday_dates}
+        if not holiday_set:
+            return
+        prox_days = int(max(0, self.holiday_proximity_days))
+        for col in self.anomalies.columns:
+            for idx, date in enumerate(self.anomalies.index):
+                if self.anomalies.iloc[idx, self.anomalies.columns.get_loc(col)] != -1:
+                    continue
+                if any(abs((date - h).days) <= prox_days for h in holiday_set):
+                    self.anomalies.iloc[idx, self.anomalies.columns.get_loc(col)] = 1
+
+    def _fit_two_pass(self, df):
+        """Liberal first-pass anomaly detection followed by local noise validation."""
+        import copy as _copy
+
+        liberal_params = _copy.deepcopy(self.method_params)
+        alpha = liberal_params.get("alpha", 0.001)
+        liberal_params["alpha"] = min(alpha * self.liberal_alpha_multiplier, 0.1)
+
+        liberal_anomalies, liberal_scores = detect_anomalies(
+            self.df_anomaly,
+            output=self.output,
+            method=self.method,
+            transform_dict=self.transform_dict,
+            method_params=liberal_params,
+            n_jobs=self.n_jobs,
+        )
+        self.scores = liberal_scores
+        self.anomalies = self._validate_anomaly_candidates(df, liberal_anomalies)
+
+    def _validate_anomaly_candidates(self, df, candidates):
+        """Validate candidate anomalies against local rolling noise estimates."""
+        validated = candidates.copy()
+        for col in df.columns:
+            if col not in validated.columns:
+                continue
+            col_values = df[col].to_numpy(dtype=float)
+            for idx in range(len(df)):
+                if candidates[col].iloc[idx] != -1:
+                    continue
+                start = max(0, idx - 30)
+                window = col_values[start:idx]
+                if len(window) > 5:
+                    local_std = float(np.nanstd(window))
+                    local_median = float(np.nanmedian(window))
+                else:
+                    local_std = float(np.nanstd(col_values))
+                    local_median = float(np.nanmedian(col_values))
+                local_std = max(local_std, 1e-9)
+                magnitude = abs(col_values[idx] - local_median)
+                if magnitude < 2.5 * local_std:
+                    validated.at[validated.index[idx], col] = 1
+        return validated
 
     def transform(self, df):
         if self.fillna is not None:

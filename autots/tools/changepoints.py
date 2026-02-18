@@ -14,6 +14,7 @@ valid_changepoint_methods = [
     'ewma',
     'autoencoder',
     'composite_fused_lasso',
+    'multiresolution',
 ]
 
 
@@ -1966,13 +1967,20 @@ class ChangepointDetector(object):
         self.method = method
         self.method_params = method_params if method_params is not None else {}
         self.aggregate_method = aggregate_method
-        self.min_segment_length = min_segment_length
         self.probabilistic_output = probabilistic_output
         self.n_jobs = n_jobs
+
+        if min_segment_length == 'auto':
+            self._auto_min_segment = True
+            self.min_segment_length = 5
+        else:
+            self._auto_min_segment = False
+            self.min_segment_length = min_segment_length
 
         # Results storage
         self.changepoints_ = None
         self.changepoint_probabilities_ = None
+        self.changepoint_confidence_ = None
         self.fitted_trends_ = None
         self.df = None
         self.segment_breaks_ = None
@@ -2059,6 +2067,9 @@ class ChangepointDetector(object):
 
         elif method == 'composite_fused_lasso':
             changepoints, fitted_trend = self._detect_composite_fused_lasso(data)
+
+        elif method == 'multiresolution':
+            changepoints, fitted_trend = self._detect_multiresolution(data)
 
         elif method == 'basic':
             changepoint_spacing = params.get('changepoint_spacing', 60)
@@ -2249,6 +2260,9 @@ class ChangepointDetector(object):
             df (pd.DataFrame): Wide-format time series with DatetimeIndex
         """
         self.df = df.copy()
+        if self._auto_min_segment:
+            n = len(df)
+            self.min_segment_length = max(7, min(30, int(n * 0.02)))
         self.df_cols = df.columns
         self.changepoint_probabilities_ = None
 
@@ -2352,6 +2366,12 @@ class ChangepointDetector(object):
                     self.fitted_trends_,
                 ) = self._detect_composite_fused_lasso(aggregated_data)
 
+            elif self.method == 'multiresolution':
+                (
+                    self.changepoints_,
+                    self.fitted_trends_,
+                ) = self._detect_multiresolution(aggregated_data)
+
             elif self.method == 'basic':
                 # Basic evenly-spaced changepoints (legacy method)
                 changepoint_spacing = self.method_params.get('changepoint_spacing', 60)
@@ -2386,6 +2406,19 @@ class ChangepointDetector(object):
                 # Update changepoints with probabilistic results if requested
                 if self.method_params.get('use_probabilistic_changepoints', False):
                     self.changepoints_ = prob_cps
+
+        # Estimate confidence windows for individual changepoints when possible.
+        self.changepoint_confidence_ = {}
+        if isinstance(self.changepoints_, dict):
+            for col in df.columns:
+                arr = df[col].dropna().to_numpy(dtype=float)
+                cps = np.asarray(self.changepoints_.get(col, []), dtype=int)
+                if len(cps) > 0 and len(arr) > 0:
+                    self.changepoint_confidence_[col] = (
+                        self._estimate_changepoint_confidence(arr, cps)
+                    )
+                else:
+                    self.changepoint_confidence_[col] = {}
 
         # Prepare transformer-related data structures
         self._prepare_transform_support()
@@ -2577,6 +2610,95 @@ class ChangepointDetector(object):
             all_changepoints = np.array(filtered_cps)
 
         return all_changepoints, fitted_trend
+
+    def _detect_multiresolution(self, data):
+        """Two-pass changepoint detection combining coarse and fine scans."""
+        params = self.method_params
+        coarse_method = params.get('coarse_method', 'pelt')
+        fine_penalty_ratio = params.get('fine_penalty_ratio', 0.5)
+        merge_tolerance = params.get('merge_tolerance', 7)
+
+        n = len(data)
+        if n < 4:
+            return np.array([], dtype=int), data.copy()
+
+        # Pass 1: coarse structural changepoints.
+        if coarse_method == 'ewma':
+            coarse_params = {
+                'lambda_param': params.get('lambda_param', 0.3),
+                'control_limit': params.get('control_limit', 3.5),
+                'normalize': params.get('normalize', True),
+                'two_sided': params.get('two_sided', True),
+                'adaptive': params.get('adaptive', True),
+                'min_distance': max(self.min_segment_length, 15),
+            }
+            coarse_cps = _detect_ewma_changepoints(data, **coarse_params)
+        else:
+            coarse_penalty = params.get('penalty', 10)
+            loss_func = params.get('loss_function', 'l2')
+            coarse_cps = _detect_pelt_changepoints(
+                data, coarse_penalty, loss_func, self.min_segment_length
+            )
+        coarse_cps = np.asarray(coarse_cps, dtype=int)
+
+        # Pass 2: finer detection inside coarse segments.
+        fine_min_seg = max(7, self.min_segment_length // 2)
+        boundaries = np.concatenate([[0], coarse_cps, [n]])
+        fine_cps = []
+        for seg_idx in range(len(boundaries) - 1):
+            seg_start = int(boundaries[seg_idx])
+            seg_end = int(boundaries[seg_idx + 1])
+            seg_data = data[seg_start:seg_end]
+            if len(seg_data) < 2 * fine_min_seg:
+                continue
+
+            if coarse_method == 'ewma':
+                fine_params = {
+                    'lambda_param': params.get('lambda_param', 0.3),
+                    'control_limit': max(
+                        1.5, params.get('control_limit', 3.5) * fine_penalty_ratio
+                    ),
+                    'normalize': params.get('normalize', True),
+                    'two_sided': params.get('two_sided', True),
+                    'adaptive': params.get('adaptive', True),
+                    'min_distance': fine_min_seg,
+                }
+                sub_cps = _detect_ewma_changepoints(seg_data, **fine_params)
+            else:
+                fine_penalty = params.get('penalty', 10) * fine_penalty_ratio
+                loss_func = params.get('loss_function', 'l2')
+                sub_cps = _detect_pelt_changepoints(
+                    seg_data, fine_penalty, loss_func, fine_min_seg
+                )
+
+            for cp in sub_cps:
+                fine_cps.append(int(cp + seg_start))
+        fine_cps = np.asarray(fine_cps, dtype=int)
+
+        # Merge nearby detections.
+        merged = list(coarse_cps)
+        for cp in fine_cps:
+            if len(coarse_cps) == 0 or np.min(np.abs(coarse_cps - cp)) > merge_tolerance:
+                merged.append(cp)
+        merged = np.array(sorted(set(merged)), dtype=int)
+        merged = merged[(merged > 1) & (merged < n - 1)]
+        return merged, data.copy()
+
+    def _estimate_changepoint_confidence(self, data, changepoints):
+        """Estimate confidence window size around each detected changepoint."""
+        confidence = {}
+        for cp in changepoints:
+            window = min(30, max(7, int(self.min_segment_length)))
+            left = data[max(0, cp - window) : cp]
+            right = data[cp : min(len(data), cp + window)]
+            if len(left) == 0 or len(right) == 0:
+                confidence[int(cp)] = 14
+                continue
+            change_mag = abs(float(np.mean(right)) - float(np.mean(left)))
+            local_noise = (float(np.std(left)) + float(np.std(right))) / 2 + 1e-9
+            snr = change_mag / local_noise
+            confidence[int(cp)] = max(1, min(14, int(7.0 / (snr + 0.5))))
+        return confidence
 
     def _detect_probabilistic_changepoints(self, data, method='bayesian_online'):
         """
@@ -2986,9 +3108,10 @@ class ChangepointDetector(object):
                 'pelt',
                 'composite_fused_lasso',
                 'autoencoder',
+                'multiresolution',
                 'none',
             ]
-            method_weights = [0.28, 0.24, 0.24, 0.08, 0.06, 0.03, 0.02, 0.01, 0.04]
+            method_weights = [0.26, 0.22, 0.22, 0.07, 0.05, 0.03, 0.02, 0.01, 0.08, 0.04]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
         elif method in ["default", "random"]:
             # Heavily weight basic method for compatibility, with EWMA and CUSUM as good alternatives
@@ -3001,9 +3124,10 @@ class ChangepointDetector(object):
                 'l1_fused_lasso',
                 'l1_total_variation',
                 'autoencoder',
+                'multiresolution',
                 'none',
             ]
-            method_weights = [0.42, 0.19, 0.19, 0.05, 0.04, 0.03, 0.03, 0.05]
+            method_weights = [0.38, 0.17, 0.17, 0.05, 0.04, 0.03, 0.03, 0.08, 0.05]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"
         else:  # random
@@ -3231,6 +3355,42 @@ class ChangepointDetector(object):
                     use_flags_options, weights=use_flags_weights, k=1
                 )[0],
             }
+
+        elif new_method == 'multiresolution':
+            coarse_method_options = ['pelt', 'ewma']
+            coarse_method_weights = [0.4, 0.6]
+            fine_penalty_ratio_options = [0.3, 0.4, 0.5, 0.6, 0.8]
+            fine_penalty_ratio_weights = [0.15, 0.2, 0.3, 0.2, 0.15]
+            merge_tolerance_options = [5, 7, 10, 14]
+            merge_tolerance_weights = [0.2, 0.4, 0.25, 0.15]
+
+            coarse = random.choices(
+                coarse_method_options, weights=coarse_method_weights, k=1
+            )[0]
+            new_params = {
+                'coarse_method': coarse,
+                'fine_penalty_ratio': random.choices(
+                    fine_penalty_ratio_options, weights=fine_penalty_ratio_weights, k=1
+                )[0],
+                'merge_tolerance': random.choices(
+                    merge_tolerance_options, weights=merge_tolerance_weights, k=1
+                )[0],
+            }
+            if coarse == 'pelt':
+                new_params['penalty'] = random.choices(
+                    [10, 20, 50, 100], weights=[0.2, 0.3, 0.3, 0.2], k=1
+                )[0]
+                new_params['loss_function'] = 'l2'
+            else:
+                new_params['lambda_param'] = random.choices(
+                    [0.2, 0.3, 0.4], weights=[0.3, 0.4, 0.3], k=1
+                )[0]
+                new_params['control_limit'] = random.choices(
+                    [2.5, 3.0, 3.5], weights=[0.2, 0.5, 0.3], k=1
+                )[0]
+                new_params['normalize'] = True
+                new_params['two_sided'] = True
+                new_params['adaptive'] = random.choice([True, False])
         else:
             new_params = {}
 

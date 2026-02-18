@@ -170,6 +170,68 @@ class FFT(object):
 
         return self
 
+    def detect_dominant_periods(self, min_period=3, max_periods=5, power_threshold=0.1):
+        """Detect dominant seasonal periods from the fitted FFT spectrum.
+
+        Returns
+        -------
+        list
+            List of `(period, relative_strength)` tuples sorted by descending
+            relative strength.
+        """
+        power = np.mean(np.abs(self.x_freqdom) ** 2, axis=1)
+        freqs = self.f
+
+        max_period = self.m / 2
+        periods = np.full(freqs.shape, np.inf, dtype=float)
+        positive_mask = freqs > 0
+        np.divide(1.0, freqs, out=periods, where=positive_mask)
+        mask = positive_mask & (periods >= min_period) & (periods <= max_period)
+        candidate_freqs = freqs[mask]
+        candidate_power = power[mask]
+
+        if len(candidate_power) == 0:
+            return []
+
+        peak_indices = []
+        for i in range(1, len(candidate_power) - 1):
+            if (
+                candidate_power[i] > candidate_power[i - 1]
+                and candidate_power[i] > candidate_power[i + 1]
+            ):
+                peak_indices.append(i)
+        if len(candidate_power) >= 2:
+            if candidate_power[0] > candidate_power[1]:
+                peak_indices.insert(0, 0)
+            if candidate_power[-1] > candidate_power[-2]:
+                peak_indices.append(len(candidate_power) - 1)
+
+        if not peak_indices:
+            sorted_idx = np.argsort(candidate_power)[::-1][:max_periods]
+            max_power = candidate_power[sorted_idx[0]] if len(sorted_idx) > 0 else 1.0
+            results = []
+            for idx in sorted_idx:
+                rel = candidate_power[idx] / (max_power + 1e-12)
+                if rel >= power_threshold:
+                    results.append((1.0 / candidate_freqs[idx], rel))
+            return results
+
+        peak_powers = candidate_power[peak_indices]
+        max_peak_power = np.max(peak_powers)
+        valid_peaks = [
+            (candidate_freqs[i], candidate_power[i])
+            for i in peak_indices
+            if candidate_power[i] / (max_peak_power + 1e-12) >= power_threshold
+        ]
+
+        valid_peaks.sort(key=lambda x: x[1], reverse=True)
+        results = []
+        for freq, pwr in valid_peaks[:max_periods]:
+            period = 1.0 / freq
+            rel_strength = pwr / (max_peak_power + 1e-12)
+            results.append((period, rel_strength))
+        return results
+
     def generate_harmonics_dataframe(self, forecast_length=0):
         extended_m = self.m + forecast_length
         harmonics_data = np.zeros((extended_m, len(self.use_idx) * 2))

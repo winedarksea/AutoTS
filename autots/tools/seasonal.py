@@ -837,6 +837,54 @@ def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
     )
 
 
+def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
+    """Build Fourier features using FFT-detected dominant periods.
+
+    Parameters
+    ----------
+    DTindex : pd.DatetimeIndex
+        Index used to generate deterministic seasonal regressors.
+    detected_periods : list
+        Sequence of `(period, strength)` tuples from `FFT.detect_dominant_periods()`.
+    max_order : int
+        Upper bound for harmonics generated per detected period.
+
+    Returns
+    -------
+    pd.DataFrame
+        Fourier feature matrix indexed by `DTindex`.
+    """
+    if not detected_periods:
+        return pd.DataFrame(index=DTindex)
+
+    t = (DTindex - pd.Timestamp(origin_ts)).days
+    t_arr = np.asarray(t, dtype=float)
+    seasonal_list = []
+    period_labels = []
+
+    for period, _strength in detected_periods[:5]:
+        n_order = min(max_order, max(2, int(len(DTindex) / period / 2)))
+        fs = fourier_series(t_arr, p=period, n=n_order)
+        seasonal_list.append(fs)
+        for k in range(1, n_order + 1):
+            period_labels.append(f"adaptive_cos_{period:.1f}_{k}")
+            period_labels.append(f"adaptive_sin_{period:.1f}_{k}")
+
+    # Add interaction terms for the two strongest periods.
+    if len(detected_periods) >= 2:
+        p1, p2 = detected_periods[0][0], detected_periods[1][0]
+        interaction_order = min(3, max_order)
+        fs1 = fourier_series(t_arr, p=p1, n=interaction_order)
+        fs2 = fourier_series(t_arr, p=p2, n=interaction_order)
+        interaction = fs1 * fs2
+        seasonal_list.append(interaction)
+        for k in range(interaction.shape[1]):
+            period_labels.append(f"adaptive_interact_{p1:.1f}x{p2:.1f}_{k}")
+
+    features = np.concatenate(seasonal_list, axis=1)
+    return pd.DataFrame(features, columns=period_labels, index=DTindex).round(6)
+
+
 datepart_components = [
     "dayofweek",
     "month",

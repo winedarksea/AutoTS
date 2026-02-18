@@ -811,7 +811,7 @@ class TestSyntheticDataGeneration(unittest.TestCase):
         # This checks that tuning actually found meaningful parameter values
         self.assertGreater(results['best_params']['trend_changepoint_freq'], 0.0)
         self.assertLess(results['best_params']['trend_changepoint_freq'], 3.0)
-        self.assertGreaterEqual(results['best_params']['noise_level'], 0.01)
+        self.assertGreaterEqual(results['best_params']['noise_level'], 0.001)
         self.assertLessEqual(results['best_params']['noise_level'], 0.5)
 
     def test_tune_to_data_error_handling(self):

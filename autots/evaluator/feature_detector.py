@@ -27,7 +27,8 @@ from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.tools.changepoints import ChangepointDetector
 from autots.tools.anomaly_utils import anomaly_new_params
 from autots.tools.plotting import plot_feature_panels, HAS_MATPLOTLIB
-from autots.tools.seasonal import date_part
+from autots.tools.seasonal import date_part, build_adaptive_fourier_features
+from autots.tools.fft import FFT
 from autots.datasets.synthetic import SyntheticDailyGenerator
 
 try:
@@ -152,7 +153,7 @@ class TimeSeriesFeatureDetector:
                 'method': 'rolling_zscore',
                 'method_params': {
                     'distribution': 'norm',
-                    'alpha': 0.05,
+                    'alpha': 0.001,
                     'rolling_periods': 200,
                     'center': False,
                 },
@@ -256,6 +257,8 @@ class TimeSeriesFeatureDetector:
         self.seasonality_components = {}
         self.seasonality_strength = {}
         self.series_seasonality_profiles = {}
+        self.detected_seasonal_periods = None
+        self._seasonality_changepoints = {}
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
         self.series_noise_levels = {}
@@ -265,6 +268,12 @@ class TimeSeriesFeatureDetector:
         self.reconstructed_components = None
         self.reconstruction_error = None
         self.reconstruction_rmse = None
+        self.optimized_detector_params = None
+        self.synthetic_tuning_results = None
+        self.synthetic_scale_multiplier = None
+        self.tuned_synthetic_generator = None
+        self.detector_optimization_summary = None
+        self.detector_optimizer = None
 
     def _sanitize_holiday_params(self, holiday_params):
         """Return holiday detector parameters filtered to supported keys."""
@@ -573,6 +582,7 @@ class TimeSeriesFeatureDetector:
         self.seasonality_components = {}
         self.seasonality_strength = {}
         self.series_seasonality_profiles = {}
+        self._seasonality_changepoints = {}
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
         self.series_noise_levels = {}
@@ -606,6 +616,14 @@ class TimeSeriesFeatureDetector:
         self._holiday_dates_temp = holiday_dates
         self._holiday_regressors_temp = holiday_regressors
 
+        # Pass known holiday dates to anomaly detector so holiday spikes are not
+        # double-counted as anomalies and holiday effects simultaneously.
+        combined_holiday_dates = self._flatten_holiday_dates(holiday_dates)
+        self.anomaly_params.pop('holiday_dates', None)
+        if combined_holiday_dates:
+            self.anomaly_params['holiday_dates'] = combined_holiday_dates
+            self.anomaly_params.setdefault('holiday_proximity_days', 2)
+
         # Anomaly detection
         residual_without_anomalies, anomaly_records = self._detect_anomalies(
             rough_residual
@@ -613,6 +631,17 @@ class TimeSeriesFeatureDetector:
         self._anomaly_records_temp = anomaly_records
 
         return rough_residual, rough_seasonality
+
+    @staticmethod
+    def _flatten_holiday_dates(holiday_dates_dict):
+        """Flatten per-series holiday date lists into a single Timestamp set."""
+        all_dates = set()
+        if not holiday_dates_dict:
+            return all_dates
+        for dates in holiday_dates_dict.values():
+            for date in dates:
+                all_dates.add(pd.Timestamp(date))
+        return all_dates
 
     def _final_seasonality_fit(self, df_work, rough_residual, rough_seasonality):
         """
@@ -836,6 +865,10 @@ class TimeSeriesFeatureDetector:
         validated_level_shifts = self._rescale_level_shifts(validated_level_shifts)
         slope_info = self._rescale_slope_info(slope_info)
         anomaly_records = self._rescale_anomalies(self._anomaly_records_temp)
+        seasonality_changepoints = self._detect_seasonality_changepoints(
+            self.df_original, seasonality_component
+        )
+        self._seasonality_changepoints = seasonality_changepoints
 
         mark_shared = self.detection_mode == 'univariate'
 
@@ -924,7 +957,9 @@ class TimeSeriesFeatureDetector:
                     'holiday_splash_impacts': self.holiday_splash_impacts.get(
                         series_name, {}
                     ),
-                    'seasonality_changepoints': [],
+                    'seasonality_changepoints': seasonality_changepoints.get(
+                        series_name, []
+                    ),
                     'noise_changepoints': [],
                 },
                 metadata,
@@ -1137,13 +1172,18 @@ class TimeSeriesFeatureDetector:
         except KeyError:
             return 'point_outlier'
 
-        # Get baseline (median before anomaly)
-        lookback = 14
+        # Get baseline from a robust pre-anomaly window.
+        lookback = 21
         start_idx = max(0, idx - lookback)
-        baseline_window = series.iloc[start_idx:idx]
-        if baseline_window.empty:
-            return 'point_outlier'
+        gap = 3
+        end_baseline = max(0, idx - gap)
+        baseline_window = series.iloc[start_idx:end_baseline]
+        if baseline_window.empty or len(baseline_window) < 3:
+            baseline_window = series.iloc[max(0, idx - 7) : idx]
+            if baseline_window.empty:
+                return 'point_outlier'
         baseline = float(np.nanmedian(baseline_window))
+        baseline_std = float(np.nanstd(baseline_window)) or 1e-9
 
         # Get anomaly magnitude
         anomaly_value = float(series.iloc[idx])
@@ -1152,45 +1192,60 @@ class TimeSeriesFeatureDetector:
             return 'point_outlier'
 
         # Check post-anomaly pattern
-        lookahead = 7
+        lookahead = 10
         end_idx = min(len(series), idx + lookahead + 1)
         post_window = series.iloc[idx + 1 : end_idx]
 
         if post_window.empty or len(post_window) < 2:
             return 'point_outlier'
 
-        # Analyze post-anomaly behavior
+        # Analyze post-anomaly behavior relative to baseline.
         post_values = post_window.to_numpy(dtype=float)
         post_deviations = np.abs(post_values - baseline)
 
-        # Check for noisy burst (multiple consecutive outliers)
-        n_outliers = np.sum(post_deviations > anomaly_mag * 0.5)
-        if n_outliers >= 2:
+        # Check for noisy burst.
+        n_outliers = np.sum(post_deviations > max(anomaly_mag * 0.4, baseline_std * 2.5))
+        if n_outliers >= 3:
             return 'noisy_burst'
 
         # Check for decay patterns
         if len(post_deviations) >= 3:
-            # Linear decay: check if deviations decrease linearly
             first_dev = post_deviations[0]
+            mid_idx = len(post_deviations) // 2
+            mid_dev = post_deviations[mid_idx]
             last_dev = post_deviations[-1]
 
-            # If first deviation is significant and it decreases
-            if first_dev > anomaly_mag * 0.3:
-                # Check for exponential decay (rapid drop)
-                mid_dev = post_deviations[len(post_deviations) // 2]
-                if mid_dev < first_dev * 0.5 and last_dev < mid_dev * 0.5:
+            if first_dev > anomaly_mag * 0.25:
+                # Exponential/impulse decay.
+                if mid_dev < first_dev * 0.4 and last_dev < first_dev * 0.15:
                     return 'impulse_decay'
 
-                # Check for linear decay (gradual drop)
-                if last_dev < first_dev * 0.5:
-                    return 'linear_decay'
+                # Gradual linear-ish decay.
+                if last_dev < first_dev * 0.4:
+                    diffs = np.diff(post_deviations[: min(6, len(post_deviations))])
+                    if np.sum(diffs < 0) >= len(diffs) * 0.6:
+                        return 'linear_decay'
 
-                # Check for transient change (sustained then return)
-                if (
-                    np.mean(post_deviations[:3]) > anomaly_mag * 0.3
-                    and last_dev < anomaly_mag * 0.2
-                ):
+                # Sustained transient shift that returns.
+                sustained_count = np.sum(post_deviations[:4] > anomaly_mag * 0.25)
+                if sustained_count >= 3 and last_dev < anomaly_mag * 0.15:
                     return 'transient_change'
+
+        # Slope reversion: sharp onset then slower reversion over a longer horizon.
+        if len(post_deviations) >= 5:
+            extended_end = min(len(series), idx + 31)
+            extended_window = series.iloc[idx + 1 : extended_end]
+            if len(extended_window) >= 10:
+                extended_devs = np.abs(extended_window.to_numpy(dtype=float) - baseline)
+                if (
+                    extended_devs[0] > anomaly_mag * 0.3
+                    and extended_devs[-1] < extended_devs[0] * 0.5
+                ):
+                    decay_slope = np.polyfit(
+                        np.arange(len(extended_devs)), extended_devs, 1
+                    )[0]
+                    if decay_slope < 0 and abs(decay_slope) < anomaly_mag * 0.05:
+                        return 'slope_reversion'
 
         # Default: point outlier
         return 'point_outlier'
@@ -1208,7 +1263,40 @@ class TimeSeriesFeatureDetector:
         if holiday_regressors is not None and not holiday_regressors.empty:
             regressor = holiday_regressors.reindex(df.index).fillna(0.0)
 
-        model = DatepartRegressionTransformer(**self.seasonality_params)
+        seasonality_params = copy.deepcopy(self.seasonality_params)
+
+        # Adaptive Fourier mode: detect dominant periods with FFT, then augment
+        # regressors with period-specific Fourier features.
+        self.detected_seasonal_periods = None
+        if seasonality_params.get('datepart_method') == 'adaptive_fourier':
+            try:
+                fft_model = FFT(n_harm=None, detrend='linear')
+                fft_input = df.dropna(how='all').to_numpy(dtype=float)
+                nan_mask = np.isfinite(fft_input).all(axis=1)
+                if nan_mask.sum() >= 14:
+                    fft_model.fit(fft_input[nan_mask])
+                    detected = fft_model.detect_dominant_periods(
+                        min_period=3, max_periods=5, power_threshold=0.1
+                    )
+                else:
+                    detected = []
+
+                if len(detected) >= 2:
+                    self.detected_seasonal_periods = detected
+                    adaptive_features = build_adaptive_fourier_features(
+                        df.index, detected, max_order=12
+                    )
+                    if regressor is not None:
+                        regressor = pd.concat([regressor, adaptive_features], axis=1)
+                    else:
+                        regressor = adaptive_features
+                    seasonality_params['datepart_method'] = 'simple_3'
+                else:
+                    seasonality_params['datepart_method'] = 'common_fourier'
+            except Exception:
+                seasonality_params['datepart_method'] = 'common_fourier'
+
+        model = DatepartRegressionTransformer(**seasonality_params)
         regressor_full = regressor
         df_fit = df.dropna(how='all')
         if df_fit.empty:
@@ -1303,7 +1391,7 @@ class TimeSeriesFeatureDetector:
 
     def _estimate_seasonality_profile(self, seasonal_series, series_scale):
         """
-        Estimate relative strength of weekly and yearly seasonal signatures.
+        Estimate relative strength of weekly, yearly, and detected periodic signatures.
 
         Parameters
         ----------
@@ -1315,7 +1403,8 @@ class TimeSeriesFeatureDetector:
         Returns
         -------
         dict
-            Dictionary containing combined, weekly, and yearly strength estimates.
+            Dictionary containing combined, weekly, yearly, and optional
+            `period_{n}` strength estimates when adaptive Fourier periods are available.
         """
         if series_scale is None or not np.isfinite(series_scale) or series_scale == 0:
             series_scale = 1.0
@@ -1345,11 +1434,61 @@ class TimeSeriesFeatureDetector:
             if len(yearly_groups) > 1:
                 yearly_strength = float(np.nanstd(yearly_groups)) / series_scale
 
-        return {
+        profile = {
             'combined': combined_strength,
             'weekly': weekly_strength,
             'yearly': yearly_strength,
         }
+
+        if self.detected_seasonal_periods:
+            total_var = float(np.nanvar(valid))
+            for period, _ in self.detected_seasonal_periods:
+                period_int = int(round(period))
+                if period_int < 2 or period_int >= len(valid):
+                    continue
+                groups = valid.groupby(np.arange(len(valid)) % period_int).mean()
+                if len(groups) > 1:
+                    period_var = float(np.nanvar(groups))
+                    period_strength = period_var / (total_var + 1e-12)
+                    profile[f'period_{period_int}'] = min(1.0, period_strength)
+
+        return profile
+
+    def _detect_seasonality_changepoints(self, df, seasonal_component):
+        """Detect dates where seasonality strength changes materially over time."""
+        n = len(df)
+        window_size = min(365, max(60, n // 3))
+        stride = max(1, window_size // 2)
+
+        changepoints = {}
+        for col in df.columns:
+            strengths = []
+            dates = []
+            for start in range(0, n - window_size, stride):
+                end = start + window_size
+                window_df = df.iloc[start:end]
+                window_seasonal = seasonal_component.iloc[start:end]
+                window_residual = window_df - window_seasonal
+                strength = self._compute_seasonality_strength(
+                    window_df[[col]], window_residual[[col]], window_seasonal[[col]]
+                )
+                strengths.append(strength.get(col, 0.0))
+                dates.append(df.index[start + window_size // 2])
+
+            col_cps = []
+            for i in range(1, len(strengths)):
+                prev_strength = strengths[i - 1]
+                curr_strength = strengths[i]
+                rel_change = abs(curr_strength - prev_strength) / (prev_strength + 1e-9)
+                if rel_change > 0.3:
+                    col_cps.append(
+                        (
+                            dates[i],
+                            f"strength_change_{prev_strength:.2f}_to_{curr_strength:.2f}",
+                        )
+                    )
+            changepoints[col] = col_cps
+        return changepoints
 
     def _solve_holiday_coefficients(self, regressor_df, holiday_component_df):
         coefficients = {col: {} for col in holiday_component_df.columns}
@@ -1483,6 +1622,14 @@ class TimeSeriesFeatureDetector:
 
         for col in residual_df.columns:
             series = residual_df[col]
+            series_std = float(series.std()) or 1e-9
+            series_iqr = (
+                float(series.quantile(0.75) - series.quantile(0.25)) or 1e-9
+            )
+            adaptive_abs_thresh = min(abs_thresh, series_std * 0.3)
+            adaptive_rel_thresh = min(
+                rel_thresh, 0.05 + series_iqr / (abs(series.median()) + 1e-9) * 0.5
+            )
             entries = []
             for candidate in candidates.get(col, []):
                 date = candidate['date']
@@ -1509,7 +1656,10 @@ class TimeSeriesFeatureDetector:
                 abs_change = abs(change)
                 rel_change = abs_change / max(abs(before), 1e-9)
 
-                if abs_change >= abs_thresh or rel_change >= rel_thresh:
+                if (
+                    abs_change >= adaptive_abs_thresh
+                    or rel_change >= adaptive_rel_thresh
+                ):
                     entries.append(
                         {
                             'date': date,
@@ -1960,7 +2110,9 @@ class TimeSeriesFeatureDetector:
                 'holiday_splash_impacts': copy.deepcopy(
                     self.holiday_splash_impacts.get(series_name, {})
                 ),
-                'seasonality_changepoints': [],
+                'seasonality_changepoints': copy.deepcopy(
+                    getattr(self, '_seasonality_changepoints', {}).get(series_name, [])
+                ),
                 'noise_changepoints': copy.deepcopy(
                     self.noise_changepoints.get(series_name, [])
                 ),
@@ -2015,7 +2167,12 @@ class TimeSeriesFeatureDetector:
             name: copy.deepcopy(self.holiday_splash_impacts.get(name, {}))
             for name in series_names
         }
-        seasonality_changepoints = {name: [] for name in series_names}
+        seasonality_changepoints = {
+            name: copy.deepcopy(
+                getattr(self, '_seasonality_changepoints', {}).get(name, [])
+            )
+            for name in series_names
+        }
         noise_changepoints = {
             name: copy.deepcopy(self.noise_changepoints.get(name, []))
             for name in series_names
@@ -2362,20 +2519,31 @@ class TimeSeriesFeatureDetector:
                         for ls in filtered_ls
                     ]
 
-            # Anomalies (list of [date, magnitude, anomaly_type, baseline, residual])
+            # Anomalies (typically [date, magnitude, anomaly_type, duration, ...]).
             anomalies = self.anomalies.get(col, [])
             if anomalies:
                 filtered_an = _filter_by_date(anomalies)
                 if filtered_an:
-                    series_features['anomalies'] = [
-                        {
-                            'date': pd.to_datetime(an[0]).isoformat(),
-                            'magnitude': float(an[1]),
-                            'type': an[2],
-                            'baseline': float(an[3]) if len(an) > 3 else None,
-                        }
-                        for an in filtered_an
-                    ]
+                    anomaly_entries = []
+                    for anomaly in filtered_an:
+                        if isinstance(anomaly, dict):
+                            entry = {
+                                'date': pd.to_datetime(anomaly.get('date')).isoformat(),
+                                'magnitude': float(anomaly.get('magnitude', 0.0)),
+                                'type': anomaly.get('type', 'point_outlier'),
+                                'duration': anomaly.get('duration'),
+                            }
+                            if 'baseline' in anomaly:
+                                entry['baseline'] = anomaly.get('baseline')
+                        else:
+                            entry = {
+                                'date': pd.to_datetime(anomaly[0]).isoformat(),
+                                'magnitude': float(anomaly[1]),
+                                'type': anomaly[2] if len(anomaly) > 2 else 'point_outlier',
+                                'duration': int(anomaly[3]) if len(anomaly) > 3 else None,
+                            }
+                        anomaly_entries.append(entry)
+                    series_features['anomalies'] = anomaly_entries
 
             # Holiday dates
             holiday_dates = self.holiday_dates.get(col, [])
@@ -2412,6 +2580,29 @@ class TimeSeriesFeatureDetector:
                         pd.to_datetime(k).isoformat(): float(v)
                         for k, v in filtered_hi.items()
                     }
+
+            # Seasonality changepoints.
+            seasonality_cps = getattr(self, '_seasonality_changepoints', {}).get(col, [])
+            if seasonality_cps:
+                filtered_scp = _filter_by_date(seasonality_cps)
+                if filtered_scp:
+                    cp_entries = []
+                    for cp in filtered_scp:
+                        if isinstance(cp, dict):
+                            cp_entries.append(
+                                {
+                                    'date': pd.to_datetime(cp.get('date')).isoformat(),
+                                    'description': cp.get('description', 'seasonality_change'),
+                                }
+                            )
+                        else:
+                            cp_entries.append(
+                                {
+                                    'date': pd.to_datetime(cp[0]).isoformat(),
+                                    'description': cp[1] if len(cp) > 1 else 'seasonality_change',
+                                }
+                            )
+                    series_features['seasonality_changepoints'] = cp_entries
 
             # Seasonality strength
             if col in self.seasonality_strength:
@@ -2552,7 +2743,9 @@ class TimeSeriesFeatureDetector:
             'anomalies': self.anomalies.get(series_name, []),
             'holiday_impacts': self.holiday_impacts.get(series_name, {}),
             'holiday_dates': self.holiday_dates.get(series_name, []),
-            'seasonality_changepoints': [],
+            'seasonality_changepoints': getattr(
+                self, '_seasonality_changepoints', {}
+            ).get(series_name, []),
             'noise_changepoints': self.noise_changepoints.get(series_name, []),
             'series_scale': 1.0,
             'noise_to_signal_ratio': self.noise_to_signal_ratios.get(series_name, None),
@@ -2586,6 +2779,8 @@ class TimeSeriesFeatureDetector:
         seasonality_params = DatepartRegressionTransformer.get_new_params(
             method=method, holiday_countries_used=False
         )
+        if random.random() < 0.15:
+            seasonality_params['datepart_method'] = 'adaptive_fourier'
 
         # Holiday params
         holiday_params = HolidayDetector.get_new_params(method=method)
@@ -2599,6 +2794,13 @@ class TimeSeriesFeatureDetector:
             'method_params': method_params,
             'fillna': 'ffill',
         }
+        if random.random() < 0.2:
+            anomaly_params['two_pass'] = True
+            anomaly_params['liberal_alpha_multiplier'] = random.choice(
+                [5.0, 10.0, 20.0]
+            )
+        if random.random() < 0.3:
+            anomaly_params['holiday_proximity_days'] = random.choice([1, 2, 3, 5])
 
         # Changepoint params
         changepoint_params = ChangepointDetector.get_new_params(method=method)
@@ -2624,6 +2826,163 @@ class TimeSeriesFeatureDetector:
             'smoothing_window': random.choice([None, 3, 5, 7]),
         }
 
+    def _apply_detector_params(self, params):
+        """Apply detector hyperparameters to this instance."""
+        if not isinstance(params, dict):
+            raise ValueError("params must be a dict of detector parameters.")
+
+        if params.get('rough_seasonality_params') is not None:
+            self.rough_seasonality_params = copy.deepcopy(
+                params['rough_seasonality_params']
+            )
+        if params.get('seasonality_params') is not None:
+            self.seasonality_params = copy.deepcopy(params['seasonality_params'])
+
+        if params.get('holiday_params') is not None:
+            self.holiday_params = self._sanitize_holiday_params(
+                copy.deepcopy(params['holiday_params'])
+            )
+
+        if params.get('anomaly_params') is not None:
+            self.anomaly_params = copy.deepcopy(params['anomaly_params'])
+            self.anomaly_params['output'] = self.detection_mode
+
+        if params.get('changepoint_params') is not None:
+            self.changepoint_params = copy.deepcopy(params['changepoint_params'])
+            if (
+                'aggregate_method' not in self.changepoint_params
+                or self.changepoint_params['aggregate_method'] == 'auto'
+            ):
+                self.changepoint_params['aggregate_method'] = (
+                    'individual' if self.detection_mode == 'multivariate' else 'mean'
+                )
+
+        if params.get('level_shift_params') is not None:
+            self.level_shift_params = copy.deepcopy(params['level_shift_params'])
+            self.level_shift_params['output'] = self.detection_mode
+
+        if params.get('general_transformer_params') is not None:
+            self.general_transformer_params = copy.deepcopy(
+                params['general_transformer_params']
+            )
+
+        if 'standardize' in params:
+            self.standardize = bool(params['standardize'])
+        if 'smoothing_window' in params:
+            self.smoothing_window = params['smoothing_window']
+
+    def tune_with_synthetic(
+        self,
+        real_df,
+        n_synthetic_series=10,
+        n_tune_iterations=15,
+        n_detector_iterations=20,
+        tune_seed=42,
+        loss_params=None,
+        loss_weights=None,
+        synthetic_starting_params=None,
+        starting_params=None,
+        verbose=True,
+    ):
+        """
+        Tune synthetic data to a real dataset, optimize detector params, and fit self.
+
+        After completion, this instance is fitted on ``real_df`` with the optimized
+        detector parameters and stores optimization artifacts on the instance.
+        """
+        if not isinstance(real_df, pd.DataFrame):
+            raise ValueError("real_df must be a pandas DataFrame.")
+        if not isinstance(real_df.index, pd.DatetimeIndex):
+            raise ValueError("real_df must use a DatetimeIndex.")
+        if real_df.empty:
+            raise ValueError("real_df must not be empty.")
+
+        if verbose:
+            print("=" * 80)
+            print("TUNE WITH SYNTHETIC: real data -> synthetic labels -> detector tuning")
+            print("=" * 80)
+
+        if verbose:
+            print("\n[Step 1/4] Tuning synthetic generator to match real data...")
+        generator = SyntheticDailyGenerator(
+            start_date=real_df.index[0],
+            n_days=len(real_df),
+            n_series=n_synthetic_series,
+            random_seed=tune_seed,
+        )
+        tuning_results = generator.tune_to_data(
+            real_df,
+            n_iterations=n_tune_iterations,
+            verbose=verbose,
+            starting_params=synthetic_starting_params,
+        )
+
+        if verbose:
+            print("\n[Step 2/4] Generating labeled synthetic data with tuned params...")
+        best_synth_params = tuning_results['best_params']
+        scale_multiplier = tuning_results.get('scale_multiplier')
+        target_weekly = tuning_results.get('target_stats', {}).get('weekly_profile')
+        target_yearly = tuning_results.get('target_stats', {}).get('yearly_fourier')
+        tuned_generator = SyntheticDailyGenerator(
+            start_date=real_df.index[0],
+            n_days=len(real_df),
+            n_series=n_synthetic_series,
+            random_seed=tune_seed,
+            series_type_override='standard',
+            weekly_profile_target=target_weekly,
+            yearly_fourier_target=target_yearly,
+            **best_synth_params,
+        )
+
+        if verbose:
+            total_labels = sum(
+                len(tuned_generator.get_all_labels(col).get('trend_changepoints', []))
+                + len(tuned_generator.get_all_labels(col).get('level_shifts', []))
+                + len(tuned_generator.get_all_labels(col).get('anomalies', []))
+                for col in tuned_generator.data.columns
+            )
+            print(
+                f"  Generated {n_synthetic_series} series with {total_labels} labeled events"
+            )
+
+        if verbose:
+            print("\n[Step 3/4] Optimizing feature detector on labeled synthetic data...")
+        loss_kwargs = copy.deepcopy(loss_params) if loss_params else {}
+        if loss_weights is not None:
+            loss_kwargs['weights'] = copy.deepcopy(loss_weights)
+        loss_calc = FeatureDetectionLoss(**loss_kwargs)
+        optimizer = FeatureDetectionOptimizer(
+            synthetic_generator=tuned_generator,
+            loss_calculator=loss_calc,
+            n_iterations=n_detector_iterations,
+            random_seed=tune_seed,
+            starting_params=starting_params,
+        )
+        best_detector_params = optimizer.optimize()
+        if best_detector_params is None:
+            raise RuntimeError("Feature detector optimization did not produce parameters.")
+
+        if verbose:
+            print("\n[Step 4/4] Applying optimized parameters and fitting on real data...")
+        self._apply_detector_params(best_detector_params)
+        self.fit(real_df)
+
+        optimization_summary = optimizer.get_optimization_summary()
+        self.optimized_detector_params = copy.deepcopy(best_detector_params)
+        self.synthetic_tuning_results = {
+            'best_detector_params': copy.deepcopy(best_detector_params),
+            'baseline_loss': optimizer.baseline_loss,
+            'tuned_generator': tuned_generator,
+            'scale_multiplier': scale_multiplier,
+            'tuning_results': tuning_results,
+            'optimization_summary': optimization_summary,
+        }
+        self.synthetic_scale_multiplier = scale_multiplier
+        self.tuned_synthetic_generator = tuned_generator
+        self.detector_optimization_summary = optimization_summary
+        self.detector_optimizer = optimizer
+        return self
+
 
 class FeatureDetectionLoss:
     """
@@ -2642,7 +3001,7 @@ class FeatureDetectionLoss:
 
     DEFAULT_WEIGHTS = {
         'trend_loss': 1.0,
-        'level_shift_loss': 0.9,
+        'level_shift_loss': 1.3,
         'anomaly_loss': 1.3,  # Increased from 1.1 - prioritize anomaly detection
         'holiday_event_loss': 1.2,  # Increased from 0.8 - penalize false holiday detections more
         'holiday_impact_loss': 0.9,  # Increased from 0.6 - ensure holiday impacts are strong enough
@@ -2659,7 +3018,7 @@ class FeatureDetectionLoss:
     def __init__(
         self,
         changepoint_tolerance_days=7,
-        level_shift_tolerance_days=3,
+        level_shift_tolerance_days=7,
         anomaly_tolerance_days=1,
         holiday_tolerance_days=1,
         seasonality_window=14,
@@ -3016,104 +3375,97 @@ class FeatureDetectionLoss:
         return {name: comps for name, comps in component_container.items()}
 
     def _trend_loss(self, detected_cp, true_cp, detected_components, true_components):
+        if not true_cp and not detected_cp:
+            return 0.0
         if not true_cp:
             return 0.25 * len(detected_cp)
 
         detected_entries = [self._parse_trend_event(event) for event in detected_cp]
         true_entries = [self._parse_trend_event(event) for event in true_cp]
-        unmatched_detected = set(range(len(detected_entries)))
+        n_true = len(true_entries)
+        n_detected = len(detected_entries)
+        unmatched_detected = set(range(n_detected))
+
+        positive_true_magnitudes = [
+            entry[3] for entry in true_entries if np.isfinite(entry[3]) and entry[3] > 0
+        ]
+        default_magnitude_scale = (
+            float(np.median(positive_true_magnitudes))
+            if positive_true_magnitudes
+            else 0.0
+        )
+
+        def _subtlety_weight(prior_slope, post_slope, magnitude):
+            sign_change = (prior_slope * post_slope) < 0
+            if sign_change:
+                return 1.0
+            if magnitude > 0:
+                scale = default_magnitude_scale if default_magnitude_scale > 0 else magnitude
+                relative = magnitude / (scale + 1e-9)
+                return 0.2 + 0.7 * np.tanh(relative)
+            return 0.2
 
         sigma_days = max(self.changepoint_tolerance_days, 1) / 1.5
-        true_magnitudes = [entry[3] for entry in true_entries if np.isfinite(entry[3])]
-        avg_true_magnitude = np.mean(true_magnitudes) if true_magnitudes else 0.0
-        magnitude_floor = max(0.05, avg_true_magnitude * 0.25)
-
+        matched_true = 0
         loss = 0.0
-        score_threshold = 0.15  # ~9 days of tolerance, higher for tighter tolerance
 
         for true_date, true_prior, true_post, true_mag in true_entries:
+            importance = _subtlety_weight(true_prior, true_post, true_mag)
             best_idx = None
-            best_score = -np.inf
-            best_metrics = None
-
+            best_dist = None
             for idx in unmatched_detected:
-                det_date, det_prior, det_post, det_mag = detected_entries[idx]
-                dist_days = abs((det_date - true_date).days)
-
-                distance_score = np.exp(-0.5 * (dist_days / (sigma_days + 1e-9)) ** 2)
-
-                slope_change_true = true_post - true_prior
-                slope_change_detected = det_post - det_prior
-                mag_denom = max(abs(true_mag), magnitude_floor, 1e-3)
-                slope_denom = max(abs(slope_change_true), magnitude_floor, 1e-3)
-
-                magnitude_score = np.exp(
-                    -0.5 * (abs(det_mag - true_mag) / mag_denom) ** 2
-                )
-                slope_score = np.exp(
-                    -0.5
-                    * (abs(slope_change_detected - slope_change_true) / slope_denom)
-                    ** 2
-                )
-
-                match_score = (
-                    0.5 * distance_score + 0.3 * magnitude_score + 0.2 * slope_score
-                )
-
-                if match_score > best_score:
-                    best_score = match_score
+                det_date = detected_entries[idx][0]
+                dist = abs((det_date - true_date).days)
+                if best_dist is None or dist < best_dist:
+                    best_dist = dist
                     best_idx = idx
-                    best_metrics = (
-                        distance_score,
-                        magnitude_score,
-                        slope_score,
-                        dist_days,
-                    )
 
             if (
                 best_idx is not None
-                and best_metrics is not None
-                and best_score >= score_threshold
+                and best_dist is not None
+                and best_dist <= self.changepoint_tolerance_days
             ):
-                distance_score, magnitude_score, slope_score, dist_days = best_metrics
+                _, det_prior, det_post, _ = detected_entries[best_idx]
                 unmatched_detected.discard(best_idx)
+                matched_true += 1
 
-                combined_penalty = (
-                    0.5 * (1.0 - distance_score)
-                    + 0.3 * (1.0 - magnitude_score)
-                    + 0.2 * (1.0 - slope_score)
+                distance_score = np.exp(-0.5 * (best_dist / (sigma_days + 1e-9)) ** 2)
+                distance_penalty = (1.0 - distance_score) * 0.5
+
+                slope_change_true = true_post - true_prior
+                slope_change_detected = det_post - det_prior
+                slope_denom = max(abs(slope_change_true), 0.05, 1e-3)
+                slope_error = abs(slope_change_detected - slope_change_true) / slope_denom
+                slope_penalty = min(slope_error, 2.0) * 0.3
+
+                sign_penalty = (
+                    0.2 if (slope_change_true * slope_change_detected) < 0 else 0.0
                 )
-
-                if dist_days > self.changepoint_tolerance_days:
-                    overshoot = dist_days - self.changepoint_tolerance_days
-                    combined_penalty += (
-                        min(overshoot / (self.changepoint_tolerance_days + 1e-6), 1.5)
-                        * 0.3
-                    )
-
-                loss += combined_penalty * (1.0 + min(abs(true_mag), 2.0))
+                loss += (distance_penalty + slope_penalty + sign_penalty) * importance
             else:
-                loss += 1.2 + abs(true_mag)
+                loss += 1.5 * importance
 
-        if true_entries:
-            for idx in unmatched_detected:
-                det_date, _, _, det_mag = detected_entries[idx]
-                nearest_distance = min(
-                    abs((det_date - true_date).days)
-                    for true_date, _, _, _ in true_entries
-                )
-                proximity_score = np.exp(
-                    -0.5 * (nearest_distance / (sigma_days + 1e-9)) ** 2
-                )
-                loss += 0.15 + 0.25 * (1.0 - proximity_score) + 0.05 * min(det_mag, 2.0)
-        else:
-            loss += 0.25 * len(unmatched_detected)
+        false_positives = len(unmatched_detected)
+        loss += 0.2 * false_positives
+
+        count_diff = abs(n_detected - n_true)
+        loss += min(count_diff, n_true + 1) * 0.4
+
+        recall = matched_true / (n_true + 1e-9)
+        precision = (
+            (n_detected - false_positives) / (n_detected + 1e-9)
+            if n_detected
+            else 1.0
+        )
+        f_beta = (1.0 + 1.5**2) * (precision * recall) / (
+            1.5**2 * precision + recall + 1e-9
+        )
+        loss += (1.0 - f_beta) * 2.0
 
         # Apply trend component or complexity penalty based on mode
         trend_detected_series = detected_components.get('trend')
 
         if self.trend_component_penalty == 'component':
-            # Component mode: use RMSE when both detected and true components available
             if (
                 trend_detected_series is not None
                 and 'trend' in true_components
@@ -3124,7 +3476,6 @@ class FeatureDetectionLoss:
                     true_components['trend'],
                 )
         elif self.trend_component_penalty == 'complexity':
-            # Complexity mode: penalize wiggly trends when weight > 0
             if trend_detected_series is not None and self.trend_complexity_weight > 0:
                 complexity_penalty = self._trend_complexity_penalty(
                     trend_detected_series
@@ -3173,6 +3524,8 @@ class FeatureDetectionLoss:
         return min(max(penalty, 0.0), 2.5)
 
     def _level_shift_loss(self, detected_ls, true_ls, detected_cp):
+        if not true_ls and not detected_ls:
+            return 0.0
         if not true_ls:
             return 0.2 * len(detected_ls)
         detected_entries = [
@@ -3180,12 +3533,22 @@ class FeatureDetectionLoss:
         ]
         true_entries = [self._parse_level_shift_event(event) for event in true_ls]
         changepoint_dates = [self._parse_trend_event(event)[0] for event in detected_cp]
-        unmatched_detected = set(range(len(detected_entries)))
+        n_true = len(true_entries)
+        n_detected = len(detected_entries)
+        unmatched_detected = set(range(n_detected))
+        matched_true = 0
         loss = 0.0
+
+        magnitude_scale = max([abs(mag) for _, mag in true_entries] or [1.0])
+
         for true_date, true_mag in true_entries:
+            relative_mag = abs(true_mag) / (magnitude_scale + 1e-9)
+            importance = 0.3 + 0.7 * min(relative_mag, 1.0)
+
             best_idx = None
             best_dist = None
-            for idx, (det_date, det_mag) in enumerate(detected_entries):
+            for idx in unmatched_detected:
+                det_date, _ = detected_entries[idx]
                 dist = abs((det_date - true_date).days)
                 if best_dist is None or dist < best_dist:
                     best_dist = dist
@@ -3195,32 +3558,50 @@ class FeatureDetectionLoss:
                 and best_dist is not None
                 and best_dist <= self.level_shift_tolerance_days
             ):
-                det_date, det_mag = detected_entries[best_idx]
+                _, det_mag = detected_entries[best_idx]
                 distance_penalty = best_dist / (self.level_shift_tolerance_days + 1e-9)
                 magnitude_penalty = abs(det_mag - true_mag) / (abs(true_mag) + 1e-6)
-                loss += 0.5 * distance_penalty + 0.5 * magnitude_penalty
+                loss += (
+                    0.5 * distance_penalty + 0.5 * min(magnitude_penalty, 2.0)
+                ) * importance
                 unmatched_detected.discard(best_idx)
+                matched_true += 1
             else:
                 prox_cp = any(
                     abs((cp_date - true_date).days) <= self.changepoint_tolerance_days
                     for cp_date in changepoint_dates
                 )
                 if prox_cp:
-                    loss += 0.5
+                    loss += 0.5 * importance
                 else:
-                    loss += 0.8 + abs(true_mag)
-        loss += 0.15 * len(unmatched_detected)
+                    loss += 1.2 * importance
+
+        false_positives = len(unmatched_detected)
+        loss += 0.15 * false_positives
+
+        count_diff = abs(n_detected - n_true)
+        loss += min(count_diff, n_true + 1) * 0.3
+
+        recall = matched_true / (n_true + 1e-9)
+        precision = (
+            (n_detected - false_positives) / (n_detected + 1e-9)
+            if n_detected
+            else 1.0
+        )
+        f_beta = (1.0 + 1.5**2) * (precision * recall) / (
+            1.5**2 * precision + recall + 1e-9
+        )
+        loss += (1.0 - f_beta) * 1.5
         return loss
 
     def _anomaly_loss(self, detected_anom, true_anom):
         if not true_anom:
-            return 0.15 * len(
-                detected_anom
-            )  # Slightly increased penalty for false positives when no true anomalies
+            return 0.3 * len(detected_anom)
         detected_entries = [self._parse_anomaly_event(event) for event in detected_anom]
         true_entries = [self._parse_anomaly_event(event) for event in true_anom]
         used_detected = set()
         loss = 0.0
+        magnitude_scale = max([abs(mag) for _, mag, _, _ in true_entries] or [1.0])
         for true_event in true_entries:
             true_date, true_mag, true_type, true_duration = true_event
             best_idx = None
@@ -3246,12 +3627,21 @@ class FeatureDetectionLoss:
                 loss += 0.5 * mag_pen + 0.3 * type_pen + 0.2 * min(duration_pen, 2.0)
                 used_detected.add(best_idx)
             else:
-                # Increased penalty for missing anomalies - encourages detection
-                loss += 1.5 if true_type in {'point_outlier', 'spike'} else 0.9
+                relative_mag = abs(true_mag) / (magnitude_scale + 1e-9)
+                if relative_mag > 0.5:
+                    miss_penalty = (
+                        1.5 if true_type in {'point_outlier', 'spike'} else 1.2
+                    )
+                elif relative_mag > 0.2:
+                    miss_penalty = (
+                        0.6 if true_type in {'point_outlier', 'spike'} else 0.4
+                    )
+                else:
+                    miss_penalty = 0.15
+                loss += miss_penalty
         false_positives = len(detected_entries) - len(used_detected)
         if false_positives > 0:
-            # Reduced false positive penalty - softer on wrong predictions
-            fp_penalty = (0.04 * false_positives) + (0.08 * np.sqrt(false_positives))
+            fp_penalty = (0.15 * false_positives) + (0.1 * np.sqrt(false_positives))
             loss += fp_penalty
         return loss
 
@@ -3350,8 +3740,41 @@ class FeatureDetectionLoss:
             return 0.0
         detected_strengths = detected_strengths or {}
         loss = 0.0
+        n_items = 0
         for key, true_value in true_strengths.items():
             det_value = detected_strengths.get(key)
+            if det_value is None and isinstance(key, str) and key.startswith('period_'):
+                try:
+                    true_period = int(key.split('_')[1])
+                except (IndexError, ValueError):
+                    true_period = None
+                if true_period is not None:
+                    best_match_penalty = None
+                    for det_key, det_val in detected_strengths.items():
+                        if not (isinstance(det_key, str) and det_key.startswith('period_')):
+                            continue
+                        try:
+                            det_period = int(det_key.split('_')[1])
+                        except (IndexError, ValueError):
+                            continue
+                        period_diff = abs(true_period - det_period)
+                        if period_diff <= max(1, true_period * 0.05):
+                            val_penalty = abs(det_val - true_value) / (
+                                abs(true_value) + 1e-6
+                            )
+                            proximity_penalty = (
+                                period_diff / (true_period + 1e-6)
+                            ) * 0.1
+                            total_penalty = min(val_penalty + proximity_penalty, 2.0)
+                            if (
+                                best_match_penalty is None
+                                or total_penalty < best_match_penalty
+                            ):
+                                best_match_penalty = total_penalty
+                    if best_match_penalty is not None:
+                        loss += best_match_penalty
+                        n_items += 1
+                        continue
             if det_value is None:
                 det_value = detected_strengths.get(
                     'combined', detected_strengths.get('seasonality_strength')
@@ -3361,7 +3784,8 @@ class FeatureDetectionLoss:
             else:
                 penalty = abs(det_value - true_value) / (abs(true_value) + 1e-6)
                 loss += min(penalty, 2.0)
-        return loss / max(1, len(true_strengths))
+            n_items += 1
+        return loss / max(1, n_items)
 
     def _seasonality_pattern_loss(self, detected_components, true_components):
         detected_series = detected_components.get('seasonality')
@@ -3987,6 +4411,7 @@ class FeatureDetectionOptimizer:
         loss_calculator=None,
         n_iterations=50,
         random_seed=42,
+        starting_params=None,
     ):
         """
         Parameters
@@ -3999,11 +4424,16 @@ class FeatureDetectionOptimizer:
             Number of random search iterations
         random_seed : int
             Random seed for reproducibility
+        starting_params : dict, optional
+            Optional detector parameter seed evaluated before random search.
         """
         self.synthetic_generator = synthetic_generator
         self.loss_calculator = loss_calculator or FeatureDetectionLoss()
         self.n_iterations = n_iterations
         self.random_seed = random_seed
+        if starting_params is not None and not isinstance(starting_params, dict):
+            raise ValueError("starting_params must be a dict or None.")
+        self.starting_params = copy.deepcopy(starting_params)
 
         self.best_params = None
         self.best_loss = float('inf')
@@ -4012,9 +4442,15 @@ class FeatureDetectionOptimizer:
         self.baseline_loss = None
         self.history_df = None
 
-    def optimize(self):
+    def optimize(self, starting_params=None):
         """
         Run genetic-style optimization to find best detector parameters.
+
+        Parameters
+        ----------
+        starting_params : dict, optional
+            Optional seed parameter configuration. Overrides constructor value
+            when provided.
 
         Returns
         -------
@@ -4027,7 +4463,10 @@ class FeatureDetectionOptimizer:
         self.optimization_history = []
         self.baseline_loss = None
 
-        return self._random_search()
+        seed = self.starting_params if starting_params is None else starting_params
+        if seed is not None and not isinstance(seed, dict):
+            raise ValueError("starting_params must be a dict or None.")
+        return self._random_search(starting_params=seed)
 
     def _default_detector_params(self):
         """Return a deep-copied set of default detector parameters."""
@@ -4048,7 +4487,7 @@ class FeatureDetectionOptimizer:
             'smoothing_window': detector.smoothing_window,
         }
 
-    def _random_search(self):
+    def _random_search(self, starting_params=None):
         """Genetic-style optimization with balanced scoring."""
         rng = random.Random(self.random_seed)
 
@@ -4077,6 +4516,33 @@ class FeatureDetectionOptimizer:
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
             self.baseline_loss = None
+
+        if starting_params is not None:
+            starting_signature = self._param_signature(starting_params)
+            if starting_signature in evaluated_signatures:
+                print("Starting params match baseline; skipping duplicate evaluation.")
+            else:
+                try:
+                    start_time = time.time()
+                    starting_loss = self._evaluate_params(starting_params)
+                    starting_runtime = time.time() - start_time
+
+                    self.optimization_history.append(
+                        {
+                            'iteration': 'starting',
+                            'params': copy.deepcopy(starting_params),
+                            'loss': starting_loss['total_loss'],
+                            'loss_breakdown': starting_loss,
+                            'runtime': starting_runtime,
+                        }
+                    )
+                    evaluated_signatures.add(starting_signature)
+                    print(
+                        f"Starting params loss = {starting_loss['total_loss']:.4f}, "
+                        f"runtime = {starting_runtime:.2f}s"
+                    )
+                except Exception as e:
+                    print(f"Warning: Starting params evaluation failed with error: {e}")
 
         successful_iterations = 0
         failed_iterations = 0

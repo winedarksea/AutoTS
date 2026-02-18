@@ -6,6 +6,7 @@ Tests for Feature Detector
 """
 
 import unittest
+from unittest.mock import patch
 import pandas as pd
 import numpy as np
 from autots.datasets.synthetic import SyntheticDailyGenerator
@@ -275,6 +276,72 @@ class TestFeatureDetector(unittest.TestCase):
 
         self.assertTrue(success)
 
+    def test_tune_with_synthetic_applies_and_fits(self):
+        """Test synthetic tuning workflow applies params and returns fitted self."""
+
+        tuned_synth_params = {
+            'trend_changepoint_freq': 1.1311196948895457,
+            'level_shift_freq': 0.11235106798095876,
+            'level_shift_strength': 0.10391796521529073,
+            'anomaly_freq': 0.04654080084797309,
+            'weekly_seasonality_strength': 0.8646796590839558,
+            'yearly_seasonality_strength': 1.2232927741109423,
+            'noise_level': 0.0016485471075049773,
+            'trend_slope_scale': 0.4964492705041623,
+            'trend_positive_bias': 0.7313495354794045,
+            'level_shift_minimum_pct': 0.03,
+            'level_shift_max_pct': 0.09,
+            'noise_ar_coefficient': 0.07932349693757101,
+            'volatility_regime_intensity': 1.3960299844487944,
+        }
+
+        def _fake_tune_to_data(self, df, n_iterations=15, verbose=True, starting_params=None):
+            return {
+                'best_params': tuned_synth_params,
+                'scale_multiplier': 1.0,
+                'target_stats': {'weekly_profile': [1.0] * 7},
+            }
+
+        def _fake_optimize(self, starting_params=None):
+            best = self._default_detector_params()
+            best['standardize'] = False
+            best['smoothing_window'] = 5
+            self.best_params = best
+            self.best_loss = 1.5
+            self.best_total_loss = 1.5
+            self.baseline_loss = 2.0
+            self.optimization_history = [
+                {'iteration': 'baseline', 'loss': 2.0, 'balanced_loss': 2.0}
+            ]
+            return best
+
+        real_df = self.data.iloc[:120, :2]
+        detector = TimeSeriesFeatureDetector()
+        with patch(
+            'autots.evaluator.feature_detector.SyntheticDailyGenerator.tune_to_data',
+            new=_fake_tune_to_data,
+        ), patch(
+            'autots.evaluator.feature_detector.FeatureDetectionOptimizer.optimize',
+            new=_fake_optimize,
+        ):
+            result = detector.tune_with_synthetic(
+                real_df=real_df,
+                n_synthetic_series=2,
+                n_tune_iterations=1,
+                n_detector_iterations=1,
+                tune_seed=42,
+                verbose=False,
+            )
+
+        self.assertIs(result, detector)
+        self.assertIsNotNone(detector.df_original)
+        self.assertIsNotNone(detector.optimized_detector_params)
+        self.assertIsNotNone(detector.synthetic_tuning_results)
+        self.assertIsNotNone(detector.tuned_synthetic_generator)
+        self.assertIsNotNone(detector.detector_optimization_summary)
+        self.assertFalse(detector.standardize)
+        self.assertEqual(detector.smoothing_window, 5)
+
 
 class TestFeatureDetectionLoss(unittest.TestCase):
     """Test FeatureDetectionLoss class."""
@@ -340,6 +407,17 @@ class TestFeatureDetectionLoss(unittest.TestCase):
 
         self.assertIn('total_loss', loss)
         self.assertIsInstance(loss['total_loss'], (int, float))
+
+    def test_seasonality_strength_fuzzy_period_match(self):
+        loss_calc = FeatureDetectionLoss()
+        exact = loss_calc._seasonality_strength_loss(
+            {'period_365': 1.0}, {'period_365': 1.0}
+        )
+        fuzzy = loss_calc._seasonality_strength_loss(
+            {'period_366': 1.0}, {'period_365': 1.0}
+        )
+        self.assertEqual(exact, 0.0)
+        self.assertLess(fuzzy, 0.01)
 
 
 class TestFeatureDetectionOptimizer(unittest.TestCase):
@@ -424,6 +502,18 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
             success = False
 
         self.assertTrue(success)
+
+    def test_optimizer_starting_params_seed(self):
+        optimizer = FeatureDetectionOptimizer(
+            self.generator,
+            n_iterations=1,
+        )
+        seed_params = optimizer._default_detector_params()
+        seed_params['standardize'] = not bool(seed_params['standardize'])
+
+        optimizer.optimize(starting_params=seed_params)
+        iterations = [entry.get('iteration') for entry in optimizer.optimization_history]
+        self.assertIn('starting', iterations)
 
 
 class TestScaling(unittest.TestCase):
