@@ -3553,12 +3553,12 @@ class MultivariateRegression(ModelObject):
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90, [2, 4, 6, 8, 12, (52, 2)], [7, 28, 364, (362, 4)]],
-            [0.3, 0.1, 0.1, 0.1, 0.1, 0.01, 0.05, 0.05],
+            [0.3, 0.1, 0.1, 0.1, 0.1, 0.001, 0.05, 0.05],
         )[0]
         if mean_rolling_periods_choice is not None:
-            macd_periods_choice = seasonal_int(small=True)
+            macd_periods_choice = seasonal_int(very_small=True)
             if macd_periods_choice == mean_rolling_periods_choice:
-                macd_periods_choice = mean_rolling_periods_choice + 10
+                macd_periods_choice = mean_rolling_periods_choice + 3
         else:
             macd_periods_choice = None
         std_rolling_periods_choice = random.choices(

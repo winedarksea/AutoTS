@@ -132,7 +132,9 @@ class SyntheticDailyGenerator:
         the form [a1, b1, a2, b2, ...].
         Extract from real data using _extract_data_statistics()['yearly_fourier'].
     noise_ar_coefficient : float or None
-        If provided, controls the AR(1) coefficient for noise autocorrelation (0.0-0.99).
+        If provided, controls the EMA smoothing coefficient for noise (0.0-0.99).
+        Applies an exponential moving average filter:
+        ``filtered[t] = coef * filtered[t-1] + (1 - coef) * noise[t]``
         Higher values produce smoother, more autocorrelated noise.
         When None, noise uses standard i.i.d. generation.
     series_type_override : str or None
@@ -265,6 +267,8 @@ class SyntheticDailyGenerator:
             self.yearly_fourier_target = yearly_fourier_arr.tolist()
         else:
             self.yearly_fourier_target = None
+        if noise_ar_coefficient is not None:
+            noise_ar_coefficient = float(np.clip(noise_ar_coefficient, 0.0, 0.99))
         self.noise_ar_coefficient = noise_ar_coefficient
         self.volatility_regime_intensity = max(0.0, float(volatility_regime_intensity))
         self.series_type_override = series_type_override
@@ -1757,7 +1761,7 @@ class SyntheticDailyGenerator:
             # Smoother, autocorrelated noise (also used for multiplicative seasonality)
             noise = self._generate_ar_noise(series_name, scale)
         else:
-            # Standard noise with changepoints (may include AR(1) if configured)
+            # Standard noise with changepoints (may include EMA smoothing if configured)
             noise = self._generate_standard_noise(series_name, scale)
 
         return noise
@@ -1862,8 +1866,10 @@ class SyntheticDailyGenerator:
             vol_envelope = np.exp(log_vol)
             noise = noise * vol_envelope
 
-        # Apply AR(1) filter if noise_ar_coefficient is set
-        # This smooths the noise to match autocorrelation structure of real data
+        # Apply EMA smoothing filter if noise_ar_coefficient is set.
+        # This is an exponential moving average (not a standard AR(1) process)
+        # that smooths noise to match autocorrelation structure of real data.
+        # EMA: y[t] = coef * y[t-1] + (1 - coef) * x[t]
         ar_coef = self.noise_ar_coefficient
         if ar_coef is not None and ar_coef > 0:
             ar_coef = min(ar_coef, 0.99)
@@ -2925,7 +2931,6 @@ class SyntheticDailyGenerator:
         stats['scale'] = float(df.abs().max().max())
 
         # Simple trend estimation (linear slope per series)
-        X = np.arange(len(df)).reshape(-1, 1)
         slopes = []
         trend_directions = []
         for col in df.columns:
@@ -3144,9 +3149,11 @@ class SyntheticDailyGenerator:
                     x = np.arange(len(series), dtype=float)
                     coeffs = np.polyfit(x, series.values, 1)
                     detrended = series.values - np.polyval(coeffs, x)
-                    # Compute Fourier coefficients for first 3 harmonics
+                    # Compute Fourier coefficients for first 3 harmonics.
+                    # Normalize globally (by the max harmonic amplitude) so
+                    # that relative harmonic strengths are preserved.
                     t = np.arange(len(detrended), dtype=float)
-                    fourier_coeffs = []
+                    raw_coeffs = []
                     for n in range(1, 4):
                         a_n = 2.0 / len(t) * np.sum(
                             detrended * np.cos(2 * np.pi * n * t / 365.25)
@@ -3154,11 +3161,17 @@ class SyntheticDailyGenerator:
                         b_n = 2.0 / len(t) * np.sum(
                             detrended * np.sin(2 * np.pi * n * t / 365.25)
                         )
-                        amp = np.sqrt(a_n ** 2 + b_n ** 2)
-                        if amp > 0:
-                            fourier_coeffs.extend([a_n / amp, b_n / amp])
-                        else:
-                            fourier_coeffs.extend([0.0, 0.0])
+                        raw_coeffs.extend([a_n, b_n])
+                    # Normalize by max harmonic amplitude (preserves ratios)
+                    amps = [
+                        np.sqrt(raw_coeffs[2 * i] ** 2 + raw_coeffs[2 * i + 1] ** 2)
+                        for i in range(3)
+                    ]
+                    max_amp = max(amps) if amps else 0.0
+                    if max_amp > 0:
+                        fourier_coeffs = [c / max_amp for c in raw_coeffs]
+                    else:
+                        fourier_coeffs = [0.0] * 6
                     yearly_fourier_all.append(fourier_coeffs)
             if yearly_fourier_all:
                 stats['yearly_fourier'] = np.mean(yearly_fourier_all, axis=0).tolist()
@@ -3725,6 +3738,7 @@ class SyntheticDailyGenerator:
             'scale_multiplier': float(scale_multiplier),
             'n_iterations': n_iterations,
             'metric': metric,
+            'tuned_with_series_type': 'standard',
         }
 
         if verbose:
@@ -3735,6 +3749,12 @@ class SyntheticDailyGenerator:
             print("\nGenerator parameters have been updated with tuned values.")
             print("Regenerate data to use new parameters.")
             print("Then multiply by scale_multiplier to match target data magnitude.")
+            if self.series_type_override != 'standard':
+                print(
+                    "\nNote: Parameters were tuned with series_type_override='standard'.\n"
+                    "  For best match, set series_type_override='standard' before regenerating,\n"
+                    "  or call: generator.series_type_override = 'standard'"
+                )
 
         return self.tuning_results
 
