@@ -921,8 +921,12 @@ class TimeSeriesFeatureDetector:
             # Calculate noise metrics
             seasonality_series = seasonality_component[series_name]
             noise_series = noise_component[series_name]
+            # Include trend, level shift, seasonality, and holidays in signal
             signal_series = (
-                trend_component[series_name] + level_shift_component[series_name]
+                trend_component[series_name]
+                + level_shift_component[series_name]
+                + seasonality_component[series_name]
+                + holiday_component[series_name]
             )
             numerator = float(np.nanstd(noise_series))
             denominator = float(np.nanstd(signal_series)) or 1e-9
@@ -1466,7 +1470,7 @@ class TimeSeriesFeatureDetector:
             return []
         median = float(np.median(valid))
         mad = float(np.median(np.abs(valid - median)))
-        threshold = median + max(3.5 * mad, 0.25)
+        threshold = median + max(3.5 * mad, 0.20)
 
         candidate_idx = np.where(diff > threshold)[0]
         if candidate_idx.size == 0:
@@ -1477,7 +1481,7 @@ class TimeSeriesFeatureDetector:
         for idx in candidate_idx:
             if idx <= 0 or idx >= n:
                 continue
-            date = self.date_index[idx]
+            date = noise_series.index[idx]
             if not filtered or (date - filtered[-1]).days >= min_spacing:
                 filtered.append(date)
 
@@ -1493,15 +1497,15 @@ class TimeSeriesFeatureDetector:
         combined = float((seasonality_profile or {}).get('combined', 0.0) or 0.0)
         cp_count = len(seasonality_changepoints or [])
 
-        if cp_count >= 2 and combined >= 0.01:
+        if cp_count >= 2 and combined >= 0.005:
             return 'seasonality_changepoints'
-        if cp_count == 1 and combined >= 0.01:
+        if cp_count == 1 and combined >= 0.005:
             return 'time_varying_seasonality'
-        if weekly >= 0.02 and yearly >= 0.04:
+        if weekly >= 0.01 and yearly >= 0.02:
             return 'weekly_yearly'
-        if weekly >= 0.02:
+        if weekly >= 0.01:
             return 'weekly'
-        if yearly >= 0.04:
+        if yearly >= 0.02:
             return 'yearly'
         return 'none'
 
@@ -1516,9 +1520,9 @@ class TimeSeriesFeatureDetector:
         noise_acf1 = float(noise_acf1) if noise_acf1 is not None else 0.0
         regime_count = len(noise_changepoints or [])
 
-        if regime_count >= 2 and noise_ratio >= 0.2:
+        if regime_count >= 2 and noise_ratio >= 0.05:
             return 'variance_regimes'
-        if abs(noise_acf1) >= 0.35 and noise_ratio >= 0.08:
+        if abs(noise_acf1) >= 0.30 and noise_ratio >= 0.02:
             return 'autocorrelated_noise'
         return 'standard'
 
@@ -3024,9 +3028,9 @@ class TimeSeriesFeatureDetector:
     def tune_with_synthetic(
         self,
         real_df,
-        n_synthetic_series=10,
-        n_tune_iterations=15,
-        n_detector_iterations=20,
+        n_synthetic_series=16,
+        n_tune_iterations=25,
+        n_detector_iterations=30,
         tune_seed=42,
         loss_params=None,
         loss_weights=None,

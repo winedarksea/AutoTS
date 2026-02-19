@@ -3477,14 +3477,14 @@ class SyntheticDailyGenerator:
 
                 if metric == 'mse':
                     distance = (
-                        normed_sq('weekly_seasonality', 3.0)
+                        normed_sq('weekly_seasonality', 4.5)
                         + normed_sq('yearly_seasonality', 2.0)
                         + normed_sq('noise_to_signal', 1.5)
                         + normed_sq('median_acf_lag1', 3.0)
                         + normed_sq('median_acf_lag7', 2.0)
                         + normed_sq('median_cv', 2.0)
                         + normed_sq('anomaly_per_week', 0.5)
-                        + normed_sq('mean_trend_slope', 1.0)
+                        + normed_sq('mean_trend_slope', 2.5)
                         + normed_sq('changepoint_energy', 1.5)
                         + normed_sq('max_jump_ratio', 1.5)
                         + normed_sq('abs_diff_skewness', 1.0)
