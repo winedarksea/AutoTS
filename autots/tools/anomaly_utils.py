@@ -96,8 +96,15 @@ def sk_outliers(df, method, method_params={}):
         except ValueError as ex:
             # Known sklearn EE failure on degenerate low-variance support data.
             if "covariance matrix of the support data is equal to 0" in str(ex).lower():
-                res = np.ones(len(df_filled), dtype=int)
-                scores = np.zeros(len(df_filled), dtype=float)
+                # Retry with full support before giving up
+                ee_params['support_fraction'] = 1.0
+                try:
+                    model = EllipticEnvelope(**ee_params)
+                    res = model.fit_predict(df_filled)
+                    scores = model.decision_function(df_filled)
+                except ValueError:
+                    res = np.ones(len(df_filled), dtype=int)
+                    scores = np.zeros(len(df_filled), dtype=float)
             else:
                 raise
     elif method == "GaussianMixture":
