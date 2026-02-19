@@ -9,6 +9,9 @@ import unittest
 from unittest.mock import patch
 import pandas as pd
 import numpy as np
+import time
+import json
+from autots.datasets import load_daily
 from autots.datasets.synthetic import SyntheticDailyGenerator
 from autots.models.base import PredictionObject
 from autots.evaluator.feature_detector import (
@@ -1203,6 +1206,104 @@ class TestIntegration(unittest.TestCase):
             + len(detected['level_shifts'])
         )
         self.assertGreater(total_detected, 0)
+
+    def test_tune_with_synthetic_on_load_daily(self):
+        """Live test of tune_with_synthetic on real load_daily data with detailed reporting."""
+        print("\n" + "=" * 80)
+        print("LIVE TEST: tune_with_synthetic ON load_daily DATA")
+        print("=" * 80)
+
+        # Loading data and preparing wide format
+        df = load_daily()
+        df_wide = df.pivot(index='datetime', columns='series_id', values='value')
+        # Use a manageable subset for testing but enough for meaningful tuning
+        df_subset = df_wide.iloc[-365:, :5]
+
+        detector = TimeSeriesFeatureDetector()
+
+        start_time = time.time()
+        # Using smaller iterations for the test to avoid taking too long
+        detector.tune_with_synthetic(
+            real_df=df_subset,
+            n_synthetic_series=5,
+            n_tune_iterations=5,
+            n_detector_iterations=10,
+            verbose=True,
+        )
+        end_time = time.time()
+
+        # Gather results for reporting
+        results = detector.synthetic_tuning_results
+        optimizer = detector.detector_optimizer
+        summary = detector.detector_optimization_summary
+
+        print("\n" + "=" * 80)
+        print("DETAILED TUNING REPORT")
+        print("=" * 80)
+        print(f"Total time: {end_time - start_time:.2f} seconds")
+
+        print(f"\n[1] Synthetic Data Tuning Results:")
+        print(f"    Scale Multiplier: {results.get('scale_multiplier'):.4f}")
+
+        gen_params = results.get('tuning_results', {}).get('best_params', {})
+        print(f"    Best Synthetic Generator Params:")
+        for k, v in gen_params.items():
+            if isinstance(v, (float, int)):
+                print(f"      - {k}: {v:.4f}")
+            else:
+                print(f"      - {k}: {v}")
+
+        print(f"\n[2] Detector Optimization Results:")
+        print(f"    Baseline Loss: {summary.get('baseline_loss'):.6f}")
+        print(f"    Best Loss: {summary.get('best_loss'):.6f}")
+        if summary.get('baseline_loss'):
+            improvement = (
+                (summary.get('baseline_loss') - summary.get('best_loss'))
+                / summary.get('baseline_loss')
+                * 100
+            )
+            print(f"    Improvement: {improvement:.2f}%")
+
+        print(f"\n[3] Best Detector Parameters Found:")
+        # Compact JSON representation
+        print(json.dumps(detector.optimized_detector_params, indent=4))
+
+        print(f"\n[4] Loss Breakdown (Best Model):")
+        # Find the best entry in history to show its breakdown
+        best_entry = None
+        target_loss = summary.get('best_loss')
+        if optimizer and optimizer.optimization_history:
+            for entry in optimizer.optimization_history:
+                # Need to handle floating point comparison
+                entry_loss = entry.get('balanced_loss', entry.get('loss', 999))
+                if abs(entry_loss - target_loss) < 1e-9:
+                    best_entry = entry
+                    break
+
+        if best_entry and 'loss_breakdown' in best_entry:
+            breakdown = best_entry['loss_breakdown']
+            for component, loss_val in breakdown.items():
+                if isinstance(loss_val, (float, int)):
+                    print(f"      - {component}: {loss_val:.6f}")
+                else:
+                    print(f"      - {component}: {loss_val}")
+
+        print(f"\n[5] Component Sensitivity (Importance of each loss component):")
+        comp_ranges = summary.get('component_ranges', {})
+        # Sort by range to show what varied most during optimization
+        for comp, stats in sorted(
+            comp_ranges.items(), key=lambda x: x[1]['range'], reverse=True
+        ):
+            print(
+                f"      - {comp}: range={stats['range']:.4f} (min={stats['min']:.4f}, max={stats['max']:.4f})"
+            )
+
+        print("\n" + "=" * 80)
+
+        # Basic functional assertions
+        self.assertIsNotNone(detector.optimized_detector_params)
+        self.assertIn('best_params', results.get('tuning_results', {}))
+        self.assertGreater(len(optimizer.optimization_history), 0)
 
 
 if __name__ == '__main__':
