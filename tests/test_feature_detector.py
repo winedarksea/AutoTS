@@ -246,6 +246,35 @@ class TestFeatureDetector(unittest.TestCase):
             detector.holiday_splash_impacts.get(series_name, {}),
         )
 
+        all_features_meta = detector.get_detected_features(include_metadata=True)
+        self.assertIn('series_types', all_features_meta)
+        self.assertIn('season_types', all_features_meta)
+        self.assertIn(series_name, all_features_meta['series_types'])
+        self.assertIn(series_name, all_features_meta['season_types'])
+
+        series_features_meta = detector.get_detected_features(
+            series_name, include_metadata=True
+        )
+        self.assertIn('series_type', series_features_meta)
+        self.assertIn('season_type', series_features_meta)
+        self.assertIsInstance(series_features_meta['series_type'], str)
+        self.assertIsInstance(series_features_meta['season_type'], str)
+
+    def test_noise_regime_detection_helper(self):
+        detector = TimeSeriesFeatureDetector()
+        detector.date_index = pd.date_range('2020-01-01', periods=180, freq='D')
+        rng = np.random.RandomState(42)
+        noise = np.concatenate(
+            [rng.normal(0, 0.1, 90), rng.normal(0, 0.8, 90)]
+        )
+        noise_series = pd.Series(noise, index=detector.date_index)
+        cps = detector._detect_noise_regime_changepoints(noise_series)
+        self.assertGreaterEqual(len(cps), 1)
+        self.assertTrue(
+            any(abs((cp - detector.date_index[90]).days) <= 25 for cp in cps),
+            f"Expected a changepoint near the regime boundary, got {cps}",
+        )
+
     def test_summary(self):
         """Test summary generation."""
         detector = TimeSeriesFeatureDetector()
@@ -495,13 +524,15 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
 
         # Should not raise error
         try:
-            optimizer.get_optimization_summary()
+            summary = optimizer.get_optimization_summary()
             success = True
         except Exception as e:
             print(f"Summary failed: {e}")
             success = False
 
         self.assertTrue(success)
+        self.assertIn('component_ranges', summary)
+        self.assertIsInstance(summary['component_ranges'], dict)
 
     def test_optimizer_starting_params_seed(self):
         optimizer = FeatureDetectionOptimizer(

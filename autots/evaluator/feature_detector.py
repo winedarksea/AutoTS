@@ -257,6 +257,8 @@ class TimeSeriesFeatureDetector:
         self.seasonality_components = {}
         self.seasonality_strength = {}
         self.series_seasonality_profiles = {}
+        self.series_season_types = {}
+        self.series_types = {}
         self.detected_seasonal_periods = None
         self._seasonality_changepoints = {}
         self.noise_changepoints = {}
@@ -582,6 +584,8 @@ class TimeSeriesFeatureDetector:
         self.seasonality_components = {}
         self.seasonality_strength = {}
         self.series_seasonality_profiles = {}
+        self.series_season_types = {}
+        self.series_types = {}
         self._seasonality_changepoints = {}
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
@@ -913,7 +917,6 @@ class TimeSeriesFeatureDetector:
             self.seasonality_strength[series_name] = seasonality_strength.get(
                 series_name, 0.0
             )
-            self.noise_changepoints[series_name] = []
 
             # Calculate noise metrics
             seasonality_series = seasonality_component[series_name]
@@ -936,6 +939,21 @@ class TimeSeriesFeatureDetector:
             self.series_seasonality_profiles[
                 series_name
             ] = self._estimate_seasonality_profile(seasonality_series, series_scale)
+            noise_cp_entries = self._detect_noise_regime_changepoints(noise_series)
+            self.noise_changepoints[series_name] = noise_cp_entries
+            seasonality_cp_entries = seasonality_changepoints.get(series_name, [])
+            season_type = self._infer_season_type(
+                self.series_seasonality_profiles[series_name], seasonality_cp_entries
+            )
+            self.series_season_types[series_name] = season_type
+            noise_acf1 = self._lag1_autocorrelation(noise_series.to_numpy(dtype=float))
+            series_type = self._infer_series_type(
+                season_type=season_type,
+                noise_changepoints=noise_cp_entries,
+                noise_ratio=self.noise_to_signal_ratios[series_name],
+                noise_acf1=noise_acf1,
+            )
+            self.series_types[series_name] = series_type
 
             metadata = {
                 'seasonality_strength': self.seasonality_strength[series_name],
@@ -943,6 +961,8 @@ class TimeSeriesFeatureDetector:
                 'seasonality_profiles': self.series_seasonality_profiles[series_name],
                 'noise_level': self.series_noise_levels[series_name],
                 'series_scale': series_scale,
+                'series_type': series_type,
+                'season_type': season_type,
             }
             template_entry = self._build_series_template(
                 series_name,
@@ -960,7 +980,7 @@ class TimeSeriesFeatureDetector:
                     'seasonality_changepoints': seasonality_changepoints.get(
                         series_name, []
                     ),
-                    'noise_changepoints': [],
+                    'noise_changepoints': noise_cp_entries,
                 },
                 metadata,
             )
@@ -1378,7 +1398,7 @@ class TimeSeriesFeatureDetector:
                 0.0 if total_var == 0 else max(0.0, min(1.0, 1 - resid_var / total_var))
             )
             if len(seasonal_clean) > 1:
-                corr = np.corrcoef(y_clean, seasonal_clean)[0, 1]
+                corr = self._safe_correlation(y_clean, seasonal_clean)
                 corr_strength = max(0.0, corr**2) if np.isfinite(corr) else 0.0
             else:
                 corr_strength = 0.0
@@ -1388,6 +1408,119 @@ class TimeSeriesFeatureDetector:
             combined = 0.6 * r_squared + 0.3 * corr_strength + 0.1 * variance_ratio
             strength[col] = max(0.0, min(1.0, combined))
         return strength
+
+    @staticmethod
+    def _safe_correlation(x, y):
+        """Compute correlation robustly, returning 0 when variance is degenerate."""
+        x_arr = np.asarray(x, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+        mask = np.isfinite(x_arr) & np.isfinite(y_arr)
+        if mask.sum() < 2:
+            return 0.0
+        x_arr = x_arr[mask]
+        y_arr = y_arr[mask]
+        x_std = float(np.nanstd(x_arr))
+        y_std = float(np.nanstd(y_arr))
+        if x_std < 1e-12 or y_std < 1e-12:
+            return 0.0
+        x_center = x_arr - np.nanmean(x_arr)
+        y_center = y_arr - np.nanmean(y_arr)
+        denom = np.sqrt(np.sum(x_center**2) * np.sum(y_center**2)) + 1e-12
+        if denom <= 0:
+            return 0.0
+        corr = float(np.sum(x_center * y_center) / denom)
+        if not np.isfinite(corr):
+            return 0.0
+        return max(-1.0, min(1.0, corr))
+
+    @staticmethod
+    def _lag1_autocorrelation(values):
+        arr = np.asarray(values, dtype=float).reshape(-1)
+        mask = np.isfinite(arr)
+        arr = arr[mask]
+        if arr.size < 3:
+            return 0.0
+        return TimeSeriesFeatureDetector._safe_correlation(arr[:-1], arr[1:])
+
+    def _detect_noise_regime_changepoints(self, noise_series):
+        """Detect changepoints in noise volatility regimes using rolling variance shifts."""
+        if not isinstance(noise_series, pd.Series):
+            noise_series = pd.Series(noise_series, index=self.date_index)
+        values = noise_series.to_numpy(dtype=float)
+        finite_mask = np.isfinite(values)
+        if finite_mask.sum() < 30:
+            return []
+        series = pd.Series(values, index=noise_series.index).interpolate(
+            limit_direction='both'
+        )
+
+        n = len(series)
+        window = min(90, max(21, n // 12))
+        min_periods = max(7, window // 3)
+        rolling_std = series.rolling(window=window, center=True, min_periods=min_periods).std()
+        log_std = np.log(np.clip(rolling_std.to_numpy(dtype=float), 1e-9, None))
+        diff = np.abs(np.diff(log_std, prepend=np.nan))
+
+        valid = diff[np.isfinite(diff)]
+        if valid.size == 0:
+            return []
+        median = float(np.median(valid))
+        mad = float(np.median(np.abs(valid - median)))
+        threshold = median + max(3.5 * mad, 0.25)
+
+        candidate_idx = np.where(diff > threshold)[0]
+        if candidate_idx.size == 0:
+            return []
+
+        min_spacing = max(7, window // 3)
+        filtered = []
+        for idx in candidate_idx:
+            if idx <= 0 or idx >= n:
+                continue
+            date = self.date_index[idx]
+            if not filtered or (date - filtered[-1]).days >= min_spacing:
+                filtered.append(date)
+
+        if not filtered:
+            return []
+        max_allowed = max(1, min(10, n // 60))
+        return filtered[:max_allowed]
+
+    @staticmethod
+    def _infer_season_type(seasonality_profile, seasonality_changepoints):
+        weekly = float((seasonality_profile or {}).get('weekly', 0.0) or 0.0)
+        yearly = float((seasonality_profile or {}).get('yearly', 0.0) or 0.0)
+        combined = float((seasonality_profile or {}).get('combined', 0.0) or 0.0)
+        cp_count = len(seasonality_changepoints or [])
+
+        if cp_count >= 2 and combined >= 0.01:
+            return 'seasonality_changepoints'
+        if cp_count == 1 and combined >= 0.01:
+            return 'time_varying_seasonality'
+        if weekly >= 0.02 and yearly >= 0.04:
+            return 'weekly_yearly'
+        if weekly >= 0.02:
+            return 'weekly'
+        if yearly >= 0.04:
+            return 'yearly'
+        return 'none'
+
+    @staticmethod
+    def _infer_series_type(season_type, noise_changepoints, noise_ratio, noise_acf1):
+        if season_type == 'seasonality_changepoints':
+            return 'seasonality_changepoints'
+        if season_type == 'time_varying_seasonality':
+            return 'time_varying_seasonality'
+
+        noise_ratio = float(noise_ratio) if noise_ratio is not None else 0.0
+        noise_acf1 = float(noise_acf1) if noise_acf1 is not None else 0.0
+        regime_count = len(noise_changepoints or [])
+
+        if regime_count >= 2 and noise_ratio >= 0.2:
+            return 'variance_regimes'
+        if abs(noise_acf1) >= 0.35 and noise_ratio >= 0.08:
+            return 'autocorrelated_noise'
+        return 'standard'
 
     def _estimate_seasonality_profile(self, seasonal_series, series_scale):
         """
@@ -2064,7 +2197,7 @@ class TimeSeriesFeatureDetector:
 
         return {
             'series_name': series_name,
-            'series_type': 'detected',
+            'series_type': metadata.get('series_type', 'detected'),
             'scale_factor': metadata.get('series_scale', 1.0),
             'combination': 'additive',
             'components': component_dict,
@@ -2074,6 +2207,7 @@ class TimeSeriesFeatureDetector:
                 'noise_to_signal_ratio': metadata.get('noise_to_signal_ratio'),
                 'noise_level': metadata.get('noise_level', 0.0),
                 'series_scale': metadata.get('series_scale', 1.0),
+                'season_type': metadata.get('season_type', 'unknown'),
             },
         }
 
@@ -2131,7 +2265,8 @@ class TimeSeriesFeatureDetector:
                             series_name, 0.0
                         ),
                         'series_scale': self.series_scales.get(series_name, 0.0),
-                        'series_type': 'detected',
+                        'series_type': self.series_types.get(series_name, 'detected'),
+                        'season_type': self.series_season_types.get(series_name, 'none'),
                         'regressor_impacts': {},
                     }
                 )
@@ -2213,7 +2348,14 @@ class TimeSeriesFeatureDetector:
                     'series_scales': {
                         name: self.series_scales.get(name, 0.0) for name in series_names
                     },
-                    'series_types': {name: 'detected' for name in series_names},
+                    'series_types': {
+                        name: self.series_types.get(name, 'detected')
+                        for name in series_names
+                    },
+                    'season_types': {
+                        name: self.series_season_types.get(name, 'none')
+                        for name in series_names
+                    },
                     'regressor_impacts': {name: {} for name in series_names},
                 }
             )
@@ -2337,6 +2479,10 @@ class TimeSeriesFeatureDetector:
         for series_name in self.df_original.columns:
             print("\n" + "-" * 80)
             print(f"Series: {series_name}")
+            inferred_type = self.series_types.get(series_name, 'detected')
+            season_type = self.series_season_types.get(series_name, 'none')
+            print(f"Series Type (inferred): {inferred_type}")
+            print(f"Season Type (inferred): {season_type}")
             strength = self.seasonality_strength.get(series_name, 0.0)
             print(f"Seasonality Strength: {strength:.3f}")
             cps = self.trend_changepoints.get(series_name, [])
@@ -2621,6 +2767,8 @@ class TimeSeriesFeatureDetector:
                     metadata['noise_level'] = float(self.series_noise_levels[col])
                 if col in self.series_scales:
                     metadata['scale'] = float(self.series_scales[col])
+                metadata['series_type'] = self.series_types.get(col, 'detected')
+                metadata['season_type'] = self.series_season_types.get(col, 'none')
 
                 # Noise changepoints
                 noise_cp = self.noise_changepoints.get(col, [])
@@ -2749,15 +2897,17 @@ class TimeSeriesFeatureDetector:
             'noise_changepoints': self.noise_changepoints.get(series_name, []),
             'series_scale': 1.0,
             'noise_to_signal_ratio': self.noise_to_signal_ratios.get(series_name, None),
-            'series_type': 'detected',
+            'series_type': self.series_types.get(series_name, 'detected'),
         }
+        inferred_type = self.series_types.get(series_name, 'detected')
+        season_type = self.series_season_types.get(series_name, 'none')
         fig = plot_feature_panels(
             series_name=series_name,
             date_index=self.date_index,
             series_data=self.df_original[series_name],
             components=components,
             labels=labels,
-            series_type_description='Detected Features',
+            series_type_description=f"Detected Features ({inferred_type}, {season_type})",
             scale=labels.get('series_scale'),
             noise_to_signal=labels.get('noise_to_signal_ratio'),
             figsize=figsize,
@@ -4830,5 +4980,32 @@ class FeatureDetectionOptimizer:
             summary['worst_loss'] = max(losses)
             summary['mean_loss'] = np.mean(losses)
             summary['std_loss'] = np.std(losses)
+
+        component_ranges = {}
+        frozen_components = []
+        if self.optimization_history:
+            for key in self.loss_calculator.weights.keys():
+                values = []
+                for entry in self.optimization_history:
+                    breakdown = entry.get('loss_breakdown') or {}
+                    val = breakdown.get(key)
+                    if val is not None and np.isfinite(val):
+                        values.append(float(val))
+                if values:
+                    comp_min = float(np.min(values))
+                    comp_max = float(np.max(values))
+                    comp_range = comp_max - comp_min
+                    component_ranges[key] = {
+                        'min': comp_min,
+                        'max': comp_max,
+                        'range': comp_range,
+                    }
+                    if comp_range <= 1e-9:
+                        frozen_components.append(key)
+
+        if component_ranges:
+            summary['component_ranges'] = component_ranges
+        if frozen_components:
+            summary['frozen_components'] = sorted(frozen_components)
 
         return summary
