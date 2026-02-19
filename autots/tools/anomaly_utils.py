@@ -71,29 +71,35 @@ def sk_outliers(df, method, method_params={}):
         res = model.fit_predict(df_scaled)
         scores = model.decision_function(df_scaled)
     elif method == "EE":
-        if method_params['contamination'] == "auto":
-            method_params['contamination'] = 0.1
+        ee_params = method_params.copy()
+        if ee_params.get('contamination') == "auto":
+            ee_params['contamination'] = 0.1
         # EllipticEnvelope is sensitive to NaN values and needs sufficient samples
         # Fill NaN with mean to avoid covariance matrix errors
         df_filled = df.fillna(df.mean()).fillna(0)
         # Ensure we have enough samples for the support_fraction
         if (
-            'support_fraction' in method_params
-            and method_params['support_fraction'] is not None
+            'support_fraction' in ee_params
+            and ee_params['support_fraction'] is not None
         ):
             min_samples = max(df_filled.shape[1] + 1, 2)  # at least n_features + 1
-            required_samples = int(
-                np.ceil(min_samples / method_params['support_fraction'])
-            )
+            required_samples = int(np.ceil(min_samples / ee_params['support_fraction']))
             if len(df_filled) < required_samples:
                 # Increase support_fraction to ensure we have enough samples
-                method_params = method_params.copy()
-                method_params['support_fraction'] = max(
-                    min_samples / len(df_filled), 0.5
+                ee_params['support_fraction'] = min(
+                    max(min_samples / max(len(df_filled), 1), 0.5), 1.0
                 )
-        model = EllipticEnvelope(**method_params)
-        res = model.fit_predict(df_filled)
-        scores = model.decision_function(df_filled)
+        model = EllipticEnvelope(**ee_params)
+        try:
+            res = model.fit_predict(df_filled)
+            scores = model.decision_function(df_filled)
+        except ValueError as ex:
+            # Known sklearn EE failure on degenerate low-variance support data.
+            if "covariance matrix of the support data is equal to 0" in str(ex).lower():
+                res = np.ones(len(df_filled), dtype=int)
+                scores = np.zeros(len(df_filled), dtype=float)
+            else:
+                raise
     elif method == "GaussianMixture":
         model = GaussianMixture(**method_params)
         model.fit(df)
