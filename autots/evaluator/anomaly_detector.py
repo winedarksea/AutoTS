@@ -28,20 +28,9 @@ class AnomalyDetector(object):
         self,
         output="multivariate",
         method="zscore",
-        transform_dict={  # also  suggest DifferencedTransformer
-            "transformations": {0: "DatepartRegression"},
-            "transformation_params": {
-                0: {
-                    "datepart_method": "simple_3",
-                    "regression_model": {
-                        "model": "ElasticNet",
-                        "model_params": {},
-                    },
-                }
-            },
-        },
+        transform_dict=None,
         forecast_params=None,
-        method_params={},
+        method_params=None,
         eval_period=None,
         isolated_only=False,
         n_jobs=1,
@@ -70,6 +59,21 @@ class AnomalyDetector(object):
             anomalies
             scores
         """
+        if transform_dict is None:
+            transform_dict = {
+                "transformations": {0: "DatepartRegression"},
+                "transformation_params": {
+                    0: {
+                        "datepart_method": "simple_3",
+                        "regression_model": {
+                            "model": "ElasticNet",
+                            "model_params": {},
+                        },
+                    }
+                },
+            }
+        if method_params is None:
+            method_params = {}
         self.output = output
         self.method = method
         self.transform_dict = transform_dict
@@ -181,9 +185,11 @@ class AnomalyDetector(object):
         series_name=None,
         title=None,
         marker_size=None,
-        plot_kwargs={},
+        plot_kwargs=None,
         start_date=None,
     ):
+        if plot_kwargs is None:
+            plot_kwargs = {}
         import matplotlib.pyplot as plt
 
         if series_name is None:
@@ -268,7 +274,7 @@ class AnomalyDetector(object):
 class HolidayDetector(object):
     def __init__(
         self,
-        anomaly_detector_params={},
+        anomaly_detector_params=None,
         threshold=0.8,
         min_occurrences=2,
         splash_threshold=0.65,
@@ -303,7 +309,9 @@ class HolidayDetector(object):
             plot()
             get_new_params()
         """
-        self.anomaly_detector_params = anomaly_detector_params
+        self.anomaly_detector_params = (
+            anomaly_detector_params if anomaly_detector_params is not None else {}
+        )
         self.threshold = threshold
         self.min_occurrences = min_occurrences
         self.splash_threshold = splash_threshold
@@ -357,7 +365,9 @@ class HolidayDetector(object):
         )
         return self
 
-    def plot_anomaly(self, kwargs={}):
+    def plot_anomaly(self, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
         # Extract start_date if provided in kwargs to pass to the anomaly detector plot method
         self.anomaly_model.plot(**kwargs)
 
@@ -367,10 +377,12 @@ class HolidayDetector(object):
         include_anomalies=True,
         title=None,
         marker_size=None,
-        plot_kwargs={},
+        plot_kwargs=None,
         series=None,
         start_date=None,
     ):
+        if plot_kwargs is None:
+            plot_kwargs = {}
         import matplotlib.pyplot as plt
 
         if series_name is None:

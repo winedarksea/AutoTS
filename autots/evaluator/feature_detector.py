@@ -45,20 +45,20 @@ class TimeSeriesFeatureDetector:
     TODO: Handle multiplicative seasonality
     TODO: Handle time varying seasonality using fast_kalman
     TODO: Improve holiday "splash" effect and weekend interactions
-    TODO: Support identifying anomaly types beyond just point_outlier
     TODO: Support identifying regressor impacts and granger lag impacts
-    TODO: Support identifying variance regime changes
     TODO: Build upon the JSON template so that it can be converted to a fixed size embedding (probably a 2d embedding). The fixed size may vary by parameters, but for a given parameter set should always be the same size. The embedding does not need to be capable of fully reconstructing the time series, just representing it.
     TODO: Support for modeling the trend with a fast kalman state space approach, ideally aligned with changepoints in some way if possible.
-    TODO: Improved scaling and option to skip scaling
     TODO: consider also having "deviation from group" type anomaly detection for multivariate series
+    TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
+    TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.
+    TODO: Add explicit consistency checks for decomposition identity (sum of components vs original) beyond template reconstruction RMSE.
 
         Parameters
     ----------
     seasonality_params : dict, optional
         Parameters for DatepartRegressionTransformer used in final seasonality fit
     rough_seasonality_params : dict, optional
-        Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition
+        Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).
     holiday_params : dict, optional
         Parameters for HolidayDetector
     anomaly_params : dict, optional
@@ -3160,6 +3160,7 @@ class FeatureDetectionLoss:
         'holiday_event_loss': 1.2,  # Increased from 0.8 - penalize false holiday detections more
         'holiday_impact_loss': 0.9,  # Increased from 0.6 - ensure holiday impacts are strong enough
         'holiday_splash_loss': 0.5,
+        'holiday_recall_loss': 0.9,  # Separate recall metric to penalize zero-detection
         'seasonality_strength_loss': 0.8,
         'seasonality_pattern_loss': 1.0,
         'seasonality_changepoint_loss': 0.6,
@@ -3229,6 +3230,7 @@ class FeatureDetectionLoss:
             'holiday_event_loss': 1.1,
             'holiday_impact_loss': 1.1,
             'holiday_splash_loss': 1.05,
+            'holiday_recall_loss': 1.15,
             'seasonality_strength_loss': 1.05,
             'seasonality_pattern_loss': 1.15,
             'seasonality_changepoint_loss': 1.1,
@@ -3353,6 +3355,10 @@ class FeatureDetectionLoss:
             detected.get('anomalies', []),
             true.get('holiday_splash_impacts', {}),
         )
+        holiday_recall_loss = self._holiday_recall_loss(
+            detected.get('holiday_dates', []),
+            true.get('holiday_dates', []),
+        )
 
         seasonality_strength_loss = self._seasonality_strength_loss(
             detected.get('series_seasonality_strengths'),
@@ -3400,6 +3406,7 @@ class FeatureDetectionLoss:
             'holiday_event_loss': holiday_event_loss,
             'holiday_impact_loss': holiday_impact_loss,
             'holiday_splash_loss': holiday_splash_loss,
+            'holiday_recall_loss': holiday_recall_loss,
             'seasonality_strength_loss': seasonality_strength_loss,
             'seasonality_pattern_loss': seasonality_pattern_loss,
             'seasonality_changepoint_loss': seasonality_changepoint_loss,
@@ -3888,6 +3895,48 @@ class FeatureDetectionLoss:
             if not found:
                 loss += 0.4 + 0.3 * min(abs(magnitude), 2.0)
         return loss
+
+    def _holiday_recall_loss(self, detected_holidays, true_holidays):
+        """
+        Separate recall-focused loss for holiday detection.
+
+        Heavily penalizes configurations that detect zero holidays when the truth
+        has many, which encourages the optimizer to explore holiday-friendly params.
+        """
+        if not true_holidays:
+            return 0.0
+
+        n_true = len(true_holidays)
+        if not detected_holidays:
+            # Zero holidays detected when truth has holidays - scale with count and strictness
+            return min(
+                (0.5 + 0.5 * self.validation_strictness) + 0.1 * n_true, 
+                2.5 * self.validation_strictness + 1.0
+            )
+
+        detected_dates = {pd.Timestamp(dt) for dt in detected_holidays}
+        true_dates = [pd.Timestamp(dt) for dt in true_holidays]
+
+        matches = sum(
+            1
+            for td in true_dates
+            if any(
+                abs(td - dd) <= self._holiday_tolerance for dd in detected_dates
+            )
+        )
+
+        recall = matches / n_true
+
+        # Progressive penalty: stronger for very low recall, influenced by strictness
+        recall_penalty_scale = self.validation_strictness
+        if recall < 0.2:
+            return 2.5 * (1.0 - recall) * recall_penalty_scale
+        elif recall < 0.4:
+            return 1.5 * (1.0 - recall) * recall_penalty_scale
+        elif recall < 0.6:
+            return 1.0 * (1.0 - recall) * recall_penalty_scale
+        else:
+            return 0.4 * (1.0 - recall) * recall_penalty_scale
 
     def _seasonality_strength_loss(self, detected_strengths, true_strengths):
         if not true_strengths:
