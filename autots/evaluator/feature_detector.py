@@ -4867,7 +4867,9 @@ class ReconstructionLoss(FeatureDetectionLoss):
     """
 
     DEFAULT_METRIC_WEIGHTS = {
-        'reconstruction_loss': 1.0,
+        'reconstruction_loss': 0.5,
+        'structural_loss': 1.0,
+        'noise_whiteness_loss': 0.5,
         'trend_smoothness_loss': 1.2,
         'trend_dominance_loss': 0.9,
         'seasonality_capture_loss': 0.8,
@@ -5006,6 +5008,12 @@ class ReconstructionLoss(FeatureDetectionLoss):
         component_sum = trend + level_shift + seasonality + holidays + anomalies + noise
         residual = observed_series - component_sum
 
+        # Structural components (predictable signal)
+        structural_sum = trend + level_shift + seasonality + holidays
+        
+        structural_loss = self._robust_structural_loss(observed_series, structural_sum)
+        noise_whiteness = self._noise_whiteness_penalty(noise)
+
         reconstruction_loss = self._normalized_rmse(observed_series, residual)
         trend_smoothness = self._trend_complexity_penalty(trend.to_numpy(dtype=float))
         trend_dominance = self._trend_dominance_penalty(
@@ -5042,6 +5050,8 @@ class ReconstructionLoss(FeatureDetectionLoss):
 
         return {
             'reconstruction_loss': reconstruction_loss,
+            'structural_loss': structural_loss,
+            'noise_whiteness_loss': noise_whiteness,
             'trend_smoothness_loss': trend_smoothness,
             'trend_dominance_loss': trend_dominance,
             'seasonality_capture_loss': seasonality_capture,
@@ -5076,6 +5086,42 @@ class ReconstructionLoss(FeatureDetectionLoss):
         if scale < 1e-6 or not np.isfinite(scale):
             scale = np.nanmean(np.abs(orig)) + 1e-6
         return min(rmse / (scale + 1e-6), 3.0)
+
+    def _robust_structural_loss(self, observed, structural):
+        """
+        Huber-style loss that is robust to anomalies (outliers).
+        Measures how well the structural components fit the 'bulk' of the data.
+        """
+        resid = (observed - structural).to_numpy(dtype=float)
+        mask = np.isfinite(resid)
+        if mask.sum() < 2:
+            return 0.0
+        resid = resid[mask]
+        
+        # Robust scale estimation (MAD)
+        median = np.median(resid)
+        abs_dev = np.abs(resid - median)
+        mad = np.median(abs_dev)
+        scale = mad * 1.4826  # Consistency with sigma for normal distribution
+        if scale < 1e-9:
+            scale = np.std(resid) + 1e-9
+            
+        # Huber Loss with delta = 1.5 * scale
+        delta = 1.5 * scale
+        error = np.abs(resid)
+        is_small = error <= delta
+        
+        squared_loss = 0.5 * error[is_small]**2
+        linear_loss = delta * (error[~is_small] - 0.5 * delta)
+        
+        loss = np.sum(squared_loss) + np.sum(linear_loss)
+        return (loss / len(resid)) / (scale**2 + 1e-9)
+
+    def _noise_whiteness_penalty(self, noise_series):
+        """Penalize autocorrelation in the noise component."""
+        values = noise_series.to_numpy(dtype=float)
+        acf1 = self._autocorrelation(values, 1)
+        return min(abs(acf1) * 2.0, 2.0)
 
     def _trend_dominance_penalty(self, trend_series, component_map):
         trend_values = trend_series.to_numpy(dtype=float)

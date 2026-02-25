@@ -2932,6 +2932,9 @@ class ChangepointDetector(object):
                     )
                 self.fitted_trends_ = aggregated_data
 
+            else:
+                raise ValueError(f"Unknown method: {self.method}")
+
             # Handle probabilistic output for aggregated data
             if self.probabilistic_output:
                 prob_method = self.method_params.get(
@@ -3628,12 +3631,8 @@ class ChangepointDetector(object):
         """
         # List of all valid method names
 
-        if method in {None, 'none'}:
-            return {
-                'method': 'none',
-                'method_params': {},
-                'aggregate_method': 'mean',
-            }
+        if method is None:
+            method = "random"
 
         selection_mode = "fast"  # default to fast
         if method in valid_changepoint_methods:
@@ -3652,12 +3651,11 @@ class ChangepointDetector(object):
                 'composite_fused_lasso',
                 'autoencoder',
                 'multiresolution',
-                'none',
             ]
             method_weights = [
-                0.20,
-                0.18,
-                0.18,
+                0.21,
+                0.19,
+                0.19,
                 0.10,
                 0.10,
                 0.06,
@@ -3665,8 +3663,7 @@ class ChangepointDetector(object):
                 0.03,
                 0.01,
                 0.01,
-                0.05,
-                0.04,
+                0.06,
             ]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
         elif method in ["default", "random"]:
@@ -3683,37 +3680,27 @@ class ChangepointDetector(object):
                 'l1_total_variation',
                 'autoencoder',
                 'multiresolution',
-                'none',
             ]
             method_weights = [
-                0.30,
-                0.15,
-                0.15,
+                0.31,
+                0.16,
+                0.16,
                 0.10,
                 0.10,
                 0.04,
                 0.03,
                 0.02,
                 0.02,
-                0.05,
-                0.04,
+                0.06,
             ]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"
         else:  # random
-            extended_options = valid_changepoint_methods + ['none']
-            extended_weights = [1.0] * len(valid_changepoint_methods) + [0.5]
             new_method = random.choices(
-                extended_options, weights=extended_weights, k=1
+                valid_changepoint_methods,
+                k=1,
             )[0]
             selection_mode = "random"
-
-        if new_method in {None, 'none'}:
-            return {
-                'method': 'none',
-                'method_params': {},
-                'aggregate_method': 'mean',
-            }
 
         # Generate method-specific parameters with weighted choices
         if new_method == 'basic':
