@@ -104,6 +104,53 @@ class TestChangepointFeatures(unittest.TestCase):
         self.assertGreater(features.shape[1], 0)
         self.assertTrue(all("ewma_changepoint" in col for col in features.columns))
 
+    def test_create_changepoint_features_kcpd(self):
+        dt_index = pd.date_range("2021-01-01", periods=180, freq="D")
+        rng = np.random.default_rng(42)
+        data = np.concatenate(
+            [np.ones(60) * 2, np.ones(60) * 5, np.ones(60) * 9]
+        ) + rng.normal(0, 0.1, 180)
+
+        features = create_changepoint_features(
+            dt_index,
+            method="kcpd",
+            params={
+                "window_size": 20,
+                "n_features": 16,
+                "score_quantile": 0.9,
+                "min_distance": 12,
+                "max_changepoints": 8,
+            },
+            data=data,
+        )
+
+        self.assertEqual(features.shape[0], len(dt_index))
+        self.assertGreater(features.shape[1], 0)
+        self.assertTrue(all("kcpd_changepoint" in col for col in features.columns))
+
+    def test_create_changepoint_features_bottom_up(self):
+        dt_index = pd.date_range("2021-01-01", periods=200, freq="D")
+        rng = np.random.default_rng(123)
+        data = np.concatenate(
+            [np.ones(70) * 3, np.ones(60) * 7, np.ones(70) * 10]
+        ) + rng.normal(0, 0.15, 200)
+
+        features = create_changepoint_features(
+            dt_index,
+            method="bottom_up",
+            params={
+                "initial_segment_length": 16,
+                "penalty": "auto",
+                "penalty_scale": 1.0,
+                "max_changepoints": 10,
+            },
+            data=data,
+        )
+
+        self.assertEqual(features.shape[0], len(dt_index))
+        self.assertGreater(features.shape[1], 0)
+        self.assertTrue(all("bottom_up_changepoint" in col for col in features.columns))
+
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"
     )
@@ -224,6 +271,64 @@ class TestChangepointDetector(unittest.TestCase):
         self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
         # EWMA should detect at least one changepoint for this clear level shift
         self.assertGreater(len(detector.changepoints_["series1"]), 0)
+
+    def test_changepoint_detector_kcpd(self):
+        dates = pd.date_range("2022-01-01", periods=180, freq="D")
+        values = np.concatenate(
+            [np.ones(60) * 2, np.ones(60) * 6, np.ones(60) * 9]
+        ) + np.random.normal(0, 0.2, 180)
+        df = pd.DataFrame({"series1": values}, index=dates)
+
+        detector = ChangepointDetector(
+            method="kcpd",
+            aggregate_method="individual",
+            method_params={
+                "window_size": 20,
+                "n_features": 16,
+                "min_distance": 10,
+                "score_quantile": 0.9,
+                "max_changepoints": 8,
+            },
+        )
+        detector.detect(df)
+
+        self.assertIn("series1", detector.changepoints_)
+        self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
+        self.assertGreater(len(detector.changepoints_["series1"]), 0)
+
+    def test_changepoint_detector_bottom_up(self):
+        dates = pd.date_range("2022-01-01", periods=200, freq="D")
+        values = np.concatenate(
+            [np.ones(70) * 4, np.ones(60) * 8, np.ones(70) * 11]
+        ) + np.random.normal(0, 0.2, 200)
+        df = pd.DataFrame({"series1": values}, index=dates)
+
+        detector = ChangepointDetector(
+            method="bottom_up",
+            aggregate_method="individual",
+            method_params={
+                "initial_segment_length": 16,
+                "penalty": "auto",
+                "penalty_scale": 1.0,
+                "max_changepoints": 10,
+            },
+        )
+        detector.detect(df)
+
+        self.assertIn("series1", detector.changepoints_)
+        self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
+        self.assertGreater(len(detector.changepoints_["series1"]), 0)
+
+    def test_get_new_params_new_methods(self):
+        kcpd_params = ChangepointDetector.get_new_params(method="kcpd")
+        self.assertEqual(kcpd_params["method"], "kcpd")
+        self.assertIn("window_size", kcpd_params["method_params"])
+        self.assertIn("n_features", kcpd_params["method_params"])
+
+        bottom_up_params = ChangepointDetector.get_new_params(method="bottom_up")
+        self.assertEqual(bottom_up_params["method"], "bottom_up")
+        self.assertIn("initial_segment_length", bottom_up_params["method_params"])
+        self.assertIn("penalty_scale", bottom_up_params["method_params"])
 
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"

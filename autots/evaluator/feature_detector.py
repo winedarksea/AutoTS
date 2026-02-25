@@ -3569,6 +3569,68 @@ class FeatureDetectionLoss:
         value = fn(*args, **kwargs)
         return self._guard_loss_value(value, key, series_name=series_name)
 
+    def _chamfer_penalty(self, detected_dates, true_dates, cap=30.0, recall_weight=0.6):
+        """
+        Compute asymmetric Chamfer distance between two sets of dates.
+
+        Uses Gaussian-weighted proximity scoring instead of linear min/cap.
+        Recall (true->detected) is weighted higher than precision (detected->true)
+        by default, since missing a true event is worse than a false positive.
+
+        Parameters
+        ----------
+        detected_dates : list
+            Detected event dates.
+        true_dates : list
+            True event dates.
+        cap : float
+            Distance cap in days. Points beyond this contribute maximum penalty.
+        recall_weight : float
+            Weight for recall direction (true->detected). Precision gets 1 - recall_weight.
+
+        Returns
+        -------
+        float
+            Value between 0 (perfect) and 1 (worst), blending recall and precision.
+        """
+        if not true_dates and not detected_dates:
+            return 0.0
+        if not true_dates:
+            # Only false positives: penalty scales with count but caps at 1
+            return min(0.3 * len(detected_dates), 1.0)
+        if not detected_dates:
+            return 1.0
+
+        t_dates = [pd.Timestamp(d) for d in true_dates]
+        d_dates = [pd.Timestamp(d) for d in detected_dates]
+
+        epoch = min(min(t_dates), min(d_dates))
+        t_vals = np.array([(d - epoch).total_seconds() / 86400.0 for d in t_dates])
+        d_vals = np.array([(d - epoch).total_seconds() / 86400.0 for d in d_dates])
+
+        dists = np.abs(t_vals[:, None] - d_vals[None, :])
+
+        # Gaussian proximity: exp(-0.5 * (d/sigma)^2), sigma = cap/3
+        sigma = max(cap / 3.0, 1.0)
+
+        # Recall: for each true event, how close is the nearest detected?
+        t2d_dists = np.min(dists, axis=1)
+        t2d_scores = np.exp(-0.5 * (t2d_dists / sigma) ** 2)
+        recall_score = 1.0 - np.mean(t2d_scores)
+
+        # Precision: for each detected event, how close is the nearest true?
+        d2t_dists = np.min(dists, axis=0)
+        d2t_scores = np.exp(-0.5 * (d2t_dists / sigma) ** 2)
+        precision_score = 1.0 - np.mean(d2t_scores)
+
+        # Count mismatch penalty (soft)
+        count_ratio = abs(len(t_dates) - len(d_dates)) / (len(t_dates) + len(d_dates))
+        count_penalty = 0.15 * count_ratio
+
+        precision_weight = 1.0 - recall_weight
+        combined = recall_weight * recall_score + precision_weight * precision_score + count_penalty
+        return min(combined, 1.0)
+
     def _build_effective_weights(self, true_series_by_name, true_components):
         effective = copy.deepcopy(self.weights)
         disabled = []
@@ -3808,6 +3870,10 @@ class FeatureDetectionLoss:
         detected_entries = [self._parse_trend_event(event) for event in detected_cp]
         true_entries = [self._parse_trend_event(event) for event in true_cp]
         n_true = len(true_entries)
+        
+        # Add Chamfer penalty to guide optimizer when points are far apart
+        chamfer_loss = self._chamfer_penalty([x[0] for x in detected_entries], [x[0] for x in true_entries], cap=self.changepoint_tolerance_days * 5)
+        
         n_detected = len(detected_entries)
         unmatched_detected = set(range(n_detected))
 
@@ -3868,7 +3934,9 @@ class FeatureDetectionLoss:
                 )
                 loss += (distance_penalty + slope_penalty + sign_penalty) * importance
             else:
-                loss += 1.5 * importance
+                # Smoother miss penalty based on distance to nearest match
+                dist_penalty = min(best_dist, 60.0) / 60.0 if best_dist is not None else 1.0
+                loss += (1.2 + 0.5 * dist_penalty) * importance
 
         false_positives = len(unmatched_detected)
         loss += 0.2 * false_positives
@@ -3907,7 +3975,7 @@ class FeatureDetectionLoss:
                 )
                 loss += self.trend_complexity_weight * complexity_penalty
 
-        return loss
+        return loss + 0.6 * chamfer_loss
 
     def _trend_complexity_penalty(self, trend_values):
         if trend_values is None:
@@ -3957,6 +4025,9 @@ class FeatureDetectionLoss:
             self._parse_level_shift_event(event) for event in detected_ls
         ]
         true_entries = [self._parse_level_shift_event(event) for event in true_ls]
+        
+        chamfer_loss = self._chamfer_penalty([x[0] for x in detected_entries], [x[0] for x in true_entries], cap=self.level_shift_tolerance_days * 5)
+        
         changepoint_dates = [self._parse_trend_event(event)[0] for event in detected_cp]
         n_true = len(true_entries)
         n_detected = len(detected_entries)
@@ -3999,7 +4070,7 @@ class FeatureDetectionLoss:
                 if prox_cp:
                     loss += 0.5 * importance
                 else:
-                    loss += 1.2 * importance
+                    loss += 1.2 * importance + (0.3 * min(best_dist, 60)/60 if best_dist else 0)
 
         false_positives = len(unmatched_detected)
         loss += 0.15 * false_positives
@@ -4017,13 +4088,90 @@ class FeatureDetectionLoss:
             1.5**2 * precision + recall + 1e-9
         )
         loss += (1.0 - f_beta) * 1.5
-        return loss
+        return loss + 0.5 * chamfer_loss
+
+    def _soft_f1_anomaly(self, detected_entries, true_entries, sigma_days=None):
+        """
+        Compute soft F1 score for anomaly detection using Gaussian proximity weighting.
+
+        Instead of binary match/no-match within a tolerance window, each
+        detected-true pair gets a continuous match score based on Gaussian
+        proximity: score = exp(-0.5 * (dist/sigma)^2). This provides smooth
+        gradients for the optimizer even when detections are slightly outside
+        the hard tolerance boundary.
+
+        Parameters
+        ----------
+        detected_entries : list of tuples
+            Parsed anomaly events (date, magnitude, type, duration).
+        true_entries : list of tuples
+            Parsed true anomaly events.
+        sigma_days : float, optional
+            Standard deviation for Gaussian weighting (in days).
+            Defaults to anomaly_tolerance_days.
+
+        Returns
+        -------
+        dict
+            Contains 'soft_precision', 'soft_recall', 'soft_f1', and
+            'match_scores' (per-true-event best match quality).
+        """
+        if sigma_days is None:
+            sigma_days = max(self.anomaly_tolerance_days, 0.5)
+
+        if not true_entries and not detected_entries:
+            return {'soft_precision': 1.0, 'soft_recall': 1.0, 'soft_f1': 1.0, 'match_scores': []}
+        if not true_entries:
+            return {'soft_precision': 0.0, 'soft_recall': 1.0, 'soft_f1': 0.0, 'match_scores': []}
+        if not detected_entries:
+            return {'soft_precision': 1.0, 'soft_recall': 0.0, 'soft_f1': 0.0, 'match_scores': []}
+
+        t_dates = np.array([
+            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+            for e in true_entries
+        ])
+        d_dates = np.array([
+            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+            for e in detected_entries
+        ])
+
+        # Pairwise distance matrix
+        dists = np.abs(t_dates[:, None] - d_dates[None, :])  # (n_true, n_det)
+        # Gaussian proximity scores
+        proximity = np.exp(-0.5 * (dists / sigma_days) ** 2)
+
+        # Soft recall: for each true event, best match quality
+        match_scores = np.max(proximity, axis=1)  # best detected match per true
+        soft_recall = float(np.mean(match_scores))
+
+        # Soft precision: for each detected event, best match quality
+        precision_scores = np.max(proximity, axis=0)
+        soft_precision = float(np.mean(precision_scores))
+
+        # Soft F1 (beta=1.2, slightly recall-favoring)
+        beta = 1.2
+        beta_sq = beta ** 2
+        denom = beta_sq * soft_precision + soft_recall + 1e-9
+        soft_f1 = (1.0 + beta_sq) * (soft_precision * soft_recall) / denom
+
+        return {
+            'soft_precision': soft_precision,
+            'soft_recall': soft_recall,
+            'soft_f1': soft_f1,
+            'match_scores': match_scores.tolist(),
+        }
 
     def _anomaly_loss(self, detected_anom, true_anom):
         if not true_anom:
             return 0.3 * len(detected_anom)
         detected_entries = [self._parse_anomaly_event(event) for event in detected_anom]
         true_entries = [self._parse_anomaly_event(event) for event in true_anom]
+
+        # Soft F1 provides smooth gradient for optimizer even when detections
+        # are slightly outside hard tolerance boundaries
+        soft_f1_result = self._soft_f1_anomaly(detected_entries, true_entries)
+        soft_f1_loss = 1.0 - soft_f1_result['soft_f1']
+
         used_detected = set()
         loss = 0.0
         finite_true_mags = [
@@ -4075,7 +4223,8 @@ class FeatureDetectionLoss:
         if false_positives > 0:
             fp_penalty = (0.15 * false_positives) + (0.1 * np.sqrt(false_positives))
             loss += fp_penalty
-        return loss
+        # Blend hard-match detail loss with soft F1 for smoother optimization
+        return 0.6 * loss + 0.4 * soft_f1_loss * max(len(true_entries), 1)
 
     def _holiday_event_loss(self, detected_holidays, true_holidays, detected_anomalies):
         if not true_holidays:
@@ -4266,7 +4415,12 @@ class FeatureDetectionLoss:
         true_series = true_components.get('seasonality')
         if detected_series is None or true_series is None:
             return 0.5
-        return self._component_rmse_penalty(detected_series, true_series)
+        rmse_penalty = self._component_rmse_penalty(detected_series, true_series)
+        wasserstein_penalty = self._component_wasserstein_penalty(detected_series, true_series)
+        # Blend RMSE (point accuracy) with Wasserstein (shape/energy fitting)
+        # Wasserstein captures overall shape and energy distribution better
+        # than RMSE alone, which can over-penalize phase shifts
+        return 0.5 * rmse_penalty + 0.5 * wasserstein_penalty
 
     def _seasonality_changepoint_loss(
         self, detected_cp, true_cp, detected_components, true_components, date_index
@@ -4631,6 +4785,71 @@ class FeatureDetectionLoss:
         return min(combined_penalty, 3.0)
 
     @staticmethod
+    def _component_wasserstein_penalty(detected, true):
+        """
+        Compute a Wasserstein-inspired shape fitting penalty between two component arrays.
+
+        This metric captures overall energy distribution and shape similarity by
+        comparing the sorted cumulative distributions (1D Wasserstein / earth mover's
+        distance) of the differentials, plus a direct differential Wasserstein distance.
+
+        Advantages over RMSE for seasonality:
+        - Tolerant of small phase shifts (common in seasonality estimation)
+        - Captures overall energy/amplitude matching
+        - Rewards correct shape even when slightly misaligned in time
+
+        Returns
+        -------
+        float
+            Penalty between 0 (perfect match) and 3.0 (poor match).
+        """
+        detected_arr = np.asarray(detected, dtype=float).ravel()
+        true_arr = np.asarray(true, dtype=float).ravel()
+        length = min(detected_arr.size, true_arr.size)
+        if length < 2:
+            return 0.5
+        detected_arr = detected_arr[:length]
+        true_arr = true_arr[:length]
+        mask = np.isfinite(detected_arr) & np.isfinite(true_arr)
+        if mask.sum() < 2:
+            return 0.5
+        detected_arr = detected_arr[mask]
+        true_arr = true_arr[mask]
+
+        true_std = float(np.nanstd(true_arr))
+        if true_std < 1e-6 or not np.isfinite(true_std):
+            true_std = float(np.nanmean(np.abs(true_arr))) + 1e-6
+
+        # 1. Value-level Wasserstein: compare sorted distributions
+        det_sorted = np.sort(detected_arr)
+        true_sorted = np.sort(true_arr)
+        value_wasserstein = np.mean(np.abs(det_sorted - true_sorted)) / (true_std + 1e-6)
+
+        # 2. Differential Wasserstein: compare step-to-step changes
+        # This captures shape/energy better than point-wise comparison
+        det_diff = np.diff(detected_arr)
+        true_diff = np.diff(true_arr)
+        diff_std = float(np.nanstd(true_diff))
+        if diff_std < 1e-6 or not np.isfinite(diff_std):
+            diff_std = float(np.nanmean(np.abs(true_diff))) + 1e-6
+
+        det_diff_sorted = np.sort(det_diff)
+        true_diff_sorted = np.sort(true_diff)
+        diff_wasserstein = np.mean(np.abs(det_diff_sorted - true_diff_sorted)) / (diff_std + 1e-6)
+
+        # 3. Energy ratio: total absolute energy comparison
+        det_energy = float(np.sum(np.abs(detected_arr)))
+        true_energy = float(np.sum(np.abs(true_arr)))
+        energy_ratio = abs(det_energy - true_energy) / (true_energy + 1e-6)
+
+        combined = (
+            0.40 * min(value_wasserstein, 3.0)
+            + 0.40 * min(diff_wasserstein, 3.0)
+            + 0.20 * min(energy_ratio, 3.0)
+        )
+        return min(combined, 3.0)
+
+    @staticmethod
     def _is_number(value):
         try:
             float(value)
@@ -4652,6 +4871,7 @@ class ReconstructionLoss(FeatureDetectionLoss):
         'trend_smoothness_loss': 1.2,
         'trend_dominance_loss': 0.9,
         'seasonality_capture_loss': 0.8,
+        'seasonality_shape_loss': 0.6,
         'anomaly_capture_loss': 0.7,
     }
 
@@ -4813,11 +5033,19 @@ class ReconstructionLoss(FeatureDetectionLoss):
             anomalies,
         )
 
+        seasonality_shape = self._seasonality_shape_penalty(
+            observed_series,
+            trend,
+            level_shift,
+            seasonality + holidays,
+        )
+
         return {
             'reconstruction_loss': reconstruction_loss,
             'trend_smoothness_loss': trend_smoothness,
             'trend_dominance_loss': trend_dominance,
             'seasonality_capture_loss': seasonality_capture,
+            'seasonality_shape_loss': seasonality_shape,
             'anomaly_capture_loss': anomaly_capture,
         }
 
@@ -4916,20 +5144,103 @@ class ReconstructionLoss(FeatureDetectionLoss):
             return 0.0
 
         residual = observed - trend - level_shift - seasonal_bundle
-        pre_std = float(np.nanstd(residual.to_numpy(dtype=float)))
+        pre_values = residual.to_numpy(dtype=float)
+        pre_std = float(np.nanstd(pre_values))
         if pre_std < self.anomaly_min_pre_std:
             return 0.0
 
         post_series = residual - anomalies
-        post_std = float(np.nanstd(post_series.to_numpy(dtype=float)))
+        post_values = post_series.to_numpy(dtype=float)
+        post_std = float(np.nanstd(post_values))
         if not np.isfinite(post_std):
             return 0.0
 
-        improvement = max(0.0, (pre_std - post_std) / (pre_std + 1e-6))
-        if improvement >= self.anomaly_improvement_target:
+        # Std-based improvement
+        std_improvement = max(0.0, (pre_std - post_std) / (pre_std + 1e-6))
+
+        # Kurtosis-based improvement: anomaly removal should reduce heavy tails
+        pre_finite = pre_values[np.isfinite(pre_values)]
+        post_finite = post_values[np.isfinite(post_values)]
+        kurtosis_improvement = 0.0
+        if pre_finite.size > 4 and post_finite.size > 4:
+            pre_kurtosis = self._excess_kurtosis(pre_finite)
+            post_kurtosis = self._excess_kurtosis(post_finite)
+            if pre_kurtosis > 0.5:  # Only penalize if there are heavy tails to capture
+                kurtosis_improvement = max(0.0, (pre_kurtosis - post_kurtosis) / (pre_kurtosis + 1e-6))
+
+        # Blend std and kurtosis improvement
+        combined_improvement = 0.7 * std_improvement + 0.3 * kurtosis_improvement
+
+        if combined_improvement >= self.anomaly_improvement_target:
             return 0.0
-        deficit = self.anomaly_improvement_target - improvement
+        deficit = self.anomaly_improvement_target - combined_improvement
         return min(max(deficit, 0.0), 1.5)
+
+    def _seasonality_shape_penalty(
+        self, observed, trend, level_shift, seasonal_bundle
+    ):
+        """
+        Wasserstein-based penalty assessing whether the seasonal component captures
+        the right shape/energy of the detrended signal's periodic structure.
+
+        Compares the differential (step-to-step change) distributions of the
+        detrended observed signal and the seasonal component. Good seasonality
+        extraction should produce a seasonal component whose differential
+        Wasserstein distribution is close to the periodic portion of the original.
+        """
+        seasonal_arr = seasonal_bundle.to_numpy(dtype=float)
+        seasonal_std = float(np.nanstd(seasonal_arr))
+        if seasonal_std < 1e-6:
+            return 0.0  # No seasonality to evaluate
+
+        detrended = (observed - trend - level_shift).to_numpy(dtype=float)
+        mask = np.isfinite(detrended) & np.isfinite(seasonal_arr)
+        if mask.sum() < 3:
+            return 0.0
+        detrended = detrended[mask]
+        seasonal_arr = seasonal_arr[mask]
+
+        # Compare differential distributions (shape/energy matching)
+        det_diff = np.diff(detrended)
+        sea_diff = np.diff(seasonal_arr)
+
+        if det_diff.size < 2:
+            return 0.0
+
+        # Sort and compute 1D Wasserstein distance on differentials
+        det_diff_sorted = np.sort(det_diff)
+        sea_diff_sorted = np.sort(sea_diff)
+        diff_scale = float(np.std(det_diff))
+        if diff_scale < 1e-6 or not np.isfinite(diff_scale):
+            diff_scale = float(np.mean(np.abs(det_diff))) + 1e-6
+
+        diff_wasserstein = np.mean(np.abs(det_diff_sorted - sea_diff_sorted)) / (diff_scale + 1e-6)
+
+        # Energy ratio: seasonal should capture a meaningful portion of detrended energy
+        detrended_energy = float(np.sum(detrended ** 2))
+        residual_energy = float(np.sum((detrended - seasonal_arr) ** 2))
+        if detrended_energy > 1e-6:
+            energy_capture = 1.0 - (residual_energy / detrended_energy)
+            # Penalize if capturing too little or negative (worse than nothing)
+            energy_penalty = max(0.0, 0.3 - energy_capture) if energy_capture >= 0 else abs(energy_capture)
+        else:
+            energy_penalty = 0.0
+
+        combined = 0.6 * min(diff_wasserstein, 2.0) + 0.4 * min(energy_penalty, 2.0)
+        return min(combined, 2.0)
+
+    @staticmethod
+    def _excess_kurtosis(values):
+        """Compute excess kurtosis (Fisher definition: normal = 0)."""
+        n = len(values)
+        if n < 4:
+            return 0.0
+        mean = np.mean(values)
+        std = np.std(values)
+        if std < 1e-9:
+            return 0.0
+        m4 = np.mean((values - mean) ** 4)
+        return (m4 / (std ** 4)) - 3.0
 
     @staticmethod
     def _autocorrelation(values, lag):

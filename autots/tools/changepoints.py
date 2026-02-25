@@ -1,4 +1,5 @@
 import random
+import heapq
 from functools import lru_cache
 import numpy as np
 import pandas as pd
@@ -13,6 +14,8 @@ valid_changepoint_methods = [
     'cusum',
     'ewma',
     'autoencoder',
+    'kcpd',
+    'bottom_up',
     'composite_fused_lasso',
     'multiresolution',
 ]
@@ -427,6 +430,346 @@ def _simple_threshold_changepoints(data):
     changepoints = np.where(diffs > threshold)[0] + 1
 
     return changepoints
+
+
+def _select_distant_changepoints(
+    candidate_indices,
+    candidate_scores,
+    min_distance,
+    max_changepoints=None,
+):
+    """Select top-scoring changepoints while enforcing minimum separation."""
+    if candidate_indices is None or len(candidate_indices) == 0:
+        return np.array([], dtype=int)
+
+    idx_array = np.asarray(candidate_indices, dtype=int)
+    score_array = np.asarray(candidate_scores, dtype=float)
+    if idx_array.size == 0:
+        return np.array([], dtype=int)
+
+    min_distance = max(1, int(min_distance))
+    if max_changepoints is not None:
+        max_changepoints = max(1, int(max_changepoints))
+
+    order = np.argsort(score_array)[::-1]
+    selected = []
+    for pos in order:
+        cp = int(idx_array[pos])
+        if all(abs(cp - prior) >= min_distance for prior in selected):
+            selected.append(cp)
+            if max_changepoints is not None and len(selected) >= max_changepoints:
+                break
+
+    if not selected:
+        return np.array([], dtype=int)
+    return np.array(sorted(selected), dtype=int)
+
+
+def _detect_kcpd_changepoints(
+    data,
+    kernel='rbf',
+    window_size=24,
+    min_distance=10,
+    min_segment_length=5,
+    n_features=24,
+    bandwidth='auto',
+    bandwidth_scale=1.0,
+    score_threshold='auto',
+    score_quantile=0.9,
+    max_changepoints=10,
+    random_state=42,
+):
+    """
+    Efficient approximate Kernel Change Point Detection using random feature embeddings.
+
+    Computes sliding-window kernel mean discrepancy scores and extracts high-scoring
+    local maxima as changepoints.
+    """
+    series = np.asarray(data, dtype=float).flatten()
+    n = len(series)
+    if n < 5:
+        return np.array([], dtype=int), np.zeros(n, dtype=float)
+
+    if not np.all(np.isfinite(series)):
+        finite_mask = np.isfinite(series)
+        if not finite_mask.any():
+            return np.array([], dtype=int), np.zeros(n, dtype=float)
+        series = (
+            pd.Series(series)
+            .interpolate(limit_direction='both')
+            .fillna(float(np.nanmedian(series[finite_mask])))
+            .to_numpy(dtype=float)
+        )
+
+    centered = series - float(np.mean(series))
+    std = float(np.std(centered))
+    if std > 1e-8:
+        centered = centered / std
+
+    win = int(max(2, window_size))
+    max_allowed = max(2, n // 2)
+    win = min(win, max_allowed)
+    if n < 2 * win + 1:
+        win = max(2, n // 3)
+    if n < 2 * win + 1:
+        return np.array([], dtype=int), np.zeros(n, dtype=float)
+
+    kernel_key = str(kernel).lower()
+    if kernel_key == 'linear':
+        features = centered.reshape(-1, 1)
+    elif kernel_key in {'rbf', 'gaussian', 'laplacian'}:
+        n_features = max(4, int(n_features))
+        if bandwidth in {None, 'auto'}:
+            q75, q25 = np.percentile(centered, [75, 25])
+            iqr_scale = (q75 - q25) / 1.349 if q75 > q25 else 0.0
+            sigma = max(iqr_scale, float(np.std(centered)), 0.1)
+        else:
+            sigma = max(1e-3, float(bandwidth))
+        sigma *= max(1e-3, float(bandwidth_scale))
+
+        rng = np.random.default_rng(random_state)
+        if kernel_key == 'laplacian':
+            omega = rng.standard_cauchy(size=n_features) / sigma
+        else:
+            omega = rng.normal(0.0, 1.0 / sigma, size=n_features)
+        phase = rng.uniform(0.0, 2 * np.pi, size=n_features)
+        projection = np.outer(centered, omega) + phase
+        features = np.sqrt(2.0 / n_features) * np.cos(projection)
+    else:
+        raise ValueError(
+            f"Unsupported kernel '{kernel}'. Use 'rbf', 'laplacian', or 'linear'."
+        )
+
+    csum = np.vstack(
+        [np.zeros((1, features.shape[1]), dtype=float), np.cumsum(features, axis=0)]
+    )
+    candidate_positions = np.arange(win, n - win + 1, dtype=int)
+    left_means = (csum[candidate_positions] - csum[candidate_positions - win]) / win
+    right_means = (
+        csum[candidate_positions + win] - csum[candidate_positions]
+    ) / win
+    diffs = left_means - right_means
+    local_scores = np.einsum('ij,ij->i', diffs, diffs)
+
+    scores = np.zeros(n, dtype=float)
+    if local_scores.size == 0:
+        return np.array([], dtype=int), scores
+
+    median = float(np.median(local_scores))
+    mad = float(np.median(np.abs(local_scores - median)))
+    if mad > 1e-9:
+        normalized_scores = (local_scores - median) / (1.4826 * mad)
+    else:
+        local_std = float(np.std(local_scores))
+        normalized_scores = (local_scores - float(np.mean(local_scores))) / (
+            local_std + 1e-9
+        )
+    scores[candidate_positions] = normalized_scores
+
+    if score_threshold in {None, 'auto'}:
+        threshold_val = float(np.quantile(normalized_scores, float(score_quantile)))
+    else:
+        threshold_val = float(score_threshold)
+
+    peak_mask = np.zeros_like(normalized_scores, dtype=bool)
+    if normalized_scores.size == 1:
+        peak_mask[0] = True
+    elif normalized_scores.size > 1:
+        peak_mask[0] = normalized_scores[0] >= normalized_scores[1]
+        peak_mask[-1] = normalized_scores[-1] >= normalized_scores[-2]
+        if normalized_scores.size > 2:
+            peak_mask[1:-1] = (normalized_scores[1:-1] >= normalized_scores[:-2]) & (
+                normalized_scores[1:-1] >= normalized_scores[2:]
+            )
+
+    keep_mask = peak_mask & (normalized_scores >= threshold_val)
+    raw_candidates = candidate_positions[keep_mask]
+    raw_scores = normalized_scores[keep_mask]
+
+    effective_min_distance = max(
+        int(min_distance),
+        int(min_segment_length),
+        int(win // 2),
+    )
+    changepoints = _select_distant_changepoints(
+        raw_candidates,
+        raw_scores,
+        min_distance=effective_min_distance,
+        max_changepoints=max_changepoints,
+    )
+    if changepoints.size:
+        changepoints = changepoints[(changepoints > 1) & (changepoints < n - 1)]
+    return changepoints, scores
+
+
+def _detect_bottom_up_changepoints(
+    data,
+    min_segment_length=5,
+    initial_segment_length='auto',
+    penalty='auto',
+    penalty_scale=1.0,
+    max_changepoints=12,
+):
+    """
+    Bottom-up segmentation using heap-based adjacent-merge optimization.
+
+    Starts with fine segments and greedily merges the pair with the smallest
+    increase in L2 segmentation cost.
+    """
+    series = np.asarray(data, dtype=float).flatten()
+    n = len(series)
+    if n == 0:
+        return np.array([], dtype=int), np.array([], dtype=float)
+
+    min_segment_length = max(1, int(min_segment_length))
+    if n < 2 * min_segment_length:
+        return np.array([], dtype=int), series.copy()
+
+    if initial_segment_length in {None, 'auto'}:
+        base_segment = max(min_segment_length, 10)
+    else:
+        base_segment = max(min_segment_length, int(initial_segment_length))
+
+    starts = list(range(0, n, base_segment))
+    if len(starts) < 2:
+        return np.array([], dtype=int), series.copy()
+    if (n - starts[-1]) < min_segment_length and len(starts) > 1:
+        starts.pop()
+    if len(starts) < 2:
+        return np.array([], dtype=int), series.copy()
+
+    ends = starts[1:] + [n]
+    segment_count = len(starts)
+
+    prefix_sum = np.concatenate(([0.0], np.cumsum(series)))
+    prefix_sq_sum = np.concatenate(([0.0], np.cumsum(series**2)))
+
+    def segment_cost(start, end):
+        length = end - start
+        if length <= 0:
+            return 0.0
+        seg_sum = prefix_sum[end] - prefix_sum[start]
+        seg_sq_sum = prefix_sq_sum[end] - prefix_sq_sum[start]
+        return float(seg_sq_sum - (seg_sum**2) / length)
+
+    costs = np.array(
+        [segment_cost(starts[idx], ends[idx]) for idx in range(segment_count)],
+        dtype=float,
+    )
+
+    if penalty in {None, 'auto'}:
+        var = float(np.var(series))
+        penalty_val = (
+            max(1e-8, var) * np.log(max(3, n)) * max(1e-3, float(penalty_scale))
+        )
+    else:
+        penalty_val = float(penalty)
+
+    if max_changepoints in {None, 'auto'}:
+        target_segments = 1
+    else:
+        max_cp = max(0, int(max_changepoints))
+        target_segments = max(1, max_cp + 1)
+
+    prev_idx = np.arange(-1, segment_count - 1, dtype=int)
+    next_idx = np.arange(1, segment_count + 1, dtype=int)
+    next_idx[-1] = -1
+    active = np.ones(segment_count, dtype=bool)
+    version = np.zeros(segment_count, dtype=int)
+    active_count = segment_count
+
+    heap = []
+
+    def push_pair(left):
+        if left < 0 or left >= segment_count or not active[left]:
+            return
+        right = next_idx[left]
+        if right == -1 or not active[right]:
+            return
+        merged_cost = segment_cost(starts[left], ends[right])
+        increase = merged_cost - costs[left] - costs[right]
+        heapq.heappush(
+            heap,
+            (
+                float(increase),
+                int(left),
+                int(version[left]),
+                int(version[right]),
+            ),
+        )
+
+    for left in range(segment_count - 1):
+        push_pair(left)
+
+    while heap and active_count > target_segments:
+        increase, left, left_version, right_version = heapq.heappop(heap)
+        right = next_idx[left] if 0 <= left < segment_count else -1
+        if right == -1:
+            continue
+        if (
+            (not active[left])
+            or (not active[right])
+            or version[left] != left_version
+            or version[right] != right_version
+        ):
+            continue
+        if penalty_val >= 0 and increase > penalty_val:
+            break
+
+        ends[left] = ends[right]
+        costs[left] = segment_cost(starts[left], ends[left])
+        active[right] = False
+        active_count -= 1
+        next_idx[left] = next_idx[right]
+        if next_idx[right] != -1:
+            prev_idx[next_idx[right]] = left
+        version[left] += 1
+
+        push_pair(left)
+        left_neighbor = prev_idx[left]
+        if left_neighbor != -1:
+            push_pair(left_neighbor)
+
+    first_active = np.where(active & (prev_idx == -1))[0]
+    if first_active.size > 0:
+        cursor = int(first_active[0])
+    else:
+        active_idx = np.where(active)[0]
+        if active_idx.size == 0:
+            return np.array([], dtype=int), series.copy()
+        cursor = int(active_idx[0])
+        while prev_idx[cursor] != -1:
+            cursor = int(prev_idx[cursor])
+
+    segment_ids = []
+    while cursor != -1:
+        if active[cursor]:
+            segment_ids.append(cursor)
+        cursor = int(next_idx[cursor])
+
+    cps = np.array([ends[idx] for idx in segment_ids[:-1]], dtype=int)
+    if cps.size:
+        cps = cps[(cps > 0) & (cps < n)]
+        if cps.size > 1:
+            filtered = [int(cps[0])]
+            for cp in cps[1:]:
+                if cp - filtered[-1] >= min_segment_length:
+                    filtered.append(int(cp))
+            cps = np.array(filtered, dtype=int)
+    else:
+        cps = np.array([], dtype=int)
+
+    fitted_trend = series.copy()
+    for idx in segment_ids:
+        start = starts[idx]
+        end = ends[idx]
+        seg_len = end - start
+        if seg_len <= 0:
+            continue
+        seg_mean = (prefix_sum[end] - prefix_sum[start]) / seg_len
+        fitted_trend[start:end] = seg_mean
+
+    return cps, fitted_trend
 
 
 def _detect_ewma_changepoints(
@@ -1610,7 +1953,8 @@ def create_changepoint_features(
     DTindex (pd.DatetimeIndex): a datetimeindex
     changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
     changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso', 'l1_total_variation', 'cusum', 'ewma', 'autoencoder')
+    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
+        'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd', 'bottom_up')
     params (dict): Additional parameters for the chosen method
     data (array-like): Time series data (required for advanced methods)
 
@@ -1682,6 +2026,16 @@ def create_changepoint_features(
         if data is None:
             raise ValueError("Data is required for autoencoder changepoint detection")
         return _create_autoencoder_changepoint_features(DTindex, data, params)
+
+    elif method == 'kcpd':
+        if data is None:
+            raise ValueError("Data is required for KCPD changepoint detection")
+        return _create_kcpd_changepoint_features(DTindex, data, params)
+
+    elif method == 'bottom_up':
+        if data is None:
+            raise ValueError("Data is required for bottom-up changepoint detection")
+        return _create_bottom_up_changepoint_features(DTindex, data, params)
 
     else:
         raise ValueError(f"Unknown changepoint detection method: {method}")
@@ -1848,6 +2202,76 @@ def _create_autoencoder_changepoint_features(
     return changepoint_features
 
 
+def _create_kcpd_changepoint_features(
+    DTindex,
+    data,
+    params=None,
+):
+    """Create changepoint features using efficient approximate KCPD."""
+    if params is None:
+        params = {}
+
+    changepoints, _ = _detect_kcpd_changepoints(
+        data,
+        kernel=params.get('kernel', 'rbf'),
+        window_size=params.get('window_size', 24),
+        min_distance=params.get('min_distance', 10),
+        min_segment_length=params.get('min_segment_length', 5),
+        n_features=params.get('n_features', 24),
+        bandwidth=params.get('bandwidth', 'auto'),
+        bandwidth_scale=params.get('bandwidth_scale', 1.0),
+        score_threshold=params.get('score_threshold', 'auto'),
+        score_quantile=params.get('score_quantile', 0.9),
+        max_changepoints=params.get('max_changepoints', 10),
+        random_state=params.get('random_state', 42),
+    )
+
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'kcpd_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
+def _create_bottom_up_changepoint_features(
+    DTindex,
+    data,
+    params=None,
+):
+    """Create changepoint features using bottom-up segmentation."""
+    if params is None:
+        params = {}
+
+    changepoints, _ = _detect_bottom_up_changepoints(
+        data,
+        min_segment_length=params.get('min_segment_length', 5),
+        initial_segment_length=params.get('initial_segment_length', 'auto'),
+        penalty=params.get('penalty', 'auto'),
+        penalty_scale=params.get('penalty_scale', 1.0),
+        max_changepoints=params.get('max_changepoints', 12),
+    )
+
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'bottom_up_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
 def _approximate_l1_trend_filter(data, D, lambda_reg):
     """Approximate L1 trend filtering using iterative reweighting."""
     n = len(data)
@@ -1957,7 +2381,8 @@ class ChangepointDetector(object):
 
         Args:
             method (str): Changepoint detection method ('basic', 'pelt', 'l1_fused_lasso',
-                'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'composite_fused_lasso')
+                'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd',
+                'bottom_up', 'composite_fused_lasso')
             method_params (dict): Parameters specific to the chosen method
             aggregate_method (str): How to aggregate across series ('mean', 'median', 'individual')
             min_segment_length (int): Minimum length of segments between changepoints
@@ -2063,6 +2488,35 @@ class ChangepointDetector(object):
                 data,
                 method_params=params,
                 min_distance=min_distance,
+            )
+
+        elif method == 'kcpd':
+            changepoints, _ = _detect_kcpd_changepoints(
+                data,
+                kernel=params.get('kernel', 'rbf'),
+                window_size=params.get(
+                    'window_size', max(8, 2 * self.min_segment_length)
+                ),
+                min_distance=params.get('min_distance', self.min_segment_length),
+                min_segment_length=self.min_segment_length,
+                n_features=params.get('n_features', 24),
+                bandwidth=params.get('bandwidth', 'auto'),
+                bandwidth_scale=params.get('bandwidth_scale', 1.0),
+                score_threshold=params.get('score_threshold', 'auto'),
+                score_quantile=params.get('score_quantile', 0.9),
+                max_changepoints=params.get('max_changepoints', 10),
+                random_state=params.get('random_state', 42),
+            )
+            fitted_trend = data
+
+        elif method == 'bottom_up':
+            changepoints, fitted_trend = _detect_bottom_up_changepoints(
+                data,
+                min_segment_length=self.min_segment_length,
+                initial_segment_length=params.get('initial_segment_length', 'auto'),
+                penalty=params.get('penalty', 'auto'),
+                penalty_scale=params.get('penalty_scale', 1.0),
+                max_changepoints=params.get('max_changepoints', 12),
             )
 
         elif method == 'composite_fused_lasso':
@@ -2213,6 +2667,54 @@ class ChangepointDetector(object):
             )
             results.update(auto_results)
 
+        elif self.method == 'kcpd':
+            for name, arr in zip(series_names, series_arrays):
+                if len(arr) < max(5, 2 * self.min_segment_length):
+                    results[name] = {
+                        'changepoints': np.array([], dtype=int),
+                        'fitted': arr,
+                    }
+                    continue
+                cps, _ = _detect_kcpd_changepoints(
+                    arr,
+                    kernel=method_params.get('kernel', 'rbf'),
+                    window_size=method_params.get(
+                        'window_size', max(8, 2 * self.min_segment_length)
+                    ),
+                    min_distance=method_params.get(
+                        'min_distance', self.min_segment_length
+                    ),
+                    min_segment_length=self.min_segment_length,
+                    n_features=method_params.get('n_features', 24),
+                    bandwidth=method_params.get('bandwidth', 'auto'),
+                    bandwidth_scale=method_params.get('bandwidth_scale', 1.0),
+                    score_threshold=method_params.get('score_threshold', 'auto'),
+                    score_quantile=method_params.get('score_quantile', 0.9),
+                    max_changepoints=method_params.get('max_changepoints', 10),
+                    random_state=method_params.get('random_state', 42),
+                )
+                results[name] = {'changepoints': cps, 'fitted': arr}
+
+        elif self.method == 'bottom_up':
+            for name, arr in zip(series_names, series_arrays):
+                if len(arr) < max(5, 2 * self.min_segment_length):
+                    results[name] = {
+                        'changepoints': np.array([], dtype=int),
+                        'fitted': arr,
+                    }
+                    continue
+                cps, fitted = _detect_bottom_up_changepoints(
+                    arr,
+                    min_segment_length=self.min_segment_length,
+                    initial_segment_length=method_params.get(
+                        'initial_segment_length', 'auto'
+                    ),
+                    penalty=method_params.get('penalty', 'auto'),
+                    penalty_scale=method_params.get('penalty_scale', 1.0),
+                    max_changepoints=method_params.get('max_changepoints', 12),
+                )
+                results[name] = {'changepoints': cps, 'fitted': fitted}
+
         else:
             raise ValueError(
                 f"Vectorized detection not implemented for method: {self.method}"
@@ -2273,6 +2775,8 @@ class ChangepointDetector(object):
                 'l1_fused_lasso',
                 'l1_total_variation',
                 'autoencoder',
+                'kcpd',
+                'bottom_up',
             }:
                 self._detect_individual_vectorized(df)
             else:
@@ -2358,6 +2862,42 @@ class ChangepointDetector(object):
                     aggregated_data,
                     method_params=self.method_params,
                     min_distance=min_distance,
+                )
+
+            elif self.method == 'kcpd':
+                self.changepoints_, _ = _detect_kcpd_changepoints(
+                    aggregated_data,
+                    kernel=self.method_params.get('kernel', 'rbf'),
+                    window_size=self.method_params.get(
+                        'window_size', max(8, 2 * self.min_segment_length)
+                    ),
+                    min_distance=self.method_params.get(
+                        'min_distance', self.min_segment_length
+                    ),
+                    min_segment_length=self.min_segment_length,
+                    n_features=self.method_params.get('n_features', 24),
+                    bandwidth=self.method_params.get('bandwidth', 'auto'),
+                    bandwidth_scale=self.method_params.get('bandwidth_scale', 1.0),
+                    score_threshold=self.method_params.get('score_threshold', 'auto'),
+                    score_quantile=self.method_params.get('score_quantile', 0.9),
+                    max_changepoints=self.method_params.get('max_changepoints', 10),
+                    random_state=self.method_params.get('random_state', 42),
+                )
+                self.fitted_trends_ = aggregated_data
+
+            elif self.method == 'bottom_up':
+                (
+                    self.changepoints_,
+                    self.fitted_trends_,
+                ) = _detect_bottom_up_changepoints(
+                    aggregated_data,
+                    min_segment_length=self.min_segment_length,
+                    initial_segment_length=self.method_params.get(
+                        'initial_segment_length', 'auto'
+                    ),
+                    penalty=self.method_params.get('penalty', 'auto'),
+                    penalty_scale=self.method_params.get('penalty_scale', 1.0),
+                    max_changepoints=self.method_params.get('max_changepoints', 12),
                 )
 
             elif self.method == 'composite_fused_lasso':
@@ -3080,7 +3620,8 @@ class ChangepointDetector(object):
             method (str): Method for parameter selection
                 - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
                 - Or specify a method name directly: 'basic', 'pelt', 'l1_fused_lasso',
-                  'l1_total_variation', 'cusum', 'autoencoder', 'composite_fused_lasso'
+                  'l1_total_variation', 'cusum', 'ewma', 'kcpd', 'bottom_up',
+                  'autoencoder', 'composite_fused_lasso'
 
         Returns:
             dict: Complete parameter dictionary for ChangepointDetector initialization
@@ -3103,6 +3644,8 @@ class ChangepointDetector(object):
                 'basic',
                 'cusum',
                 'ewma',
+                'kcpd',
+                'bottom_up',
                 'l1_fused_lasso',
                 'l1_total_variation',
                 'pelt',
@@ -3111,7 +3654,20 @@ class ChangepointDetector(object):
                 'multiresolution',
                 'none',
             ]
-            method_weights = [0.26, 0.22, 0.22, 0.07, 0.05, 0.03, 0.02, 0.01, 0.08, 0.04]
+            method_weights = [
+                0.20,
+                0.18,
+                0.18,
+                0.10,
+                0.10,
+                0.06,
+                0.04,
+                0.03,
+                0.01,
+                0.01,
+                0.05,
+                0.04,
+            ]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
         elif method in ["default", "random"]:
             # Heavily weight basic method for compatibility, with EWMA and CUSUM as good alternatives
@@ -3120,6 +3676,8 @@ class ChangepointDetector(object):
                 'basic',
                 'cusum',
                 'ewma',
+                'kcpd',
+                'bottom_up',
                 'pelt',
                 'l1_fused_lasso',
                 'l1_total_variation',
@@ -3127,7 +3685,19 @@ class ChangepointDetector(object):
                 'multiresolution',
                 'none',
             ]
-            method_weights = [0.38, 0.17, 0.17, 0.05, 0.04, 0.03, 0.03, 0.08, 0.05]
+            method_weights = [
+                0.30,
+                0.15,
+                0.15,
+                0.10,
+                0.10,
+                0.04,
+                0.03,
+                0.02,
+                0.02,
+                0.05,
+                0.04,
+            ]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"
         else:  # random
@@ -3317,6 +3887,90 @@ class ChangepointDetector(object):
                 )[0],
                 'min_distance': random.choices(
                     min_distance_options, weights=min_distance_weights, k=1
+                )[0],
+            }
+
+        elif new_method == 'kcpd':
+            if selection_mode == "fast":
+                kernel_options = ['rbf', 'linear']
+                kernel_weights = [0.9, 0.1]
+                window_options = [16, 24, 32, 48]
+                window_weights = [0.2, 0.4, 0.3, 0.1]
+                feature_options = [12, 16, 24]
+                feature_weights = [0.25, 0.5, 0.25]
+                distance_options = [8, 10, 14, 20]
+                distance_weights = [0.2, 0.4, 0.3, 0.1]
+                quantile_options = [0.85, 0.9, 0.93]
+                quantile_weights = [0.25, 0.5, 0.25]
+                max_cp_options = [6, 8, 10]
+                max_cp_weights = [0.4, 0.4, 0.2]
+            else:
+                kernel_options = ['rbf', 'laplacian', 'linear']
+                kernel_weights = [0.7, 0.15, 0.15]
+                window_options = [12, 16, 24, 32, 48]
+                window_weights = [0.1, 0.2, 0.35, 0.25, 0.1]
+                feature_options = [12, 16, 24, 32]
+                feature_weights = [0.15, 0.35, 0.35, 0.15]
+                distance_options = [6, 8, 10, 14, 20]
+                distance_weights = [0.1, 0.2, 0.35, 0.25, 0.1]
+                quantile_options = [0.8, 0.85, 0.9, 0.93]
+                quantile_weights = [0.1, 0.2, 0.45, 0.25]
+                max_cp_options = [6, 8, 10, 14]
+                max_cp_weights = [0.25, 0.35, 0.25, 0.15]
+
+            new_params = {
+                'kernel': random.choices(kernel_options, weights=kernel_weights, k=1)[
+                    0
+                ],
+                'window_size': random.choices(
+                    window_options, weights=window_weights, k=1
+                )[0],
+                'n_features': random.choices(
+                    feature_options, weights=feature_weights, k=1
+                )[0],
+                'bandwidth': 'auto',
+                'bandwidth_scale': random.choices(
+                    [0.75, 1.0, 1.25, 1.5], weights=[0.15, 0.5, 0.2, 0.15], k=1
+                )[0],
+                'score_threshold': 'auto',
+                'score_quantile': random.choices(
+                    quantile_options, weights=quantile_weights, k=1
+                )[0],
+                'min_distance': random.choices(
+                    distance_options, weights=distance_weights, k=1
+                )[0],
+                'max_changepoints': random.choices(
+                    max_cp_options, weights=max_cp_weights, k=1
+                )[0],
+                'random_state': 42,
+            }
+
+        elif new_method == 'bottom_up':
+            if selection_mode == "fast":
+                init_options = [12, 16, 24, 32]
+                init_weights = [0.2, 0.4, 0.3, 0.1]
+                penalty_scale_options = [0.75, 1.0, 1.5, 2.0]
+                penalty_scale_weights = [0.2, 0.45, 0.25, 0.1]
+                max_cp_options = [5, 8, 10]
+                max_cp_weights = [0.35, 0.45, 0.2]
+            else:
+                init_options = [8, 12, 16, 24, 32]
+                init_weights = [0.1, 0.25, 0.3, 0.25, 0.1]
+                penalty_scale_options = [0.5, 0.75, 1.0, 1.5, 2.0]
+                penalty_scale_weights = [0.1, 0.2, 0.4, 0.2, 0.1]
+                max_cp_options = [5, 8, 10, 14]
+                max_cp_weights = [0.2, 0.35, 0.3, 0.15]
+
+            new_params = {
+                'initial_segment_length': random.choices(
+                    init_options, weights=init_weights, k=1
+                )[0],
+                'penalty': 'auto',
+                'penalty_scale': random.choices(
+                    penalty_scale_options, weights=penalty_scale_weights, k=1
+                )[0],
+                'max_changepoints': random.choices(
+                    max_cp_options, weights=max_cp_weights, k=1
                 )[0],
             }
 
