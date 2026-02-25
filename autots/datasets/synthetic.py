@@ -137,6 +137,16 @@ class SyntheticDailyGenerator:
         ``filtered[t] = coef * filtered[t-1] + (1 - coef) * noise[t]``
         Higher values produce smoother, more autocorrelated noise.
         When None, noise uses standard i.i.d. generation.
+    holiday_signal_floor_pct : float
+        Optional floor for holiday magnitude as a fraction of baseline signal
+        (`scale * 50`). Useful when noise_level is very low and holiday amplitudes
+        would otherwise be too small to detect (default 0.0 = disabled).
+    random_dom_holiday_count : int or None
+        If provided, fixes the number of random day-of-month holiday templates.
+        None keeps the existing random count behavior.
+    random_wkdom_holiday_count : int or None
+        If provided, fixes the number of random weekday-of-month holiday templates.
+        None keeps the existing random count behavior.
     series_type_override : str or None
         If set, ALL series use this type instead of the default type map.
         Use 'standard' to force all series to be standard type during tuning.
@@ -209,6 +219,9 @@ class SyntheticDailyGenerator:
         yearly_fourier_target=None,
         noise_ar_coefficient=None,
         volatility_regime_intensity=0.0,
+        holiday_signal_floor_pct=0.0,
+        random_dom_holiday_count=None,
+        random_wkdom_holiday_count=None,
         series_type_override=None,
     ):
         self.start_date = pd.Timestamp(start_date)
@@ -271,6 +284,17 @@ class SyntheticDailyGenerator:
             noise_ar_coefficient = float(np.clip(noise_ar_coefficient, 0.0, 0.99))
         self.noise_ar_coefficient = noise_ar_coefficient
         self.volatility_regime_intensity = max(0.0, float(volatility_regime_intensity))
+        self.holiday_signal_floor_pct = max(0.0, float(holiday_signal_floor_pct))
+        self.random_dom_holiday_count = (
+            None
+            if random_dom_holiday_count is None
+            else max(0, int(random_dom_holiday_count))
+        )
+        self.random_wkdom_holiday_count = (
+            None
+            if random_wkdom_holiday_count is None
+            else max(0, int(random_wkdom_holiday_count))
+        )
         self.series_type_override = series_type_override
 
         # Validate and set anomaly types
@@ -393,6 +417,9 @@ class SyntheticDailyGenerator:
                     'volatility_regime_intensity': float(
                         self.volatility_regime_intensity
                     ),
+                    'holiday_signal_floor_pct': float(self.holiday_signal_floor_pct),
+                    'random_dom_holiday_count': self.random_dom_holiday_count,
+                    'random_wkdom_holiday_count': self.random_wkdom_holiday_count,
                     'series_type_override': self.series_type_override,
                 },
                 'random_dom_holidays': copy.deepcopy(self.random_dom_holidays),
@@ -1265,8 +1292,15 @@ class SyntheticDailyGenerator:
         signal_strength = scale * 50
         noise_std = series_noise_level * signal_strength
 
-        # Holiday impacts should be 2-6x noise for detectability
-        holiday_scale = self.rng.uniform(2, 6) * noise_std
+        # Holiday impacts should be 2-6x noise for detectability.
+        # When noise is extremely low, apply an optional signal-relative floor.
+        noise_based_holiday = self.rng.uniform(2, 6) * noise_std
+        signal_based_floor = (
+            signal_strength
+            * self.holiday_signal_floor_pct
+            * self.rng.uniform(0.85, 1.15)
+        )
+        holiday_scale = max(noise_based_holiday, signal_based_floor)
 
         # Determine splash/bridge configuration for each holiday type (consistent across years)
         if not self.holiday_config:
@@ -1670,7 +1704,11 @@ class SyntheticDailyGenerator:
     def _init_random_dom_holidays(self):
         """Create random day-of-month holiday templates shared across series."""
         holidays = []
-        n_dom = int(self.rng.randint(2, 4))
+        n_dom = (
+            int(self.random_dom_holiday_count)
+            if self.random_dom_holiday_count is not None
+            else int(self.rng.randint(2, 4))
+        )
         protected = {
             'dom_12_25',
             'dom_12_24',
@@ -1705,7 +1743,11 @@ class SyntheticDailyGenerator:
     def _init_random_wkdom_holidays(self):
         """Create random weekday-of-month holiday templates shared across series."""
         holidays = []
-        n_wkdom = int(self.rng.randint(1, 3))
+        n_wkdom = (
+            int(self.random_wkdom_holiday_count)
+            if self.random_wkdom_holiday_count is not None
+            else int(self.rng.randint(1, 3))
+        )
         protected = {
             'wkdom_11_4_4',
             'wkdom_11_4_3',
@@ -3457,6 +3499,9 @@ class SyntheticDailyGenerator:
                     yearly_fourier_target=target_yearly_fourier.tolist(),
                     include_regressors=False,
                     disable_holiday_splash=self.disable_holiday_splash,
+                    holiday_signal_floor_pct=self.holiday_signal_floor_pct,
+                    random_dom_holiday_count=self.random_dom_holiday_count,
+                    random_wkdom_holiday_count=self.random_wkdom_holiday_count,
                     series_type_override='standard',
                 )
 
@@ -3669,6 +3714,9 @@ class SyntheticDailyGenerator:
             yearly_fourier_target=target_yearly_fourier.tolist(),
             include_regressors=self.include_regressors,
             disable_holiday_splash=self.disable_holiday_splash,
+            holiday_signal_floor_pct=self.holiday_signal_floor_pct,
+            random_dom_holiday_count=self.random_dom_holiday_count,
+            random_wkdom_holiday_count=self.random_wkdom_holiday_count,
             series_type_override='standard',
         )
         # Scale the final synthetic data to match target magnitude

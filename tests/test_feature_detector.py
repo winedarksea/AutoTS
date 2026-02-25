@@ -14,6 +14,7 @@ import json
 from autots.datasets import load_daily
 from autots.datasets.synthetic import SyntheticDailyGenerator
 from autots.models.base import PredictionObject
+from autots.evaluator.anomaly_detector import HolidayDetector
 from autots.evaluator.feature_detector import (
     TimeSeriesFeatureDetector,
     FeatureDetectionLoss,
@@ -263,6 +264,67 @@ class TestFeatureDetector(unittest.TestCase):
         self.assertIsInstance(series_features_meta['series_type'], str)
         self.assertIsInstance(series_features_meta['season_type'], str)
 
+    def test_holiday_detector_coverage_cap(self):
+        test_gen = SyntheticDailyGenerator(
+            start_date='2020-01-01',
+            n_days=365 * 3,
+            n_series=3,
+            random_seed=42,
+            noise_level=0.02,
+        )
+        test_data = test_gen.get_data()
+        detector = HolidayDetector(
+            threshold=0.6,
+            splash_threshold=0.45,
+            min_occurrences=2,
+            use_dayofmonth_holidays=True,
+            use_wkdom_holidays=True,
+            use_wkdeom_holidays=False,
+            use_lunar_holidays=False,
+            use_lunar_weekday=False,
+            use_islamic_holidays=False,
+            use_hebrew_holidays=False,
+            use_hindu_holidays=False,
+            auto_relax=True,
+            relax_rounds=2,
+            max_holidays_per_series=5,
+            holiday_selection_strategy='coverage',
+            anomaly_detector_params={
+                'method': 'rolling_zscore',
+                'method_params': {
+                    'distribution': 'norm',
+                    'alpha': 0.05,
+                    'rolling_periods': 90,
+                    'center': False,
+                },
+            },
+            output='multivariate',
+        )
+        detector.detect(test_data)
+
+        counts = pd.Series(0, index=test_data.columns, dtype=float)
+        for table in [detector.day_holidays, detector.wkdom_holidays]:
+            if table is None or table.empty:
+                continue
+            counts = counts.add(table.groupby('series').size(), fill_value=0)
+        counts = counts.reindex(test_data.columns, fill_value=0).astype(int)
+        self.assertTrue((counts <= 5).all())
+
+        stats = detector.get_detection_stats()
+        self.assertIn('series_holiday_counts', stats)
+        self.assertEqual(len(stats['series_holiday_counts']), test_data.shape[1])
+
+        flags = detector.dates_to_holidays(
+            test_data.index, style='series_flag', max_features=10
+        )
+        self.assertEqual(flags.shape, test_data.shape)
+
+    def test_holiday_detector_strategy_fallback(self):
+        detector = HolidayDetector(
+            max_holidays_per_series=3, holiday_selection_strategy='unknown'
+        )
+        self.assertEqual(detector.holiday_selection_strategy, 'score')
+
     def test_noise_regime_detection_helper(self):
         detector = TimeSeriesFeatureDetector()
         detector.date_index = pd.date_range('2020-01-01', periods=180, freq='D')
@@ -374,6 +436,35 @@ class TestFeatureDetector(unittest.TestCase):
         self.assertFalse(detector.standardize)
         self.assertEqual(detector.smoothing_window, 5)
 
+    def test_analyze_noise_uses_anomaly_transform(self):
+        detector = TimeSeriesFeatureDetector()
+        index = pd.date_range('2023-01-01', periods=5, freq='D')
+        cols = ['series_0']
+        df_work = pd.DataFrame({'series_0': [1.0, 5.0, 1.0, 1.0, 1.0]}, index=index)
+        cleaned = pd.DataFrame({'series_0': [1.0, 1.0, 1.0, 1.0, 1.0]}, index=index)
+
+        class _DummyAnomalyDetector:
+            def __init__(self, cleaned_df):
+                self.cleaned_df = cleaned_df
+
+            def transform(self, df):
+                return self.cleaned_df.copy()
+
+        detector.anomaly_detector = _DummyAnomalyDetector(cleaned)
+        detector._anomaly_records_temp = {}
+
+        zeros = pd.DataFrame(0.0, index=index, columns=cols)
+        noise_component, anomaly_component = detector._analyze_noise(
+            df_work,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+        )
+
+        self.assertAlmostEqual(float(anomaly_component.iloc[1, 0]), 4.0, places=6)
+        self.assertAlmostEqual(float(noise_component.iloc[1, 0]), 1.0, places=6)
+
 
 class TestFeatureDetectionLoss(unittest.TestCase):
     """Test FeatureDetectionLoss class."""
@@ -450,6 +541,73 @@ class TestFeatureDetectionLoss(unittest.TestCase):
         )
         self.assertEqual(exact, 0.0)
         self.assertLess(fuzzy, 0.01)
+
+    def test_holiday_splash_loss_uses_splash_impacts(self):
+        loss_calc = FeatureDetectionLoss()
+        splash_date = pd.Timestamp('2020-01-15')
+        detected_features = {
+            'trend_changepoints': {'series_0': []},
+            'holiday_impacts': {'series_0': {}},
+            'holiday_splash_impacts': {'series_0': {splash_date: 2.0}},
+            'anomalies': {'series_0': []},
+        }
+        true_labels = {
+            'trend_changepoints': {'series_0': []},
+            'holiday_splash_impacts': {'series_0': {splash_date: 2.0}},
+        }
+        loss = loss_calc.calculate_loss(
+            detected_features=detected_features,
+            true_labels=true_labels,
+            date_index=pd.date_range('2020-01-01', periods=30, freq='D'),
+        )
+        self.assertEqual(loss['holiday_splash_loss'], 0.0)
+
+    def test_dynamic_loss_activation_disables_empty_components(self):
+        detector = TimeSeriesFeatureDetector()
+        detector.fit(self.data)
+        detected = detector.get_detected_features(include_components=True)
+
+        loss_calc = FeatureDetectionLoss()
+        loss = loss_calc.calculate_loss(
+            detected,
+            self.labels,
+            true_components=self.components,
+            date_index=self.date_index,
+        )
+
+        self.assertIn('regressor_loss', loss.get('disabled_components', []))
+        self.assertEqual(
+            loss.get('effective_weights', {}).get('regressor_loss'),
+            0.0,
+        )
+
+    def test_regressor_loss_supports_nested_schema(self):
+        loss_calc = FeatureDetectionLoss()
+        date = pd.Timestamp('2022-05-10')
+        payload = {
+            'by_date': {date: {'promotion': 2.0, 'temperature': -0.4}},
+            'coefficients': {'promotion': 1.1, 'temperature': -0.2},
+        }
+        perfect = loss_calc._regressor_loss(payload, payload)
+        self.assertEqual(perfect, 0.0)
+
+        partial = {
+            'by_date': {date: {'promotion': 2.0}},
+            'coefficients': {'promotion': 1.1},
+        }
+        self.assertGreater(loss_calc._regressor_loss(partial, payload), 0.0)
+
+    def test_anomaly_loss_handles_nan_magnitudes(self):
+        loss_calc = FeatureDetectionLoss()
+        detected_anom = [
+            {'date': pd.Timestamp('2020-01-10'), 'magnitude': np.nan, 'type': 'point_outlier'}
+        ]
+        true_anom = [
+            {'date': pd.Timestamp('2020-01-10'), 'magnitude': 2.0, 'type': 'point_outlier'}
+        ]
+        loss = loss_calc._anomaly_loss(detected_anom, true_anom)
+        self.assertTrue(np.isfinite(loss))
+        self.assertGreaterEqual(loss, 0.0)
 
 
 class TestFeatureDetectionOptimizer(unittest.TestCase):
@@ -548,6 +706,23 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         optimizer.optimize(starting_params=seed_params)
         iterations = [entry.get('iteration') for entry in optimizer.optimization_history]
         self.assertIn('starting', iterations)
+
+    def test_param_signature_handles_numpy_and_ordering(self):
+        params_a = {
+            'alpha': np.float64(0.2),
+            'arr': np.array([1, 2, 3]),
+            'flags': {'b', 'a'},
+            'when': pd.Timestamp('2020-01-01'),
+        }
+        params_b = {
+            'when': pd.Timestamp('2020-01-01'),
+            'flags': {'a', 'b'},
+            'arr': np.array([1, 2, 3]),
+            'alpha': np.float64(0.2),
+        }
+        sig_a = FeatureDetectionOptimizer._param_signature(params_a)
+        sig_b = FeatureDetectionOptimizer._param_signature(params_b)
+        self.assertEqual(sig_a, sig_b)
 
 
 class TestScaling(unittest.TestCase):
