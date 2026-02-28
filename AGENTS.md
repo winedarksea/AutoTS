@@ -33,6 +33,6 @@
 - **AutoTS** the AutoTS class itself is the primary entry point for users to get and iteract with forecasts. While advanced users are expected to utilize the rest of the library code directly, documentation and code style generally focus on the AutoTS class in particular. AutoTS's core function is to run a search across validation holdouts of combinations of transformers and model parameters, usually several combined in an ensemble, returning a prediction object at the end of a tuned forecast.
 
 ### Basic Tenants
-- **Priorities** Accuracy > Ease of Use > Speed (with speed more important with 'fast' selections)
+- **Priorities** Accuracy > Ease of Use > Speed (with speed more important with 'fast' selections). While speed is lowest priority, it is still critical, and all code should be vectorized and use matrix operations, avoiding for loops when possible.
 - **Fault tolerance** it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 - **Missing data tolerance** large chunks of data can be missing and model will still produce reasonable results (although lower quality than if data is available)

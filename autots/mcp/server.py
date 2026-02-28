@@ -25,7 +25,14 @@ from pathlib import Path
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+    from mcp.types import (
+        Tool,
+        TextContent,
+        ImageContent,
+        Resource,
+        ToolAnnotations,
+        CallToolResult,
+    )
 
     MCP_AVAILABLE = True
 except ImportError:
@@ -392,19 +399,31 @@ def build_csv_metadata(filepath: str, df: pd.DataFrame, is_long: bool = False) -
 if MCP_AVAILABLE:
     app = Server("autots")
 
+    async def _log_progress(message: str) -> None:
+        """Send an MCP log notification (notifications/message) so clients can show progress."""
+        try:
+            await app.request_context.session.send_log_message("info", message)
+        except Exception:
+            pass
+
     @app.list_tools()
     async def list_tools() -> list[Tool]:
         """List all available AutoTS tools."""
         return [
+            # ----------------------------------------------------------------
             # Cache management
+            # ----------------------------------------------------------------
             Tool(
                 name="list_cache",
-                description="List all cached objects (predictions, autots models, event_risk, feature_detectors, data)",
-                inputSchema={"type": "object", "properties": {}},
+                title="List Cached Objects",
+                description="List all cached objects across all cache types (predictions, autots_models, event_risk, feature_detectors, data). Call this to discover existing IDs before calling any get_*, plot_*, or apply_* tools.",
+                inputSchema={"type": "object", "additionalProperties": False},
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="clear_cache",
-                description="Clear cache: specific object by ID and type, entire cache type, or all caches",
+                title="Clear Cache",
+                description="Clear cache: specific object by ID+type, an entire cache type, or all caches. Destructive — freed objects cannot be recovered.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -425,11 +444,20 @@ if MCP_AVAILABLE:
                         },
                     },
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {"success": {"type": "boolean"}},
+                    "required": ["success"],
+                },
+                annotations=ToolAnnotations(destructiveHint=True, idempotentHint=True),
             ),
+            # ----------------------------------------------------------------
             # Data loading
+            # ----------------------------------------------------------------
             Tool(
                 name="load_sample_data",
-                description="Load sample time series dataset. Returns data_id for use in other tools",
+                title="Load Sample Dataset",
+                description="Load a built-in sample time series dataset. Returns data_id for use as the data_id parameter in forecast_*, detect_features, forecast_event_risk, clean_data, and get_data.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -455,10 +483,22 @@ if MCP_AVAILABLE:
                         },
                     },
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                        "source": {"type": "string"},
+                        "rows": {"type": "integer"},
+                        "cols": {"type": "integer"},
+                    },
+                    "required": ["data_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="load_live_data",
-                description="Load live data from FRED, stocks, etc. Returns data_id",
+                title="Load Live Data (FRED / Stocks)",
+                description="Load live data from external sources (FRED economic data, stock tickers). Returns data_id. Requires network access.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -480,10 +520,21 @@ if MCP_AVAILABLE:
                         },
                     },
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                        "rows": {"type": "integer"},
+                        "cols": {"type": "integer"},
+                    },
+                    "required": ["data_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, openWorldHint=True),
             ),
             Tool(
                 name="generate_synthetic_data",
-                description="Generate synthetic time series with labeled components. Returns data_id",
+                title="Generate Synthetic Time Series",
+                description="Generate synthetic time series data with labeled components for testing. Returns data_id.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -494,10 +545,22 @@ if MCP_AVAILABLE:
                         }
                     },
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                        "n_series": {"type": "integer"},
+                        "rows": {"type": "integer"},
+                        "cols": {"type": "integer"},
+                    },
+                    "required": ["data_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="load_data_from_file",
-                description="Load CSV from local path or URL. Returns data_id",
+                title="Load Data from File or URL",
+                description="Load a CSV from a local file path or URL. Returns data_id. CSV must have a datetime column as the first column (index).",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -508,10 +571,22 @@ if MCP_AVAILABLE:
                     },
                     "required": ["filepath"],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                        "source": {"type": "string"},
+                        "rows": {"type": "integer"},
+                        "cols": {"type": "integer"},
+                    },
+                    "required": ["data_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, openWorldHint=True),
             ),
             Tool(
                 name="get_data",
-                description="Get cached data as JSON (wide/long) or save as CSV with metadata",
+                title="Get Cached Data",
+                description="Retrieve cached data as JSON (wide or long) or save as CSV. Requires data_id from load_sample_data, load_live_data, load_data_from_file, generate_synthetic_data, convert_long_to_wide, or clean_data.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -525,16 +600,18 @@ if MCP_AVAILABLE:
                     },
                     "required": ["data_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="convert_long_to_wide",
-                description="Convert long format to wide. Must provide either 'data' or 'data_id'. Returns new data_id",
+                title="Convert Long Format to Wide",
+                description="Convert long-format data (datetime, series_id, value columns) to wide format. Provide either data (inline dict) or data_id. Returns new data_id.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "data": {
                             "type": "object",
-                            "description": "Long format data with datetime,series_id,value",
+                            "description": "Long format data with datetime, series_id, value columns",
                         },
                         "data_id": {
                             "type": "string",
@@ -543,10 +620,21 @@ if MCP_AVAILABLE:
                     },
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cache ID for converted wide-format data"},
+                        "rows": {"type": "integer"},
+                        "cols": {"type": "integer"},
+                    },
+                    "required": ["data_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="clean_data",
-                description="Clean time series data (handle missing values, outliers). Returns data_id. Must provide either 'data' or 'data_id'.",
+                title="Clean Time Series Data",
+                description="Clean time series data: fill missing values and handle outliers. Provide either data (inline dict) or data_id. Returns new data_id with cleaned data.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -567,11 +655,24 @@ if MCP_AVAILABLE:
                     },
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data_id": {"type": "string", "description": "Cache ID for cleaned data"},
+                        "rows": {"type": "integer"},
+                        "cols": {"type": "integer"},
+                    },
+                    "required": ["data_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
+            # ----------------------------------------------------------------
             # Forecasting
+            # ----------------------------------------------------------------
             Tool(
                 name="forecast_fast",
-                description="FAST: Pre-configured mosaic ensemble forecast using fit_data (no model search). Must provide either 'data' or 'data_id'. Returns prediction_id",
+                title="Fast Mosaic Ensemble Forecast",
+                description="FAST: Pre-configured mosaic ensemble forecast using fit_data (no model search). Use for quick results. Provide data or data_id. Returns prediction_id for use in get_forecast, plot_forecast, apply_constraints, apply_adjustments, get_model_params.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -589,10 +690,20 @@ if MCP_AVAILABLE:
                     },
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, apply_constraints, apply_adjustments, get_model_params"},
+                        "forecast_length": {"type": "integer"},
+                    },
+                    "required": ["prediction_id", "forecast_length"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="forecast_explainable",
-                description="MODERATE: AutoTS model search with EXPLAINABLE models only (Cassandra, TVVAR, BasicLinearModel). Convenience wrapper for interpretable forecasts. Use when you need to understand model components. Must provide either 'data' or 'data_id'. Returns prediction_id and autots_id",
+                title="Explainable Model Forecast",
+                description="MODERATE: AutoTS model search restricted to EXPLAINABLE models (Cassandra, TVVAR, BasicLinearModel). Use when interpretability matters. Provide data or data_id. Returns prediction_id and autots_id. Use get_forecast_components on prediction_id for component decomposition.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -606,10 +717,21 @@ if MCP_AVAILABLE:
                     },
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments"},
+                        "autots_id": {"type": "string", "description": "Cache ID — pass to get_validation_results, plot_validation"},
+                        "forecast_length": {"type": "integer"},
+                    },
+                    "required": ["prediction_id", "autots_id", "forecast_length"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="forecast_custom",
-                description="CUSTOM: AutoTS with user-specified parameters or template Generally use this when the forecast_fast results are insufficient and higher accuracy is needed. Defaults to 'scalable' model_list for speed and accuracy. Must provide either 'data' or 'data_id'. Returns prediction_id and autots_id",
+                title="Custom AutoTS Forecast",
+                description="CUSTOM: AutoTS with user-specified parameters or template. Use when forecast_fast results are insufficient. Call get_autots_docs first to understand parameters. Defaults to 'scalable' model_list. Provide data or data_id. Returns prediction_id and autots_id.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -639,16 +761,31 @@ if MCP_AVAILABLE:
                     },
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments"},
+                        "autots_id": {"type": "string", "description": "Cache ID — pass to get_validation_results, plot_validation"},
+                        "forecast_length": {"type": "integer"},
+                    },
+                    "required": ["prediction_id", "autots_id", "forecast_length"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="get_autots_docs",
-                description="Get documentation for AutoTS custom forecast parameters. Use this before forecast_custom to understand the primary options",
-                inputSchema={"type": "object", "properties": {}},
+                title="AutoTS Parameter Documentation",
+                description="Get documentation for AutoTS forecast_custom parameters. Call this before forecast_custom to understand available options and defaults.",
+                inputSchema={"type": "object", "additionalProperties": False},
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
+            # ----------------------------------------------------------------
             # Prediction object tools
+            # ----------------------------------------------------------------
             Tool(
                 name="get_forecast",
-                description="Get forecast from cached prediction as JSON or CSV. Use 'all' output to get point, upper, and lower forecasts combined in long format with forecast_type column",
+                title="Get Forecast Data",
+                description="Retrieve forecast values from a cached prediction as JSON or CSV. Requires prediction_id from forecast_fast, forecast_explainable, forecast_custom, or forecast_from_features. Use output='all' to get point, upper, and lower forecasts combined with a forecast_type column.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -665,21 +802,23 @@ if MCP_AVAILABLE:
                                 "all",
                             ],
                             "default": "forecast",
-                            "description": "Which forecast to return. 'all' returns point, upper, and lower forecasts combined in long format with forecast_type column",
+                            "description": "Which forecast to return. 'all' returns point, upper, and lower combined in long format with forecast_type column",
                         },
                         "format": {
                             "type": "string",
                             "enum": ["json_wide", "json_long", "csv_wide", "csv_long"],
                             "default": "json_wide",
-                            "description": "Output format. Note: 'all' output automatically uses long format",
+                            "description": "Output format. Note: 'all' output uses long format automatically",
                         },
                     },
                     "required": ["prediction_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="plot_forecast",
-                description="Plot forecast from prediction. Returns base64 PNG image. Defaults to first series only.",
+                title="Plot Forecast",
+                description="Plot forecast with optional history and prediction intervals. Requires prediction_id from forecast_fast, forecast_explainable, forecast_custom, or forecast_from_features. Returns base64-encoded PNG image. Defaults to first series only.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -705,10 +844,12 @@ if MCP_AVAILABLE:
                     },
                     "required": ["prediction_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="apply_constraints",
-                description="Apply constraints to forecast (dampen, bounds, quantiles). Returns new prediction_id",
+                title="Apply Forecast Constraints",
+                description="Apply constraints to a forecast (dampen growth, enforce upper/lower bounds, or quantile clipping). Requires prediction_id from a forecast tool. Returns a new prediction_id with constrained values.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -733,10 +874,20 @@ if MCP_AVAILABLE:
                     },
                     "required": ["prediction_id", "constraint_method"],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cache ID for the constrained forecast"},
+                        "constraint_method": {"type": "string"},
+                    },
+                    "required": ["prediction_id", "constraint_method"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
-                name="apply_adjustments",  # TODO: consider setting this up to work on historical data as well
-                description="Apply adjustments to forecast (basic ramp, align to history, smoothing). Returns new prediction_id. Three adjustment types: 1) 'basic' - linear ramp between start/end dates with start/end values (additive or multiplicative), 2) 'align_last_value' - align forecast to recent history (requires df_train), 3) 'smoothing' - EWMA smoothing with span parameter. Can apply to specific series_ids or all series (default).",
+                name="apply_adjustments",
+                title="Apply Forecast Adjustments",
+                description="Apply post-hoc adjustments to a forecast. Requires prediction_id from a forecast tool. Three types: 1) 'basic'/'linear'/'ramp' — linear ramp between start/end dates with start/end values (additive or multiplicative); 2) 'align_last_value'/'alignlastvalue' — align forecast to recent history (also requires data_id); 3) 'smoothing'/'ewma' — exponential smoothing with span parameter. Optionally restrict to specific series_ids. Returns new prediction_id.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -759,24 +910,35 @@ if MCP_AVAILABLE:
                                 "smoothing",
                                 "ewma",
                             ],
-                            "description": "Adjustment type: basic/linear/ramp (linear ramp), align_last_value/alignlastvalue (align to history), smoothing/ewma (exponential smoothing)",
+                            "description": "Adjustment type",
                         },
                         "adjustment_params": {
                             "type": "object",
-                            "description": "Adjustment parameters. For basic: {start_date, end_date, start_value, end_value, value, method='additive'|'multiplicative'}. For align_last_value: {rows, lag, method, strength, etc.}. For smoothing: {span}",
+                            "description": "Adjustment parameters. For basic: {start_date, end_date, start_value, end_value, value, method='additive'|'multiplicative'}. For align_last_value: {rows, lag, method, strength}. For smoothing: {span}",
                         },
                         "series_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "List of series IDs to apply adjustment to. If not provided, applies to all series.",
+                            "description": "Series IDs to apply adjustment to. If omitted, applies to all series.",
                         },
                     },
                     "required": ["prediction_id", "adjustment_method"],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cache ID for the adjusted forecast"},
+                        "adjustment_method": {"type": "string"},
+                        "series_ids_applied": {},
+                    },
+                    "required": ["prediction_id", "adjustment_method"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="get_model_params",
-                description="Get model parameters from cached prediction",
+                title="Get Model Parameters",
+                description="Get model name, parameters, and transformation parameters from a cached prediction. Requires prediction_id from any forecast tool.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -787,25 +949,31 @@ if MCP_AVAILABLE:
                     },
                     "required": ["prediction_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="get_forecast_components",
-                description="Get decomposed forecast components (trend, seasonality) if available. Only for Cassandra/TVVAR models",
+                title="Get Forecast Component Decomposition",
+                description="Get decomposed forecast components (trend, seasonality, etc.) if available. Only works for Cassandra and TVVAR models — use forecast_explainable to guarantee these model types. Requires prediction_id.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "prediction_id": {
                             "type": "string",
-                            "description": "Cached prediction ID",
+                            "description": "Cached prediction ID (must be from a Cassandra or TVVAR model)",
                         }
                     },
                     "required": ["prediction_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
+            # ----------------------------------------------------------------
             # AutoTS model tools
+            # ----------------------------------------------------------------
             Tool(
                 name="get_validation_results",
-                description="Get validation results summary from AutoTS search",
+                title="Get Validation Results",
+                description="Get cross-validation results and top model rankings from an AutoTS model search. Requires autots_id from forecast_explainable or forecast_custom.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -816,10 +984,12 @@ if MCP_AVAILABLE:
                     },
                     "required": ["autots_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="plot_validation",
-                description="Plot validation forecasts from AutoTS search. Returns base64 PNG",
+                title="Plot Validation Forecasts",
+                description="Plot cross-validation forecasts from an AutoTS model search. Requires autots_id from forecast_explainable or forecast_custom. Returns base64-encoded PNG.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -830,11 +1000,15 @@ if MCP_AVAILABLE:
                     },
                     "required": ["autots_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
+            # ----------------------------------------------------------------
             # Event Risk tools
+            # ----------------------------------------------------------------
             Tool(
                 name="forecast_event_risk",
-                description="Special type of forecasting for predicting the probability of crossing a threshold (such as out of stock for products or exceeding historic maximums on usage). Must provide 'threshold' and either 'data' or 'data_id'. Returns event_risk_id",
+                title="Forecast Event Risk Probabilities",
+                description="Forecast the probability of crossing a threshold over future periods (e.g., stockout risk, capacity breach). Threshold in [0,1] is treated as a historical quantile; values outside [0,1] are absolute. Provide data or data_id. Returns event_risk_id for use in get_event_risk_results and plot_event_risk.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -850,13 +1024,13 @@ if MCP_AVAILABLE:
                                 {"type": "number"},
                                 {"type": "array", "items": {"type": "number"}},
                             ],
-                            "description": "Threshold value (required). Float in range [0, 1] represents historic quantile (0=minimum, 0.5=median, 1=maximum). Values outside [0,1] are treated as absolute thresholds. Can also be a 2D array of shape (forecast_length, num_series) for per-timestep, per-series thresholds.",
+                            "description": "Threshold value (required). Float in [0,1] = historical quantile. Outside [0,1] = absolute threshold. Can be 2D array of shape (forecast_length, num_series).",
                         },
                         "direction": {
                             "type": "string",
                             "enum": ["upper", "lower"],
                             "default": "upper",
-                            "description": "Detect crossing above (upper) or below (lower)",
+                            "description": "Detect crossing above (upper) or below (lower) the threshold",
                         },
                         "tune": {
                             "type": "boolean",
@@ -867,10 +1041,22 @@ if MCP_AVAILABLE:
                     "required": ["threshold"],
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "event_risk_id": {"type": "string", "description": "Cache ID — pass to get_event_risk_results or plot_event_risk"},
+                        "threshold": {},
+                        "direction": {"type": "string"},
+                        "forecast_length": {"type": "integer"},
+                    },
+                    "required": ["event_risk_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="get_event_risk_results",
-                description="Get event risk probabilities from cached EventRiskForecast",
+                title="Get Event Risk Probabilities",
+                description="Get event risk probability values from a cached EventRiskForecast. Requires event_risk_id from forecast_event_risk. Returns probabilities per period per series.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -887,10 +1073,12 @@ if MCP_AVAILABLE:
                     },
                     "required": ["event_risk_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="plot_event_risk",
-                description="Plot event risk probabilities. Returns base64 PNG",
+                title="Plot Event Risk Probabilities",
+                description="Plot event risk probabilities over the forecast horizon. Requires event_risk_id from forecast_event_risk. Returns base64-encoded PNG.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -901,11 +1089,15 @@ if MCP_AVAILABLE:
                     },
                     "required": ["event_risk_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
+            # ----------------------------------------------------------------
             # Feature detection tools
+            # ----------------------------------------------------------------
             Tool(
                 name="detect_features",
-                description="Detect anomalies, changepoints, holidays, patterns. Must provide either 'data' or 'data_id'. Returns detector_id",
+                title="Detect Time Series Features",
+                description="Detect anomalies, changepoints, level shifts, holidays, and seasonality patterns across all series. Provide data or data_id. Returns detector_id for use in get_detected_features, plot_features, and forecast_from_features.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -914,10 +1106,20 @@ if MCP_AVAILABLE:
                     },
                     "oneOf": [{"required": ["data"]}, {"required": ["data_id"]}],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "detector_id": {"type": "string", "description": "Cache ID — pass to get_detected_features, plot_features, forecast_from_features"},
+                        "series_count": {"type": "integer"},
+                    },
+                    "required": ["detector_id"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
             Tool(
                 name="get_detected_features",
-                description="Get detected features (anomalies, changepoints, holidays, seasonality) from cached detector. Supports filtering by date range, specific dates, and by series name. Use this to answer queries like 'was there an anomaly on Christmas 2024' or 'when was the first level shift'. Parameters: detector_id (required), date_start/date_end for ranges, series_name for filtering, include_components and include_metadata flags.",
+                title="Get Detected Features",
+                description="Query detected features (anomalies, changepoints, level shifts, holidays, seasonality) from a cached detector. Requires detector_id from detect_features. Supports filtering by date range, specific date, or series name. Use include_components=true for time-series component values. Examples: 'was there an anomaly on 2024-12-25?', 'when was the first level shift?'",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -927,15 +1129,15 @@ if MCP_AVAILABLE:
                         },
                         "date_start": {
                             "type": "string",
-                            "description": "Optional start date for filtering (YYYY-MM-DD format)",
+                            "description": "Optional start date filter (YYYY-MM-DD)",
                         },
                         "date_end": {
                             "type": "string",
-                            "description": "Optional end date for filtering (YYYY-MM-DD format)",
+                            "description": "Optional end date filter (YYYY-MM-DD)",
                         },
                         "specific_date": {
                             "type": "string",
-                            "description": "Optional specific single date to query (YYYY-MM-DD format)",
+                            "description": "Optional single date to query (YYYY-MM-DD)",
                         },
                         "series_name": {
                             "type": "string",
@@ -943,19 +1145,21 @@ if MCP_AVAILABLE:
                         },
                         "include_components": {
                             "type": "boolean",
-                            "description": "Include component time series values (default: false)",
+                            "description": "Include component time-series values (default: false)",
                         },
                         "include_metadata": {
                             "type": "boolean",
-                            "description": "Include metadata like noise levels, scales (default: false)",
+                            "description": "Include metadata like noise levels and scales (default: false)",
                         },
                     },
                     "required": ["detector_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="plot_features",
-                description="Plot detected features. Returns base64 PNG",
+                title="Plot Detected Features",
+                description="Plot detected features overlaid on the time series. Requires detector_id from detect_features. Returns base64-encoded PNG.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -971,10 +1175,12 @@ if MCP_AVAILABLE:
                     },
                     "required": ["detector_id"],
                 },
+                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
             ),
             Tool(
                 name="forecast_from_features",
-                description="Create forecast using detected features (EXPERIMENTAL: use only after feature detection, not for standalone forecasts). Returns prediction_id. SEQUENTIAL: Requires detector_id from detect_features first. Must complete before using prediction_id in plot_forecast or get_forecast",
+                title="Forecast from Detected Features (Experimental)",
+                description="EXPERIMENTAL: Create a forecast using the decomposed components from a feature detector. Only use after detect_features, not as a standalone forecasting method. Requires detector_id from detect_features. Returns prediction_id for use in get_forecast, plot_forecast.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -990,6 +1196,16 @@ if MCP_AVAILABLE:
                     },
                     "required": ["detector_id"],
                 },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast or plot_forecast"},
+                        "forecast_length": {"type": "integer"},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["prediction_id", "forecast_length"],
+                },
+                annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
         ]
 
@@ -1014,12 +1230,7 @@ if MCP_AVAILABLE:
                 obj_id = arguments.get("object_id")
                 cache_type = arguments.get("cache_type")
                 clear_cache(obj_id, cache_type)
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"success": True}, separators=(',', ':')),
-                    )
-                ]
+                return {"success": True}
 
             # Data loading tools
             elif name == "load_sample_data":
@@ -1049,20 +1260,12 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "data_id": data_id,
-                                "source": dataset,
-                                "rows": len(df),
-                                "cols": len(df.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "data_id": data_id,
+                    "source": dataset,
+                    "rows": len(df),
+                    "cols": len(df.columns),
+                }
 
             elif name == "load_live_data":
                 fred_key = arguments.get("fred_key")
@@ -1088,19 +1291,11 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "data_id": data_id,
-                                "rows": len(df),
-                                "cols": len(df.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "data_id": data_id,
+                    "rows": len(df),
+                    "cols": len(df.columns),
+                }
 
             elif name == "generate_synthetic_data":
                 n_series = arguments.get("n_series", 5)
@@ -1118,20 +1313,12 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "data_id": data_id,
-                                "n_series": n_series,
-                                "rows": len(df),
-                                "cols": len(df.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "data_id": data_id,
+                    "n_series": n_series,
+                    "rows": len(df),
+                    "cols": len(df.columns),
+                }
 
             elif name == "load_data_from_file":
                 filepath = arguments.get("filepath")
@@ -1148,20 +1335,12 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "data_id": data_id,
-                                "source": filepath,
-                                "rows": len(df),
-                                "cols": len(df.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "data_id": data_id,
+                    "source": filepath,
+                    "rows": len(df),
+                    "cols": len(df.columns),
+                }
 
             elif name == "get_data":
                 data_id = arguments.get("data_id")
@@ -1192,7 +1371,7 @@ if MCP_AVAILABLE:
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
@@ -1215,26 +1394,18 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "data_id": new_data_id,
-                                "rows": len(df),
-                                "cols": len(df.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "data_id": new_data_id,
+                    "rows": len(df),
+                    "cols": len(df.columns),
+                }
 
             elif name == "clean_data":
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
                 fillna = arguments.get("fillna", "ffill")
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
@@ -1255,19 +1426,11 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "data_id": clean_data_id,
-                                "rows": len(df_clean),
-                                "cols": len(df_clean.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "data_id": clean_data_id,
+                    "rows": len(df_clean),
+                    "cols": len(df_clean.columns),
+                }
 
             # Forecasting tools
             elif name == "forecast_fast":
@@ -1276,7 +1439,7 @@ if MCP_AVAILABLE:
                 forecast_length = arguments.get("forecast_length", 30)
                 profile_template = arguments.get("profile_template")
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
@@ -1314,6 +1477,7 @@ if MCP_AVAILABLE:
                 }
                 ensemble_template = pd.DataFrame(ensemble_params, index=[0])
 
+                await _log_progress(f"forecast_fast: fitting mosaic ensemble on {len(df.columns)} series × {len(df)} rows")
                 model = AutoTS(
                     forecast_length=forecast_length,
                     frequency='infer',
@@ -1340,25 +1504,17 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "prediction_id": prediction_id,
-                                "forecast_length": forecast_length,
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "prediction_id": prediction_id,
+                    "forecast_length": forecast_length,
+                }
 
             elif name == "forecast_explainable":
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
                 forecast_length = arguments.get("forecast_length", 30)
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
@@ -1377,6 +1533,7 @@ if MCP_AVAILABLE:
                         },
                     )
 
+                await _log_progress(f"forecast_explainable: starting model search on {len(df.columns)} series × {len(df)} rows (3 generations, 2 validations — may take several minutes)")
                 model = AutoTS(
                     forecast_length=forecast_length,
                     frequency='infer',
@@ -1387,6 +1544,7 @@ if MCP_AVAILABLE:
                     validation_method='backwards',
                 )
                 model.fit(df)
+                await _log_progress("forecast_explainable: model search complete, generating forecast")
                 prediction = model.predict()
 
                 prediction_id = cache_object(
@@ -1408,19 +1566,11 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "prediction_id": prediction_id,
-                                "autots_id": autots_id,
-                                "forecast_length": forecast_length,
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "prediction_id": prediction_id,
+                    "autots_id": autots_id,
+                    "forecast_length": forecast_length,
+                }
 
             elif name == "forecast_custom":
                 data = arguments.get("data")
@@ -1431,7 +1581,7 @@ if MCP_AVAILABLE:
                 future_regressor_train = arguments.get("future_regressor_train")
                 future_regressor_forecast = arguments.get("future_regressor_forecast")
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
@@ -1471,6 +1621,9 @@ if MCP_AVAILABLE:
 
                 model = AutoTS(**autots_params)
 
+                gens = autots_params.get('max_generations', 10)
+                vals = autots_params.get('num_validations', 2)
+                await _log_progress(f"forecast_custom: starting model search on {len(df.columns)} series × {len(df)} rows ({gens} generations, {vals} validations — may take several minutes)")
                 if model_template:
                     model = model.import_template(model_template, method='only')
                     # Fit on df before predict to ensure model has historical context
@@ -1483,6 +1636,7 @@ if MCP_AVAILABLE:
                     prediction = model.predict(
                         future_regressor=future_regressor_forecast_df
                     )
+                await _log_progress("forecast_custom: model search complete, forecast generated")
 
                 prediction_id = cache_object(
                     prediction,
@@ -1503,19 +1657,11 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "prediction_id": prediction_id,
-                                "autots_id": autots_id,
-                                "forecast_length": forecast_length,
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "prediction_id": prediction_id,
+                    "autots_id": autots_id,
+                    "forecast_length": forecast_length,
+                }
 
             elif name == "get_autots_docs":
                 docs = {
@@ -1619,8 +1765,8 @@ if MCP_AVAILABLE:
                         ['datetime', 'series_id', 'forecast_type', 'value']
                     ]
 
-                    if format_type.startswith("csv") or format_type == "json_wide":
-                        # For 'all' output, always use CSV for simplicity
+                    if format_type.startswith("csv"):
+                        # For 'all' output with CSV format, save to file
                         temp_dir = tempfile.gettempdir()
                         file_id = str(uuid.uuid4())[:8]
                         filename = f"autots_{file_id}_all_forecasts.csv"
@@ -1826,18 +1972,10 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "prediction_id": new_prediction_id,
-                                "constraint_method": constraint_method,
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "prediction_id": new_prediction_id,
+                    "constraint_method": constraint_method,
+                }
 
             elif name == "apply_adjustments":
                 prediction_id = arguments.get("prediction_id")
@@ -1899,21 +2037,11 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "prediction_id": new_prediction_id,
-                                "adjustment_method": adjustment_method,
-                                "series_ids_applied": series_ids
-                                if series_ids
-                                else "all",
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "prediction_id": new_prediction_id,
+                    "adjustment_method": adjustment_method,
+                    "series_ids_applied": series_ids if series_ids else "all",
+                }
 
             elif name == "get_model_params":
                 prediction_id = arguments.get("prediction_id")
@@ -2157,7 +2285,7 @@ if MCP_AVAILABLE:
                 direction = arguments.get("direction", "upper")
                 tune = arguments.get("tune", False)
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
@@ -2174,6 +2302,7 @@ if MCP_AVAILABLE:
                     upper_limit = threshold
                     lower_limit = None
 
+                await _log_progress(f"forecast_event_risk: fitting event risk model on {len(df.columns)} series × {len(df)} rows")
                 erf = EventRiskForecast(
                     df_train=df,
                     forecast_length=forecast_length,
@@ -2184,6 +2313,7 @@ if MCP_AVAILABLE:
 
                 erf.fit()
                 erf.predict()
+                await _log_progress("forecast_event_risk: event risk forecast complete")
 
                 event_risk_id = cache_object(
                     erf,
@@ -2196,20 +2326,12 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "event_risk_id": event_risk_id,
-                                "threshold": threshold,
-                                "direction": direction,
-                                "forecast_length": forecast_length,
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "event_risk_id": event_risk_id,
+                    "threshold": threshold,
+                    "direction": direction,
+                    "forecast_length": forecast_length,
+                }
 
             elif name == "get_event_risk_results":
                 event_risk_id = arguments.get("event_risk_id")
@@ -2288,15 +2410,17 @@ if MCP_AVAILABLE:
                 data = arguments.get("data")
                 data_id = arguments.get("data_id")
 
-                if not data and not data_id:
+                if data is None and data_id is None:
                     raise ValueError(
                         "Must provide either 'data' or 'data_id' parameter"
                     )
 
                 df = load_to_dataframe(data, data_id=data_id)
 
+                await _log_progress(f"detect_features: analysing {len(df.columns)} series × {len(df)} rows for anomalies, changepoints, seasonality, and holidays")
                 detector = TimeSeriesFeatureDetector()
                 detector.fit(df)
+                await _log_progress("detect_features: detection complete")
 
                 detector_id = cache_object(
                     detector,
@@ -2304,18 +2428,10 @@ if MCP_AVAILABLE:
                     {'series_count': len(df.columns), 'data_rows': len(df)},
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "detector_id": detector_id,
-                                "series_count": len(df.columns),
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "detector_id": detector_id,
+                    "series_count": len(df.columns),
+                }
 
             elif name == "get_detected_features":
                 detector_id = arguments.get("detector_id")
@@ -2360,8 +2476,8 @@ if MCP_AVAILABLE:
 
                 # Add detection counts for quick reference
                 detection_counts = {}
-                for series_name in results.get('series', {}).keys():
-                    series_data = results['series'][series_name]
+                for sname in results.get('series', {}).keys():
+                    series_data = results['series'][sname]
                     counts = {
                         "trend_changepoints": len(
                             series_data.get('trend_changepoints', [])
@@ -2374,7 +2490,7 @@ if MCP_AVAILABLE:
                         counts['seasonality_strength'] = series_data[
                             'seasonality_strength'
                         ]
-                    detection_counts[series_name] = counts
+                    detection_counts[sname] = counts
 
                 output = {
                     'summary': summary,
@@ -2442,19 +2558,11 @@ if MCP_AVAILABLE:
                     },
                 )
 
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "prediction_id": prediction_id,
-                                "forecast_length": forecast_length,
-                                "note": "This forecast is based on detected features and is experimental",
-                            },
-                            separators=(',', ':'),
-                        ),
-                    )
-                ]
+                return {
+                    "prediction_id": prediction_id,
+                    "forecast_length": forecast_length,
+                    "note": "This forecast is based on detected features and is experimental",
+                }
 
             else:
                 return [
@@ -2468,17 +2576,10 @@ if MCP_AVAILABLE:
 
         except Exception as e:
             logger.exception(f"Error in tool {name}")
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps(
-                        {"error": str(e), "tool": name}, separators=(',', ':')
-                    ),
-                )
-            ]
+            raise
 
     @app.list_resources()
-    async def list_resources() -> list[Any]:
+    async def list_resources() -> list[Resource]:
         """List available documentation resources."""
         from os.path import dirname, join, exists
 
@@ -2498,16 +2599,11 @@ if MCP_AVAILABLE:
             filepath = join(base, filename)
             if exists(filepath):
                 resources.append(
-                    EmbeddedResource(
-                        type="resource",
-                        resource={
-                            "uri": f"file://{filepath}",
-                            "name": filename,
-                            "description": description,
-                            "mimeType": "text/markdown"
-                            if filename.endswith('.md')
-                            else "text/plain",
-                        },
+                    Resource(
+                        uri=f"file://{filepath}",
+                        name=filename,
+                        description=description,
+                        mimeType="text/markdown" if filename.endswith('.md') else "text/plain",
                     )
                 )
 
