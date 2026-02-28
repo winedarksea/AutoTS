@@ -598,17 +598,30 @@ class LossEvaluatorsMixin:
             n_items += 1
         return loss / max(1, n_items)
 
-    def _seasonality_pattern_loss(self, detected_components, true_components):
+    def _seasonality_pattern_loss(self, detected_components, true_components, date_index=None):
         detected_series = detected_components.get('seasonality')
         true_series = true_components.get('seasonality')
         if detected_series is None or true_series is None:
             return 0.5
         rmse_penalty = self._component_rmse_penalty(detected_series, true_series)
         wasserstein_penalty = self._component_wasserstein_penalty(detected_series, true_series)
-        # Blend RMSE (point accuracy) with Wasserstein (shape/energy fitting)
-        # Wasserstein captures overall shape and energy distribution better
-        # than RMSE alone, which can over-penalize phase shifts
-        return 0.5 * rmse_penalty + 0.5 * wasserstein_penalty
+        spectral_penalty = self._component_spectral_penalty(detected_series, true_series)
+        profile_penalty = self._component_profile_correlation(
+            detected_series, true_series, date_index=date_index,
+        )
+        # Balanced blend across four complementary metrics:
+        # - RMSE: point-wise accuracy (penalizes phase shifts, keeps magnitude honest)
+        # - Wasserstein: shape/energy distribution (phase-tolerant)
+        # - Spectral: frequency content match (fully phase-invariant, rewards
+        #   correct periodic structure at any data frequency automatically)
+        # - Profile correlation: periodic shape fidelity (day-of-week, month, etc.;
+        #   auto-adapts to data frequency from the datetime index)
+        return (
+            0.25 * rmse_penalty
+            + 0.25 * wasserstein_penalty
+            + 0.30 * spectral_penalty
+            + 0.20 * profile_penalty
+        )
 
     def _seasonality_changepoint_loss(
         self, detected_cp, true_cp, detected_components, true_components, date_index

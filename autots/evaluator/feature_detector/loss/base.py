@@ -309,6 +309,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             fn=self._seasonality_pattern_loss,
             detected_components=detected_components,
             true_components=true_components,
+            date_index=date_index,
         )
         seasonality_changepoint_loss = self._evaluate_component_loss(
             key='seasonality_changepoint_loss',

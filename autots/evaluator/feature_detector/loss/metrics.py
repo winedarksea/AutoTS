@@ -259,6 +259,218 @@ class LossMetricsMixin:
         return min(combined, 3.0)
 
     @staticmethod
+    def _component_spectral_penalty(detected, true):
+        """
+        Phase-invariant spectral loss comparing FFT magnitude spectra.
+
+        Compares the absolute magnitudes of the real FFT of detected vs true
+        component arrays, ignoring phase entirely. This rewards correct
+        frequency content (the "shape" at the right periods) without
+        penalizing small time-shifts that cause RMSE to spike.
+
+        Works automatically for any data frequency: the FFT bins adapt to
+        whatever sampling rate the data has (daily, monthly, hourly, etc.)
+        so no hard-coded periods (7, 12, 365.25) are needed.
+
+        Returns
+        -------
+        float
+            Penalty between 0 (perfect spectral match) and 3.0 (poor match).
+        """
+        detected_arr = np.asarray(detected, dtype=float).ravel()
+        true_arr = np.asarray(true, dtype=float).ravel()
+        length = min(detected_arr.size, true_arr.size)
+        if length < 4:
+            return 0.5
+        detected_arr = detected_arr[:length]
+        true_arr = true_arr[:length]
+        mask = np.isfinite(detected_arr) & np.isfinite(true_arr)
+        if mask.sum() < 4:
+            return 0.5
+        detected_arr = detected_arr[mask]
+        true_arr = true_arr[mask]
+
+        # Compute real FFT magnitudes (discarding phase/imaginary component)
+        true_spectrum = np.abs(np.fft.rfft(true_arr))
+        detected_spectrum = np.abs(np.fft.rfft(detected_arr))
+
+        # Normalize by sequence length for scale-consistent comparison
+        n = true_arr.size
+        true_spectrum = true_spectrum / (n + 1e-9)
+        detected_spectrum = detected_spectrum / (n + 1e-9)
+
+        # 1. Overall spectral MAE (normalized by true spectral energy)
+        true_spectral_energy = float(np.sum(true_spectrum))
+        if true_spectral_energy < 1e-9:
+            # True seasonality has negligible spectral energy
+            det_spectral_energy = float(np.sum(detected_spectrum))
+            return min(det_spectral_energy * 10.0, 3.0) if det_spectral_energy > 1e-6 else 0.0
+
+        spectral_mae = float(np.mean(np.abs(true_spectrum - detected_spectrum)))
+        normalized_spectral_mae = spectral_mae / (true_spectral_energy / len(true_spectrum) + 1e-9)
+
+        # 2. Peak frequency alignment: check if the dominant frequencies match
+        # Identify top-k peaks in true spectrum (excluding DC at index 0)
+        n_peaks = min(5, max(1, len(true_spectrum) // 10))
+        if len(true_spectrum) > 1:
+            spectrum_no_dc = true_spectrum[1:]
+            det_spectrum_no_dc = detected_spectrum[1:]
+            # Indices of the largest true peaks (offset by 1 for DC removal)
+            top_true_indices = np.argsort(spectrum_no_dc)[-n_peaks:]
+            # How well does the detected spectrum capture these specific peaks?
+            peak_true_values = spectrum_no_dc[top_true_indices]
+            peak_det_values = det_spectrum_no_dc[top_true_indices]
+            peak_scale = float(np.mean(peak_true_values)) + 1e-9
+            peak_mae = float(np.mean(np.abs(peak_true_values - peak_det_values))) / peak_scale
+        else:
+            peak_mae = 0.0
+
+        # 3. Spectral correlation: overall shape similarity in frequency domain
+        if len(true_spectrum) > 2:
+            t_std = float(np.std(true_spectrum))
+            d_std = float(np.std(detected_spectrum))
+            if t_std > 1e-12 and d_std > 1e-12:
+                corr = float(np.corrcoef(true_spectrum, detected_spectrum)[0, 1])
+                if not np.isfinite(corr):
+                    spectral_corr_penalty = 1.0
+                else:
+                    spectral_corr_penalty = 1.0 - max(0.0, corr)
+            else:
+                spectral_corr_penalty = 0.0 if (t_std < 1e-12 and d_std < 1e-12) else 1.0
+        else:
+            spectral_corr_penalty = 0.0
+
+        combined = (
+            0.35 * min(normalized_spectral_mae, 3.0)
+            + 0.35 * min(peak_mae, 3.0)
+            + 0.30 * min(spectral_corr_penalty, 3.0)
+        )
+        return min(combined, 3.0)
+
+    @staticmethod
+    def _component_profile_correlation(detected, true, date_index=None):
+        """
+        Compute periodic profile correlations between detected and true seasonality.
+
+        Automatically detects the data frequency from the datetime index and
+        builds appropriate aggregation profiles:
+        - Sub-daily data (hourly, etc.): hour-of-day profile + day-of-week profile
+        - Daily data: day-of-week profile + month-of-year profile
+        - Weekly data: week-of-year profile
+        - Monthly data: month-of-year profile
+
+        Each profile is the mean value at each position in the cycle. The
+        correlation between detected and true profiles measures whether the
+        shape (peaks, troughs, relative ordering) is preserved.
+
+        Parameters
+        ----------
+        detected : array-like
+            Detected seasonality component values.
+        true : array-like
+            True seasonality component values.
+        date_index : pd.DatetimeIndex, optional
+            Datetime index for the time series. When None, falls back to
+            a simple positional modular profile using common cycle lengths.
+
+        Returns
+        -------
+        float
+            Penalty between 0 (perfect profile correlation) and 3.0 (poor match).
+        """
+        detected_arr = np.asarray(detected, dtype=float).ravel()
+        true_arr = np.asarray(true, dtype=float).ravel()
+        length = min(detected_arr.size, true_arr.size)
+        if length < 4:
+            return 0.5
+        detected_arr = detected_arr[:length]
+        true_arr = true_arr[:length]
+        mask = np.isfinite(detected_arr) & np.isfinite(true_arr)
+        if mask.sum() < 4:
+            return 0.5
+        detected_arr = detected_arr[mask]
+        true_arr = true_arr[mask]
+
+        def _profile_corr(values_det, values_true, group_keys):
+            """Compute mean profiles by group key and return 1 - correlation."""
+            unique_keys = np.unique(group_keys)
+            if len(unique_keys) < 3:
+                return None  # Too few groups for meaningful profile
+            det_means = np.array([np.mean(values_det[group_keys == k]) for k in unique_keys])
+            true_means = np.array([np.mean(values_true[group_keys == k]) for k in unique_keys])
+            d_std = float(np.std(det_means))
+            t_std = float(np.std(true_means))
+            if t_std < 1e-12:
+                # True profile is flat; penalty proportional to detected variation
+                return min(d_std * 5.0, 1.0) if d_std > 1e-9 else 0.0
+            if d_std < 1e-12:
+                # Detected profile is flat but true has variation
+                return 1.0
+            corr = float(np.corrcoef(det_means, true_means)[0, 1])
+            if not np.isfinite(corr):
+                return 1.0
+            return max(0.0, 1.0 - corr)
+
+        penalties = []
+
+        if date_index is not None and isinstance(date_index, pd.DatetimeIndex):
+            idx = date_index[:length]
+            # Trim to mask
+            if mask.sum() < length:
+                idx = idx[mask]
+
+            # Infer frequency from median timedelta
+            if len(idx) > 1:
+                median_delta = np.median(np.diff(idx.values).astype('timedelta64[s]').astype(float))
+            else:
+                median_delta = 86400.0  # Default to daily
+
+            if median_delta < 3600 * 12:  # Sub-daily (e.g., hourly)
+                hour_keys = np.array(idx.hour)
+                p = _profile_corr(detected_arr, true_arr, hour_keys)
+                if p is not None:
+                    penalties.append(p)
+                dow_keys = np.array(idx.dayofweek)
+                p = _profile_corr(detected_arr, true_arr, dow_keys)
+                if p is not None:
+                    penalties.append(p)
+            elif median_delta < 86400 * 3:  # Daily
+                dow_keys = np.array(idx.dayofweek)
+                p = _profile_corr(detected_arr, true_arr, dow_keys)
+                if p is not None:
+                    penalties.append(p)
+                month_keys = np.array(idx.month)
+                p = _profile_corr(detected_arr, true_arr, month_keys)
+                if p is not None:
+                    penalties.append(p)
+            elif median_delta < 86400 * 10:  # Weekly
+                woy_keys = np.array(idx.isocalendar().week.values, dtype=int)
+                p = _profile_corr(detected_arr, true_arr, woy_keys)
+                if p is not None:
+                    penalties.append(p)
+            else:  # Monthly or longer
+                month_keys = np.array(idx.month)
+                p = _profile_corr(detected_arr, true_arr, month_keys)
+                if p is not None:
+                    penalties.append(p)
+        else:
+            # Fallback: positional modular profiles for common cycle lengths
+            n = detected_arr.size
+            for period in [7, 12, 52]:
+                if n >= period * 2:  # Need at least 2 full cycles
+                    pos_keys = np.arange(n) % period
+                    p = _profile_corr(detected_arr, true_arr, pos_keys)
+                    if p is not None:
+                        penalties.append(p)
+
+        if not penalties:
+            return 0.5
+
+        # Average penalty across all applicable profiles
+        avg_penalty = float(np.mean(penalties))
+        return min(avg_penalty, 3.0)
+
+    @staticmethod
     def _is_number(value):
         try:
             float(value)
