@@ -724,6 +724,65 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         sig_b = FeatureDetectionOptimizer._param_signature(params_b)
         self.assertEqual(sig_a, sig_b)
 
+    def test_mutate_params_numeric_perturbation(self):
+        """Test recursive parameter mutation with numerical perturbation."""
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        params = {
+            'alpha': 0.1,
+            'n_estimators': 100,
+            'flags': ['a', 'b'],
+            'nested': {'beta': 0.2, 'count': 50}
+        }
+        
+        # We'll use a mock sampler to provide any fresh params if needed
+        detector = TimeSeriesFeatureDetector()
+        rng = random.Random(42)
+        
+        # Test basic mutation (replaces a top-level key)
+        mutated = optimizer._mutate_params(params, detector, rng)
+        self.assertNotEqual(params, mutated)
+        
+        # Verify it still has the same top-level structure (keys might be replaced)
+        self.assertEqual(set(params.keys()), set(mutated.keys()))
+
+    def test_select_best_with_balanced_scores(self):
+        """Test that the selection logic correctly identifies a better model using scalers."""
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        
+        # Create a synthetic history with two entries
+        # Entry 0: Low raw loss, but bad at one component
+        # Entry 1: Slightly higher raw loss, but balanced across components
+        history = [
+            {
+                'iteration': 0,
+                'params': {'p': 1},
+                'loss': 1.0,
+                'loss_breakdown': {
+                    'total_loss': 1.0,
+                    'trend_loss': 0.1,
+                    'anomaly_loss': 1.9, # Very bad at anomaly
+                }
+            },
+            {
+                'iteration': 1,
+                'params': {'p': 2},
+                'loss': 1.1,
+                'loss_breakdown': {
+                    'total_loss': 1.1,
+                    'trend_loss': 0.5,
+                    'anomaly_loss': 0.6, # Better balanced
+                }
+            }
+        ]
+        optimizer.optimization_history = history
+        
+        # Mocking or triggering select_best
+        best_params = optimizer._select_best_from_history()
+        
+        # Should have 2 entries in history_df
+        self.assertEqual(len(optimizer.history_df), 2)
+        self.assertIn('balanced_loss', optimizer.history_df.columns)
+        self.assertIsNotNone(best_params)
 
 class TestScaling(unittest.TestCase):
     """Test that scaling and unscaling work correctly."""

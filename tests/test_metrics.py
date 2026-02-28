@@ -4,9 +4,49 @@ import unittest
 import numpy as np
 import pandas as pd
 from autots.models.base import PredictionObject
+from autots.evaluator.feature_detector.loss.metrics import LossMetricsMixin
 
 
 class TestMetrics(unittest.TestCase):
+    def test_spectral_and_profile_metrics(self):
+        """Test the new phase-invariant spectral and profile metrics."""
+        np.random.seed(42)
+        n = 365 * 2
+        t = np.arange(n)
+        
+        # Create synthetic daily seasonality: weekly + yearly
+        true_seasonality = 0.8 * np.sin(2 * np.pi * t / 7.0) + 1.2 * np.sin(2 * np.pi * t / 365.25)
+        
+        # 1. Good shape but slightly phase-shifted and amplitude scaled
+        detected_good = 0.75 * np.sin(2 * np.pi * t / 7.0 + 0.3) + 1.1 * np.sin(2 * np.pi * t / 365.25 + 0.1)
+        
+        # 2. Bad shape (random noise)
+        detected_bad = np.random.normal(0, np.std(true_seasonality), n)
+        
+        # 3. Flat (zero)
+        detected_zero = np.zeros(n)
+        
+        # Test Spectral Penalty
+        sp_good = LossMetricsMixin._component_spectral_penalty(detected_good, true_seasonality)
+        sp_bad = LossMetricsMixin._component_spectral_penalty(detected_bad, true_seasonality)
+        sp_zero = LossMetricsMixin._component_spectral_penalty(detected_zero, true_seasonality)
+        
+        self.assertLess(sp_good, 0.2, "Good shape should have low spectral penalty")
+        self.assertGreater(sp_bad, sp_good, "Random noise should have higher spectral penalty than good shape")
+        self.assertGreater(sp_zero, sp_good, "Zero signal should have higher spectral penalty than good shape")
+        
+        # Test Profile Correlation
+        date_index = pd.date_range('2020-01-01', periods=n, freq='D')
+        pc_good = LossMetricsMixin._component_profile_correlation(detected_good, true_seasonality, date_index)
+        pc_bad = LossMetricsMixin._component_profile_correlation(detected_bad, true_seasonality, date_index)
+        
+        self.assertLess(pc_good, 0.1, "Good shape should have low profile penalty")
+        self.assertGreater(pc_bad, pc_good, "Random noise should have higher profile penalty")
+        
+        # Test positional fallback (no date index)
+        pc_no_idx = LossMetricsMixin._component_profile_correlation(detected_good, true_seasonality)
+        self.assertLess(pc_no_idx, 0.2, "Positional profile matching should work without date index")
+
     def test_metrics(self):
         """This at least assures no changes in behavior go unnoticed, hopefully."""
 

@@ -463,6 +463,39 @@ class TestChangepointDetector(unittest.TestCase):
         diff = np.abs(df_const - inverse5).max().max()
         self.assertLess(diff, 1e-10)
 
+    def test_changepoint_detector_transformer_load_daily(self):
+        """Test ChangepointDetector as a transformer with load_daily data."""
+        from autots.datasets import load_daily
+
+        df = load_daily(long=False)
+
+        # Test with a robust method like pelt
+        detector = ChangepointDetector(
+            method="pelt",
+            aggregate_method="individual",
+            method_params={"penalty": 10, "loss_function": "l2"},
+        )
+
+        # Following transformer patterns: get_new_params, fit, transform, inverse_transform
+        params = detector.get_new_params()
+        self.assertTrue(params)
+
+        detector.fit(df)
+        transformed = detector.transform(df)
+        reconstructed = detector.inverse_transform(transformed)
+
+        # Assertions
+        self.assertEqual(transformed.shape, df.shape)
+        self.assertEqual(reconstructed.shape, df.shape)
+        # Check reconstruction accuracy
+        pd.testing.assert_frame_equal(df, reconstructed, atol=1e-10, check_dtype=False)
+
+        # At least one changepoint should be found in at least one series
+        total_cps = sum(len(cps) for cps in detector.changepoints_.values())
+        self.assertGreater(
+            total_cps, 0, "No changepoints found in any series of load_daily"
+        )
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
