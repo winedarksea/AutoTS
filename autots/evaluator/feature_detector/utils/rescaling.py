@@ -110,6 +110,14 @@ class RescalingMixin:
                         ),
                         'score': entry.get('score'),
                         'type': entry.get('type', 'spike'),
+                        # Preserve duration so multi-day anomalies are not collapsed to 1
+                        'duration': int(entry.get('duration', 1) or 1),
+                        # Preserve end_date if present (from extended detection)
+                        'end_date': (
+                            pd.Timestamp(entry['end_date'])
+                            if entry.get('end_date') is not None
+                            else None
+                        ),
                     }
                 )
             rescaled[series_name] = converted

@@ -109,6 +109,9 @@ class FeatureDetectionOptimizer:
             ),
             'standardize': detector.standardize,
             'smoothing_window': detector.smoothing_window,
+            'extended_anomaly_params': copy.deepcopy(
+                detector.extended_anomaly_params
+            ),
         }
 
     def _random_search(self, starting_params=None):

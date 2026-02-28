@@ -40,6 +40,7 @@ from .components.seasonality import SeasonalityMixin
 from .components.trend import TrendMixin
 from .components.holidays import HolidayMixin
 from .components.anomalies import AnomalyMixin
+from .extended_anomaly import ExtendedAnomalyDetector, ExtendedAnomalyMixin
 from .utils.rescaling import RescalingMixin
 from .utils.formatting import FormattingMixin
 
@@ -50,6 +51,7 @@ class TimeSeriesFeatureDetector(
     TrendMixin,
     HolidayMixin,
     AnomalyMixin,
+    ExtendedAnomalyMixin,
     RescalingMixin,
     FormattingMixin,
 ):
@@ -116,6 +118,7 @@ class TimeSeriesFeatureDetector(
         standardize=True,
         detection_mode='multivariate',
         global_holiday_anomaly_suppression=True,
+        extended_anomaly_params=None,
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -249,6 +252,26 @@ class TimeSeriesFeatureDetector(
         self.global_holiday_anomaly_suppression = bool(
             global_holiday_anomaly_suppression
         )
+        # Extended anomaly detector params; falsy value disables extended detection.
+        # Default enables a conservative extended pass.
+        if extended_anomaly_params is None:
+            self.extended_anomaly_params = {
+                'sustained_window': 7,
+                'sustained_baseline': 60,
+                'sustained_threshold': 2.5,
+                'cusum_k': 0.5,
+                'cusum_h': 5.0,
+                'slope_reversion_min_hold': 5,
+                'slope_reversion_min_reversion': 7,
+                'slope_reversion_cumsum_threshold': 3.0,
+                'decay_lookahead': 14,
+                'decay_fit_min_r2': 0.5,
+                'min_segment_run': 2,
+                'merge_distance_days': 3,
+            }
+        else:
+            # Explicitly setting to False/empty dict disables; any truthy dict enables
+            self.extended_anomaly_params = extended_anomaly_params if extended_anomaly_params else {}
 
         # Model artifacts
         self.scaler = None
@@ -365,6 +388,24 @@ class TimeSeriesFeatureDetector(
             final_seasonality,
             holiday_component_scaled,
         )
+
+        # Step 8.5: Extended anomaly detection on clean residual
+        # clean_residual = noise + anomaly signal (structured components removed)
+        # This is the cleanest possible input for extended pattern detection.
+        # In univariate mode, the mixin aggregates across series before detection
+        # and broadcasts shared events back, mirroring AnomalyRemoval behaviour.
+        if self.extended_anomaly_params:
+            try:
+                clean_residual_scaled = noise_component_scaled + anomaly_component_scaled
+                extended_records = self._detect_extended_anomalies(clean_residual_scaled)
+                self._anomaly_records_temp = self._merge_anomaly_records(
+                    self._anomaly_records_temp, extended_records
+                )
+            except Exception as _ext_exc:
+                warnings.warn(
+                    f"Extended anomaly detection step failed: {_ext_exc}",
+                    RuntimeWarning,
+                )
 
         # Step 9: Convert all components to original scale
         components_original = self._rescale_all_components(
@@ -1324,6 +1365,13 @@ class TimeSeriesFeatureDetector(
             method="filters", allow_none=True, transformer_max_depth=2
         )
 
+        # Extended anomaly detector params (disabled ~15% of the time)
+        extended_anomaly_params = (
+            None
+            if random.random() < 0.15
+            else ExtendedAnomalyDetector.get_new_params(method=method)
+        )
+
         return {
             'rough_seasonality_params': rough_seasonality_params,
             'seasonality_params': seasonality_params,
@@ -1337,6 +1385,7 @@ class TimeSeriesFeatureDetector(
             'global_holiday_anomaly_suppression': random.choices(
                 [True, False], [0.8, 0.2]
             )[0],
+            'extended_anomaly_params': extended_anomaly_params,
         }
 
     def _apply_detector_params(self, params):
@@ -1387,6 +1436,10 @@ class TimeSeriesFeatureDetector(
             self.global_holiday_anomaly_suppression = bool(
                 params['global_holiday_anomaly_suppression']
             )
+        if 'extended_anomaly_params' in params:
+            self.extended_anomaly_params = copy.deepcopy(
+                params['extended_anomaly_params']
+            ) or {}
 
     def tune_with_synthetic(
         self,

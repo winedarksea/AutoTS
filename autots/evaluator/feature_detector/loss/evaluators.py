@@ -238,9 +238,37 @@ class LossEvaluatorsMixin:
         loss += (1.0 - f_beta) * 1.5
         return loss + 0.5 * chamfer_loss
 
-    def _anomaly_loss(self, detected_anom, true_anom):
+    # Anomaly type categories for type-aware penalty logic
+    _POINT_TYPES = frozenset({'point_outlier', 'spike'})
+    _EXTENDED_TYPES = frozenset({
+        'slope_reversion', 'transient_change', 'impulse_decay',
+        'linear_decay', 'noisy_burst',
+    })
+
+    def _anomaly_loss(
+        self,
+        detected_anom,
+        true_anom,
+        detected_cp=None,
+        detected_ls=None,
+    ):
+        """
+        Compute anomaly detection loss with type-aware penalties.
+
+        Parameters
+        ----------
+        detected_anom : list
+            Detected anomaly events.
+        true_anom : list
+            True anomaly events from synthetic labels.
+        detected_cp : list, optional
+            Detected trend changepoints (for partial credit on extended misses).
+        detected_ls : list, optional
+            Detected level shifts (for partial credit on extended misses).
+        """
         if not true_anom:
             return 0.3 * len(detected_anom)
+
         detected_entries = [self._parse_anomaly_event(event) for event in detected_anom]
         true_entries = [self._parse_anomaly_event(event) for event in true_anom]
 
@@ -248,6 +276,31 @@ class LossEvaluatorsMixin:
         # are slightly outside hard tolerance boundaries
         soft_f1_result = self._soft_f1_anomaly(detected_entries, true_entries)
         soft_f1_loss = 1.0 - soft_f1_result['soft_f1']
+
+        # Pre-parse changepoints and level shifts for partial-credit checks
+        cp_dates = []
+        for cp_ev in (detected_cp or []):
+            try:
+                if isinstance(cp_ev, dict):
+                    cp_dates.append(pd.Timestamp(cp_ev.get('date')))
+                elif isinstance(cp_ev, (tuple, list)) and cp_ev:
+                    cp_dates.append(pd.Timestamp(cp_ev[0]))
+                else:
+                    cp_dates.append(pd.Timestamp(cp_ev))
+            except Exception:
+                pass
+
+        ls_dates = []
+        for ls_ev in (detected_ls or []):
+            try:
+                if isinstance(ls_ev, dict):
+                    ls_dates.append(pd.Timestamp(ls_ev.get('date')))
+                elif isinstance(ls_ev, (tuple, list)) and ls_ev:
+                    ls_dates.append(pd.Timestamp(ls_ev[0]))
+                else:
+                    ls_dates.append(pd.Timestamp(ls_ev))
+            except Exception:
+                pass
 
         used_detected = set()
         loss = 0.0
@@ -257,49 +310,107 @@ class LossEvaluatorsMixin:
             if np.isfinite(mag) and abs(mag) > 0
         ]
         magnitude_scale = max(finite_true_mags or [1.0])
+
         for true_event in true_entries:
             true_date, true_mag, true_type, true_duration = true_event
+            true_mag_safe = true_mag if np.isfinite(true_mag) else 0.0
+
+            is_extended = true_type in self._EXTENDED_TYPES
+
+            # For extended types use a wider date tolerance proportional to duration
+            if is_extended:
+                effective_tol = max(
+                    self.anomaly_tolerance_days,
+                    min(7, true_duration // 3),
+                )
+            else:
+                effective_tol = self.anomaly_tolerance_days
+
             best_idx = None
             best_dist = None
             for idx, det_event in enumerate(detected_entries):
                 det_date, *_ = det_event
                 dist = abs((det_date - true_date).days)
+                # For extended anomalies: also match if detected date falls
+                # within the true event window [true_date, true_date+duration]
+                if is_extended and true_duration > 1:
+                    window_end = true_date + pd.Timedelta(days=true_duration - 1)
+                    if true_date <= det_date <= window_end:
+                        dist = 0
                 if best_dist is None or dist < best_dist:
                     best_dist = dist
                     best_idx = idx
+
             if (
                 best_idx is not None
                 and best_dist is not None
-                and best_dist <= self.anomaly_tolerance_days
+                and best_dist <= effective_tol
             ):
                 det_event = detected_entries[best_idx]
                 _, det_mag, det_type, det_duration = det_event
-                true_mag = true_mag if np.isfinite(true_mag) else 0.0
-                det_mag = det_mag if np.isfinite(det_mag) else 0.0
-                mag_pen = abs(det_mag - true_mag) / (abs(true_mag) + 1e-6)
-                type_pen = 0.0 if det_type == true_type else 0.3
-                duration_pen = abs(det_duration - true_duration) / (
-                    true_duration + 1e-6
-                )
-                loss += 0.5 * mag_pen + 0.3 * type_pen + 0.2 * min(duration_pen, 2.0)
-                used_detected.add(best_idx)
-            else:
-                relative_mag = abs(true_mag) / (magnitude_scale + 1e-9)
-                if relative_mag > 0.5:
-                    miss_penalty = (
-                        1.5 if true_type in {'point_outlier', 'spike'} else 1.2
-                    )
-                elif relative_mag > 0.2:
-                    miss_penalty = (
-                        0.6 if true_type in {'point_outlier', 'spike'} else 0.4
-                    )
+                det_mag_safe = det_mag if np.isfinite(det_mag) else 0.0
+
+                mag_pen = abs(det_mag_safe - true_mag_safe) / (abs(true_mag_safe) + 1e-6)
+
+                if is_extended:
+                    # Softer type mismatch for extended types (hard to classify)
+                    type_pen = 0.0 if det_type == true_type else 0.2
+                    # Duration coverage: penalise if detected duration << true
+                    duration_coverage = min(det_duration / max(true_duration, 1), 2.0)
+                    duration_penalty = max(0.0, 1.0 - duration_coverage) * 0.4
                 else:
-                    miss_penalty = 0.15
+                    # Point types: stricter type matching
+                    type_pen = 0.0 if det_type == true_type else 0.3
+                    duration_penalty = 0.2 * min(
+                        abs(det_duration - true_duration) / (true_duration + 1e-6),
+                        2.0,
+                    )
+
+                loss += 0.5 * min(mag_pen, 2.0) + 0.3 * type_pen + duration_penalty
+                used_detected.add(best_idx)
+
+            else:
+                # Miss penalty — type-weighted
+                relative_mag = abs(true_mag_safe) / (magnitude_scale + 1e-9)
+
+                if true_type in self._POINT_TYPES:
+                    # Point types: highest priority — keep original aggressive penalties
+                    if relative_mag > 0.5:
+                        miss_penalty = 1.5
+                    elif relative_mag > 0.2:
+                        miss_penalty = 0.6
+                    else:
+                        miss_penalty = 0.15
+                else:
+                    # Extended types: lower base penalty (harder to detect),
+                    # scaled by duration (longer events penalised more)
+                    duration_factor = min(2.0, 1.0 + true_duration / 21.0)
+                    if relative_mag > 0.3:
+                        miss_penalty = 0.9 * duration_factor
+                    else:
+                        miss_penalty = 0.3 * duration_factor
+
+                    # Partial credit: if near a detected changepoint or level
+                    # shift, the extended anomaly was approximately identified
+                    # by another detector — reduce miss penalty by 50 %.
+                    near_cp = any(
+                        abs((cp_d - true_date).days) <= self.changepoint_tolerance_days
+                        for cp_d in cp_dates
+                    )
+                    near_ls = any(
+                        abs((ls_d - true_date).days) <= self.level_shift_tolerance_days
+                        for ls_d in ls_dates
+                    )
+                    if near_cp or near_ls:
+                        miss_penalty *= 0.5
+
                 loss += miss_penalty
+
         false_positives = len(detected_entries) - len(used_detected)
         if false_positives > 0:
             fp_penalty = (0.15 * false_positives) + (0.1 * np.sqrt(false_positives))
             loss += fp_penalty
+
         # Blend hard-match detail loss with soft F1 for smoother optimization
         return 0.6 * loss + 0.4 * soft_f1_loss * max(len(true_entries), 1)
 

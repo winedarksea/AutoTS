@@ -231,13 +231,17 @@ class FormattingMixin:
             date = pd.Timestamp(item['date'])
             magnitude = item['magnitude']
             anomaly_type = item.get('type', 'point_outlier')
-            entries.append((date, magnitude, anomaly_type, 1, shared))
+            # Preserve duration from extended detection; previously hardcoded to 1
+            duration = int(item.get('duration', 1) or 1)
+            if duration < 1:
+                duration = 1
+            entries.append((date, magnitude, anomaly_type, duration, shared))
             template_entries.append(
                 {
                     'date': date.isoformat(),
                     'magnitude': magnitude,
                     'pattern': anomaly_type,
-                    'duration': 1,
+                    'duration': duration,
                     'shared': bool(shared),
                 }
             )
