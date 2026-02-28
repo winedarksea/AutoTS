@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 import pandas as pd
 import numpy as np
+import random
 import time
 import json
 from autots.datasets import load_daily

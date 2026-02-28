@@ -188,9 +188,12 @@ class AnomalyMixin:
                     extended_devs[0] > anomaly_mag * 0.3
                     and extended_devs[-1] < extended_devs[0] * 0.5
                 ):
-                    decay_slope = np.polyfit(
-                        np.arange(len(extended_devs)), extended_devs, 1
-                    )[0]
+                    try:
+                        decay_slope = np.polyfit(
+                            np.arange(len(extended_devs)), extended_devs, 1
+                        )[0]
+                    except np.linalg.LinAlgError:
+                        decay_slope = 0
                     if decay_slope < 0 and abs(decay_slope) < anomaly_mag * 0.05:
                         return 'slope_reversion'
 

@@ -1273,6 +1273,12 @@ def dates_to_holidays(
                     sample = holiday_df['holiday_name'].iloc[0]
                     if "hebrew" in sample:
                         hdates = gregorian_to_hebrew(dates)
+                        if "weekofmonth" in on and "weekofmonth" not in hdates.columns:
+                            hdates["weekofmonth"] = (hdates["day"] - 1) // 7 + 1
+                        if "weekfromend" in on and "weekfromend" not in hdates.columns:
+                            hdates["weekfromend"] = (hdates["day"] - hdates["day"].max()) // -7
+                        if "dayofweek" in on and "dayofweek" not in hdates.columns:
+                            hdates["dayofweek"] = hdates.index.dayofweek
                         populated_holidays = (
                             hdates.drop(
                                 columns=hdates.columns.difference(on + ['date']),
@@ -1287,6 +1293,12 @@ def dates_to_holidays(
                         )
                     elif "islamic" in sample:
                         idates = gregorian_to_islamic(dates)
+                        if "weekofmonth" in on and "weekofmonth" not in idates.columns:
+                            idates["weekofmonth"] = (idates["day"] - 1) // 7 + 1
+                        if "weekfromend" in on and "weekfromend" not in idates.columns:
+                            idates["weekfromend"] = (idates["day"] - idates["day"].max()) // -7
+                        if "dayofweek" in on and "dayofweek" not in idates.columns:
+                            idates["dayofweek"] = idates.index.dayofweek
                         populated_holidays = (
                             idates.drop(
                                 columns=idates.columns.difference(on + ['date']),
@@ -1301,6 +1313,12 @@ def dates_to_holidays(
                         )
                     elif "hindu" in sample:
                         idates = gregorian_to_hindu(dates)
+                        if "weekofmonth" in on and "weekofmonth" not in idates.columns:
+                            idates["weekofmonth"] = (idates["day"] - 1) // 7 + 1
+                        if "weekfromend" in on and "weekfromend" not in idates.columns:
+                            idates["weekfromend"] = (idates["day"] - idates["day"].max()) // -7
+                        if "dayofweek" in on and "dayofweek" not in idates.columns:
+                            idates["dayofweek"] = idates.index.dayofweek
                         populated_holidays = (
                             idates.drop(
                                 columns=idates.columns.difference(on + ['date']),
