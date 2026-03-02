@@ -6,6 +6,7 @@ for integration with LLM environments like VS Code.
 """
 import asyncio
 import base64
+import copy
 import io
 import json
 import logging
@@ -2015,9 +2016,6 @@ if MCP_AVAILABLE:
                 )
 
                 # Create new prediction object with adjusted forecasts
-                # We need to create a copy of the prediction object and update its forecasts
-                import copy
-
                 new_prediction = copy.deepcopy(prediction)
                 new_prediction.forecast = forecast_adj
                 if lower_adj is not None:
@@ -2302,7 +2300,11 @@ if MCP_AVAILABLE:
                     upper_limit = threshold
                     lower_limit = None
 
-                await _log_progress(f"forecast_event_risk: fitting event risk model on {len(df.columns)} series × {len(df)} rows")
+                tune_kwargs = {"max_generations": 50, "num_validations": 2} if tune else None
+                await _log_progress(
+                    f"forecast_event_risk: fitting event risk model on {len(df.columns)} series × {len(df)} rows"
+                    + (" (tuned — slower)" if tune else "")
+                )
                 erf = EventRiskForecast(
                     df_train=df,
                     forecast_length=forecast_length,
@@ -2311,7 +2313,7 @@ if MCP_AVAILABLE:
                     upper_limit=upper_limit,
                 )
 
-                erf.fit()
+                erf.fit(autots_kwargs=tune_kwargs)
                 erf.predict()
                 await _log_progress("forecast_event_risk: event risk forecast complete")
 
