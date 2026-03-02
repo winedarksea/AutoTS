@@ -360,11 +360,12 @@ class FeatureDetectionOptimizer:
     def _mutate_params(self, params, sampler, rng):
         mutated = copy.deepcopy(params)
         fresh = sampler.get_new_params(method='random')
-        keys = list(mutated.keys())
-        if not keys:
+        # Only mutate keys that exist in both the current params and fresh sample
+        shared_keys = [k for k in mutated.keys() if k in fresh]
+        if not shared_keys:
             return mutated
-        count = max(1, min(len(keys), 2))
-        for key in rng.sample(keys, count):
+        count = max(1, min(len(shared_keys), 2))
+        for key in rng.sample(shared_keys, count):
             mutated[key] = copy.deepcopy(fresh[key])
         return mutated
 

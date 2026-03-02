@@ -728,22 +728,17 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
     def test_mutate_params_numeric_perturbation(self):
         """Test recursive parameter mutation with numerical perturbation."""
         optimizer = FeatureDetectionOptimizer(self.generator)
-        params = {
-            'alpha': 0.1,
-            'n_estimators': 100,
-            'flags': ['a', 'b'],
-            'nested': {'beta': 0.2, 'count': 50}
-        }
-        
-        # We'll use a mock sampler to provide any fresh params if needed
         detector = TimeSeriesFeatureDetector()
+
+        # Use realistic params from the detector so keys overlap with fresh samples
+        params = detector.get_new_params(method='random')
         rng = random.Random(42)
-        
-        # Test basic mutation (replaces a top-level key)
+
+        # Test basic mutation (replaces a top-level key with a fresh random value)
         mutated = optimizer._mutate_params(params, detector, rng)
         self.assertNotEqual(params, mutated)
-        
-        # Verify it still has the same top-level structure (keys might be replaced)
+
+        # Verify it still has the same top-level structure (keys should be preserved)
         self.assertEqual(set(params.keys()), set(mutated.keys()))
 
     def test_select_best_with_balanced_scores(self):
