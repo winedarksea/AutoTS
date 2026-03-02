@@ -1948,17 +1948,25 @@ if MCP_AVAILABLE:
 
                 if constraint_method == "dampen":
                     prediction = prediction.apply_constraints(
-                        constraint_method="dampen", constraint_value=constraint_value
+                        constraints={
+                            "constraint_method": "dampening",
+                            "constraint_value": constraint_value,
+                        }
                     )
                 elif constraint_method in ["upper", "lower"]:
                     prediction = prediction.apply_constraints(
-                        constraint_method="constraint",
-                        constraint_value=constraint_value,
-                        constraint_direction=constraint_direction,
+                        constraints={
+                            "constraint_method": "absolute",
+                            "constraint_value": constraint_value,
+                            "constraint_direction": constraint_direction,
+                        }
                     )
                 elif constraint_method == "quantile":
                     prediction = prediction.apply_constraints(
-                        constraint_method="quantile", constraint_value=constraint_value
+                        constraints={
+                            "constraint_method": "quantile",
+                            "constraint_value": constraint_value,
+                        }
                     )
                 else:
                     raise ValueError(f"Unknown constraint method: {constraint_method}")
