@@ -695,9 +695,10 @@ if MCP_AVAILABLE:
                     "type": "object",
                     "properties": {
                         "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, apply_constraints, apply_adjustments, get_model_params"},
+                        "data_id": {"type": "string", "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value"},
                         "forecast_length": {"type": "integer"},
                     },
-                    "required": ["prediction_id", "forecast_length"],
+                    "required": ["prediction_id", "data_id", "forecast_length"],
                 },
                 annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
@@ -723,9 +724,10 @@ if MCP_AVAILABLE:
                     "properties": {
                         "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments"},
                         "autots_id": {"type": "string", "description": "Cache ID — pass to get_validation_results, plot_validation"},
+                        "data_id": {"type": "string", "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value"},
                         "forecast_length": {"type": "integer"},
                     },
-                    "required": ["prediction_id", "autots_id", "forecast_length"],
+                    "required": ["prediction_id", "autots_id", "data_id", "forecast_length"],
                 },
                 annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
@@ -767,9 +769,10 @@ if MCP_AVAILABLE:
                     "properties": {
                         "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments"},
                         "autots_id": {"type": "string", "description": "Cache ID — pass to get_validation_results, plot_validation"},
+                        "data_id": {"type": "string", "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value"},
                         "forecast_length": {"type": "integer"},
                     },
-                    "required": ["prediction_id", "autots_id", "forecast_length"],
+                    "required": ["prediction_id", "autots_id", "data_id", "forecast_length"],
                 },
                 annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
@@ -1478,7 +1481,9 @@ if MCP_AVAILABLE:
                 }
                 ensemble_template = pd.DataFrame(ensemble_params, index=[0])
 
-                await _log_progress(f"forecast_fast: fitting mosaic ensemble on {len(df.columns)} series × {len(df)} rows")
+                await _log_progress(
+                    f"forecast_fast: fitting mosaic ensemble on {len(df.columns)} series × {len(df)} rows"
+                )
                 model = AutoTS(
                     forecast_length=forecast_length,
                     frequency='infer',
@@ -1507,6 +1512,7 @@ if MCP_AVAILABLE:
 
                 return {
                     "prediction_id": prediction_id,
+                    "data_id": data_id,
                     "forecast_length": forecast_length,
                 }
 
@@ -1570,6 +1576,7 @@ if MCP_AVAILABLE:
                 return {
                     "prediction_id": prediction_id,
                     "autots_id": autots_id,
+                    "data_id": data_id,
                     "forecast_length": forecast_length,
                 }
 
@@ -1661,6 +1668,7 @@ if MCP_AVAILABLE:
                 return {
                     "prediction_id": prediction_id,
                     "autots_id": autots_id,
+                    "data_id": data_id,
                     "forecast_length": forecast_length,
                 }
 
@@ -1854,8 +1862,8 @@ if MCP_AVAILABLE:
                     forecast_df = prediction.forecast
                     series_names = list(prediction.forecast.columns)
                 elif series:
-                    forecast_df = prediction.forecast[series]
                     series_names = series if isinstance(series, list) else [series]
+                    forecast_df = prediction.forecast[series_names]
                 else:
                     # Default to first series only
                     first_col = prediction.forecast.columns[0]

@@ -1051,6 +1051,17 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("forecast_length", data)
         self.assertEqual(data["forecast_length"], 8)
 
+    async def test_plot_forecast_single_series_string(self):
+        prediction_id = await self._ensure_weekly_forecast()
+        series_name = self.__class__._small_weekly.columns[0]
+        result = await call_tool(
+            "plot_forecast",
+            {"prediction_id": prediction_id, "series": series_name},
+        )
+        self.assertIsInstance(result, list)
+        self.assertTrue(len(result) > 0)
+        self.assertEqual(getattr(result[0], "type", None), "image")
+
     async def test_apply_constraints_dampen(self):
         prediction_id = await self._ensure_weekly_forecast()
 
