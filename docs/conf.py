@@ -25,7 +25,7 @@ author = 'Colin Catlin'
 # import AutoTS
 # from  AutoTS import __version__
 # release = __version__
-release = "1.0.1"
+release = "1.0.2"
 
 # -- General configuration ---------------------------------------------------
 

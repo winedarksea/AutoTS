@@ -31,7 +31,7 @@ from autots.models.cassandra import Cassandra
 from autots.tools.impute import FillNA
 
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 TransformTS = GeneralTransformer
 
