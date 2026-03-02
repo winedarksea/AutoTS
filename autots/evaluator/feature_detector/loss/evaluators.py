@@ -812,8 +812,7 @@ class LossEvaluatorsMixin:
         )
         return float(min(max(combined, 0.0), 3.0))
 
-    @staticmethod
-    def _aligned_finite_arrays(detected_values, true_values):
+    def _aligned_finite_arrays(self, detected_values, true_values):
         detected_arr = np.asarray(detected_values, dtype=float).ravel()
         true_arr = np.asarray(true_values, dtype=float).ravel()
         length = min(detected_arr.size, true_arr.size)
@@ -826,8 +825,7 @@ class LossEvaluatorsMixin:
             return np.array([], dtype=float), np.array([], dtype=float)
         return detected_arr[mask], true_arr[mask]
 
-    @staticmethod
-    def _robust_linear_slope(x_values, y_values):
+    def _robust_linear_slope(self, x_values, y_values):
         x_arr = np.asarray(x_values, dtype=float).ravel()
         y_arr = np.asarray(y_values, dtype=float).ravel()
         mask = np.isfinite(x_arr) & np.isfinite(y_arr)

@@ -1277,7 +1277,16 @@ class TimeSeriesFeatureDetector(
 
         return result
 
-    def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
+    def plot(
+        self,
+        series_name=None,
+        figsize=(16, 14),
+        save_path=None,
+        show=True,
+        separate_noise_anomaly_panels=True,
+        dual_axis_seasonality_holidays=True,
+        dual_axis_trend_level_shift=True,
+    ):
         if not HAS_MATPLOTLIB:
             raise ImportError("matplotlib is required for plotting.")
         if self.df_original is None:
@@ -1318,6 +1327,9 @@ class TimeSeriesFeatureDetector(
             save_path=save_path,
             show=show,
             title_prefix='Feature Detection',
+            separate_noise_anomaly_panels=separate_noise_anomaly_panels,
+            dual_axis_seasonality_holidays=dual_axis_seasonality_holidays,
+            dual_axis_trend_level_shift=dual_axis_trend_level_shift,
         )
         return fig
 

@@ -3974,7 +3974,16 @@ class SyntheticDailyGenerator:
             'weekly_profile_correlation': profile_corr,
         }
 
-    def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
+    def plot(
+        self,
+        series_name=None,
+        figsize=(16, 14),
+        save_path=None,
+        show=True,
+        separate_noise_anomaly_panels=True,
+        dual_axis_seasonality_holidays=True,
+        dual_axis_trend_level_shift=True,
+    ):
         """
         Plot a series with all its labeled components clearly marked.
 
@@ -3983,11 +3992,20 @@ class SyntheticDailyGenerator:
         series_name : str, optional
             Name of series to plot. If None, randomly selects one.
         figsize : tuple, optional
-            Figure size (width, height) in inches. Default (16, 12).
+            Figure size (width, height) in inches. Default (16, 14).
         save_path : str, optional
             If provided, saves the plot to this path instead of displaying.
         show : bool, optional
             Whether to display the plot. Default True.
+        separate_noise_anomaly_panels : bool, optional
+            If True, plots anomaly and noise components in separate panels.
+            If False, combines them in one panel. Default True.
+        dual_axis_seasonality_holidays : bool, optional
+            If True, plots seasonality and holidays with separate y-axes to
+            improve readability when scales differ. Default True.
+        dual_axis_trend_level_shift : bool, optional
+            If True, plots trend/combined on the left axis and level-shift
+            component on a right axis to avoid scale compression. Default True.
 
         Returns
         -------
@@ -4029,6 +4047,9 @@ class SyntheticDailyGenerator:
             title_prefix='Synthetic Data Analysis',
             save_path=save_path,
             show=show,
+            separate_noise_anomaly_panels=separate_noise_anomaly_panels,
+            dual_axis_seasonality_holidays=dual_axis_seasonality_holidays,
+            dual_axis_trend_level_shift=dual_axis_trend_level_shift,
         )
 
         if save_path:

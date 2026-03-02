@@ -17,10 +17,6 @@ from datetime import datetime
 from typing import Any, Optional, Dict, Union
 
 import pandas as pd
-import matplotlib
-
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 from pathlib import Path
 
 try:
@@ -34,6 +30,10 @@ try:
         ToolAnnotations,
         CallToolResult,
     )
+    import matplotlib
+
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
 
     MCP_AVAILABLE = True
 except ImportError:
