@@ -10,6 +10,11 @@ Tests cover:
 - Tool handler invocations (async)
 - Tool schema / list validation
 - Package structure and entry-point verification
+
+Resource-optimised: expensive operations (forecast_fast, detect_features,
+EventRiskForecast) are shared across tests via lazy class-level fixtures so
+they execute at most once per class.  Data is sliced to small sizes before
+being fed into heavy operations.
 """
 
 import asyncio
@@ -32,10 +37,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # ---------------------------------------------------------------------------
 try:
     from autots.mcp.server import (
-        CACHE_MAX_OBJECTS,
         CACHE_REGISTRY,
         MCP_AVAILABLE,
-        _enforce_cache_limit,
         _resolve_cache,
         build_csv_metadata,
         cache_object,
@@ -98,8 +101,8 @@ def _extract(result):
 
     Tools return either:
       * a plain dict
-      * a list[TextContent]  →  JSON-parsed
-      * a list[ImageContent] →  returned as-is (caller checks .type)
+      * a list[TextContent]  ->  JSON-parsed
+      * a list[ImageContent] ->  returned as-is (caller checks .type)
     """
     if isinstance(result, dict):
         return result
@@ -259,11 +262,12 @@ class TestMCPForecasting(unittest.TestCase):
     def test_weekly_data_forecast(self):
         from autots import AutoTS
 
+        # gens=0, vals=0: tests forecast output shape without expensive model search
         model = AutoTS(
             forecast_length=8,
             frequency='infer',
-            max_generations=1,
-            num_validations=1,
+            max_generations=0,
+            num_validations=0,
             model_list='superfast',
         )
         model = model.fit(self.df_weekly)
@@ -273,11 +277,12 @@ class TestMCPForecasting(unittest.TestCase):
     def test_hourly_data_forecast(self):
         from autots import AutoTS
 
+        # gens=0, vals=0: tests forecast output shape without expensive model search
         model = AutoTS(
             forecast_length=24,
             frequency='infer',
-            max_generations=1,
-            num_validations=1,
+            max_generations=0,
+            num_validations=0,
             model_list='superfast',
         )
         model = model.fit(self.df_hourly)
@@ -458,7 +463,7 @@ class TestMCPEventRiskForecasting(unittest.TestCase):
             upper_limit=0.9,
         )
         erf.fit()
-        upper_risk_df, lower_risk_df = erf.predict()
+        upper_risk_df, _ = erf.predict()
         # Probabilities must be in [0, 1]
         self.assertTrue((upper_risk_df.values >= 0).all())
         self.assertTrue((upper_risk_df.values <= 1).all())
@@ -755,6 +760,10 @@ class TestMCPServerUtilities(unittest.TestCase):
 
 # ===========================================================================
 # Async tool handler tests (call_tool directly)
+#
+# Expensive operations (forecast_fast, detect_features) are shared via lazy
+# class-level fixtures.  Data is sliced to small sizes (<=150 rows, 2-3 cols)
+# and cached directly to avoid loading full datasets into heavy operations.
 # ===========================================================================
 
 
@@ -762,28 +771,98 @@ class TestMCPServerUtilities(unittest.TestCase):
 class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
     """Invoke call_tool handlers directly and verify return values."""
 
-    async def asyncSetUp(self):
-        clear_cache()
+    # Shared fixture IDs (populated lazily, persist across tests in the class)
+    _weekly_data_id = None
+    _weekly_prediction_id = None
+    _daily_data_id = None
+    _detector_id = None
 
-    async def asyncTearDown(self):
+    @classmethod
+    def setUpClass(cls):
         clear_cache()
+        # Pre-load small sliced DataFrames so tool handlers operate on small data.
+        # This avoids loading full datasets (2869x27 daily, 1028x9 weekly) which
+        # caused memory exhaustion when repeated across many tests.
+        cls._small_weekly = load_weekly(long=False).iloc[:80, :2]
+        cls._small_daily = load_daily(long=False).iloc[:150, :3]
 
-    # ---- Cache tools ----------------------------------------------------
+    @classmethod
+    def tearDownClass(cls):
+        clear_cache()
+        cls._weekly_data_id = None
+        cls._weekly_prediction_id = None
+        cls._daily_data_id = None
+        cls._detector_id = None
+
+    # ---- Lazy shared helpers (run at most once, reused across tests) ------
+
+    async def _ensure_weekly_data(self):
+        """Cache small weekly DataFrame; return data_id."""
+        cls = self.__class__
+        if cls._weekly_data_id is None or cls._weekly_data_id not in CACHE_REGISTRY['data']:
+            cls._weekly_data_id = cache_object(
+                cls._small_weekly, 'data',
+                {'source': 'test_weekly', 'rows': len(cls._small_weekly)},
+            )
+        return cls._weekly_data_id
+
+    async def _ensure_weekly_forecast(self):
+        """Run forecast_fast once on small weekly data; return prediction_id."""
+        cls = self.__class__
+        if cls._weekly_prediction_id is None or cls._weekly_prediction_id not in CACHE_REGISTRY['prediction']:
+            data_id = await self._ensure_weekly_data()
+            result = await call_tool(
+                "forecast_fast", {"data_id": data_id, "forecast_length": 8}
+            )
+            cls._weekly_prediction_id = _extract(result)["prediction_id"]
+        return cls._weekly_prediction_id
+
+    async def _ensure_daily_data(self):
+        """Cache small daily DataFrame; return data_id."""
+        cls = self.__class__
+        if cls._daily_data_id is None or cls._daily_data_id not in CACHE_REGISTRY['data']:
+            cls._daily_data_id = cache_object(
+                cls._small_daily, 'data',
+                {'source': 'test_daily', 'rows': len(cls._small_daily)},
+            )
+        return cls._daily_data_id
+
+    async def _ensure_detector(self):
+        """Run detect_features once on small daily data; return detector_id."""
+        cls = self.__class__
+        if cls._detector_id is None or cls._detector_id not in CACHE_REGISTRY['feature_detector']:
+            data_id = await self._ensure_daily_data()
+            result = await call_tool("detect_features", {"data_id": data_id})
+            cls._detector_id = _extract(result)["detector_id"]
+        return cls._detector_id
+
+    # ---- Cache tools (lightweight, manage their own state) ---------------
 
     async def test_list_cache_empty(self):
-        result = await call_tool("list_cache", {})
-        data = _extract(result)
-        self.assertIsInstance(data, dict)
-        self.assertEqual(len(data), 0)
+        # Temporarily snapshot caches, clear, test, then restore so shared
+        # fixtures remain valid for other tests in this class
+        saved = {k: dict(v) for k, v in CACHE_REGISTRY.items()}
+        try:
+            clear_cache()
+            result = await call_tool("list_cache", {})
+            data = _extract(result)
+            self.assertIsInstance(data, dict)
+            self.assertEqual(len(data), 0)
+        finally:
+            for k in CACHE_REGISTRY:
+                CACHE_REGISTRY[k].clear()
+                CACHE_REGISTRY[k].update(saved[k])
 
     async def test_clear_cache_tool(self):
-        cache_object({'x': 1}, 'data')
-        result = await call_tool("clear_cache", {})
-        # Result is a plain dict {"success": True}
+        # Clear only a temp entry — not the shared fixtures
+        temp_id = cache_object({'x': 1}, 'data')
+        result = await call_tool(
+            "clear_cache", {"object_id": temp_id, "cache_type": "data"}
+        )
         data = _extract(result)
-        self.assertTrue(data.get("success", True))  # accept any truthy result
+        self.assertTrue(data.get("success", True))
 
-    # ---- Data loading tools ---------------------------------------------
+    # ---- Data loading tools (lightweight, use load_sample_data API) ------
 
     async def test_load_sample_data_daily(self):
         result = await call_tool("load_sample_data", {"dataset": "daily"})
@@ -791,21 +870,25 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("data_id", data)
         self.assertGreater(data.get("rows", 0), 100)
         self.assertGreater(data.get("cols", 0), 1)
+        # Clean up full-sized data immediately to save memory
+        clear_cache(data["data_id"], "data")
 
     async def test_load_sample_data_datasets(self):
         for dataset in ("weekly", "monthly", "yearly", "linear", "sine"):
             result = await call_tool("load_sample_data", {"dataset": dataset})
             data = _extract(result)
             self.assertIn("data_id", data, msg=f"Missing data_id for dataset={dataset}")
+            # Clean up full-sized data immediately
+            clear_cache(data["data_id"], "data")
 
     async def test_generate_synthetic_data(self):
         result = await call_tool("generate_synthetic_data", {"n_series": 3})
         data = _extract(result)
         self.assertIn("data_id", data)
         self.assertEqual(data.get("n_series"), 3)
+        clear_cache(data["data_id"], "data")
 
     async def test_load_data_from_file(self):
-        # Write a temp CSV and load it
         dates = pd.date_range('2024-01-01', periods=30, freq='D')
         df = pd.DataFrame({'s1': np.random.randn(30)}, index=dates)
         with tempfile.NamedTemporaryFile(suffix='.csv', mode='w', delete=False) as f:
@@ -815,46 +898,49 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
             result = await call_tool("load_data_from_file", {"filepath": tmp_path})
             data = _extract(result)
             self.assertIn("data_id", data)
+            clear_cache(data["data_id"], "data")
         finally:
             os.unlink(tmp_path)
 
-    # ---- Data manipulation tools ----------------------------------------
+    # ---- Data manipulation tools (use shared weekly data) ----------------
 
     async def test_get_data_json_wide(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-
-        result = await call_tool("get_data", {"data_id": data_id, "output_format": "json_wide"})
+        data_id = await self._ensure_weekly_data()
+        result = await call_tool(
+            "get_data", {"data_id": data_id, "output_format": "json_wide"}
+        )
         data = _extract(result)
         self.assertIn("datetime", data)
 
     async def test_get_data_json_long(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-
-        result = await call_tool("get_data", {"data_id": data_id, "output_format": "json_long"})
+        data_id = await self._ensure_weekly_data()
+        result = await call_tool(
+            "get_data", {"data_id": data_id, "output_format": "json_long"}
+        )
         data = _extract(result)
         self.assertIn("datetime", data)
         self.assertIn("series_id", data)
         self.assertIn("value", data)
 
     async def test_get_data_csv_wide(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-
-        result = await call_tool("get_data", {"data_id": data_id, "output_format": "csv_wide"})
+        data_id = await self._ensure_weekly_data()
+        result = await call_tool(
+            "get_data", {"data_id": data_id, "output_format": "csv_wide"}
+        )
         data = _extract(result)
         self.assertIn("filepath", data)
         self.assertTrue(os.path.exists(data["filepath"]))
 
     async def test_clean_data(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
-
-        result = await call_tool("clean_data", {"data_id": data_id, "fillna": "ffill"})
+        data_id = await self._ensure_daily_data()
+        result = await call_tool(
+            "clean_data", {"data_id": data_id, "fillna": "ffill"}
+        )
         data = _extract(result)
         self.assertIn("data_id", data)
-        self.assertNotEqual(data["data_id"], data_id)  # new ID for cleaned copy
+        self.assertNotEqual(data["data_id"], data_id)
+        # Clean up derived data
+        clear_cache(data["data_id"], "data")
 
     async def test_convert_long_to_wide(self):
         long_data = {
@@ -867,8 +953,9 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("data_id", data)
         self.assertEqual(data.get("rows"), 2)
         self.assertEqual(data.get("cols"), 2)
+        clear_cache(data["data_id"], "data")
 
-    # ---- Documentation tool ---------------------------------------------
+    # ---- Documentation tool ----------------------------------------------
 
     async def test_get_autots_docs(self):
         result = await call_tool("get_autots_docs", {})
@@ -876,35 +963,33 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("AutoTS_Parameters", data)
         self.assertIn("forecast_length", data["AutoTS_Parameters"])
 
-    # ---- Feature detection tools ----------------------------------------
+    # ---- Feature detection tools (shared detector fixture) ---------------
 
     async def test_detect_features(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
-
+        data_id = await self._ensure_daily_data()
         result = await call_tool("detect_features", {"data_id": data_id})
         data = _extract(result)
         self.assertIn("detector_id", data)
         self.assertGreater(data.get("series_count", 0), 0)
+        # Promote to shared fixture if none exists; otherwise clean up the duplicate.
+        cls = self.__class__
+        if cls._detector_id is None or cls._detector_id not in CACHE_REGISTRY['feature_detector']:
+            cls._detector_id = data["detector_id"]
+        else:
+            clear_cache(data["detector_id"], "feature_detector")
 
     async def test_get_detected_features(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
-        detect_result = await call_tool("detect_features", {"data_id": data_id})
-        detector_id = _extract(detect_result)["detector_id"]
-
-        result = await call_tool("get_detected_features", {"detector_id": detector_id})
+        detector_id = await self._ensure_detector()
+        result = await call_tool(
+            "get_detected_features", {"detector_id": detector_id}
+        )
         data = _extract(result)
         self.assertIn("summary", data)
         self.assertIn("detection_counts", data)
         self.assertIn("features", data)
 
     async def test_get_detected_features_with_date_filter(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
-        detect_result = await call_tool("detect_features", {"data_id": data_id})
-        detector_id = _extract(detect_result)["detector_id"]
-
+        detector_id = await self._ensure_detector()
         result = await call_tool(
             "get_detected_features",
             {
@@ -917,11 +1002,7 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("summary", data)
 
     async def test_forecast_from_features(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
-        detect_result = await call_tool("detect_features", {"data_id": data_id})
-        detector_id = _extract(detect_result)["detector_id"]
-
+        detector_id = await self._ensure_detector()
         result = await call_tool(
             "forecast_from_features",
             {"detector_id": detector_id, "forecast_length": 14},
@@ -929,25 +1010,15 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         data = _extract(result)
         self.assertIn("prediction_id", data)
         self.assertEqual(data.get("forecast_length"), 14)
+        # Clean up derived prediction
+        clear_cache(data["prediction_id"], "prediction")
 
-    # ---- Forecast fast pipeline -----------------------------------------
+    # ---- Forecast fast pipeline (shared forecast fixture) ----------------
 
     async def test_forecast_fast_and_get_forecast(self):
-        """End-to-end: load → forecast_fast → get_forecast."""
-        load_result = await call_tool(
-            "load_sample_data", {"dataset": "weekly"}
-        )
-        data_id = _extract(load_result)["data_id"]
+        """End-to-end: load -> forecast_fast -> get_forecast."""
+        prediction_id = await self._ensure_weekly_forecast()
 
-        fcst_result = await call_tool(
-            "forecast_fast",
-            {"data_id": data_id, "forecast_length": 8},
-        )
-        fcst_data = _extract(fcst_result)
-        self.assertIn("prediction_id", fcst_data)
-        prediction_id = fcst_data["prediction_id"]
-
-        # get_forecast
         forecast_result = await call_tool(
             "get_forecast",
             {"prediction_id": prediction_id, "output": "forecast"},
@@ -956,13 +1027,8 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("datetime", fdata)
 
     async def test_forecast_fast_get_all(self):
-        """forecast_fast → get_forecast(output='all')."""
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-        fcst_result = await call_tool(
-            "forecast_fast", {"data_id": data_id, "forecast_length": 8}
-        )
-        prediction_id = _extract(fcst_result)["prediction_id"]
+        """forecast_fast -> get_forecast(output='all')."""
+        prediction_id = await self._ensure_weekly_forecast()
 
         result = await call_tool(
             "get_forecast",
@@ -975,26 +1041,18 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("point", types_present)
 
     async def test_forecast_fast_get_model_params(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-        fcst_result = await call_tool(
-            "forecast_fast", {"data_id": data_id, "forecast_length": 8}
-        )
-        prediction_id = _extract(fcst_result)["prediction_id"]
+        prediction_id = await self._ensure_weekly_forecast()
 
-        result = await call_tool("get_model_params", {"prediction_id": prediction_id})
+        result = await call_tool(
+            "get_model_params", {"prediction_id": prediction_id}
+        )
         data = _extract(result)
         self.assertIn("model_name", data)
         self.assertIn("forecast_length", data)
         self.assertEqual(data["forecast_length"], 8)
 
     async def test_apply_constraints_dampen(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-        fcst_result = await call_tool(
-            "forecast_fast", {"data_id": data_id, "forecast_length": 8}
-        )
-        prediction_id = _extract(fcst_result)["prediction_id"]
+        prediction_id = await self._ensure_weekly_forecast()
 
         result = await call_tool(
             "apply_constraints",
@@ -1007,14 +1065,11 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         data = _extract(result)
         self.assertIn("prediction_id", data)
         self.assertNotEqual(data["prediction_id"], prediction_id)
+        # Clean up derived prediction
+        clear_cache(data["prediction_id"], "prediction")
 
     async def test_apply_adjustments_ewma(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "weekly"})
-        data_id = _extract(load_result)["data_id"]
-        fcst_result = await call_tool(
-            "forecast_fast", {"data_id": data_id, "forecast_length": 8}
-        )
-        prediction_id = _extract(fcst_result)["prediction_id"]
+        prediction_id = await self._ensure_weekly_forecast()
 
         result = await call_tool(
             "apply_adjustments",
@@ -1027,10 +1082,13 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         data = _extract(result)
         self.assertIn("prediction_id", data)
         self.assertEqual(data.get("adjustment_method"), "smoothing")
+        # Clean up derived prediction
+        clear_cache(data["prediction_id"], "prediction")
 
     async def test_list_cache_after_operations(self):
-        await call_tool("load_sample_data", {"dataset": "daily"})
-        await call_tool("load_sample_data", {"dataset": "weekly"})
+        # Ensure shared fixtures exist so cache has entries to list
+        await self._ensure_weekly_forecast()
+        await self._ensure_daily_data()
         result = await call_tool("list_cache", {})
         data = _extract(result)
         self.assertIn("data", data)
@@ -1039,36 +1097,61 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
 
 # ===========================================================================
 # Event risk tool handlers (async)
+#
+# Shares data and lazily creates event risk fixture to avoid running the
+# expensive EventRiskForecast fit multiple times on full-sized data.
 # ===========================================================================
 
 
 @unittest.skipIf(not SERVER_UTILS_AVAILABLE, "MCP server utilities not available")
 class TestMCPEventRiskHandlers(unittest.IsolatedAsyncioTestCase):
 
-    async def asyncSetUp(self):
-        clear_cache()
+    _daily_data_id = None
+    _upper_event_risk_id = None
 
-    async def asyncTearDown(self):
+    @classmethod
+    def setUpClass(cls):
         clear_cache()
+        # Pre-cache a small slice of daily data (150 rows, 2 cols)
+        cls._small_daily = load_daily(long=False).iloc[:150, :2]
+
+    @classmethod
+    def tearDownClass(cls):
+        clear_cache()
+        cls._daily_data_id = None
+        cls._upper_event_risk_id = None
+
+    async def _ensure_daily_data(self):
+        cls = self.__class__
+        if cls._daily_data_id is None or cls._daily_data_id not in CACHE_REGISTRY['data']:
+            cls._daily_data_id = cache_object(
+                cls._small_daily, 'data', {'source': 'test_daily_erf'}
+            )
+        return cls._daily_data_id
+
+    async def _ensure_upper_event_risk(self):
+        cls = self.__class__
+        if cls._upper_event_risk_id is None or cls._upper_event_risk_id not in CACHE_REGISTRY['event_risk']:
+            data_id = await self._ensure_daily_data()
+            result = await call_tool(
+                "forecast_event_risk",
+                {
+                    "data_id": data_id,
+                    "threshold": 0.75,
+                    "direction": "upper",
+                    "forecast_length": 14,
+                },
+            )
+            cls._upper_event_risk_id = _extract(result)["event_risk_id"]
+        return cls._upper_event_risk_id
 
     async def test_forecast_event_risk_and_results(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
+        event_risk_id = await self._ensure_upper_event_risk()
 
-        result = await call_tool(
-            "forecast_event_risk",
-            {
-                "data_id": data_id,
-                "threshold": 0.75,
-                "direction": "upper",
-                "forecast_length": 14,
-            },
-        )
-        data = _extract(result)
-        self.assertIn("event_risk_id", data)
-        self.assertEqual(data.get("direction"), "upper")
+        # Verify the cached entry is valid and has correct direction
+        cached = get_cached_object(event_risk_id, 'event_risk')
+        self.assertEqual(cached['metadata'].get('direction'), 'upper')
 
-        event_risk_id = data["event_risk_id"]
         results = await call_tool(
             "get_event_risk_results", {"event_risk_id": event_risk_id}
         )
@@ -1077,8 +1160,7 @@ class TestMCPEventRiskHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("risk_type", rdata)
 
     async def test_forecast_event_risk_lower(self):
-        load_result = await call_tool("load_sample_data", {"dataset": "daily"})
-        data_id = _extract(load_result)["data_id"]
+        data_id = await self._ensure_daily_data()
 
         result = await call_tool(
             "forecast_event_risk",

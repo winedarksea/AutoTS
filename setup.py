@@ -10,7 +10,7 @@ required = [
 extras = {
     'additional': [
         "holidays>=0.9",
-        'prophet>=0.4.0',
+        'prophet>=1.0.0',
         'fredapi',
         'tensorflow',
         'xgboost',

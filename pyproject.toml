@@ -66,8 +66,9 @@ autots-mcp = "autots.mcp.server:serve"
 "Homepage" = "https://github.com/winedarksea/AutoTS"
 "Bug Tracker" = "https://github.com/winedarksea/AutoTS/issues"
 
-[tool.setuptools.packages]
-find = {}  # Scan the project directory with the default parameters
+[tool.setuptools.packages.find]
+include = ["autots*"]
+exclude = ["build*", "dist*", "tests*"]
 
 [tool.setuptools.package-data]
 "autots.mcp" = ["*.json", "*.md"]
