@@ -739,6 +739,109 @@ class LossEvaluatorsMixin:
         loss += 0.1 * false_positives
         return loss
 
+    def _noise_structure_loss(self, detected_components, true_components):
+        """
+        Penalize low-frequency structure mismatch in the noise component.
+
+        This targets residual drift/level-shift leakage by comparing smoothed
+        noise behavior rather than point-wise high-frequency noise values.
+        """
+        detected_noise = detected_components.get('noise')
+        true_noise = true_components.get('noise')
+        if true_noise is None and detected_noise is None:
+            return 0.0
+        if true_noise is None:
+            return 0.0
+        if detected_noise is None:
+            return 0.8
+
+        detected_arr, true_arr = self._aligned_finite_arrays(detected_noise, true_noise)
+        if detected_arr.size < 8:
+            return 0.0
+
+        n_obs = detected_arr.size
+        smooth_window = min(max(7, n_obs // 14), 45)
+        detected_smooth = (
+            pd.Series(detected_arr).rolling(smooth_window, center=True, min_periods=1).mean()
+        ).to_numpy(dtype=float)
+        true_smooth = (
+            pd.Series(true_arr).rolling(smooth_window, center=True, min_periods=1).mean()
+        ).to_numpy(dtype=float)
+
+        true_scale = float(np.nanstd(true_arr))
+        if true_scale < 1e-6 or not np.isfinite(true_scale):
+            true_scale = float(np.nanmean(np.abs(true_arr))) + 1e-6
+        smooth_scale = float(np.nanstd(true_smooth))
+        if smooth_scale < 1e-6 or not np.isfinite(smooth_scale):
+            smooth_scale = true_scale
+        norm_scale = max(smooth_scale, true_scale * 0.2, 1e-6)
+
+        # Core penalty: low-frequency path mismatch.
+        smooth_rmse = np.sqrt(np.nanmean((detected_smooth - true_smooth) ** 2))
+        smooth_rmse_penalty = min(smooth_rmse / (norm_scale + 1e-6), 3.0)
+
+        # Drift leakage: compare smoothed global slopes.
+        x = np.arange(n_obs, dtype=float)
+        det_slope = self._robust_linear_slope(x, detected_smooth)
+        true_slope = self._robust_linear_slope(x, true_smooth)
+        slope_denom = max(abs(true_slope), norm_scale / max(n_obs, 1), 1e-6)
+        slope_penalty = min(abs(det_slope - true_slope) / slope_denom, 3.0)
+
+        # Level-shift leakage proxy: compare frequency of large smooth jumps.
+        det_diff = np.diff(detected_smooth)
+        true_diff = np.diff(true_smooth)
+        if true_diff.size == 0:
+            shift_penalty = 0.0
+        else:
+            shift_threshold = np.nanpercentile(np.abs(true_diff), 90)
+            if not np.isfinite(shift_threshold) or shift_threshold < 1e-9:
+                shift_threshold = np.nanstd(true_diff) * 1.5
+            if not np.isfinite(shift_threshold) or shift_threshold < 1e-9:
+                shift_threshold = 1e-9
+            det_shift_rate = float(np.mean(np.abs(det_diff) > shift_threshold))
+            true_shift_rate = float(np.mean(np.abs(true_diff) > shift_threshold))
+            shift_penalty = min(
+                abs(det_shift_rate - true_shift_rate) / (true_shift_rate + 0.05),
+                3.0,
+            )
+
+        combined = (
+            0.55 * smooth_rmse_penalty
+            + 0.25 * slope_penalty
+            + 0.20 * shift_penalty
+        )
+        return float(min(max(combined, 0.0), 3.0))
+
+    @staticmethod
+    def _aligned_finite_arrays(detected_values, true_values):
+        detected_arr = np.asarray(detected_values, dtype=float).ravel()
+        true_arr = np.asarray(true_values, dtype=float).ravel()
+        length = min(detected_arr.size, true_arr.size)
+        if length == 0:
+            return np.array([], dtype=float), np.array([], dtype=float)
+        detected_arr = detected_arr[:length]
+        true_arr = true_arr[:length]
+        mask = np.isfinite(detected_arr) & np.isfinite(true_arr)
+        if not np.any(mask):
+            return np.array([], dtype=float), np.array([], dtype=float)
+        return detected_arr[mask], true_arr[mask]
+
+    @staticmethod
+    def _robust_linear_slope(x_values, y_values):
+        x_arr = np.asarray(x_values, dtype=float).ravel()
+        y_arr = np.asarray(y_values, dtype=float).ravel()
+        mask = np.isfinite(x_arr) & np.isfinite(y_arr)
+        if mask.sum() < 2:
+            return 0.0
+        x_arr = x_arr[mask]
+        y_arr = y_arr[mask]
+        x_centered = x_arr - np.mean(x_arr)
+        y_centered = y_arr - np.mean(y_arr)
+        denom = float(np.sum(x_centered**2))
+        if denom <= 1e-12:
+            return 0.0
+        return float(np.sum(x_centered * y_centered) / denom)
+
     def _metadata_loss(self, detected_scale, true_scale, detected_type, true_type):
         penalties = []
         if true_scale is not None:
@@ -933,4 +1036,3 @@ class LossEvaluatorsMixin:
             except (ValueError, TypeError):
                 continue
         return normalized
-

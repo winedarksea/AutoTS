@@ -20,6 +20,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
     - Holiday timing, direct impacts, and splash/bridge days
     - Seasonality strength, patterns, and changepoints
     - Noise regimes and noise-to-signal characteristics
+    - Low-frequency noise structure consistency (drift/shift leakage)
     - Series-level metadata consistency (scale, type)
     - Regressor impacts when present
     """
@@ -37,6 +38,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         'seasonality_changepoint_loss': 0.6,
         'noise_level_loss': 0.5,
         'noise_regime_loss': 0.4,
+        'noise_structure_loss': 0.2,
         'metadata_loss': 0.2,
         'regressor_loss': 0.3,
     }
@@ -341,6 +343,14 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             detected_cp=detected.get('noise_changepoints', []),
             true_cp=true.get('noise_changepoints', []),
         )
+        noise_structure_loss = self._evaluate_component_loss(
+            key='noise_structure_loss',
+            series_name=series_name,
+            effective_weights=effective_weights,
+            fn=self._noise_structure_loss,
+            detected_components=detected_components,
+            true_components=true_components,
+        )
 
         metadata_loss = self._evaluate_component_loss(
             key='metadata_loss',
@@ -375,6 +385,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             'seasonality_changepoint_loss': seasonality_changepoint_loss,
             'noise_level_loss': noise_level_loss,
             'noise_regime_loss': noise_regime_loss,
+            'noise_structure_loss': noise_structure_loss,
             'metadata_loss': metadata_loss,
             'regressor_loss': regressor_loss,
         }
@@ -435,6 +446,8 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             return bool(has_level or has_ratio)
         if key == 'noise_regime_loss':
             return not self._is_empty_label(true_series.get('noise_changepoints'))
+        if key == 'noise_structure_loss':
+            return not self._is_empty_label(true_component_map.get('noise'))
         if key == 'metadata_loss':
             has_scale = not self._is_empty_label(true_series.get('series_scale'))
             has_type = not self._is_empty_label(true_series.get('series_type'))
@@ -616,4 +629,3 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         if series_name is not None:
             return {series_name: component_container.get(series_name, {})}
         return {name: comps for name, comps in component_container.items()}
-
