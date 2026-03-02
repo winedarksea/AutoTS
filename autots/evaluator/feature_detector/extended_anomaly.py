@@ -93,6 +93,9 @@ class ExtendedAnomalyDetector:
     slope_reversion_cumsum_threshold : float
         Minimum peak z-score of the cumulative sum (relative to its rolling σ)
         required to trigger a slope-reversion candidate.
+    slope_reversion_max_duration : int
+        Maximum allowed duration (days) for slope-reversion events. Longer
+        candidates are treated as structural drift and ignored.
     decay_lookahead : int
         Number of days to inspect after a pass-1 peak for a decay tail.
     decay_fit_min_r2 : float
@@ -100,6 +103,13 @@ class ExtendedAnomalyDetector:
     min_segment_run : int
         Minimum number of consecutive elevated windows required by the
         segmented-shift detector to form an event.
+    sustained_hysteresis : float
+        Fraction of ``sustained_threshold`` used to keep an in-progress
+        segmented run active after it starts. Values in (0, 1] reduce
+        fragmentation from brief dips.
+    segment_max_gap : int
+        Maximum number of non-flagged days allowed between two segmented runs
+        before stitching them into one event.
     merge_distance_days : int
         Events within this many days of each other (or overlapping) are merged.
     max_anomalies_per_series : int
@@ -117,9 +127,12 @@ class ExtendedAnomalyDetector:
         slope_reversion_min_hold=5,
         slope_reversion_min_reversion=7,
         slope_reversion_cumsum_threshold=3.0,
+        slope_reversion_max_duration=84,
         decay_lookahead=14,
         decay_fit_min_r2=0.5,
         min_segment_run=2,
+        sustained_hysteresis=0.7,
+        segment_max_gap=1,
         merge_distance_days=3,
         max_anomalies_per_series=25,
     ):
@@ -132,9 +145,15 @@ class ExtendedAnomalyDetector:
         self.slope_reversion_min_hold = max(2, int(slope_reversion_min_hold))
         self.slope_reversion_min_reversion = max(2, int(slope_reversion_min_reversion))
         self.slope_reversion_cumsum_threshold = float(slope_reversion_cumsum_threshold)
+        self.slope_reversion_max_duration = max(
+            self.slope_reversion_min_hold + self.slope_reversion_min_reversion + 1,
+            int(slope_reversion_max_duration),
+        )
         self.decay_lookahead = max(3, int(decay_lookahead))
         self.decay_fit_min_r2 = float(decay_fit_min_r2)
         self.min_segment_run = max(1, int(min_segment_run))
+        self.sustained_hysteresis = float(np.clip(sustained_hysteresis, 0.05, 1.0))
+        self.segment_max_gap = max(0, int(segment_max_gap))
         self.merge_distance_days = max(0, int(merge_distance_days))
         self.max_anomalies_per_series = max(1, int(max_anomalies_per_series))
 
@@ -213,10 +232,13 @@ class ExtendedAnomalyDetector:
             'slope_reversion_min_hold': random.choice([3, 5, 7]),
             'slope_reversion_min_reversion': random.choice([5, 7, 10]),
             'slope_reversion_cumsum_threshold': round(random.uniform(2.0, 5.0), 1),
+            'slope_reversion_max_duration': random.choice([56, 72, 84, 112]),
             'decay_lookahead': random.choice([7, 10, 14]),
             'decay_fit_min_r2': round(random.uniform(0.35, 0.70), 2),
             'merge_distance_days': random.choice([1, 2, 3, 5]),
             'min_segment_run': random.choice([2, 3]),
+            'sustained_hysteresis': round(random.uniform(0.55, 0.85), 2),
+            'segment_max_gap': random.choice([0, 1, 2]),
         }
 
     # ------------------------------------------------------------------
@@ -309,8 +331,11 @@ class ExtendedAnomalyDetector:
             return []
 
         series = pd.Series(values)
-        rolling_mean = series.rolling(bl, center=True, min_periods=max(2, bl // 3)).mean()
-        rolling_std = series.rolling(bl, center=True, min_periods=max(2, bl // 3)).std()
+        baseline_series = series.shift(1)
+        rolling_mean = baseline_series.rolling(bl, min_periods=max(3, bl // 3)).mean()
+        rolling_std = baseline_series.rolling(bl, min_periods=max(3, bl // 3)).std()
+        rolling_mean = rolling_mean.bfill().ffill()
+        rolling_std = rolling_std.bfill().ffill()
 
         # Standardize
         z = (series - rolling_mean) / (rolling_std.clip(lower=1e-6))
@@ -338,10 +363,13 @@ class ExtendedAnomalyDetector:
                         onset_idx = j + 1
                         break
                 onset_idx = max(0, onset_idx)
-                # Find end: first index after alarm where S returns to 0
+                # Find end: first index after alarm where CUSUM resets and
+                # residual z-score is near baseline.
                 end_fall = end_idx
-                for j in range(end_idx, min(n, end_idx + self.sustained_baseline)):
-                    if S[j] <= 0:
+                max_end = min(n - 1, end_idx + self.sustained_baseline)
+                for j in range(end_idx + 1, max_end + 1):
+                    end_fall = j
+                    if S[j] <= 0 and abs(z[j]) <= max(0.5, self.cusum_k + 0.1):
                         end_fall = j
                         break
 
@@ -449,6 +477,8 @@ class ExtendedAnomalyDetector:
             if revert_days < self.slope_reversion_min_reversion:
                 continue
             if duration < 1:
+                continue
+            if duration > self.slope_reversion_max_duration:
                 continue
 
             window_vals = values[onset_i:revert_i + 1]
@@ -615,15 +645,23 @@ class ExtendedAnomalyDetector:
             return []
 
         series = pd.Series(values)
-        bl_mean = series.rolling(bl, center=True, min_periods=max(3, bl // 3)).mean()
-        bl_std = series.rolling(bl, center=True, min_periods=max(3, bl // 3)).std()
+        # Use trailing baseline windows so the candidate anomaly period does not
+        # self-contaminate its own reference statistics.
+        baseline_series = series.shift(win)
+        bl_mean = baseline_series.rolling(bl, min_periods=max(3, bl // 3)).mean()
+        bl_std = baseline_series.rolling(bl, min_periods=max(3, bl // 3)).std()
+        bl_mean = bl_mean.bfill().ffill()
+        bl_std = bl_std.bfill().ffill()
 
         # Compute z-score of local (short-window) mean vs. baseline
-        local_mean = series.rolling(win, center=True, min_periods=max(2, win // 2)).mean()
+        local_mean = series.rolling(win, min_periods=max(2, win // 2)).mean()
         z = (local_mean - bl_mean) / (bl_std.clip(lower=1e-6))
         z = z.fillna(0.0).to_numpy(dtype=float)
 
-        flagged = np.abs(z) > self.sustained_threshold
+        high_threshold = np.abs(z) > self.sustained_threshold
+        low_threshold = np.abs(z) > (self.sustained_threshold * self.sustained_hysteresis)
+        flagged = self._apply_hysteresis(high_threshold, low_threshold)
+        flagged = self._bridge_small_gaps(flagged, self.segment_max_gap)
 
         events = []
         runs = self._find_runs(flagged)
@@ -632,9 +670,16 @@ class ExtendedAnomalyDetector:
             if run_len < self.min_segment_run:
                 continue
 
-            # Pad the window to cover the actual elevated region (centering effect)
-            actual_start = max(0, start_idx - win // 2)
-            actual_end = min(n - 1, end_idx + win // 2)
+            # Expand to nearby low-threshold support to better capture full
+            # 1-3 week transients around the high-threshold core.
+            actual_start = start_idx
+            actual_end = end_idx
+            hold_level = self.sustained_threshold * max(self.sustained_hysteresis, 0.5)
+            while actual_start > 0 and abs(z[actual_start - 1]) > hold_level:
+                actual_start -= 1
+            while actual_end < (n - 1) and abs(z[actual_end + 1]) > hold_level:
+                actual_end += 1
+
             duration = actual_end - actual_start + 1
             anomaly_type = 'noisy_burst' if duration <= 5 else 'transient_change'
 
@@ -693,6 +738,15 @@ class ExtendedAnomalyDetector:
 
             # Overlapping or within merge_distance_days
             if ev_start <= prev_end + gap:
+                prev_duration = int(prev.get('duration', 1) or 1)
+                ev_duration = int(ev.get('duration', 1) or 1)
+                longer = max(prev_duration, ev_duration)
+                shorter = min(prev_duration, ev_duration)
+                # Do not collapse short transient events into long-window
+                # detections of a different type.
+                if shorter <= 21 and (longer / max(shorter, 1)) > 2.0:
+                    merged.append(copy.deepcopy(ev))
+                    continue
                 # Combine: extend end, take most specific type, max magnitude
                 new_end = max(prev_end, ev['end_date'])
                 new_start = min(prev['date'], ev_start)
@@ -788,6 +842,41 @@ class ExtendedAnomalyDetector:
         if in_run:
             runs.append((start, len(bool_array) - 1))
         return runs
+
+    def _bridge_small_gaps(self, bool_array, max_gap):
+        """Fill short False gaps between True runs to reduce run fragmentation."""
+        arr = np.asarray(bool_array, dtype=bool).copy()
+        if max_gap <= 0 or arr.size < 3:
+            return arr
+        runs = self._find_runs(arr)
+        if len(runs) < 2:
+            return arr
+        for idx in range(len(runs) - 1):
+            left_end = runs[idx][1]
+            right_start = runs[idx + 1][0]
+            gap_start = left_end + 1
+            gap_end = right_start - 1
+            gap_len = gap_end - gap_start + 1
+            if 0 < gap_len <= max_gap:
+                arr[gap_start : gap_end + 1] = True
+        return arr
+
+    @staticmethod
+    def _apply_hysteresis(high_flags, low_flags):
+        """Start on high threshold, continue while low-threshold support holds."""
+        high = np.asarray(high_flags, dtype=bool)
+        low = np.asarray(low_flags, dtype=bool)
+        if high.size == 0:
+            return high
+        out = np.zeros(high.size, dtype=bool)
+        active = False
+        for i in range(high.size):
+            if high[i]:
+                active = True
+            elif active and not low[i]:
+                active = False
+            out[i] = active
+        return out
 
 
 # ---------------------------------------------------------------------------

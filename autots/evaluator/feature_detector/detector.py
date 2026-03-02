@@ -257,17 +257,20 @@ class TimeSeriesFeatureDetector(
         if extended_anomaly_params is None:
             self.extended_anomaly_params = {
                 'sustained_window': 7,
-                'sustained_baseline': 60,
-                'sustained_threshold': 2.5,
+                'sustained_baseline': 45,
+                'sustained_threshold': 2.2,
                 'cusum_k': 0.5,
-                'cusum_h': 5.0,
+                'cusum_h': 4.0,
                 'slope_reversion_min_hold': 5,
                 'slope_reversion_min_reversion': 7,
                 'slope_reversion_cumsum_threshold': 3.0,
-                'decay_lookahead': 14,
+                'slope_reversion_max_duration': 84,
+                'decay_lookahead': 21,
                 'decay_fit_min_r2': 0.5,
                 'min_segment_run': 2,
-                'merge_distance_days': 3,
+                'sustained_hysteresis': 0.7,
+                'segment_max_gap': 1,
+                'merge_distance_days': 2,
             }
         else:
             # Explicitly setting to False/empty dict disables; any truthy dict enables
@@ -1554,4 +1557,3 @@ class TimeSeriesFeatureDetector(
         self.detector_optimization_summary = optimization_summary
         self.detector_optimizer = optimizer
         return self
-
