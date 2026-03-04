@@ -377,6 +377,7 @@ def plot_feature_panels(
     separate_noise_anomaly_panels: bool = True,
     dual_axis_seasonality_holidays: bool = True,
     dual_axis_trend_level_shift: bool = True,
+    show_reconstructed_on_top: bool = False,
 ):
     """Create a diagnostic plot shared by generator and detector."""
     # TODO: switch the anomaly type labels to colored by type, only impact number shown on label, and prevent label overlap
@@ -395,6 +396,9 @@ def plot_feature_panels(
     anomalies_component = _component_array(components, 'anomalies', n)
 
     combined_trend = trend + level_shift
+    reconstructed_no_residual = (
+        trend + level_shift + seasonality + holidays + anomalies_component
+    )
 
     panel_count = 5 if separate_noise_anomaly_panels else 4
     fig, axes = plt.subplots(panel_count, 1, figsize=figsize, sharex=True)
@@ -419,6 +423,16 @@ def plot_feature_panels(
         linewidth=1.2,
         label='Series',
     )
+    if show_reconstructed_on_top:
+        ax.plot(
+            date_index,
+            reconstructed_no_residual,
+            color='tab:orange',
+            alpha=0.8,
+            linewidth=1.15,
+            linestyle='--',
+            label='Reconstructed (No Residual)',
+        )
 
     anomalies = labels.get('anomalies', [])
     if anomalies:
@@ -484,6 +498,33 @@ def plot_feature_panels(
             label='Seasonality CPs',
         ),
     ]
+    if show_reconstructed_on_top:
+        legend_elements.insert(
+            1,
+            Line2D(
+                [0],
+                [0],
+                color='tab:orange',
+                linestyle='--',
+                linewidth=1.5,
+                label='Reconstructed (No Residual)',
+            ),
+        )
+    top_values = [np.asarray(series_data.values, dtype=float)]
+    if show_reconstructed_on_top:
+        top_values.append(np.asarray(reconstructed_no_residual, dtype=float))
+    top_values = np.concatenate(top_values)
+    finite_top_values = top_values[np.isfinite(top_values)]
+    if finite_top_values.size > 0:
+        ymin = float(np.nanmin(finite_top_values))
+        ymax = float(np.nanmax(finite_top_values))
+        if np.isfinite(ymin) and np.isfinite(ymax):
+            if np.isclose(ymin, ymax):
+                pad = max(abs(ymin) * 0.05, 1.0)
+            else:
+                pad = (ymax - ymin) * 0.03
+            ax.set_ylim(ymin - pad, ymax + pad)
+
     ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
     ax.set_ylabel('Value', fontsize=10)
     ax.set_title('Series with Key Events', fontsize=12, fontweight='bold')

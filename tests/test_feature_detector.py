@@ -371,6 +371,45 @@ class TestFeatureDetector(unittest.TestCase):
 
         self.assertTrue(success)
 
+    def test_plot_top_panel_reconstruction_uses_single_axis(self):
+        """Top panel should keep series and reconstruction on the same y-axis."""
+        detector = TimeSeriesFeatureDetector()
+        detector.fit(self.data)
+        fig = detector.plot(show=False)
+
+        top_axis = fig.axes[0]
+        top_bounds = top_axis.get_position().bounds
+
+        # Ensure no twinx axis exists for the top panel.
+        top_panel_axes = [
+            axis
+            for axis in fig.axes
+            if np.allclose(axis.get_position().bounds, top_bounds, atol=1e-6)
+        ]
+        self.assertEqual(
+            len(top_panel_axes),
+            1,
+            "Top panel should not have a secondary y-axis.",
+        )
+
+        line_labels = [line.get_label() for line in top_axis.get_lines()]
+        self.assertIn('Series', line_labels)
+        self.assertIn('Reconstructed (No Residual)', line_labels)
+
+    def test_synthetic_plot_top_panel_hides_reconstruction(self):
+        """Synthetic generator plot should not show reconstructed overlay."""
+        synthetic = SyntheticDailyGenerator(
+            start_date='2020-01-01',
+            n_days=180,
+            n_series=2,
+            random_seed=42,
+        )
+        fig = synthetic.plot(show=False)
+        top_axis = fig.axes[0]
+        line_labels = [line.get_label() for line in top_axis.get_lines()]
+        self.assertIn('Series', line_labels)
+        self.assertNotIn('Reconstructed (No Residual)', line_labels)
+
     def test_tune_with_synthetic_applies_and_fits(self):
         """Test synthetic tuning workflow applies params and returns fitted self."""
 

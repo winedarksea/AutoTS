@@ -1330,6 +1330,7 @@ class TimeSeriesFeatureDetector(
             separate_noise_anomaly_panels=separate_noise_anomaly_panels,
             dual_axis_seasonality_holidays=dual_axis_seasonality_holidays,
             dual_axis_trend_level_shift=dual_axis_trend_level_shift,
+            show_reconstructed_on_top=True,
         )
         return fig
 
