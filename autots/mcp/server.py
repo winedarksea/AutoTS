@@ -29,6 +29,10 @@ try:
         Resource,
         ToolAnnotations,
         CallToolResult,
+        Prompt,
+        PromptArgument,
+        PromptMessage,
+        GetPromptResult,
     )
     import matplotlib
 
@@ -734,7 +738,7 @@ if MCP_AVAILABLE:
             Tool(
                 name="forecast_custom",
                 title="Custom AutoTS Forecast",
-                description="CUSTOM: AutoTS with user-specified parameters or template. Use when forecast_fast results are insufficient. Call get_autots_docs first to understand parameters. Defaults to 'scalable' model_list. Provide data or data_id. Returns prediction_id and autots_id.",
+                description="CUSTOM: AutoTS with user-specified parameters or template. Use when forecast_fast results are insufficient. Read the autots://docs/forecast_custom_params resource for available parameters. Defaults to 'scalable' model_list. Provide data or data_id. Returns prediction_id and autots_id.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -776,13 +780,7 @@ if MCP_AVAILABLE:
                 },
                 annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
             ),
-            Tool(
-                name="get_autots_docs",
-                title="AutoTS Parameter Documentation",
-                description="Get documentation for AutoTS forecast_custom parameters. Call this before forecast_custom to understand available options and defaults.",
-                inputSchema={"type": "object", "additionalProperties": False},
-                annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-            ),
+            # get_autots_docs is now a Resource (autots://docs/forecast_custom_params)
             # ----------------------------------------------------------------
             # Prediction object tools
             # ----------------------------------------------------------------
@@ -1671,38 +1669,6 @@ if MCP_AVAILABLE:
                     "data_id": data_id,
                     "forecast_length": forecast_length,
                 }
-
-            elif name == "get_autots_docs":
-                docs = {
-                    "AutoTS_Parameters": {
-                        "forecast_length": "Number of periods to forecast (required)",
-                        "frequency": "Pandas frequency string ('D','H','W','MS',etc.) or 'infer'",
-                        "ensemble": "Ensemble method: 'simple','distance','horizontal','mosaic',None",
-                        "model_list": "List of models or preset: 'fast','superfast','all','default'",
-                        "transformer_list": "Transformations: 'fast','superfast','all'",
-                        "max_generations": "Number of genetic algorithm generations, generally controls runtime.",
-                        "generation_timeout": "Max time (minutes) for all generations. Useful to set a sanity cap on runtime.",
-                        "num_validations": "Number of cross-validation splits",
-                        "validation_method": "'backwards','even','seasonal',etc.",
-                        "models_to_validate": "Fraction of models to fully validate (0.0-1.0)",
-                        "n_jobs": "Parallel processes: 'auto',-1,or specific number",
-                    },
-                    "Example": {
-                        "autots_params": {
-                            "forecast_length": 30,
-                            "frequency": "D",
-                            "ensemble": "simple",
-                            "model_list": "fast",
-                            "max_generations": 5,
-                        }
-                    },
-                    "Documentation": "See extended_tutorial.md for complete documentation",
-                }
-                return [
-                    TextContent(
-                        type="text", text=json.dumps(docs, separators=(',', ':'))
-                    )
-                ]
 
             # Prediction object tools
             elif name == "get_forecast":
@@ -2625,12 +2591,53 @@ if MCP_AVAILABLE:
                     )
                 )
 
+        # Built-in documentation resources
+        resources.append(
+            Resource(
+                uri="autots://docs/forecast_custom_params",
+                name="AutoTS forecast_custom Parameters",
+                description="Parameter reference for the forecast_custom tool — read this before using forecast_custom",
+                mimeType="application/json",
+            )
+        )
+
         return resources
+
+    _AUTOTS_DOCS = json.dumps(
+        {
+            "AutoTS_Parameters": {
+                "forecast_length": "Number of periods to forecast (required)",
+                "frequency": "Pandas frequency string ('D','H','W','MS',etc.) or 'infer'",
+                "ensemble": "Ensemble method: 'simple','distance','horizontal','mosaic',None",
+                "model_list": "List of models or preset: 'fast','superfast','scalable','all','default'",
+                "transformer_list": "Transformations: 'fast','superfast','all'",
+                "max_generations": "Number of genetic algorithm generations, generally controls runtime.",
+                "generation_timeout": "Max time (minutes) for all generations. Useful to set a sanity cap on runtime.",
+                "num_validations": "Number of cross-validation splits",
+                "validation_method": "'backwards','even','seasonal',etc.",
+                "models_to_validate": "Fraction of models to fully validate (0.0-1.0)",
+                "n_jobs": "Parallel processes: 'auto',-1,or specific number",
+            },
+            "Example": {
+                "autots_params": {
+                    "forecast_length": 30,
+                    "frequency": "D",
+                    "ensemble": "simple",
+                    "model_list": "fast",
+                    "max_generations": 5,
+                }
+            },
+            "Documentation": "See extended_tutorial.md for complete documentation",
+        },
+        indent=2,
+    )
 
     @app.read_resource()
     async def read_resource(uri: str) -> str:
         """Read a documentation resource."""
-        if uri.startswith("file://"):
+        if uri == "autots://docs/forecast_custom_params":
+            return _AUTOTS_DOCS
+        elif uri.startswith("file://"):
             filepath = uri[7:]
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
@@ -2639,6 +2646,110 @@ if MCP_AVAILABLE:
                 return f"Error reading {filepath}: {str(e)}"
         else:
             return f"Unknown resource URI: {uri}"
+
+
+    # ========================================================================
+    # Prompts — reusable multi-step workflow templates
+    # ========================================================================
+
+    @app.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        """List available workflow prompts."""
+        return [
+            Prompt(
+                name="sample_forecast",
+                title="Sample Forecast Workflow",
+                description="Load a built-in sample dataset, run a fast mosaic ensemble forecast (4 weeks), and plot the results.",
+                arguments=[
+                    PromptArgument(
+                        name="dataset",
+                        description="Sample dataset to use: daily, hourly, weekly, monthly, yearly, linear, sine, artificial",
+                        required=False,
+                    ),
+                ],
+            ),
+            Prompt(
+                name="explainable_forecast",
+                title="Explainable Forecast from File",
+                description="Load data from a CSV file, run an explainable model forecast, then return forecast components and validation results.",
+                arguments=[
+                    PromptArgument(
+                        name="filepath",
+                        description="Path to a CSV file with a datetime index column",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="forecast_length",
+                        description="Number of periods to forecast (default: 30)",
+                        required=False,
+                    ),
+                ],
+            ),
+        ]
+
+    @app.get_prompt()
+    async def get_prompt(name: str, arguments: dict | None = None) -> GetPromptResult:
+        """Return a multi-step workflow prompt."""
+        arguments = arguments or {}
+
+        if name == "sample_forecast":
+            dataset = arguments.get("dataset", "daily")
+            return GetPromptResult(
+                description=f"Fast forecast workflow using the '{dataset}' sample dataset",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(
+                            type="text",
+                            text=(
+                                f"Run a complete sample forecast workflow:\n"
+                                f"1. Call load_sample_data with dataset=\"{dataset}\"\n"
+                                f"2. Using the returned data_id, call forecast_fast with forecast_length=28 (4 weeks)\n"
+                                f"3. Using the returned prediction_id, call plot_forecast with plot_all=true\n"
+                                f"Return the plot and a brief summary of the forecast."
+                            ),
+                        ),
+                    ),
+                ],
+            )
+
+        elif name == "explainable_forecast":
+            filepath = arguments.get("filepath", "")
+            forecast_length = arguments.get("forecast_length", "30")
+            if not filepath:
+                return GetPromptResult(
+                    description="Error: filepath argument is required",
+                    messages=[
+                        PromptMessage(
+                            role="user",
+                            content=TextContent(
+                                type="text",
+                                text="Error: the 'filepath' argument is required for the explainable_forecast prompt.",
+                            ),
+                        ),
+                    ],
+                )
+            return GetPromptResult(
+                description=f"Explainable forecast workflow for {filepath}",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(
+                            type="text",
+                            text=(
+                                f"Run a complete explainable forecast workflow:\n"
+                                f"1. Call load_data_from_file with filepath=\"{filepath}\"\n"
+                                f"2. Using the returned data_id, call forecast_explainable with forecast_length={forecast_length}\n"
+                                f"3. Using the returned prediction_id, call get_forecast_components to get the decomposition\n"
+                                f"4. Using the returned autots_id, call get_validation_results to get model rankings\n"
+                                f"Return the component decomposition, validation results, and a summary of the best model."
+                            ),
+                        ),
+                    ),
+                ],
+            )
+
+        raise ValueError(f"Unknown prompt: {name}")
 
 
 def serve():
