@@ -249,8 +249,45 @@ def _calculate_segment_cost(segment_data, loss_function):
                 delta * (abs_residuals - 0.5 * delta),
             )
         )
+    elif loss_function == 'ed':
+        # Energy distance: full pairwise sum sum_{i,j} |x_i - x_j|.
+        # Uses the sorted-order identity to avoid an O(n^2) double loop:
+        #   sum_{i,j} |x_i - x_j| = 2 * sum_k (2k - n + 1) * x_sorted[k]
+        # where k is 0-indexed and x_sorted is the within-segment sorted order.
+        # The factor of 2 makes this consistent with _build_ed_prefix_sums which
+        # accumulates both (i,j) and (j,i) directions.
+        n = len(segment_data)
+        if n < 2:
+            return 0.0
+        sorted_data = np.sort(segment_data)
+        k = np.arange(n, dtype=float)
+        return float(2.0 * np.sum((2.0 * k - n + 1.0) * sorted_data))
     else:
         raise ValueError(f"Unknown loss function: {loss_function}")
+
+
+def _build_ed_prefix_sums(data):
+    """
+    Precompute the 2-D prefix-sum matrix of the absolute pairwise difference matrix
+    so that the energy-distance cost of any segment [s, t) can be retrieved in O(1):
+
+        cost(s, t) = P[t, t] - P[s, t] - P[t, s] + P[s, s]
+
+    Memory footprint is O(n^2): ~8 MB at n=1000, ~200 MB at n=5000.
+
+    Parameters:
+    data (np.ndarray): 1-D float array of length n.
+
+    Returns:
+    np.ndarray: Zero-padded (n+1, n+1) prefix-sum array P where
+        P[i, j] = sum_{r<i, c<j} |data[r] - data[c]|.
+    """
+    # Build full pairwise |x_i - x_j| matrix via broadcasting -- O(n^2) time and space.
+    diff_matrix = np.abs(data[:, None] - data[None, :])  # shape (n, n)
+    # Two cumulative sums turn the diff matrix into a 2-D prefix sum (SAT).
+    prefix_2d = np.zeros((len(data) + 1, len(data) + 1), dtype=float)
+    prefix_2d[1:, 1:] = np.cumsum(np.cumsum(diff_matrix, axis=0), axis=1)
+    return prefix_2d
 
 
 def _detect_pelt_changepoints(
@@ -259,18 +296,35 @@ def _detect_pelt_changepoints(
     """
     PELT (Pruned Exact Linear Time) changepoint detection algorithm.
 
+    Supports four cost functions selected via *loss_function*:
+
+    * ``'l2'``  – squared-error cost.  Uses 1-D prefix sums so cost queries are
+      O(1) and the full algorithm is O(n) amortised (fastest).
+    * ``'ed'``  – energy-distance cost (ED-PELT, Haynes et al. 2017).  Detects
+      distributional changes rather than pure level shifts, making it robust to
+      heavy-tailed noise and outliers.  Precomputes an O(n^2) 2-D prefix-sum
+      matrix so individual queries are O(1); total complexity O(n^2) in space
+      and time.  Set *penalty* roughly 2–10× higher than for ``'l2'`` because
+      the ED cost magnitude grows as O(n^2) per segment.
+    * ``'l1'``  – absolute-error cost.  Per-segment recomputation; slow for
+      large n.
+    * ``'huber'`` – Huber-loss cost.  Per-segment recomputation; slow for
+      large n.
+
     Parameters:
-    data (array-like): Time series data
-    penalty (float): Penalty parameter for model complexity
-    loss_function (str): Loss function ('l2', 'l1', 'huber')
-    min_segment_length (int): Minimum segment length
-    pruning_factor (float): Factor for more aggressive pruning (>1.0 = more aggressive, faster)
-        Values > 1.0 prune more aggressively by multiplying the pruning threshold.
-        Default 1.0 is standard PELT. Values like 2.0-5.0 can significantly speed up
-        computation at the cost of potentially missing some changepoints.
+    data (array-like): Time series data.
+    penalty (float): Additive penalty per changepoint for model complexity.
+        Tip for 'ed': scale penalty ~2–10× relative to 'l2' because the
+        energy-distance cost grows as O(n^2) per segment.
+    loss_function (str): One of ``'l2'``, ``'ed'``, ``'l1'``, ``'huber'``.
+    min_segment_length (int): Minimum allowed segment length between changepoints.
+    pruning_factor (float): Controls PELT candidate pruning aggressiveness.
+        1.0 = standard PELT.  Values > 1.0 prune earlier (faster) at the cost of
+        potentially missing some changepoints.  Values like 2.0–5.0 can give
+        significant speedups without much accuracy loss in practice.
 
     Returns:
-    np.array: Array of changepoint indices
+    np.ndarray: Sorted array of changepoint indices (positions in *data*).
     """
     data = np.asarray(data, dtype=float)
     n = len(data)
@@ -282,8 +336,15 @@ def _detect_pelt_changepoints(
     F[0] = -penalty
     cp = np.zeros(n + 1, dtype=int)
 
-    # Pre-compute fast segment cost helpers
+    # ------------------------------------------------------------------
+    # Build cost-computation helpers. Each loss defines two callables:
+    #   segment_cost(s, t)          – scalar cost of segment [s, t)
+    #   batch_segment_cost(starts, t) – vectorized cost for many start
+    #                                    indices at once (numpy array in,
+    #                                    numpy array out). Used when |R|>10.
+    # ------------------------------------------------------------------
     if loss_function == 'l2':
+        # O(1) per query via 1-D prefix sums.
         prefix_sum = np.concatenate(([0.0], np.cumsum(data)))
         prefix_sq_sum = np.concatenate(([0.0], np.cumsum(data**2)))
 
@@ -291,29 +352,67 @@ def _detect_pelt_changepoints(
             length = end - start
             if length <= 0:
                 return 0.0
-            segment_sum = prefix_sum[end] - prefix_sum[start]
-            segment_sq_sum = prefix_sq_sum[end] - prefix_sq_sum[start]
-            return float(segment_sq_sum - (segment_sum**2) / length)
+            s_sum = prefix_sum[end] - prefix_sum[start]
+            s_sq = prefix_sq_sum[end] - prefix_sq_sum[start]
+            return float(s_sq - (s_sum**2) / length)
+
+        def batch_segment_cost(starts, end):
+            # starts is a numpy int array; end is a scalar int
+            lengths = end - starts  # shape (k,)
+            s_sums = prefix_sum[end] - prefix_sum[starts]
+            s_sqs = prefix_sq_sum[end] - prefix_sq_sum[starts]
+            return s_sqs - (s_sums**2) / lengths  # shape (k,)
+
+    elif loss_function == 'ed':
+        # ED-PELT (Energy Distance PELT, Haynes et al. 2017).
+        # Precompute 2-D prefix sum of |x_i - x_j|; O(n^2) memory/time up-front
+        # but O(1) per segment query thereafter.
+        # For n > ~6000 memory may become substantial (~290 MB at n=6000).
+        prefix_2d = _build_ed_prefix_sums(data)
+
+        def segment_cost(start, end):
+            if end <= start:
+                return 0.0
+            return float(
+                prefix_2d[end, end]
+                - prefix_2d[start, end]
+                - prefix_2d[end, start]
+                + prefix_2d[start, start]
+            )
+
+        def batch_segment_cost(starts, end):
+            # Fully vectorized: all array indexing, no Python loop.
+            return (
+                prefix_2d[end, end]
+                - prefix_2d[starts, end]
+                - prefix_2d[end, starts]
+                + prefix_2d[starts, starts]
+            )
 
     else:
-
+        # l1 / huber: per-segment recomputation with lru_cache.
+        # Inherently sequential; slow for large n.
         @lru_cache(maxsize=10000)
         def segment_cost(start, end):
             if end <= start:
                 return 0.0
             return float(_calculate_segment_cost(data[start:end], loss_function))
 
-    # PELT algorithm
-    R = [0]  # Set of potential changepoints
+        def batch_segment_cost(starts, end):
+            return np.array([segment_cost(int(s), end) for s in starts], dtype=float)
+
+    # PELT main loop
+    R = [0]  # Pruned set of potential last-changepoint candidates
 
     for t in range(1, n + 1):
-        # Vectorize candidate evaluation when R is large
+        # Vectorise candidate evaluation when |R| is large enough that numpy
+        # overhead pays off (empirically ~10 elements).
         if len(R) > 10:
             R_array = np.array(R, dtype=int)
             valid_mask = (t - R_array) >= min_segment_length
             if np.any(valid_mask):
                 valid_R = R_array[valid_mask]
-                costs = np.array([segment_cost(s, t) for s in valid_R], dtype=float)
+                costs = batch_segment_cost(valid_R, t)
                 total_costs = F[valid_R] + costs + penalty
                 best_idx = np.argmin(total_costs)
                 F[t] = total_costs[best_idx]
@@ -321,7 +420,7 @@ def _detect_pelt_changepoints(
             else:
                 continue
         else:
-            # Use list for small R (overhead of numpy not worth it)
+            # Plain Python for small R (numpy overhead perhaps not worthwhile).
             candidates = []
             for s in R:
                 if t - s >= min_segment_length:
@@ -334,21 +433,18 @@ def _detect_pelt_changepoints(
             else:
                 continue
 
-        # Pruning step - keep only competitive changepoints
-        # PELT pruning: keep s if F[s] could be part of optimal solution
-        # Standard PELT: keep s if F[s] <= F[t]
-        # Aggressive pruning: keep s if F[s] <= F[t] - K where K = penalty * (pruning_factor - 1)
-        # This prunes more aggressively by requiring potential changepoints to be "better enough"
+        # Pruning: discard candidates that cannot be part of any optimal future
+        # segmentation.  Standard PELT keeps s when F[s] <= F[t]; aggressive
+        # pruning (pruning_factor > 1) tightens the threshold further.
         if pruning_factor <= 1.0:
             threshold = F[t]
         else:
-            # Add extra penalty margin for aggressive pruning
             threshold = F[t] - penalty * (pruning_factor - 1.0)
         R_new = [s for s in R if F[s] <= threshold]
         R_new.append(t)
         R = R_new
 
-    # Backtrack to find changepoints
+    # Backtrack through cp[] to recover the optimal segmentation.
     changepoints = []
     t = n
     while t > 0 and cp[t] != 0:
@@ -1975,8 +2071,9 @@ def create_changepoint_features(
         penalty = params.get('penalty', 10)
         loss_function = params.get('loss_function', 'l2')
         min_segment_length = params.get('min_segment_length', 1)
+        pruning_factor = params.get('pruning_factor', 1.0)
         return _create_pelt_changepoint_features(
-            DTindex, data, penalty, loss_function, min_segment_length
+            DTindex, data, penalty, loss_function, min_segment_length, pruning_factor
         )
 
     elif method in ['l1_fused_lasso', 'l1_total_variation']:
@@ -2066,7 +2163,7 @@ def _create_pelt_changepoint_features(
     min_segment_length=1,
     pruning_factor=1.0,
 ):
-    """Create changepoint features using PELT algorithm."""
+    """Create changepoint features using PELT algorithm (including ED-PELT when loss_function='ed')."""
     changepoints = _detect_pelt_changepoints(
         data, penalty, loss_function, min_segment_length, pruning_factor
     )
@@ -3637,6 +3734,9 @@ class ChangepointDetector(object):
         selection_mode = "fast"  # default to fast
         if method in valid_changepoint_methods:
             new_method = method
+            # When a concrete method is named, use the full parameter space (not
+            # speed-restricted "fast" defaults) so all options (including 'ed') are reachable.
+            selection_mode = "random"
         elif method == "fast":
             # Include all methods but will use fast parameters for potentially slow ones
             method_options = [
@@ -3748,8 +3848,11 @@ class ChangepointDetector(object):
             else:
                 penalty_options = [10, 20, 50, 100, 200]
                 penalty_weights = [0.15, 0.25, 0.3, 0.2, 0.1]
-                loss_functions = ['l2', 'l1', 'huber']
-                loss_weights = [0.99, 0.01, 0.02]
+                # 'ed' included at low weight: penalty must be scaled up vs 'l2'
+                # because ED cost grows O(n^2) per segment.  Kept rare because
+                # O(n^2) precomputation is expensive for long series.
+                loss_functions = ['l2', 'l1', 'huber', 'ed']
+                loss_weights = [0.89, 0.01, 0.02, 0.08]
                 min_segment_options = [2, 5, 10, 15]
                 min_segment_weights = [0.2, 0.3, 0.3, 0.2]
                 # Normal mode: standard PELT pruning (1.0) or slightly more aggressive (1.5-2.0)
@@ -3770,6 +3873,11 @@ class ChangepointDetector(object):
                     pruning_factor_options, weights=pruning_factor_weights, k=1
                 )[0],
             }
+            # ED-PELT cost grows O(n^2) per segment, so a larger penalty is needed
+            # to achieve the same effective number of changepoints as 'l2'.
+            # Scale penalty ~5x (rough empirical calibration for typical series lengths).
+            if new_params['loss_function'] == 'ed':
+                new_params['penalty'] = new_params['penalty'] * 5
 
         elif new_method in ['l1_fused_lasso', 'l1_total_variation']:
             # L1 trend filtering parameters
