@@ -1371,6 +1371,9 @@ class TimeSeriesFeatureDetector(
 
         # Changepoint params
         changepoint_params = ChangepointDetector.get_new_params(method=method)
+        # Keep sampled params aligned with multivariate detector semantics:
+        # each series gets its own changepoints by default.
+        changepoint_params['aggregate_method'] = 'individual'
 
         # Level shift params
         level_shift_params = LevelShiftMagic.get_new_params(method=method)

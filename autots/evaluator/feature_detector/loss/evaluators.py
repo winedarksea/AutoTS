@@ -329,6 +329,8 @@ class LossEvaluatorsMixin:
             best_idx = None
             best_dist = None
             for idx, det_event in enumerate(detected_entries):
+                if idx in used_detected:
+                    continue
                 det_date, *_ = det_event
                 dist = abs((det_date - true_date).days)
                 # For extended anomalies: also match if detected date falls

@@ -111,6 +111,42 @@ class TestExtendedAnomalyDetector(unittest.TestCase):
             "Expected merged/bridged run to have extended duration, not a point spike.",
         )
 
+    def test_max_anomaly_cap_keeps_strongest_event(self):
+        dates = pd.date_range("2021-01-01", periods=120, freq="D")
+        values = np.zeros(len(dates), dtype=float)
+        residual_df = pd.DataFrame({"series_0": values}, index=dates)
+
+        # Two pass-1 proposals; later event is much stronger.
+        pass1 = {
+            "series_0": [
+                {
+                    "date": dates[10],
+                    "magnitude": 1.0,
+                    "score": 1.0,
+                    "type": "point_outlier",
+                },
+                {
+                    "date": dates[100],
+                    "magnitude": 6.0,
+                    "score": 9.0,
+                    "type": "point_outlier",
+                },
+            ]
+        }
+
+        detector = ExtendedAnomalyDetector(
+            max_anomalies_per_series=1,
+            sustained_threshold=999.0,
+            cusum_h=999.0,
+            slope_reversion_cumsum_threshold=999.0,
+        )
+        detector.fit(residual_df, pass1_records=pass1)
+        events = detector.get_events("series_0")
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["date"], dates[100])
+        self.assertGreaterEqual(float(events[0].get("score", 0.0)), 9.0)
+
 
 if __name__ == "__main__":
     unittest.main()

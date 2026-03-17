@@ -47,8 +47,11 @@ try:
         dataframe_to_output,
         get_cached_object,
         list_all_cached_objects,
+        list_prompts,
+        list_resources,
         list_tools,
         load_to_dataframe,
+        read_resource,
         save_temp_csv,
         serialize_timestamps,
     )
@@ -77,7 +80,6 @@ EXPECTED_TOOLS = {
     "forecast_fast",
     "forecast_explainable",
     "forecast_custom",
-    "get_autots_docs",
     "get_forecast",
     "plot_forecast",
     "apply_constraints",
@@ -212,7 +214,7 @@ class TestMCPServerIntegration(unittest.TestCase):
 
     def test_readonly_tools_flagged(self):
         """Read-only tools should carry the readOnlyHint annotation."""
-        read_only_tools = {"list_cache", "get_forecast", "get_autots_docs"}
+        read_only_tools = {"list_cache", "get_forecast"}
         tools = asyncio.run(list_tools())
         tool_map = {t.name: t for t in tools}
         for name in read_only_tools:
@@ -955,13 +957,59 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data.get("cols"), 2)
         clear_cache(data["data_id"], "data")
 
-    # ---- Documentation tool ----------------------------------------------
+    # ---- Documentation resource -------------------------------------------
 
-    async def test_get_autots_docs(self):
-        result = await call_tool("get_autots_docs", {})
-        data = _extract(result)
+    async def test_autots_docs_resource(self):
+        """AutoTS parameter docs are served as a resource, not a tool."""
+        resources = await list_resources()
+        uris = {str(r.uri) for r in resources}
+        self.assertIn("autots://docs/forecast_custom_params", uris)
+
+        content = await read_resource("autots://docs/forecast_custom_params")
+        data = json.loads(content)
         self.assertIn("AutoTS_Parameters", data)
         self.assertIn("forecast_length", data["AutoTS_Parameters"])
+
+    # ---- Prompts ----------------------------------------------------------
+
+    async def test_list_prompts(self):
+        """Server exposes at least the two built-in workflow prompts."""
+        prompts = await list_prompts()
+        names = {p.name for p in prompts}
+        self.assertIn("sample_forecast", names)
+        self.assertIn("explainable_forecast", names)
+
+    async def test_get_prompt_sample_forecast(self):
+        from autots.mcp.server import get_prompt
+
+        result = await get_prompt("sample_forecast", {"dataset": "weekly"})
+        self.assertIsNotNone(result.messages)
+        self.assertGreater(len(result.messages), 0)
+        text = result.messages[0].content.text
+        self.assertIn("weekly", text)
+        self.assertIn("forecast_fast", text)
+        self.assertIn("plot_forecast", text)
+
+    async def test_get_prompt_explainable_forecast(self):
+        from autots.mcp.server import get_prompt
+
+        result = await get_prompt(
+            "explainable_forecast", {"filepath": "/tmp/test.csv", "forecast_length": "14"}
+        )
+        self.assertIsNotNone(result.messages)
+        text = result.messages[0].content.text
+        self.assertIn("/tmp/test.csv", text)
+        self.assertIn("14", text)
+        self.assertIn("forecast_explainable", text)
+        self.assertIn("get_forecast_components", text)
+        self.assertIn("get_validation_results", text)
+
+    async def test_get_prompt_explainable_forecast_missing_filepath(self):
+        from autots.mcp.server import get_prompt
+
+        result = await get_prompt("explainable_forecast", {})
+        text = result.messages[0].content.text
+        self.assertIn("Error", text)
 
     # ---- Feature detection tools (shared detector fixture) ---------------
 

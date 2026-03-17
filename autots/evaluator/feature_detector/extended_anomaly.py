@@ -267,7 +267,26 @@ class ExtendedAnomalyDetector:
 
         all_events = decayed + cusum_events + slope_events + seg_events
         merged = self._merge_events(all_events, date_index)
-        return merged[: self.max_anomalies_per_series]
+        if len(merged) <= self.max_anomalies_per_series:
+            return merged
+
+        # When capping event count, keep the strongest events rather than the
+        # earliest chronological events, then restore date order for output.
+        def _event_strength(event):
+            score = event.get('score')
+            if score is None or not np.isfinite(score):
+                score = 0.0
+            magnitude = event.get('magnitude', 0.0)
+            if magnitude is None or not np.isfinite(magnitude):
+                magnitude = 0.0
+            duration = int(event.get('duration', 1) or 1)
+            return (float(score), float(abs(magnitude)), duration)
+
+        strongest = sorted(merged, key=_event_strength, reverse=True)[
+            : self.max_anomalies_per_series
+        ]
+        strongest.sort(key=lambda event: event['date'])
+        return strongest
 
     # ------------------------------------------------------------------
     # Pass-1 internal runner (when no external records provided)

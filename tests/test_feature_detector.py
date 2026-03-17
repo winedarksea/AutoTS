@@ -122,6 +122,15 @@ class TestFeatureDetector(unittest.TestCase):
         self.assertIn('multivariate', str(context.exception).lower())
         self.assertIn('univariate', str(context.exception).lower())
 
+    def test_get_new_params_enforces_multivariate_changepoint_aggregation(self):
+        """Sampled params should default to per-series changepoints."""
+        for _ in range(20):
+            params = TimeSeriesFeatureDetector.get_new_params(method='random')
+            self.assertEqual(
+                params['changepoint_params'].get('aggregate_method'),
+                'individual',
+            )
+
     def test_detector_fit(self):
         """Test detector can fit data."""
         detector = TimeSeriesFeatureDetector()
@@ -648,6 +657,44 @@ class TestFeatureDetectionLoss(unittest.TestCase):
         loss = loss_calc._anomaly_loss(detected_anom, true_anom)
         self.assertTrue(np.isfinite(loss))
         self.assertGreaterEqual(loss, 0.0)
+
+    def test_anomaly_loss_penalizes_one_detection_for_two_true_events(self):
+        loss_calc = FeatureDetectionLoss(anomaly_tolerance_days=1)
+        true_anom = [
+            {
+                'date': pd.Timestamp('2020-01-10'),
+                'magnitude': 2.0,
+                'type': 'point_outlier',
+            },
+            {
+                'date': pd.Timestamp('2020-01-11'),
+                'magnitude': 2.0,
+                'type': 'point_outlier',
+            },
+        ]
+        one_detected = [
+            {
+                'date': pd.Timestamp('2020-01-10'),
+                'magnitude': 2.0,
+                'type': 'point_outlier',
+            }
+        ]
+        two_detected = [
+            {
+                'date': pd.Timestamp('2020-01-10'),
+                'magnitude': 2.0,
+                'type': 'point_outlier',
+            },
+            {
+                'date': pd.Timestamp('2020-01-11'),
+                'magnitude': 2.0,
+                'type': 'point_outlier',
+            },
+        ]
+
+        under_detect_loss = loss_calc._anomaly_loss(one_detected, true_anom)
+        full_detect_loss = loss_calc._anomaly_loss(two_detected, true_anom)
+        self.assertGreater(under_detect_loss, full_detect_loss + 0.5)
 
 
 class TestFeatureDetectionOptimizer(unittest.TestCase):
