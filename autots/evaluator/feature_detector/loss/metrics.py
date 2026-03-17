@@ -11,11 +11,12 @@ class LossMetricsMixin:
 
     def _chamfer_penalty(self, detected_dates, true_dates, cap=30.0, recall_weight=0.6):
         """
-        Compute asymmetric Chamfer distance between two sets of dates.
+        Compute asymmetric log-Chamfer distance between two sets of dates.
 
-        Uses Gaussian-weighted proximity scoring instead of linear min/cap.
-        Recall (true->detected) is weighted higher than precision (detected->true)
-        by default, since missing a true event is worse than a false positive.
+        Uses log(1 + distance / tolerance) scoring for a continuous, uncapped
+        gradient everywhere. Unlike Gaussian proximity, this never plateaus: the
+        optimizer always receives a directional signal pulling distant false
+        positives or misses toward the nearest true event location.
 
         Parameters
         ----------
@@ -24,14 +25,17 @@ class LossMetricsMixin:
         true_dates : list
             True event dates.
         cap : float
-            Distance cap in days. Points beyond this contribute maximum penalty.
+            Reference scale in days; tolerance = cap / 3.  Sets log normalization
+            so that score = 1.0 when distance equals tolerance.  The penalty itself
+            is uncapped and continues to grow beyond this reference.
         recall_weight : float
             Weight for recall direction (true->detected). Precision gets 1 - recall_weight.
 
         Returns
         -------
         float
-            Value between 0 (perfect) and 1 (worst), blending recall and precision.
+            Non-negative value where 0 is perfect.  Scales beyond 1 for events
+            separated by more than one tolerance unit, providing gradient everywhere.
         """
         if not true_dates and not detected_dates:
             return 0.0
@@ -48,28 +52,26 @@ class LossMetricsMixin:
         t_vals = np.array([(d - epoch).total_seconds() / 86400.0 for d in t_dates])
         d_vals = np.array([(d - epoch).total_seconds() / 86400.0 for d in d_dates])
 
-        dists = np.abs(t_vals[:, None] - d_vals[None, :])
+        dists = np.abs(t_vals[:, None] - d_vals[None, :])  # (n_true, n_det)
 
-        # Gaussian proximity: exp(-0.5 * (d/sigma)^2), sigma = cap/3
-        sigma = max(cap / 3.0, 1.0)
+        # Normalizing tolerance: log1p(1) = log(2), so score=1 when dist=tolerance
+        tolerance = max(cap / 3.0, 1.0)
+        _log2 = np.log(2.0)
 
-        # Recall: for each true event, how close is the nearest detected?
+        # Recall: for each true event, log-penalty for nearest detected
         t2d_dists = np.min(dists, axis=1)
-        t2d_scores = np.exp(-0.5 * (t2d_dists / sigma) ** 2)
-        recall_score = 1.0 - np.mean(t2d_scores)
+        recall_score = float(np.mean(np.log1p(t2d_dists / tolerance) / _log2))
 
-        # Precision: for each detected event, how close is the nearest true?
+        # Precision: for each detected event, log-penalty for nearest true
         d2t_dists = np.min(dists, axis=0)
-        d2t_scores = np.exp(-0.5 * (d2t_dists / sigma) ** 2)
-        precision_score = 1.0 - np.mean(d2t_scores)
+        precision_score = float(np.mean(np.log1p(d2t_dists / tolerance) / _log2))
 
-        # Count mismatch penalty (soft)
+        # Soft count-mismatch penalty
         count_ratio = abs(len(t_dates) - len(d_dates)) / (len(t_dates) + len(d_dates))
         count_penalty = 0.15 * count_ratio
 
         precision_weight = 1.0 - recall_weight
-        combined = recall_weight * recall_score + precision_weight * precision_score + count_penalty
-        return min(combined, 1.0)
+        return recall_weight * recall_score + precision_weight * precision_score + count_penalty
 
     def _soft_f1_anomaly(self, detected_entries, true_entries, sigma_days=None):
         """

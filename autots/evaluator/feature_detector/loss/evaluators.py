@@ -41,7 +41,9 @@ class LossEvaluatorsMixin:
             if magnitude > 0:
                 scale = default_magnitude_scale if default_magnitude_scale > 0 else magnitude
                 relative = magnitude / (scale + 1e-9)
-                return 0.2 + 0.7 * np.tanh(relative)
+                # Linear (uncapped) scaling: large structural shifts get proportionally
+                # larger weights so the optimizer treats them as priority targets.
+                return 0.2 + 0.8 * relative
             return 0.2
 
         sigma_days = max(self.changepoint_tolerance_days, 1) / 1.5
@@ -82,9 +84,12 @@ class LossEvaluatorsMixin:
                 )
                 loss += (distance_penalty + slope_penalty + sign_penalty) * importance
             else:
-                # Smoother miss penalty based on distance to nearest match
-                dist_penalty = min(best_dist, 60.0) / 60.0 if best_dist is not None else 1.0
-                loss += (1.2 + 0.5 * dist_penalty) * importance
+                # Log-scaled miss penalty: continuous gradient everywhere, no hard clip
+                if best_dist is not None:
+                    log_slope = np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))
+                    loss += (1.0 + 0.5 * log_slope) * importance
+                else:
+                    loss += 1.5 * importance
 
         false_positives = len(unmatched_detected)
         loss += 0.2 * false_positives
@@ -98,8 +103,9 @@ class LossEvaluatorsMixin:
             if n_detected
             else 1.0
         )
-        f_beta = (1.0 + 1.5**2) * (precision * recall) / (
-            1.5**2 * precision + recall + 1e-9
+        # β=2.0: strongly recall-biased — over-detecting is preferred over missing
+        f_beta = (1.0 + 2.0**2) * (precision * recall) / (
+            2.0**2 * precision + recall + 1e-9
         )
         loss += (1.0 - f_beta) * 2.0
 
@@ -218,7 +224,12 @@ class LossEvaluatorsMixin:
                 if prox_cp:
                     loss += 0.5 * importance
                 else:
-                    loss += 1.2 * importance + (0.3 * min(best_dist, 60)/60 if best_dist else 0)
+                    # Log-scaled miss penalty: continuous gradient everywhere, no hard clip
+                    if best_dist is not None:
+                        log_slope = np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))
+                        loss += (1.0 + 0.3 * log_slope) * importance
+                    else:
+                        loss += 1.2 * importance
 
         false_positives = len(unmatched_detected)
         loss += 0.15 * false_positives
@@ -232,8 +243,9 @@ class LossEvaluatorsMixin:
             if n_detected
             else 1.0
         )
-        f_beta = (1.0 + 1.5**2) * (precision * recall) / (
-            1.5**2 * precision + recall + 1e-9
+        # β=2.0: strongly recall-biased — over-detecting is preferred over missing
+        f_beta = (1.0 + 2.0**2) * (precision * recall) / (
+            2.0**2 * precision + recall + 1e-9
         )
         loss += (1.0 - f_beta) * 1.5
         return loss + 0.5 * chamfer_loss
