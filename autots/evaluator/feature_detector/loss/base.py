@@ -259,6 +259,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             true_anom=true.get('anomalies', []),
             detected_cp=detected.get('trend_changepoints', []),
             detected_ls=detected.get('level_shifts', []),
+            true_ls=true.get('level_shifts', []),
         )
 
         holiday_event_loss = self._evaluate_component_loss(

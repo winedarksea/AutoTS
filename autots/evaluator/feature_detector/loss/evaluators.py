@@ -85,15 +85,14 @@ class LossEvaluatorsMixin:
                 )
                 loss += (distance_penalty + slope_penalty + sign_penalty) * importance
             else:
-                # Log-scaled miss penalty capped just below the no-detection
-                # level (1.5) so that any detection — even a far-off one — is
-                # always slightly better than detecting nothing.  Without the
-                # cap, distant wrong detections produce higher loss than no
-                # detections at all, inverting the gradient and collapsing the
-                # optimizer toward zero changepoints (single linear trend).
+                # tanh(log1p(d/tol)) asymptotically approaches 1.0 from below,
+                # so scaling by 1.5 keeps any misplaced detection strictly cheaper
+                # than no detection (1.5).  Unlike a hard min() cap, tanh(log1p)
+                # retains a non-zero gradient for all finite distances — the
+                # optimizer always has a directional signal pushing detections
+                # closer to the true changepoint date, even from far away.
                 if best_dist is not None:
-                    log_slope = np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))
-                    loss += min(1.4, 1.0 + 0.5 * log_slope) * importance
+                    loss += 1.5 * np.tanh(np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))) * importance
                 else:
                     loss += 1.5 * importance
 
@@ -230,11 +229,10 @@ class LossEvaluatorsMixin:
                 if prox_cp:
                     loss += 0.5 * importance
                 else:
-                    # Same cap logic as trend: any detection must be strictly
-                    # cheaper than no detection (1.2) to avoid zero-detection collapse.
+                    # Same tanh(log1p) asymptotic scaling: gradient everywhere,
+                    # strictly below the no-detection baseline (1.2).
                     if best_dist is not None:
-                        log_slope = np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))
-                        loss += min(1.1, 1.0 + 0.3 * log_slope) * importance
+                        loss += 1.2 * np.tanh(np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))) * importance
                     else:
                         loss += 1.2 * importance
 
@@ -270,6 +268,7 @@ class LossEvaluatorsMixin:
         true_anom,
         detected_cp=None,
         detected_ls=None,
+        true_ls=None,
     ):
         """
         Compute anomaly detection loss with type-aware penalties.
@@ -284,6 +283,10 @@ class LossEvaluatorsMixin:
             Detected trend changepoints (for partial credit on extended misses).
         detected_ls : list, optional
             Detected level shifts (for partial credit on extended misses).
+        true_ls : list, optional
+            Ground-truth level shifts.  Detected anomalies that overlap with
+            true level shift dates are penalised so the optimizer learns that
+            structural breaks belong to the level-shift detector.
         """
         if not true_anom:
             return 0.3 * len(detected_anom)
@@ -431,6 +434,33 @@ class LossEvaluatorsMixin:
         if false_positives > 0:
             fp_penalty = (0.15 * false_positives) + (0.1 * np.sqrt(false_positives))
             loss += fp_penalty
+
+        # Cross-penalty: anomalies detected near true (or detected) level-shift
+        # dates signal that the anomaly detector is absorbing structural breaks
+        # that the level-shift detector should own.  Applying a small per-event
+        # cross-penalty nudges the optimizer away from that configuration.
+        true_ls_dates = []
+        for ls_ev in (true_ls or []):
+            try:
+                if isinstance(ls_ev, dict):
+                    true_ls_dates.append(pd.Timestamp(ls_ev.get('date')))
+                elif isinstance(ls_ev, (tuple, list)) and ls_ev:
+                    true_ls_dates.append(pd.Timestamp(ls_ev[0]))
+                else:
+                    true_ls_dates.append(pd.Timestamp(ls_ev))
+            except Exception:
+                pass
+        all_ls_dates = true_ls_dates + ls_dates
+        if all_ls_dates:
+            ls_overlap_penalty = 0.0
+            for det_entry in detected_entries:
+                det_date = det_entry[0]
+                if any(
+                    abs((det_date - ls_d).days) <= self.level_shift_tolerance_days
+                    for ls_d in all_ls_dates
+                ):
+                    ls_overlap_penalty += 0.015  # keep very small extra penalty here
+            loss += ls_overlap_penalty
 
         # Blend hard-match detail loss with soft F1 for smoother optimization
         return 0.6 * loss + 0.4 * soft_f1_loss * max(len(true_entries), 1)
@@ -582,6 +612,7 @@ class LossEvaluatorsMixin:
                     true_period = None
                 if true_period is not None:
                     best_match_penalty = None
+                    best_match_det_val = None
                     for det_key, det_val in detected_strengths.items():
                         if not (isinstance(det_key, str) and det_key.startswith('period_')):
                             continue
@@ -603,7 +634,11 @@ class LossEvaluatorsMixin:
                                 or total_penalty < best_match_penalty
                             ):
                                 best_match_penalty = total_penalty
+                                best_match_det_val = det_val
                     if best_match_penalty is not None:
+                        # Apply the same underprediction asymmetry (1.5×) used
+                        if best_match_det_val < true_value:
+                            best_match_penalty = min(best_match_penalty * 1.25, 2.0)
                         loss += best_match_penalty
                         n_items += 1
                         continue
@@ -614,7 +649,11 @@ class LossEvaluatorsMixin:
             if det_value is None:
                 loss += 0.5 + abs(true_value)
             else:
-                penalty = abs(det_value - true_value) / (abs(true_value) + 1e-6)
+                error = det_value - true_value
+                penalty = abs(error) / (abs(true_value) + 1e-6)
+                # Underpredicted amplitudes are penalized more heavily.
+                if error < 0:
+                    penalty *= 1.25
                 loss += min(penalty, 2.0)
             n_items += 1
         return loss / max(1, n_items)

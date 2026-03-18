@@ -17,7 +17,7 @@
 - **Shared Fixtures:** Extract common test utilities (synthetic signal generators, stub storage) into a shared helper module if reused across 3+ files.
 
 ### Dependencies
-- **Limited Assumed Dependencies** Only pandas, numpy are assumed always available. scikit-learn, scipy, and statsmodels are usually available but should still be in a guarded import block (with fallbacks in mocks.py). Then other libraries are in a separate guarded import as well.
+- **Limited Assumed Dependencies** Only pandas, numpy are assumed always available. scikit-learn, scipy, and statsmodels are usually available but should still be in a guarded import block (with fallbacks in mocks.py). Then other libraries are in a separate guarded import as well. Python 3.9 compatability is to be maintained where possible.
 
 ## AutoTS Specific Guidelines
 
