@@ -933,6 +933,11 @@ class MambaMinimalBlock(Module):
 
         bc = self.x_proj(x)
         B_val, C_val = torch.split(bc, self.d_state, dim=-1)
+        
+        # Mamba-3 Improvement: BC Normalization (RMSNorm equivalent)
+        # Stabilizes gradients by keeping state projections well-conditioned
+        B_val = B_val / (torch.norm(B_val, dim=-1, keepdim=True) + 1e-6)
+        C_val = C_val / (torch.norm(C_val, dim=-1, keepdim=True) + 1e-6)
 
         h = torch.zeros(B, d_inner, self.d_state, device=x.device, dtype=x.dtype)
         y = torch.zeros(B, L, d_inner, device=x.device, dtype=x.dtype)
@@ -940,7 +945,9 @@ class MambaMinimalBlock(Module):
         for i in range(L):
             delta_i = delta[:, i, :].unsqueeze(-1)
             A_bar = torch.exp(delta_i * A)
-            B_bar = delta_i * B_val[:, i, :].unsqueeze(1)
+            
+            # Mamba-3 Improvement: Exponential-Trapezoidal Discretization
+            B_bar = (delta_i / 2.0) * (1.0 + A_bar) * B_val[:, i, :].unsqueeze(1)
 
             if self.use_extra_gating:
                 # Additional gating on state transition
