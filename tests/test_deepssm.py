@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Deep SSM models testing."""
+"""Deep SSM models testing. Use conda env gpu311"""
 import unittest
 import pandas as pd
 import numpy as np

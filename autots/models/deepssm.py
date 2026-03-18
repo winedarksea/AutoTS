@@ -995,9 +995,10 @@ class MambaMinimalBlock(Module):
         bc = self.x_proj(x)
         B_val, C_val = torch.split(bc, self.d_state, dim=-1)  # each [B, L, d_state]
 
-        # Mamba-3: BC Normalisation — keeps projections well-conditioned
-        B_val = B_val / (torch.norm(B_val, dim=-1, keepdim=True) + 1e-6)
-        C_val = C_val / (torch.norm(C_val, dim=-1, keepdim=True) + 1e-6)
+        # Mamba-3: BC Normalisation (RMSNorm) — keeps projections well-conditioned.
+        # Using mean(x²) rather than sum(x²) so scale is independent of d_state size.
+        B_val = B_val / torch.sqrt(torch.mean(B_val**2, dim=-1, keepdim=True) + 1e-6)
+        C_val = C_val / torch.sqrt(torch.mean(C_val**2, dim=-1, keepdim=True) + 1e-6)
 
         # --- B. MIMO / Parallel Scan path ---
         if self.use_scan:
