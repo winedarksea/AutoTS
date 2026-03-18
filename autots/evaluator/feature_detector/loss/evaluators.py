@@ -41,9 +41,10 @@ class LossEvaluatorsMixin:
             if magnitude > 0:
                 scale = default_magnitude_scale if default_magnitude_scale > 0 else magnitude
                 relative = magnitude / (scale + 1e-9)
-                # Linear (uncapped) scaling: large structural shifts get proportionally
-                # larger weights so the optimizer treats them as priority targets.
-                return 0.2 + 0.8 * relative
+                # Bounded via tanh so importance stays in [0.2, 0.9].  An
+                # unbounded linear scale amplifies the miss/no-detection penalty
+                # inversion, causing the optimizer to collapse to zero detections.
+                return 0.2 + 0.7 * np.tanh(relative)
             return 0.2
 
         sigma_days = max(self.changepoint_tolerance_days, 1) / 1.5
@@ -84,10 +85,15 @@ class LossEvaluatorsMixin:
                 )
                 loss += (distance_penalty + slope_penalty + sign_penalty) * importance
             else:
-                # Log-scaled miss penalty: continuous gradient everywhere, no hard clip
+                # Log-scaled miss penalty capped just below the no-detection
+                # level (1.5) so that any detection — even a far-off one — is
+                # always slightly better than detecting nothing.  Without the
+                # cap, distant wrong detections produce higher loss than no
+                # detections at all, inverting the gradient and collapsing the
+                # optimizer toward zero changepoints (single linear trend).
                 if best_dist is not None:
                     log_slope = np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))
-                    loss += (1.0 + 0.5 * log_slope) * importance
+                    loss += min(1.4, 1.0 + 0.5 * log_slope) * importance
                 else:
                     loss += 1.5 * importance
 
@@ -224,10 +230,11 @@ class LossEvaluatorsMixin:
                 if prox_cp:
                     loss += 0.5 * importance
                 else:
-                    # Log-scaled miss penalty: continuous gradient everywhere, no hard clip
+                    # Same cap logic as trend: any detection must be strictly
+                    # cheaper than no detection (1.2) to avoid zero-detection collapse.
                     if best_dist is not None:
                         log_slope = np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))
-                        loss += (1.0 + 0.3 * log_slope) * importance
+                        loss += min(1.1, 1.0 + 0.3 * log_slope) * importance
                     else:
                         loss += 1.2 * importance
 

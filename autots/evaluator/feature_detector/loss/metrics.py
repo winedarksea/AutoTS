@@ -71,7 +71,12 @@ class LossMetricsMixin:
         count_penalty = 0.15 * count_ratio
 
         precision_weight = 1.0 - recall_weight
-        return recall_weight * recall_score + precision_weight * precision_score + count_penalty
+        combined = recall_weight * recall_score + precision_weight * precision_score + count_penalty
+        # Cap at 1.0 so that wrong detections are never penalized more than no
+        # detections (which also return 1.0).  Unbounded values invert the
+        # gradient: the optimizer would prefer zero detections over any
+        # misplaced ones, collapsing changepoint detection entirely.
+        return min(combined, 1.0)
 
     def _soft_f1_anomaly(self, detected_entries, true_entries, sigma_days=None):
         """
