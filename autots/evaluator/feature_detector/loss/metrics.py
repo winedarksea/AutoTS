@@ -58,17 +58,53 @@ class LossMetricsMixin:
         tolerance = max(cap / 3.0, 1.0)
         _log2 = np.log(2.0)
 
-        # Recall: for each true event, log-penalty for nearest detected
-        t2d_dists = np.min(dists, axis=1)
-        recall_score = float(np.mean(np.log1p(t2d_dists / tolerance) / _log2))
+        n_true = len(t_dates)
+        n_det = len(d_dates)
 
-        # Precision: for each detected event, log-penalty for nearest true
-        d2t_dists = np.min(dists, axis=0)
-        precision_score = float(np.mean(np.log1p(d2t_dists / tolerance) / _log2))
+        # 1:1 greedy assignment by ascending distance.
+        # Without this, one central detection can act as the nearest neighbor
+        # for every true event simultaneously, letting the optimizer achieve
+        # low recall penalty with a single detection while avoiding all false-
+        # positive accumulation from additional detections.  Strict 1:1
+        # assignment means N true events genuinely require N detections.
+        all_pairs = sorted(
+            ((float(dists[i, j]), i, j) for i in range(n_true) for j in range(n_det)),
+            key=lambda x: x[0],
+        )
+        matched_true_idxs: set = set()
+        matched_det_idxs: set = set()
+        match_distances = []
+        for dist_val, i, j in all_pairs:
+            if i not in matched_true_idxs and j not in matched_det_idxs:
+                matched_true_idxs.add(i)
+                matched_det_idxs.add(j)
+                match_distances.append(dist_val)
 
-        # Soft count-mismatch penalty
-        count_ratio = abs(len(t_dates) - len(d_dates)) / (len(t_dates) + len(d_dates))
-        count_penalty = 0.15 * count_ratio
+        n_matched = len(match_distances)
+
+        # Recall: matched pairs contribute log-distance score; unmatched true
+        # events are full misses (score = 1.0).
+        if match_distances:
+            matched_log_penalty = float(
+                np.mean(np.log1p(np.array(match_distances) / tolerance) / _log2)
+            )
+        else:
+            matched_log_penalty = 0.0
+        n_missed_true = n_true - n_matched
+        recall_score = (n_matched * matched_log_penalty + n_missed_true * 1.0) / n_true
+
+        # Precision: unmatched detections are false positives at full penalty (1.0).
+        n_fp = n_det - n_matched
+        precision_score = (
+            (n_matched * matched_log_penalty + n_fp * 1.0) / n_det
+            if n_det > 0
+            else 0.0
+        )
+
+        # Count-mismatch penalty — stronger signal than the old 0.15 factor
+        # because count equality is the clearest indicator of correct detection.
+        count_ratio = abs(n_true - n_det) / (n_true + n_det + 1e-9)
+        count_penalty = 0.3 * count_ratio
 
         precision_weight = 1.0 - recall_weight
         combined = recall_weight * recall_score + precision_weight * precision_score + count_penalty

@@ -85,22 +85,22 @@ class LossEvaluatorsMixin:
                 )
                 loss += (distance_penalty + slope_penalty + sign_penalty) * importance
             else:
-                # tanh(log1p(d/tol)) asymptotically approaches 1.0 from below,
-                # so scaling by 1.5 keeps any misplaced detection strictly cheaper
-                # than no detection (1.5).  Unlike a hard min() cap, tanh(log1p)
-                # retains a non-zero gradient for all finite distances — the
-                # optimizer always has a directional signal pushing detections
-                # closer to the true changepoint date, even from far away.
+                # Absolute magnitude penalty: missing a large slope change is
+                # worse than missing a small one regardless of normalization — the
+                # old implementation baked raw size directly into the miss loss.
+                abs_mag_penalty = min(abs(true_mag) / (default_magnitude_scale + 1e-9), 2.0) * 0.5
                 if best_dist is not None:
-                    loss += 1.5 * np.tanh(np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))) * importance
+                    loss += (1.5 * np.tanh(np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))) + abs_mag_penalty) * importance
                 else:
-                    loss += 1.5 * importance
+                    loss += (1.5 + abs_mag_penalty) * importance
 
         false_positives = len(unmatched_detected)
         loss += 0.2 * false_positives
 
         count_diff = abs(n_detected - n_true)
-        loss += min(count_diff, n_true + 1) * 0.4
+        # Count equality is the single strongest signal that the detector is
+        # calibrated correctly — double the old weight to reflect that primacy.
+        loss += min(count_diff, n_true + 1) * 0.8
 
         recall = matched_true / (n_true + 1e-9)
         precision = (
@@ -229,18 +229,20 @@ class LossEvaluatorsMixin:
                 if prox_cp:
                     loss += 0.5 * importance
                 else:
-                    # Same tanh(log1p) asymptotic scaling: gradient everywhere,
-                    # strictly below the no-detection baseline (1.2).
+                    # Absolute magnitude penalty: missing a large level shift
+                    # is worse than missing a small one — bake the raw size in.
+                    abs_mag_penalty = min(abs(true_mag) / (magnitude_scale + 1e-9), 2.0) * 0.5
                     if best_dist is not None:
-                        loss += 1.2 * np.tanh(np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))) * importance
+                        loss += (1.2 * np.tanh(np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))) + abs_mag_penalty) * importance
                     else:
-                        loss += 1.2 * importance
+                        loss += (1.2 + abs_mag_penalty) * importance
 
         false_positives = len(unmatched_detected)
         loss += 0.15 * false_positives
 
         count_diff = abs(n_detected - n_true)
-        loss += min(count_diff, n_true + 1) * 0.3
+        # Count equality is the single strongest signal — double the old weight.
+        loss += min(count_diff, n_true + 1) * 0.6
 
         recall = matched_true / (n_true + 1e-9)
         precision = (
@@ -669,6 +671,20 @@ class LossEvaluatorsMixin:
         profile_penalty = self._component_profile_correlation(
             detected_series, true_series, date_index=date_index,
         )
+        
+        # Explicit asymmetric amplitude penalty to prevent underprediction
+        detected_amp = np.nanstd(np.asarray(detected_series, dtype=float))
+        true_amp = np.nanstd(np.asarray(true_series, dtype=float))
+        amplitude_penalty = 0.0
+        if np.isfinite(detected_amp) and np.isfinite(true_amp) and true_amp > 1e-6:
+            ratio = detected_amp / true_amp
+            if ratio < 1.0:
+                # Heavy penalty for underpredicting amplitude
+                amplitude_penalty = (1.0 - ratio) * 0.4
+            else:
+                # Lighter penalty for slight overpredicting
+                amplitude_penalty = min((ratio - 1.0) * 0.1, 0.4)
+
         # Balanced blend across four complementary metrics:
         # - RMSE: point-wise accuracy (penalizes phase shifts, keeps magnitude honest)
         # - Wasserstein: shape/energy distribution (phase-tolerant)
@@ -676,11 +692,13 @@ class LossEvaluatorsMixin:
         #   correct periodic structure at any data frequency automatically)
         # - Profile correlation: periodic shape fidelity (day-of-week, month, etc.;
         #   auto-adapts to data frequency from the datetime index)
+        # - Amplitude: asymmetric penalty forcing model to capture full swing
         return (
             0.25 * rmse_penalty
             + 0.25 * wasserstein_penalty
             + 0.30 * spectral_penalty
             + 0.20 * profile_penalty
+            + amplitude_penalty
         )
 
     def _seasonality_changepoint_loss(
