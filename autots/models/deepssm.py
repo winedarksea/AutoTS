@@ -2132,11 +2132,11 @@ class MambaSSM(ModelObject):
 
         # Number of layers - more layers can be more accurate but much slower
         n_layers_options = [1, 2, 3, 4, 6]
-        n_layers_weights = [0.15, 0.35, 0.25, 0.2, 0.05]  # Prefer 2-3 layers
+        n_layers_weights = [0.15, 0.45, 0.25, 0.1, 0.05]  # Prefer 2-3 layers
 
         # State dimension - affects model capacity
         d_states = [4, 8, 12, 16, 24, 32]
-        d_state_weights = [0.1, 0.25, 0.2, 0.25, 0.15, 0.05]  # Prefer 8-16 range
+        d_state_weights = [0.1, 0.25, 0.2, 0.25, 0.15, 0.0005]  # Prefer 8-16 range
 
         # Training epochs - more epochs more accurate but slower
         epochs_options = [5, 8, 10, 15, 20, 30]
@@ -2160,7 +2160,7 @@ class MambaSSM(ModelObject):
             "short_horizon_rank",  # Best for short horizon ranked Sharpe
             "ranked_sharpe",  # General ranked Sharpe optimization
         ]
-        loss_weights = [0.3, 0.25, 0.2, 0.15, 0.05, 0.03, 0.03]
+        loss_weights = [0.3, 0.05, 0.2, 0.15, 0.01, 0.03, 0.03]
 
         # NLL weight for combined loss
         nll_weights = [0.5, 0.8, 1.0, 1.2, 1.5]
@@ -2251,11 +2251,11 @@ class MambaSSM(ModelObject):
         # Add prediction_batch_size based on context_length (longer contexts need smaller batches)
         if selected_params["context_length"] >= 180:
             selected_params["prediction_batch_size"] = random.choices(
-                [30, 45, 60], weights=[0.4, 0.4, 0.2], k=1
+                [1, 30, 45, 60], weights=[0.01, 0.4, 0.4, 0.2], k=1
             )[0]
         else:
             selected_params["prediction_batch_size"] = random.choices(
-                [45, 60, 90], weights=[0.3, 0.4, 0.3], k=1
+                [1, 45, 60, 90], weights=[0.02, 0.3, 0.4, 0.3], k=1
             )[0]
 
         return selected_params
