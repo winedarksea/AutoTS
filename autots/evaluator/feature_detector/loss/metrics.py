@@ -342,15 +342,19 @@ class LossMetricsMixin:
         true_spectrum = true_spectrum / (n + 1e-9)
         detected_spectrum = detected_spectrum / (n + 1e-9)
 
-        # 1. Overall spectral MAE (normalized by true spectral energy)
-        true_spectral_energy = float(np.sum(true_spectrum))
-        if true_spectral_energy < 1e-9:
+        # 1. Overall spectral error (normalized by true spectral power)
+        # Using L2 norm (power) is critical because L1 metric scales with N when evaluating noise
+        true_power = true_spectrum ** 2
+        detected_power = detected_spectrum ** 2
+        
+        true_spectral_power = float(np.mean(true_power))
+        if true_spectral_power < 1e-12:
             # True seasonality has negligible spectral energy
-            det_spectral_energy = float(np.sum(detected_spectrum))
-            return min(det_spectral_energy * 10.0, 3.0) if det_spectral_energy > 1e-6 else 0.0
+            det_spectral_power = float(np.mean(detected_power))
+            return min(det_spectral_power * 100.0, 3.0) if det_spectral_power > 1e-12 else 0.0
 
-        spectral_mae = float(np.mean(np.abs(true_spectrum - detected_spectrum)))
-        normalized_spectral_mae = spectral_mae / (true_spectral_energy / len(true_spectrum) + 1e-9)
+        spectral_mse = float(np.mean(np.abs(true_power - detected_power)))
+        normalized_spectral_mae = spectral_mse / (true_spectral_power + 1e-12)
 
         # 2. Peak frequency alignment: check if the dominant frequencies match
         # Identify top-k peaks in true spectrum (excluding DC at index 0)
@@ -512,6 +516,87 @@ class LossMetricsMixin:
         # Average penalty across all applicable profiles
         avg_penalty = float(np.mean(penalties))
         return min(avg_penalty, 3.0)
+
+    def _focal_tversky_changepoint_penalty(
+        self,
+        detected_entries,
+        true_entries,
+        sigma,
+        alpha=0.3,
+        beta=0.7,
+        gamma=2.0,
+    ):
+        """
+        Statistical analog of the neural Focal Tversky Loss for changepoint detection.
+
+        Translates into the statistical domain using Gaussian proximity scores as
+        soft TP/FP/FN quantities rather than hard binary thresholds.  The key
+        design principle: alpha < beta forces the optimizer to prefer recall over
+        precision, directly preventing the zero-prediction collapse that plagues
+        changepoint tuning.
+
+        Parameters
+        ----------
+        detected_entries : list of tuples
+            (date, ...) tuples — output of _parse_trend_event or
+            _parse_level_shift_event.
+        true_entries : list of tuples
+            Same format for ground truth.
+        sigma : float
+            Gaussian smoothing sigma in days.  Drive down through curriculum:
+            14.0 (wide, builds sensitivity) → 7.0 (medium) → 3.5 (tight, ≈±7-day
+            operational window).
+        alpha : float
+            FP penalty weight.  Keep below beta so over-detection is preferable
+            to under-detection.
+        beta : float
+            FN penalty weight.  Must satisfy alpha + beta > 0.
+        gamma : float
+            Focal exponent.  Higher values concentrate gradient on hard cases
+            (partially missed CPs) rather than wasting capacity on already-good
+            predictions.
+
+        Returns
+        -------
+        float
+            Focal Tversky loss in [0, 1].  0 = perfect; 1 = complete miss.
+        """
+        if not true_entries and not detected_entries:
+            return 0.0
+        if not true_entries:
+            # FPs only: light penalty (no ground truth to anchor against)
+            return min(0.2 * len(detected_entries), 1.0)
+        if not detected_entries:
+            # All FN: maximum penalty regardless of sigma
+            return 1.0
+
+        t_days = np.array([
+            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+            for e in true_entries
+        ])
+        d_days = np.array([
+            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+            for e in detected_entries
+        ])
+
+        safe_sigma = max(float(sigma), 0.5)
+        dists = np.abs(t_days[:, None] - d_days[None, :])  # (n_true, n_det)
+        proximity = np.exp(-0.5 * (dists / safe_sigma) ** 2)  # Gaussian soft match
+
+        # Soft TP: for each true CP, the best proximity to any detection.
+        best_true_match = np.max(proximity, axis=1)  # (n_true,)
+        soft_tp = float(np.sum(best_true_match))
+        soft_fn = float(np.sum(1.0 - best_true_match))  # recall gap = FN mass
+
+        # Soft FP: for each detection, how well it aligns with any true CP.
+        best_det_match = np.max(proximity, axis=0)   # (n_det,)
+        soft_fp = float(np.sum(1.0 - best_det_match))  # precision gap = FP mass
+
+        # Tversky Index: TP / (TP + alpha·FP + beta·FN), alpha<beta → prefers recall
+        tversky = soft_tp / (soft_tp + alpha * soft_fp + beta * soft_fn + 1e-9)
+
+        # Focal exponent concentrates gradient on partially-matched CPs
+        return float((1.0 - tversky) ** gamma)
 
     @staticmethod
     def _is_number(value):

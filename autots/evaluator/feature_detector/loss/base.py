@@ -31,15 +31,15 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         'anomaly_loss': 1.3,  # Increased from 1.1 - prioritize anomaly detection
         'holiday_event_loss': 1.2,  # Increased from 0.8 - penalize false holiday detections more
         'holiday_impact_loss': 0.9,  # Increased from 0.6 - ensure holiday impacts are strong enough
-        'holiday_splash_loss': 0.5,
+        'holiday_splash_loss': 0.03,  # tends to have wayyy too much impact
         'holiday_recall_loss': 0.9,  # Separate recall metric to penalize zero-detection
-        'seasonality_strength_loss': 0.8,
-        'seasonality_pattern_loss': 1.0,
+        'seasonality_strength_loss': 2.0,
+        'seasonality_pattern_loss': 2.0,
         'seasonality_changepoint_loss': 0.6,
         'noise_level_loss': 0.5,
         'noise_regime_loss': 0.4,
         'noise_structure_loss': 0.2,
-        'metadata_loss': 0.2,
+        'metadata_loss': 0.05,  # also tends to have too much impact
         'regressor_loss': 0.3,
     }
 

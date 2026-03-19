@@ -551,3 +551,298 @@ class FeatureDetectionOptimizer:
             summary['disabled_component_counts'] = disabled_component_counts
 
         return summary
+
+    # ------------------------------------------------------------------
+    # Changepoint fine-tuning with curriculum Focal Tversky loss
+    # ------------------------------------------------------------------
+
+    def fine_tune_changepoints(
+        self,
+        starting_params,
+        n_per_stage=200,
+        curriculum_sigmas=None,
+        tversky_alpha=0.3,
+        tversky_beta=0.7,
+        tversky_gamma=2.0,
+        level_shift_weight=0.5,
+        exclude_changepoint_methods=None,
+    ):
+        """
+        Focused fine-tuning pass that freezes every parameter group except
+        ``changepoint_params`` and ``level_shift_params``.
+
+        All other parameters (seasonality, anomaly, holiday, etc.) are held fixed
+        so the optimizer can zero in on changepoint quality without interference.
+
+        The loss function is a statistical translation of techniques designed for
+        neural changepoint training:
+
+        Gaussian Label Smoothing
+            Instead of a hard ±tolerance binary label, each true changepoint is
+            represented as a Gaussian probability distribution centred on its date
+            with standard deviation ``sigma``.  This converts the step-function
+            loss landscape into smooth, convex basins and ensures that detections
+            that are "close but not exact" receive a constructive gradient signal.
+
+        Focal Tversky Loss (statistical translation)
+            The metric used for scoring is the Focal Tversky index with
+            ``alpha < beta`` (default 0.3 / 0.7), which heavily penalises false
+            negatives over false positives, directly preventing the zero-prediction
+            collapse that plagues changepoint tuning.  The focal exponent
+            ``gamma=2.0`` concentrates the gradient on partially-matched
+            changepoints rather than already-correct ones.
+
+        Curriculum Learning (sigma annealing)
+            Three stages with decreasing sigma drive the search from coarse to
+            fine sensitivity:
+              Stage 1: sigma=14 days — wide window builds initial recall
+              Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
+              Stage 3: sigma=3.5 days — tight window polishes placement precision
+
+        Parameters
+        ----------
+        starting_params : dict
+            Full detector parameter dict to use as the frozen baseline.
+            All keys except ``changepoint_params`` and ``level_shift_params``
+            are immutably frozen throughout the run.
+        n_per_stage : int
+            Number of candidate configurations evaluated per curriculum stage.
+        curriculum_sigmas : list of float, optional
+            Sigma values (in days) for each curriculum stage.
+            Defaults to [14.0, 7.0, 3.5].
+        tversky_alpha : float
+            FP weight in Tversky denominator (keep < tversky_beta).
+        tversky_beta : float
+            FN weight in Tversky denominator (keep > tversky_alpha).
+        tversky_gamma : float
+            Focal exponent applied to (1 - Tversky_index).
+        level_shift_weight : float
+            Blend weight for level-shift Tversky loss in the final score
+            (trend changepoints get 1 - weight).
+        exclude_changepoint_methods : list of str, optional
+            Changepoint method names to exclude from the search.  Defaults to
+            ``['basic']``, which prevents the evenly-spaced pseudo-detector
+            from being selected (it cannot be used for analytic purposes).
+            Pass an empty list ``[]`` to allow all methods including 'basic'.
+
+        Returns
+        -------
+        dict
+            Best full parameter dict found, with only changepoint/level-shift
+            params potentially changed from ``starting_params``.
+        """
+        if curriculum_sigmas is None:
+            curriculum_sigmas = [14.0, 7.0, 3.5]
+        if exclude_changepoint_methods is None:
+            exclude_changepoint_methods = ['basic']
+
+        rng = random.Random(self.random_seed + 9999)
+        detector_for_sampling = _get_detector_class()()
+
+        current_best_params = copy.deepcopy(starting_params)
+        current_best_loss = float('inf')
+        self.fine_tune_history = []
+
+        print(
+            f"\nStarting changepoint fine-tuning "
+            f"({len(curriculum_sigmas)} stages × {n_per_stage} iters, "
+            f"Tversky α={tversky_alpha} β={tversky_beta} γ={tversky_gamma})"
+        )
+
+        for stage_idx, sigma in enumerate(curriculum_sigmas):
+            print(
+                f"\n--- Stage {stage_idx + 1}/{len(curriculum_sigmas)}: "
+                f"sigma={sigma:.1f} days ---"
+            )
+            stage_best, stage_loss, stage_entries = self._run_changepoint_stage(
+                current_best_params,
+                sigma,
+                n_per_stage,
+                detector_for_sampling,
+                rng,
+                tversky_alpha=tversky_alpha,
+                tversky_beta=tversky_beta,
+                tversky_gamma=tversky_gamma,
+                level_shift_weight=level_shift_weight,
+                stage_idx=stage_idx,
+                exclude_changepoint_methods=exclude_changepoint_methods,
+            )
+            self.fine_tune_history.extend(stage_entries)
+
+            if stage_loss < current_best_loss:
+                current_best_params = stage_best
+                current_best_loss = stage_loss
+                print(f"  Stage {stage_idx + 1}: improved → loss={stage_loss:.4f}")
+            else:
+                print(
+                    f"  Stage {stage_idx + 1}: no improvement "
+                    f"(best so far: {current_best_loss:.4f})"
+                )
+
+        print(f"\nFine-tuning complete.  Best Tversky loss: {current_best_loss:.4f}")
+        return current_best_params
+
+    def _run_changepoint_stage(
+        self,
+        frozen_params,
+        sigma,
+        n_iters,
+        detector_for_sampling,
+        rng,
+        tversky_alpha=0.3,
+        tversky_beta=0.7,
+        tversky_gamma=2.0,
+        level_shift_weight=0.5,
+        stage_idx=0,
+        exclude_changepoint_methods=None,
+    ):
+        """
+        Run one curriculum stage, mutating only changepoint_params and
+        level_shift_params while holding everything else frozen.
+        """
+        from autots.tools.changepoints import ChangepointDetector
+        from autots.tools.transform import LevelShiftMagic
+
+        best_params = copy.deepcopy(frozen_params)
+
+        try:
+            best_loss = self._evaluate_changepoint_params(
+                frozen_params, sigma, tversky_alpha, tversky_beta,
+                tversky_gamma, level_shift_weight,
+            )
+        except Exception:
+            best_loss = float('inf')
+
+        history = [{
+            'sigma': sigma,
+            'iteration': 'stage_start',
+            'params': copy.deepcopy(frozen_params),
+            'loss': best_loss,
+        }]
+        evaluated_sigs = {self._param_signature(frozen_params)}
+
+        for i in range(n_iters):
+            candidate = copy.deepcopy(best_params)
+            if i % 20 == 0:
+                print(f"  Stage {stage_idx + 1} iter {i}/{n_iters} (best loss so far: {best_loss:.4f})")
+
+            # Always resample changepoint_params
+            fresh_cp = ChangepointDetector.get_new_params(method='random')
+            if exclude_changepoint_methods and fresh_cp.get('method') in exclude_changepoint_methods:
+                continue
+            fresh_cp['aggregate_method'] = 'individual'
+            candidate['changepoint_params'] = fresh_cp
+
+            # Resample level_shift_params ~70 % of the time
+            if rng.random() < 0.7:
+                fresh_ls = LevelShiftMagic.get_new_params(method='random')
+                fresh_ls['output'] = 'multivariate'
+                candidate['level_shift_params'] = fresh_ls
+
+            sig = self._param_signature(candidate)
+            if sig in evaluated_sigs:
+                continue
+            evaluated_sigs.add(sig)
+
+            try:
+                loss = self._evaluate_changepoint_params(
+                    candidate, sigma, tversky_alpha, tversky_beta,
+                    tversky_gamma, level_shift_weight,
+                )
+                history.append({
+                    'sigma': sigma,
+                    'iteration': i,
+                    'params': copy.deepcopy(candidate),
+                    'loss': loss,
+                })
+                if loss < best_loss:
+                    best_loss = loss
+                    best_params = copy.deepcopy(candidate)
+                    print(f"    iter {i}: improved → {loss:.4f}")
+            except Exception:
+                pass
+
+        return best_params, best_loss, history
+
+    def _evaluate_changepoint_params(
+        self,
+        params,
+        sigma,
+        tversky_alpha=0.3,
+        tversky_beta=0.7,
+        tversky_gamma=2.0,
+        level_shift_weight=0.5,
+    ):
+        """
+        Score a parameter config using only the Focal Tversky changepoint loss.
+
+        Runs a full detector fit (required because changepoints are extracted
+        from the decomposed residual series), then extracts trend_changepoints
+        and level_shifts per series and computes the Focal Tversky penalty with
+        the given Gaussian sigma — bypassing all seasonality, anomaly, and
+        holiday components so the gradient is purely changepoint-driven.
+        """
+        detector = _get_detector_class()(**params)
+        detector.fit(self.synthetic_generator.get_data())
+        detected_features = detector.get_detected_features(include_components=False)
+        true_labels = self.synthetic_generator.get_all_labels()
+
+        series_names = self.loss_calculator._resolve_series_names(
+            detected_features, true_labels, None
+        )
+        if not series_names:
+            return float('inf')
+
+        total_cp_loss = 0.0
+        total_ls_loss = 0.0
+        n_scored = 0
+
+        for name in series_names:
+            det_series = self.loss_calculator._extract_detected_series(
+                detected_features, name
+            )
+            true_series = self.loss_calculator._extract_true_series(true_labels, name)
+
+            # Trend changepoints
+            det_cp_entries = [
+                self.loss_calculator._parse_trend_event(e)
+                for e in det_series.get('trend_changepoints', [])
+            ]
+            true_cp_entries = [
+                self.loss_calculator._parse_trend_event(e)
+                for e in true_series.get('trend_changepoints', [])
+            ]
+            cp_loss = self.loss_calculator._focal_tversky_changepoint_penalty(
+                det_cp_entries, true_cp_entries,
+                sigma=sigma, alpha=tversky_alpha,
+                beta=tversky_beta, gamma=tversky_gamma,
+            )
+
+            # Level shifts — slightly lighter FN weight (harder to localise exactly)
+            det_ls_entries = [
+                self.loss_calculator._parse_level_shift_event(e)
+                for e in det_series.get('level_shifts', [])
+            ]
+            true_ls_entries = [
+                self.loss_calculator._parse_level_shift_event(e)
+                for e in true_series.get('level_shifts', [])
+            ]
+            ls_beta = max(tversky_beta - 0.1, tversky_alpha + 0.05)
+            ls_loss = self.loss_calculator._focal_tversky_changepoint_penalty(
+                det_ls_entries, true_ls_entries,
+                sigma=sigma, alpha=tversky_alpha,
+                beta=ls_beta, gamma=tversky_gamma,
+            )
+
+            total_cp_loss += cp_loss
+            total_ls_loss += ls_loss
+            n_scored += 1
+
+        if n_scored == 0:
+            return float('inf')
+
+        avg_cp = total_cp_loss / n_scored
+        avg_ls = total_ls_loss / n_scored
+        cp_weight = 1.0 - level_shift_weight
+        return cp_weight * avg_cp + level_shift_weight * avg_ls
+
