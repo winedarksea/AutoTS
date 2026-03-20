@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """FeatureDetectionOptimizer - Hyperparameter optimization using synthetic data."""
 
+import math
 import numpy as np
 import pandas as pd
 import random
@@ -566,6 +567,7 @@ class FeatureDetectionOptimizer:
         tversky_gamma=2.0,
         level_shift_weight=0.5,
         exclude_changepoint_methods=None,
+        over_prediction_penalty=0.1,
     ):
         """
         Focused fine-tuning pass that freezes every parameter group except
@@ -624,6 +626,15 @@ class FeatureDetectionOptimizer:
             ``['basic']``, which prevents the evenly-spaced pseudo-detector
             from being selected (it cannot be used for analytic purposes).
             Pass an empty list ``[]`` to allow all methods including 'basic'.
+        over_prediction_penalty : float
+            Maximum additional penalty for extreme over-detection, applied via
+            exponential saturation: ``(1 - exp(-excess_ratio)) * penalty`` where
+            ``excess_ratio = (det - true) / true``.  The saturation bounds the
+            penalty to ``[0, over_prediction_penalty]``, ensuring over-detection
+            can *never* score worse than zero-detection (which always gives
+            Tversky=1.0), regardless of how high this value is set.  Near the
+            target count the gradient is steep; far above it the curve flattens,
+            preserving the recall-over-precision bias that prevents CP collapse.
 
         Returns
         -------
@@ -666,6 +677,7 @@ class FeatureDetectionOptimizer:
                 level_shift_weight=level_shift_weight,
                 stage_idx=stage_idx,
                 exclude_changepoint_methods=exclude_changepoint_methods,
+                over_prediction_penalty=over_prediction_penalty,
             )
             self.fine_tune_history.extend(stage_entries)
 
@@ -695,6 +707,7 @@ class FeatureDetectionOptimizer:
         level_shift_weight=0.5,
         stage_idx=0,
         exclude_changepoint_methods=None,
+        over_prediction_penalty=0.1,
     ):
         """
         Run one curriculum stage, mutating only changepoint_params and
@@ -708,7 +721,7 @@ class FeatureDetectionOptimizer:
         try:
             best_loss = self._evaluate_changepoint_params(
                 frozen_params, sigma, tversky_alpha, tversky_beta,
-                tversky_gamma, level_shift_weight,
+                tversky_gamma, level_shift_weight, over_prediction_penalty,
             )
         except Exception:
             best_loss = float('inf')
@@ -747,7 +760,7 @@ class FeatureDetectionOptimizer:
             try:
                 loss = self._evaluate_changepoint_params(
                     candidate, sigma, tversky_alpha, tversky_beta,
-                    tversky_gamma, level_shift_weight,
+                    tversky_gamma, level_shift_weight, over_prediction_penalty,
                 )
                 history.append({
                     'sigma': sigma,
@@ -772,6 +785,7 @@ class FeatureDetectionOptimizer:
         tversky_beta=0.7,
         tversky_gamma=2.0,
         level_shift_weight=0.5,
+        over_prediction_penalty=0.1,
     ):
         """
         Score a parameter config using only the Focal Tversky changepoint loss.
@@ -818,6 +832,14 @@ class FeatureDetectionOptimizer:
                 beta=tversky_beta, gamma=tversky_gamma,
             )
 
+            if len(det_cp_entries) > len(true_cp_entries):
+                # Exponentially-saturated ratio penalty: bounded to [0, over_prediction_penalty]
+                # so over-detection can never score worse than zero-detection (Tversky=1.0).
+                # 1 - exp(-r) grows quickly near r=0 (gradient when barely over-count)
+                # then saturates, making the parameter safe at any positive value.
+                excess_ratio = (len(det_cp_entries) - len(true_cp_entries)) / max(len(true_cp_entries), 1)
+                cp_loss += (1.0 - math.exp(-excess_ratio)) * over_prediction_penalty
+
             # Level shifts — slightly lighter FN weight (harder to localise exactly)
             det_ls_entries = [
                 self.loss_calculator._parse_level_shift_event(e)
@@ -833,6 +855,10 @@ class FeatureDetectionOptimizer:
                 sigma=sigma, alpha=tversky_alpha,
                 beta=ls_beta, gamma=tversky_gamma,
             )
+
+            if len(det_ls_entries) > len(true_ls_entries):
+                excess_ratio = (len(det_ls_entries) - len(true_ls_entries)) / max(len(true_ls_entries), 1)
+                ls_loss += (1.0 - math.exp(-excess_ratio)) * over_prediction_penalty
 
             total_cp_loss += cp_loss
             total_ls_loss += ls_loss
