@@ -581,7 +581,8 @@ class FeatureDetectionOptimizer:
         )
 
         dists = np.abs(t_days[:, None] - d_days[None, :])
-        scale = max(float(sigma) * 2.0, 1.0)
+        # Use a wider scale relative to sigma so that detections within ±1 sigma
+        scale = max(float(sigma) * 3.0, 7.0)
         nearest_true = np.min(dists, axis=1)
         nearest_detected = np.min(dists, axis=0)
         true_penalty = 1.0 - np.exp(-0.5 * (nearest_true / scale) ** 2)
@@ -1015,32 +1016,38 @@ class FeatureDetectionOptimizer:
             if i % 20 == 0:
                 print(f"  Stage {stage_idx + 1} iter {i}/{n_iters} (best loss so far: {best_loss:.4f})")
 
-            # Mostly refine around the current best so we can trade count against
-            # placement instead of constantly jumping between distant regimes.
-            if rng.random() < 0.7:
+            # In Stage 1 (wide sigma), explore broadly to escape year-long offset basin
+            local_prob = 0.4 if stage_idx == 0 else 0.7
+            if rng.random() < local_prob:
                 fresh_cp = self._local_mutate_changepoint_params(
                     candidate.get('changepoint_params', {}), rng
                 )
             else:
                 fresh_cp = ChangepointDetector.get_new_params(method='random')
+            # If the sampled method is excluded, resample randomly.
             if exclude_changepoint_methods and fresh_cp.get('method') in exclude_changepoint_methods:
-                continue
+                for _ in range(10):
+                    fresh_cp = ChangepointDetector.get_new_params(method='random')
+                    if fresh_cp.get('method') not in exclude_changepoint_methods:
+                        break
+                else:
+                    continue
             fresh_cp['aggregate_method'] = 'individual'
             fresh_cp['probabilistic_output'] = False
             candidate['changepoint_params'] = fresh_cp
 
-            # Resample level_shift_params ~70 % of the time
+            # Update level_shift_params 70 % of iterations; freeze 30 % so the
+            # loss signal stays anchored to CP changes rather than LS noise.
             if rng.random() < 0.7:
-                fresh_ls = self._local_mutate_level_shift_params(
-                    candidate.get('level_shift_params', {}), rng
-                )
-            elif rng.random() < 0.85:
-                fresh_ls = LevelShiftMagic.get_new_params(method='random')
-            else:
-                fresh_ls = None
-            if fresh_ls is not None:
+                if rng.random() < 0.6:
+                    fresh_ls = self._local_mutate_level_shift_params(
+                        candidate.get('level_shift_params', {}), rng
+                    )
+                else:
+                    fresh_ls = LevelShiftMagic.get_new_params(method='random')
                 fresh_ls['output'] = 'multivariate'
                 candidate['level_shift_params'] = fresh_ls
+            # else: keep level_shift_params from best_params (cleaner CP gradient)
 
             sig = self._param_signature(candidate)
             if sig in evaluated_sigs:
@@ -1134,14 +1141,7 @@ class FeatureDetectionOptimizer:
             cp_loss += slope_match_weight * self._slope_change_alignment_penalty(
                 det_cp_entries, true_cp_entries, sigma
             )
-
-            if len(det_cp_entries) > len(true_cp_entries):
-                # Exponentially-saturated ratio penalty: bounded to [0, over_prediction_penalty]
-                # so over-detection can never score worse than zero-detection (Tversky=1.0).
-                # 1 - exp(-r) grows quickly near r=0 (gradient when barely over-count)
-                # then saturates, making the parameter safe at any positive value.
-                excess_ratio = (len(det_cp_entries) - len(true_cp_entries)) / max(len(true_cp_entries), 1)
-                cp_loss += (1.0 - math.exp(-excess_ratio)) * over_prediction_penalty
+            # NOTE: over-detection is already covered by _count_calibration_penalty
 
             # Level shifts — slightly lighter FN weight (harder to localise exactly)
             det_ls_entries = [
@@ -1164,10 +1164,7 @@ class FeatureDetectionOptimizer:
             ls_loss += 0.75 * count_weight * self._count_calibration_penalty(
                 len(det_ls_entries), len(true_ls_entries)
             )
-
-            if len(det_ls_entries) > len(true_ls_entries):
-                excess_ratio = (len(det_ls_entries) - len(true_ls_entries)) / max(len(true_ls_entries), 1)
-                ls_loss += (1.0 - math.exp(-excess_ratio)) * over_prediction_penalty
+            # NOTE: same reasoning as trend CPs — count_calibration_penalty is sufficient
 
             total_cp_loss += cp_loss
             total_ls_loss += ls_loss
