@@ -866,6 +866,79 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         self.assertIn('balanced_loss', optimizer.history_df.columns)
         self.assertIsNotNone(best_params)
 
+    def test_changepoint_distance_penalty_prefers_nearby_matches(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        true_entries = [
+            (pd.Timestamp('2020-01-10'), 0.0, 1.0, 1.0),
+            (pd.Timestamp('2020-02-10'), 1.0, -0.5, 1.5),
+        ]
+        near_entries = [
+            (pd.Timestamp('2020-01-12'), 0.0, 1.0, 1.0),
+            (pd.Timestamp('2020-02-12'), 1.0, -0.5, 1.5),
+        ]
+        far_entries = [
+            (pd.Timestamp('2021-01-10'), 0.0, 1.0, 1.0),
+            (pd.Timestamp('2021-02-10'), 1.0, -0.5, 1.5),
+        ]
+
+        near_penalty = optimizer._bounded_distance_penalty(
+            near_entries, true_entries, sigma=7.0
+        )
+        far_penalty = optimizer._bounded_distance_penalty(
+            far_entries, true_entries, sigma=7.0
+        )
+
+        self.assertLess(near_penalty, far_penalty)
+        self.assertGreaterEqual(far_penalty, 0.95)
+
+    def test_count_calibration_penalty_prefers_small_mismatch(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        small_mismatch = optimizer._count_calibration_penalty(4, 3)
+        severe_over_detection = optimizer._count_calibration_penalty(30, 3)
+        severe_under_detection = optimizer._count_calibration_penalty(0, 3)
+
+        self.assertLess(small_mismatch, severe_over_detection)
+        self.assertLess(small_mismatch, severe_under_detection)
+        self.assertGreater(severe_over_detection, severe_under_detection)
+
+    def test_slope_alignment_penalty_prefers_matching_direction(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        true_entries = [(pd.Timestamp('2020-01-10'), 0.0, 1.0, 1.0)]
+        matching_entries = [(pd.Timestamp('2020-01-11'), 0.0, 1.1, 1.1)]
+        wrong_direction_entries = [(pd.Timestamp('2020-01-11'), 0.0, -1.0, 1.0)]
+
+        matching_penalty = optimizer._slope_change_alignment_penalty(
+            matching_entries, true_entries, sigma=7.0
+        )
+        wrong_direction_penalty = optimizer._slope_change_alignment_penalty(
+            wrong_direction_entries, true_entries, sigma=7.0
+        )
+
+        self.assertLess(matching_penalty, wrong_direction_penalty)
+
+    def test_local_mutate_changepoint_params_preserves_individual_mode(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        params = {
+            'method': 'pelt',
+            'method_params': {
+                'penalty': 50,
+                'loss_function': 'l2',
+                'min_segment_length': 10,
+                'pruning_factor': 1.5,
+            },
+            'aggregate_method': 'mean',
+            'min_segment_length': 10,
+            'probabilistic_output': True,
+        }
+
+        mutated = optimizer._local_mutate_changepoint_params(
+            params, random.Random(42)
+        )
+
+        self.assertEqual(mutated['aggregate_method'], 'individual')
+        self.assertFalse(mutated['probabilistic_output'])
+        self.assertIn('method_params', mutated)
+
 class TestScaling(unittest.TestCase):
     """Test that scaling and unscaling work correctly."""
 

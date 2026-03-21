@@ -557,6 +557,259 @@ class FeatureDetectionOptimizer:
     # Changepoint fine-tuning with curriculum Focal Tversky loss
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _bounded_distance_penalty(detected_entries, true_entries, sigma):
+        """Return a symmetric proximity penalty that saturates for very distant events."""
+        if not true_entries and not detected_entries:
+            return 0.0
+        if not true_entries or not detected_entries:
+            return 1.0
+
+        t_days = np.array(
+            [
+                (entry[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for entry in true_entries
+            ],
+            dtype=float,
+        )
+        d_days = np.array(
+            [
+                (entry[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for entry in detected_entries
+            ],
+            dtype=float,
+        )
+
+        dists = np.abs(t_days[:, None] - d_days[None, :])
+        scale = max(float(sigma) * 2.0, 1.0)
+        nearest_true = np.min(dists, axis=1)
+        nearest_detected = np.min(dists, axis=0)
+        true_penalty = 1.0 - np.exp(-0.5 * (nearest_true / scale) ** 2)
+        detected_penalty = 1.0 - np.exp(-0.5 * (nearest_detected / scale) ** 2)
+        return float(0.5 * (np.mean(true_penalty) + np.mean(detected_penalty)))
+
+    @staticmethod
+    def _count_calibration_penalty(
+        detected_count,
+        true_count,
+        under_weight=0.6,
+        over_weight=1.0,
+    ):
+        """Penalize count mismatch, with a stronger bias against over-detection."""
+        detected_count = int(max(detected_count, 0))
+        true_count = int(max(true_count, 0))
+        if detected_count == 0 and true_count == 0:
+            return 0.0
+        if true_count == 0:
+            return float(1.0 - math.exp(-detected_count / 2.0))
+
+        excess_ratio = max(detected_count - true_count, 0) / float(true_count)
+        deficit_ratio = max(true_count - detected_count, 0) / float(true_count)
+        over_penalty = 1.0 - math.exp(-excess_ratio)
+        under_penalty = 1.0 - math.exp(-deficit_ratio)
+        return float(over_weight * over_penalty + under_weight * under_penalty)
+
+    @staticmethod
+    def _slope_change_alignment_penalty(detected_entries, true_entries, sigma):
+        """Compare slope-change magnitude and direction for nearby trend changepoints."""
+        if not true_entries or not detected_entries:
+            return 0.0
+
+        safe_sigma = max(float(sigma), 1.0)
+        match_radius = max(14.0, safe_sigma * 4.0)
+        penalties = []
+
+        for true_entry in true_entries:
+            true_date, true_prior, true_post, _ = true_entry
+            best_entry = None
+            best_dist = None
+            for detected_entry in detected_entries:
+                dist = abs((detected_entry[0] - true_date).days)
+                if best_dist is None or dist < best_dist:
+                    best_dist = dist
+                    best_entry = detected_entry
+
+            if best_entry is None or best_dist is None or best_dist > match_radius:
+                continue
+
+            det_prior = best_entry[1]
+            det_post = best_entry[2]
+            true_delta = float(true_post - true_prior)
+            detected_delta = float(det_post - det_prior)
+            delta_scale = max(abs(true_delta), 0.05)
+            magnitude_penalty = min(abs(detected_delta - true_delta) / delta_scale, 2.0)
+            sign_penalty = 0.5 if (true_delta * detected_delta) < 0 else 0.0
+            proximity = math.exp(-0.5 * (best_dist / safe_sigma) ** 2)
+            penalties.append((0.5 * magnitude_penalty + sign_penalty) * proximity)
+
+        if not penalties:
+            return 0.0
+        return float(np.mean(penalties))
+
+    @staticmethod
+    def _mutate_numeric_value(value, rng, integer=False, minimum=None, maximum=None):
+        """Apply a small local perturbation to a numeric hyperparameter."""
+        factors = [0.6, 0.8, 1.25, 1.5]
+        mutated = float(value) * rng.choice(factors)
+        if integer:
+            mutated = int(round(mutated))
+            mutated = max(mutated, 1)
+        if minimum is not None:
+            mutated = max(mutated, minimum)
+        if maximum is not None:
+            mutated = min(mutated, maximum)
+        return mutated
+
+    def _local_mutate_changepoint_params(self, params, rng):
+        """Refine changepoint params locally instead of always fully resampling."""
+        from autots.tools.changepoints import ChangepointDetector
+
+        if not params or rng.random() < 0.12:
+            return ChangepointDetector.get_new_params(method='random')
+
+        mutated = copy.deepcopy(params)
+        method_params = copy.deepcopy(mutated.get('method_params', {}))
+        method = mutated.get('method')
+
+        if 'min_segment_length' in mutated and rng.random() < 0.6:
+            mutated['min_segment_length'] = int(
+                self._mutate_numeric_value(
+                    mutated['min_segment_length'],
+                    rng,
+                    integer=True,
+                    minimum=2,
+                    maximum=120,
+                )
+            )
+
+        if method == 'pelt':
+            if 'penalty' in method_params and rng.random() < 0.8:
+                method_params['penalty'] = self._mutate_numeric_value(
+                    method_params['penalty'],
+                    rng,
+                    integer=False,
+                    minimum=1.0,
+                    maximum=400.0,
+                )
+            if 'min_segment_length' in method_params and rng.random() < 0.5:
+                method_params['min_segment_length'] = int(
+                    self._mutate_numeric_value(
+                        method_params['min_segment_length'],
+                        rng,
+                        integer=True,
+                        minimum=2,
+                        maximum=120,
+                    )
+                )
+            if 'pruning_factor' in method_params and rng.random() < 0.4:
+                method_params['pruning_factor'] = self._mutate_numeric_value(
+                    method_params['pruning_factor'],
+                    rng,
+                    integer=False,
+                    minimum=1.0,
+                    maximum=4.0,
+                )
+        elif method == 'basic':
+            if 'changepoint_spacing' in method_params and rng.random() < 0.8:
+                method_params['changepoint_spacing'] = int(
+                    self._mutate_numeric_value(
+                        method_params['changepoint_spacing'],
+                        rng,
+                        integer=True,
+                        minimum=3,
+                        maximum=5040,
+                    )
+                )
+            if 'changepoint_distance_end' in method_params and rng.random() < 0.6:
+                method_params['changepoint_distance_end'] = int(
+                    self._mutate_numeric_value(
+                        method_params['changepoint_distance_end'],
+                        rng,
+                        integer=True,
+                        minimum=3,
+                        maximum=5040,
+                    )
+                )
+        elif method == 'ewma':
+            for key, minimum, maximum in [
+                ('lambda_param', 0.01, 0.8),
+                ('control_limit', 0.5, 10.0),
+                ('min_distance', 1, 120),
+            ]:
+                if key in method_params and rng.random() < 0.6:
+                    method_params[key] = self._mutate_numeric_value(
+                        method_params[key],
+                        rng,
+                        integer=(key == 'min_distance'),
+                        minimum=minimum,
+                        maximum=maximum,
+                    )
+        elif method == 'cusum':
+            for key, minimum, maximum in [
+                ('threshold', 1.0, 60.0),
+                ('drift', 0.0, 5.0),
+            ]:
+                if key in method_params and rng.random() < 0.6:
+                    method_params[key] = self._mutate_numeric_value(
+                        method_params[key],
+                        rng,
+                        integer=False,
+                        minimum=minimum,
+                        maximum=maximum,
+                    )
+        else:
+            numeric_keys = [
+                key for key, value in method_params.items() if isinstance(value, (int, float))
+            ]
+            if numeric_keys:
+                for key in rng.sample(numeric_keys, min(len(numeric_keys), 2)):
+                    method_params[key] = self._mutate_numeric_value(
+                        method_params[key],
+                        rng,
+                        integer=isinstance(method_params[key], int),
+                    )
+
+        mutated['method_params'] = method_params
+        mutated['aggregate_method'] = 'individual'
+        mutated['probabilistic_output'] = False
+        return mutated
+
+    def _local_mutate_level_shift_params(self, params, rng):
+        """Apply local mutations to level-shift params to preserve nearby good fits."""
+        from autots.tools.transform import LevelShiftMagic
+
+        if not params or rng.random() < 0.15:
+            return LevelShiftMagic.get_new_params(method='random')
+
+        mutated = copy.deepcopy(params)
+        for key, minimum, maximum, integer in [
+            ('window_size', 3, 364, True),
+            ('alpha', 0.8, 5.0, False),
+            ('grouping_forward_limit', 1, 10, True),
+            ('max_level_shifts', 1, 40, True),
+            ('shift_remove_window', 0, 5, True),
+        ]:
+            if key in mutated and rng.random() < 0.55:
+                mutated[key] = self._mutate_numeric_value(
+                    mutated[key],
+                    rng,
+                    integer=integer,
+                    minimum=minimum,
+                    maximum=maximum,
+                )
+
+        if 'alignment' in mutated and rng.random() < 0.2:
+            mutated['alignment'] = rng.choice(
+                ['average', 'last_value', 'rolling_diff', 'rolling_diff_3nn']
+            )
+        if 'window_method' in mutated and rng.random() < 0.2:
+            mutated['window_method'] = rng.choice(
+                ['overlap', 'exclusive', 'diff_overlap']
+            )
+
+        mutated['output'] = 'multivariate'
+        return mutated
+
     def fine_tune_changepoints(
         self,
         starting_params,
@@ -568,6 +821,9 @@ class FeatureDetectionOptimizer:
         level_shift_weight=0.5,
         exclude_changepoint_methods=None,
         over_prediction_penalty=0.1,
+        location_weight=0.35,
+        count_weight=0.25,
+        slope_match_weight=0.15,
     ):
         """
         Focused fine-tuning pass that freezes every parameter group except
@@ -635,6 +891,19 @@ class FeatureDetectionOptimizer:
             Tversky=1.0), regardless of how high this value is set.  Near the
             target count the gradient is steep; far above it the curve flattens,
             preserving the recall-over-precision bias that prevents CP collapse.
+        location_weight : float
+            Weight on an explicit symmetric distance penalty.  This makes a
+            count-correct but badly misplaced solution score worse than a nearby
+            over-detected one, which is the balance needed for downstream trend
+            fitting.
+        count_weight : float
+            Weight on count calibration.  Over-detection is penalized more than
+            under-detection, but both are considered so the search does not drift
+            toward either collapse or severe over-segmentation.
+        slope_match_weight : float
+            Weight on slope-change alignment for nearby trend changepoints.  This
+            favors candidates that place changepoints where the underlying trend
+            change is directionally and numerically similar to ground truth.
 
         Returns
         -------
@@ -678,6 +947,9 @@ class FeatureDetectionOptimizer:
                 stage_idx=stage_idx,
                 exclude_changepoint_methods=exclude_changepoint_methods,
                 over_prediction_penalty=over_prediction_penalty,
+                location_weight=location_weight,
+                count_weight=count_weight,
+                slope_match_weight=slope_match_weight,
             )
             self.fine_tune_history.extend(stage_entries)
 
@@ -708,6 +980,9 @@ class FeatureDetectionOptimizer:
         stage_idx=0,
         exclude_changepoint_methods=None,
         over_prediction_penalty=0.1,
+        location_weight=0.35,
+        count_weight=0.25,
+        slope_match_weight=0.15,
     ):
         """
         Run one curriculum stage, mutating only changepoint_params and
@@ -722,6 +997,7 @@ class FeatureDetectionOptimizer:
             best_loss = self._evaluate_changepoint_params(
                 frozen_params, sigma, tversky_alpha, tversky_beta,
                 tversky_gamma, level_shift_weight, over_prediction_penalty,
+                location_weight, count_weight, slope_match_weight,
             )
         except Exception:
             best_loss = float('inf')
@@ -739,16 +1015,30 @@ class FeatureDetectionOptimizer:
             if i % 20 == 0:
                 print(f"  Stage {stage_idx + 1} iter {i}/{n_iters} (best loss so far: {best_loss:.4f})")
 
-            # Always resample changepoint_params
-            fresh_cp = ChangepointDetector.get_new_params(method='random')
+            # Mostly refine around the current best so we can trade count against
+            # placement instead of constantly jumping between distant regimes.
+            if rng.random() < 0.7:
+                fresh_cp = self._local_mutate_changepoint_params(
+                    candidate.get('changepoint_params', {}), rng
+                )
+            else:
+                fresh_cp = ChangepointDetector.get_new_params(method='random')
             if exclude_changepoint_methods and fresh_cp.get('method') in exclude_changepoint_methods:
                 continue
             fresh_cp['aggregate_method'] = 'individual'
+            fresh_cp['probabilistic_output'] = False
             candidate['changepoint_params'] = fresh_cp
 
             # Resample level_shift_params ~70 % of the time
             if rng.random() < 0.7:
+                fresh_ls = self._local_mutate_level_shift_params(
+                    candidate.get('level_shift_params', {}), rng
+                )
+            elif rng.random() < 0.85:
                 fresh_ls = LevelShiftMagic.get_new_params(method='random')
+            else:
+                fresh_ls = None
+            if fresh_ls is not None:
                 fresh_ls['output'] = 'multivariate'
                 candidate['level_shift_params'] = fresh_ls
 
@@ -761,6 +1051,7 @@ class FeatureDetectionOptimizer:
                 loss = self._evaluate_changepoint_params(
                     candidate, sigma, tversky_alpha, tversky_beta,
                     tversky_gamma, level_shift_weight, over_prediction_penalty,
+                    location_weight, count_weight, slope_match_weight,
                 )
                 history.append({
                     'sigma': sigma,
@@ -786,6 +1077,9 @@ class FeatureDetectionOptimizer:
         tversky_gamma=2.0,
         level_shift_weight=0.5,
         over_prediction_penalty=0.1,
+        location_weight=0.35,
+        count_weight=0.25,
+        slope_match_weight=0.15,
     ):
         """
         Score a parameter config using only the Focal Tversky changepoint loss.
@@ -831,6 +1125,15 @@ class FeatureDetectionOptimizer:
                 sigma=sigma, alpha=tversky_alpha,
                 beta=tversky_beta, gamma=tversky_gamma,
             )
+            cp_loss += location_weight * self._bounded_distance_penalty(
+                det_cp_entries, true_cp_entries, sigma
+            )
+            cp_loss += count_weight * self._count_calibration_penalty(
+                len(det_cp_entries), len(true_cp_entries)
+            )
+            cp_loss += slope_match_weight * self._slope_change_alignment_penalty(
+                det_cp_entries, true_cp_entries, sigma
+            )
 
             if len(det_cp_entries) > len(true_cp_entries):
                 # Exponentially-saturated ratio penalty: bounded to [0, over_prediction_penalty]
@@ -854,6 +1157,12 @@ class FeatureDetectionOptimizer:
                 det_ls_entries, true_ls_entries,
                 sigma=sigma, alpha=tversky_alpha,
                 beta=ls_beta, gamma=tversky_gamma,
+            )
+            ls_loss += location_weight * self._bounded_distance_penalty(
+                det_ls_entries, true_ls_entries, sigma
+            )
+            ls_loss += 0.75 * count_weight * self._count_calibration_penalty(
+                len(det_ls_entries), len(true_ls_entries)
             )
 
             if len(det_ls_entries) > len(true_ls_entries):
