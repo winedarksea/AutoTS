@@ -15,6 +15,7 @@ from autots.tools.changepoints import (
     _build_ed_prefix_sums,
     _calculate_segment_cost,
     _detect_pelt_changepoints,
+    _detect_wbs2_changepoints,
     create_changepoint_features,
     find_market_changepoints_multivariate,
 )
@@ -153,6 +154,32 @@ class TestChangepointFeatures(unittest.TestCase):
         self.assertEqual(features.shape[0], len(dt_index))
         self.assertGreater(features.shape[1], 0)
         self.assertTrue(all("bottom_up_changepoint" in col for col in features.columns))
+
+    def test_create_changepoint_features_wbs2(self):
+        dt_index = pd.date_range("2021-01-01", periods=180, freq="D")
+        rng = np.random.default_rng(111)
+        data = np.concatenate(
+            [np.ones(60) * 2, np.ones(60) * 6, np.ones(60) * 10]
+        ) + rng.normal(0, 0.2, 180)
+
+        features = create_changepoint_features(
+            dt_index,
+            method="wbs2",
+            params={
+                "M": 100,
+                "interval_sampling": "systematic",
+                "universal": True,
+                "lambda_param": 0.9,
+                "th_const_min_mult": 0.3,
+                "model_selection": "sdll",
+                "max_changepoints": 10,
+            },
+            data=data,
+        )
+
+        self.assertEqual(features.shape[0], len(dt_index))
+        self.assertGreater(features.shape[1], 0)
+        self.assertTrue(all("wbs2_changepoint" in col for col in features.columns))
 
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"
@@ -322,6 +349,61 @@ class TestChangepointDetector(unittest.TestCase):
         self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
         self.assertGreater(len(detector.changepoints_["series1"]), 0)
 
+    def test_changepoint_detector_wbs2(self):
+        dates = pd.date_range("2022-01-01", periods=210, freq="D")
+        rng = np.random.default_rng(12)
+        values = np.concatenate(
+            [np.ones(70) * 3, np.ones(70) * 7, np.ones(70) * 12]
+        ) + rng.normal(0, 0.2, 210)
+        df = pd.DataFrame({"series1": values}, index=dates)
+
+        detector = ChangepointDetector(
+            method="wbs2",
+            aggregate_method="individual",
+            method_params={
+                "M": 100,
+                "interval_sampling": "systematic",
+                "universal": True,
+                "model_selection": "sdll",
+                "max_changepoints": 10,
+            },
+        )
+        detector.detect(df)
+
+        self.assertIn("series1", detector.changepoints_)
+        self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
+        self.assertGreater(len(detector.changepoints_["series1"]), 0)
+
+    def test_changepoint_detector_wbs2_transform_cycle(self):
+        dates = pd.date_range("2022-01-01", periods=180, freq="D")
+        rng = np.random.default_rng(101)
+        base = np.concatenate([np.ones(60) * 1, np.ones(60) * 4, np.ones(60) * 9])
+        df = pd.DataFrame(
+            {
+                "series1": base + rng.normal(0, 0.2, 180),
+                "series2": (base * 1.3) + rng.normal(0, 0.2, 180),
+            },
+            index=dates,
+        )
+
+        detector = ChangepointDetector(
+            method="wbs2",
+            aggregate_method="mean",
+            method_params={
+                "M": 100,
+                "interval_sampling": "systematic",
+                "universal": True,
+                "model_selection": "sdll",
+            },
+        )
+        detector.fit(df)
+        transformed = detector.transform(df)
+        reconstructed = detector.inverse_transform(transformed)
+
+        self.assertEqual(transformed.shape, df.shape)
+        self.assertEqual(reconstructed.shape, df.shape)
+        pd.testing.assert_frame_equal(df, reconstructed, atol=1e-8, check_dtype=False)
+
     def test_get_new_params_new_methods(self):
         kcpd_params = ChangepointDetector.get_new_params(method="kcpd")
         self.assertEqual(kcpd_params["method"], "kcpd")
@@ -332,6 +414,11 @@ class TestChangepointDetector(unittest.TestCase):
         self.assertEqual(bottom_up_params["method"], "bottom_up")
         self.assertIn("initial_segment_length", bottom_up_params["method_params"])
         self.assertIn("penalty_scale", bottom_up_params["method_params"])
+
+        wbs2_params = ChangepointDetector.get_new_params(method="wbs2")
+        self.assertEqual(wbs2_params["method"], "wbs2")
+        self.assertIn("M", wbs2_params["method_params"])
+        self.assertIn("model_selection", wbs2_params["method_params"])
 
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"
@@ -720,6 +807,43 @@ class TestEdPelt(unittest.TestCase):
                 found_ed = True
                 break
         self.assertTrue(found_ed, "get_new_params never returned loss_function='ed' in 300 tries")
+
+
+class TestWbs2(unittest.TestCase):
+    """Tests for WBS2 changepoint detection."""
+
+    def test_wbs2_detects_clear_shift(self):
+        rng = np.random.default_rng(42)
+        signal = np.concatenate([rng.normal(0, 0.4, 80), rng.normal(7, 0.4, 80)])
+        cps, fitted = _detect_wbs2_changepoints(
+            signal,
+            min_segment_length=5,
+            M=100,
+            interval_sampling='systematic',
+            random_state=42,
+            universal=True,
+            model_selection='sdll',
+            max_changepoints=10,
+        )
+        self.assertIsInstance(cps, np.ndarray)
+        self.assertGreater(len(cps), 0)
+        self.assertTrue(
+            any(65 <= cp <= 95 for cp in cps),
+            f"WBS2 failed to detect main shift near 80: {cps}",
+        )
+        self.assertEqual(len(fitted), len(signal))
+
+    def test_wbs2_constant_series_returns_no_changepoints(self):
+        signal = np.ones(120) * 5.0
+        cps, fitted = _detect_wbs2_changepoints(
+            signal,
+            min_segment_length=5,
+            M=100,
+            universal=True,
+            model_selection='sdll',
+        )
+        self.assertEqual(len(cps), 0)
+        self.assertEqual(len(fitted), len(signal))
 
 
 if __name__ == "__main__":  # pragma: no cover

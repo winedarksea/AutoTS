@@ -16,6 +16,7 @@ valid_changepoint_methods = [
     'autoencoder',
     'kcpd',
     'bottom_up',
+    'wbs2',
     'composite_fused_lasso',
     'multiresolution',
 ]
@@ -866,6 +867,557 @@ def _detect_bottom_up_changepoints(
         fitted_trend[start:end] = seg_mean
 
     return cps, fitted_trend
+
+
+def _wbs2_universal_constants(n, lambda_param=0.9):
+    """
+    Universal threshold constants from the reference WBS2 implementation.
+
+    Returns:
+        tuple(float, int): (threshold_constant, recommended_M)
+    """
+    n_grid = np.array(
+        [
+            10,
+            50,
+            100,
+            150,
+            200,
+            300,
+            400,
+            500,
+            600,
+            700,
+            800,
+            900,
+            1000,
+            1500,
+            2000,
+            2500,
+            3000,
+            4000,
+            5000,
+            6000,
+            7000,
+            8000,
+            9000,
+            10000,
+        ],
+        dtype=float,
+    )
+    th_90 = np.array(
+        [
+            1.420,
+            1.310,
+            1.280,
+            1.270,
+            1.250,
+            1.220,
+            1.205,
+            1.205,
+            1.200,
+            1.200,
+            1.200,
+            1.185,
+            1.185,
+            1.170,
+            1.170,
+            1.160,
+            1.150,
+            1.150,
+            1.150,
+            1.150,
+            1.145,
+            1.145,
+            1.135,
+            1.135,
+        ],
+        dtype=float,
+    )
+    th_95 = np.array(
+        [
+            1.550,
+            1.370,
+            1.340,
+            1.320,
+            1.300,
+            1.290,
+            1.265,
+            1.265,
+            1.247,
+            1.247,
+            1.247,
+            1.225,
+            1.225,
+            1.220,
+            1.210,
+            1.190,
+            1.190,
+            1.190,
+            1.190,
+            1.190,
+            1.190,
+            1.180,
+            1.170,
+            1.170,
+        ],
+        dtype=float,
+    )
+
+    x = float(max(2, n))
+    th90 = float(np.interp(x, n_grid, th_90))
+    th95 = float(np.interp(x, n_grid, th_95))
+    # Lambda defaults to 0.9 in WBS2.SDLL; interpolate toward 0.95 table when needed.
+    alpha = float(np.clip((float(lambda_param) - 0.9) / 0.05, 0.0, 1.0))
+    th_const = (1.0 - alpha) * th90 + alpha * th95
+    return float(th_const), 100
+
+
+def _wbs2_all_intervals(length):
+    """All local intervals [start, end) of length >= 2 for a segment of given length."""
+    m = int(length)
+    if m < 2:
+        return np.array([], dtype=int), np.array([], dtype=int)
+    starts = np.repeat(np.arange(0, m - 1, dtype=int), np.arange(m - 1, 0, -1))
+    ends = np.concatenate(
+        [np.arange(start + 2, m + 1, dtype=int) for start in range(m - 1)]
+    )
+    return starts, ends
+
+
+def _wbs2_systematic_intervals(length, M):
+    """Systematic interval sampling inspired by grid.intervals() from the R code."""
+    m = int(length)
+    if m < 2:
+        return np.array([], dtype=int), np.array([], dtype=int)
+
+    total = m * (m - 1) // 2
+    if M >= total:
+        return _wbs2_all_intervals(m)
+
+    k = 2
+    target = max(1, int(M))
+    while (k * (k - 1)) // 2 < target:
+        k += 1
+    grid = np.unique(np.round(np.linspace(0, m - 1, k)).astype(int))
+    if grid.size < 2:
+        return _wbs2_all_intervals(m)
+
+    i_idx, j_idx = np.triu_indices(grid.size, k=1)
+    starts = grid[i_idx]
+    ends = grid[j_idx] + 1
+    valid = (ends - starts) >= 2
+    starts = starts[valid]
+    ends = ends[valid]
+    if starts.size == 0:
+        return _wbs2_all_intervals(m)
+    return starts.astype(int, copy=False), ends.astype(int, copy=False)
+
+
+def _wbs2_random_intervals(length, M, rng):
+    """Random interval sampling (local coordinates)."""
+    m = int(length)
+    if m < 2:
+        return np.array([], dtype=int), np.array([], dtype=int)
+
+    total = m * (m - 1) // 2
+    target = max(1, int(M))
+    if target >= total:
+        return _wbs2_all_intervals(m)
+
+    batch = max(32, target * 2)
+    starts = np.array([], dtype=int)
+    ends = np.array([], dtype=int)
+    attempts = 0
+    while starts.size < target and attempts < 10:
+        raw = rng.integers(0, m, size=(2, batch))
+        lo = np.minimum(raw[0], raw[1])
+        hi = np.maximum(raw[0], raw[1])
+        valid = (hi - lo) >= 1
+        if np.any(valid):
+            starts = np.concatenate([starts, lo[valid].astype(int)])
+            ends = np.concatenate([ends, (hi[valid] + 1).astype(int)])
+        attempts += 1
+
+    if starts.size == 0:
+        return _wbs2_all_intervals(m)
+
+    # Deduplicate while preserving draw order.
+    encoded = starts * (m + 1) + ends
+    _, unique_idx = np.unique(encoded, return_index=True)
+    unique_idx = np.sort(unique_idx)
+    starts = starts[unique_idx]
+    ends = ends[unique_idx]
+    if starts.size > target:
+        starts = starts[:target]
+        ends = ends[:target]
+    return starts.astype(int, copy=False), ends.astype(int, copy=False)
+
+
+def _wbs2_sample_intervals(segment_start, segment_end, M, interval_sampling, rng):
+    """Sample local intervals and translate them into global [start, end) coordinates."""
+    seg_len = int(segment_end - segment_start)
+    if seg_len < 2:
+        return np.array([], dtype=int), np.array([], dtype=int)
+
+    mode = str(interval_sampling).lower()
+    if mode == 'random':
+        starts, ends = _wbs2_random_intervals(seg_len, M, rng)
+    else:
+        starts, ends = _wbs2_systematic_intervals(seg_len, M)
+
+    starts = starts + int(segment_start)
+    ends = ends + int(segment_start)
+
+    # Ensure the current segment itself is part of the candidate interval set.
+    if starts.size == 0 or not np.any((starts == segment_start) & (ends == segment_end)):
+        starts = np.append(starts, int(segment_start))
+        ends = np.append(ends, int(segment_end))
+
+    return starts.astype(int, copy=False), ends.astype(int, copy=False)
+
+
+def _wbs2_best_split(prefix_sum, segment_start, segment_end, interval_starts, interval_ends, min_segment_length):
+    """
+    Evaluate sampled intervals and return the highest absolute CUSUM split.
+
+    Returns:
+        tuple: (best_cp, best_cusum, best_interval_start, best_interval_end)
+    """
+    seg_start = int(segment_start)
+    seg_end = int(segment_end)
+    min_seg = max(1, int(min_segment_length))
+
+    best_cp = None
+    best_score = 0.0
+    best_abs = -np.inf
+    best_int_start = seg_start
+    best_int_end = seg_end
+
+    for int_start, int_end in zip(interval_starts, interval_ends):
+        start = max(seg_start, int(int_start))
+        end = min(seg_end, int(int_end))
+        seg_len = end - start
+        if seg_len < 2 * min_seg:
+            continue
+
+        cps = np.arange(start + min_seg, end - min_seg + 1, dtype=int)
+        if cps.size == 0:
+            continue
+
+        left_len = cps - start
+        right_len = end - cps
+        total_sum = prefix_sum[end] - prefix_sum[start]
+        left_sum = prefix_sum[cps] - prefix_sum[start]
+        right_sum = total_sum - left_sum
+
+        scale_left = np.sqrt(right_len / (seg_len * left_len))
+        scale_right = np.sqrt(left_len / (seg_len * right_len))
+        cusum_values = scale_left * left_sum - scale_right * right_sum
+
+        local_idx = int(np.argmax(np.abs(cusum_values)))
+        score = float(cusum_values[local_idx])
+        abs_score = abs(score)
+        if abs_score > best_abs:
+            best_abs = abs_score
+            best_score = score
+            best_cp = int(cps[local_idx])
+            best_int_start = start
+            best_int_end = end
+
+    return best_cp, best_score, best_int_start, best_int_end
+
+
+def _wbs2_complete_solution_path(
+    series,
+    M=100,
+    interval_sampling='systematic',
+    min_segment_length=5,
+    random_state=42,
+):
+    """
+    Build WBS2 complete solution path via iterative recursive splitting.
+
+    Returns:
+        tuple(np.ndarray,...): interval_starts, interval_ends, cps, scores
+    """
+    data = np.asarray(series, dtype=float).flatten()
+    n = len(data)
+    min_seg = max(1, int(min_segment_length))
+    if n < 2 * min_seg:
+        return (
+            np.array([], dtype=int),
+            np.array([], dtype=int),
+            np.array([], dtype=int),
+            np.array([], dtype=float),
+        )
+
+    prefix_sum = np.concatenate(([0.0], np.cumsum(data)))
+    rng = np.random.default_rng(random_state)
+    max_nodes = max(1, n - 1)
+
+    stack = [(0, n)]
+    path_starts = []
+    path_ends = []
+    path_cps = []
+    path_scores = []
+
+    while stack and len(path_cps) < max_nodes:
+        seg_start, seg_end = stack.pop()
+        if seg_end - seg_start < 2 * min_seg:
+            continue
+
+        sampled_starts, sampled_ends = _wbs2_sample_intervals(
+            seg_start, seg_end, M, interval_sampling, rng
+        )
+        cp, score, int_start, int_end = _wbs2_best_split(
+            prefix_sum,
+            seg_start,
+            seg_end,
+            sampled_starts,
+            sampled_ends,
+            min_seg,
+        )
+        if cp is None:
+            continue
+
+        path_starts.append(int(int_start))
+        path_ends.append(int(int_end))
+        path_cps.append(int(cp))
+        path_scores.append(float(score))
+
+        # Stack order to emulate recursive left-first traversal.
+        if seg_end - cp >= 2 * min_seg:
+            stack.append((cp, seg_end))
+        if cp - seg_start >= 2 * min_seg:
+            stack.append((seg_start, cp))
+
+    return (
+        np.asarray(path_starts, dtype=int),
+        np.asarray(path_ends, dtype=int),
+        np.asarray(path_cps, dtype=int),
+        np.asarray(path_scores, dtype=float),
+    )
+
+
+def _wbs2_sdll_selection(
+    path_cps,
+    path_scores,
+    threshold,
+    threshold_min,
+    min_segment_length=5,
+    max_changepoints=None,
+    n_obs=None,
+):
+    """Apply SDLL model selection on the complete WBS2 path."""
+    cps = np.asarray(path_cps, dtype=int)
+    scores = np.asarray(path_scores, dtype=float)
+    if cps.size == 0:
+        return np.array([], dtype=int)
+
+    abs_scores = np.abs(scores)
+    if abs_scores.size == 0 or float(np.max(abs_scores)) < float(threshold):
+        return np.array([], dtype=int)
+
+    keep = np.where(abs_scores > float(threshold_min))[0]
+    if keep.size == 0:
+        return np.array([], dtype=int)
+
+    sel_cps = cps[keep]
+    sel_abs_scores = abs_scores[keep]
+
+    if sel_cps.size == 1:
+        candidate_cps = sel_cps.copy()
+        candidate_scores = sel_abs_scores.copy()
+    else:
+        ord_idx = np.argsort(sel_abs_scores)[::-1]
+        z = sel_abs_scores[ord_idx]
+        dif = -np.diff(np.log(np.maximum(z, 1e-12)))
+        dif_ord = np.argsort(dif)[::-1]
+
+        j = 0
+        while j < (z.size - 1) and z[dif_ord[j] + 1] > float(threshold):
+            j += 1
+        if j < (z.size - 1):
+            no_of_cpt = int(dif_ord[j] + 1)
+        else:
+            no_of_cpt = int(z.size)
+
+        top_idx = ord_idx[:no_of_cpt]
+        candidate_cps = sel_cps[top_idx]
+        candidate_scores = sel_abs_scores[top_idx]
+
+    if candidate_cps.size == 0:
+        return np.array([], dtype=int)
+
+    # Deduplicate identical changepoint positions by keeping the strongest score.
+    cp_to_score = {}
+    upper = int(n_obs) if n_obs is not None else None
+    for cp, sc in zip(candidate_cps, candidate_scores):
+        cp_int = int(cp)
+        if cp_int <= 0:
+            continue
+        if upper is not None and cp_int >= upper:
+            continue
+        score_val = float(sc)
+        prev = cp_to_score.get(cp_int)
+        if prev is None or score_val > prev:
+            cp_to_score[cp_int] = score_val
+
+    if not cp_to_score:
+        return np.array([], dtype=int)
+
+    unique_cps = np.array(sorted(cp_to_score.keys()), dtype=int)
+    unique_scores = np.array([cp_to_score[int(cp)] for cp in unique_cps], dtype=float)
+    return _select_distant_changepoints(
+        unique_cps,
+        unique_scores,
+        min_distance=max(1, int(min_segment_length)),
+        max_changepoints=max_changepoints,
+    )
+
+
+def _piecewise_mean_from_changepoints(data, changepoints):
+    """Create a piecewise-constant fitted signal from changepoint locations."""
+    series = np.asarray(data, dtype=float).flatten()
+    n = len(series)
+    if n == 0:
+        return np.array([], dtype=float)
+
+    cps = np.asarray(changepoints if changepoints is not None else [], dtype=int)
+    if cps.size:
+        cps = np.unique(cps[(cps > 0) & (cps < n)])
+    if cps.size == 0:
+        return np.full(n, float(np.mean(series)), dtype=float)
+
+    boundaries = np.concatenate(([0], cps, [n]))
+    starts = boundaries[:-1]
+    ends = boundaries[1:]
+    prefix_sum = np.concatenate(([0.0], np.cumsum(series)))
+    means = (prefix_sum[ends] - prefix_sum[starts]) / (ends - starts)
+
+    fitted = np.empty(n, dtype=float)
+    for start, end, mean_val in zip(starts, ends, means):
+        fitted[int(start) : int(end)] = float(mean_val)
+    return fitted
+
+
+def _detect_wbs2_changepoints(
+    data,
+    min_segment_length=5,
+    M='auto',
+    interval_sampling='systematic',
+    random_state=42,
+    sigma='mad',
+    universal=True,
+    th_const=None,
+    th_const_min_mult=0.3,
+    lambda_param=0.9,
+    model_selection='sdll',
+    threshold=None,
+    threshold_min=None,
+    max_changepoints=None,
+):
+    """
+    Wild Binary Segmentation 2 (WBS2) changepoint detection with SDLL selection.
+
+    Returns:
+        tuple(np.ndarray, np.ndarray): changepoint indices and fitted piecewise mean trend
+    """
+    series = np.asarray(data, dtype=float).flatten()
+    n = len(series)
+    if n == 0:
+        return np.array([], dtype=int), np.array([], dtype=float)
+
+    finite_mask = np.isfinite(series)
+    if not finite_mask.all():
+        if not finite_mask.any():
+            return np.array([], dtype=int), np.zeros(n, dtype=float)
+        fill_value = float(np.nanmedian(series[finite_mask]))
+        series = (
+            pd.Series(series)
+            .interpolate(limit_direction='both')
+            .fillna(fill_value)
+            .to_numpy(dtype=float)
+        )
+
+    min_seg = max(1, int(min_segment_length))
+    if n < 2 * min_seg:
+        return np.array([], dtype=int), _piecewise_mean_from_changepoints(series, [])
+
+    m_eff = 100 if M in {None, 'auto'} else max(1, int(M))
+    th_const_eff = th_const
+    if universal:
+        univ_th, univ_M = _wbs2_universal_constants(n, lambda_param=lambda_param)
+        if M in {None, 'auto'}:
+            m_eff = int(univ_M)
+        if th_const_eff in {None, 'auto'}:
+            th_const_eff = float(univ_th)
+    if th_const_eff in {None, 'auto'}:
+        th_const_eff = 1.3
+
+    if sigma in {None, 'mad', 'auto'}:
+        diffs = np.diff(series) / np.sqrt(2.0)
+        if diffs.size == 0:
+            return np.array([], dtype=int), _piecewise_mean_from_changepoints(series, [])
+        med = float(np.median(diffs))
+        mad = float(np.median(np.abs(diffs - med)))
+        sigma_hat = 1.4826 * mad
+    else:
+        sigma_hat = float(sigma)
+
+    if (not np.isfinite(sigma_hat)) or sigma_hat <= 1e-12:
+        return np.array([], dtype=int), _piecewise_mean_from_changepoints(series, [])
+
+    path_starts, path_ends, path_cps, path_scores = _wbs2_complete_solution_path(
+        series,
+        M=m_eff,
+        interval_sampling=interval_sampling,
+        min_segment_length=min_seg,
+        random_state=random_state,
+    )
+    if path_cps.size == 0:
+        return np.array([], dtype=int), _piecewise_mean_from_changepoints(series, [])
+
+    scale = np.sqrt(2.0 * np.log(max(2, n))) * sigma_hat
+    threshold_eff = (
+        float(th_const_eff) * scale if threshold in {None, 'auto'} else float(threshold)
+    )
+    threshold_min_eff = (
+        float(th_const_eff) * float(th_const_min_mult) * scale
+        if threshold_min in {None, 'auto'}
+        else float(threshold_min)
+    )
+
+    selection_mode = str(model_selection).lower()
+    if selection_mode == 'threshold':
+        keep = np.where(np.abs(path_scores) > threshold_eff)[0]
+        cand_cps = path_cps[keep]
+        cand_scores = np.abs(path_scores[keep])
+        if cand_cps.size == 0:
+            selected = np.array([], dtype=int)
+        else:
+            selected = _select_distant_changepoints(
+                cand_cps,
+                cand_scores,
+                min_distance=min_seg,
+                max_changepoints=max_changepoints,
+            )
+    else:
+        selected = _wbs2_sdll_selection(
+            path_cps,
+            path_scores,
+            threshold=threshold_eff,
+            threshold_min=threshold_min_eff,
+            min_segment_length=min_seg,
+            max_changepoints=max_changepoints,
+            n_obs=n,
+        )
+
+    if selected.size:
+        selected = np.unique(selected[(selected > 0) & (selected < n)])
+    fitted = _piecewise_mean_from_changepoints(series, selected)
+    return selected.astype(int, copy=False), fitted
 
 
 def _detect_ewma_changepoints(
@@ -2050,7 +2602,7 @@ def create_changepoint_features(
     changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
     changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
     method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
-        'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd', 'bottom_up')
+        'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd', 'bottom_up', 'wbs2')
     params (dict): Additional parameters for the chosen method
     data (array-like): Time series data (required for advanced methods)
 
@@ -2133,6 +2685,11 @@ def create_changepoint_features(
         if data is None:
             raise ValueError("Data is required for bottom-up changepoint detection")
         return _create_bottom_up_changepoint_features(DTindex, data, params)
+
+    elif method == 'wbs2':
+        if data is None:
+            raise ValueError("Data is required for WBS2 changepoint detection")
+        return _create_wbs2_changepoint_features(DTindex, data, params)
 
     else:
         raise ValueError(f"Unknown changepoint detection method: {method}")
@@ -2369,6 +2926,46 @@ def _create_bottom_up_changepoint_features(
     return changepoint_features
 
 
+def _create_wbs2_changepoint_features(
+    DTindex,
+    data,
+    params=None,
+):
+    """Create changepoint features using WBS2 with SDLL model selection."""
+    if params is None:
+        params = {}
+
+    changepoints, _ = _detect_wbs2_changepoints(
+        data,
+        min_segment_length=params.get('min_segment_length', 5),
+        M=params.get('M', 'auto'),
+        interval_sampling=params.get('interval_sampling', 'systematic'),
+        random_state=params.get('random_state', 42),
+        sigma=params.get('sigma', 'mad'),
+        universal=params.get('universal', True),
+        th_const=params.get('th_const', None),
+        th_const_min_mult=params.get('th_const_min_mult', 0.3),
+        lambda_param=params.get('lambda_param', 0.9),
+        model_selection=params.get('model_selection', 'sdll'),
+        threshold=params.get('threshold', None),
+        threshold_min=params.get('threshold_min', None),
+        max_changepoints=params.get('max_changepoints', None),
+    )
+
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'wbs2_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
 def _approximate_l1_trend_filter(data, D, lambda_reg):
     """Approximate L1 trend filtering using iterative reweighting."""
     n = len(data)
@@ -2479,7 +3076,7 @@ class ChangepointDetector(object):
         Args:
             method (str): Changepoint detection method ('basic', 'pelt', 'l1_fused_lasso',
                 'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd',
-                'bottom_up', 'composite_fused_lasso')
+                'bottom_up', 'wbs2', 'composite_fused_lasso', 'multiresolution')
             method_params (dict): Parameters specific to the chosen method
             aggregate_method (str): How to aggregate across series ('mean', 'median', 'individual')
             min_segment_length (int): Minimum length of segments between changepoints
@@ -2614,6 +3211,24 @@ class ChangepointDetector(object):
                 penalty=params.get('penalty', 'auto'),
                 penalty_scale=params.get('penalty_scale', 1.0),
                 max_changepoints=params.get('max_changepoints', 12),
+            )
+
+        elif method == 'wbs2':
+            changepoints, fitted_trend = _detect_wbs2_changepoints(
+                data,
+                min_segment_length=self.min_segment_length,
+                M=params.get('M', 'auto'),
+                interval_sampling=params.get('interval_sampling', 'systematic'),
+                random_state=params.get('random_state', 42),
+                sigma=params.get('sigma', 'mad'),
+                universal=params.get('universal', True),
+                th_const=params.get('th_const', None),
+                th_const_min_mult=params.get('th_const_min_mult', 0.3),
+                lambda_param=params.get('lambda_param', 0.9),
+                model_selection=params.get('model_selection', 'sdll'),
+                threshold=params.get('threshold', None),
+                threshold_min=params.get('threshold_min', None),
+                max_changepoints=params.get('max_changepoints', None),
             )
 
         elif method == 'composite_fused_lasso':
@@ -2812,6 +3427,34 @@ class ChangepointDetector(object):
                 )
                 results[name] = {'changepoints': cps, 'fitted': fitted}
 
+        elif self.method == 'wbs2':
+            for name, arr in zip(series_names, series_arrays):
+                if len(arr) < max(5, 2 * self.min_segment_length):
+                    results[name] = {
+                        'changepoints': np.array([], dtype=int),
+                        'fitted': arr,
+                    }
+                    continue
+                cps, fitted = _detect_wbs2_changepoints(
+                    arr,
+                    min_segment_length=self.min_segment_length,
+                    M=method_params.get('M', 'auto'),
+                    interval_sampling=method_params.get(
+                        'interval_sampling', 'systematic'
+                    ),
+                    random_state=method_params.get('random_state', 42),
+                    sigma=method_params.get('sigma', 'mad'),
+                    universal=method_params.get('universal', True),
+                    th_const=method_params.get('th_const', None),
+                    th_const_min_mult=method_params.get('th_const_min_mult', 0.3),
+                    lambda_param=method_params.get('lambda_param', 0.9),
+                    model_selection=method_params.get('model_selection', 'sdll'),
+                    threshold=method_params.get('threshold', None),
+                    threshold_min=method_params.get('threshold_min', None),
+                    max_changepoints=method_params.get('max_changepoints', None),
+                )
+                results[name] = {'changepoints': cps, 'fitted': fitted}
+
         else:
             raise ValueError(
                 f"Vectorized detection not implemented for method: {self.method}"
@@ -2874,6 +3517,7 @@ class ChangepointDetector(object):
                 'autoencoder',
                 'kcpd',
                 'bottom_up',
+                'wbs2',
             }:
                 self._detect_individual_vectorized(df)
             else:
@@ -2995,6 +3639,31 @@ class ChangepointDetector(object):
                     penalty=self.method_params.get('penalty', 'auto'),
                     penalty_scale=self.method_params.get('penalty_scale', 1.0),
                     max_changepoints=self.method_params.get('max_changepoints', 12),
+                )
+
+            elif self.method == 'wbs2':
+                (
+                    self.changepoints_,
+                    self.fitted_trends_,
+                ) = _detect_wbs2_changepoints(
+                    aggregated_data,
+                    min_segment_length=self.min_segment_length,
+                    M=self.method_params.get('M', 'auto'),
+                    interval_sampling=self.method_params.get(
+                        'interval_sampling', 'systematic'
+                    ),
+                    random_state=self.method_params.get('random_state', 42),
+                    sigma=self.method_params.get('sigma', 'mad'),
+                    universal=self.method_params.get('universal', True),
+                    th_const=self.method_params.get('th_const', None),
+                    th_const_min_mult=self.method_params.get(
+                        'th_const_min_mult', 0.3
+                    ),
+                    lambda_param=self.method_params.get('lambda_param', 0.9),
+                    model_selection=self.method_params.get('model_selection', 'sdll'),
+                    threshold=self.method_params.get('threshold', None),
+                    threshold_min=self.method_params.get('threshold_min', None),
+                    max_changepoints=self.method_params.get('max_changepoints', None),
                 )
 
             elif self.method == 'composite_fused_lasso':
@@ -3721,7 +4390,7 @@ class ChangepointDetector(object):
                 - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
                 - Or specify a method name directly: 'basic', 'pelt', 'l1_fused_lasso',
                   'l1_total_variation', 'cusum', 'ewma', 'kcpd', 'bottom_up',
-                  'autoencoder', 'composite_fused_lasso'
+                  'wbs2', 'autoencoder', 'composite_fused_lasso'
 
         Returns:
             dict: Complete parameter dictionary for ChangepointDetector initialization
@@ -3745,6 +4414,7 @@ class ChangepointDetector(object):
                 'ewma',
                 'kcpd',
                 'bottom_up',
+                'wbs2',
                 'l1_fused_lasso',
                 'l1_total_variation',
                 'pelt',
@@ -3753,11 +4423,12 @@ class ChangepointDetector(object):
                 'multiresolution',
             ]
             method_weights = [
-                0.21,
                 0.19,
-                0.19,
-                0.10,
-                0.10,
+                0.17,
+                0.17,
+                0.09,
+                0.09,
+                0.08,
                 0.06,
                 0.04,
                 0.03,
@@ -3775,6 +4446,7 @@ class ChangepointDetector(object):
                 'ewma',
                 'kcpd',
                 'bottom_up',
+                'wbs2',
                 'pelt',
                 'l1_fused_lasso',
                 'l1_total_variation',
@@ -3782,16 +4454,17 @@ class ChangepointDetector(object):
                 'multiresolution',
             ]
             method_weights = [
-                0.31,
-                0.16,
-                0.16,
-                0.10,
-                0.10,
+                0.27,
+                0.15,
+                0.15,
+                0.09,
+                0.09,
+                0.07,
                 0.04,
                 0.03,
                 0.02,
                 0.02,
-                0.06,
+                0.07,
             ]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"
@@ -4063,6 +4736,44 @@ class ChangepointDetector(object):
                 'penalty': 'auto',
                 'penalty_scale': random.choices(
                     penalty_scale_options, weights=penalty_scale_weights, k=1
+                )[0],
+                'max_changepoints': random.choices(
+                    max_cp_options, weights=max_cp_weights, k=1
+                )[0],
+            }
+
+        elif new_method == 'wbs2':
+            if selection_mode == "fast":
+                m_options = [50, 75, 100]
+                m_weights = [0.3, 0.4, 0.3]
+                min_mult_options = [0.25, 0.3, 0.35]
+                min_mult_weights = [0.2, 0.6, 0.2]
+                max_cp_options = [6, 10, 14]
+                max_cp_weights = [0.35, 0.45, 0.2]
+            else:
+                m_options = [50, 75, 100, 150, 200]
+                m_weights = [0.15, 0.25, 0.35, 0.15, 0.1]
+                min_mult_options = [0.2, 0.25, 0.3, 0.35, 0.45]
+                min_mult_weights = [0.1, 0.2, 0.4, 0.2, 0.1]
+                max_cp_options = [6, 10, 14, 20]
+                max_cp_weights = [0.25, 0.35, 0.25, 0.15]
+
+            new_params = {
+                'M': random.choices(m_options, weights=m_weights, k=1)[0],
+                'interval_sampling': random.choices(
+                    ['systematic', 'random'], weights=[0.85, 0.15], k=1
+                )[0],
+                'random_state': 42,
+                'sigma': 'mad',
+                'universal': True,
+                'th_const_min_mult': random.choices(
+                    min_mult_options, weights=min_mult_weights, k=1
+                )[0],
+                'lambda_param': random.choices([0.9, 0.95], weights=[0.8, 0.2], k=1)[
+                    0
+                ],
+                'model_selection': random.choices(
+                    ['sdll', 'threshold'], weights=[0.9, 0.1], k=1
                 )[0],
                 'max_changepoints': random.choices(
                     max_cp_options, weights=max_cp_weights, k=1
