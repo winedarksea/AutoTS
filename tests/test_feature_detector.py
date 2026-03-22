@@ -939,6 +939,72 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         self.assertFalse(mutated['probabilistic_output'])
         self.assertIn('method_params', mutated)
 
+    def test_local_mutate_changepoint_params_ewma_path(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        params = {
+            'method': 'ewma',
+            'method_params': {
+                'lambda_param': 0.2,
+                'control_limit': 3.0,
+                'min_distance': 10,
+            },
+            'aggregate_method': 'mean',
+            'probabilistic_output': True,
+        }
+
+        class DeterministicRng:
+            def random(self):
+                return 0.2
+
+            def choice(self, values):
+                return values[0]
+
+            def sample(self, values, sample_size):
+                return list(values)[:sample_size]
+
+        mutated = optimizer._local_mutate_changepoint_params(
+            params, DeterministicRng()
+        )
+
+        self.assertEqual(mutated['aggregate_method'], 'individual')
+        self.assertFalse(mutated['probabilistic_output'])
+        self.assertIn('method_params', mutated)
+        self.assertIsInstance(mutated['method_params']['min_distance'], int)
+
+    def test_fine_tune_changepoints_runs_with_ewma_starting_params(self):
+        optimizer = FeatureDetectionOptimizer(self.generator, random_seed=2)
+        starting_params = optimizer._default_detector_params()
+        starting_params['changepoint_params'] = {
+            'method': 'ewma',
+            'method_params': {
+                'lambda_param': 0.2,
+                'control_limit': 3.0,
+                'min_distance': 10,
+            },
+            'aggregate_method': 'individual',
+            'probabilistic_output': False,
+        }
+
+        with patch.object(
+            optimizer,
+            '_evaluate_changepoint_params',
+            return_value=1.0,
+        ), patch.object(
+            optimizer,
+            '_local_mutate_changepoint_params',
+            wraps=optimizer._local_mutate_changepoint_params,
+        ) as local_mutate:
+            best = optimizer.fine_tune_changepoints(
+                starting_params,
+                n_per_stage=1,
+                curriculum_sigmas=[7.0],
+                exclude_changepoint_methods=[],
+            )
+
+        self.assertIsInstance(best, dict)
+        self.assertIn('changepoint_params', best)
+        self.assertGreaterEqual(local_mutate.call_count, 1)
+
 class TestScaling(unittest.TestCase):
     """Test that scaling and unscaling work correctly."""
 

@@ -674,7 +674,7 @@ class FeatureDetectionOptimizer:
 
         if 'min_segment_length' in mutated and rng.random() < 0.6:
             mutated['min_segment_length'] = int(
-                self._mutate_numeric_value(
+                type(self)._mutate_numeric_value(
                     mutated['min_segment_length'],
                     rng,
                     integer=True,
@@ -685,7 +685,7 @@ class FeatureDetectionOptimizer:
 
         if method == 'pelt':
             if 'penalty' in method_params and rng.random() < 0.8:
-                method_params['penalty'] = self._mutate_numeric_value(
+                method_params['penalty'] = type(self)._mutate_numeric_value(
                     method_params['penalty'],
                     rng,
                     integer=False,
@@ -694,7 +694,7 @@ class FeatureDetectionOptimizer:
                 )
             if 'min_segment_length' in method_params and rng.random() < 0.5:
                 method_params['min_segment_length'] = int(
-                    self._mutate_numeric_value(
+                    type(self)._mutate_numeric_value(
                         method_params['min_segment_length'],
                         rng,
                         integer=True,
@@ -703,7 +703,7 @@ class FeatureDetectionOptimizer:
                     )
                 )
             if 'pruning_factor' in method_params and rng.random() < 0.4:
-                method_params['pruning_factor'] = self._mutate_numeric_value(
+                method_params['pruning_factor'] = type(self)._mutate_numeric_value(
                     method_params['pruning_factor'],
                     rng,
                     integer=False,
@@ -713,7 +713,7 @@ class FeatureDetectionOptimizer:
         elif method == 'basic':
             if 'changepoint_spacing' in method_params and rng.random() < 0.8:
                 method_params['changepoint_spacing'] = int(
-                    self._mutate_numeric_value(
+                    type(self)._mutate_numeric_value(
                         method_params['changepoint_spacing'],
                         rng,
                         integer=True,
@@ -723,7 +723,7 @@ class FeatureDetectionOptimizer:
                 )
             if 'changepoint_distance_end' in method_params and rng.random() < 0.6:
                 method_params['changepoint_distance_end'] = int(
-                    self._mutate_numeric_value(
+                    type(self)._mutate_numeric_value(
                         method_params['changepoint_distance_end'],
                         rng,
                         integer=True,
@@ -738,7 +738,7 @@ class FeatureDetectionOptimizer:
                 ('min_distance', 1, 120),
             ]:
                 if key in method_params and rng.random() < 0.6:
-                    method_params[key] = self._mutate_numeric_value(
+                    method_params[key] = type(self)._mutate_numeric_value(
                         method_params[key],
                         rng,
                         integer=(key == 'min_distance'),
@@ -751,7 +751,7 @@ class FeatureDetectionOptimizer:
                 ('drift', 0.0, 5.0),
             ]:
                 if key in method_params and rng.random() < 0.6:
-                    method_params[key] = self._mutate_numeric_value(
+                    method_params[key] = type(self)._mutate_numeric_value(
                         method_params[key],
                         rng,
                         integer=False,
@@ -764,7 +764,7 @@ class FeatureDetectionOptimizer:
             ]
             if numeric_keys:
                 for key in rng.sample(numeric_keys, min(len(numeric_keys), 2)):
-                    method_params[key] = self._mutate_numeric_value(
+                    method_params[key] = type(self)._mutate_numeric_value(
                         method_params[key],
                         rng,
                         integer=isinstance(method_params[key], int),
@@ -791,7 +791,7 @@ class FeatureDetectionOptimizer:
             ('shift_remove_window', 0, 5, True),
         ]:
             if key in mutated and rng.random() < 0.55:
-                mutated[key] = self._mutate_numeric_value(
+                mutated[key] = type(self)._mutate_numeric_value(
                     mutated[key],
                     rng,
                     integer=integer,
@@ -1177,4 +1177,3 @@ class FeatureDetectionOptimizer:
         avg_ls = total_ls_loss / n_scored
         cp_weight = 1.0 - level_shift_weight
         return cp_weight * avg_cp + level_shift_weight * avg_ls
-
