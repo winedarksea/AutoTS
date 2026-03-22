@@ -299,7 +299,227 @@ class FeatureDetectionOptimizer:
             true_components=true_components,
             date_index=self.synthetic_generator.date_index,
         )
+        # Keep main optimize aligned with legacy changepoint measurement.
+        # This only affects the trend changepoint component used by optimize;
+        # fine_tune_changepoints uses its own dedicated objective.
+        loss = self._apply_legacy_changepoint_loss_for_optimize(
+            loss=loss,
+            detected_features=detected_features,
+            true_labels=true_labels,
+            true_components=true_components,
+        )
 
+        return loss
+
+    def _legacy_optimize_trend_loss(
+        self,
+        detected_cp,
+        true_cp,
+        detected_components,
+        true_components,
+    ):
+        """
+        Legacy trend changepoint loss used by the older optimizer path.
+
+        This is kept local to optimize so the broader loss implementation and
+        fine_tune_changepoints objective can continue evolving independently.
+        """
+        loss_calc = self.loss_calculator
+        if not true_cp and not detected_cp:
+            return 0.0
+        if not true_cp:
+            return 0.25 * len(detected_cp)
+
+        detected_entries = [loss_calc._parse_trend_event(event) for event in detected_cp]
+        true_entries = [loss_calc._parse_trend_event(event) for event in true_cp]
+        unmatched_detected = set(range(len(detected_entries)))
+
+        sigma_days = max(loss_calc.changepoint_tolerance_days, 1) / 1.5
+        true_magnitudes = [entry[3] for entry in true_entries if np.isfinite(entry[3])]
+        avg_true_magnitude = np.mean(true_magnitudes) if true_magnitudes else 0.0
+        magnitude_floor = max(0.05, avg_true_magnitude * 0.25)
+
+        loss = 0.0
+        score_threshold = 0.15
+
+        for true_date, true_prior, true_post, true_mag in true_entries:
+            best_idx = None
+            best_score = -np.inf
+            best_metrics = None
+
+            for idx in unmatched_detected:
+                det_date, det_prior, det_post, det_mag = detected_entries[idx]
+                dist_days = abs((det_date - true_date).days)
+                distance_score = np.exp(-0.5 * (dist_days / (sigma_days + 1e-9)) ** 2)
+
+                slope_change_true = true_post - true_prior
+                slope_change_detected = det_post - det_prior
+                mag_denom = max(abs(true_mag), magnitude_floor, 1e-3)
+                slope_denom = max(abs(slope_change_true), magnitude_floor, 1e-3)
+
+                magnitude_score = np.exp(
+                    -0.5 * (abs(det_mag - true_mag) / mag_denom) ** 2
+                )
+                slope_score = np.exp(
+                    -0.5
+                    * (abs(slope_change_detected - slope_change_true) / slope_denom)
+                    ** 2
+                )
+                match_score = (
+                    0.5 * distance_score + 0.3 * magnitude_score + 0.2 * slope_score
+                )
+
+                if match_score > best_score:
+                    best_score = match_score
+                    best_idx = idx
+                    best_metrics = (
+                        distance_score,
+                        magnitude_score,
+                        slope_score,
+                        dist_days,
+                    )
+
+            if (
+                best_idx is not None
+                and best_metrics is not None
+                and best_score >= score_threshold
+            ):
+                distance_score, magnitude_score, slope_score, dist_days = best_metrics
+                unmatched_detected.discard(best_idx)
+
+                combined_penalty = (
+                    0.5 * (1.0 - distance_score)
+                    + 0.3 * (1.0 - magnitude_score)
+                    + 0.2 * (1.0 - slope_score)
+                )
+                if dist_days > loss_calc.changepoint_tolerance_days:
+                    overshoot = dist_days - loss_calc.changepoint_tolerance_days
+                    combined_penalty += (
+                        min(overshoot / (loss_calc.changepoint_tolerance_days + 1e-6), 1.5)
+                        * 0.3
+                    )
+                loss += combined_penalty * (1.0 + min(abs(true_mag), 2.0))
+            else:
+                loss += 1.2 + abs(true_mag)
+
+        if true_entries:
+            for idx in unmatched_detected:
+                det_date, _, _, det_mag = detected_entries[idx]
+                nearest_distance = min(
+                    abs((det_date - true_date).days)
+                    for true_date, _, _, _ in true_entries
+                )
+                proximity_score = np.exp(
+                    -0.5 * (nearest_distance / (sigma_days + 1e-9)) ** 2
+                )
+                loss += (
+                    0.15 + 0.25 * (1.0 - proximity_score) + 0.05 * min(det_mag, 2.0)
+                )
+        else:
+            loss += 0.25 * len(unmatched_detected)
+
+        trend_detected_series = (
+            detected_components.get('trend')
+            if isinstance(detected_components, dict)
+            else None
+        )
+        trend_true_series = (
+            true_components.get('trend') if isinstance(true_components, dict) else None
+        )
+
+        if getattr(loss_calc, 'trend_component_penalty', 'component') == 'component':
+            if trend_detected_series is not None and trend_true_series is not None:
+                loss += loss_calc._component_rmse_penalty(
+                    trend_detected_series,
+                    trend_true_series,
+                )
+        elif (
+            getattr(loss_calc, 'trend_component_penalty', 'component') == 'complexity'
+            and trend_detected_series is not None
+            and getattr(loss_calc, 'trend_complexity_weight', 0.0) > 0
+        ):
+            complexity_penalty = loss_calc._trend_complexity_penalty(
+                trend_detected_series
+            )
+            loss += float(loss_calc.trend_complexity_weight) * complexity_penalty
+
+        return float(loss)
+
+    def _apply_legacy_changepoint_loss_for_optimize(
+        self,
+        loss,
+        detected_features,
+        true_labels,
+        true_components,
+    ):
+        """Swap in legacy trend changepoint loss for optimize scoring."""
+        if not isinstance(loss, dict):
+            return loss
+
+        series_names = self.loss_calculator._resolve_series_names(
+            detected_features, true_labels, None
+        )
+        if not series_names:
+            return loss
+
+        detected_components_by_name = self.loss_calculator._resolve_components(
+            detected_features.get('components')
+            if isinstance(detected_features, dict)
+            else None,
+            None,
+        )
+        true_components_by_name = self.loss_calculator._resolve_components(
+            true_components, None
+        )
+
+        trend_losses = []
+        series_breakdown = loss.get('series_breakdown', {})
+        for name in series_names:
+            detected_series = self.loss_calculator._extract_detected_series(
+                detected_features, name
+            )
+            true_series = self.loss_calculator._extract_true_series(true_labels, name)
+            trend_loss = self._legacy_optimize_trend_loss(
+                detected_series.get('trend_changepoints', []),
+                true_series.get('trend_changepoints', []),
+                detected_components_by_name.get(name, {}),
+                true_components_by_name.get(name, {}),
+            )
+            trend_losses.append(trend_loss)
+            if isinstance(series_breakdown, dict):
+                per_series = series_breakdown.get(name)
+                if isinstance(per_series, dict):
+                    per_series['trend_loss'] = trend_loss
+
+        if not trend_losses:
+            return loss
+
+        legacy_trend = float(np.mean(trend_losses))
+        previous_trend = loss.get('trend_loss', legacy_trend)
+        if previous_trend is None or not np.isfinite(previous_trend):
+            previous_trend = legacy_trend
+        previous_trend = float(previous_trend)
+
+        loss['trend_loss'] = legacy_trend
+
+        effective_weights = loss.get('effective_weights', {})
+        trend_weight = float(
+            effective_weights.get(
+                'trend_loss',
+                self.loss_calculator.weights.get('trend_loss', 1.0),
+            )
+        )
+        previous_total = loss.get('total_loss')
+        if previous_total is None or not np.isfinite(previous_total):
+            previous_total = 0.0
+        previous_total = float(previous_total)
+        adjusted_total = previous_total + trend_weight * (legacy_trend - previous_trend)
+        if hasattr(self.loss_calculator, '_guard_loss_value'):
+            adjusted_total = self.loss_calculator._guard_loss_value(
+                adjusted_total,
+                'total_loss',
+            )
+        loss['total_loss'] = adjusted_total
         return loss
 
     @staticmethod
@@ -593,10 +813,20 @@ class FeatureDetectionOptimizer:
     def _count_calibration_penalty(
         detected_count,
         true_count,
-        under_weight=0.6,
-        over_weight=1.0,
+        under_weight=1.05,
+        over_weight=0.9,
+        slight_over_buffer=0.75,
+        over_scale=1.4,
     ):
-        """Penalize count mismatch, with a stronger bias against over-detection."""
+        """
+        Penalize count mismatch while tolerating slight over-detection.
+
+        A small amount of over-prediction is preferable to missing true
+        changepoints, but severe over-segmentation should still be discouraged.
+        ``slight_over_buffer`` is expressed in event-count units rather than a
+        ratio so that ``+1`` extra changepoint is treated gently when the truth
+        count is small.
+        """
         detected_count = int(max(detected_count, 0))
         true_count = int(max(true_count, 0))
         if detected_count == 0 and true_count == 0:
@@ -604,11 +834,51 @@ class FeatureDetectionOptimizer:
         if true_count == 0:
             return float(1.0 - math.exp(-detected_count / 2.0))
 
-        excess_ratio = max(detected_count - true_count, 0) / float(true_count)
+        excess_count = max(detected_count - true_count, 0)
         deficit_ratio = max(true_count - detected_count, 0) / float(true_count)
-        over_penalty = 1.0 - math.exp(-excess_ratio)
-        under_penalty = 1.0 - math.exp(-deficit_ratio)
+        effective_excess = max(excess_count - float(slight_over_buffer), 0.0)
+        excess_ratio = effective_excess / float(true_count)
+        over_penalty = 1.0 - math.exp(-max(float(over_scale), 0.1) * excess_ratio)
+        under_penalty = 1.0 - math.exp(-1.6 * deficit_ratio)
         return float(over_weight * over_penalty + under_weight * under_penalty)
+
+    @staticmethod
+    def _cross_family_partial_credit(
+        alternate_detected_entries,
+        true_entries,
+        sigma,
+        max_credit=0.12,
+    ):
+        """
+        Grant limited credit when the other event family lands on the right date.
+
+        Trend changepoints and level shifts can legitimately be confused near the
+        boundary between additive jumps and slope changes. This softens the miss
+        penalty without making cross-family matches equivalent to correct labels.
+        """
+        if not alternate_detected_entries or not true_entries:
+            return 0.0
+
+        t_days = np.array(
+            [
+                (entry[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for entry in true_entries
+            ],
+            dtype=float,
+        )
+        d_days = np.array(
+            [
+                (entry[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for entry in alternate_detected_entries
+            ],
+            dtype=float,
+        )
+
+        safe_sigma = max(float(sigma), 0.5)
+        dists = np.abs(t_days[:, None] - d_days[None, :])
+        proximity = np.exp(-0.5 * (dists / safe_sigma) ** 2)
+        best_true_match = np.max(proximity, axis=1)
+        return float(max_credit * np.mean(best_true_match))
 
     @staticmethod
     def _slope_change_alignment_penalty(detected_entries, true_entries, sigma):
@@ -819,7 +1089,7 @@ class FeatureDetectionOptimizer:
         tversky_alpha=0.3,
         tversky_beta=0.7,
         tversky_gamma=2.0,
-        level_shift_weight=0.5,
+        level_shift_weight=0.35,
         exclude_changepoint_methods=None,
         over_prediction_penalty=0.1,
         location_weight=0.35,
@@ -877,30 +1147,27 @@ class FeatureDetectionOptimizer:
             Focal exponent applied to (1 - Tversky_index).
         level_shift_weight : float
             Blend weight for level-shift Tversky loss in the final score
-            (trend changepoints get 1 - weight).
+            (trend changepoints get 1 - weight). Defaults below 0.5 so the
+            fine-tune remains changepoint-first while still rewarding cleaner
+            level-shift separation.
         exclude_changepoint_methods : list of str, optional
             Changepoint method names to exclude from the search.  Defaults to
             ``['basic']``, which prevents the evenly-spaced pseudo-detector
             from being selected (it cannot be used for analytic purposes).
             Pass an empty list ``[]`` to allow all methods including 'basic'.
         over_prediction_penalty : float
-            Maximum additional penalty for extreme over-detection, applied via
-            exponential saturation: ``(1 - exp(-excess_ratio)) * penalty`` where
-            ``excess_ratio = (det - true) / true``.  The saturation bounds the
-            penalty to ``[0, over_prediction_penalty]``, ensuring over-detection
-            can *never* score worse than zero-detection (which always gives
-            Tversky=1.0), regardless of how high this value is set.  Near the
-            target count the gradient is steep; far above it the curve flattens,
-            preserving the recall-over-precision bias that prevents CP collapse.
+            Scales how quickly the count penalty ramps once detections exceed the
+            slight-over buffer. Higher values curb severe over-segmentation
+            without removing the mild recall bias near the target count.
         location_weight : float
             Weight on an explicit symmetric distance penalty.  This makes a
             count-correct but badly misplaced solution score worse than a nearby
             over-detected one, which is the balance needed for downstream trend
             fitting.
         count_weight : float
-            Weight on count calibration.  Over-detection is penalized more than
-            under-detection, but both are considered so the search does not drift
-            toward either collapse or severe over-segmentation.
+            Weight on count calibration. Slight over-detection is tolerated more
+            than under-detection, but the penalty ramps quickly once excess
+            changepoints move beyond the preferred buffer.
         slope_match_weight : float
             Weight on slope-change alignment for nearby trend changepoints.  This
             favors candidates that place changepoints where the underlying trend
@@ -977,7 +1244,7 @@ class FeatureDetectionOptimizer:
         tversky_alpha=0.3,
         tversky_beta=0.7,
         tversky_gamma=2.0,
-        level_shift_weight=0.5,
+        level_shift_weight=0.35,
         stage_idx=0,
         exclude_changepoint_methods=None,
         over_prediction_penalty=0.1,
@@ -1082,7 +1349,7 @@ class FeatureDetectionOptimizer:
         tversky_alpha=0.3,
         tversky_beta=0.7,
         tversky_gamma=2.0,
-        level_shift_weight=0.5,
+        level_shift_weight=0.35,
         over_prediction_penalty=0.1,
         location_weight=0.35,
         count_weight=0.25,
@@ -1111,6 +1378,7 @@ class FeatureDetectionOptimizer:
         total_cp_loss = 0.0
         total_ls_loss = 0.0
         n_scored = 0
+        over_scale = 1.0 + max(float(over_prediction_penalty), 0.0) * 4.0
 
         for name in series_names:
             det_series = self.loss_calculator._extract_detected_series(
@@ -1136,12 +1404,13 @@ class FeatureDetectionOptimizer:
                 det_cp_entries, true_cp_entries, sigma
             )
             cp_loss += count_weight * self._count_calibration_penalty(
-                len(det_cp_entries), len(true_cp_entries)
+                len(det_cp_entries),
+                len(true_cp_entries),
+                over_scale=over_scale,
             )
             cp_loss += slope_match_weight * self._slope_change_alignment_penalty(
                 det_cp_entries, true_cp_entries, sigma
             )
-            # NOTE: over-detection is already covered by _count_calibration_penalty
 
             # Level shifts — slightly lighter FN weight (harder to localise exactly)
             det_ls_entries = [
@@ -1162,9 +1431,24 @@ class FeatureDetectionOptimizer:
                 det_ls_entries, true_ls_entries, sigma
             )
             ls_loss += 0.75 * count_weight * self._count_calibration_penalty(
-                len(det_ls_entries), len(true_ls_entries)
+                len(det_ls_entries),
+                len(true_ls_entries),
+                over_scale=max(1.0, over_scale - 0.15),
             )
-            # NOTE: same reasoning as trend CPs — count_calibration_penalty is sufficient
+            cp_loss = max(
+                cp_loss
+                - self._cross_family_partial_credit(
+                    det_ls_entries, true_cp_entries, sigma, max_credit=0.10
+                ),
+                0.0,
+            )
+            ls_loss = max(
+                ls_loss
+                - self._cross_family_partial_credit(
+                    det_cp_entries, true_ls_entries, sigma, max_credit=0.08
+                ),
+                0.0,
+            )
 
             total_cp_loss += cp_loss
             total_ls_loss += ls_loss

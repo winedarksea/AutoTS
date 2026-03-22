@@ -891,14 +891,76 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         self.assertLess(near_penalty, far_penalty)
         self.assertGreaterEqual(far_penalty, 0.95)
 
+    def test_legacy_optimize_trend_loss_prefers_nearby_matches(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        true_cp = [(pd.Timestamp('2020-01-10'), 0.0, 1.0)]
+        near_detected = [(pd.Timestamp('2020-01-11'), 0.0, 1.0)]
+        far_detected = [(pd.Timestamp('2020-06-11'), 0.0, 1.0)]
+        components = {'trend': np.array([0.0, 1.0, 2.0, 3.0])}
+
+        near_loss = optimizer._legacy_optimize_trend_loss(
+            near_detected,
+            true_cp,
+            components,
+            components,
+        )
+        far_loss = optimizer._legacy_optimize_trend_loss(
+            far_detected,
+            true_cp,
+            components,
+            components,
+        )
+
+        self.assertLess(near_loss, far_loss)
+
+    def test_apply_legacy_changepoint_loss_updates_total_loss(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        ts = pd.Timestamp('2020-01-10')
+        detected_features = {
+            'trend_changepoints': {'series_0': [(ts, 0.0, 1.0)]},
+            'components': {'series_0': {'trend': np.array([0.0, 1.0, 2.0])}},
+        }
+        true_labels = {
+            'trend_changepoints': {'series_0': [(ts, 0.0, 1.0)]},
+            'series_types': {'series_0': 'standard'},
+        }
+        true_components = {'series_0': {'trend': np.array([0.0, 1.0, 2.0])}}
+        input_loss = {
+            'trend_loss': 10.0,
+            'total_loss': 20.0,
+            'effective_weights': {'trend_loss': 2.0},
+            'series_breakdown': {'series_0': {'trend_loss': 10.0}},
+        }
+
+        output_loss = optimizer._apply_legacy_changepoint_loss_for_optimize(
+            loss=input_loss,
+            detected_features=detected_features,
+            true_labels=true_labels,
+            true_components=true_components,
+        )
+
+        self.assertAlmostEqual(output_loss['trend_loss'], 0.0, places=7)
+        self.assertAlmostEqual(output_loss['total_loss'], 0.0, places=7)
+        self.assertAlmostEqual(
+            output_loss['series_breakdown']['series_0']['trend_loss'],
+            0.0,
+            places=7,
+        )
+
     def test_count_calibration_penalty_prefers_small_mismatch(self):
         optimizer = FeatureDetectionOptimizer(self.generator)
         small_mismatch = optimizer._count_calibration_penalty(4, 3)
+        slight_under_detection = optimizer._count_calibration_penalty(2, 3)
         severe_over_detection = optimizer._count_calibration_penalty(30, 3)
         severe_under_detection = optimizer._count_calibration_penalty(0, 3)
 
         self.assertLess(small_mismatch, severe_over_detection)
         self.assertLess(small_mismatch, severe_under_detection)
+        self.assertLess(
+            small_mismatch,
+            slight_under_detection,
+            "A slight over-prediction should be cheaper than a slight under-prediction.",
+        )
         self.assertGreater(severe_over_detection, severe_under_detection)
 
     def test_slope_alignment_penalty_prefers_matching_direction(self):
@@ -915,6 +977,23 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         )
 
         self.assertLess(matching_penalty, wrong_direction_penalty)
+
+    def test_cross_family_partial_credit_prefers_nearby_confusion(self):
+        optimizer = FeatureDetectionOptimizer(self.generator)
+        true_entries = [(pd.Timestamp('2020-01-10'), 0.0, 1.0, 1.0)]
+        nearby_other_family = [(pd.Timestamp('2020-01-11'), 1.5)]
+        far_other_family = [(pd.Timestamp('2020-03-15'), 1.5)]
+
+        nearby_credit = optimizer._cross_family_partial_credit(
+            nearby_other_family, true_entries, sigma=7.0
+        )
+        far_credit = optimizer._cross_family_partial_credit(
+            far_other_family, true_entries, sigma=7.0
+        )
+
+        self.assertGreater(nearby_credit, far_credit)
+        self.assertGreater(nearby_credit, 0.0)
+        self.assertLessEqual(nearby_credit, 0.12)
 
     def test_local_mutate_changepoint_params_preserves_individual_mode(self):
         optimizer = FeatureDetectionOptimizer(self.generator)
