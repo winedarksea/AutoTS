@@ -2,8 +2,8 @@
 """
 NornDecomposer — Wraps TimeSeriesFeatureDetector for TVA decomposition.
 
-The Norns are the three figures in Norse mythology who weave the threads of fate
-and time at the base of Yggdrasil. Here they weave time series into components.
+In the spirit of structural weaving, this class decomposes time series into
+constituent threads (trend, seasonality, noise, etc.) for joint forecasting.
 """
 
 import numpy as np

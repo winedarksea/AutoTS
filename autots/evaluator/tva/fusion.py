@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Digital Twin Fusion — Weaving the Tapestry.
+Digital Twin Fusion — Component Recombination.
 
 Reconstructs full forecasts by combining trend network output with
-seasonality, holidays, level shifts, and anomalies. Two variants:
-attention-weighted (learned) and additive (baseline).
+seasonality, holidays, level shifts, and anomalies. Different variants
+(attention-weighted or additive) serve as the final weaving mechanism.
 """
 
 try:

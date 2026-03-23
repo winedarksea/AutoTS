@@ -5,6 +5,8 @@ TVA — Time Variant Architecture.
 Top-level orchestrator for the TVA forecasting graph. Ties together
 decomposition, priors, trend network, fusion, losses, reconciliation,
 and scenario planning into a single fit/predict interface.
+
+Norse/TVA references courtesy of an LLM.
 """
 
 import numpy as np
@@ -45,6 +47,7 @@ class TVA:
         series_metadata: List of SeriesMetadata for prior construction.
         prior_adjacency: (N, N) explicit prior adjacency matrix (optional).
         prior_confidence: Weight of priors (0=ignore, 1=rigid).
+        causal_prior: Optional soft causal edge prior for V2 adjacency regularization.
         d_token: Token/latent dimension.
         n_meso: Number of meso latent nodes.
         n_global: Number of global latent nodes.
@@ -71,6 +74,9 @@ class TVA:
         series_metadata: list = None,
         prior_adjacency: np.ndarray = None,
         prior_confidence: float = 0.3,
+        causal_prior: np.ndarray = None,
+        prior_construction_config: dict = None,
+        causal_prior_construction_config: dict = None,
         d_token: int = 64,
         n_meso: int = 8,
         n_global: int = 4,
@@ -79,8 +85,8 @@ class TVA:
         epochs: int = 20,
         lr: float = 1e-3,
         batch_size: int = 32,
-        window_size: int = 90,
-        forecast_horizon: int = 30,
+        window_size: int = 91,
+        forecast_horizon: int = 28,
         loss_weights: dict = None,
         reconciliation_method: str = None,
         min_anchor_history: int = 180,
@@ -97,6 +103,9 @@ class TVA:
         self.series_metadata = series_metadata
         self.prior_adjacency = prior_adjacency
         self.prior_confidence = prior_confidence
+        self.causal_prior = causal_prior
+        self.prior_construction_config = prior_construction_config
+        self.causal_prior_construction_config = causal_prior_construction_config
         self.d_token = d_token
         self.n_meso = n_meso
         self.n_global = n_global
@@ -142,26 +151,50 @@ class TVA:
 
         # Step 1: Decompose
         if self.verbose:
-            print("TVA: Decomposing time series (Norns weaving fate)...")
+            print("TVA: Decomposing time series (Weaving components)...")
         self._decomposer = NornDecomposer(self.detector_params)
         self._decomposer.fit(df)
         self._components = self._decomposer.get_components()
+        detected_features = self._decomposer.get_features()
 
         n_series = len(df.columns)
 
         # Step 2: Build priors
         if self.verbose:
-            print("TVA: Building priors (Yggdrasil connecting realms)...")
-        self._priors = YggdrasilPriors(
-            series_metadata=self.series_metadata,
-            relationship_matrix=self.prior_adjacency,
-            prior_confidence=self.prior_confidence,
+            print("TVA: Building priors (Connecting domain knowledge)...")
+        should_build_priors = any(
+            [
+                self.series_metadata,
+                self.prior_adjacency is not None,
+                self.causal_prior is not None,
+                self.prior_construction_config,
+                self.causal_prior_construction_config,
+            ]
         )
 
-        if self.series_metadata:
-            self._prior_adj = self._priors.build_prior_adjacency()
-            self._metadata_embeddings = self._priors.build_metadata_embeddings()
-            self._anchor_mask = self._priors.get_anchor_mask(self.min_anchor_history)
+        if should_build_priors:
+            self._priors = YggdrasilPriors(
+                series_metadata=self.series_metadata,
+                relationship_matrix=self.prior_adjacency,
+                prior_confidence=self.prior_confidence,
+                detected_features=detected_features,
+                trend_data=self._components['trend'],
+                observed_history=df.notna().sum().to_dict(),
+                prior_construction_config=self.prior_construction_config,
+                causal_prior_construction_config=self.causal_prior_construction_config,
+                series_names=list(df.columns),
+            )
+        else:
+            self._priors = None
+
+        if self._priors is not None:
+            self._prior_adj = self._priors.build_structural_prior_adjacency()
+            if self.series_metadata:
+                self._metadata_embeddings = self._priors.build_metadata_embeddings()
+                self._anchor_mask = self._priors.get_anchor_mask(self.min_anchor_history)
+            else:
+                self._metadata_embeddings = None
+                self._anchor_mask = np.ones(n_series, dtype=bool)
         else:
             self._prior_adj = None
             self._metadata_embeddings = None
@@ -227,6 +260,10 @@ class TVA:
         )
 
         if self.trend_network_type == 'v2':
+            if self.causal_prior is not None:
+                network_kwargs['causal_prior'] = self.causal_prior
+            elif self._priors is not None:
+                network_kwargs['causal_prior'] = self._priors.build_causal_prior_adjacency()
             self._network = CompositeTrendNetworkV2(**network_kwargs).to(device)
         else:
             self._network = CompositeTrendNetworkV1(**network_kwargs).to(device)
@@ -285,6 +322,8 @@ class TVA:
                 }
                 if self._prior_adj is not None:
                     targets['prior_adjacency'] = self._prior_adj
+                if self.prior_confidence is not None:
+                    targets['prior_confidence'] = self.prior_confidence
 
                 loss, breakdown = self._loss_fn(outputs, targets)
 
@@ -411,7 +450,7 @@ class TVA:
             )
         elif 'level_name' in constraints:
             S = self._priors.build_hierarchy_matrix() if self._priors else None
-            return optimizer.apply_hierarchical_constraint(
+            return optimizer.apply_hierarchical_adjustment(
                 constraints['level_name'], constraints['target_value'],
                 hierarchy_matrix=S,
             )

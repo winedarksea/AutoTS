@@ -140,13 +140,17 @@ if HAS_TORCH:
             self,
             learned_adjacency: torch.Tensor,
             prior_adjacency: torch.Tensor,
+            prior_confidence: float = 1.0,
         ) -> torch.Tensor:
             """
             Args:
                 learned_adjacency: (M, M) learned graph edges.
                 prior_adjacency: (M, M) prior graph edges (may be series-level,
                     larger than latent-space adjacency in V2).
+                prior_confidence: Runtime multiplier for optional prior strength.
             """
+            if prior_confidence <= 0:
+                return torch.tensor(0.0, device=learned_adjacency.device)
             # learned adjacency is (n_global, n_global); prior may be (N, N).
             # When sizes differ, resize prior via interpolation rather than
             # broadcasting incorrectly, or skip if ambiguous.
@@ -164,7 +168,47 @@ if HAS_TORCH:
                     prior_adjacency = prior_resized
                 else:
                     return torch.tensor(0.0, device=learned_adjacency.device)
-            return self.penalty_weight * F.mse_loss(learned_adjacency, prior_adjacency)
+            return (
+                self.penalty_weight
+                * float(prior_confidence)
+                * F.mse_loss(learned_adjacency, prior_adjacency)
+            )
+
+    class ProbabilisticLoss(nn.Module):
+        """Gaussian negative log-likelihood on V2 probabilistic output head.
+
+        Uses mu and sigma emitted by CompositeTrendNetworkV2 to compute NLL
+        over the trend targets, teaching the network to calibrate its uncertainty.
+        Sigma is kept positive by Softplus in the network head.
+
+        Default weight is low (0.2) because calibration is secondary to the
+        structural accuracy goals of the other loss components.
+        """
+
+        def __init__(self, penalty_weight: float = 0.2):
+            super().__init__()
+            self.penalty_weight = penalty_weight
+
+        def forward(
+            self,
+            mu: torch.Tensor,
+            sigma: torch.Tensor,
+            target: torch.Tensor,
+        ) -> torch.Tensor:
+            """
+            Args:
+                mu: (B, N, T) predicted mean — same as trend_forecast.
+                sigma: (B, N, T) predicted std dev, strictly positive.
+                target: (B, N, T) true trend values.
+
+            Returns:
+                Scalar Gaussian NLL (mean over all elements).
+            """
+            # Gaussian NLL = log(sigma) + 0.5 * ((target - mu) / sigma)^2
+            # Constant 0.5 * log(2π) omitted — does not affect gradients.
+            sigma = sigma.clamp(min=1e-6)
+            nll = torch.log(sigma) + 0.5 * ((target - mu) / sigma) ** 2
+            return self.penalty_weight * nll.mean()
 
     class CrossSeriesCoherenceLoss(nn.Module):
         """Ensures related metrics produce consistent macro direction.
@@ -230,7 +274,7 @@ if HAS_TORCH:
         Args:
             weights: Dict overriding default weights for each loss component.
                 Keys: 'forecast', 'orthogonality', 'local_trend', 'smoothness',
-                      'soft_prior', 'coherence'.
+                      'soft_prior', 'causal_prior', 'coherence'.
             base_forecast_loss: 'mse', 'mae', or 'huber'.
         """
 
@@ -242,14 +286,20 @@ if HAS_TORCH:
             self.local_trend = LocalTrendPenalty(w.get('local_trend', 1.0))
             self.smoothness = SmoothnessPenalty(w.get('smoothness', 0.1))
             self.soft_prior = SoftPriorLoss(w.get('soft_prior', 0.5))
+            self.causal_prior = SoftPriorLoss(
+                w.get('causal_prior', w.get('soft_prior', 0.5))
+            )
             self.coherence = CrossSeriesCoherenceLoss(w.get('coherence', 2.0))
+            self.probabilistic = ProbabilisticLoss(w.get('probabilistic', 0.2))
             self._forecast_weight = w.get('forecast', 1.0)
 
         def forward(self, outputs: dict, targets: dict) -> tuple:
             """
             Args:
                 outputs: Dict from CompositeTrendNetwork.forward():
-                    - 'trend_forecast': (B, N, T)
+                    - 'trend_forecast': (B, N, T) — same as 'mu' for V2.
+                    - 'mu': (B, N, T) V2 only; used for probabilistic loss alongside sigma.
+                    - 'sigma': (B, N, T) V2 only; predicted std dev for NLL.
                     - 'prototype_weights': (B, N, K) or (B, n_global, K)
                     - 'composite_trend': (B, K, T) or (B, n_latent, T)
                     - 'adjacency': (M, M) (V2 only, optional)
@@ -259,12 +309,14 @@ if HAS_TORCH:
                     - 'holidays': (B, N, T) optional
                     - 'anomalies': (B, N, T) optional
                     - 'prior_adjacency': (M, M) optional
+                    - 'prior_confidence': scalar multiplier for optional priors
 
             Returns:
                 (total_loss, breakdown_dict)
             """
             device = outputs['trend_forecast'].device
             breakdown = {}
+            prior_confidence = float(targets.get('prior_confidence', 1.0))
 
             # forecast loss
             loss_fc = self._forecast_weight * self.forecast_loss(
@@ -302,9 +354,26 @@ if HAS_TORCH:
                 prior = targets['prior_adjacency']
                 if not isinstance(prior, torch.Tensor):
                     prior = torch.tensor(prior, dtype=torch.float32, device=device)
-                loss_sp = self.soft_prior(outputs['adjacency'], prior)
+                loss_sp = self.soft_prior(
+                    outputs['adjacency'], prior, prior_confidence=prior_confidence
+                )
                 breakdown['soft_prior'] = loss_sp.item()
                 total = total + loss_sp
+
+            # causal prior (V2 only)
+            if 'adjacency' in outputs and outputs.get('causal_prior') is not None:
+                causal_prior = outputs['causal_prior']
+                if not isinstance(causal_prior, torch.Tensor):
+                    causal_prior = torch.tensor(
+                        causal_prior, dtype=torch.float32, device=device
+                    )
+                loss_cp = self.causal_prior(
+                    outputs['adjacency'],
+                    causal_prior,
+                    prior_confidence=prior_confidence,
+                )
+                breakdown['causal_prior'] = loss_cp.item()
+                total = total + loss_cp
 
             # coherence
             if 'prototype_weights' in outputs:
@@ -313,6 +382,14 @@ if HAS_TORCH:
                 )
                 breakdown['coherence'] = loss_ch.item()
                 total = total + loss_ch
+
+            # probabilistic loss (V2 only — requires both mu and sigma)
+            if 'mu' in outputs and 'sigma' in outputs:
+                loss_prob = self.probabilistic(
+                    outputs['mu'], outputs['sigma'], targets['true_trend']
+                )
+                breakdown['probabilistic'] = loss_prob.item()
+                total = total + loss_prob
 
             breakdown['total'] = total.item()
             return total, breakdown

@@ -12,6 +12,7 @@ with those shared states.
 """
 
 import math
+import warnings
 import numpy as np
 
 try:
@@ -24,6 +25,44 @@ except Exception:
     HAS_TORCH = False
 
 if HAS_TORCH:
+
+    def _resize_graph_prior_to_square_numpy(
+        graph_prior: np.ndarray,
+        target_size: int,
+        prior_name: str,
+    ) -> np.ndarray:
+        """Resize an optional square prior matrix into latent graph size."""
+        if graph_prior is None:
+            return None
+        graph_prior = np.asarray(graph_prior, dtype=np.float32)
+        if graph_prior.ndim != 2 or graph_prior.shape[0] != graph_prior.shape[1]:
+            warnings.warn(
+                f"{prior_name} shape {graph_prior.shape} is not square. "
+                f"Using a zero prior of shape ({target_size}, {target_size}) instead.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return np.zeros((target_size, target_size), dtype=np.float32)
+        if graph_prior.shape != (target_size, target_size):
+            warnings.warn(
+                f"{prior_name} shape {graph_prior.shape} does not match "
+                f"target_size={target_size}. The prior will be bilinearly interpolated "
+                f"to ({target_size}, {target_size}).",
+                UserWarning,
+                stacklevel=2,
+            )
+            try:
+                graph_prior = F.interpolate(
+                    torch.tensor(graph_prior, dtype=torch.float32)
+                    .unsqueeze(0)
+                    .unsqueeze(0),
+                    size=(target_size, target_size),
+                    mode='bilinear',
+                    align_corners=False,
+                ).squeeze(0).squeeze(0).numpy()
+            except Exception:
+                graph_prior = np.zeros((target_size, target_size), dtype=np.float32)
+        return graph_prior.astype(np.float32)
 
     class PositionalEncoding(nn.Module):
         """Sinusoidal positional encoding for temporal sequences."""
@@ -382,6 +421,11 @@ if HAS_TORCH:
             In V1 this is a fixed buffer. In V2 it becomes a parameter.
             """
             if prior_adjacency is not None:
+                prior_adjacency = _resize_graph_prior_to_square_numpy(
+                    prior_adjacency,
+                    target_size=self.n_global,
+                    prior_name='V1 prior_adjacency',
+                )
                 # threshold to binary and convert to attention mask format
                 # 0 = attend, -inf = block
                 binary = (prior_adjacency > 0.1).astype(np.float32)
@@ -428,9 +472,8 @@ if HAS_TORCH:
             meso, glob, skip = self.encoder(anchor_tokens)
 
             # sparse attention over global latents
-            # adapt mask size to match n_global
             mask = self._attn_mask
-            if mask.shape[0] != glob.shape[1]:
+            if mask.shape != (glob.shape[1], glob.shape[1]):
                 mask = torch.zeros(
                     glob.shape[1], glob.shape[1],
                     device=glob.device, dtype=glob.dtype,
@@ -508,12 +551,11 @@ if HAS_TORCH:
             # replace fixed mask with learnable adjacency
             n_latent = self.n_global
             if prior_adj is not None:
-                # initialize from prior, resize to latent space
-                if prior_adj.shape[0] != n_latent:
-                    # project prior to latent-space size via averaging
-                    init = np.zeros((n_latent, n_latent), dtype=np.float32)
-                else:
-                    init = prior_adj.astype(np.float32)
+                init = _resize_graph_prior_to_square_numpy(
+                    prior_adj,
+                    target_size=n_latent,
+                    prior_name='V2 prior_adjacency',
+                )
             else:
                 init = np.full((n_latent, n_latent), 0.5, dtype=np.float32)
 
@@ -521,13 +563,15 @@ if HAS_TORCH:
                 torch.tensor(init, dtype=torch.float32)
             )
 
-            # causal prior for regularization
+            # causal prior regularizes learned edges as a soft target.
+            causal_prior_tensor = None
             if causal_prior is not None:
-                self.register_buffer(
-                    '_causal_prior', torch.tensor(causal_prior, dtype=torch.float32)
+                causal_prior_tensor = self._resize_graph_prior_to_latent_space(
+                    causal_prior,
+                    n_latent=n_latent,
+                    prior_name='causal_prior',
                 )
-            else:
-                self.register_buffer('_causal_prior', None)
+            self.register_buffer('_causal_prior', causal_prior_tensor)
 
             # adaptive prototypes: regime gating
             self._regime_gate = nn.Sequential(
@@ -543,6 +587,18 @@ if HAS_TORCH:
         def learned_adjacency(self) -> torch.Tensor:
             """Learned adjacency as a sigmoid-normalized matrix."""
             return torch.sigmoid(self._learned_adjacency_logits)
+
+        @staticmethod
+        def _resize_graph_prior_to_latent_space(
+            graph_prior: np.ndarray, n_latent: int, prior_name: str
+        ) -> torch.Tensor:
+            """Map optional graph priors into the latent adjacency size."""
+            graph_prior = _resize_graph_prior_to_square_numpy(
+                graph_prior,
+                target_size=n_latent,
+                prior_name=f'V2 {prior_name}',
+            )
+            return torch.tensor(graph_prior, dtype=torch.float32)
 
         def _register_attention_mask(self, prior_adjacency=None):
             """Override: in V2 the mask is derived from learned adjacency at forward time."""
@@ -628,6 +684,7 @@ if HAS_TORCH:
                 'composite_trend': composite_trend,
                 'composite_trend_per_series': composite_per_series,
                 'adjacency': self.learned_adjacency,
+                'causal_prior': self._causal_prior,
             }
 
         def promote_responder(self, series_idx: int):

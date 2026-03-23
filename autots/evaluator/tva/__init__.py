@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-TVA — Time Variance Authority.
+TVA — Time-varying Vectorized Architecture.
 
 A modular forecasting graph that produces structurally consistent
 forecasts across related time series via shared composite trend prototypes.

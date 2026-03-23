@@ -89,32 +89,108 @@ class BifrostOptimizer:
 
         return self._optimize([constraint_loss])
 
-    def apply_hierarchical_constraint(
+    def apply_hierarchical_adjustment(
         self,
         level_name: str,
         target_value: float,
         hierarchy_matrix: np.ndarray = None,
     ) -> pd.DataFrame:
-        """Adjust a top-level aggregate and propagate down.
+        """Set an aggregate level to target_value and propagate down proportionally.
 
-        First applies the constraint at the aggregate level, then uses
-        reconciliation to propagate to bottom-level series.
+        This is an **adjustment** (set to exactly target_value at every timestep),
+        not a constraint (threshold/clamp that only fires when exceeded).
+
+        The delta between target_value and the current aggregate sum is distributed
+        to constituent bottom-level series proportional to their current share of
+        that aggregate. When the current aggregate is near zero, the delta is split
+        equally across constituent series.
 
         Args:
-            level_name: Name of the aggregate level to constrain.
-            target_value: Target value for the aggregate.
-            hierarchy_matrix: S matrix for reconciliation.
+            level_name: Name of the aggregate node to adjust, matched against the
+                last component of hierarchy path tuples (e.g. 'global', 'NA', 'EU').
+                If multiple nodes share the same last component, the first
+                (shallowest) match is used.
+            target_value: Desired flat aggregate value applied across all forecast
+                timesteps. The constituent series are scaled so their sum equals
+                this value at every step.
+            hierarchy_matrix: (L, M) summing matrix S. If None, built automatically
+                from priors configured at fit time. Required when no series metadata
+                was provided.
 
         Returns:
-            Adjusted and reconciled forecast DataFrame.
+            Adjusted forecast DataFrame (same shape as predict()), with constituent
+            series modified so their aggregate sum equals target_value.
         """
-        # generate adjusted base forecast
-        adjusted = self.tva.predict()
+        base_forecast = self.tva.predict()
+        columns = list(base_forecast.columns)
+        N = len(columns)
 
-        if hierarchy_matrix is not None and self.tva._reconciler is not None:
-            return self.tva._reconciler.reconcile(adjusted, hierarchy_matrix)
+        # resolveS matrix
+        if hierarchy_matrix is not None:
+            S = np.asarray(hierarchy_matrix, dtype=np.float64)
+        elif self.tva._priors is not None:
+            S = self.tva._priors.build_hierarchy_matrix().astype(np.float64)
+        else:
+            return base_forecast  # no hierarchy available
 
-        return adjusted
+        n_bottom = S.shape[1]
+        n_all = S.shape[0]
+        n_agg = n_all - n_bottom
+
+        if n_agg == 0 or n_bottom != N:
+            # flat hierarchy, or S doesn't align with forecast columns
+            return base_forecast
+
+        # identify which aggregate row corresponds to level_name by rebuilding
+        # the sorted aggregate node list used in build_hierarchy_matrix
+        agg_row_idx = None
+        if self.tva._priors is not None and self.tva._priors.series_metadata:
+            paths = [
+                m.hierarchy_path
+                for m in self.tva._priors.series_metadata
+                if m.hierarchy_path
+            ]
+            _aggregate_nodes = set()
+            for path in paths:
+                for depth in range(1, len(path)):
+                    _aggregate_nodes.add(tuple(path[:depth]))
+            _aggregate_nodes = sorted(_aggregate_nodes, key=lambda x: (len(x), x))
+
+            for i, node in enumerate(_aggregate_nodes):
+                if node[-1] == level_name or '/'.join(node) == level_name:
+                    agg_row_idx = i
+                    break
+
+        if agg_row_idx is None:
+            return base_forecast  # level_name not found in hierarchy
+
+        # S row for this aggregate is a binary mask over bottom-level series
+        constituent_mask = S[agg_row_idx, :].astype(bool)  # (M,)
+        constituent_indices = np.where(constituent_mask)[0]
+
+        if len(constituent_indices) == 0:
+            return base_forecast
+
+        # bottom forecasts: (T, N)
+        adjusted_values = base_forecast.values.copy().astype(np.float64)
+
+        # current aggregate per timestep
+        current_agg = adjusted_values[:, constituent_indices].sum(axis=1)  # (T,)
+
+        for t in range(len(current_agg)):
+            delta = target_value - current_agg[t]
+            total = current_agg[t]
+            if abs(total) > 1e-10:
+                # proportional to each series' share of the current aggregate
+                shares = adjusted_values[t, constituent_indices] / total
+            else:
+                # equal split when aggregate is near zero
+                shares = np.ones(len(constituent_indices)) / len(constituent_indices)
+            adjusted_values[t, constituent_indices] += delta * shares
+
+        return pd.DataFrame(
+            adjusted_values, index=base_forecast.index, columns=columns
+        )
 
     def _optimize(self, constraints: list) -> pd.DataFrame:
         """Core optimization loop.
