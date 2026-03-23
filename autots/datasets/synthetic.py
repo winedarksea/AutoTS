@@ -1018,16 +1018,28 @@ class SyntheticDailyGenerator:
             # For longer datasets, use Poisson
             n_shifts = int(self.rng.poisson(expected_shifts))
 
-        # Generate non-shared shift locations
+        # Get trend changepoint day indices to avoid same-day collisions
+        trend_cp_indices = set()
+        for cp_info in self.trend_changepoints.get(series_name, []):
+            try:
+                day_idx = (cp_info[0] - self.date_index[0]).days
+                if 0 <= day_idx < self.n_days:
+                    trend_cp_indices.add(day_idx)
+            except Exception:
+                pass
+
+        # Generate non-shared shift locations, excluding trend changepoint days
         shift_days = []
         if n_shifts > 0:
-            shift_days = sorted(
-                self.rng.choice(
-                    range(int(self.n_days * 0.2), int(self.n_days * 0.9)),
-                    size=n_shifts,
-                    replace=False,
+            candidate_pool = [
+                d for d in range(int(self.n_days * 0.2), int(self.n_days * 0.9))
+                if d not in trend_cp_indices
+            ]
+            n_to_pick = min(n_shifts, len(candidate_pool))
+            if n_to_pick > 0:
+                shift_days = sorted(
+                    self.rng.choice(candidate_pool, size=n_to_pick, replace=False).tolist()
                 )
-            )
 
         shift_info = []
 
@@ -2056,15 +2068,36 @@ class SyntheticDailyGenerator:
                     return True
             return False
 
+        # Build set of forbidden start days (trend changepoints + level shift starts)
+        # so anomaly onset never lands on the same day as a changepoint or shift.
+        forbidden_start_days = set()
+        for cp_info in self.trend_changepoints.get(series_name, []):
+            try:
+                day_idx = (cp_info[0] - self.date_index[0]).days
+                if 0 <= day_idx < self.n_days:
+                    forbidden_start_days.add(day_idx)
+            except Exception:
+                pass
+        for ls_info in self.level_shifts.get(series_name, []):
+            try:
+                day_idx = (ls_info[0] - self.date_index[0]).days
+                if 0 <= day_idx < self.n_days:
+                    forbidden_start_days.add(day_idx)
+            except Exception:
+                pass
+
         # Generate non-shared anomalies
         anomaly_days = []
         attempts = 0
         while len(anomaly_days) < n_anomalies and attempts < n_anomalies * 10:
             candidate = self.rng.randint(0, self.n_days - 10)
-            # Ensure at least 7 days spacing, not on holiday, and no overlap with holiday range
-            if all(
-                abs(candidate - existing) > 7 for existing in anomaly_days
-            ) and not has_holiday_overlap(candidate):
+            # Ensure at least 7 days spacing, not on holiday, no holiday range overlap,
+            # and first day does not coincide with a trend changepoint or level shift.
+            if (
+                all(abs(candidate - existing) > 7 for existing in anomaly_days)
+                and not has_holiday_overlap(candidate)
+                and candidate not in forbidden_start_days
+            ):
                 anomaly_days.append(candidate)
             attempts += 1
 
@@ -2076,6 +2109,7 @@ class SyntheticDailyGenerator:
                 for day in self.shared_events['anomalies']
                 if all(abs(day - existing) > 7 for existing in anomaly_days)
                 and not has_holiday_overlap(day)
+                and day not in forbidden_start_days
             ],
             participation_prob=0.5,
         )
