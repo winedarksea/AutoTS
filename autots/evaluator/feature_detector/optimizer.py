@@ -1353,16 +1353,16 @@ class FeatureDetectionOptimizer:
         over_prediction_penalty=0.1,
         location_weight=0.35,
         count_weight=0.25,
-        slope_match_weight=0.15,
+        slope_match_weight=0.0,
     ):
         """
-        Score a parameter config using only the Focal Tversky changepoint loss.
+        Score a parameter config using date proximity and count only.
 
         Runs a full detector fit (required because changepoints are extracted
         from the decomposed residual series), then extracts trend_changepoints
-        and level_shifts per series and computes the Focal Tversky penalty with
-        the given Gaussian sigma — bypassing all seasonality, anomaly, and
-        holiday components so the gradient is purely changepoint-driven.
+        and level_shifts per series and computes the Focal Tversky + location +
+        count penalties, bypassing slope and trend-shape terms so the gradient
+        is driven purely by whether the right dates are found.
         """
         detector = _get_detector_class()(**params)
         detector.fit(self.synthetic_generator.get_data())
