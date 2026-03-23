@@ -365,8 +365,10 @@ class FeatureDetectionOptimizer:
                     * (abs(slope_change_detected - slope_change_true) / slope_denom)
                     ** 2
                 )
+                # Distance dominates matching; slope is too noisy to heavily weight
+                # for placement decisions (mirrors fine_tune_changepoints finding).
                 match_score = (
-                    0.5 * distance_score + 0.3 * magnitude_score + 0.2 * slope_score
+                    0.65 * distance_score + 0.30 * magnitude_score + 0.05 * slope_score
                 )
 
                 if match_score > best_score:
@@ -387,10 +389,12 @@ class FeatureDetectionOptimizer:
                 distance_score, magnitude_score, slope_score, dist_days = best_metrics
                 unmatched_detected.discard(best_idx)
 
+                # Keep slope in the penalty but strongly down-weighted so that
+                # mis-placed-but-slope-matching CPs don't outrank well-placed ones.
                 combined_penalty = (
-                    0.5 * (1.0 - distance_score)
-                    + 0.3 * (1.0 - magnitude_score)
-                    + 0.2 * (1.0 - slope_score)
+                    0.65 * (1.0 - distance_score)
+                    + 0.30 * (1.0 - magnitude_score)
+                    + 0.05 * (1.0 - slope_score)
                 )
                 if dist_days > loss_calc.changepoint_tolerance_days:
                     overshoot = dist_days - loss_calc.changepoint_tolerance_days
