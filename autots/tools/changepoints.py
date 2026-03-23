@@ -4450,21 +4450,23 @@ class ChangepointDetector(object):
                 'pelt',
                 'l1_fused_lasso',
                 'l1_total_variation',
+                'composite_fused_lasso',
                 'autoencoder',
                 'multiresolution',
             ]
             method_weights = [
-                0.27,
-                0.15,
-                0.15,
-                0.09,
-                0.09,
+                0.07,
+                0.10,
+                0.10,
+                0.03,
+                0.03,
                 0.07,
                 0.04,
-                0.03,
+                0.06,
                 0.02,
                 0.02,
-                0.07,
+                0.01,
+                0.05,
             ]
             new_method = random.choices(method_options, weights=method_weights, k=1)[0]
             selection_mode = "random"

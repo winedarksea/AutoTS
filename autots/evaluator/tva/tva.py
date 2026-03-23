@@ -6,7 +6,7 @@ Top-level orchestrator for the TVA forecasting graph. Ties together
 decomposition, priors, trend network, fusion, losses, reconciliation,
 and scenario planning into a single fit/predict interface.
 
-Norse/TVA references courtesy of an LLM.
+Norse/TVA references courtesy of an LLM. A bit heavier handed than the easter eggs I prefer.
 """
 
 import numpy as np
@@ -64,6 +64,9 @@ class TVA:
         device: 'cpu' or 'cuda'.
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
+        prototype_assignment_method: Prototype assignment method for bottleneck
+            ('cosine', 'l2', 'linear'). Defaults to 'cosine'.
+        prototype_assignment_temperature: Temperature for prototype assignment logits.
     """
 
     def __init__(
@@ -93,6 +96,8 @@ class TVA:
         device: str = 'cpu',
         random_seed: int = 42,
         verbose: int = 1,
+        prototype_assignment_method: str = 'cosine',
+        prototype_assignment_temperature: float = 1.0,
     ):
         if not HAS_TORCH:
             raise ImportError("TVA requires PyTorch. Install with: pip install torch")
@@ -110,6 +115,8 @@ class TVA:
         self.n_meso = n_meso
         self.n_global = n_global
         self.n_prototypes = n_prototypes
+        self.prototype_assignment_method = prototype_assignment_method
+        self.prototype_assignment_temperature = prototype_assignment_temperature
         self.n_heads = n_heads
         self.epochs = epochs
         self.lr = lr
@@ -254,6 +261,8 @@ class TVA:
             n_meso=self.n_meso,
             n_global=self.n_global,
             n_prototypes=self.n_prototypes,
+            prototype_assignment_method=self.prototype_assignment_method,
+            prototype_assignment_temperature=self.prototype_assignment_temperature,
             n_heads=self.n_heads,
             d_meta=d_meta,
             prior_adjacency=self._prior_adj,
@@ -613,4 +622,5 @@ class TVA:
             'n_series': len(self._df_original.columns) if self._df_original is not None else 0,
             'n_anchors': int(self._anchor_mask.sum()) if self._anchor_mask is not None else 0,
             'n_prototypes': self.n_prototypes,
+            'prototype_assignment_method': self.prototype_assignment_method,
         }

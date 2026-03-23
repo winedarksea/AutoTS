@@ -217,23 +217,68 @@ if HAS_TORCH:
     class PrototypeBottleneck(nn.Module):
         """Projects global latent through a bank of prototype trend signatures.
 
-        K prototypes, each a D-dimensional vector. The global latent is projected
-        into prototype space, producing usage weights and prototype-conditioned output.
+        K prototypes, each a D-dimensional vector. The global latent is assigned
+        to prototypes with a configurable scoring function (distance or projection),
+        producing usage weights and prototype-conditioned output.
 
         Internal name: _sacred_timeline_prototypes
 
         Args:
             d_latent: Latent dimension.
             n_prototypes: Number of prototypes (K).
+            assignment_method: Strategy for prototype logits.
+                - 'cosine' (default): cosine similarity in metric space.
+                - 'l2': negative squared Euclidean distance.
+                - 'linear': legacy learned projection.
+            assignment_temperature: Temperature divisor for assignment logits.
         """
 
-        def __init__(self, d_latent: int, n_prototypes: int):
+        def __init__(
+            self,
+            d_latent: int,
+            n_prototypes: int,
+            assignment_method: str = 'cosine',
+            assignment_temperature: float = 1.0,
+        ):
             super().__init__()
             self.n_prototypes = n_prototypes
+            self.assignment_method = str(assignment_method).lower()
+            self.assignment_temperature = max(float(assignment_temperature), 1e-6)
             self._sacred_timeline_prototypes = nn.Parameter(
                 torch.randn(n_prototypes, d_latent) * 0.02
             )
             self.project = nn.Linear(d_latent, n_prototypes)
+            supported = {'cosine', 'l2', 'linear'}
+            if self.assignment_method not in supported:
+                raise ValueError(
+                    f"Unsupported prototype assignment_method='{assignment_method}'. "
+                    f"Supported values: {sorted(supported)}"
+                )
+
+        def compute_logits(self, latent: torch.Tensor) -> torch.Tensor:
+            """Compute prototype assignment logits for latent tokens.
+
+            Args:
+                latent: (B, M, D) latent vectors to assign to K prototypes.
+            Returns:
+                logits: (B, M, K) unnormalized assignment scores.
+            """
+            if self.assignment_method == 'linear':
+                return self.project(latent)
+
+            prototypes = self._sacred_timeline_prototypes  # (K, D)
+            if self.assignment_method == 'cosine':
+                latent_unit = F.normalize(latent, p=2, dim=-1)
+                proto_unit = F.normalize(prototypes, p=2, dim=-1)
+                logits = torch.matmul(latent_unit, proto_unit.transpose(0, 1))
+                return logits / self.assignment_temperature
+
+            # Negative squared distance yields higher logits for closer prototypes.
+            # latent: (B, M, 1, D), prototypes: (1, 1, K, D)
+            diffs = latent.unsqueeze(-2) - prototypes.unsqueeze(0).unsqueeze(0)
+            sq_l2 = (diffs ** 2).sum(dim=-1)
+            logits = -sq_l2
+            return logits / self.assignment_temperature
 
         def forward(self, global_latent: torch.Tensor) -> tuple:
             """
@@ -244,8 +289,8 @@ if HAS_TORCH:
                 conditioned: (B, n_global, D) prototype-conditioned latent.
                 usage_weights: (B, n_global, K) soft assignment to prototypes.
             """
-            # compute similarity to prototypes
-            logits = self.project(global_latent)  # (B, n_global, K)
+            # compute assignment scores to prototypes
+            logits = self.compute_logits(global_latent)  # (B, n_global, K)
             usage_weights = F.softmax(logits, dim=-1)  # (B, n_global, K)
 
             # weighted combination of prototypes
@@ -383,6 +428,8 @@ if HAS_TORCH:
             n_heads: Attention heads.
             d_meta: Metadata embedding dimension (0 = none).
             prior_adjacency: Optional (M, M) prior adjacency for sparse attention mask.
+            prototype_assignment_method: Prototype assignment function.
+            prototype_assignment_temperature: Temperature for assignment logits.
         """
 
         def __init__(
@@ -397,6 +444,8 @@ if HAS_TORCH:
             n_heads: int = 4,
             d_meta: int = 0,
             prior_adjacency: np.ndarray = None,
+            prototype_assignment_method: str = 'cosine',
+            prototype_assignment_temperature: float = 1.0,
         ):
             super().__init__()
             self.n_series = n_series
@@ -408,7 +457,12 @@ if HAS_TORCH:
             self.tokenizer = TrendTokenizer(window_size, d_token, d_meta)
             self.encoder = HierarchicalLatentEncoder(d_token, n_meso, n_global, n_heads)
             self.sparse_attn = MaskedSparseAttention(d_token, n_heads)
-            self.prototype = PrototypeBottleneck(d_token, n_prototypes)
+            self.prototype = PrototypeBottleneck(
+                d_token,
+                n_prototypes,
+                assignment_method=prototype_assignment_method,
+                assignment_temperature=prototype_assignment_temperature,
+            )
             self.decoder = HierarchicalDecoder(d_token, n_meso, forecast_horizon, n_heads)
             self.responder = ResponderHead(d_token, forecast_horizon, max(n_heads // 2, 1))
 
@@ -506,7 +560,7 @@ if HAS_TORCH:
                 trend_forecast = anchor_forecasts
 
             # compute per-series prototype weights by projecting tokens through prototype
-            proto_logits = self.prototype.project(tokens)  # (B, N, K)
+            proto_logits = self.prototype.compute_logits(tokens)  # (B, N, K)
             prototype_weights = F.softmax(proto_logits, dim=-1)
 
             # composite-only reconstruction per series (for local trend penalty)
@@ -663,7 +717,7 @@ if HAS_TORCH:
                 responder_mask = None
 
             # prototype weights per series
-            proto_logits = self.prototype.project(tokens)
+            proto_logits = self.prototype.compute_logits(tokens)
             prototype_weights = F.softmax(proto_logits, dim=-1)
 
             # composite per series
