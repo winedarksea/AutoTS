@@ -11,11 +11,17 @@ Norse/TVA references courtesy of an LLM. A bit heavier handed than the easter eg
 
 import numpy as np
 import pandas as pd
+import warnings
 from typing import Optional
 
 from autots.evaluator.tva.decomposition import NornDecomposer
 from autots.evaluator.tva.priors import YggdrasilPriors, SeriesMetadata
 from autots.evaluator.tva.reconciliation import ReconciliationBridge
+from autots.evaluator.tva.structure import (
+    StructureLearningConfig,
+    build_graph_snapshot,
+    plot_graph_snapshot,
+)
 
 try:
     import torch
@@ -67,6 +73,8 @@ class TVA:
         prototype_assignment_method: Prototype assignment method for bottleneck
             ('cosine', 'l2', 'linear'). Defaults to 'cosine'.
         prototype_assignment_temperature: Temperature for prototype assignment logits.
+        structure_learning_config: Optional dict enabling experimental DAG and
+            dynamic hierarchy learning in the V2 trend network.
     """
 
     def __init__(
@@ -98,6 +106,7 @@ class TVA:
         verbose: int = 1,
         prototype_assignment_method: str = 'cosine',
         prototype_assignment_temperature: float = 1.0,
+        structure_learning_config: dict = None,
     ):
         if not HAS_TORCH:
             raise ImportError("TVA requires PyTorch. Install with: pip install torch")
@@ -117,6 +126,9 @@ class TVA:
         self.n_prototypes = n_prototypes
         self.prototype_assignment_method = prototype_assignment_method
         self.prototype_assignment_temperature = prototype_assignment_temperature
+        self._structure_config = StructureLearningConfig.from_dict(
+            structure_learning_config
+        )
         self.n_heads = n_heads
         self.epochs = epochs
         self.lr = lr
@@ -207,6 +219,15 @@ class TVA:
             self._metadata_embeddings = None
             self._anchor_mask = np.ones(n_series, dtype=bool)
 
+        if self._anchor_mask is not None and not np.any(self._anchor_mask):
+            warnings.warn(
+                "TVA found no anchor series under the current history threshold. "
+                "Falling back to treating all series as anchors for this fit.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self._anchor_mask = np.ones(n_series, dtype=bool)
+
         d_meta = self._metadata_embeddings.shape[1] if self._metadata_embeddings is not None else 0
 
         # Step 3: Prepare training data
@@ -269,6 +290,8 @@ class TVA:
         )
 
         if self.trend_network_type == 'v2':
+            network_kwargs['n_anchor_series'] = int(self._anchor_mask.sum())
+            network_kwargs['structure_learning_config'] = self._structure_config.to_dict()
             if self.causal_prior is not None:
                 network_kwargs['causal_prior'] = self.causal_prior
             elif self._priors is not None:
@@ -288,7 +311,10 @@ class TVA:
         # Step 6: Instantiate loss
         from autots.evaluator.tva.losses import TemporalLossComposite
 
-        self._loss_fn = TemporalLossComposite(weights=self.loss_weights)
+        self._loss_fn = TemporalLossComposite(
+            weights=self.loss_weights,
+            structure_config=self._structure_config,
+        )
 
         # Step 7: Training loop
         if self.verbose:
@@ -311,6 +337,11 @@ class TVA:
         for epoch in epoch_iter:
             epoch_loss = 0.0
             n_batches = 0
+            structure_loss_scale = self._structure_config.structure_scale(
+                epoch_index=epoch,
+                total_epochs=self.epochs,
+            )
+            structure_regularization_enabled = True
 
             for batch in loader:
                 x_b, y_b, sea_b, hol_b, ano_b = batch
@@ -333,8 +364,30 @@ class TVA:
                     targets['prior_adjacency'] = self._prior_adj
                 if self.prior_confidence is not None:
                     targets['prior_confidence'] = self.prior_confidence
+                targets['structure_loss_scale'] = (
+                    structure_loss_scale if structure_regularization_enabled else 0.0
+                )
+                targets['structure_prior_weight'] = self._structure_config.prior_tether_weight
+                targets['structure_config'] = self._structure_config
 
                 loss, breakdown = self._loss_fn(outputs, targets)
+                if (
+                    self._structure_config.enabled
+                    and structure_regularization_enabled
+                    and not torch.isfinite(loss)
+                ):
+                    structure_regularization_enabled = False
+                    warnings.warn(
+                        "TVA structure regularization produced a non-finite loss. "
+                        "Continuing training with structure penalties disabled.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    targets['structure_loss_scale'] = 0.0
+                    loss, breakdown = self._loss_fn(outputs, targets)
+
+                if not torch.isfinite(loss):
+                    raise RuntimeError("TVA encountered a non-finite training loss.")
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -525,26 +578,7 @@ class TVA:
         """
         if self._network is None:
             raise RuntimeError("TVA must be fit first.")
-
-        device = torch.device(self.device)
-        trend_data = self._components['trend'].values
-        last_window = trend_data[-self.window_size:]
-
-        x = torch.tensor(
-            last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
-        )
-
-        meta = None
-        if self._metadata_embeddings is not None and self._metadata_embeddings.shape[1] > 0:
-            meta = torch.tensor(
-                self._metadata_embeddings[np.newaxis, :, :],
-                dtype=torch.float32, device=device,
-            )
-
-        anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
-
-        with torch.no_grad():
-            outputs = self._network(x, meta, anchor_mask_t)
+        outputs = self._get_last_window_outputs()
 
         result = {
             'prototypes': self._network.prototype._sacred_timeline_prototypes.detach().cpu().numpy(),
@@ -571,7 +605,91 @@ class TVA:
             n = self.n_global
             return np.ones((n, n), dtype=np.float32)
 
+    def get_graph_snapshot(
+        self,
+        threshold: float = None,
+        include_priors: bool = True,
+    ) -> dict:
+        """Return a serializable snapshot of the learned graph and hierarchy."""
+        if self._network is None:
+            raise RuntimeError("TVA must be fit first.")
+
+        outputs = self._get_last_window_outputs()
+        assignment_matrices = [
+            matrix.detach().cpu().numpy()
+            for matrix in outputs.get('assignment_matrices', [])
+        ]
+        anchor_names = list(np.asarray(self._df_original.columns)[self._anchor_mask])
+        snapshot = build_graph_snapshot(
+            adjacency_dense=self.get_graph(),
+            assignment_matrices=assignment_matrices,
+            threshold=(
+                self._structure_config.threshold_for_export
+                if threshold is None
+                else float(threshold)
+            ),
+            prior_adjacency=self._prior_adj if include_priors else None,
+            anchor_names=anchor_names,
+        )
+        return snapshot.to_dict()
+
+    def plot_graph(
+        self,
+        view: str = 'dag',
+        threshold: float = None,
+        max_edges: int = 50,
+        show_priors: bool = False,
+        ax=None,
+    ):
+        """Plot the learned graph, hierarchy, or adjacency heatmap."""
+        snapshot_dict = self.get_graph_snapshot(
+            threshold=threshold,
+            include_priors=show_priors,
+        )
+        snapshot = build_graph_snapshot(
+            adjacency_dense=snapshot_dict['adjacency_dense'],
+            assignment_matrices=snapshot_dict['assignment_matrices'],
+            threshold=threshold
+            if threshold is not None
+            else self._structure_config.threshold_for_export,
+            prior_adjacency=snapshot_dict.get('prior_adjacency'),
+            anchor_names=[
+                node['node_id']
+                for node in snapshot_dict['node_table']
+                if node.get('level') == 0
+            ],
+        )
+        return plot_graph_snapshot(
+            snapshot=snapshot,
+            view=view,
+            max_edges=max_edges,
+            show_priors=show_priors,
+            ax=ax,
+        )
+
     # ---- internal helpers ----
+
+    def _get_last_window_outputs(self) -> dict:
+        if self._network is None:
+            raise RuntimeError("TVA must be fit first.")
+
+        device = torch.device(self.device)
+        trend_data = self._components['trend'].values
+        last_window = trend_data[-self.window_size:]
+        x = torch.tensor(
+            last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
+        )
+
+        meta = None
+        if self._metadata_embeddings is not None and self._metadata_embeddings.shape[1] > 0:
+            meta = torch.tensor(
+                self._metadata_embeddings[np.newaxis, :, :],
+                dtype=torch.float32, device=device,
+            )
+
+        anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
+        with torch.no_grad():
+            return self._network(x, meta, anchor_mask_t)
 
     def _create_windows(self, data: np.ndarray) -> tuple:
         """Create sliding windows and targets from (T, N) trend data.

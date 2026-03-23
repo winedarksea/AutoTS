@@ -776,6 +776,92 @@ class TestLossFunctions(unittest.TestCase):
 
 
 @SKIP_TORCH
+class TestStructureLearningUtilities(unittest.TestCase):
+    def test_dag_cycle_penalty_tracks_cycles(self):
+        from autots.evaluator.tva.structure import dag_cycle_penalty
+
+        acyclic = torch.tensor([[0.0, 0.8], [0.0, 0.0]], dtype=torch.float32)
+        cyclic = torch.tensor([[0.0, 0.8], [0.8, 0.0]], dtype=torch.float32)
+        self.assertLess(dag_cycle_penalty(acyclic).item(), 1e-3)
+        self.assertGreater(dag_cycle_penalty(cyclic).item(), 1e-2)
+
+    def test_structure_config_derives_deterministic_sizes(self):
+        from autots.evaluator.tva.structure import StructureLearningConfig
+
+        config = StructureLearningConfig(
+            enabled=True,
+            learn_hierarchy=True,
+            max_levels=3,
+            pool_ratio=0.5,
+            min_nodes_per_level=2,
+        )
+        self.assertEqual(config.derive_latent_sizes(8), [4, 2])
+        self.assertEqual(config.derive_latent_sizes(5), [3, 2])
+
+    def test_graph_snapshot_marks_acyclic_graph(self):
+        from autots.evaluator.tva.structure import build_graph_snapshot
+
+        adjacency = np.array(
+            [
+                [0.0, 0.9, 0.0],
+                [0.0, 0.0, 0.8],
+                [0.0, 0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        assignments = [np.array([[0.8, 0.2], [0.1, 0.9]], dtype=np.float32)]
+        snapshot = build_graph_snapshot(
+            adjacency_dense=adjacency,
+            assignment_matrices=assignments,
+            threshold=0.2,
+            anchor_names=['a', 'b'],
+        )
+        self.assertTrue(snapshot.is_acyclic)
+        self.assertEqual(snapshot.topological_order, [0, 1, 2])
+        self.assertEqual(snapshot.assignment_matrices[0].shape, (2, 2))
+
+    def test_temporal_loss_composite_structure_terms(self):
+        from autots.evaluator.tva.losses import TemporalLossComposite
+        from autots.evaluator.tva.structure import StructureLearningConfig
+
+        structure_config = StructureLearningConfig(
+            enabled=True,
+            learn_hierarchy=True,
+            learn_dag=True,
+            dag_penalty=0.5,
+            sparsity_weight=0.2,
+            assignment_entropy_weight=0.1,
+            assignment_full_rank_weight=0.1,
+            prior_tether_weight=0.5,
+        )
+        loss_fn = TemporalLossComposite(structure_config=structure_config)
+        outputs = {
+            'trend_forecast': torch.randn(2, 4, 10),
+            'prototype_weights': torch.softmax(torch.randn(2, 4, 3), dim=-1),
+            'composite_trend': torch.randn(2, 3, 10),
+            'adjacency': torch.tensor([[0.0, 0.9], [0.7, 0.0]], dtype=torch.float32),
+            'assignment_matrices': [
+                torch.tensor([[0.8, 0.2], [0.1, 0.9]], dtype=torch.float32)
+            ],
+            'structure_mode': True,
+            'structure_prior': torch.tensor([[0.0, 0.7], [0.2, 0.0]], dtype=torch.float32),
+            'assignment_drift': torch.tensor(0.0, dtype=torch.float32),
+        }
+        targets = {
+            'true_trend': torch.randn(2, 4, 10),
+            'structure_loss_scale': 1.0,
+            'structure_prior_weight': 0.5,
+            'structure_config': structure_config,
+        }
+        _, breakdown = loss_fn(outputs, targets)
+        self.assertIn('dag', breakdown)
+        self.assertIn('structure_sparsity', breakdown)
+        self.assertIn('assignment_entropy', breakdown)
+        self.assertIn('assignment_full_rank', breakdown)
+        self.assertIn('structure_prior', breakdown)
+
+
+@SKIP_TORCH
 class TestTrendTokenizer(unittest.TestCase):
     def test_output_shape_no_meta(self):
         from autots.evaluator.tva.trend_network import TrendTokenizer
@@ -1009,6 +1095,37 @@ class TestCompositeTrendNetworkV2(unittest.TestCase):
         net = self._make_net()
         result = net._glorious_purpose()
         self.assertIsInstance(result, np.ndarray)
+
+    def test_v2_structure_mode_returns_assignments(self):
+        from autots.evaluator.tva.trend_network import CompositeTrendNetworkV2
+
+        net = CompositeTrendNetworkV2(
+            n_series=5,
+            window_size=30,
+            forecast_horizon=10,
+            d_token=32,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            n_anchor_series=3,
+            structure_learning_config={
+                'enabled': True,
+                'learn_hierarchy': True,
+                'learn_dag': True,
+                'max_levels': 2,
+                'pool_ratio': 0.5,
+                'min_nodes_per_level': 2,
+            },
+            prior_adjacency=np.ones((5, 5), dtype=np.float32),
+        )
+        mask = torch.tensor([True, True, True, False, False])
+        out = net(torch.randn(2, 5, 30), anchor_mask=mask)
+        self.assertTrue(out['structure_mode'])
+        self.assertTrue(len(out['assignment_matrices']) > 0)
+        self.assertEqual(out['trend_forecast'].shape, (2, 5, 10))
+        self.assertEqual(out['adjacency'].shape, (2, 2))
+        self.assertEqual(out['structure_prior'].shape, (2, 2))
 
 
 # ---------------------------------------------------------------------------
@@ -1332,6 +1449,84 @@ class TestTVAIntegration(unittest.TestCase):
         tva.fit(self.df)
         graph = tva.get_graph()
         self.assertEqual(graph.shape, (2, 2))  # n_global x n_global
+
+    def test_v2_structure_learning_snapshot_and_plot(self):
+        import matplotlib
+
+        matplotlib.use('Agg')
+        from autots.evaluator.tva.tva import TVA
+
+        tva = TVA(
+            trend_network='v2',
+            fusion='additive',
+            epochs=1,
+            window_size=60,
+            forecast_horizon=14,
+            d_token=16,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            batch_size=8,
+            verbose=0,
+            structure_learning_config={
+                'enabled': True,
+                'learn_hierarchy': True,
+                'learn_dag': True,
+                'max_levels': 2,
+                'pool_ratio': 0.5,
+                'min_nodes_per_level': 2,
+                'dag_penalty': 0.05,
+            },
+        )
+        tva.fit(self.df)
+        snapshot = tva.get_graph_snapshot()
+        self.assertIn('adjacency_dense', snapshot)
+        self.assertIn('assignment_matrices', snapshot)
+        self.assertTrue(isinstance(snapshot['assignment_matrices'], list))
+        ax = tva.plot_graph(view='dag')
+        self.assertIsNotNone(ax)
+
+    def test_structure_learning_respects_short_history_responders(self):
+        from autots.evaluator.tva.tva import TVA
+        from autots.evaluator.tva.priors import SeriesMetadata
+
+        df = self.df.copy()
+        df.columns = ['s0', 's1', 's2']
+        metadata = [
+            SeriesMetadata("s0", history_periods=400),
+            SeriesMetadata("s1", history_periods=400),
+            SeriesMetadata("s2", history_periods=30),
+        ]
+        tva = TVA(
+            trend_network='v2',
+            fusion='additive',
+            series_metadata=metadata,
+            epochs=1,
+            window_size=60,
+            forecast_horizon=14,
+            d_token=16,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            batch_size=8,
+            verbose=0,
+            min_anchor_history=100,
+            structure_learning_config={
+                'enabled': True,
+                'learn_hierarchy': True,
+                'learn_dag': True,
+                'max_levels': 2,
+                'pool_ratio': 0.5,
+                'min_nodes_per_level': 2,
+            },
+        )
+        tva.fit(df)
+        snapshot = tva.get_graph_snapshot()
+        self.assertEqual(len(snapshot['node_table']), 3)
+        forecast = tva.predict()
+        self.assertEqual(forecast.shape, (14, 3))
 
     def test_he_who_remains(self):
         tva = self._make_tva()

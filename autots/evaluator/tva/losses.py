@@ -16,6 +16,13 @@ except Exception:
 
 
 if HAS_TORCH:
+    from autots.evaluator.tva.structure import (
+        StructureLearningConfig,
+        adjacency_sparsity_penalty,
+        assignment_entropy_penalty,
+        assignment_full_rank_penalty,
+        dag_cycle_penalty,
+    )
 
     class ForecastLoss(nn.Module):
         """Standard forecast loss on trend outputs.
@@ -278,9 +285,15 @@ if HAS_TORCH:
             base_forecast_loss: 'mse', 'mae', or 'huber'.
         """
 
-        def __init__(self, weights: dict = None, base_forecast_loss: str = 'mse'):
+        def __init__(
+            self,
+            weights: dict = None,
+            base_forecast_loss: str = 'mse',
+            structure_config: dict = None,
+        ):
             super().__init__()
             w = weights or {}
+            self.structure_config = StructureLearningConfig.from_dict(structure_config)
             self.forecast_loss = ForecastLoss(base_loss=base_forecast_loss)
             self.orthogonality = OrthogonalityPenalty(w.get('orthogonality', 1.0))
             self.local_trend = LocalTrendPenalty(w.get('local_trend', 1.0))
@@ -289,6 +302,7 @@ if HAS_TORCH:
             self.causal_prior = SoftPriorLoss(
                 w.get('causal_prior', w.get('soft_prior', 0.5))
             )
+            self.structure_prior = SoftPriorLoss(1.0)
             self.coherence = CrossSeriesCoherenceLoss(w.get('coherence', 2.0))
             self.probabilistic = ProbabilisticLoss(w.get('probabilistic', 0.2))
             self._forecast_weight = w.get('forecast', 1.0)
@@ -317,6 +331,14 @@ if HAS_TORCH:
             device = outputs['trend_forecast'].device
             breakdown = {}
             prior_confidence = float(targets.get('prior_confidence', 1.0))
+            structure_loss_scale = float(targets.get('structure_loss_scale', 0.0))
+            structure_config = targets.get('structure_config', self.structure_config)
+            structure_prior_weight = float(
+                targets.get(
+                    'structure_prior_weight',
+                    getattr(structure_config, 'prior_tether_weight', 0.0),
+                )
+            )
 
             # forecast loss
             loss_fc = self._forecast_weight * self.forecast_loss(
@@ -350,7 +372,11 @@ if HAS_TORCH:
                 total = total + loss_sm
 
             # soft prior (V2 only)
-            if 'adjacency' in outputs and 'prior_adjacency' in targets:
+            if (
+                'adjacency' in outputs
+                and 'prior_adjacency' in targets
+                and not outputs.get('structure_mode', False)
+            ):
                 prior = targets['prior_adjacency']
                 if not isinstance(prior, torch.Tensor):
                     prior = torch.tensor(prior, dtype=torch.float32, device=device)
@@ -374,6 +400,76 @@ if HAS_TORCH:
                 )
                 breakdown['causal_prior'] = loss_cp.item()
                 total = total + loss_cp
+
+            if (
+                structure_loss_scale > 0
+                and 'adjacency' in outputs
+                and outputs.get('structure_mode', False)
+            ):
+                if getattr(structure_config, 'learn_dag', True):
+                    loss_dag = (
+                        structure_loss_scale
+                        * float(getattr(structure_config, 'dag_penalty', 0.0))
+                        * dag_cycle_penalty(outputs['adjacency'])
+                    )
+                    breakdown['dag'] = loss_dag.item()
+                    total = total + loss_dag
+
+                    loss_sparse = (
+                        structure_loss_scale
+                        * float(getattr(structure_config, 'sparsity_weight', 0.0))
+                        * adjacency_sparsity_penalty(outputs['adjacency'])
+                    )
+                    breakdown['structure_sparsity'] = loss_sparse.item()
+                    total = total + loss_sparse
+
+                assignments = outputs.get('assignment_matrices') or []
+                if assignments:
+                    loss_entropy = (
+                        structure_loss_scale
+                        * float(
+                            getattr(structure_config, 'assignment_entropy_weight', 0.0)
+                        )
+                        * assignment_entropy_penalty(assignments)
+                    )
+                    breakdown['assignment_entropy'] = loss_entropy.item()
+                    total = total + loss_entropy
+
+                    loss_rank = (
+                        structure_loss_scale
+                        * float(
+                            getattr(structure_config, 'assignment_full_rank_weight', 0.0)
+                        )
+                        * assignment_full_rank_penalty(assignments)
+                    )
+                    breakdown['assignment_full_rank'] = loss_rank.item()
+                    total = total + loss_rank
+
+                if outputs.get('structure_prior') is not None and structure_prior_weight > 0:
+                    loss_structure_prior = (
+                        structure_loss_scale
+                        * self.structure_prior(
+                            outputs['adjacency'],
+                            outputs['structure_prior'],
+                            prior_confidence=structure_prior_weight,
+                        )
+                    )
+                    breakdown['structure_prior'] = loss_structure_prior.item()
+                    total = total + loss_structure_prior
+
+                drift_value = outputs.get('assignment_drift')
+                if drift_value is not None:
+                    if not isinstance(drift_value, torch.Tensor):
+                        drift_value = torch.tensor(
+                            drift_value, dtype=torch.float32, device=device
+                        )
+                    loss_drift = (
+                        structure_loss_scale
+                        * float(getattr(structure_config, 'temporal_drift_weight', 0.0))
+                        * drift_value.mean()
+                    )
+                    breakdown['assignment_drift'] = loss_drift.item()
+                    total = total + loss_drift
 
             # coherence
             if 'prototype_weights' in outputs:

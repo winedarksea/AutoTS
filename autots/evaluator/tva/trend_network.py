@@ -25,6 +25,11 @@ except Exception:
     HAS_TORCH = False
 
 if HAS_TORCH:
+    from autots.evaluator.tva.structure import (
+        DirectedGraphLearner,
+        DynamicHierarchyLearner,
+        StructureLearningConfig,
+    )
 
     def _resize_graph_prior_to_square_numpy(
         graph_prior: np.ndarray,
@@ -600,21 +605,42 @@ if HAS_TORCH:
 
         def __init__(self, *args, causal_prior: np.ndarray = None, **kwargs):
             prior_adj = kwargs.get('prior_adjacency', None)
+            n_anchor_series = int(kwargs.pop('n_anchor_series', kwargs.get('n_series', 1)))
+            structure_learning_config = kwargs.pop('structure_learning_config', None)
             super().__init__(*args, **kwargs)
+            self.structure_config = StructureLearningConfig.from_dict(
+                structure_learning_config
+            )
+            self.n_anchor_series = max(int(n_anchor_series), 1)
 
-            # replace fixed mask with learnable adjacency
-            n_latent = self.n_global
+            top_latent_size = self.n_global
+            self.dynamic_hierarchy = None
+            self.structure_level_sizes = []
+            if self.structure_config.enabled and self.structure_config.learn_hierarchy:
+                self.dynamic_hierarchy = DynamicHierarchyLearner(
+                    n_anchor=self.n_anchor_series,
+                    d_token=self.tokenizer.d_token,
+                    config=self.structure_config,
+                )
+                self.structure_level_sizes = list(self.dynamic_hierarchy.level_sizes)
+                top_latent_size = int(self.structure_level_sizes[-1])
+
+            resized_prior_adj = None
             if prior_adj is not None:
-                init = _resize_graph_prior_to_square_numpy(
+                resized_prior_adj = _resize_graph_prior_to_square_numpy(
                     prior_adj,
-                    target_size=n_latent,
+                    target_size=top_latent_size,
                     prior_name='V2 prior_adjacency',
                 )
-            else:
-                init = np.full((n_latent, n_latent), 0.5, dtype=np.float32)
-
-            self._learned_adjacency_logits = nn.Parameter(
-                torch.tensor(init, dtype=torch.float32)
+            self.graph_learner = DirectedGraphLearner(
+                n_nodes=top_latent_size,
+                prior_adjacency=resized_prior_adj,
+            )
+            self.register_buffer(
+                '_structure_prior',
+                None
+                if resized_prior_adj is None
+                else torch.tensor(resized_prior_adj, dtype=torch.float32),
             )
 
             # causal prior regularizes learned edges as a soft target.
@@ -622,7 +648,7 @@ if HAS_TORCH:
             if causal_prior is not None:
                 causal_prior_tensor = self._resize_graph_prior_to_latent_space(
                     causal_prior,
-                    n_latent=n_latent,
+                    n_latent=top_latent_size,
                     prior_name='causal_prior',
                 )
             self.register_buffer('_causal_prior', causal_prior_tensor)
@@ -640,7 +666,7 @@ if HAS_TORCH:
         @property
         def learned_adjacency(self) -> torch.Tensor:
             """Learned adjacency as a sigmoid-normalized matrix."""
-            return torch.sigmoid(self._learned_adjacency_logits)
+            return self.graph_learner.adjacency
 
         @staticmethod
         def _resize_graph_prior_to_latent_space(
@@ -663,7 +689,7 @@ if HAS_TORCH:
             )
 
         def forward(self, trend_input, metadata=None, anchor_mask=None) -> dict:
-            """Same interface as V1, plus 'mu', 'sigma', 'adjacency' in output."""
+            """Same interface as V1, plus structure outputs when enabled."""
             B, N, T = trend_input.shape
 
             # tokenize
@@ -674,28 +700,35 @@ if HAS_TORCH:
             else:
                 anchor_tokens = tokens
 
-            # encode
-            meso, glob, skip = self.encoder(anchor_tokens)
-
-            # learned sparse attention with differentiable mask
-            adj = self.learned_adjacency
-            # convert to additive mask: low adjacency -> large negative bias
-            attn_mask = -10.0 * (1.0 - adj)
-            glob = self.sparse_attn(glob, attn_mask)
-
-            # adaptive prototype bottleneck with regime gating
-            glob_conditioned, usage_weights_global = self.prototype(glob)
-
-            # regime-adaptive gating on global latent
-            regime_weights = self._regime_gate(glob_conditioned.mean(dim=1, keepdim=True))
-            # modulate prototype usage by regime
-            usage_weights_global = usage_weights_global * regime_weights
-
-            # decode
-            anchor_forecasts, composite_trend = self.decoder(
-                glob_conditioned, meso,
-                skip if anchor_mask is None else tokens[:, anchor_mask],
-            )
+            structure_assignments = []
+            assignment_drift = torch.tensor(0.0, device=trend_input.device)
+            if self.dynamic_hierarchy is not None:
+                hierarchy_outputs = self.dynamic_hierarchy(anchor_tokens)
+                structure_assignments = hierarchy_outputs['assignment_matrices']
+                latent_levels = hierarchy_outputs['levels']
+                glob = hierarchy_outputs['top_latent']
+                glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
+                glob_conditioned, usage_weights_global = self.prototype(glob)
+                regime_weights = self._regime_gate(glob_conditioned.mean(dim=1, keepdim=True))
+                usage_weights_global = usage_weights_global * regime_weights
+                decoded_levels = self.dynamic_hierarchy.decode(
+                    glob_conditioned,
+                    latent_levels,
+                    assignment_matrices=structure_assignments,
+                )
+                anchor_forecasts = self.decoder.forecast_head(decoded_levels[0])
+                composite_trend = self.decoder.forecast_head(glob_conditioned)
+            else:
+                meso, glob, skip = self.encoder(anchor_tokens)
+                glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
+                glob_conditioned, usage_weights_global = self.prototype(glob)
+                regime_weights = self._regime_gate(glob_conditioned.mean(dim=1, keepdim=True))
+                usage_weights_global = usage_weights_global * regime_weights
+                anchor_forecasts, composite_trend = self.decoder(
+                    glob_conditioned,
+                    meso,
+                    skip if anchor_mask is None else tokens[:, anchor_mask],
+                )
 
             # responder
             if anchor_mask is not None and not anchor_mask.all():
@@ -738,6 +771,10 @@ if HAS_TORCH:
                 'composite_trend': composite_trend,
                 'composite_trend_per_series': composite_per_series,
                 'adjacency': self.learned_adjacency,
+                'structure_mode': bool(self.structure_config.enabled),
+                'assignment_matrices': structure_assignments,
+                'assignment_drift': assignment_drift,
+                'structure_prior': self._structure_prior,
                 'causal_prior': self._causal_prior,
             }
 
