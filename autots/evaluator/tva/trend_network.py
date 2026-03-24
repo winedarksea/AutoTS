@@ -598,6 +598,8 @@ if HAS_TORCH:
         - Probabilistic output head (mu, sigma).
         - Incremental responder-to-anchor promotion.
 
+        "I know what kind of God I Need to be."
+
         Args:
             causal_prior: (M, M) causal discovery prior for soft edge regularization.
             All other args passed to V1.
@@ -705,6 +707,14 @@ if HAS_TORCH:
             if self.dynamic_hierarchy is not None:
                 hierarchy_outputs = self.dynamic_hierarchy(anchor_tokens)
                 structure_assignments = hierarchy_outputs['assignment_matrices']
+                structure_dynamic_assignments = hierarchy_outputs.get(
+                    'dynamic_assignment_matrices',
+                    [],
+                )
+                assignment_drift = hierarchy_outputs.get(
+                    'assignment_drift',
+                    assignment_drift,
+                )
                 latent_levels = hierarchy_outputs['levels']
                 glob = hierarchy_outputs['top_latent']
                 glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
@@ -714,7 +724,11 @@ if HAS_TORCH:
                 decoded_levels = self.dynamic_hierarchy.decode(
                     glob_conditioned,
                     latent_levels,
-                    assignment_matrices=structure_assignments,
+                    assignment_matrices=(
+                        structure_dynamic_assignments
+                        if structure_dynamic_assignments
+                        else structure_assignments
+                    ),
                 )
                 anchor_forecasts = self.decoder.forecast_head(decoded_levels[0])
                 composite_trend = self.decoder.forecast_head(glob_conditioned)
@@ -742,9 +756,6 @@ if HAS_TORCH:
                 )
                 trend_forecast[:, anchor_mask] = anchor_forecasts
                 trend_forecast[:, responder_mask] = responder_forecasts
-
-                # sigma for responders
-                resp_sigma = self._sigma_activation(self._sigma_head(responder_tokens))
             else:
                 trend_forecast = anchor_forecasts
                 responder_mask = None

@@ -2,9 +2,6 @@
 """
 BifrostOptimizer — What-If Scenario Planning.
 
-Bifrost is the rainbow bridge connecting the realms in Norse mythology.
-Here it connects user adjustments to the full forecast graph.
-
 Freezes all network weights and optimizes a latent perturbation to satisfy
 user-specified constraints while minimizing disruption to the forecast.
 """

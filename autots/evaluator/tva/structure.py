@@ -430,6 +430,9 @@ if HAS_TORCH:
             self.assignment_logits = nn.ParameterList()
             self.encoder_norms = nn.ModuleList()
             self.decoder_norms = nn.ModuleList()
+            # Keep the backbone static while allowing a small token-conditioned
+            # assignment adaptation used for diagnostics and optional drift loss.
+            self.dynamic_assignment_mix = 0.2
 
             for lower_size, upper_size in zip(layer_sizes[:-1], layer_sizes[1:]):
                 logits = torch.zeros(lower_size, upper_size, dtype=torch.float32)
@@ -444,23 +447,58 @@ if HAS_TORCH:
                 matrices.append(F.softmax(clamped, dim=-1))
             return matrices
 
+        def _batch_conditioned_assignments(
+            self,
+            lower_tokens: torch.Tensor,
+            base_assignment: torch.Tensor,
+        ) -> torch.Tensor:
+            """Return per-batch assignments blended with the static backbone."""
+            batch_size = lower_tokens.shape[0]
+            base_expanded = base_assignment.unsqueeze(0).expand(batch_size, -1, -1)
+            if batch_size <= 1:
+                return base_expanded
+
+            base_column_norm = base_assignment.sum(dim=0, keepdim=True).clamp(min=1e-6)
+            seed_upper = torch.einsum(
+                'bld,lu->bud',
+                lower_tokens,
+                base_assignment / base_column_norm,
+            )
+            lower_unit = F.normalize(lower_tokens, p=2, dim=-1)
+            upper_unit = F.normalize(seed_upper, p=2, dim=-1)
+            logits = torch.einsum('bld,bud->blu', lower_unit, upper_unit)
+            adaptive = F.softmax(logits, dim=-1)
+
+            mixed = ((1.0 - self.dynamic_assignment_mix) * base_expanded) + (
+                self.dynamic_assignment_mix * adaptive
+            )
+            return mixed / mixed.sum(dim=-1, keepdim=True).clamp(min=1e-6)
+
         def forward(self, anchor_tokens: torch.Tensor) -> dict:
             levels = [anchor_tokens]
             assignments = self.assignment_matrices()
+            dynamic_assignments = []
+            drift_total = torch.tensor(0.0, device=anchor_tokens.device)
             current = anchor_tokens
             for assignment, norm in zip(assignments, self.encoder_norms):
-                column_norm = assignment.sum(dim=0, keepdim=True).clamp(min=1e-6)
+                batch_assignment = self._batch_conditioned_assignments(current, assignment)
+                dynamic_assignments.append(batch_assignment)
+                drift_total = drift_total + ((batch_assignment - assignment.unsqueeze(0)) ** 2).mean()
+
+                column_norm = batch_assignment.sum(dim=1, keepdim=True).clamp(min=1e-6)
                 pooled = torch.einsum(
-                    'bld,lu->bud',
+                    'bld,blu->bud',
                     current,
-                    assignment / column_norm,
+                    batch_assignment / column_norm,
                 )
                 current = norm(pooled)
                 levels.append(current)
             return {
                 'levels': levels,
                 'assignment_matrices': assignments,
+                'dynamic_assignment_matrices': dynamic_assignments,
                 'top_latent': levels[-1],
+                'assignment_drift': drift_total / max(len(assignments), 1),
             }
 
         def decode(self, top_latent: torch.Tensor, skip_levels: list, assignment_matrices=None) -> list:
@@ -470,7 +508,10 @@ if HAS_TORCH:
             decoded_levels[-1] = current
             for idx in reversed(range(len(assignments))):
                 assignment = assignments[idx]
-                upsampled = torch.einsum('lu,bud->bld', assignment, current)
+                if assignment.ndim == 3:
+                    upsampled = torch.einsum('blu,bud->bld', assignment, current)
+                else:
+                    upsampled = torch.einsum('lu,bud->bld', assignment, current)
                 current = self.decoder_norms[idx](upsampled + skip_levels[idx])
                 decoded_levels[idx] = current
             return decoded_levels

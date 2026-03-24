@@ -7,6 +7,15 @@ decomposition, priors, trend network, fusion, losses, reconciliation,
 and scenario planning into a single fit/predict interface.
 
 Norse/TVA references courtesy of an LLM. A bit heavier handed than the easter eggs I prefer.
+
+Some reference papers:
+https://www.mdpi.com/2227-7390/13/20/3288
+https://openreview.net/pdf?id=GYSG2vF6z5
+https://arxiv.org/html/2409.10996v2
+https://arxiv.org/html/2507.15119v2#S4
+https://www.researchgate.net/profile/Jawad-Chowdhury-6/publication/379087074_CD-_NOTEAR[…]N0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
+https://openreview.net/pdf?id=80g3Yqlo1a
+https://openreview.net/pdf?id=WjDjem8mWE
 """
 
 import numpy as np
@@ -44,7 +53,7 @@ class TVA:
 
     The Common Operating Picture for time series. Produces structurally
     consistent forecasts across related series by routing all trends through
-    shared composite prototypes.
+    shared composite prototypes. For all Time. Always.
 
     Args:
         detector_params: Dict passed to TimeSeriesFeatureDetector.
@@ -54,12 +63,23 @@ class TVA:
         prior_adjacency: (N, N) explicit prior adjacency matrix (optional).
         prior_confidence: Weight of priors (0=ignore, 1=rigid).
         causal_prior: Optional soft causal edge prior for V2 adjacency regularization.
+        prior_construction_config: Dict configuring automatic structural prior
+            construction from event clusters and metadata. Defaults to blending
+            detected changepoints/anomalies with metadata similarity
+            ({'sources': ['event', 'metadata'], ...}). Pass {} to disable.
+        causal_prior_construction_config: Dict configuring automatic Granger-causal
+            prior construction from decomposed trend components (requires
+            statsmodels). Defaults to {'max_lag': 3, 'min_history': 90,
+            'top_k': 8, 'alpha': 0.05, 'difference': True}. Pass {} to disable.
         d_token: Token/latent dimension.
-        n_meso: Number of meso latent nodes.
-        n_global: Number of global latent nodes.
-        n_prototypes: Number of prototype trend signatures.
+        n_meso: Number of meso latent nodes, or 'auto' (default) to set as
+            2 * n_global derived from N series.
+        n_global: Number of global latent nodes, or 'auto' (default) to set as
+            max(2, ceil(sqrt(N_anchors))). Controls the DAG size.
+        n_prototypes: Number of prototype trend signatures, or 'auto' (default)
+            to set as max(2, round(log2(N_anchors + 1))). Capped at 8.
         n_heads: Attention heads.
-        epochs: Training epochs.
+        epochs: Training epochs. Default 50 (needed for DAG warmup convergence).
         lr: Learning rate.
         batch_size: Training batch size.
         window_size: Input trend window length.
@@ -73,8 +93,10 @@ class TVA:
         prototype_assignment_method: Prototype assignment method for bottleneck
             ('cosine', 'l2', 'linear'). Defaults to 'cosine'.
         prototype_assignment_temperature: Temperature for prototype assignment logits.
-        structure_learning_config: Optional dict enabling experimental DAG and
-            dynamic hierarchy learning in the V2 trend network.
+        structure_learning_config: Dict enabling DAG and dynamic hierarchy learning
+            in the V2 trend network. Defaults to enabled with conservative penalties
+            ({'enabled': True, 'learn_hierarchy': True, 'learn_dag': True, ...}).
+            Pass {'enabled': False} to disable.
     """
 
     def __init__(
@@ -89,11 +111,11 @@ class TVA:
         prior_construction_config: dict = None,
         causal_prior_construction_config: dict = None,
         d_token: int = 64,
-        n_meso: int = 8,
-        n_global: int = 4,
-        n_prototypes: int = 4,
+        n_meso: int | str = 'auto',
+        n_global: int | str = 'auto',
+        n_prototypes: int | str = 'auto',
         n_heads: int = 4,
-        epochs: int = 20,
+        epochs: int = 50,
         lr: float = 1e-3,
         batch_size: int = 32,
         window_size: int = 91,
@@ -111,6 +133,32 @@ class TVA:
         if not HAS_TORCH:
             raise ImportError("TVA requires PyTorch. Install with: pip install torch")
 
+        # Apply defaults for config dicts using sentinel pattern to allow explicit
+        # override with {} to disable. These replace None-only defaults.
+        if structure_learning_config is None:
+            structure_learning_config = {
+                'enabled': True,
+                'learn_hierarchy': True,
+                'learn_dag': True,
+                'dag_penalty': 0.1,
+                'sparsity_weight': 0.01,
+                'assignment_entropy_weight': 0.01,
+            }
+        if prior_construction_config is None:
+            prior_construction_config = {
+                'sources': ['event', 'metadata'],
+                'source_weights': {'event': 0.7, 'metadata': 0.3},
+                'max_distance_days': 7,
+            }
+        if causal_prior_construction_config is None:
+            causal_prior_construction_config = {
+                'max_lag': 3,
+                'min_history': 90,
+                'top_k': 8,
+                'alpha': 0.05,
+                'difference': True,
+            }
+
         self.detector_params = detector_params
         self.trend_network_type = trend_network
         self.fusion_type = fusion
@@ -124,6 +172,10 @@ class TVA:
         self.n_meso = n_meso
         self.n_global = n_global
         self.n_prototypes = n_prototypes
+        # resolved values stored after fit() calls _resolve_network_sizes()
+        self._n_meso_fit: Optional[int] = None
+        self._n_global_fit: Optional[int] = None
+        self._n_prototypes_fit: Optional[int] = None
         self.prototype_assignment_method = prototype_assignment_method
         self.prototype_assignment_temperature = prototype_assignment_temperature
         self._structure_config = StructureLearningConfig.from_dict(
@@ -274,14 +326,24 @@ class TVA:
             CompositeTrendNetworkV2,
         )
 
+        n_anchors = int(self._anchor_mask.sum())
+        self._n_global_fit, self._n_meso_fit, self._n_prototypes_fit = (
+            self._resolve_network_sizes(n_anchors, self.n_global, self.n_meso, self.n_prototypes)
+        )
+        if self.verbose >= 2:
+            print(
+                f"TVA: network sizes — n_global={self._n_global_fit}, "
+                f"n_meso={self._n_meso_fit}, n_prototypes={self._n_prototypes_fit}"
+            )
+
         network_kwargs = dict(
             n_series=N,
             window_size=self.window_size,
             forecast_horizon=self.forecast_horizon,
             d_token=self.d_token,
-            n_meso=self.n_meso,
-            n_global=self.n_global,
-            n_prototypes=self.n_prototypes,
+            n_meso=self._n_meso_fit,
+            n_global=self._n_global_fit,
+            n_prototypes=self._n_prototypes_fit,
             prototype_assignment_method=self.prototype_assignment_method,
             prototype_assignment_temperature=self.prototype_assignment_temperature,
             n_heads=self.n_heads,
@@ -602,7 +664,7 @@ class TVA:
         elif self._prior_adj is not None:
             return self._prior_adj.copy()
         else:
-            n = self.n_global
+            n = self._n_global_fit if self._n_global_fit is not None else max(2, int(self.n_global) if self.n_global != 'auto' else 4)
             return np.ones((n, n), dtype=np.float32)
 
     def get_graph_snapshot(
@@ -669,6 +731,41 @@ class TVA:
 
     # ---- internal helpers ----
 
+    @staticmethod
+    def _resolve_network_sizes(
+        n_anchors: int,
+        n_global,
+        n_meso,
+        n_prototypes,
+    ) -> tuple:
+        """Resolve 'auto' sentinels to concrete integers based on anchor count.
+
+        n_global  = max(2, ceil(sqrt(n_anchors)))
+        n_meso    = max(n_global, 2 * n_global)  — interpolates between global and series
+        n_prototypes = max(2, round(log2(n_anchors + 1))), capped at 8
+
+        Integer values are passed through unchanged with a floor of 2.
+        """
+        import math
+        n = max(int(n_anchors), 1)
+
+        resolved_global = (
+            max(2, int(np.ceil(np.sqrt(n))))
+            if n_global == 'auto'
+            else max(2, int(n_global))
+        )
+        resolved_meso = (
+            max(resolved_global, 2 * resolved_global)
+            if n_meso == 'auto'
+            else max(2, int(n_meso))
+        )
+        resolved_prototypes = (
+            min(8, max(2, round(math.log2(n + 1))))
+            if n_prototypes == 'auto'
+            else max(2, int(n_prototypes))
+        )
+        return resolved_global, resolved_meso, resolved_prototypes
+
     def _get_last_window_outputs(self) -> dict:
         if self._network is None:
             raise RuntimeError("TVA must be fit first.")
@@ -733,12 +830,15 @@ class TVA:
 
         return targets
 
-    def _he_who_remains(self):
-        """Hidden: the one who holds the TVA together."""
+    def _get_metadata(self):
         return {
             'network_type': self.trend_network_type,
             'n_series': len(self._df_original.columns) if self._df_original is not None else 0,
             'n_anchors': int(self._anchor_mask.sum()) if self._anchor_mask is not None else 0,
-            'n_prototypes': self.n_prototypes,
+            'n_prototypes': self._n_prototypes_fit if self._n_prototypes_fit is not None else self.n_prototypes,
             'prototype_assignment_method': self.prototype_assignment_method,
         }
+
+    # legacy alias
+    _he_who_remains = _get_metadata
+
