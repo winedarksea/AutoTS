@@ -1,5 +1,6 @@
 import random
 import heapq
+from math import comb
 from functools import lru_cache
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ valid_changepoint_methods = [
     'pelt',
     'l1_fused_lasso',
     'l1_total_variation',
+    'l0_trend_filter',
     'cusum',
     'ewma',
     'autoencoder',
@@ -455,65 +457,265 @@ def _detect_pelt_changepoints(
     return np.array(sorted(changepoints)) if changepoints else np.array([])
 
 
-def _detect_l1_trend_changepoints(data, lambda_reg=1.0, method='fused_lasso'):
+def _default_difference_order(method):
+    """Resolve default finite-difference order from method name."""
+    if method == 'fused_lasso':
+        return 1
+    if method == 'total_variation':
+        return 2
+    raise ValueError(f"Unknown method: {method}")
+
+
+def _resolve_difference_order(method, difference_order=None, max_order=4):
+    """Validate and resolve trend-filter finite-difference order."""
+    order = (
+        _default_difference_order(method)
+        if difference_order is None
+        else int(difference_order)
+    )
+    if order < 1 or order > int(max_order):
+        raise ValueError(
+            f"difference_order must be in [1, {int(max_order)}], got {order}"
+        )
+    return order
+
+
+def _build_difference_matrix(n, difference_order):
+    """Build forward-difference matrix D_k with shape (n-k, n)."""
+    order = int(difference_order)
+    if order < 1:
+        raise ValueError("difference_order must be >= 1")
+    if n <= order:
+        return np.empty((0, int(n)), dtype=float)
+    try:
+        from scipy.sparse import diags
+
+        coeffs = [((-1) ** j) * comb(order, j) for j in range(order + 1)]
+        offsets = np.arange(order + 1, dtype=int)
+        return diags(coeffs, offsets, shape=(n - order, n), dtype=float).toarray()
+    except Exception:
+        # Fallback using repeated differencing of identity (slower but robust).
+        eye = np.eye(n, dtype=float)
+        return np.diff(eye, n=order, axis=0)
+
+
+def _resolve_l0_max_changepoints(
+    n,
+    min_segment_length,
+    lambda_reg,
+    max_changepoints='auto',
+):
+    """Translate L0 regularization controls into a concrete changepoint cap."""
+    min_seg = max(1, int(min_segment_length))
+    spacing_cap = max(0, int(n // max(2, min_seg)) - 1)
+    if max_changepoints in {None, 'auto'}:
+        denom = 1.0 + 2.5 * max(0.0, float(lambda_reg))
+        guess = int(np.ceil(spacing_cap / denom))
+        return int(np.clip(guess, 0, spacing_cap))
+    return int(np.clip(int(max_changepoints), 0, spacing_cap))
+
+
+def _topk_changepoints_from_differences(
+    differences,
+    difference_order,
+    n_obs,
+    min_segment_length,
+    max_changepoints,
+):
+    """Extract top-k changepoints directly from finite differences."""
+    scores = np.abs(np.asarray(differences, dtype=float))
+    if scores.size == 0:
+        return np.array([], dtype=int)
+    if not np.any(np.isfinite(scores)):
+        return np.array([], dtype=int)
+    if np.allclose(scores, 0.0, atol=1e-12, rtol=0.0):
+        return np.array([], dtype=int)
+
+    candidates = np.arange(scores.size, dtype=int) + int(difference_order)
+    valid = (candidates > int(difference_order)) & (candidates < int(n_obs) - int(difference_order))
+    if not np.any(valid):
+        return np.array([], dtype=int)
+
+    candidates = candidates[valid]
+    scores = scores[valid]
+    if candidates.size == 0:
+        return np.array([], dtype=int)
+
+    max_score = float(np.max(scores))
+    score_eps = max(1e-12, max_score * 1e-8)
+    keep = scores > score_eps
+    if not np.any(keep):
+        return np.array([], dtype=int)
+    candidates = candidates[keep]
+    scores = scores[keep]
+    if candidates.size == 0:
+        return np.array([], dtype=int)
+
+    cp_cap = int(max_changepoints)
+    if cp_cap <= 0:
+        return np.array([], dtype=int)
+    if candidates.size > cp_cap:
+        top_idx = np.argpartition(scores, -cp_cap)[-cp_cap:]
+        candidates = candidates[top_idx]
+        scores = scores[top_idx]
+
+    return _select_distant_changepoints(
+        candidates,
+        scores,
+        min_distance=max(1, int(min_segment_length)),
+        max_changepoints=cp_cap,
+    )
+
+
+def _detect_l1_trend_changepoints(
+    data,
+    lambda_reg=1.0,
+    method='fused_lasso',
+    difference_order=None,
+    adaptive=False,
+    adaptive_gamma=1.0,
+    irls_iterations=4,
+):
     """
     L1 trend filtering for changepoint detection.
 
     Parameters:
-    data (array-like): Time series data
-    lambda_reg (float): Regularization parameter
-    method (str): Method type ('fused_lasso', 'total_variation')
+    data (array-like): Time series data.
+    lambda_reg (float): Regularization parameter.
+    method (str): Method type ('fused_lasso', 'total_variation').
+    difference_order (int): Order of differencing penalty (1..4). Defaults to
+        method-specific order: 1 for fused_lasso, 2 for total_variation.
+    adaptive (bool): Enable adaptive L1 reweighting (adaptive lasso style).
+    adaptive_gamma (float): Exponent used in adaptive weights.
+    irls_iterations (int): Iterations for IRLS solver.
 
     Returns:
     tuple: (changepoints, fitted_trend)
     """
-    try:
-        from scipy.optimize import minimize
-        from scipy.sparse import diags
-    except ImportError:
-        raise ImportError("scipy is required for L1 trend filtering")
-
-    data = np.asarray(data).flatten()  # Ensure 1D array
+    data = np.asarray(data, dtype=float).flatten()
     n = len(data)
     if n < 3:
-        return np.array([]), data.copy()
+        return np.array([], dtype=int), data.copy()
 
-    # For very small data, fall back to simple thresholding
-    if n < 10:
+    if not np.all(np.isfinite(data)):
+        finite_mask = np.isfinite(data)
+        if not np.any(finite_mask):
+            return np.array([], dtype=int), np.zeros(n, dtype=float)
+        data = (
+            pd.Series(data)
+            .interpolate(limit_direction='both')
+            .fillna(float(np.nanmedian(data[finite_mask])))
+            .to_numpy(dtype=float)
+        )
+
+    order = _resolve_difference_order(method, difference_order, max_order=4)
+    if n <= order + 1:
+        return np.array([], dtype=int), data.copy()
+    if n < max(10, order + 3):
         return _simple_threshold_changepoints(data), data.copy()
 
-    # Create difference matrix for trend filtering
-    if method == 'fused_lasso':
-        # First-order differences (detects level changes)
-        try:
-            D = diags([1, -1], [0, 1], shape=(n - 1, n)).toarray()
-        except:
-            # Fallback for very small arrays
-            D = np.eye(n - 1, n) - np.eye(n - 1, n, k=1)
-    elif method == 'total_variation':
-        # Second-order differences (detects trend changes)
-        if n < 4:
-            return _simple_threshold_changepoints(data), data.copy()
-        try:
-            D = diags([1, -2, 1], [0, 1, 2], shape=(n - 2, n)).toarray()
-        except:
-            # Fallback for very small arrays
-            D = np.eye(n - 2, n) - 2 * np.eye(n - 2, n, k=1) + np.eye(n - 2, n, k=2)
-    else:
-        raise ValueError(f"Unknown method: {method}")
+    D = _build_difference_matrix(n, order)
+    if D.shape[0] == 0:
+        return np.array([], dtype=int), data.copy()
 
-    # Use a simpler approximation method instead of full L1 optimization
-    # This avoids the complex optimization issues while still providing trend filtering
     try:
-        fitted_trend = _approximate_l1_trend_filter(data, D, lambda_reg)
+        fitted_trend = _approximate_l1_trend_filter(
+            data,
+            D,
+            lambda_reg=lambda_reg,
+            adaptive=adaptive,
+            adaptive_gamma=adaptive_gamma,
+            irls_iterations=irls_iterations,
+        )
     except Exception:
-        # Final fallback: return original data as trend
         return _simple_threshold_changepoints(data), data.copy()
 
-    # Find changepoints from the fitted trend
-    changepoints = _extract_changepoints_from_trend(fitted_trend, method)
-
+    changepoints = _extract_changepoints_from_trend(
+        fitted_trend, method=method, difference_order=order
+    )
     return changepoints, fitted_trend
+
+
+def _detect_l0_trend_changepoints(
+    data,
+    lambda_reg=1.0,
+    difference_order=2,
+    max_changepoints='auto',
+    min_segment_length=5,
+    htp_iterations=4,
+    hard_weight=2500.0,
+    support_multiplier=2,
+):
+    """
+    Approximate L0 trend filtering via hard-threshold pursuit style updates.
+
+    This keeps a fixed sparse support in the k-th differences and solves a
+    weighted least-squares system that strongly enforces zero on inactive
+    coefficients.
+    """
+    series = np.asarray(data, dtype=float).flatten()
+    n = len(series)
+    if n < 3:
+        return np.array([], dtype=int), series.copy()
+    if float(np.nanstd(series)) <= 1e-12:
+        return np.array([], dtype=int), series.copy()
+
+    if not np.all(np.isfinite(series)):
+        finite_mask = np.isfinite(series)
+        if not np.any(finite_mask):
+            return np.array([], dtype=int), np.zeros(n, dtype=float)
+        series = (
+            pd.Series(series)
+            .interpolate(limit_direction='both')
+            .fillna(float(np.nanmedian(series[finite_mask])))
+            .to_numpy(dtype=float)
+        )
+
+    order = int(difference_order)
+    if order < 1:
+        raise ValueError("difference_order must be >= 1")
+    if n <= order + 1:
+        return np.array([], dtype=int), series.copy()
+
+    D = _build_difference_matrix(n, order)
+    if D.shape[0] == 0:
+        return np.array([], dtype=int), series.copy()
+
+    cp_cap = _resolve_l0_max_changepoints(
+        n=n,
+        min_segment_length=min_segment_length,
+        lambda_reg=lambda_reg,
+        max_changepoints=max_changepoints,
+    )
+    if cp_cap <= 0:
+        return np.array([], dtype=int), series.copy()
+
+    support_size = min(
+        D.shape[0],
+        max(cp_cap, int(cp_cap * max(1, int(support_multiplier)))),
+    )
+
+    try:
+        fitted = _approximate_l0_trend_filter(
+            series,
+            D=D,
+            lambda_reg=lambda_reg,
+            support_size=support_size,
+            htp_iterations=htp_iterations,
+            hard_weight=hard_weight,
+        )
+    except Exception:
+        fitted = series.copy()
+
+    diff_signal = D @ fitted
+    changepoints = _topk_changepoints_from_differences(
+        differences=diff_signal,
+        difference_order=order,
+        n_obs=n,
+        min_segment_length=min_segment_length,
+        max_changepoints=cp_cap,
+    )
+    return changepoints, fitted
 
 
 def _simple_threshold_changepoints(data):
@@ -2053,69 +2255,158 @@ def _vectorized_ewma_changepoints(
     return results
 
 
-def _approximate_l1_trend_filter_batch(data_block, method, lambda_reg):
+def _solve_weighted_trend_system_batch(chunk, D, identity, lambda_reg, weights):
+    """Solve batched weighted trend-filter systems."""
+    scaled = np.sqrt(np.maximum(0.0, float(lambda_reg)) * weights)
+    D_weighted = D[None, :, :] * scaled[:, :, None]
+    A = identity[None, :, :] + np.matmul(
+        np.transpose(D_weighted, (0, 2, 1)), D_weighted
+    )
+    return np.linalg.solve(A, chunk)
+
+
+def _approximate_l1_trend_filter_batch(
+    data_block,
+    difference_order,
+    lambda_reg,
+    adaptive=False,
+    adaptive_gamma=1.0,
+    irls_iterations=4,
+):
     """Vectorized approximate L1 trend filtering for multiple series."""
     batch_size, n = data_block.shape
-    if method == 'fused_lasso':
-        if n < 2:
-            return data_block.astype(float)
-        D = np.eye(n - 1, n, dtype=float) - np.eye(n - 1, n, k=1, dtype=float)
-    else:
-        if n < 3:
-            return data_block.astype(float)
-        D = (
-            np.eye(n - 2, n, dtype=float)
-            - 2 * np.eye(n - 2, n, k=1, dtype=float)
-            + np.eye(n - 2, n, k=2, dtype=float)
-        )
+    order = int(difference_order)
+    if n <= order:
+        return data_block.astype(float)
+
+    D = _build_difference_matrix(n, order)
+    if D.shape[0] == 0:
+        return data_block.astype(float)
 
     identity = np.eye(n, dtype=float)
     results = np.empty_like(data_block, dtype=float)
     m = D.shape[0]
     max_elements = 4_000_000
     chunk_size = max(1, max_elements // max(1, m * n))
+    irls_iterations = max(1, int(irls_iterations))
+    adaptive_gamma = max(0.0, float(adaptive_gamma))
 
     for start in range(0, batch_size, chunk_size):
         end = min(batch_size, start + chunk_size)
         chunk = data_block[start:end].astype(float, copy=True)
         x_chunk = chunk.copy()
+        adaptive_scale = np.ones((end - start, m), dtype=float)
+        use_fallback = False
 
-        for _ in range(3):
-            DX = x_chunk @ D.T
-            weights = 1.0 / (np.abs(DX) + 1e-6)
-            sqrt_weights = np.sqrt(lambda_reg * weights)
-            D_weighted = D[None, :, :] * sqrt_weights[:, :, None]
-            A = identity[None, :, :] + np.matmul(
-                np.transpose(D_weighted, (0, 2, 1)), D_weighted
-            )
-            try:
-                x_chunk = np.linalg.solve(A, chunk)
-            except np.linalg.LinAlgError:
-                x_chunk = np.array([_simple_smooth(row, lambda_reg) for row in chunk])
-                break
+        try:
+            if adaptive:
+                pilot_steps = max(1, min(3, irls_iterations // 2))
+                for _ in range(pilot_steps):
+                    DX = x_chunk @ D.T
+                    pilot_weights = 1.0 / (np.abs(DX) + 1e-6)
+                    x_chunk = _solve_weighted_trend_system_batch(
+                        chunk, D, identity, lambda_reg, pilot_weights
+                    )
+                adaptive_scale = 1.0 / (
+                    np.abs(x_chunk @ D.T) + 1e-6
+                ) ** adaptive_gamma
+                adaptive_scale = adaptive_scale / (
+                    np.mean(adaptive_scale, axis=1, keepdims=True) + 1e-9
+                )
 
+            for _ in range(irls_iterations):
+                DX = x_chunk @ D.T
+                weights = adaptive_scale / (np.abs(DX) + 1e-6)
+                x_chunk = _solve_weighted_trend_system_batch(
+                    chunk, D, identity, lambda_reg, weights
+                )
+        except np.linalg.LinAlgError:
+            use_fallback = True
+
+        if use_fallback:
+            x_chunk = np.array([_simple_smooth(row, lambda_reg) for row in chunk])
         results[start:end] = x_chunk
 
     return results
 
 
-def _extract_changepoints_from_trend_batch(fitted_trends, method, min_segment_length):
+def _approximate_l0_trend_filter_batch(
+    data_block,
+    D,
+    lambda_reg,
+    support_size,
+    htp_iterations=4,
+    hard_weight=2500.0,
+):
+    """Vectorized hard-threshold pursuit approximation for L0 trend filtering."""
+    batch_size, n = data_block.shape
+    m = D.shape[0]
+    if m == 0:
+        return data_block.astype(float)
+
+    support_size = int(np.clip(int(support_size), 1, m))
+    identity = np.eye(n, dtype=float)
+    results = np.empty_like(data_block, dtype=float)
+    max_elements = 4_000_000
+    chunk_size = max(1, max_elements // max(1, m * n))
+    htp_iterations = max(1, int(htp_iterations))
+    hard_weight = max(1.0, float(hard_weight))
+
+    for start in range(0, batch_size, chunk_size):
+        end = min(batch_size, start + chunk_size)
+        chunk = data_block[start:end].astype(float, copy=True)
+        x_chunk = chunk.copy()
+        use_fallback = False
+        rows = np.arange(end - start)[:, None]
+
+        try:
+            for _ in range(htp_iterations):
+                diff = x_chunk @ D.T
+                abs_diff = np.abs(diff)
+                if float(np.max(abs_diff)) <= 1e-12:
+                    break
+                if support_size >= m:
+                    support_mask = np.ones_like(abs_diff, dtype=bool)
+                else:
+                    keep_idx = np.argpartition(abs_diff, -support_size, axis=1)[
+                        :, -support_size:
+                    ]
+                    support_mask = np.zeros_like(abs_diff, dtype=bool)
+                    support_mask[rows, keep_idx] = True
+
+                weights = np.where(support_mask, 1.0, hard_weight)
+                x_new = _solve_weighted_trend_system_batch(
+                    chunk, D, identity, lambda_reg, weights
+                )
+                if float(np.max(np.abs(x_new - x_chunk))) <= 1e-7:
+                    x_chunk = x_new
+                    break
+                x_chunk = x_new
+        except np.linalg.LinAlgError:
+            use_fallback = True
+
+        if use_fallback:
+            x_chunk = chunk.copy()
+        results[start:end] = x_chunk
+
+    return results
+
+
+def _extract_changepoints_from_trend_batch(
+    fitted_trends,
+    difference_order,
+    min_segment_length,
+):
     """Extract changepoints from fitted trends for multiple series."""
     if fitted_trends.size == 0:
         return []
 
     n_series, n = fitted_trends.shape
-    if method == 'fused_lasso':
-        if n < 2:
-            return [np.array([], dtype=int) for _ in range(n_series)]
-        differences = np.abs(np.diff(fitted_trends, axis=1))
-        shift = 1
-    else:
-        if n < 3:
-            return [np.array([], dtype=int) for _ in range(n_series)]
-        differences = np.abs(np.diff(fitted_trends, n=2, axis=1))
-        shift = 2
+    order = int(difference_order)
+    if n <= order:
+        return [np.array([], dtype=int) for _ in range(n_series)]
 
+    differences = np.abs(np.diff(fitted_trends, n=order, axis=1))
     mean_diff = differences.mean(axis=1)
     std_diff = differences.std(axis=1)
 
@@ -2126,14 +2417,15 @@ def _extract_changepoints_from_trend_batch(fitted_trends, method, min_segment_le
             continue
 
         threshold = mean_diff[idx] + 1.5 * std_diff[idx]
-        candidates = np.where(differences[idx] > threshold)[0] + shift
-        candidates = candidates[(candidates > 2) & (candidates < n - 2)]
+        candidates = np.where(differences[idx] > threshold)[0] + order
+        candidates = candidates[
+            (candidates > order) & (candidates < n - max(2, order))
+        ]
 
         if candidates.size == 0:
             results.append(np.array([], dtype=int))
             continue
 
-        # Vectorized min_distance filtering
         if candidates.size > 1:
             diffs = np.diff(candidates)
             keep_mask = np.concatenate([[True], diffs >= min_segment_length])
@@ -2147,15 +2439,31 @@ def _extract_changepoints_from_trend_batch(fitted_trends, method, min_segment_le
 
 
 def _vectorized_l1_detection(
-    names, series_list, lambda_reg, method_key, min_segment_length
+    names,
+    series_list,
+    lambda_reg,
+    method_key,
+    min_segment_length,
+    method_params=None,
 ):
     """Vectorized L1 (fused lasso / total variation) detection across series."""
     results = {}
     if not series_list:
         return results
 
+    if method_params is None:
+        method_params = {}
+
     method = 'fused_lasso' if method_key == 'l1_fused_lasso' else 'total_variation'
-    min_required = 4 if method == 'total_variation' else 3
+    difference_order = _resolve_difference_order(
+        method,
+        method_params.get('difference_order', None),
+        max_order=4,
+    )
+    adaptive = bool(method_params.get('adaptive', False))
+    adaptive_gamma = float(method_params.get('adaptive_gamma', 1.0))
+    irls_iterations = int(method_params.get('irls_iterations', 4))
+    min_required = max(3, difference_order + 2)
 
     # Vectorized length calculation
     lengths = np.array([len(arr) for arr in series_list], dtype=int)
@@ -2195,19 +2503,130 @@ def _vectorized_l1_detection(
         )
         try:
             fitted_block = _approximate_l1_trend_filter_batch(
-                data_block, method, lambda_reg
+                data_block,
+                difference_order=difference_order,
+                lambda_reg=lambda_reg,
+                adaptive=adaptive,
+                adaptive_gamma=adaptive_gamma,
+                irls_iterations=irls_iterations,
             )
         except Exception:
             fitted_block = data_block.copy()
 
         cp_lists = _extract_changepoints_from_trend_batch(
-            fitted_block, method, min_segment_length
+            fitted_block,
+            difference_order=difference_order,
+            min_segment_length=min_segment_length,
         )
 
         for row, series_idx in enumerate(indices_in_group):
             name = names[series_idx]
             results[name] = {
                 'changepoints': cp_lists[row],
+                'fitted': fitted_block[row],
+            }
+
+    return results
+
+
+def _vectorized_l0_detection(names, series_list, method_params, min_segment_length):
+    """Vectorized L0 trend filtering detection across series."""
+    results = {}
+    if not series_list:
+        return results
+
+    lambda_reg = float(method_params.get('lambda_reg', 1.0))
+    difference_order = int(method_params.get('difference_order', 2))
+    if difference_order < 1:
+        raise ValueError("difference_order must be >= 1")
+
+    max_changepoints = method_params.get('max_changepoints', 'auto')
+    htp_iterations = int(method_params.get('htp_iterations', 4))
+    hard_weight = float(method_params.get('hard_weight', 2500.0))
+    support_multiplier = int(method_params.get('support_multiplier', 2))
+    min_required = max(3, difference_order + 2)
+    lengths = np.array([len(arr) for arr in series_list], dtype=int)
+
+    short_mask = lengths < min_required
+    if np.any(short_mask):
+        short_indices = np.where(short_mask)[0]
+        for idx in short_indices:
+            arr = series_list[idx]
+            cp = _simple_threshold_changepoints(arr) if len(arr) >= 3 else np.array([], dtype=int)
+            results[names[idx]] = {
+                'changepoints': cp,
+                'fitted': arr.astype(float, copy=False),
+            }
+
+    eligible_mask = lengths >= min_required
+    if not np.any(eligible_mask):
+        return results
+
+    eligible_indices = np.where(eligible_mask)[0]
+    eligible_lengths = lengths[eligible_indices]
+    unique_lengths, inverse_indices = np.unique(eligible_lengths, return_inverse=True)
+
+    for group_idx, length in enumerate(unique_lengths):
+        indices_in_group = eligible_indices[inverse_indices == group_idx]
+        data_block = np.vstack(
+            [series_list[i].astype(float, copy=False) for i in indices_in_group]
+        )
+        row_std = np.std(data_block, axis=1)
+        flat_mask = row_std <= 1e-12
+        D = _build_difference_matrix(length, difference_order)
+        cp_cap = _resolve_l0_max_changepoints(
+            n=length,
+            min_segment_length=min_segment_length,
+            lambda_reg=lambda_reg,
+            max_changepoints=max_changepoints,
+        )
+        if cp_cap <= 0:
+            for row, series_idx in enumerate(indices_in_group):
+                results[names[series_idx]] = {
+                    'changepoints': np.array([], dtype=int),
+                    'fitted': data_block[row],
+                }
+            continue
+        support_size = min(
+            D.shape[0],
+            max(cp_cap, int(cp_cap * max(1, support_multiplier))),
+        )
+
+        fitted_block = data_block.copy()
+        nonflat_idx = np.where(~flat_mask)[0]
+        if nonflat_idx.size > 0:
+            try:
+                fitted_block[nonflat_idx] = _approximate_l0_trend_filter_batch(
+                    data_block[nonflat_idx],
+                    D=D,
+                    lambda_reg=lambda_reg,
+                    support_size=support_size,
+                    htp_iterations=htp_iterations,
+                    hard_weight=hard_weight,
+                )
+            except Exception:
+                fitted_block[nonflat_idx] = data_block[nonflat_idx]
+
+        diff_block = (
+            fitted_block @ D.T if D.size else np.empty((fitted_block.shape[0], 0))
+        )
+        for row, series_idx in enumerate(indices_in_group):
+            if flat_mask[row]:
+                cps = np.array([], dtype=int)
+                results[names[series_idx]] = {
+                    'changepoints': cps,
+                    'fitted': fitted_block[row],
+                }
+                continue
+            cps = _topk_changepoints_from_differences(
+                differences=diff_block[row],
+                difference_order=difference_order,
+                n_obs=length,
+                min_segment_length=min_segment_length,
+                max_changepoints=cp_cap,
+            )
+            results[names[series_idx]] = {
+                'changepoints': cps,
                 'fitted': fitted_block[row],
             }
 
@@ -2602,7 +3021,8 @@ def create_changepoint_features(
     changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
     changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
     method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
-        'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd', 'bottom_up', 'wbs2')
+        'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'autoencoder',
+        'kcpd', 'bottom_up', 'wbs2')
     params (dict): Additional parameters for the chosen method
     data (array-like): Time series data (required for advanced methods)
 
@@ -2633,7 +3053,21 @@ def create_changepoint_features(
             raise ValueError("Data is required for L1 trend filtering")
         lambda_reg = params.get('lambda_reg', 1.0)
         l1_method = 'fused_lasso' if method == 'l1_fused_lasso' else 'total_variation'
-        return _create_l1_changepoint_features(DTindex, data, lambda_reg, l1_method)
+        return _create_l1_changepoint_features(
+            DTindex,
+            data,
+            lambda_reg=lambda_reg,
+            method=l1_method,
+            difference_order=params.get('difference_order', None),
+            adaptive=params.get('adaptive', False),
+            adaptive_gamma=params.get('adaptive_gamma', 1.0),
+            irls_iterations=params.get('irls_iterations', 4),
+        )
+
+    elif method == 'l0_trend_filter':
+        if data is None:
+            raise ValueError("Data is required for L0 trend filtering")
+        return _create_l0_changepoint_features(DTindex, data, params)
 
     elif method == 'cusum':
         if data is None:
@@ -2741,10 +3175,25 @@ def _create_pelt_changepoint_features(
 
 
 def _create_l1_changepoint_features(
-    DTindex, data, lambda_reg=1.0, method='fused_lasso'
+    DTindex,
+    data,
+    lambda_reg=1.0,
+    method='fused_lasso',
+    difference_order=None,
+    adaptive=False,
+    adaptive_gamma=1.0,
+    irls_iterations=4,
 ):
     """Create changepoint features using L1 trend filtering."""
-    changepoints, _ = _detect_l1_trend_changepoints(data, lambda_reg, method)
+    changepoints, _ = _detect_l1_trend_changepoints(
+        data,
+        lambda_reg=lambda_reg,
+        method=method,
+        difference_order=difference_order,
+        adaptive=adaptive,
+        adaptive_gamma=adaptive_gamma,
+        irls_iterations=irls_iterations,
+    )
 
     if len(changepoints) == 0:
         # Return at least one changepoint in the middle if none detected
@@ -2754,6 +3203,36 @@ def _create_l1_changepoint_features(
     res = []
     for i, cp in enumerate(changepoints):
         feature_name = f'l1_{method}_changepoint_{i+1}'
+        res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
+
+    changepoint_features = pd.concat(res, axis=1)
+    changepoint_features.index = DTindex
+    return changepoint_features
+
+
+def _create_l0_changepoint_features(DTindex, data, params=None):
+    """Create changepoint features using L0 trend filtering."""
+    if params is None:
+        params = {}
+
+    changepoints, _ = _detect_l0_trend_changepoints(
+        data,
+        lambda_reg=params.get('lambda_reg', 1.0),
+        difference_order=params.get('difference_order', 2),
+        max_changepoints=params.get('max_changepoints', 'auto'),
+        min_segment_length=params.get('min_segment_length', 5),
+        htp_iterations=params.get('htp_iterations', 4),
+        hard_weight=params.get('hard_weight', 2500.0),
+        support_multiplier=params.get('support_multiplier', 2),
+    )
+
+    if len(changepoints) == 0:
+        changepoints = np.array([len(DTindex) // 2])
+
+    n = len(DTindex)
+    res = []
+    for i, cp in enumerate(changepoints):
+        feature_name = f'l0_trend_filter_changepoint_{i+1}'
         res.append(pd.Series(np.maximum(0, np.arange(n) - cp), name=feature_name))
 
     changepoint_features = pd.concat(res, axis=1)
@@ -2966,30 +3445,91 @@ def _create_wbs2_changepoint_features(
     return changepoint_features
 
 
-def _approximate_l1_trend_filter(data, D, lambda_reg):
-    """Approximate L1 trend filtering using iterative reweighting."""
+def _approximate_l1_trend_filter(
+    data,
+    D,
+    lambda_reg,
+    adaptive=False,
+    adaptive_gamma=1.0,
+    irls_iterations=4,
+):
+    """Approximate L1 trend filtering using iterative reweighted least squares."""
     n = len(data)
-    x = data.copy()  # Initialize with data
+    m = D.shape[0]
+    if m == 0:
+        return data.astype(float, copy=True)
 
-    # Iterative reweighted least squares approximation to L1
-    for _ in range(3):  # Limited iterations for efficiency
-        try:
-            # Weights for reweighting (avoid division by zero)
-            weights = 1.0 / (np.abs(D @ x) + 1e-6)
+    x = data.astype(float, copy=True)
+    identity = np.eye(n, dtype=float)
+    irls_iterations = max(1, int(irls_iterations))
+    adaptive_gamma = max(0.0, float(adaptive_gamma))
+    adaptive_scale = np.ones(m, dtype=float)
 
-            # Weighted least squares problem: minimize ||data - x||^2 + lambda * ||W * D * x||^2
-            # This approximates the L1 penalty with a weighted L2 penalty
-            W = np.diag(np.sqrt(weights * lambda_reg))
-            WD = W @ D
+    try:
+        if adaptive:
+            pilot_steps = max(1, min(3, irls_iterations // 2))
+            for _ in range(pilot_steps):
+                diff = D @ x
+                pilot_weights = 1.0 / (np.abs(diff) + 1e-6)
+                WD = D * np.sqrt(np.maximum(0.0, float(lambda_reg)) * pilot_weights)[:, None]
+                x = np.linalg.solve(identity + WD.T @ WD, data)
 
-            # Solve: (I + (WD)^T * WD) * x = data
-            A = np.eye(n) + WD.T @ WD
-            x = np.linalg.solve(A, data)
+            adaptive_scale = 1.0 / (np.abs(D @ x) + 1e-6) ** adaptive_gamma
+            adaptive_scale = adaptive_scale / (np.mean(adaptive_scale) + 1e-9)
 
-        except (np.linalg.LinAlgError, ValueError):
-            # If solve fails, use a simpler smoothing approach
-            x = _simple_smooth(data, lambda_reg)
-            break
+        for _ in range(irls_iterations):
+            diff = D @ x
+            weights = adaptive_scale / (np.abs(diff) + 1e-6)
+            WD = D * np.sqrt(np.maximum(0.0, float(lambda_reg)) * weights)[:, None]
+            x = np.linalg.solve(identity + WD.T @ WD, data)
+    except (np.linalg.LinAlgError, ValueError):
+        x = _simple_smooth(data, lambda_reg)
+
+    return x
+
+
+def _approximate_l0_trend_filter(
+    data,
+    D,
+    lambda_reg,
+    support_size,
+    htp_iterations=4,
+    hard_weight=2500.0,
+):
+    """Approximate L0 trend filtering via hard-support weighted least squares."""
+    n = len(data)
+    m = D.shape[0]
+    if m == 0:
+        return data.astype(float, copy=True)
+
+    support_size = int(np.clip(int(support_size), 1, m))
+    htp_iterations = max(1, int(htp_iterations))
+    hard_weight = max(1.0, float(hard_weight))
+    x = data.astype(float, copy=True)
+    identity = np.eye(n, dtype=float)
+
+    try:
+        for _ in range(htp_iterations):
+            diff = D @ x
+            abs_diff = np.abs(diff)
+            if float(np.max(abs_diff)) <= 1e-12:
+                break
+            if support_size >= m:
+                support_mask = np.ones(m, dtype=bool)
+            else:
+                keep_idx = np.argpartition(abs_diff, -support_size)[-support_size:]
+                support_mask = np.zeros(m, dtype=bool)
+                support_mask[keep_idx] = True
+
+            weights = np.where(support_mask, 1.0, hard_weight)
+            WD = D * np.sqrt(np.maximum(0.0, float(lambda_reg)) * weights)[:, None]
+            x_new = np.linalg.solve(identity + WD.T @ WD, data)
+            if float(np.max(np.abs(x_new - x))) <= 1e-7:
+                x = x_new
+                break
+            x = x_new
+    except (np.linalg.LinAlgError, ValueError):
+        x = _simple_smooth(data, lambda_reg)
 
     return x
 
@@ -3014,43 +3554,38 @@ def _simple_smooth(data, lambda_reg):
         return smoothed
 
 
-def _extract_changepoints_from_trend(fitted_trend, method):
+def _extract_changepoints_from_trend(
+    fitted_trend,
+    method='fused_lasso',
+    difference_order=None,
+):
     """Extract changepoints from fitted trend."""
     n = len(fitted_trend)
-
-    if method == 'fused_lasso':
-        # Look for level changes (first-order differences)
-        differences = np.abs(np.diff(fitted_trend))
-    else:  # total_variation
-        # Look for trend changes (second-order differences)
-        if n < 3:
-            return np.array([])
-        differences = np.abs(np.diff(fitted_trend, n=2))
+    order = _resolve_difference_order(method, difference_order, max_order=4)
+    if n <= order:
+        return np.array([], dtype=int)
+    differences = np.abs(np.diff(fitted_trend, n=order))
 
     if len(differences) == 0:
-        return np.array([])
+        return np.array([], dtype=int)
 
     # Adaptive threshold based on data characteristics
     mean_diff = np.mean(differences)
     std_diff = np.std(differences)
 
     if std_diff == 0:
-        return np.array([])
+        return np.array([], dtype=int)
 
     # Use a more conservative threshold
     threshold = mean_diff + 1.5 * std_diff
-
-    if method == 'fused_lasso':
-        changepoints = np.where(differences > threshold)[0] + 1
-    else:  # total_variation
-        changepoints = (
-            np.where(differences > threshold)[0] + 2
-        )  # Adjust for second-order diff
+    changepoints = np.where(differences > threshold)[0] + order
 
     # Filter out changepoints too close to boundaries
-    changepoints = changepoints[(changepoints > 2) & (changepoints < n - 2)]
+    changepoints = changepoints[
+        (changepoints > order) & (changepoints < n - max(2, order))
+    ]
 
-    return changepoints
+    return changepoints.astype(int)
 
 
 class ChangepointDetector(object):
@@ -3075,7 +3610,7 @@ class ChangepointDetector(object):
 
         Args:
             method (str): Changepoint detection method ('basic', 'pelt', 'l1_fused_lasso',
-                'l1_total_variation', 'cusum', 'ewma', 'autoencoder', 'kcpd',
+                'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'autoencoder', 'kcpd',
                 'bottom_up', 'wbs2', 'composite_fused_lasso', 'multiresolution')
             method_params (dict): Parameters specific to the chosen method
             aggregate_method (str): How to aggregate across series ('mean', 'median', 'individual')
@@ -3141,7 +3676,27 @@ class ChangepointDetector(object):
                 'fused_lasso' if method == 'l1_fused_lasso' else 'total_variation'
             )
             changepoints, fitted_trend = _detect_l1_trend_changepoints(
-                data, lambda_reg, l1_method
+                data,
+                lambda_reg=lambda_reg,
+                method=l1_method,
+                difference_order=params.get('difference_order', None),
+                adaptive=params.get('adaptive', False),
+                adaptive_gamma=params.get('adaptive_gamma', 1.0),
+                irls_iterations=params.get('irls_iterations', 4),
+            )
+
+        elif method == 'l0_trend_filter':
+            changepoints, fitted_trend = _detect_l0_trend_changepoints(
+                data,
+                lambda_reg=params.get('lambda_reg', 1.0),
+                difference_order=params.get('difference_order', 2),
+                max_changepoints=params.get('max_changepoints', 'auto'),
+                min_segment_length=params.get(
+                    'min_segment_length', self.min_segment_length
+                ),
+                htp_iterations=params.get('htp_iterations', 4),
+                hard_weight=params.get('hard_weight', 2500.0),
+                support_multiplier=params.get('support_multiplier', 2),
             )
 
         elif method == 'cusum':
@@ -3367,8 +3922,18 @@ class ChangepointDetector(object):
                 lambda_reg,
                 self.method,
                 self.min_segment_length,
+                method_params=method_params,
             )
             results.update(l1_results)
+
+        elif self.method == 'l0_trend_filter':
+            l0_results = _vectorized_l0_detection(
+                series_names,
+                series_arrays,
+                method_params=method_params,
+                min_segment_length=self.min_segment_length,
+            )
+            results.update(l0_results)
 
         elif self.method == 'autoencoder':
             auto_results = _detect_autoencoder_changepoints_vectorized(
@@ -3514,6 +4079,7 @@ class ChangepointDetector(object):
                 'ewma',
                 'l1_fused_lasso',
                 'l1_total_variation',
+                'l0_trend_filter',
                 'autoencoder',
                 'kcpd',
                 'bottom_up',
@@ -3553,7 +4119,32 @@ class ChangepointDetector(object):
                     else 'total_variation'
                 )
                 self.changepoints_, self.fitted_trends_ = _detect_l1_trend_changepoints(
-                    aggregated_data, lambda_reg, l1_method
+                    aggregated_data,
+                    lambda_reg=lambda_reg,
+                    method=l1_method,
+                    difference_order=self.method_params.get('difference_order', None),
+                    adaptive=self.method_params.get('adaptive', False),
+                    adaptive_gamma=self.method_params.get('adaptive_gamma', 1.0),
+                    irls_iterations=self.method_params.get('irls_iterations', 4),
+                )
+
+            elif self.method == 'l0_trend_filter':
+                (
+                    self.changepoints_,
+                    self.fitted_trends_,
+                ) = _detect_l0_trend_changepoints(
+                    aggregated_data,
+                    lambda_reg=self.method_params.get('lambda_reg', 1.0),
+                    difference_order=self.method_params.get('difference_order', 2),
+                    max_changepoints=self.method_params.get(
+                        'max_changepoints', 'auto'
+                    ),
+                    min_segment_length=self.method_params.get(
+                        'min_segment_length', self.min_segment_length
+                    ),
+                    htp_iterations=self.method_params.get('htp_iterations', 4),
+                    hard_weight=self.method_params.get('hard_weight', 2500.0),
+                    support_multiplier=self.method_params.get('support_multiplier', 2),
                 )
 
             elif self.method == 'cusum':
@@ -4389,7 +4980,7 @@ class ChangepointDetector(object):
             method (str): Method for parameter selection
                 - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
                 - Or specify a method name directly: 'basic', 'pelt', 'l1_fused_lasso',
-                  'l1_total_variation', 'cusum', 'ewma', 'kcpd', 'bottom_up',
+                  'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'kcpd', 'bottom_up',
                   'wbs2', 'autoencoder', 'composite_fused_lasso'
 
         Returns:
@@ -4417,19 +5008,21 @@ class ChangepointDetector(object):
                 'wbs2',
                 'l1_fused_lasso',
                 'l1_total_variation',
+                'l0_trend_filter',
                 'pelt',
                 'composite_fused_lasso',
                 'autoencoder',
                 'multiresolution',
             ]
             method_weights = [
-                0.19,
-                0.17,
-                0.17,
-                0.09,
+                0.18,
+                0.16,
+                0.16,
                 0.09,
                 0.08,
+                0.08,
                 0.06,
+                0.04,
                 0.04,
                 0.03,
                 0.01,
@@ -4450,6 +5043,7 @@ class ChangepointDetector(object):
                 'pelt',
                 'l1_fused_lasso',
                 'l1_total_variation',
+                'l0_trend_filter',
                 'composite_fused_lasso',
                 'autoencoder',
                 'multiresolution',
@@ -4463,6 +5057,7 @@ class ChangepointDetector(object):
                 0.07,
                 0.04,
                 0.06,
+                0.02,
                 0.02,
                 0.02,
                 0.01,
@@ -4565,6 +5160,55 @@ class ChangepointDetector(object):
             new_params = {
                 'lambda_reg': random.choices(
                     lambda_options, weights=lambda_weights, k=1
+                )[0],
+                'difference_order': random.choices(
+                    [1, 2] if new_method == 'l1_fused_lasso' else [2, 3, 4],
+                    weights=[0.85, 0.15]
+                    if new_method == 'l1_fused_lasso'
+                    else [0.75, 0.2, 0.05],
+                    k=1,
+                )[0],
+                'adaptive': random.choices([False, True], weights=[0.7, 0.3], k=1)[0],
+                'adaptive_gamma': random.choices(
+                    [0.5, 1.0, 1.5], weights=[0.2, 0.65, 0.15], k=1
+                )[0],
+                'irls_iterations': random.choices([3, 4, 5], weights=[0.3, 0.5, 0.2], k=1)[
+                    0
+                ],
+            }
+
+        elif new_method == 'l0_trend_filter':
+            lambda_options = [0.1, 0.5, 1.0, 2.0, 5.0]
+            lambda_weights = [0.15, 0.35, 0.3, 0.15, 0.05]
+            if selection_mode == "fast":
+                max_cp_options = [3, 5, 8]
+                max_cp_weights = [0.35, 0.45, 0.2]
+                htp_options = [2, 3]
+                htp_weights = [0.65, 0.35]
+            else:
+                max_cp_options = [3, 5, 8, 12]
+                max_cp_weights = [0.25, 0.35, 0.25, 0.15]
+                htp_options = [2, 3, 4, 5]
+                htp_weights = [0.2, 0.4, 0.3, 0.1]
+
+            new_params = {
+                'lambda_reg': random.choices(
+                    lambda_options, weights=lambda_weights, k=1
+                )[0],
+                'difference_order': random.choices(
+                    [1, 2, 3, 4], weights=[0.2, 0.55, 0.2, 0.05], k=1
+                )[0],
+                'max_changepoints': random.choices(
+                    max_cp_options, weights=max_cp_weights, k=1
+                )[0],
+                'htp_iterations': random.choices(
+                    htp_options, weights=htp_weights, k=1
+                )[0],
+                'hard_weight': random.choices(
+                    [1000.0, 2500.0, 5000.0], weights=[0.3, 0.5, 0.2], k=1
+                )[0],
+                'support_multiplier': random.choices(
+                    [1, 2, 3], weights=[0.2, 0.6, 0.2], k=1
                 )[0],
             }
 

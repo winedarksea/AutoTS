@@ -14,6 +14,7 @@ from autots.tools.changepoints import (
     ChangepointDetector,
     _build_ed_prefix_sums,
     _calculate_segment_cost,
+    _detect_l0_trend_changepoints,
     _detect_pelt_changepoints,
     _detect_wbs2_changepoints,
     create_changepoint_features,
@@ -69,6 +70,67 @@ class TestChangepointFeatures(unittest.TestCase):
         self.assertGreater(features.shape[1], 0)
         self.assertTrue(
             all("l1_fused_lasso_changepoint" in col for col in features.columns)
+        )
+
+    def test_create_changepoint_features_l1_adaptive_higher_order(self):
+        dt_index = pd.date_range("2020-01-01", periods=180, freq="D")
+        x = np.arange(180, dtype=float)
+        data = np.where(
+            x < 95,
+            0.0025 * (x**2) + 2.0,
+            0.0025 * ((x - 95.0) ** 2) + 14.0,
+        )
+        data = data + np.sin(x / 8.0) * 0.05
+
+        features = create_changepoint_features(
+            dt_index,
+            method="l1_total_variation",
+            params={
+                "lambda_reg": 1.0,
+                "difference_order": 3,
+                "adaptive": True,
+                "adaptive_gamma": 1.0,
+                "irls_iterations": 4,
+            },
+            data=data,
+        )
+
+        self.assertEqual(features.shape[0], len(dt_index))
+        self.assertGreater(features.shape[1], 0)
+        self.assertTrue(
+            all("l1_total_variation_changepoint" in col for col in features.columns)
+        )
+
+    def test_create_changepoint_features_l0(self):
+        dt_index = pd.date_range("2020-01-01", periods=160, freq="D")
+        x = np.arange(160, dtype=float)
+        data = np.piecewise(
+            x,
+            [x < 55, (x >= 55) & (x < 105), x >= 105],
+            [
+                lambda v: 0.08 * v + 5.0,
+                lambda v: 0.01 * (v - 55.0) + 10.0,
+                lambda v: -0.04 * (v - 105.0) + 10.5,
+            ],
+        )
+
+        features = create_changepoint_features(
+            dt_index,
+            method="l0_trend_filter",
+            params={
+                "lambda_reg": 1.0,
+                "difference_order": 2,
+                "max_changepoints": 6,
+                "min_segment_length": 8,
+                "htp_iterations": 3,
+            },
+            data=data,
+        )
+
+        self.assertEqual(features.shape[0], len(dt_index))
+        self.assertGreater(features.shape[1], 0)
+        self.assertTrue(
+            all("l0_trend_filter_changepoint" in col for col in features.columns)
         )
 
     def test_create_changepoint_features_cusum(self):
@@ -302,6 +364,39 @@ class TestChangepointDetector(unittest.TestCase):
         # EWMA should detect at least one changepoint for this clear level shift
         self.assertGreater(len(detector.changepoints_["series1"]), 0)
 
+    def test_changepoint_detector_l0_trend_filter(self):
+        dates = pd.date_range("2022-01-01", periods=180, freq="D")
+        x = np.arange(180, dtype=float)
+        series1 = np.piecewise(
+            x,
+            [x < 70, (x >= 70) & (x < 120), x >= 120],
+            [
+                lambda v: 0.06 * v + 4.0,
+                lambda v: 0.0 * v + 8.5,
+                lambda v: -0.05 * (v - 120.0) + 8.5,
+            ],
+        )
+        series2 = series1 * 1.2 + 0.3
+        df = pd.DataFrame({"series1": series1, "series2": series2}, index=dates)
+
+        detector = ChangepointDetector(
+            method="l0_trend_filter",
+            aggregate_method="individual",
+            method_params={
+                "lambda_reg": 1.0,
+                "difference_order": 2,
+                "max_changepoints": 6,
+                "htp_iterations": 3,
+                "hard_weight": 2500.0,
+            },
+        )
+        detector.detect(df)
+
+        self.assertIn("series1", detector.changepoints_)
+        self.assertIn("series2", detector.changepoints_)
+        self.assertIsInstance(detector.changepoints_["series1"], np.ndarray)
+        self.assertGreater(len(detector.changepoints_["series1"]), 0)
+
     def test_changepoint_detector_kcpd(self):
         dates = pd.date_range("2022-01-01", periods=180, freq="D")
         values = np.concatenate(
@@ -419,6 +514,12 @@ class TestChangepointDetector(unittest.TestCase):
         self.assertEqual(wbs2_params["method"], "wbs2")
         self.assertIn("M", wbs2_params["method_params"])
         self.assertIn("model_selection", wbs2_params["method_params"])
+
+        l0_params = ChangepointDetector.get_new_params(method="l0_trend_filter")
+        self.assertEqual(l0_params["method"], "l0_trend_filter")
+        self.assertIn("difference_order", l0_params["method_params"])
+        self.assertIn("max_changepoints", l0_params["method_params"])
+        self.assertIn("htp_iterations", l0_params["method_params"])
 
     @unittest.skipUnless(
         TORCH_AVAILABLE, "PyTorch required for autoencoder changepoint detection"
@@ -807,6 +908,71 @@ class TestEdPelt(unittest.TestCase):
                 found_ed = True
                 break
         self.assertTrue(found_ed, "get_new_params never returned loss_function='ed' in 300 tries")
+
+
+class TestL0TrendFiltering(unittest.TestCase):
+    """Tests for L0 trend filtering changepoint detection."""
+
+    def test_l0_constant_series_returns_no_changepoints(self):
+        signal = np.ones(160, dtype=float) * 7.5
+        cps, fitted = _detect_l0_trend_changepoints(
+            signal,
+            lambda_reg=1.0,
+            difference_order=2,
+            max_changepoints='auto',
+            min_segment_length=8,
+            htp_iterations=3,
+        )
+        self.assertEqual(len(cps), 0, f"Unexpected changepoints on constant series: {cps}")
+        self.assertEqual(len(fitted), len(signal))
+
+    def test_l0_detects_structural_shift(self):
+        x = np.arange(180, dtype=float)
+        signal = np.piecewise(
+            x,
+            [x < 75, (x >= 75) & (x < 125), x >= 125],
+            [
+                lambda v: 0.04 * v + 2.0,
+                lambda v: 0.0 * v + 8.0,
+                lambda v: -0.06 * (v - 125.0) + 8.0,
+            ],
+        )
+        cps, fitted = _detect_l0_trend_changepoints(
+            signal,
+            lambda_reg=1.0,
+            difference_order=2,
+            max_changepoints=6,
+            min_segment_length=8,
+            htp_iterations=3,
+        )
+        self.assertIsInstance(cps, np.ndarray)
+        self.assertEqual(len(fitted), len(signal))
+        self.assertGreater(len(cps), 0)
+        self.assertTrue(any(65 <= cp <= 85 for cp in cps), f"cps={cps}")
+
+    def test_l0_detector_vectorized_handles_constant_series(self):
+        dates = pd.date_range("2022-01-01", periods=140, freq="D")
+        x = np.arange(140, dtype=float)
+        changing = np.piecewise(
+            x,
+            [x < 70, x >= 70],
+            [lambda v: 0.05 * v + 1.0, lambda v: -0.03 * (v - 70.0) + 4.5],
+        )
+        constant = np.ones(140, dtype=float) * 3.0
+        df = pd.DataFrame({"changing": changing, "constant": constant}, index=dates)
+        cd = ChangepointDetector(
+            method="l0_trend_filter",
+            aggregate_method="individual",
+            method_params={
+                "lambda_reg": 1.0,
+                "difference_order": 2,
+                "max_changepoints": 6,
+                "htp_iterations": 3,
+            },
+        )
+        cd.detect(df)
+        self.assertEqual(len(cd.changepoints_["constant"]), 0)
+        self.assertGreaterEqual(len(cd.changepoints_["changing"]), 1)
 
 
 class TestWbs2(unittest.TestCase):
