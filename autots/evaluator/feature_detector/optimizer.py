@@ -335,9 +335,6 @@ class FeatureDetectionOptimizer:
         unmatched_detected = set(range(len(detected_entries)))
 
         sigma_days = max(loss_calc.changepoint_tolerance_days, 1) / 1.5
-        true_magnitudes = [entry[3] for entry in true_entries if np.isfinite(entry[3])]
-        avg_true_magnitude = np.mean(true_magnitudes) if true_magnitudes else 0.0
-        magnitude_floor = max(0.05, avg_true_magnitude * 0.25)
 
         loss = 0.0
         score_threshold = 0.15
@@ -348,60 +345,35 @@ class FeatureDetectionOptimizer:
             best_metrics = None
 
             for idx in unmatched_detected:
-                det_date, det_prior, det_post, det_mag = detected_entries[idx]
+                det_date, _det_prior, _det_post, _det_mag = detected_entries[idx]
                 dist_days = abs((det_date - true_date).days)
                 distance_score = np.exp(-0.5 * (dist_days / (sigma_days + 1e-9)) ** 2)
 
-                slope_change_true = true_post - true_prior
-                slope_change_detected = det_post - det_prior
-                mag_denom = max(abs(true_mag), magnitude_floor, 1e-3)
-                slope_denom = max(abs(slope_change_true), magnitude_floor, 1e-3)
-
-                magnitude_score = np.exp(
-                    -0.5 * (abs(det_mag - true_mag) / mag_denom) ** 2
-                )
-                slope_score = np.exp(
-                    -0.5
-                    * (abs(slope_change_detected - slope_change_true) / slope_denom)
-                    ** 2
-                )
-                # Distance dominates matching; slope is too noisy to heavily weight
-                # for placement decisions (mirrors fine_tune_changepoints finding).
-                match_score = (
-                    0.65 * distance_score + 0.30 * magnitude_score + 0.05 * slope_score
-                )
+                # Match purely on distance — residual magnitude and slope are too
+                # sensitive to small parameter changes to provide a clean gradient.
+                match_score = distance_score
 
                 if match_score > best_score:
                     best_score = match_score
                     best_idx = idx
-                    best_metrics = (
-                        distance_score,
-                        magnitude_score,
-                        slope_score,
-                        dist_days,
-                    )
+                    best_metrics = (distance_score, dist_days)
 
             if (
                 best_idx is not None
                 and best_metrics is not None
                 and best_score >= score_threshold
             ):
-                distance_score, magnitude_score, slope_score, dist_days = best_metrics
+                distance_score, dist_days = best_metrics
                 unmatched_detected.discard(best_idx)
 
-                # Keep slope in the penalty but strongly down-weighted so that
-                # mis-placed-but-slope-matching CPs don't outrank well-placed ones.
-                combined_penalty = (
-                    0.65 * (1.0 - distance_score)
-                    + 0.30 * (1.0 - magnitude_score)
-                    + 0.05 * (1.0 - slope_score)
-                )
+                combined_penalty = 1.0 - distance_score
                 if dist_days > loss_calc.changepoint_tolerance_days:
                     overshoot = dist_days - loss_calc.changepoint_tolerance_days
                     combined_penalty += (
                         min(overshoot / (loss_calc.changepoint_tolerance_days + 1e-6), 1.5)
                         * 0.3
                     )
+                # Scale by true magnitude so large trend breaks matter more.
                 loss += combined_penalty * (1.0 + min(abs(true_mag), 2.0))
             else:
                 loss += 1.2 + abs(true_mag)
