@@ -411,7 +411,6 @@ class TVA:
                 # expand metadata for batch
                 meta_b = None
                 if meta_t is not None:
-                    idx = slice(0, x_b.shape[0])
                     meta_b = meta_t[:x_b.shape[0]]
 
                 outputs = self._network(x_b, meta_b, anchor_mask_t)
@@ -569,6 +568,8 @@ class TVA:
         optimizer = BifrostOptimizer(self)
 
         if 'growth_rate' in constraints:
+            if 'series_name' not in constraints:
+                raise ValueError("what_if() with 'growth_rate' requires 'series_name' in constraints.")
             return optimizer.apply_growth_constraint(
                 constraints['series_name'], constraints['growth_rate']
             )
@@ -604,6 +605,12 @@ class TVA:
                 return forecasts
 
         if self._priors is None:
+            warnings.warn(
+                "reconcile() called but no priors/hierarchy matrix is available. "
+                "Returning unreconciled forecasts.",
+                UserWarning,
+                stacklevel=2,
+            )
             return forecasts
 
         S = self._priors.build_hierarchy_matrix()

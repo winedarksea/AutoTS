@@ -90,6 +90,8 @@ class ReconciliationBridge:
             reconciled = erm_reconcile(S, y_all, W)
         elif self.method == 'iterative_mint':
             reconciled = iterative_mint_reconcile(S, y_all, W)
+        elif self.method == 'volatility_mint':
+            return self.reconcile_with_volatility(forecasts, S, residuals if residuals is not None else np.zeros((1, L)))
         else:
             reconciled = mint_reconcile(S, y_all, W)
 

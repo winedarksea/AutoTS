@@ -655,4 +655,6 @@ class YggdrasilPriors:
     def _branches_of_yggdrasil(self):
         """Hidden: count the branches (edges) in the prior graph."""
         adj = self.build_prior_adjacency()
+        if adj is None:
+            return 0
         return int(np.count_nonzero(adj - np.diag(np.diag(adj))) // 2)

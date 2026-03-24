@@ -124,26 +124,21 @@ class NornDecomposer:
             'level_shifts': 'level_shift',
         }
 
-        # extract from prediction components if available
+        # extract from prediction components if available.
+        # pred.components is a MultiIndex DataFrame with columns (series, component_name)
+        # produced by stack_component_frames — never a plain dict.
         pred_components = getattr(pred, 'components', None)
-        if pred_components is not None and isinstance(pred_components, dict):
+        if pred_components is not None and isinstance(pred_components, pd.DataFrame):
+            available_components = set(pred_components.columns.get_level_values(1))
             for output_key, comp_key in component_map.items():
-                if comp_key in pred_components:
-                    df = pred_components[comp_key]
-                    if isinstance(df, pd.DataFrame):
-                        result[output_key] = df.reindex(columns=columns, fill_value=0.0)
-                    else:
-                        result[output_key] = pd.DataFrame(0.0, index=future_index, columns=columns)
+                if comp_key in available_components:
+                    df = pred_components.xs(comp_key, axis=1, level=1)
+                    result[output_key] = df.reindex(columns=columns, fill_value=0.0)
                 else:
                     result[output_key] = pd.DataFrame(0.0, index=future_index, columns=columns)
         else:
-            # fallback: reconstruct from the forecast method's internal logic
-            # the detector.forecast builds these internally as local variables
-            # re-call and capture
             for output_key in component_map:
                 result[output_key] = pd.DataFrame(0.0, index=future_index, columns=columns)
-            # trend and seasonal are the main ones available
-            result['trend'] = pd.DataFrame(0.0, index=future_index, columns=columns)
 
         # anomalies and noise are not projected
         result['anomalies'] = pd.DataFrame(0.0, index=future_index, columns=columns)
