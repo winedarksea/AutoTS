@@ -685,19 +685,22 @@ class LossEvaluatorsMixin:
                 # Lighter penalty for slight overpredicting
                 amplitude_penalty = min((ratio - 1.0) * 0.1, 0.4)
 
-        # Balanced blend across four complementary metrics:
+        # Blend across four complementary metrics:
         # - RMSE: point-wise accuracy (penalizes phase shifts, keeps magnitude honest)
         # - Wasserstein: shape/energy distribution (phase-tolerant)
-        # - Spectral: frequency content match (fully phase-invariant, rewards
-        #   correct periodic structure at any data frequency automatically)
+        # - Spectral: frequency content match (phase-invariant; peak_mae now uses
+        #   per-peak relative error so yearly and weekly are equally important)
         # - Profile correlation: periodic shape fidelity (day-of-week, month, etc.;
-        #   auto-adapts to data frequency from the datetime index)
+        #   auto-adapts to data frequency; explicitly checks each period separately
+        #   so this is the primary guard against wrong yearly shape and missing weekly)
         # - Amplitude: asymmetric penalty forcing model to capture full swing
+        # Wasserstein weight is reduced because it is shape-tolerant
+        # Profile weight is raised because it directly checks the seasonal profile
         return (
-            0.25 * rmse_penalty
-            + 0.25 * wasserstein_penalty
-            + 0.30 * spectral_penalty
-            + 0.20 * profile_penalty
+            0.30 * rmse_penalty
+            + 0.10 * wasserstein_penalty
+            + 0.25 * spectral_penalty
+            + 0.35 * profile_penalty
             + amplitude_penalty
         )
 

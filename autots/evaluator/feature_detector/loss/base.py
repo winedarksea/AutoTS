@@ -35,7 +35,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         'holiday_recall_loss': 0.9,  # Separate recall metric to penalize zero-detection
         'seasonality_strength_loss': 2.0,
         'seasonality_pattern_loss': 2.0,
-        'seasonality_changepoint_loss': 0.6,
+        'seasonality_changepoint_loss': 0.01,
         'noise_level_loss': 0.5,
         'noise_regime_loss': 0.4,
         'noise_structure_loss': 0.2,

@@ -367,8 +367,11 @@ class LossMetricsMixin:
             # How well does the detected spectrum capture these specific peaks?
             peak_true_values = spectrum_no_dc[top_true_indices]
             peak_det_values = det_spectrum_no_dc[top_true_indices]
-            peak_scale = float(np.mean(peak_true_values)) + 1e-9
-            peak_mae = float(np.mean(np.abs(peak_true_values - peak_det_values))) / peak_scale
+            # Per-peak relative error: each frequency peak (weekly, yearly, etc.)
+            per_peak_errors = np.abs(peak_true_values - peak_det_values) / (
+                peak_true_values + 1e-9
+            )
+            peak_mae = float(np.mean(per_peak_errors))
         else:
             peak_mae = 0.0
 
