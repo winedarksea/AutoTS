@@ -6,7 +6,7 @@ Top-level orchestrator for the TVA forecasting graph. Ties together
 decomposition, priors, trend network, fusion, losses, reconciliation,
 and scenario planning into a single fit/predict interface.
 
-Norse/TVA references courtesy of an LLM. A bit heavier handed than the easter eggs I prefer.
+Note a wrapper exists in /autots/models/tva_model.py for the AutoTS search integration.
 
 Some reference papers:
 https://www.mdpi.com/2227-7390/13/20/3288
@@ -838,7 +838,4 @@ class TVA:
             'n_prototypes': self._n_prototypes_fit if self._n_prototypes_fit is not None else self.n_prototypes,
             'prototype_assignment_method': self.prototype_assignment_method,
         }
-
-    # legacy alias
-    _he_who_remains = _get_metadata
 

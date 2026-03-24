@@ -75,6 +75,7 @@ from autots.models.sklearn import (
 )
 from autots.models.composite import PreprocessingExperts
 from autots.models.deepssm import MambaSSM, pMLP
+from autots.models.tva_model import TVAModel
 from typing import Any, Dict, Tuple
 
 
@@ -712,6 +713,17 @@ def ModelMonster(
         )
     elif model == 'pMLP':
         return pMLP(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'TVAModel':
+        return TVAModel(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
