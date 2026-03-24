@@ -1075,7 +1075,7 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         ) as local_mutate:
             best = optimizer.fine_tune_changepoints(
                 starting_params,
-                n_per_stage=1,
+                n_per_stage=20,
                 curriculum_sigmas=[7.0],
                 exclude_changepoint_methods=[],
             )

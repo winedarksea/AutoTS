@@ -1282,14 +1282,71 @@ class FeatureDetectionOptimizer:
         }]
         evaluated_sigs = {self._param_signature(frozen_params)}
 
+        # ------------------------------------------------------------------
+        # Method-diversity sweep: try every non-excluded CP method at least
+        # once before any local refinement begins.  This prevents the stage
+        # from ignoring an entire method family simply because the seed came
+        # from a different one.
+        # ------------------------------------------------------------------
+        try:
+            from autots.tools.changepoints import valid_changepoint_methods as _all_cp_methods
+            all_cp_methods = list(_all_cp_methods)
+        except Exception:
+            all_cp_methods = ['cusum', 'ewma', 'pelt', 'kcpd', 'bottom_up', 'wbs2',
+                              'l1_fused_lasso', 'l1_total_variation',
+                              'composite_fused_lasso', 'autoencoder', 'multiresolution']
+        diversity_methods = [
+            m for m in all_cp_methods
+            if not (exclude_changepoint_methods and m in exclude_changepoint_methods)
+        ]
+        for sweep_method in diversity_methods:
+            sweep_candidate = copy.deepcopy(best_params)
+            try:
+                sweep_cp = ChangepointDetector.get_new_params(method='random')
+                # Force the method to the sweep target.
+                sweep_cp['method'] = sweep_method
+                sweep_cp['aggregate_method'] = 'individual'
+                sweep_cp['probabilistic_output'] = False
+                sweep_candidate['changepoint_params'] = sweep_cp
+                sweep_sig = self._param_signature(sweep_candidate)
+                if sweep_sig not in evaluated_sigs:
+                    evaluated_sigs.add(sweep_sig)
+                    sweep_loss = self._evaluate_changepoint_params(
+                        sweep_candidate, sigma, tversky_alpha, tversky_beta,
+                        tversky_gamma, level_shift_weight, over_prediction_penalty,
+                        location_weight, count_weight, slope_match_weight,
+                    )
+                    history.append({
+                        'sigma': sigma,
+                        'iteration': f'diversity_sweep_{sweep_method}',
+                        'params': copy.deepcopy(sweep_candidate),
+                        'loss': sweep_loss,
+                    })
+                    if sweep_loss < best_loss:
+                        best_loss = sweep_loss
+                        best_params = copy.deepcopy(sweep_candidate)
+            except Exception:
+                pass
+
+        # How often to force a fully random sample regardless of local_prob.
+        # Every ~8 iterations we break out of the local refinement basin.
+        diversity_interval = max(6, n_iters // 12)
+
+        # Per-stage local-refinement probability.  Later stages refine more but
+        # still leave meaningful room for exploration so a globally better method
+        # can be discovered after the diversity sweep.
+        stage_local_probs = [0.35, 0.52, 0.62]
+        local_prob = stage_local_probs[min(stage_idx, len(stage_local_probs) - 1)]
+
         for i in range(n_iters):
             candidate = copy.deepcopy(best_params)
             if i % 20 == 0:
                 print(f"  Stage {stage_idx + 1} iter {i}/{n_iters} (best loss so far: {best_loss:.4f})")
 
-            # In Stage 1 (wide sigma), explore broadly to escape year-long offset basin
-            local_prob = 0.4 if stage_idx == 0 else 0.7
-            if rng.random() < local_prob:
+            # Periodically break out of the local basin with a random sample,
+            # regardless of the stage local_prob setting.
+            force_random = (i > 0) and (i % diversity_interval == 0)
+            if not force_random and rng.random() < local_prob:
                 fresh_cp = self._local_mutate_changepoint_params(
                     candidate.get('changepoint_params', {}), rng
                 )
