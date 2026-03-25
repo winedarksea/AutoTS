@@ -915,8 +915,8 @@ class TestFusionLayers(unittest.TestCase):
         trend = torch.ones(B, N, T)
         sea = torch.ones(B, N, T)
         hol = torch.zeros(B, N, T)
-        ls = torch.zeros(B, N, T)
-        out = f(trend, sea, hol, ls)
+        # level_shifts are added by caller, not passed to fusion
+        out = f(trend, sea, hol)
         self.assertEqual(out.shape, (B, N, T))
         np.testing.assert_allclose(out.detach().numpy(), 2.0 * np.ones((B, N, T)), atol=1e-5)
 
@@ -924,23 +924,51 @@ class TestFusionLayers(unittest.TestCase):
         from autots.evaluator.tva.fusion import AdditiveFusion
         f = AdditiveFusion()
         x = torch.ones(2, 3, 5)
-        out = f(x, x, x, x, anomalies=x)
-        np.testing.assert_allclose(out.detach().numpy(), 5.0 * np.ones((2, 3, 5)), atol=1e-5)
+        out = f(x, x, x, anomalies=x)
+        np.testing.assert_allclose(out.detach().numpy(), 4.0 * np.ones((2, 3, 5)), atol=1e-5)
 
     def test_digital_twin_fusion_shape(self):
         from autots.evaluator.tva.fusion import DigitalTwinFusion
         f = DigitalTwinFusion()
         B, N, T = 2, 4, 10
         x = torch.randn(B, N, T)
-        out = f(x, x, x, x)
+        out = f(x, x, x)
         self.assertEqual(out.shape, (B, N, T))
 
     def test_digital_twin_fusion_with_anomalies(self):
         from autots.evaluator.tva.fusion import DigitalTwinFusion
         f = DigitalTwinFusion()
         x = torch.randn(2, 3, 8)
-        out = f(x, x, x, x, anomalies=x)
+        out = f(x, x, x, anomalies=x)
         self.assertEqual(out.shape, (2, 3, 8))
+
+    def test_direct_attention_fusion_shape(self):
+        from autots.evaluator.tva.fusion import DirectAttentionFusion
+        f = DirectAttentionFusion()
+        B, N, T = 2, 4, 10
+        x = torch.randn(B, N, T)
+        out = f(x, x, x)
+        self.assertEqual(out.shape, (B, N, T))
+
+    def test_direct_attention_fusion_with_anomalies(self):
+        from autots.evaluator.tva.fusion import DirectAttentionFusion
+        f = DirectAttentionFusion()
+        x = torch.randn(2, 3, 8)
+        out = f(x, x, x, anomalies=x)
+        self.assertEqual(out.shape, (2, 3, 8))
+
+    def test_direct_attention_fusion_additive_init(self):
+        """Zero-init output_proj means fusion output ≈ sum of components at init."""
+        from autots.evaluator.tva.fusion import DirectAttentionFusion
+        torch.manual_seed(0)
+        f = DirectAttentionFusion()
+        B, N, T = 1, 2, 6
+        trend = torch.full((B, N, T), 1.0)
+        sea = torch.full((B, N, T), 0.5)
+        hol = torch.full((B, N, T), 0.25)
+        out = f(trend, sea, hol)
+        expected = 1.0 + 0.5 + 0.25
+        np.testing.assert_allclose(out.detach().numpy(), expected * np.ones((B, N, T)), atol=1e-5)
 
 
 @SKIP_TORCH

@@ -414,7 +414,7 @@ class TVA:
             isinstance(self._fusion_layer, nn.Module)
             and any(p.requires_grad for p in self._fusion_layer.parameters())
         )
-        fusion_forecast_weight = float((self.loss_weights or {}).get('fusion_forecast', 1.0))
+        fusion_forecast_weight = float((self.loss_weights or {}).get('fusion_forecast', 0.25))
 
         epoch_iter = tqdm(range(self.epochs), desc="TVA Training") if self.verbose else range(self.epochs)
 
