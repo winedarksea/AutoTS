@@ -3,31 +3,12 @@
 
 import numpy as np
 import pandas as pd
-import copy
 import warnings
 from autots.tools.transform import AnomalyRemoval
 
 
 class AnomalyMixin:
     """Mixin providing anomaly detection, noise analysis, and regime changepoint detection."""
-
-    def _build_anomaly_params(self, stage='final'):
-        """Build anomaly params for the requested pipeline stage."""
-        params = copy.deepcopy(self.anomaly_params)
-        params['output'] = self.detection_mode
-        if stage == 'prepass':
-            method_params = copy.deepcopy(params.get('method_params', {}))
-            if 'alpha' in method_params:
-                method_params['alpha'] = min(max(float(method_params['alpha']) * 4.0, 0.03), 0.20)
-            if 'rolling_periods' in method_params:
-                method_params['rolling_periods'] = max(
-                    14,
-                    int(method_params['rolling_periods'] * 0.5),
-                )
-            params['method_params'] = method_params
-            params.pop('holiday_dates', None)
-            params['two_pass'] = False
-        return params
 
     def _detect_anomalies(self, residual_df, anomaly_params=None, detector_attr='anomaly_detector'):
         """Detect anomalies using AnomalyRemoval."""

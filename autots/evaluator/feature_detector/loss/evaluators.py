@@ -527,18 +527,15 @@ class LossEvaluatorsMixin:
         false_positives = len(unmatched_detected)
         precision = matched_true / max(len(detected_dates), 1)
         recall = matched_true / max(len(true_dates), 1)
-        count_penalty = abs(len(detected_dates) - len(true_dates)) / max(len(true_dates), 1)
-        return max(
-            0.0,
-            (
-            (1.0 - precision) * 1.5
-            + (1.0 - recall) * 1.2
-            + 0.6 * min(count_penalty, 2.0)
-            + 0.35 * false_positives
-            + max(len(true_dates) - matched_true, 0) * 0.25
-            - anomaly_credit
-            ),
-        )
+        # F2 (beta=2) is recall-biased: missing a holiday costs more than a false
+        # positive.  holiday_recall_loss provides additional zero-detection gradient
+        # so this function only needs a balanced quality signal.
+        beta_sq = 4.0
+        f2 = (1.0 + beta_sq) * precision * recall / (beta_sq * precision + recall + 1e-9)
+        # Absolute FP term deters arbitrary over-detection independently of the
+        # count ratio already captured by precision.
+        fp_penalty = 0.18 * false_positives
+        return max(0.0, (1.0 - f2) * 2.5 + fp_penalty - anomaly_credit)
 
     def _holiday_impact_loss(self, detected_impacts, true_impacts):
         if not true_impacts:
