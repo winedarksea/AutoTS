@@ -2186,7 +2186,7 @@ class MambaSSM(ModelObject):
 
         # Parallel scan: faster training (especially long sequences), numerically equivalent
         use_scan_options = [True, False]
-        use_scan_weights = [0.5, 0.5]  # Equal chance; scan is generally a free speedup
+        use_scan_weights = [1.0, 0.000001]  # Scan is consistently faster and better
 
         # Local (instance) scaling: normalizes each window by context-window stats for better extrapolation
         local_scaling_options = [True, False]

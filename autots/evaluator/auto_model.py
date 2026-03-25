@@ -722,7 +722,7 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
-    elif model == 'TVAModel':
+    elif model in ['TVAModel', 'TVA']:
         return TVAModel(
             frequency=frequency,
             prediction_interval=prediction_interval,

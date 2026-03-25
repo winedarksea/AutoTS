@@ -222,7 +222,7 @@ class TVA:
 
         # Step 1: Decompose
         if self.verbose:
-            print("TVA: Decomposing time series (Weaving components)...")
+            print("TVA: Decomposing time series...")
         self._decomposer = NornDecomposer(self.detector_params)
         self._decomposer.fit(df)
         self._components = self._decomposer.get_components()
@@ -380,7 +380,7 @@ class TVA:
 
         # Step 7: Training loop
         if self.verbose:
-            print("TVA: Training (establishing the Sacred Timeline)...")
+            print("TVA: Training...")
 
         all_params = list(self._network.parameters())
         if hasattr(self._fusion_layer, 'parameters'):

@@ -1375,12 +1375,23 @@ def dates_to_holidays(
                     result_per_holiday.index = populated_holidays['date']
                     result.append(result_per_holiday.groupby(level=0).sum())
                 elif style in ["impact", 'series_flag']:
-                    temp = populated_holidays.pivot(
-                        index='date', columns='series', values='holiday_name'
-                    ).reindex(columns=df_cols)
                     if style == "series_flag":
-                        result = result + temp.where(temp.isnull(), 1).fillna(0.0)
+                        temp = (
+                            populated_holidays.assign(_holiday_flag=1.0)
+                            .pivot_table(
+                                index='date',
+                                columns='series',
+                                values='_holiday_flag',
+                                aggfunc='max',
+                            )
+                            .reindex(index=dates, columns=df_cols)
+                            .fillna(0.0)
+                        )
+                        result = result + temp
                     else:
+                        temp = populated_holidays.pivot(
+                            index='date', columns='series', values='holiday_name'
+                        ).reindex(columns=df_cols)
                         if isinstance(holiday_impacts, dict):
                             result = result + temp.replace(holiday_impacts).astype(
                                 float
