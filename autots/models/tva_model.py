@@ -278,7 +278,7 @@ class TVAModel(ModelObject):
         trend_network = random.choices(["v2", "v1"], weights=[0.75, 0.25])[0]
         fusion = random.choices(["attention", "additive", "direct"], weights=[0.35, 0.45, 0.15])[0]
         d_token = random.choices([32, 48, 64, 96, 128], weights=[0.15, 0.2, 0.35, 0.2, 0.1])[0]
-        n_heads = random.choices([2, 4, 8], weights=[0.2, 0.6, 0.2])[0]
+        n_heads = random.choices([2, 4, 8, 10], weights=[0.2, 0.6, 0.2, 0.1])[0]
         # keep n_heads as divisor of d_token
         if d_token % n_heads != 0:
             n_heads = 4 if d_token % 4 == 0 else 2
@@ -296,7 +296,7 @@ class TVAModel(ModelObject):
         )[0]
         n_global = random.choices(["auto", 2, 3, 4, 5, 6], weights=[0.5, 0.08, 0.14, 0.14, 0.08, 0.06])[0]
         n_meso = random.choices(["auto", 4, 6, 8, 10, 12], weights=[0.45, 0.1, 0.15, 0.15, 0.1, 0.05])[0]
-        n_prototypes = random.choices(["auto", 2, 3, 4, 5, 6], weights=[0.55, 0.12, 0.14, 0.1, 0.06, 0.03])[0]
+        n_prototypes = random.choices(["auto", 2, 3, 4, 5, 6, 8], weights=[0.55, 0.12, 0.14, 0.1, 0.06, 0.03, 0.03])[0]
         if n_meso != "auto" and n_global != "auto":
             n_meso = max(int(n_meso), int(n_global))
         prototype_assignment_method = random.choices(
@@ -340,26 +340,26 @@ class TVAModel(ModelObject):
                 weights=[0.12, 0.15, 0.2, 0.22, 0.18, 0.13],
             )[0],
             "smoothness": random.choices(
-                [0.0, 0.01, 0.03, 0.1, 0.2],
-                weights=[0.1, 0.2, 0.25, 0.3, 0.15],
+                [0.0, 0.01, 0.03, 0.1, 0.2, 0.3],
+                weights=[0.1, 0.2, 0.25, 0.3, 0.15, 0.05],
             )[0],
             "soft_prior": random.choices(
-                [0.0, 0.1, 0.25, 0.5], weights=[0.15, 0.25, 0.3, 0.3]
+                [0.0, 0.1, 0.25, 0.5, 0.75], weights=[0.15, 0.25, 0.3, 0.3, 0.1]
             )[0],
             "causal_prior": random.choices(
                 [0.0, 0.1, 0.25, 0.5], weights=[0.2, 0.25, 0.3, 0.25]
             )[0],
             "coherence": random.choices(
-                [0.0, 0.25, 0.5, 1.0, 2.0],
-                weights=[0.1, 0.2, 0.3, 0.25, 0.15],
+                [0.0, 0.05, 0.25, 0.5, 1.0, 2.0],
+                weights=[0.2, 0.1, 0.2, 0.1, 0.25, 0.15],
             )[0],
             "probabilistic": random.choices(
                 [0.0, 0.05, 0.1, 0.2, 0.3],
                 weights=[0.1, 0.2, 0.35, 0.25, 0.1],
             )[0],
             "fusion_forecast": random.choices(
-                [0.0, 0.25, 0.5, 1.0],
-                weights=[0.1, 0.2, 0.25, 0.45],
+                [0.0, 0.25, 0.5, 0.75, 1.0],
+                weights=[0.1, 0.2, 0.25, 0.2, 0.25],
             )[0],
         }
 
