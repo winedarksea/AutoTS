@@ -76,7 +76,12 @@ class HolidayMixin:
                         country=country_value,
                         encode_holiday_type=True,
                     )
-                except Exception:
+                except Exception as exc:
+                    warnings.warn(
+                        f"Calendar holiday fetch failed for country '{country_value}': {exc}. "
+                        "Holiday features for this country will be skipped.",
+                        RuntimeWarning,
+                    )
                     country_features = pd.DataFrame(index=index)
                 if isinstance(country_features, pd.Series):
                     country_features = country_features.to_frame()

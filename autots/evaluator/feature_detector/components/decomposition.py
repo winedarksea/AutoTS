@@ -32,6 +32,17 @@ class DecompositionMixin:
         )
         self._holiday_dates_temp = holiday_dates
         self._holiday_regressors_temp = holiday_regressors
+        # Persist regressor column names separately so forecast() can align future
+        # regressors to the fitted schema even if _holiday_regressors_temp is lost
+        # (e.g., across a serialization round-trip). Calendar holiday columns are
+        # type-stable (e.g., "calendar_US__Christmas Day"), not date-specific, so
+        # schema alignment from stored names is safe across forecast horizons.
+        self._holiday_regressor_columns = (
+            list(holiday_regressors.columns)
+            if holiday_regressors is not None
+            and not getattr(holiday_regressors, "empty", True)
+            else []
+        )
 
         # Optional suppression of holiday-proximate anomalies to reduce holiday
         # double-counting in the final anomaly output.

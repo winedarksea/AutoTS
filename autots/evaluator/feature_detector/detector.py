@@ -326,6 +326,7 @@ class TimeSeriesFeatureDetector(
         self.detected_seasonal_periods = None
         self._seasonality_changepoints = {}
         self._holiday_regressors_temp = None
+        self._holiday_regressor_columns = None
         self._holiday_dates_temp = {}
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
@@ -481,15 +482,23 @@ class TimeSeriesFeatureDetector(
         seasonal = zeros.copy()
         holidays = zeros.copy()
         train_reg = getattr(self, "_holiday_regressors_temp", None)
+        # Fall back to the persisted column list when train_reg was lost (e.g. after
+        # a serialization round-trip that preserved config but not runtime state).
+        _saved_columns = getattr(self, "_holiday_regressor_columns", None)
+        fit_columns = (
+            list(train_reg.columns)
+            if train_reg is not None and not getattr(train_reg, "empty", True)
+            else _saved_columns if _saved_columns else None
+        )
         if self.seasonality_model is not None:
             future_reg = None
-            if train_reg is not None and not getattr(train_reg, "empty", True):
+            if fit_columns is not None:
                 future_reg = self._build_holiday_regressors_for_index(
                     future_index,
                     columns=columns,
-                    include_anomaly_rules=True,
+                    include_anomaly_rules=train_reg is not None,
                 )
-                future_reg = future_reg.reindex(columns=train_reg.columns, fill_value=0.0)
+                future_reg = future_reg.reindex(columns=fit_columns, fill_value=0.0)
                 if future_reg.empty:
                     future_reg = None
             if future_reg is not None:
@@ -632,6 +641,7 @@ class TimeSeriesFeatureDetector(
         self.reconstruction_error = None
         self.reconstruction_rmse = None
         self._holiday_regressors_temp = None
+        self._holiday_regressor_columns = None
         self._holiday_dates_temp = {}
 
     def get_detected_features(
