@@ -172,6 +172,11 @@ class FeatureDetectionOptimizer:
             record['objective_value'] = float(objective_value)
         self.optimization_history.append(record)
         evaluated_signatures.add(signature)
+        # Keep a running best so self.best_params is never None after at least one successful evaluation
+        if loss['total_loss'] < self.best_loss:
+            self.best_params = copy.deepcopy(params)
+            self.best_loss = loss['total_loss']
+            self.best_total_loss = loss['total_loss']
         return record
 
     def _initialize_history(self, starting_params=None):

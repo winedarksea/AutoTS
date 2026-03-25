@@ -933,6 +933,47 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         self.assertIn('holiday_recall', metrics)
         self.assertIn('trend_f2', metrics)
 
+    def test_running_best_params_survive_final_selection_failure(self):
+        """Regression: successful evaluations should populate running best state."""
+        optimizer = FeatureDetectionOptimizer(
+            self.generator,
+            n_iterations=1,
+        )
+
+        fake_loss = {'total_loss': 1.5}
+        with patch.object(optimizer, '_evaluate_params', return_value=fake_loss):
+            with patch.object(
+                optimizer,
+                '_select_best_from_history',
+                side_effect=RuntimeError('selection failed'),
+            ):
+                with self.assertRaises(RuntimeError):
+                    optimizer.optimize()
+
+        self.assertGreaterEqual(len(optimizer.optimization_history), 1)
+        self.assertIsNotNone(optimizer.best_params)
+        self.assertEqual(optimizer.best_loss, 1.5)
+        self.assertEqual(optimizer.best_total_loss, 1.5)
+
+    def test_record_evaluation_updates_best_total_loss(self):
+        """Regression: running best bookkeeping should keep total loss aligned."""
+        optimizer = FeatureDetectionOptimizer(self.generator, n_iterations=0)
+        evaluated_signatures = set()
+        first_params = {'candidate': 1}
+        second_params = {'candidate': 2}
+
+        with patch.object(
+            optimizer,
+            '_evaluate_params',
+            side_effect=[{'total_loss': 2.0}, {'total_loss': 1.0}],
+        ):
+            optimizer._record_evaluation('first', first_params, evaluated_signatures)
+            optimizer._record_evaluation('second', second_params, evaluated_signatures)
+
+        self.assertEqual(optimizer.best_params, second_params)
+        self.assertEqual(optimizer.best_loss, 1.0)
+        self.assertEqual(optimizer.best_total_loss, 1.0)
+
     def test_example_benchmark_raw_best_matches_selected(self):
         """Regression check for the example benchmark selection path."""
         example_path = Path(__file__).resolve().parents[1] / 'examples' / 'synthetic_tuning_example.py'

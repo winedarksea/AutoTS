@@ -34,5 +34,5 @@
 
 ### Basic Tenants
 - **Priorities** Accuracy > Ease of Use > Speed (with speed more important with 'fast' selections). While speed is lowest priority, it is still critical, and all code should be vectorized and use matrix operations, avoiding for loops when possible.
-- **Fault tolerance** it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
+- **Fault tolerance** it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others. However, additional fallbacks should be avoided where possible, and root cause solutions found.
 - **Missing data tolerance** large chunks of data can be missing and model will still produce reasonable results (although lower quality than if data is available)
