@@ -172,8 +172,8 @@ class LossMetricsMixin:
         precision_scores = np.max(proximity, axis=0)
         soft_precision = float(np.mean(precision_scores))
 
-        # Soft F1 (beta=1.2, slightly recall-favoring)
-        beta = 1.2
+        # Soft F1 (beta=2.0, clearly recall-favoring for the synthetic benchmark)
+        beta = 2.0
         beta_sq = beta ** 2
         denom = beta_sq * soft_precision + soft_recall + 1e-9
         soft_f1 = (1.0 + beta_sq) * (soft_precision * soft_recall) / denom
@@ -489,10 +489,15 @@ class LossMetricsMixin:
                 p = _profile_corr(detected_arr, true_arr, dow_keys)
                 if p is not None:
                     penalties.append(p)
+                if len(idx) > 180:
+                    doy_keys = np.array(idx.dayofyear)
+                    p = _profile_corr(detected_arr, true_arr, doy_keys)
+                    if p is not None:
+                        penalties.append(p)
                 month_keys = np.array(idx.month)
                 p = _profile_corr(detected_arr, true_arr, month_keys)
                 if p is not None:
-                    penalties.append(p)
+                    penalties.append(0.5 * p)
             elif median_delta < 86400 * 10:  # Weekly
                 woy_keys = np.array(idx.isocalendar().week.values, dtype=int)
                 p = _profile_corr(detected_arr, true_arr, woy_keys)
@@ -519,6 +524,41 @@ class LossMetricsMixin:
         # Average penalty across all applicable profiles
         avg_penalty = float(np.mean(penalties))
         return min(avg_penalty, 3.0)
+
+    @staticmethod
+    def _component_yearly_fourier_penalty(detected, true, date_index=None, max_harmonics=3):
+        """Compare yearly seasonal shape through low-order Fourier coefficients."""
+        if date_index is None or not isinstance(date_index, pd.DatetimeIndex):
+            return 0.5
+        detected_arr = np.asarray(detected, dtype=float).ravel()
+        true_arr = np.asarray(true, dtype=float).ravel()
+        length = min(detected_arr.size, true_arr.size, len(date_index))
+        if length < 180:
+            return 0.5
+        detected_arr = detected_arr[:length]
+        true_arr = true_arr[:length]
+        idx = date_index[:length]
+        mask = np.isfinite(detected_arr) & np.isfinite(true_arr)
+        if mask.sum() < 180:
+            return 0.5
+        detected_arr = detected_arr[mask]
+        true_arr = true_arr[mask]
+        idx = idx[mask]
+
+        day_of_year = np.asarray(idx.dayofyear, dtype=float)
+        period = 365.25
+        coeff_penalties = []
+        for harmonic in range(1, max(1, int(max_harmonics)) + 1):
+            cos_term = np.cos(2.0 * np.pi * harmonic * day_of_year / period)
+            sin_term = np.sin(2.0 * np.pi * harmonic * day_of_year / period)
+            true_cos = float(np.dot(true_arr, cos_term) / len(true_arr))
+            true_sin = float(np.dot(true_arr, sin_term) / len(true_arr))
+            det_cos = float(np.dot(detected_arr, cos_term) / len(detected_arr))
+            det_sin = float(np.dot(detected_arr, sin_term) / len(detected_arr))
+            true_scale = max(abs(true_cos), abs(true_sin), 1e-6)
+            coeff_penalties.append(abs(det_cos - true_cos) / true_scale)
+            coeff_penalties.append(abs(det_sin - true_sin) / true_scale)
+        return float(min(np.mean(coeff_penalties), 3.0))
 
     def _focal_tversky_changepoint_penalty(
         self,
@@ -608,4 +648,3 @@ class LossMetricsMixin:
             return True
         except (TypeError, ValueError):
             return False
-

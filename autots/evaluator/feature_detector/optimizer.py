@@ -23,11 +23,17 @@ def _get_loss_class():
     return FeatureDetectionLoss
 
 
+def _get_reconstruction_loss_class():
+    """Lazy import to avoid circular dependency."""
+    from .loss import ReconstructionLoss
+    return ReconstructionLoss
+
+
 class FeatureDetectionOptimizer:
     """
     Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.
 
-    Uses a genetic-style search with balanced scoring to minimize detection loss.
+    Defaults to a broad random/genetic search and raw-loss selection.
     """
 
     def __init__(
@@ -37,6 +43,9 @@ class FeatureDetectionOptimizer:
         n_iterations=50,
         random_seed=42,
         starting_params=None,
+        search_strategy="random",
+        selection_strategy="raw_lexicographic",
+        stage_budget=None,
     ):
         """
         Parameters
@@ -54,8 +63,12 @@ class FeatureDetectionOptimizer:
         """
         self.synthetic_generator = synthetic_generator
         self.loss_calculator = loss_calculator or _get_loss_class()()
+        self.reconstruction_loss_calculator = _get_reconstruction_loss_class()()
         self.n_iterations = n_iterations
         self.random_seed = random_seed
+        self.search_strategy = str(search_strategy or "random")
+        self.selection_strategy = str(selection_strategy or "raw_lexicographic")
+        self.stage_budget = copy.deepcopy(stage_budget)
         if starting_params is not None and not isinstance(starting_params, dict):
             raise ValueError("starting_params must be a dict or None.")
         self.starting_params = copy.deepcopy(starting_params)
@@ -66,6 +79,19 @@ class FeatureDetectionOptimizer:
         self.optimization_history = []
         self.baseline_loss = None
         self.history_df = None
+        self.recovery_floor_thresholds = {
+            'median_weekly_rel_error': 0.15,
+            'median_yearly_rel_error': 0.15,
+            'holiday_recall': 0.90,
+            'holiday_precision': 0.80,
+            'median_holiday_count_error': 2.0,
+            'anomaly_f2': 0.85,
+            'anomaly_precision': 0.70,
+            'trend_f2': 0.85,
+            'trend_mean_date_error_days': 5.0,
+            'median_trend_count_error': 1.0,
+            'zero_level_shift_false_positives': 1.0,
+        }
 
     def optimize(self, starting_params=None):
         """
@@ -91,6 +117,8 @@ class FeatureDetectionOptimizer:
         seed = self.starting_params if starting_params is None else starting_params
         if seed is not None and not isinstance(seed, dict):
             raise ValueError("starting_params must be a dict or None.")
+        if self.search_strategy == 'hybrid':
+            return self._hybrid_search(starting_params=seed)
         return self._random_search(starting_params=seed)
 
     def _default_detector_params(self):
@@ -115,62 +143,80 @@ class FeatureDetectionOptimizer:
             ),
         }
 
-    def _random_search(self, starting_params=None):
-        """Genetic-style optimization with balanced scoring."""
+    def _record_evaluation(
+        self,
+        iteration,
+        params,
+        evaluated_signatures,
+        objective_label='raw',
+        objective_value=None,
+    ):
+        """Evaluate params once and append a normalized history record."""
+        params = copy.deepcopy(params)
+        signature = self._param_signature(params)
+        if signature in evaluated_signatures:
+            return None
+
+        start_time = time.time()
+        loss = self._evaluate_params(params)
+        runtime = time.time() - start_time
+        record = {
+            'iteration': iteration,
+            'params': copy.deepcopy(params),
+            'loss': loss['total_loss'],
+            'loss_breakdown': loss,
+            'runtime': runtime,
+            'objective_label': objective_label,
+        }
+        if objective_value is not None and np.isfinite(objective_value):
+            record['objective_value'] = float(objective_value)
+        self.optimization_history.append(record)
+        evaluated_signatures.add(signature)
+        return record
+
+    def _initialize_history(self, starting_params=None):
+        """Evaluate baseline and optional starting params."""
         rng = random.Random(self.random_seed)
-
-        detector_for_sampling = _get_detector_class()()
-
-        baseline_params = self._default_detector_params()
         evaluated_signatures = set()
+        baseline_params = self._default_detector_params()
         try:
-            start_time = time.time()
-            baseline_loss = self._evaluate_params(baseline_params)
-            baseline_runtime = time.time() - start_time
-
-            self.baseline_loss = baseline_loss['total_loss']
-            baseline_history_entry = {
-                'iteration': 'baseline',
-                'params': copy.deepcopy(baseline_params),
-                'loss': self.baseline_loss,
-                'loss_breakdown': baseline_loss,
-                'runtime': baseline_runtime,
-            }
-            self.optimization_history.append(baseline_history_entry)
-            evaluated_signatures.add(self._param_signature(baseline_params))
+            baseline_history_entry = self._record_evaluation(
+                'baseline',
+                baseline_params,
+                evaluated_signatures,
+            )
+            self.baseline_loss = baseline_history_entry['loss']
             print(
-                f"Baseline loss = {self.baseline_loss:.4f}, runtime = {baseline_runtime:.2f}s"
+                f"Baseline loss = {self.baseline_loss:.4f}, runtime = {baseline_history_entry['runtime']:.2f}s"
             )
         except Exception as e:
             print(f"Warning: Baseline evaluation failed with error: {e}")
             self.baseline_loss = None
 
         if starting_params is not None:
+            starting_params = copy.deepcopy(starting_params)
             starting_signature = self._param_signature(starting_params)
             if starting_signature in evaluated_signatures:
                 print("Starting params match baseline; skipping duplicate evaluation.")
             else:
                 try:
-                    start_time = time.time()
-                    starting_loss = self._evaluate_params(starting_params)
-                    starting_runtime = time.time() - start_time
-
-                    self.optimization_history.append(
-                        {
-                            'iteration': 'starting',
-                            'params': copy.deepcopy(starting_params),
-                            'loss': starting_loss['total_loss'],
-                            'loss_breakdown': starting_loss,
-                            'runtime': starting_runtime,
-                        }
+                    starting_record = self._record_evaluation(
+                        'starting',
+                        starting_params,
+                        evaluated_signatures,
                     )
-                    evaluated_signatures.add(starting_signature)
                     print(
-                        f"Starting params loss = {starting_loss['total_loss']:.4f}, "
-                        f"runtime = {starting_runtime:.2f}s"
+                        f"Starting params loss = {starting_record['loss']:.4f}, "
+                        f"runtime = {starting_record['runtime']:.2f}s"
                     )
                 except Exception as e:
                     print(f"Warning: Starting params evaluation failed with error: {e}")
+        return rng, evaluated_signatures
+
+    def _random_search(self, starting_params=None):
+        """Legacy random search retained for compatibility."""
+        rng, evaluated_signatures = self._initialize_history(starting_params)
+        detector_for_sampling = _get_detector_class()()
 
         successful_iterations = 0
         failed_iterations = 0
@@ -180,7 +226,7 @@ class FeatureDetectionOptimizer:
             attempts = 0
             parent_pool = sorted(
                 self.optimization_history,
-                key=lambda x: x.get('balanced_loss', x.get('loss', float('inf'))),
+                key=lambda x: x.get('loss', float('inf')),
             )
             parent_pool = (
                 parent_pool[: max(2, min(6, len(parent_pool)))] if parent_pool else []
@@ -204,8 +250,6 @@ class FeatureDetectionOptimizer:
                 else:
                     params = detector_for_sampling.get_new_params(method='random')
                 if attempts > 8:
-                    # Bug fix: ensure we have valid params even if duplicates persist
-                    # Force a fresh random sample as last resort
                     params = detector_for_sampling.get_new_params(method='random')
                     break
 
@@ -218,26 +262,17 @@ class FeatureDetectionOptimizer:
                 continue
 
             try:
-                start_time = time.time()
-                loss = self._evaluate_params(params)
-                runtime = time.time() - start_time
-
-                record = {
-                    'iteration': successful_iterations,
-                    'params': copy.deepcopy(params),
-                    'loss': loss['total_loss'],
-                    'loss_breakdown': loss,
-                    'runtime': runtime,
-                }
-                self.optimization_history.append(record)
-                evaluated_signatures.add(signature)
+                record = self._record_evaluation(
+                    successful_iterations,
+                    params,
+                    evaluated_signatures,
+                )
                 successful_iterations += 1
 
-                # Print progress for every iteration
                 if i % 20 == 0 or successful_iterations == 1:
                     print(
                         f"Iteration {i} ({successful_iterations} successful): "
-                        f"raw loss = {loss['total_loss']:.4f}, runtime = {runtime:.2f}s"
+                        f"raw loss = {record['loss']:.4f}, runtime = {record['runtime']:.2f}s"
                     )
             except Exception as e:
                 failed_iterations += 1
@@ -272,44 +307,458 @@ class FeatureDetectionOptimizer:
             print(f"  Max runtime: {max_runtime:.2f}s")
 
         # Now select best model based on properly calculated balanced scores
-        print(f"\nCalculating balanced scores and selecting best model...")
+        print(f"\nSelecting best model from raw-loss history...")
         best_params = self._select_best_from_history()
 
         return best_params
 
+    def _hybrid_search(self, starting_params=None):
+        """Hybrid staged optimization tuned for the synthetic benchmark."""
+        rng, evaluated_signatures = self._initialize_history(starting_params)
+        detector_for_sampling = _get_detector_class()()
+        stage_budget = self._resolve_stage_budget()
+
+        print(
+            "\nStarting hybrid feature-detector search "
+            f"with stage budget {stage_budget}"
+        )
+
+        self._run_portfolio_stage(
+            stage_budget.get('portfolio', 0),
+            detector_for_sampling,
+            rng,
+            evaluated_signatures,
+            starting_params=starting_params,
+        )
+        self._run_local_stage(
+            "seasonality_holiday",
+            stage_budget.get('seasonality_holiday', 0),
+            detector_for_sampling,
+            rng,
+            evaluated_signatures,
+            mutable_keys=(
+                'rough_seasonality_params',
+                'seasonality_params',
+                'holiday_params',
+                'general_transformer_params',
+            ),
+        )
+        self._run_local_stage(
+            "anomaly",
+            stage_budget.get('anomaly', 0),
+            detector_for_sampling,
+            rng,
+            evaluated_signatures,
+            mutable_keys=('anomaly_params', 'extended_anomaly_params'),
+        )
+        self._run_local_stage(
+            "changepoint_level_shift",
+            stage_budget.get('changepoint_level_shift', 0),
+            detector_for_sampling,
+            rng,
+            evaluated_signatures,
+            mutable_keys=('changepoint_params', 'level_shift_params'),
+            stage_objective='changepoint',
+        )
+        self._run_local_stage(
+            "joint_polish",
+            stage_budget.get('joint_polish', 0),
+            detector_for_sampling,
+            rng,
+            evaluated_signatures,
+            mutable_keys=(
+                'rough_seasonality_params',
+                'seasonality_params',
+                'holiday_params',
+                'anomaly_params',
+                'changepoint_params',
+                'level_shift_params',
+                'general_transformer_params',
+                'standardize',
+                'smoothing_window',
+                'extended_anomaly_params',
+            ),
+        )
+
+        print("\nHybrid search complete. Selecting best model...")
+        return self._select_best_from_history()
+
+    def _resolve_stage_budget(self):
+        """Map n_iterations to deterministic stage counts."""
+        if isinstance(self.stage_budget, dict):
+            budget = {
+                'portfolio': int(self.stage_budget.get('portfolio', 0)),
+                'seasonality_holiday': int(self.stage_budget.get('seasonality_holiday', 0)),
+                'anomaly': int(self.stage_budget.get('anomaly', 0)),
+                'changepoint_level_shift': int(self.stage_budget.get('changepoint_level_shift', 0)),
+                'joint_polish': int(self.stage_budget.get('joint_polish', 0)),
+            }
+            return budget
+
+        total = max(int(self.n_iterations), 0)
+        weights = {
+            'portfolio': 0.15,
+            'seasonality_holiday': 0.30,
+            'anomaly': 0.20,
+            'changepoint_level_shift': 0.25,
+            'joint_polish': 0.10,
+        }
+        budget = {key: int(math.floor(total * weight)) for key, weight in weights.items()}
+        allocated = sum(budget.values())
+        order = [
+            'seasonality_holiday',
+            'changepoint_level_shift',
+            'anomaly',
+            'portfolio',
+            'joint_polish',
+        ]
+        idx = 0
+        while allocated < total:
+            bucket = order[idx % len(order)]
+            budget[bucket] += 1
+            allocated += 1
+            idx += 1
+        return budget
+
+    def _run_portfolio_stage(
+        self,
+        budget,
+        detector_for_sampling,
+        rng,
+        evaluated_signatures,
+        starting_params=None,
+    ):
+        """Evaluate a curated seed portfolio before local search."""
+        if budget <= 0:
+            return
+
+        print(f"\n[Portfolio] evaluating up to {budget} curated seeds...")
+        seed_portfolio = self._build_seed_portfolio(detector_for_sampling, rng, starting_params)
+        successes = 0
+        for idx, params in enumerate(seed_portfolio):
+            if successes >= budget:
+                break
+            try:
+                record = self._record_evaluation(
+                    f'portfolio_{idx}',
+                    params,
+                    evaluated_signatures,
+                )
+                if record is None:
+                    continue
+                successes += 1
+                print(
+                    f"  seed {idx + 1}/{budget}: raw loss = {record['loss']:.4f}, "
+                    f"recon = {record['loss_breakdown'].get('reconstruction_total_loss', np.nan):.4f}"
+                )
+            except Exception as exc:
+                print(f"  seed {idx + 1} failed: {str(exc)[:120]}")
+
+    def _run_local_stage(
+        self,
+        stage_name,
+        budget,
+        detector_for_sampling,
+        rng,
+        evaluated_signatures,
+        mutable_keys,
+        stage_objective='raw',
+    ):
+        """Run a local-search stage around the strongest history entries."""
+        if budget <= 0:
+            return
+
+        print(f"\n[{stage_name}] running {budget} local iterations...")
+        successful = 0
+        failed = 0
+        for i in range(budget):
+            parent_pool = self._get_parent_pool(stage_name, stage_objective)
+            if parent_pool:
+                parent = copy.deepcopy(rng.choice(parent_pool)['params'])
+            else:
+                parent = detector_for_sampling.get_new_params(method='random')
+
+            candidate = self._mutate_params(
+                parent,
+                detector_for_sampling,
+                rng,
+                allowed_keys=mutable_keys,
+            )
+            objective_value = None
+            if stage_objective == 'changepoint':
+                try:
+                    objective_value = self._evaluate_changepoint_params(
+                        candidate,
+                        sigma=7.0,
+                        location_weight=0.45,
+                        count_weight=0.35,
+                        slope_match_weight=0.10,
+                    )
+                except Exception:
+                    objective_value = None
+
+            try:
+                record = self._record_evaluation(
+                    f'{stage_name}_{i}',
+                    candidate,
+                    evaluated_signatures,
+                    objective_label=stage_objective,
+                    objective_value=objective_value,
+                )
+                if record is None:
+                    continue
+                successful += 1
+                if i % 10 == 0 or i == budget - 1:
+                    objective_msg = ""
+                    if objective_value is not None and np.isfinite(objective_value):
+                        objective_msg = f", stage score = {objective_value:.4f}"
+                    print(
+                        f"  iter {i + 1}/{budget}: raw loss = {record['loss']:.4f}"
+                        f"{objective_msg}"
+                    )
+            except Exception as exc:
+                failed += 1
+                if failed <= 3:
+                    print(f"  iter {i + 1} failed: {str(exc)[:120]}")
+
+        if failed > 3:
+            print(f"  ... and {failed - 3} more failures suppressed")
+
     def _evaluate_params(self, params):
         """Evaluate a parameter configuration."""
-        # Create detector with these params
+        params = copy.deepcopy(params)
         detector = _get_detector_class()(**params)
-
-        # Fit on synthetic data
-        detector.fit(self.synthetic_generator.get_data())
-
-        # Get detected features
+        observed = self.synthetic_generator.get_data()
+        detector.fit(observed)
         detected_features = detector.get_detected_features(include_components=True)
-
-        # Get true labels
         true_labels = self.synthetic_generator.get_all_labels()
         true_components = self.synthetic_generator.get_components()
-
-        # Calculate loss
         loss = self.loss_calculator.calculate_loss(
             detected_features,
             true_labels,
             true_components=true_components,
             date_index=self.synthetic_generator.date_index,
         )
-        # Keep main optimize aligned with legacy changepoint measurement.
-        # This only affects the trend changepoint component used by optimize;
-        # fine_tune_changepoints uses its own dedicated objective.
-        loss = self._apply_legacy_changepoint_loss_for_optimize(
-            loss=loss,
-            detected_features=detected_features,
-            true_labels=true_labels,
-            true_components=true_components,
+        try:
+            reconstruction = self.reconstruction_loss_calculator.calculate_loss(
+                observed,
+                detected_features,
+                components=detected_features.get('components'),
+            )
+            reconstruction_total_loss = float(reconstruction.get('total_loss', np.nan))
+        except Exception:
+            reconstruction_total_loss = float('inf')
+        recovery_metrics = self._compute_recovery_metrics(
+            detected_features,
+            true_labels,
+            true_components,
+        )
+        loss['reconstruction_total_loss'] = reconstruction_total_loss
+        loss['recovery_metrics'] = recovery_metrics
+        loss['recovery_floor_violations'] = self._count_recovery_floor_violations(
+            recovery_metrics
+        )
+        return loss
+
+    def _compute_recovery_metrics(
+        self,
+        detected_features,
+        true_labels,
+        true_components,
+    ):
+        """Compute benchmark-facing recovery metrics for selection and reporting."""
+        metrics = {}
+        series_names = self.loss_calculator._resolve_series_names(
+            detected_features,
+            true_labels,
+            None,
+        )
+        detected_components = self.loss_calculator._resolve_components(
+            detected_features.get('components') if isinstance(detected_features, dict) else None,
+            None,
+        )
+        true_component_map = self.loss_calculator._resolve_components(
+            true_components,
+            None,
         )
 
-        return loss
+        weekly_errors = []
+        yearly_errors = []
+        holiday_precision = []
+        holiday_recall = []
+        holiday_count_error = []
+        anomaly_f2 = []
+        anomaly_precision = []
+        trend_f2 = []
+        trend_date_error = []
+        trend_count_error = []
+        zero_level_shift_fp = []
+
+        for name in series_names:
+            det_series = self.loss_calculator._extract_detected_series(detected_features, name)
+            true_series = self.loss_calculator._extract_true_series(true_labels, name)
+
+            det_strength = det_series.get('series_seasonality_strengths') or {}
+            true_strength = true_series.get('series_seasonality_strengths') or {}
+            for key, container in [('weekly', weekly_errors), ('yearly', yearly_errors)]:
+                truth = true_strength.get(key)
+                estimate = det_strength.get(key)
+                if truth is None or not np.isfinite(float(truth)) or abs(float(truth)) < 1e-9:
+                    continue
+                estimate = 0.0 if estimate is None or not np.isfinite(float(estimate)) else float(estimate)
+                container.append(abs(estimate - float(truth)) / (abs(float(truth)) + 1e-6))
+
+            hol_stats = self._date_detection_stats(
+                det_series.get('holiday_dates', []),
+                true_series.get('holiday_dates', []),
+                tolerance_days=max(self.loss_calculator.holiday_tolerance_days, 1),
+                beta=1.0,
+            )
+            holiday_precision.append(hol_stats['precision'])
+            holiday_recall.append(hol_stats['recall'])
+            holiday_count_error.append(abs(hol_stats['detected_count'] - hol_stats['true_count']))
+
+            anomaly_stats = self._date_detection_stats(
+                det_series.get('anomalies', []),
+                true_series.get('anomalies', []),
+                tolerance_days=max(self.loss_calculator.anomaly_tolerance_days, 1),
+                beta=2.0,
+            )
+            anomaly_f2.append(anomaly_stats['fbeta'])
+            anomaly_precision.append(anomaly_stats['precision'])
+
+            trend_stats = self._date_detection_stats(
+                det_series.get('trend_changepoints', []),
+                true_series.get('trend_changepoints', []),
+                tolerance_days=max(self.loss_calculator.changepoint_tolerance_days, 1),
+                beta=2.0,
+            )
+            trend_f2.append(trend_stats['fbeta'])
+            trend_count_error.append(abs(trend_stats['detected_count'] - trend_stats['true_count']))
+            if trend_stats['matched_date_errors']:
+                trend_date_error.extend(trend_stats['matched_date_errors'])
+
+            true_ls = true_series.get('level_shifts', []) or []
+            det_ls = det_series.get('level_shifts', []) or []
+            if not true_ls:
+                zero_level_shift_fp.append(float(len(det_ls)))
+
+        metrics['median_weekly_rel_error'] = float(np.median(weekly_errors)) if weekly_errors else np.nan
+        metrics['median_yearly_rel_error'] = float(np.median(yearly_errors)) if yearly_errors else np.nan
+        metrics['holiday_recall'] = float(np.mean(holiday_recall)) if holiday_recall else np.nan
+        metrics['holiday_precision'] = float(np.mean(holiday_precision)) if holiday_precision else np.nan
+        metrics['median_holiday_count_error'] = float(np.median(holiday_count_error)) if holiday_count_error else np.nan
+        metrics['anomaly_f2'] = float(np.mean(anomaly_f2)) if anomaly_f2 else np.nan
+        metrics['anomaly_precision'] = float(np.mean(anomaly_precision)) if anomaly_precision else np.nan
+        metrics['trend_f2'] = float(np.mean(trend_f2)) if trend_f2 else np.nan
+        metrics['trend_mean_date_error_days'] = float(np.mean(trend_date_error)) if trend_date_error else np.nan
+        metrics['median_trend_count_error'] = float(np.median(trend_count_error)) if trend_count_error else np.nan
+        metrics['zero_level_shift_false_positives'] = (
+            float(np.max(zero_level_shift_fp)) if zero_level_shift_fp else 0.0
+        )
+
+        if series_names:
+            weekly_profile = []
+            yearly_profile = []
+            for name in series_names:
+                det_comp = detected_components.get(name, {})
+                true_comp = true_component_map.get(name, {})
+                det_season = det_comp.get('seasonality')
+                true_season = true_comp.get('seasonality')
+                if det_season is None or true_season is None:
+                    continue
+                weekly_penalty, yearly_penalty = self._seasonality_profile_penalties(
+                    det_season,
+                    true_season,
+                    self.synthetic_generator.date_index,
+                )
+                if weekly_penalty is not None:
+                    weekly_profile.append(1.0 - weekly_penalty)
+                if yearly_penalty is not None:
+                    yearly_profile.append(1.0 - yearly_penalty)
+            metrics['weekly_profile_correlation'] = float(np.mean(weekly_profile)) if weekly_profile else np.nan
+            metrics['yearly_profile_correlation'] = float(np.mean(yearly_profile)) if yearly_profile else np.nan
+
+        return metrics
+
+    def _count_recovery_floor_violations(self, recovery_metrics):
+        """Count how many benchmark floors a candidate misses."""
+        if not isinstance(recovery_metrics, dict):
+            return 0
+        checks = [
+            recovery_metrics.get('median_weekly_rel_error'),
+            recovery_metrics.get('median_yearly_rel_error'),
+            recovery_metrics.get('holiday_recall'),
+            recovery_metrics.get('holiday_precision'),
+            recovery_metrics.get('median_holiday_count_error'),
+            recovery_metrics.get('anomaly_f2'),
+            recovery_metrics.get('anomaly_precision'),
+            recovery_metrics.get('trend_f2'),
+            recovery_metrics.get('trend_mean_date_error_days'),
+            recovery_metrics.get('median_trend_count_error'),
+            recovery_metrics.get('zero_level_shift_false_positives'),
+        ]
+        thresholds = [
+            ('median_weekly_rel_error', '<='),
+            ('median_yearly_rel_error', '<='),
+            ('holiday_recall', '>='),
+            ('holiday_precision', '>='),
+            ('median_holiday_count_error', '<='),
+            ('anomaly_f2', '>='),
+            ('anomaly_precision', '>='),
+            ('trend_f2', '>='),
+            ('trend_mean_date_error_days', '<='),
+            ('median_trend_count_error', '<='),
+            ('zero_level_shift_false_positives', '<='),
+        ]
+        violations = 0
+        for value, (name, direction) in zip(checks, thresholds):
+            if value is None or not np.isfinite(value):
+                violations += 1
+                continue
+            threshold = self.recovery_floor_thresholds[name]
+            if direction == '<=' and value > threshold:
+                violations += 1
+            if direction == '>=' and value < threshold:
+                violations += 1
+        return int(violations)
+
+    def _date_detection_stats(self, detected_events, true_events, tolerance_days=1, beta=1.0):
+        """Compute precision/recall/F-beta and matched date errors for dated event lists."""
+        detected_dates = [self.loss_calculator._parse_generic_date(event) for event in (detected_events or [])]
+        true_dates = [self.loss_calculator._parse_generic_date(event) for event in (true_events or [])]
+        detected_dates = [d for d in detected_dates if d is not None]
+        true_dates = [d for d in true_dates if d is not None]
+        unmatched = set(range(len(detected_dates)))
+        matches = 0
+        matched_errors = []
+        for true_date in true_dates:
+            best_idx = None
+            best_dist = None
+            for idx in unmatched:
+                dist = abs((detected_dates[idx] - true_date).days)
+                if best_dist is None or dist < best_dist:
+                    best_idx = idx
+                    best_dist = dist
+            if best_idx is not None and best_dist is not None and best_dist <= tolerance_days:
+                unmatched.discard(best_idx)
+                matches += 1
+                matched_errors.append(float(best_dist))
+        true_count = len(true_dates)
+        detected_count = len(detected_dates)
+        precision = matches / detected_count if detected_count else 1.0
+        recall = matches / true_count if true_count else 1.0
+        beta_sq = float(beta) ** 2
+        denom = beta_sq * precision + recall + 1e-9
+        fbeta = (1.0 + beta_sq) * precision * recall / denom if denom > 0 else 0.0
+        return {
+            'precision': float(precision),
+            'recall': float(recall),
+            'fbeta': float(fbeta),
+            'detected_count': detected_count,
+            'true_count': true_count,
+            'matched_date_errors': matched_errors,
+        }
 
     def _legacy_optimize_trend_loss(
         self,
@@ -554,29 +1003,169 @@ class FeatureDetectionOptimizer:
                 child[key] = copy.deepcopy(parent_b[key])
         return child
 
-    def _mutate_params(self, params, sampler, rng):
+    def _get_parent_pool(self, stage_name, stage_objective='raw', limit=6):
+        """Return the strongest recent candidates for the current stage."""
+        if not self.optimization_history:
+            return []
+        history = list(self.optimization_history)
+        if stage_objective == 'changepoint':
+            with_objective = [
+                entry
+                for entry in history
+                if np.isfinite(entry.get('objective_value', np.nan))
+            ]
+            if with_objective:
+                history = with_objective
+            history = sorted(
+                history,
+                key=lambda entry: (
+                    entry.get('objective_value', float('inf')),
+                    entry.get('loss', float('inf')),
+                ),
+            )
+        else:
+            history = sorted(
+                history,
+                key=lambda entry: (
+                    entry.get('loss', float('inf')),
+                    entry.get('loss_breakdown', {}).get(
+                        'recovery_floor_violations', float('inf')
+                    ),
+                    entry.get('loss_breakdown', {}).get(
+                        'reconstruction_total_loss', float('inf')
+                    ),
+                ),
+            )
+        return history[: max(1, min(limit, len(history)))]
+
+    def _mutate_params(self, params, sampler, rng, allowed_keys=None):
+        """Replace one or more top-level parameter blocks with fresh samples."""
         mutated = copy.deepcopy(params)
         fresh = sampler.get_new_params(method='random')
-        # Only mutate keys that exist in both the current params and fresh sample
         shared_keys = [k for k in mutated.keys() if k in fresh]
+        if allowed_keys is not None:
+            shared_keys = [k for k in shared_keys if k in set(allowed_keys)]
         if not shared_keys:
             return mutated
-        count = max(1, min(len(shared_keys), 2))
-        for key in rng.sample(shared_keys, count):
-            mutated[key] = copy.deepcopy(fresh[key])
+
+        n_blocks = min(len(shared_keys), 1 if rng.random() < 0.7 else 2)
+        for selected_key in rng.sample(shared_keys, n_blocks):
+            mutated[selected_key] = copy.deepcopy(fresh.get(selected_key))
         return mutated
+
+    def _mutate_nested_block(self, current, fresh, rng):
+        """Mutate a nested configuration with local numeric jitter and sparse leaf swaps."""
+        if fresh is None:
+            return copy.deepcopy(current)
+        if current is None or rng.random() < 0.15:
+            return copy.deepcopy(fresh)
+        if isinstance(current, dict) and isinstance(fresh, dict):
+            mutated = copy.deepcopy(current)
+            shared_keys = [k for k in mutated.keys() if k in fresh]
+            if not shared_keys:
+                return copy.deepcopy(fresh)
+            sample_size = max(1, min(len(shared_keys), 2))
+            for key in rng.sample(shared_keys, sample_size):
+                cur_val = mutated.get(key)
+                new_val = fresh.get(key)
+                if isinstance(cur_val, dict) and isinstance(new_val, dict):
+                    mutated[key] = self._mutate_nested_block(cur_val, new_val, rng)
+                elif isinstance(cur_val, bool):
+                    mutated[key] = cur_val if rng.random() < 0.5 else bool(new_val)
+                elif isinstance(cur_val, int) and not isinstance(cur_val, bool):
+                    mutated[key] = int(
+                        type(self)._mutate_numeric_value(
+                            cur_val,
+                            rng,
+                            integer=True,
+                            minimum=1 if cur_val > 0 else None,
+                        )
+                    )
+                elif isinstance(cur_val, float):
+                    mutated[key] = float(
+                        type(self)._mutate_numeric_value(cur_val, rng, integer=False)
+                    )
+                else:
+                    mutated[key] = copy.deepcopy(new_val)
+            return mutated
+        if isinstance(current, list) and isinstance(fresh, list):
+            if not current or rng.random() < 0.25:
+                return copy.deepcopy(fresh)
+            mutated = copy.deepcopy(current)
+            idx = rng.randrange(len(mutated))
+            replacement_idx = min(idx, len(fresh) - 1)
+            mutated[idx] = copy.deepcopy(fresh[replacement_idx])
+            return mutated
+        if isinstance(current, (int, float)) and isinstance(fresh, (int, float)):
+            return type(self)._mutate_numeric_value(
+                current,
+                rng,
+                integer=isinstance(current, int),
+            )
+        return copy.deepcopy(fresh)
+
+    def _build_seed_portfolio(self, detector_for_sampling, rng, starting_params=None):
+        """Create a small, reliable portfolio without rewriting user params."""
+        baseline = self._default_detector_params()
+        portfolio = [baseline]
+        if starting_params is not None:
+            portfolio.append(copy.deepcopy(starting_params))
+
+        while len(portfolio) < max(6, min(self.n_iterations + 2, 12)):
+            portfolio.append(detector_for_sampling.get_new_params(method='random'))
+        return portfolio
+
+    def _sanitize_benchmark_params(self, params):
+        """Return params unchanged for compatibility with older call sites."""
+        return copy.deepcopy(params)
+
+    def _seasonality_profile_penalties(self, detected, true, date_index):
+        """Return weekly and yearly profile penalties for benchmark reporting."""
+        detected_arr = np.asarray(detected, dtype=float).ravel()
+        true_arr = np.asarray(true, dtype=float).ravel()
+        length = min(detected_arr.size, true_arr.size, len(date_index))
+        if length < 14:
+            return None, None
+        detected_arr = detected_arr[:length]
+        true_arr = true_arr[:length]
+        idx = date_index[:length]
+        mask = np.isfinite(detected_arr) & np.isfinite(true_arr)
+        if mask.sum() < 14:
+            return None, None
+        detected_arr = detected_arr[mask]
+        true_arr = true_arr[mask]
+        idx = idx[mask]
+
+        def _corr_penalty(group_keys):
+            unique = np.unique(group_keys)
+            if len(unique) < 3:
+                return None
+            det_profile = np.array([np.mean(detected_arr[group_keys == key]) for key in unique])
+            true_profile = np.array([np.mean(true_arr[group_keys == key]) for key in unique])
+            if np.std(true_profile) < 1e-12:
+                return 0.0 if np.std(det_profile) < 1e-12 else 1.0
+            if np.std(det_profile) < 1e-12:
+                return 1.0
+            corr = np.corrcoef(det_profile, true_profile)[0, 1]
+            if not np.isfinite(corr):
+                return 1.0
+            return max(0.0, 1.0 - corr)
+
+        weekly_penalty = _corr_penalty(np.asarray(idx.dayofweek, dtype=int))
+        yearly_penalty = None
+        span_days = (idx[-1] - idx[0]).days if len(idx) > 1 else 0
+        if span_days >= 180:
+            yearly_penalty = _corr_penalty(np.asarray(idx.dayofyear, dtype=int))
+        return weekly_penalty, yearly_penalty
 
     def _select_best_from_history(self):
         """
-        Post-process optimization history to select best model based on balanced scores.
-
-        Converts history to DataFrame, calculates balanced scores with fixed scalers,
-        and selects the model with the best balanced loss.
+        Post-process optimization history and select the best raw candidate.
 
         Returns
         -------
         dict
-            Best parameters based on balanced scoring
+            Best parameters based on lexicographic raw selection
         """
         if not self.optimization_history:
             return None
@@ -588,8 +1177,13 @@ class FeatureDetectionOptimizer:
                 'iteration': entry.get('iteration'),
                 'loss': entry.get('loss'),
                 'runtime': entry.get('runtime'),
+                'recovery_floor_violations': (
+                    entry.get('loss_breakdown') or {}
+                ).get('recovery_floor_violations', np.nan),
+                'reconstruction_total_loss': (
+                    entry.get('loss_breakdown') or {}
+                ).get('reconstruction_total_loss', np.nan),
             }
-            # Add all loss breakdown components
             breakdown = entry.get('loss_breakdown', {})
             for key in self.loss_calculator.weights.keys():
                 row[key] = breakdown.get(key, np.nan)
@@ -630,27 +1224,27 @@ class FeatureDetectionOptimizer:
 
         self.history_df['balanced_loss'] = balanced_losses
 
-        # Select from the strongest balanced candidates, then require the best raw loss
-        # within that pool so we don't prefer configurations with worse total loss.
-        balanced_arr = np.asarray(balanced_losses, dtype=float)
-        raw_arr = np.asarray(
-            [entry.get('loss', np.inf) for entry in self.optimization_history],
-            dtype=float,
-        )
-        valid_idx = np.where(np.isfinite(balanced_arr) & np.isfinite(raw_arr))[0]
-        if valid_idx.size == 0:
-            best_idx = int(np.nanargmin(balanced_arr))
-            candidate_pool_size = 1
+        if self.selection_strategy == 'recovery_lexicographic':
+            sort_key = lambda item: (
+                item.get('loss_breakdown', {}).get('recovery_floor_violations', float('inf')),
+                item.get('loss', float('inf')),
+                item.get('loss_breakdown', {}).get('reconstruction_total_loss', float('inf')),
+                item.get('runtime', float('inf')),
+            )
         else:
-            sorted_balanced = valid_idx[np.argsort(balanced_arr[valid_idx])]
-            candidate_pool_size = max(1, min(8, int(np.ceil(sorted_balanced.size * 0.2))))
-            top_candidates = sorted_balanced[:candidate_pool_size]
-            best_idx = int(top_candidates[np.argmin(raw_arr[top_candidates])])
-
-        best_entry = self.optimization_history[best_idx]
+            sort_key = lambda item: (
+                item.get('loss', float('inf')),
+                item.get('loss_breakdown', {}).get('recovery_floor_violations', float('inf')),
+                item.get('loss_breakdown', {}).get('reconstruction_total_loss', float('inf')),
+                item.get('runtime', float('inf')),
+            )
+        ranked_entries = sorted(self.optimization_history, key=sort_key)
+        best_entry = ranked_entries[0]
+        best_idx = self.optimization_history.index(best_entry)
+        candidate_pool_size = min(8, len(ranked_entries))
 
         self.best_params = copy.deepcopy(best_entry['params'])
-        self.best_loss = best_entry['balanced_loss']
+        self.best_loss = best_entry['loss']
         self.best_total_loss = best_entry['loss']
 
         # Find baseline entry for comparison
@@ -661,25 +1255,23 @@ class FeatureDetectionOptimizer:
                 break
 
         if baseline_entry:
-            baseline_balanced = baseline_entry.get(
-                'balanced_loss', baseline_entry['loss']
-            )
-            improvement = baseline_balanced - self.best_loss
+            baseline_raw = baseline_entry['loss']
+            improvement = baseline_raw - self.best_total_loss
             improvement_pct = (
-                (improvement / baseline_balanced * 100) if baseline_balanced != 0 else 0
+                (improvement / baseline_raw * 100) if baseline_raw != 0 else 0
             )
 
             print(f"\n{'='*80}")
             print(f"OPTIMIZATION RESULTS")
             print(f"{'='*80}")
-            print(
-                f"Baseline balanced loss: {baseline_balanced:.4f} (raw: {baseline_entry['loss']:.4f})"
-            )
-            print(
-                f"Best balanced loss:     {self.best_loss:.4f} (raw: {self.best_total_loss:.4f})"
-            )
+            print(f"Baseline raw loss:      {baseline_raw:.4f}")
+            print(f"Best raw loss:          {self.best_total_loss:.4f}")
             print(f"Selection pool size:    {candidate_pool_size}")
             print(f"Improvement:            {improvement:.4f} ({improvement_pct:.2f}%)")
+            print(
+                "Recovery floor misses:  "
+                f"{best_entry.get('loss_breakdown', {}).get('recovery_floor_violations', 'n/a')}"
+            )
             print(f"Best found at iteration: {best_entry.get('iteration')}")
 
         return self.best_params
@@ -687,7 +1279,7 @@ class FeatureDetectionOptimizer:
     def get_optimization_summary(self):
         """Return summary of optimization results."""
         summary = {
-            'method': 'genetic_search',
+            'method': self.search_strategy,
             'n_iterations': len(self.optimization_history),
             'best_loss': self.best_loss,
             'baseline_loss': self.baseline_loss,
@@ -698,15 +1290,23 @@ class FeatureDetectionOptimizer:
         }
 
         if self.optimization_history:
-            losses = [
-                h.get('balanced_loss', h.get('loss', float('inf')))
-                for h in self.optimization_history
-            ]
+            losses = [h.get('loss', float('inf')) for h in self.optimization_history]
             summary['initial_loss'] = losses[0]
             summary['final_loss'] = losses[-1]
             summary['worst_loss'] = max(losses)
             summary['mean_loss'] = np.mean(losses)
             summary['std_loss'] = np.std(losses)
+            reconstruction_losses = [
+                (h.get('loss_breakdown') or {}).get('reconstruction_total_loss', np.nan)
+                for h in self.optimization_history
+            ]
+            finite_reconstruction = [
+                float(val)
+                for val in reconstruction_losses
+                if val is not None and np.isfinite(val)
+            ]
+            if finite_reconstruction:
+                summary['min_reconstruction_loss'] = float(min(finite_reconstruction))
 
         component_ranges = {}
         frozen_components = []

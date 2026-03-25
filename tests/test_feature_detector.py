@@ -7,6 +7,8 @@ Tests for Feature Detector
 
 import unittest
 from unittest.mock import patch
+import ast
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import random
@@ -794,6 +796,27 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         iterations = [entry.get('iteration') for entry in optimizer.optimization_history]
         self.assertIn('starting', iterations)
 
+    def test_starting_params_are_evaluated_without_rewrite(self):
+        optimizer = FeatureDetectionOptimizer(
+            self.generator,
+            n_iterations=0,
+        )
+        starting_params = optimizer._default_detector_params()
+        starting_params['holiday_params']['use_lunar_holidays'] = True
+        starting_params['changepoint_params']['probabilistic_output'] = True
+        starting_params['anomaly_params']['method'] = 'IsolationForest'
+
+        fake_loss = {'total_loss': 1.0}
+        with patch.object(optimizer, '_evaluate_params', return_value=fake_loss):
+            optimizer.optimize(starting_params=starting_params)
+
+        starting_entry = next(
+            entry
+            for entry in optimizer.optimization_history
+            if entry.get('iteration') == 'starting'
+        )
+        self.assertEqual(starting_entry['params'], starting_params)
+
     def test_param_signature_handles_numpy_and_ordering(self):
         params_a = {
             'alpha': np.float64(0.2),
@@ -827,13 +850,9 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         # Verify it still has the same top-level structure (keys should be preserved)
         self.assertEqual(set(params.keys()), set(mutated.keys()))
 
-    def test_select_best_with_balanced_scores(self):
-        """Test that the selection logic correctly identifies a better model using scalers."""
+    def test_select_best_uses_raw_lexicographic_order(self):
+        """Test that the default selector prefers raw loss, then diagnostics."""
         optimizer = FeatureDetectionOptimizer(self.generator)
-        
-        # Create a synthetic history with two entries
-        # Entry 0: Low raw loss, but bad at one component
-        # Entry 1: Slightly higher raw loss, but balanced across components
         history = [
             {
                 'iteration': 0,
@@ -841,9 +860,11 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
                 'loss': 1.0,
                 'loss_breakdown': {
                     'total_loss': 1.0,
-                    'trend_loss': 0.1,
-                    'anomaly_loss': 1.9, # Very bad at anomaly
-                }
+                    'trend_loss': 0.3,
+                    'anomaly_loss': 1.9,
+                    'recovery_floor_violations': 6,
+                    'reconstruction_total_loss': 0.9,
+                },
             },
             {
                 'iteration': 1,
@@ -851,20 +872,99 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
                 'loss': 1.1,
                 'loss_breakdown': {
                     'total_loss': 1.1,
-                    'trend_loss': 0.5,
-                    'anomaly_loss': 0.6, # Better balanced
-                }
-            }
+                    'trend_loss': 0.2,
+                    'anomaly_loss': 0.6,
+                    'recovery_floor_violations': 0,
+                    'reconstruction_total_loss': 0.4,
+                },
+            },
         ]
         optimizer.optimization_history = history
-        
-        # Mocking or triggering select_best
+
         best_params = optimizer._select_best_from_history()
-        
-        # Should have 2 entries in history_df
+
+        self.assertEqual(best_params, {'p': 1})
         self.assertEqual(len(optimizer.history_df), 2)
         self.assertIn('balanced_loss', optimizer.history_df.columns)
-        self.assertIsNotNone(best_params)
+        self.assertEqual(optimizer.best_total_loss, 1.0)
+
+    def test_select_best_can_use_recovery_lexicographic_order(self):
+        """Alternate selector should prefer fewer recovery-floor misses."""
+        optimizer = FeatureDetectionOptimizer(
+            self.generator,
+            selection_strategy='recovery_lexicographic',
+        )
+        optimizer.optimization_history = [
+            {
+                'iteration': 0,
+                'params': {'p': 1},
+                'loss': 1.0,
+                'loss_breakdown': {
+                    'total_loss': 1.0,
+                    'recovery_floor_violations': 5,
+                    'reconstruction_total_loss': 1.0,
+                },
+            },
+            {
+                'iteration': 1,
+                'params': {'p': 2},
+                'loss': 1.1,
+                'loss_breakdown': {
+                    'total_loss': 1.1,
+                    'recovery_floor_violations': 0,
+                    'reconstruction_total_loss': 0.7,
+                },
+            },
+        ]
+
+        best_params = optimizer._select_best_from_history()
+        self.assertEqual(best_params, {'p': 2})
+
+    def test_optimizer_records_recovery_metrics(self):
+        optimizer = FeatureDetectionOptimizer(
+            self.generator,
+            n_iterations=1,
+        )
+        optimizer.optimize()
+        self.assertGreater(len(optimizer.optimization_history), 0)
+        breakdown = optimizer.optimization_history[0].get('loss_breakdown') or {}
+        metrics = breakdown.get('recovery_metrics') or {}
+        self.assertIn('median_weekly_rel_error', metrics)
+        self.assertIn('holiday_recall', metrics)
+        self.assertIn('trend_f2', metrics)
+
+    def test_example_benchmark_raw_best_matches_selected(self):
+        """Regression check for the example benchmark selection path."""
+        example_path = Path(__file__).resolve().parents[1] / 'examples' / 'synthetic_tuning_example.py'
+        src = example_path.read_text()
+        mod = ast.parse(src)
+        values = {}
+        for node in mod.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id in {'known_good_bp', 'best_20k'}:
+                        values[target.id] = ast.literal_eval(node.value)
+
+        generator = SyntheticDailyGenerator(
+            start_date='2020-01-01',
+            n_days=365 * 3,
+            n_series=5,
+            random_seed=42,
+            **values['known_good_bp'],
+        )
+        optimizer = FeatureDetectionOptimizer(
+            generator,
+            n_iterations=3,
+            starting_params=values['best_20k'],
+            random_seed=42,
+        )
+        best = optimizer.optimize()
+        self.assertIsNotNone(best)
+        raw_best = min(optimizer.optimization_history, key=lambda entry: entry['loss'])
+        self.assertEqual(best, raw_best['params'])
+        metrics = raw_best.get('loss_breakdown', {}).get('recovery_metrics', {})
+        self.assertIn('weekly_profile_correlation', metrics)
+        self.assertIn('yearly_profile_correlation', metrics)
 
     def test_changepoint_distance_penalty_prefers_nearby_matches(self):
         optimizer = FeatureDetectionOptimizer(self.generator)

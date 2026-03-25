@@ -24,6 +24,14 @@ class LossEvaluatorsMixin:
         
         n_detected = len(detected_entries)
         unmatched_detected = set(range(n_detected))
+        focal_tversky = self._focal_tversky_changepoint_penalty(
+            detected_entries,
+            true_entries,
+            sigma=max(self.changepoint_tolerance_days, 1),
+            alpha=0.28,
+            beta=0.72,
+            gamma=2.0,
+        )
 
         positive_true_magnitudes = [
             entry[3] for entry in true_entries if np.isfinite(entry[3]) and entry[3] > 0
@@ -98,9 +106,8 @@ class LossEvaluatorsMixin:
         loss += 0.2 * false_positives
 
         count_diff = abs(n_detected - n_true)
-        # Count equality is the single strongest signal that the detector is
-        # calibrated correctly — double the old weight to reflect that primacy.
-        loss += min(count_diff, n_true + 1) * 0.8
+        count_penalty = min(count_diff / max(n_true, 1), 2.0)
+        loss += 0.6 * count_penalty
 
         recall = matched_true / (n_true + 1e-9)
         precision = (
@@ -112,7 +119,8 @@ class LossEvaluatorsMixin:
         f_beta = (1.0 + 2.0**2) * (precision * recall) / (
             2.0**2 * precision + recall + 1e-9
         )
-        loss += (1.0 - f_beta) * 2.0
+        loss += (1.0 - f_beta) * 2.4
+        loss += focal_tversky * max(n_true, 1) * 1.25
 
         # Apply trend component or complexity penalty based on mode
         trend_detected_series = detected_components.get('trend')
@@ -134,7 +142,7 @@ class LossEvaluatorsMixin:
                 )
                 loss += self.trend_complexity_weight * complexity_penalty
 
-        return loss + 0.6 * chamfer_loss
+        return loss + 0.75 * chamfer_loss
 
     def _trend_complexity_penalty(self, trend_values):
         if trend_values is None:
@@ -188,6 +196,14 @@ class LossEvaluatorsMixin:
         chamfer_loss = self._chamfer_penalty([x[0] for x in detected_entries], [x[0] for x in true_entries], cap=self.level_shift_tolerance_days * 5)
         
         changepoint_dates = [self._parse_trend_event(event)[0] for event in detected_cp]
+        focal_tversky = self._focal_tversky_changepoint_penalty(
+            detected_entries,
+            true_entries,
+            sigma=max(self.level_shift_tolerance_days, 1),
+            alpha=0.32,
+            beta=0.68,
+            gamma=2.0,
+        )
         n_true = len(true_entries)
         n_detected = len(detected_entries)
         unmatched_detected = set(range(n_detected))
@@ -241,8 +257,7 @@ class LossEvaluatorsMixin:
         loss += 0.15 * false_positives
 
         count_diff = abs(n_detected - n_true)
-        # Count equality is the single strongest signal — double the old weight.
-        loss += min(count_diff, n_true + 1) * 0.6
+        loss += 0.45 * min(count_diff / max(n_true, 1), 2.0)
 
         recall = matched_true / (n_true + 1e-9)
         precision = (
@@ -254,8 +269,9 @@ class LossEvaluatorsMixin:
         f_beta = (1.0 + 2.0**2) * (precision * recall) / (
             2.0**2 * precision + recall + 1e-9
         )
-        loss += (1.0 - f_beta) * 1.5
-        return loss + 0.5 * chamfer_loss
+        loss += (1.0 - f_beta) * 1.7
+        loss += focal_tversky * max(n_true, 1) * 0.8
+        return loss + 0.6 * chamfer_loss
 
     # Anomaly type categories for type-aware penalty logic
     _POINT_TYPES = frozenset({'point_outlier', 'spike'})
@@ -464,52 +480,65 @@ class LossEvaluatorsMixin:
                     ls_overlap_penalty += 0.015  # keep very small extra penalty here
             loss += ls_overlap_penalty
 
-        # Blend hard-match detail loss with soft F1 for smoother optimization
-        return 0.6 * loss + 0.4 * soft_f1_loss * max(len(true_entries), 1)
+        matches = len(used_detected)
+        precision = matches / max(len(detected_entries), 1)
+        recall = matches / max(len(true_entries), 1)
+        beta = 2.0
+        beta_sq = beta ** 2
+        f2 = (1.0 + beta_sq) * precision * recall / (
+            beta_sq * precision + recall + 1e-9
+        )
+        precision_floor_penalty = max(0.0, 0.7 - precision)
+
+        # Blend hard-match detail loss with strong recall-oriented penalties.
+        return (
+            0.45 * loss
+            + 0.55 * soft_f1_loss * max(len(true_entries), 1)
+            + (1.0 - f2) * 1.8
+            + 0.5 * precision_floor_penalty
+        )
 
     def _holiday_event_loss(self, detected_holidays, true_holidays, detected_anomalies):
         if not true_holidays:
-            # Significantly increased penalty for false positive holidays
-            return 0.25 * len(detected_holidays)
+            return 0.30 * len(detected_holidays)
         detected_dates = [pd.Timestamp(dt) for dt in detected_holidays]
         true_dates = [pd.Timestamp(dt) for dt in true_holidays]
         anomaly_dates = [
             self._parse_anomaly_event(event)[0] for event in detected_anomalies
         ]
-        loss = 0.0
+        matched_true = 0
+        unmatched_detected = set(range(len(detected_dates)))
+        anomaly_credit = 0.0
         for true_date in true_dates:
-            matches = [
-                det
-                for det in detected_dates
-                if abs(det - true_date) <= self._holiday_tolerance
-            ]
-            if matches:
+            best_idx = None
+            best_dist = None
+            for idx in unmatched_detected:
+                dist = abs((detected_dates[idx] - true_date).days)
+                if best_dist is None or dist < best_dist:
+                    best_idx = idx
+                    best_dist = dist
+            if best_idx is not None and best_dist is not None and best_dist <= self.holiday_tolerance_days:
+                matched_true += 1
+                unmatched_detected.discard(best_idx)
                 continue
-            anomaly_match = [
-                det
-                for det in anomaly_dates
-                if abs(det - true_date) <= self._anomaly_tolerance
-            ]
-            if anomaly_match:
-                loss += self.holiday_over_anomaly_bonus
-            else:
-                loss += 1.0
-        false_positives = sum(
-            1
-            for det in detected_dates
-            if not any(
-                abs(det - true_date) <= self._holiday_tolerance
-                for true_date in true_dates
-            )
+            if any(abs(anomaly_date - true_date) <= self._anomaly_tolerance for anomaly_date in anomaly_dates):
+                anomaly_credit += self.holiday_over_anomaly_bonus
+
+        false_positives = len(unmatched_detected)
+        precision = matched_true / max(len(detected_dates), 1)
+        recall = matched_true / max(len(true_dates), 1)
+        count_penalty = abs(len(detected_dates) - len(true_dates)) / max(len(true_dates), 1)
+        return max(
+            0.0,
+            (
+            (1.0 - precision) * 1.5
+            + (1.0 - recall) * 1.2
+            + 0.6 * min(count_penalty, 2.0)
+            + 0.35 * false_positives
+            + max(len(true_dates) - matched_true, 0) * 0.25
+            - anomaly_credit
+            ),
         )
-        if false_positives > 0:
-            ratio = false_positives / max(len(true_dates), 1)
-            # Significantly increased false positive penalty for holidays
-            # Linear component: 0.35 per FP (was 0.12)
-            # Ratio penalty: 1.2x when FP ratio > 0.5 (was 0.4x)
-            # This heavily discourages over-detection
-            loss += 0.35 * false_positives + 1.2 * max(ratio - 0.5, 0.0)
-        return loss
 
     def _holiday_impact_loss(self, detected_impacts, true_impacts):
         if not true_impacts:
@@ -520,24 +549,20 @@ class LossEvaluatorsMixin:
         for date, true_value in true.items():
             det_value = detected.get(date, None)
             if det_value is None:
-                # Missing impact - strong penalty
-                loss += 0.8 + abs(true_value) * 0.5
+                loss += 0.5 + abs(true_value) * 0.35
             else:
                 penalty = abs(det_value - true_value) / (abs(true_value) + 1e-6)
                 if abs(true_value) > 1e-6:
                     relative_mag = abs(det_value) / (abs(true_value) + 1e-6)
-                    # Significantly increased penalty when detected impact is too weak
-                    # This encourages stronger holiday impact detection
                     if relative_mag < 0.3:
-                        penalty *= 2.0  # Very weak detection gets 2x penalty
+                        penalty *= 1.6
                     elif relative_mag < 0.5:
-                        penalty *= 1.5  # Somewhat weak detection gets 1.5x penalty
+                        penalty *= 1.3
                     elif relative_mag < 0.7:
-                        penalty *= 1.2  # Slightly weak detection gets 1.2x penalty
+                        penalty *= 1.15
                 loss += min(penalty, 2.5)
         extras = len([date for date in detected if date not in true])
-        # Increased FP penalty for holiday impacts
-        loss += 0.15 * extras
+        loss += 0.08 * extras
         return loss
 
     def _holiday_splash_loss(self, detected_impacts, detected_anomalies, true_splash):
@@ -569,11 +594,7 @@ class LossEvaluatorsMixin:
 
         n_true = len(true_holidays)
         if not detected_holidays:
-            # Zero holidays detected when truth has holidays - scale with count and strictness
-            return min(
-                (0.5 + 0.5 * self.validation_strictness) + 0.1 * n_true, 
-                2.5 * self.validation_strictness + 1.0
-            )
+            return min((0.7 + 0.55 * self.validation_strictness) + 0.12 * n_true, 3.0)
 
         detected_dates = {pd.Timestamp(dt) for dt in detected_holidays}
         true_dates = [pd.Timestamp(dt) for dt in true_holidays]
@@ -588,16 +609,14 @@ class LossEvaluatorsMixin:
 
         recall = matches / n_true
 
-        # Progressive penalty: stronger for very low recall, influenced by strictness
-        recall_penalty_scale = self.validation_strictness
+        recall_penalty_scale = max(self.validation_strictness, 0.75)
         if recall < 0.2:
-            return 2.5 * (1.0 - recall) * recall_penalty_scale
-        elif recall < 0.4:
-            return 1.5 * (1.0 - recall) * recall_penalty_scale
-        elif recall < 0.6:
-            return 1.0 * (1.0 - recall) * recall_penalty_scale
-        else:
-            return 0.4 * (1.0 - recall) * recall_penalty_scale
+            return 3.0 * (1.0 - recall) * recall_penalty_scale
+        if recall < 0.5:
+            return 2.0 * (1.0 - recall) * recall_penalty_scale
+        if recall < 0.8:
+            return 1.1 * (1.0 - recall) * recall_penalty_scale
+        return 0.5 * (1.0 - recall) * recall_penalty_scale
 
     def _seasonality_strength_loss(self, detected_strengths, true_strengths):
         if not true_strengths:
@@ -606,6 +625,11 @@ class LossEvaluatorsMixin:
         loss = 0.0
         n_items = 0
         for key, true_value in true_strengths.items():
+            component_weight = 1.0
+            if key == 'weekly':
+                component_weight = 1.35
+            elif key == 'yearly':
+                component_weight = 1.1
             det_value = detected_strengths.get(key)
             if det_value is None and isinstance(key, str) and key.startswith('period_'):
                 try:
@@ -641,22 +665,22 @@ class LossEvaluatorsMixin:
                         # Apply the same underprediction asymmetry (1.5×) used
                         if best_match_det_val < true_value:
                             best_match_penalty = min(best_match_penalty * 1.25, 2.0)
-                        loss += best_match_penalty
+                        loss += component_weight * best_match_penalty
                         n_items += 1
                         continue
             if det_value is None:
-                det_value = detected_strengths.get(
-                    'combined', detected_strengths.get('seasonality_strength')
-                )
+                if key not in {'weekly', 'yearly'}:
+                    det_value = detected_strengths.get(
+                        'combined', detected_strengths.get('seasonality_strength')
+                    )
             if det_value is None:
-                loss += 0.5 + abs(true_value)
+                loss += component_weight * (0.5 + abs(true_value))
             else:
                 error = det_value - true_value
                 penalty = abs(error) / (abs(true_value) + 1e-6)
-                # Underpredicted amplitudes are penalized more heavily.
                 if error < 0:
-                    penalty *= 1.25
-                loss += min(penalty, 2.0)
+                    penalty *= 1.45 if key == 'weekly' else 1.25
+                loss += component_weight * min(penalty, 2.0)
             n_items += 1
         return loss / max(1, n_items)
 
@@ -670,6 +694,11 @@ class LossEvaluatorsMixin:
         spectral_penalty = self._component_spectral_penalty(detected_series, true_series)
         profile_penalty = self._component_profile_correlation(
             detected_series, true_series, date_index=date_index,
+        )
+        yearly_fourier_penalty = self._component_yearly_fourier_penalty(
+            detected_series,
+            true_series,
+            date_index=date_index,
         )
         
         # Explicit asymmetric amplitude penalty to prevent underprediction
@@ -697,10 +726,11 @@ class LossEvaluatorsMixin:
         # Wasserstein weight is reduced because it is shape-tolerant
         # Profile weight is raised because it directly checks the seasonal profile
         return (
-            0.30 * rmse_penalty
-            + 0.10 * wasserstein_penalty
-            + 0.25 * spectral_penalty
-            + 0.35 * profile_penalty
+            0.24 * rmse_penalty
+            + 0.08 * wasserstein_penalty
+            + 0.22 * spectral_penalty
+            + 0.28 * profile_penalty
+            + 0.18 * yearly_fourier_penalty
             + amplitude_penalty
         )
 
@@ -748,12 +778,18 @@ class LossEvaluatorsMixin:
             )
             true_left = (
                 np.nanmean(true_array[left_slice])
-                if true_array.size == seasonality_array.size
+                if (
+                    true_array.size == seasonality_array.size
+                    and left_slice.stop > left_slice.start
+                )
                 else np.nan
             )
             true_right = (
                 np.nanmean(true_array[right_slice])
-                if true_array.size == seasonality_array.size
+                if (
+                    true_array.size == seasonality_array.size
+                    and right_slice.stop > right_slice.start
+                )
                 else np.nan
             )
             if np.isnan(left_mean) or np.isnan(right_mean):

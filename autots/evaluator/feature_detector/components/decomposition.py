@@ -25,18 +25,18 @@ class DecompositionMixin:
             self.rough_seasonality_model,
         ) = self._compute_rough_seasonality(df_work)
 
-        # Holiday detection
+        # Holiday detection should see the rough residual directly because the
+        # holiday detector itself relies on anomaly-like spikes to identify dates.
         holiday_dates, holiday_splash_dates, holiday_regressors = self._detect_holidays(
             rough_residual
         )
         self._holiday_dates_temp = holiday_dates
         self._holiday_regressors_temp = holiday_regressors
 
-        # Optional: suppress holiday-proximate anomalies using a merged holiday
-        # date set across all series to reduce holiday/anomaly double counting.
+        # Optional suppression of holiday-proximate anomalies to reduce holiday
+        # double-counting in the final anomaly output.
         if self.global_holiday_anomaly_suppression:
             combined_holiday_dates = self._flatten_holiday_dates(holiday_dates)
-            self.anomaly_params.pop('holiday_dates', None)
             if combined_holiday_dates:
                 self.anomaly_params['holiday_dates'] = combined_holiday_dates
                 self.anomaly_params.setdefault('holiday_proximity_days', 2)
@@ -54,4 +54,3 @@ class DecompositionMixin:
         residual = model.fit_transform(df)
         seasonal = df - residual
         return residual, seasonal, model
-

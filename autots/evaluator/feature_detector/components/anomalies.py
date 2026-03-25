@@ -11,17 +11,37 @@ from autots.tools.transform import AnomalyRemoval
 class AnomalyMixin:
     """Mixin providing anomaly detection, noise analysis, and regime changepoint detection."""
 
-    def _detect_anomalies(self, residual_df):
+    def _build_anomaly_params(self, stage='final'):
+        """Build anomaly params for the requested pipeline stage."""
+        params = copy.deepcopy(self.anomaly_params)
+        params['output'] = self.detection_mode
+        if stage == 'prepass':
+            method_params = copy.deepcopy(params.get('method_params', {}))
+            if 'alpha' in method_params:
+                method_params['alpha'] = min(max(float(method_params['alpha']) * 4.0, 0.03), 0.20)
+            if 'rolling_periods' in method_params:
+                method_params['rolling_periods'] = max(
+                    14,
+                    int(method_params['rolling_periods'] * 0.5),
+                )
+            params['method_params'] = method_params
+            params.pop('holiday_dates', None)
+            params['two_pass'] = False
+        return params
+
+    def _detect_anomalies(self, residual_df, anomaly_params=None, detector_attr='anomaly_detector'):
         """Detect anomalies using AnomalyRemoval."""
-        self.anomaly_detector = AnomalyRemoval(**self.anomaly_params)
-        cleaned = self.anomaly_detector.fit_transform(residual_df)
+        active_params = anomaly_params or self.anomaly_params
+        detector = AnomalyRemoval(**active_params)
+        cleaned = detector.fit_transform(residual_df)
+        setattr(self, detector_attr, detector)
         anomalies = {}
 
         # Handle both multivariate and univariate outputs
         if self.detection_mode == 'univariate':
             # Univariate mode: single column of anomaly flags for all series
             # anomalies will be a single column, apply to all series
-            anomaly_col = self.anomaly_detector.anomalies.iloc[:, 0]
+            anomaly_col = detector.anomalies.iloc[:, 0]
             mask = anomaly_col == -1
             anomaly_dates = residual_df.index[mask].tolist()
 
@@ -33,11 +53,11 @@ class AnomalyMixin:
                 magnitude = float(np.nanmean(magnitudes))
                 score = None
                 if (
-                    hasattr(self.anomaly_detector, 'scores')
-                    and not self.anomaly_detector.scores.empty
+                    hasattr(detector, 'scores')
+                    and not detector.scores.empty
                 ):
                     try:
-                        score = float(self.anomaly_detector.scores.loc[date].iloc[0])
+                        score = float(detector.scores.loc[date].iloc[0])
                     except Exception:
                         score = None
                 anomaly_type = 'point_outlier'  # Simplified for univariate
@@ -55,11 +75,11 @@ class AnomalyMixin:
         else:
             # Multivariate mode: each series has its own anomaly flags
             for col in residual_df.columns:
-                if col not in self.anomaly_detector.anomalies.columns:
+                if col not in detector.anomalies.columns:
                     anomalies[col] = []
                     continue
 
-                mask = self.anomaly_detector.anomalies[col] == -1
+                mask = detector.anomalies[col] == -1
                 if mask.sum() == 0:
                     anomalies[col] = []
                     continue
@@ -70,11 +90,11 @@ class AnomalyMixin:
                     magnitude = residual_df.at[date, col]
                     score = None
                     if (
-                        hasattr(self.anomaly_detector, 'scores')
-                        and not self.anomaly_detector.scores.empty
+                        hasattr(detector, 'scores')
+                        and not detector.scores.empty
                     ):
                         try:
-                            score = float(self.anomaly_detector.scores.loc[date, col])
+                            score = float(detector.scores.loc[date, col])
                         except Exception:
                             score = None
                     anomaly_type = self._classify_anomaly_type(residual_df[col], date)
@@ -368,4 +388,3 @@ class AnomalyMixin:
         if not np.isfinite(corr):
             return 0.0
         return max(-1.0, min(1.0, corr))
-
