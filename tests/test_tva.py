@@ -1579,6 +1579,64 @@ class TestTVAIntegration(unittest.TestCase):
         with self.assertRaises(ValueError):
             tva.fit(self.df)
 
+    def test_tva_passes_calendar_holiday_config_to_decomposer(self):
+        from autots.evaluator.tva.tva import TVA
+
+        class _StopFit(Exception):
+            pass
+
+        fake_decomposer = mock.Mock()
+        fake_decomposer.fit.side_effect = _StopFit()
+        tva = TVA(
+            trend_network='v1',
+            fusion='additive',
+            epochs=1,
+            window_size=60,
+            forecast_horizon=14,
+            d_token=16,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            batch_size=8,
+            holiday_country='US',
+            holiday_countries={'s1': 'CA'},
+            verbose=0,
+        )
+        with mock.patch(
+            'autots.evaluator.tva.tva.NornDecomposer',
+            return_value=fake_decomposer,
+        ) as mock_decomposer:
+            with self.assertRaises(_StopFit):
+                tva.fit(self.df)
+
+        _, kwargs = mock_decomposer.call_args
+        self.assertEqual(kwargs['holiday_country'], 'US')
+        self.assertEqual(kwargs['holiday_countries'], {'s1': 'CA'})
+
+
+class TestTVAModelHolidayPropagation(unittest.TestCase):
+    def test_wrapper_passes_calendar_holiday_config_to_tva(self):
+        from autots.models.tva_model import TVAModel
+
+        df = _make_daily_df(n_series=2, n_days=120)
+        model = TVAModel(
+            forecast_length=7,
+            epochs=1,
+            batch_size=4,
+            window_size=30,
+            holiday_country='US',
+            holiday_countries={'s1': 'CA'},
+            verbose=0,
+        )
+        with mock.patch('autots.evaluator.tva.tva.TVA') as mock_tva:
+            mock_tva.return_value.fit.return_value = mock_tva.return_value
+            model.fit(df)
+
+        _, kwargs = mock_tva.call_args
+        self.assertEqual(kwargs['holiday_country'], 'US')
+        self.assertEqual(kwargs['holiday_countries'], {'s1': 'CA'})
+
 
 @SKIP_INTEGRATION
 class TestTVAWithPriors(unittest.TestCase):

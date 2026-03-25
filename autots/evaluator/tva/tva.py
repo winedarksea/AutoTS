@@ -132,6 +132,8 @@ class TVA:
         loss_weights: dict = None,
         reconciliation_method: str = None,
         min_anchor_history: int = 180,
+        holiday_country=None,
+        holiday_countries: dict = None,
         device: str = 'cpu',
         random_seed: int = 42,
         verbose: int = 1,
@@ -199,6 +201,8 @@ class TVA:
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
         self.min_anchor_history = min_anchor_history
+        self.holiday_country = holiday_country
+        self.holiday_countries = holiday_countries
         self.device = device
         self.random_seed = random_seed
         self.verbose = verbose
@@ -232,7 +236,11 @@ class TVA:
         # Step 1: Decompose
         if self.verbose:
             print("TVA: Decomposing time series...")
-        self._decomposer = NornDecomposer(self.detector_params)
+        self._decomposer = NornDecomposer(
+            self.detector_params,
+            holiday_country=self.holiday_country,
+            holiday_countries=self.holiday_countries,
+        )
         self._decomposer.fit(df)
         self._components = self._decomposer.get_components()
         detected_features = self._decomposer.get_features()

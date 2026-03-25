@@ -44,7 +44,8 @@ class TVAModel(ModelObject):
         min_anchor_history: Minimum history length for anchor selection.
         structure_learning_enabled: Whether to learn DAG structure and hierarchy in V2 network.
         structure_learning_config: Additional structure-learning penalties and options.
-        holiday_country: Passed through for API compatibility.
+        holiday_country: Shared default country for TVA calendar holiday fusion.
+        holiday_countries: Optional per-series country override map.
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
         n_jobs: Unused, kept for API compatibility.
@@ -77,6 +78,7 @@ class TVAModel(ModelObject):
         structure_learning_config: dict = None,
         detector_params: dict = None,
         holiday_country: str = "US",
+        holiday_countries: dict = None,
         random_seed: int = 42,
         verbose: int = 0,
         n_jobs: int = None,
@@ -113,6 +115,7 @@ class TVAModel(ModelObject):
         self.structure_learning_enabled = structure_learning_enabled
         self.structure_learning_config = structure_learning_config
         self.detector_params = detector_params
+        self.holiday_countries = holiday_countries
         self._tva = None
 
     def fit(self, df, future_regressor=None):
@@ -170,6 +173,8 @@ class TVAModel(ModelObject):
             prototype_assignment_temperature=self.prototype_assignment_temperature,
             reconciliation_method=self.reconciliation_method,
             min_anchor_history=self.min_anchor_history,
+            holiday_country=self.holiday_country,
+            holiday_countries=self.holiday_countries,
             structure_learning_config=structure_learning_config,
             random_seed=self.random_seed,
             verbose=self.verbose,
@@ -264,6 +269,8 @@ class TVAModel(ModelObject):
             "structure_learning_enabled": self.structure_learning_enabled,
             "structure_learning_config": self.structure_learning_config,
             "detector_params": self.detector_params,
+            "holiday_country": self.holiday_country,
+            "holiday_countries": self.holiday_countries,
         }
 
     @staticmethod

@@ -1981,5 +1981,116 @@ class TestIntegration(unittest.TestCase):
         self.assertGreater(len(optimizer.optimization_history), 0)
 
 
+class TestFeatureDetectorCalendarHolidayFusion(unittest.TestCase):
+    """Focused tests for calendar-country holiday fusion."""
+
+    @staticmethod
+    def _detector_kwargs():
+        return {
+            'standardize': False,
+            'seasonality_params': {
+                'regression_model': {
+                    'model': 'DecisionTree',
+                    'model_params': {'max_depth': 4, 'min_samples_split': 2},
+                },
+                'datepart_method': 'simple_3',
+                'polynomial_degree': None,
+                'transform_dict': None,
+                'holiday_countries_used': True,
+                'lags': None,
+                'forward_lags': None,
+            },
+            'rough_seasonality_params': {
+                'regression_model': {
+                    'model': 'DecisionTree',
+                    'model_params': {'max_depth': 3, 'min_samples_split': 2},
+                },
+                'datepart_method': 'simple',
+                'polynomial_degree': None,
+                'transform_dict': None,
+                'holiday_countries_used': True,
+                'lags': None,
+                'forward_lags': None,
+            },
+            'holiday_params': {
+                'threshold': 0.99,
+                'min_occurrences': 99,
+                'splash_threshold': None,
+                'use_dayofmonth_holidays': True,
+                'use_wkdom_holidays': False,
+                'use_wkdeom_holidays': False,
+                'use_lunar_holidays': False,
+                'use_lunar_weekday': False,
+                'use_islamic_holidays': False,
+                'use_hebrew_holidays': False,
+                'use_hindu_holidays': False,
+                'auto_relax': False,
+            },
+        }
+
+    @staticmethod
+    def _make_calendar_spike_df(end_date="2024-06-20"):
+        dates = pd.date_range("2021-01-01", end_date, freq='D')
+        weekly = np.sin(np.arange(len(dates)) * 2 * np.pi / 7) * 0.25
+        us = weekly + 1.0
+        ca = weekly + 1.0
+        us_spike = (dates.month == 7) & (dates.day == 4)
+        ca_spike = (dates.month == 7) & (dates.day == 1)
+        us = us + us_spike.astype(float) * 8.0
+        ca = ca + ca_spike.astype(float) * 6.0
+        return pd.DataFrame({'us_series': us, 'ca_series': ca}, index=dates)
+
+    def test_calendar_only_holiday_regression_creates_nonzero_component(self):
+        df = self._make_calendar_spike_df()[['us_series']]
+        detector = TimeSeriesFeatureDetector(
+            holiday_country='US',
+            **self._detector_kwargs(),
+        )
+        detector.fit(df)
+        july_fourth_mask = (df.index.month == 7) & (df.index.day == 4)
+        holiday_component = np.asarray(
+            detector.components['us_series']['holidays'], dtype=float
+        )
+        self.assertGreater(np.abs(holiday_component[july_fourth_mask]).sum(), 0.0)
+
+    def test_per_series_country_mapping_uses_distinct_calendar_dates(self):
+        df = self._make_calendar_spike_df()
+        detector = TimeSeriesFeatureDetector(
+            holiday_country='US',
+            holiday_countries={'ca_series': 'CA'},
+            **self._detector_kwargs(),
+        )
+        detector.fit(df)
+        us_dates = set(detector.holiday_dates['us_series'])
+        ca_dates = set(detector.holiday_dates['ca_series'])
+        self.assertIn(pd.Timestamp('2023-07-04'), us_dates)
+        self.assertNotIn(pd.Timestamp('2023-07-01'), us_dates)
+        self.assertIn(pd.Timestamp('2023-07-01'), ca_dates)
+        self.assertNotIn(pd.Timestamp('2023-07-04'), ca_dates)
+
+    def test_forecast_holiday_regressor_continuity_uses_calendar_dates(self):
+        df = self._make_calendar_spike_df(end_date="2024-06-20")[['us_series']]
+        detector = TimeSeriesFeatureDetector(
+            holiday_country='US',
+            **self._detector_kwargs(),
+        )
+        detector.fit(df)
+        pred = detector.forecast(20)
+        holidays = pred.components.xs('holidays', axis=1, level=1)
+        self.assertIn(pd.Timestamp('2024-07-04'), holidays.index)
+        self.assertGreater(
+            float(abs(holidays.loc[pd.Timestamp('2024-07-04'), 'us_series'])),
+            0.0,
+        )
+
+    def test_calendar_fusion_disables_datepart_holiday_features(self):
+        detector = TimeSeriesFeatureDetector(
+            holiday_country='US',
+            **self._detector_kwargs(),
+        )
+        self.assertFalse(detector.rough_seasonality_params['holiday_countries_used'])
+        self.assertFalse(detector.seasonality_params['holiday_countries_used'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -119,6 +119,8 @@ class TimeSeriesFeatureDetector(
         detection_mode='multivariate',
         global_holiday_anomaly_suppression=True,
         extended_anomaly_params=None,
+        holiday_country=None,
+        holiday_countries=None,
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -129,7 +131,10 @@ class TimeSeriesFeatureDetector(
                 f"detection_mode must be 'multivariate' or 'univariate', got '{detection_mode}'"
             )
 
-        self.rough_seasonality_params = rough_seasonality_params or {
+        self.rough_seasonality_params = (
+            copy.deepcopy(rough_seasonality_params)
+            if rough_seasonality_params is not None
+            else {
             'regression_model': {
                 'model': 'RandomForest',
                 'model_params': {
@@ -149,7 +154,11 @@ class TimeSeriesFeatureDetector(
             'lags': None,
             'forward_lags': None,
         }
-        self.seasonality_params = seasonality_params or {
+        )
+        self.seasonality_params = (
+            copy.deepcopy(seasonality_params)
+            if seasonality_params is not None
+            else {
             'regression_model': {
                 'model': 'SVM',
                 'model_params': {
@@ -166,6 +175,14 @@ class TimeSeriesFeatureDetector(
             'lags': None,
             'forward_lags': None,
         }
+        )
+        self.holiday_country = holiday_country
+        self.holiday_countries = (
+            copy.deepcopy(holiday_countries) if holiday_countries is not None else {}
+        )
+        self._resolved_holiday_countries = {}
+        self.rough_seasonality_params['holiday_countries_used'] = False
+        self.seasonality_params['holiday_countries_used'] = False
         self.holiday_params = self._sanitize_holiday_params(holiday_params)
         # Ensure anomaly_params uses the correct output mode
         if anomaly_params is None:
@@ -308,6 +325,8 @@ class TimeSeriesFeatureDetector(
         self.series_types = {}
         self.detected_seasonal_periods = None
         self._seasonality_changepoints = {}
+        self._holiday_regressors_temp = None
+        self._holiday_dates_temp = {}
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
         self.series_noise_levels = {}
@@ -464,17 +483,13 @@ class TimeSeriesFeatureDetector(
         train_reg = getattr(self, "_holiday_regressors_temp", None)
         if self.seasonality_model is not None:
             future_reg = None
-            if (
-                self.holiday_detector is not None
-                and train_reg is not None
-                and not getattr(train_reg, "empty", True)
-            ):
-                future_reg = self.holiday_detector.dates_to_holidays(
-                    future_index, style='flag'
+            if train_reg is not None and not getattr(train_reg, "empty", True):
+                future_reg = self._build_holiday_regressors_for_index(
+                    future_index,
+                    columns=columns,
+                    include_anomaly_rules=True,
                 )
-                future_reg = future_reg.reindex(
-                    columns=train_reg.columns, fill_value=0.0
-                )
+                future_reg = future_reg.reindex(columns=train_reg.columns, fill_value=0.0)
                 if future_reg.empty:
                     future_reg = None
             if future_reg is not None:
@@ -572,6 +587,8 @@ class TimeSeriesFeatureDetector(
             'smoothing_window': self.smoothing_window,
             'detection_mode': self.detection_mode,
             'global_holiday_anomaly_suppression': self.global_holiday_anomaly_suppression,
+            'holiday_country': copy.deepcopy(self.holiday_country),
+            'holiday_countries': copy.deepcopy(self.holiday_countries),
         }
         self.template = {
             'version': self.TEMPLATE_VERSION,
@@ -614,6 +631,8 @@ class TimeSeriesFeatureDetector(
         self.reconstructed_components = None
         self.reconstruction_error = None
         self.reconstruction_rmse = None
+        self._holiday_regressors_temp = None
+        self._holiday_dates_temp = {}
 
     def get_detected_features(
         self, series_name=None, include_components=False, include_metadata=True
@@ -1416,8 +1435,18 @@ class TimeSeriesFeatureDetector(
             self.rough_seasonality_params = copy.deepcopy(
                 params['rough_seasonality_params']
             )
+            self.rough_seasonality_params['holiday_countries_used'] = False
         if params.get('seasonality_params') is not None:
             self.seasonality_params = copy.deepcopy(params['seasonality_params'])
+            self.seasonality_params['holiday_countries_used'] = False
+
+        if 'holiday_country' in params:
+            self.holiday_country = params.get('holiday_country')
+        if 'holiday_countries' in params:
+            holiday_countries = params.get('holiday_countries')
+            self.holiday_countries = (
+                copy.deepcopy(holiday_countries) if holiday_countries is not None else {}
+            )
 
         if params.get('holiday_params') is not None:
             self.holiday_params = self._sanitize_holiday_params(

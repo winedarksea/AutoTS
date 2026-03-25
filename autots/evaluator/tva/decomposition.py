@@ -20,8 +20,17 @@ class NornDecomposer:
         detector_params: Dict of kwargs passed to TimeSeriesFeatureDetector.__init__.
     """
 
-    def __init__(self, detector_params: dict = None):
-        self.detector_params = detector_params or {}
+    def __init__(
+        self,
+        detector_params: dict = None,
+        holiday_country=None,
+        holiday_countries: dict = None,
+    ):
+        self.detector_params = dict(detector_params or {})
+        if holiday_country is not None:
+            self.detector_params['holiday_country'] = holiday_country
+        if holiday_countries is not None:
+            self.detector_params['holiday_countries'] = holiday_countries
         self.detector = None
         self._df_original = None
         self._components = None

@@ -6,10 +6,174 @@ import pandas as pd
 import copy
 import warnings
 from autots.evaluator.anomaly_detector import HolidayDetector
+from autots.tools.holiday import holiday_flag
 
 
 class HolidayMixin:
     """Mixin providing holiday detection, coefficient solving, and parameter sanitization."""
+
+    @staticmethod
+    def _normalize_holiday_country_value(value):
+        """Normalize holiday country config to None, string, or list of strings."""
+        if value is None:
+            return None
+        if isinstance(value, (list, tuple, set)):
+            cleaned = [str(x).upper() for x in value if x is not None and str(x).strip()]
+            return cleaned if cleaned else None
+        if isinstance(value, dict):
+            cleaned = [str(x).upper() for x in value.keys() if x is not None and str(x).strip()]
+            return cleaned if cleaned else None
+        value = str(value).strip()
+        if not value:
+            return None
+        return value.upper()
+
+    @staticmethod
+    def _holiday_country_label(country_value):
+        """Create a stable label for calendar holiday feature column prefixes."""
+        normalized = HolidayMixin._normalize_holiday_country_value(country_value)
+        if normalized is None:
+            return None
+        if isinstance(normalized, list):
+            return "_".join(normalized)
+        return normalized
+
+    def _resolve_holiday_country_map(self, columns):
+        """Resolve per-series holiday countries from shared default and overrides."""
+        default_country = self._normalize_holiday_country_value(
+            getattr(self, 'holiday_country', None)
+        )
+        override_map = getattr(self, 'holiday_countries', None) or {}
+        resolved = {}
+        for col in columns:
+            if col in override_map:
+                resolved[col] = self._normalize_holiday_country_value(override_map[col])
+            else:
+                resolved[col] = default_country
+        self._resolved_holiday_countries = resolved
+        return resolved
+
+    def _build_calendar_holiday_features(self, dates, columns):
+        """Build shared calendar regressors and per-series flags from holiday countries."""
+        index = pd.DatetimeIndex(dates)
+        columns = list(columns)
+        resolved = self._resolve_holiday_country_map(columns)
+        calendar_flags = pd.DataFrame(0.0, index=index, columns=columns)
+        regressor_frames = []
+        feature_cache = {}
+
+        for series_name in columns:
+            country_value = resolved.get(series_name)
+            if country_value is None:
+                continue
+            label = self._holiday_country_label(country_value)
+            if not label:
+                continue
+            if label not in feature_cache:
+                try:
+                    country_features = holiday_flag(
+                        index,
+                        country=country_value,
+                        encode_holiday_type=True,
+                    )
+                except Exception:
+                    country_features = pd.DataFrame(index=index)
+                if isinstance(country_features, pd.Series):
+                    country_features = country_features.to_frame()
+                if country_features is None or country_features.empty:
+                    country_features = pd.DataFrame(index=index)
+                else:
+                    country_features = (
+                        country_features.reindex(index)
+                        .fillna(0.0)
+                        .astype(float)
+                        .loc[:, ~country_features.columns.duplicated()]
+                    )
+                    country_features = country_features.rename(
+                        columns=lambda x: f"calendar_{label}__{x}"
+                    )
+                feature_cache[label] = country_features
+                if not country_features.empty:
+                    regressor_frames.append(country_features)
+            country_features = feature_cache.get(label)
+            if country_features is not None and not country_features.empty:
+                calendar_flags[series_name] = (
+                    country_features.sum(axis=1).to_numpy(dtype=float) > 0
+                ).astype(float)
+
+        if regressor_frames:
+            calendar_regressors = pd.concat(regressor_frames, axis=1)
+            calendar_regressors = calendar_regressors.loc[
+                :, ~calendar_regressors.columns.duplicated()
+            ]
+        else:
+            calendar_regressors = pd.DataFrame(index=index)
+        return calendar_flags, calendar_regressors
+
+    @staticmethod
+    def _merge_holiday_regressors(*frames):
+        """Concatenate holiday regressor blocks into one aligned design matrix."""
+        valid_frames = []
+        for frame in frames:
+            if frame is None:
+                continue
+            if isinstance(frame, pd.Series):
+                frame = frame.to_frame()
+            if not isinstance(frame, pd.DataFrame):
+                continue
+            if frame.empty and frame.columns.empty:
+                continue
+            valid_frames.append(frame)
+        if not valid_frames:
+            return pd.DataFrame()
+        merged = pd.concat(valid_frames, axis=1)
+        merged = merged.fillna(0.0).astype(float)
+        return merged.loc[:, ~merged.columns.duplicated()]
+
+    @staticmethod
+    def _merge_holiday_dates_by_series(base_dates, added_flags):
+        """Union anomaly-derived and calendar-derived holiday dates by series."""
+        merged = {
+            series_name: [pd.Timestamp(x) for x in dates]
+            for series_name, dates in (base_dates or {}).items()
+        }
+        if added_flags is None or added_flags.empty:
+            return merged
+        for series_name in added_flags.columns:
+            existing = {pd.Timestamp(x) for x in merged.get(series_name, [])}
+            series_flags = added_flags[series_name]
+            existing.update(pd.Timestamp(x) for x in series_flags[series_flags > 0].index)
+            merged[series_name] = sorted(existing)
+        return merged
+
+    def _build_holiday_regressors_for_index(
+        self, dates, columns, include_anomaly_rules=True
+    ):
+        """Build the merged holiday regressor design matrix for any date index."""
+        index = pd.DatetimeIndex(dates)
+        anomaly_regressors = pd.DataFrame(index=index)
+        if include_anomaly_rules and getattr(self, 'holiday_detector', None) is not None:
+            try:
+                anomaly_regressors = self.holiday_detector.dates_to_holidays(
+                    index, style='flag'
+                )
+                if anomaly_regressors is None:
+                    anomaly_regressors = pd.DataFrame(index=index)
+                else:
+                    anomaly_regressors = (
+                        anomaly_regressors.reindex(index)
+                        .fillna(0.0)
+                        .astype(float)
+                        .loc[:, ~anomaly_regressors.columns.duplicated()]
+                    )
+            except Exception:
+                anomaly_regressors = pd.DataFrame(index=index)
+
+        _, calendar_regressors = self._build_calendar_holiday_features(index, columns)
+        merged = self._merge_holiday_regressors(anomaly_regressors, calendar_regressors)
+        if merged.empty:
+            return pd.DataFrame(index=index)
+        return merged.reindex(index).fillna(0.0)
 
     def _sanitize_holiday_params(self, holiday_params):
         """Return holiday detector parameters filtered to supported keys."""
@@ -100,6 +264,17 @@ class HolidayMixin:
             )
             holiday_regressors = pd.DataFrame(index=residual_df.index)
 
+        calendar_flags, calendar_regressors = self._build_calendar_holiday_features(
+            residual_df.index, residual_df.columns
+        )
+        holiday_regressors = self._merge_holiday_regressors(
+            holiday_regressors, calendar_regressors
+        )
+        if holiday_regressors.empty:
+            holiday_regressors = pd.DataFrame(index=residual_df.index)
+        else:
+            holiday_regressors = holiday_regressors.reindex(residual_df.index).fillna(0.0)
+
         holiday_dates = {}
         holiday_splash_dates = {}  # For storing splash/bridge days separately
 
@@ -133,6 +308,10 @@ class HolidayMixin:
                 holiday_splash_dates[
                     col
                 ] = []  # Will be populated during final seasonality fit
+
+        holiday_dates = self._merge_holiday_dates_by_series(
+            holiday_dates, calendar_flags
+        )
 
         return holiday_dates, holiday_splash_dates, holiday_regressors
 
@@ -202,4 +381,3 @@ class HolidayMixin:
                     splash_dict[date_ts] = float(impact * scale)
             splash_impacts[series_name] = splash_dict
         return splash_impacts
-
