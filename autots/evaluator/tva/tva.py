@@ -58,7 +58,16 @@ class TVA:
     Args:
         detector_params: Dict passed to TimeSeriesFeatureDetector.
         trend_network: 'v1' (hierarchical latent) or 'v2' (learned directed).
-        fusion: 'attention' (DigitalTwinFusion) or 'additive' (AdditiveFusion).
+        fusion: How stochastic components (trend, seasonality, holidays) are
+            recombined before level shifts are added additively.
+            'attention' (default): DigitalTwinFusion — self-attention contextualizes
+                component embeddings; sigmoid gates independently fade each component
+                in/out (gate in [0,1]) applied to the original values.
+            'direct': DirectAttentionFusion — self-attention contextualizes component
+                embeddings; attended representations are projected directly to scalar
+                contributions summed as a residual over the originals. More purely
+                attention-driven; zero-init ensures pure-additive start.
+            'additive': AdditiveFusion — plain sum, no learned parameters.
         series_metadata: List of SeriesMetadata for prior construction.
         prior_adjacency: (N, N) explicit prior adjacency matrix (optional).
         prior_confidence: Weight of priors (0=ignore, 1=rigid).
@@ -299,6 +308,7 @@ class TVA:
         # prepare other component windows for loss computation
         seasonal_targets = self._create_target_windows(self._components['seasonality'].values)
         holiday_targets = self._create_target_windows(self._components['holidays'].values)
+        level_shift_targets = self._create_target_windows(self._components['level_shifts'].values)
         anomaly_targets = self._create_target_windows(self._components['anomalies'].values)
 
         # to tensors
@@ -307,6 +317,7 @@ class TVA:
         Y = torch.tensor(targets, dtype=torch.float32, device=device)  # (B, N, T_fc)
         S_sea = torch.tensor(seasonal_targets, dtype=torch.float32, device=device)
         S_hol = torch.tensor(holiday_targets, dtype=torch.float32, device=device)
+        S_lvl = torch.tensor(level_shift_targets, dtype=torch.float32, device=device)
         S_ano = torch.tensor(anomaly_targets, dtype=torch.float32, device=device)
 
         anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
@@ -363,10 +374,16 @@ class TVA:
             self._network = CompositeTrendNetworkV1(**network_kwargs).to(device)
 
         # Step 5: Instantiate fusion
-        from autots.evaluator.tva.fusion import DigitalTwinFusion, AdditiveFusion
+        from autots.evaluator.tva.fusion import (
+            DigitalTwinFusion,
+            DirectAttentionFusion,
+            AdditiveFusion,
+        )
 
         if self.fusion_type == 'attention':
             self._fusion_layer = DigitalTwinFusion().to(device)
+        elif self.fusion_type == 'direct':
+            self._fusion_layer = DirectAttentionFusion().to(device)
         else:
             self._fusion_layer = AdditiveFusion().to(device)
 
@@ -387,12 +404,17 @@ class TVA:
             all_params += list(self._fusion_layer.parameters())
         optimizer = torch.optim.AdamW(all_params, lr=self.lr)
 
-        dataset = TensorDataset(X, Y, S_sea, S_hol, S_ano)
+        dataset = TensorDataset(X, Y, S_sea, S_hol, S_lvl, S_ano)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
         self._network.train()
         if isinstance(self._fusion_layer, nn.Module):
             self._fusion_layer.train()
+        fusion_trainable = (
+            isinstance(self._fusion_layer, nn.Module)
+            and any(p.requires_grad for p in self._fusion_layer.parameters())
+        )
+        fusion_forecast_weight = float((self.loss_weights or {}).get('fusion_forecast', 1.0))
 
         epoch_iter = tqdm(range(self.epochs), desc="TVA Training") if self.verbose else range(self.epochs)
 
@@ -406,7 +428,7 @@ class TVA:
             structure_regularization_enabled = True
 
             for batch in loader:
-                x_b, y_b, sea_b, hol_b, ano_b = batch
+                x_b, y_b, sea_b, hol_b, lvl_b, ano_b = batch
 
                 # expand metadata for batch
                 meta_b = None
@@ -449,6 +471,26 @@ class TVA:
 
                 if not torch.isfinite(loss):
                     raise RuntimeError("TVA encountered a non-finite training loss.")
+
+                # Train fusion explicitly on reconstructed full signal. Without
+                # this term, learned fusion parameters receive no gradients.
+                if fusion_trainable and fusion_forecast_weight > 0:
+                    # level_shifts are always additive; fusion gates only the
+                    # stochastic components (trend, seasonality, holidays).
+                    fused_forecast = self._fusion_layer(
+                        outputs['trend_forecast'],
+                        sea_b,
+                        hol_b,
+                    ) + lvl_b
+                    full_signal_target = y_b + sea_b + hol_b + lvl_b
+                    fusion_loss = fusion_forecast_weight * torch.nn.functional.mse_loss(
+                        fused_forecast,
+                        full_signal_target,
+                    )
+                    if not torch.isfinite(fusion_loss):
+                        raise RuntimeError("TVA encountered a non-finite fusion training loss.")
+                    breakdown['fusion_forecast'] = fusion_loss.item()
+                    loss = loss + fusion_loss
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -529,14 +571,14 @@ class TVA:
         # truncate trend forecast if needed
         trend_fc = trend_forecast[:, :fc_length]
 
-        # fuse components
+        # fuse stochastic components; level_shifts always added additively afterward
         if isinstance(self._fusion_layer, nn.Module):
             with torch.no_grad():
                 t_trend = torch.tensor(trend_fc[np.newaxis], dtype=torch.float32, device=device)
                 t_sea = torch.tensor(seasonal[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
                 t_hol = torch.tensor(holidays[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
                 t_ls = torch.tensor(level_shifts[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
-                fused = self._fusion_layer(t_trend, t_sea, t_hol, t_ls)
+                fused = self._fusion_layer(t_trend, t_sea, t_hol) + t_ls
                 forecast_values = fused.cpu().numpy()[0].T  # (T, N)
         else:
             forecast_values = (trend_fc + seasonal[:, :fc_length] +
@@ -845,4 +887,3 @@ class TVA:
             'n_prototypes': self._n_prototypes_fit if self._n_prototypes_fit is not None else self.n_prototypes,
             'prototype_assignment_method': self.prototype_assignment_method,
         }
-
