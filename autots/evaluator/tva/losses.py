@@ -226,6 +226,14 @@ if HAS_TORCH:
         among all series weighted by that prototype. Penalizes series whose slope
         disagrees with the weighted consensus. Uses soft sign (tanh) for
         differentiability.
+
+        The penalty is scaled by |consensus| so that it only enforces consistency
+        when there is a genuine shared direction signal. When a prototype group is
+        heterogeneous (mixed growth/decline), consensus ≈ 0 and the penalty
+        vanishes, preventing the degenerate case where the loss pulls all series
+        toward zero slope (flat forecast). Series with a strong shared driver
+        (consensus near ±1) are held tightly together; genuinely independent
+        series are left to follow their own data-driven history.
         """
 
         def __init__(self, penalty_weight: float = 2.0, temperature: float = 1.0):
@@ -233,15 +241,44 @@ if HAS_TORCH:
             self.penalty_weight = penalty_weight
             self.temperature = temperature
 
+        def _trend_direction(self, x: torch.Tensor) -> torch.Tensor:
+            """Multi-scale soft direction signal.
+
+            Averages tanh-slope across three windows (full, first-half,
+            second-half) so the signal captures acceleration and deceleration,
+            not just net endpoint displacement.
+
+            Args:
+                x: (..., T) trend tensor.
+            Returns:
+                (...) direction signal in [-1, 1].
+            """
+            T = x.shape[-1]
+            mid = max(T // 2, 1)
+            s_full = (x[..., -1] - x[..., 0]) / T
+            s_first = (x[..., mid] - x[..., 0]) / mid
+            s_second = (x[..., -1] - x[..., mid]) / max(T - mid, 1)
+            t = self.temperature
+            return (
+                torch.tanh(s_full / t)
+                + torch.tanh(s_first / t)
+                + torch.tanh(s_second / t)
+            ) / 3.0
+
         def forward(
             self,
             trend_forecasts: torch.Tensor,
             prototype_weights: torch.Tensor,
+            composite_per_series: torch.Tensor = None,
         ) -> torch.Tensor:
             """
             Args:
                 trend_forecasts: (B, N, T) per-series trend forecasts.
                 prototype_weights: (B, N, K) how much each series uses each prototype.
+                composite_per_series: (B, N, T) optional trend reconstructed purely
+                    from shared prototypes (composite_trend_per_series from network
+                    output). When provided, each series is compared against its own
+                    structural anchor instead of an emergent group consensus.
             """
             B, N, T = trend_forecasts.shape
             K = prototype_weights.shape[-1]
@@ -249,28 +286,41 @@ if HAS_TORCH:
             if T < 2:
                 return torch.tensor(0.0, device=trend_forecasts.device)
 
-            # per-series slope: simple (last - first) / T
-            slopes = (trend_forecasts[..., -1] - trend_forecasts[..., 0]) / T  # (B, N)
+            soft_dir = self._trend_direction(trend_forecasts)  # (B, N)
 
-            # soft direction signal
-            soft_dir = torch.tanh(slopes / self.temperature)  # (B, N)
+            # --- Composite-anchored mode ---
+            # When composite_per_series is available it is the structurally derived
+            # "what the shared driver says this series should do" signal.  Each
+            # series is compared against its own anchor rather than an emergent
+            # group average, which avoids the consensus-toward-flat collapse and
+            # is grounded in the network's latent structure rather than shape
+            # similarity.
+            if (
+                composite_per_series is not None
+                and composite_per_series.shape == trend_forecasts.shape
+            ):
+                anchor_dir = self._trend_direction(composite_per_series)  # (B, N)
+                # Gate by assignment confidence: how committed each series is to
+                # any one prototype.  A series spread uniformly across prototypes
+                # has no clear structural home and gets a lower penalty.
+                assignment_confidence = prototype_weights.max(dim=-1).values  # (B, N)
+                deviation = (soft_dir - anchor_dir) ** 2  # (B, N)
+                penalty = (assignment_confidence * deviation).mean()
+                return self.penalty_weight * penalty
 
+            # --- Fallback: prototype-consensus mode ---
+            # Original approach, retained for V1 / cases where composite_per_series
+            # is not available.  Uses multi-scale direction signal in place of the
+            # previous endpoint-only slope.
             penalty = torch.tensor(0.0, device=trend_forecasts.device)
-
-            # prototype_weights: (B, N, K)
-            # for each prototype k, compute weighted consensus direction
             for k in range(K):
                 w_k = prototype_weights[:, :, k]  # (B, N)
-                w_sum = w_k.sum(dim=-1, keepdim=True).clamp(min=1e-8)  # (B, 1)
-
-                # weighted mean direction
-                consensus = (w_k * soft_dir).sum(dim=-1, keepdim=True) / w_sum  # (B, 1)
-
-                # penalize deviation from consensus, weighted by how much series uses this prototype
-                deviation = (soft_dir - consensus) ** 2  # (B, N)
-                weighted_dev = (w_k * deviation).sum(dim=-1)  # (B,)
-                penalty = penalty + weighted_dev.mean()
-
+                w_sum = w_k.sum(dim=-1, keepdim=True).clamp(min=1e-8)
+                consensus = (w_k * soft_dir).sum(dim=-1, keepdim=True) / w_sum
+                consensus_strength = consensus.abs()
+                deviation = (soft_dir - consensus) ** 2
+                weighted_dev = (w_k * deviation).sum(dim=-1)
+                penalty = penalty + (consensus_strength.squeeze(-1) * weighted_dev).mean()
             return self.penalty_weight * penalty / max(K, 1)
 
     class TemporalLossComposite(nn.Module):
@@ -474,7 +524,9 @@ if HAS_TORCH:
             # coherence
             if 'prototype_weights' in outputs:
                 loss_ch = self.coherence(
-                    outputs['trend_forecast'], outputs['prototype_weights']
+                    outputs['trend_forecast'],
+                    outputs['prototype_weights'],
+                    outputs.get('composite_trend_per_series'),
                 )
                 breakdown['coherence'] = loss_ch.item()
                 total = total + loss_ch
