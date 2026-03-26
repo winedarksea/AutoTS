@@ -53,6 +53,7 @@ all_models = [
     "pMLP",
     "TVAModel",
 ]
+# used for graphing, not for model selection
 model_classes = {
     'ARDL': 'stat',
     'DatepartRegression': 'ML',

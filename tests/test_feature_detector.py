@@ -47,6 +47,17 @@ class TestFeatureDetector(unittest.TestCase):
         cls.data = cls.generator.get_data()
         cls.labels = cls.generator.get_all_labels()
 
+    def _make_manual_event_dag_detector(self, detection_mode='multivariate'):
+        detector = TimeSeriesFeatureDetector(detection_mode=detection_mode)
+        detector.df_original = pd.DataFrame(
+            0.0,
+            index=pd.date_range('2024-01-01', periods=45, freq='D'),
+            columns=['a', 'b', 'c'],
+        )
+        detector.date_index = detector.df_original.index
+        detector._reset_results()
+        return detector
+
     def test_detector_initialization(self):
         """Test detector can be initialized."""
         detector = TimeSeriesFeatureDetector()
@@ -275,6 +286,137 @@ class TestFeatureDetector(unittest.TestCase):
         self.assertIn('season_type', series_features_meta)
         self.assertIsInstance(series_features_meta['series_type'], str)
         self.assertIsInstance(series_features_meta['season_type'], str)
+
+    def test_event_dag_clusters_same_window_events_and_preserves_raw_records(self):
+        detector = self._make_manual_event_dag_detector()
+        detector.anomalies = {
+            'a': [
+                (pd.Timestamp('2024-01-10'), 3.0, 'point_outlier', 1, False),
+                (pd.Timestamp('2024-01-20'), 2.5, 'point_outlier', 1, False),
+            ],
+            'b': [
+                (pd.Timestamp('2024-01-11'), 2.0, 'point_outlier', 1, False),
+                (pd.Timestamp('2024-01-21'), 1.8, 'point_outlier', 1, False),
+            ],
+            'c': [
+                (pd.Timestamp('2024-01-30'), -3.2, 'point_outlier', 1, False),
+            ],
+        }
+        detector.trend_changepoints = {'a': [], 'b': [], 'c': []}
+        detector.level_shifts = {'a': [], 'b': [], 'c': []}
+
+        event_dag = detector._rebuild_event_dag()
+
+        self.assertEqual(len(event_dag['member_events']), 5)
+        self.assertEqual(len(event_dag['event_clusters']), 3)
+        self.assertEqual(detector.anomalies['a'][0][0], pd.Timestamp('2024-01-10'))
+        self.assertEqual(len(detector.anomalies['a']), 2)
+
+        first_cluster = event_dag['event_clusters'][0]
+        self.assertEqual(first_cluster['series_count'], 2)
+        self.assertTrue(first_cluster['is_shared_root_cause_candidate'])
+        self.assertEqual(len(first_cluster['member_ids']), 2)
+        self.assertEqual(set(first_cluster['affected_series']), {'a', 'b'})
+
+    def test_event_dag_repeated_clusters_form_families(self):
+        detector = self._make_manual_event_dag_detector()
+        detector.anomalies = {
+            'a': [
+                (pd.Timestamp('2024-01-10'), 3.0, 'point_outlier', 1, False),
+                (pd.Timestamp('2024-01-20'), 2.5, 'point_outlier', 1, False),
+            ],
+            'b': [
+                (pd.Timestamp('2024-01-11'), 2.0, 'point_outlier', 1, False),
+                (pd.Timestamp('2024-01-21'), 1.8, 'point_outlier', 1, False),
+            ],
+            'c': [
+                (pd.Timestamp('2024-01-30'), -3.2, 'point_outlier', 1, False),
+            ],
+        }
+        detector.trend_changepoints = {'a': [], 'b': [], 'c': []}
+        detector.level_shifts = {'a': [], 'b': [], 'c': []}
+
+        event_dag = detector._rebuild_event_dag()
+
+        self.assertEqual(len(event_dag['event_families']), 1)
+        family = event_dag['event_families'][0]
+        self.assertEqual(family['occurrence_count'], 2)
+        self.assertEqual(len(family['cluster_ids']), 2)
+        self.assertEqual(
+            event_dag['event_clusters'][0]['family_id'],
+            event_dag['event_clusters'][1]['family_id'],
+        )
+        self.assertIsNone(event_dag['event_clusters'][2]['family_id'])
+
+    def test_event_dag_is_exposed_in_template_features_query_and_plot(self):
+        detector = self._make_manual_event_dag_detector()
+        detector.anomalies = {
+            'a': [(pd.Timestamp('2024-01-10'), 3.0, 'point_outlier', 1, False)],
+            'b': [(pd.Timestamp('2024-01-11'), 2.0, 'point_outlier', 1, False)],
+            'c': [],
+        }
+        detector.trend_changepoints = {'a': [], 'b': [], 'c': []}
+        detector.level_shifts = {'a': [], 'b': [], 'c': []}
+        detector._rebuild_event_dag()
+
+        all_features = detector.get_detected_features()
+        self.assertIn('event_dag', all_features)
+        self.assertEqual(detector.template['version'], '1.2')
+        self.assertIn('event_dag', detector.get_template())
+
+        series_features = detector.get_detected_features('a')
+        self.assertEqual(len(series_features['event_dag']['event_clusters']), 1)
+
+        queried = detector.query_features(
+            dates=slice('2024-01-09', '2024-01-12'),
+            series=['a', 'b'],
+            include_event_dag=True,
+        )
+        self.assertIn('event_dag', queried)
+        self.assertEqual(len(queried['event_dag']['event_clusters']), 1)
+        self.assertEqual(queried['event_dag']['member_events'], [])
+
+        queried_members = detector.query_features(
+            dates=slice('2024-01-09', '2024-01-12'),
+            series=['a', 'b'],
+            include_event_dag=True,
+            include_event_members=True,
+        )
+        self.assertEqual(len(queried_members['event_dag']['member_events']), 2)
+
+        fig = detector.plot_event_dag(show=False)
+        self.assertIsNotNone(fig)
+
+    def test_event_dag_univariate_uses_broadcast_mode_without_families(self):
+        detector = self._make_manual_event_dag_detector(detection_mode='univariate')
+        shared_records = [
+            (pd.Timestamp('2024-01-10'), 2.0, 'point_outlier', 1, True),
+            (pd.Timestamp('2024-01-20'), 2.0, 'point_outlier', 1, True),
+        ]
+        detector.anomalies = {'a': shared_records, 'b': list(shared_records), 'c': list(shared_records)}
+        detector.trend_changepoints = {'a': [], 'b': [], 'c': []}
+        detector.level_shifts = {'a': [], 'b': [], 'c': []}
+
+        event_dag = detector._rebuild_event_dag()
+
+        self.assertEqual(event_dag['meta']['construction_mode'], 'broadcast')
+        self.assertEqual(len(event_dag['event_families']), 0)
+        self.assertTrue(all(x['series_name'] == '__broadcast__' for x in event_dag['member_events']))
+        self.assertTrue(all(x['shared_flag'] for x in event_dag['member_events']))
+
+    def test_event_dag_empty_path_returns_valid_empty_structure(self):
+        detector = self._make_manual_event_dag_detector()
+        detector.anomalies = {'a': [], 'b': [], 'c': []}
+        detector.trend_changepoints = {'a': [], 'b': [], 'c': []}
+        detector.level_shifts = {'a': [], 'b': [], 'c': []}
+
+        event_dag = detector._rebuild_event_dag()
+
+        self.assertIsInstance(event_dag, dict)
+        self.assertEqual(event_dag['member_events'], [])
+        self.assertEqual(event_dag['event_clusters'], [])
+        self.assertEqual(event_dag['event_families'], [])
+        self.assertEqual(event_dag['edges'], [])
 
     def test_holiday_detector_coverage_cap(self):
         test_gen = SyntheticDailyGenerator(

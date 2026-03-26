@@ -6,7 +6,8 @@ import pandas as pd
 import copy
 import warnings
 from autots.datasets.synthetic import SyntheticDailyGenerator
-import warnings
+
+from ..event_dag import build_event_dag_from_detector
 
 
 class FormattingMixin:
@@ -181,6 +182,8 @@ class FormattingMixin:
         else:
             self.shared_events = {'anomalies': [], 'level_shifts': []}
         self.template['shared_events'] = copy.deepcopy(self.shared_events)
+        self.event_dag = build_event_dag_from_detector(self)
+        self.template['event_dag'] = copy.deepcopy(self.event_dag)
 
         # Validate reconstruction
         self._reconstruct_from_template()
@@ -373,4 +376,3 @@ class FormattingMixin:
             self.reconstructed_components = None
             self.reconstruction_error = None
             self.reconstruction_rmse = None
-

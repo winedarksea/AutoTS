@@ -41,6 +41,12 @@ from .components.trend import TrendMixin
 from .components.holidays import HolidayMixin
 from .components.anomalies import AnomalyMixin
 from .extended_anomaly import ExtendedAnomalyDetector, ExtendedAnomalyMixin
+from .event_dag import (
+    build_event_dag_from_detector,
+    empty_event_dag,
+    resolve_event_dag_params,
+)
+from .event_dag_view import filter_event_dag, plot_event_dag_timeline
 from .utils.rescaling import RescalingMixin
 from .utils.formatting import FormattingMixin
 
@@ -102,7 +108,7 @@ class TimeSeriesFeatureDetector(
         date set from all series. Set False to disable this suppression.
     """
 
-    TEMPLATE_VERSION = "1.1"
+    TEMPLATE_VERSION = "1.2"
 
     def __init__(
         self,
@@ -119,6 +125,7 @@ class TimeSeriesFeatureDetector(
         detection_mode='multivariate',
         global_holiday_anomaly_suppression=True,
         extended_anomaly_params=None,
+        event_dag_params=None,
         holiday_country=None,
         holiday_countries=None,
     ):
@@ -292,6 +299,7 @@ class TimeSeriesFeatureDetector(
         else:
             # Explicitly setting to False/empty dict disables; any truthy dict enables
             self.extended_anomaly_params = extended_anomaly_params if extended_anomaly_params else {}
+        self.event_dag_params = resolve_event_dag_params(event_dag_params)
 
         # Model artifacts
         self.scaler = None
@@ -333,6 +341,13 @@ class TimeSeriesFeatureDetector(
         self.series_noise_levels = {}
         self.series_scales = {}
         self.shared_events = {'anomalies': [], 'level_shifts': []}
+        self.event_dag = empty_event_dag(
+            params=self.event_dag_params,
+            detection_mode=self.detection_mode,
+            construction_mode='broadcast'
+            if self.detection_mode == 'univariate'
+            else 'full',
+        )
         self.reconstructed = None
         self.reconstructed_components = None
         self.reconstruction_error = None
@@ -596,6 +611,7 @@ class TimeSeriesFeatureDetector(
             'smoothing_window': self.smoothing_window,
             'detection_mode': self.detection_mode,
             'global_holiday_anomaly_suppression': self.global_holiday_anomaly_suppression,
+            'event_dag_params': copy.deepcopy(self.event_dag_params),
             'holiday_country': copy.deepcopy(self.holiday_country),
             'holiday_countries': copy.deepcopy(self.holiday_countries),
         }
@@ -615,6 +631,14 @@ class TimeSeriesFeatureDetector(
             'regressors': None,
             'series': {},
             'shared_events': {'anomalies': [], 'level_shifts': []},
+            'event_dag': empty_event_dag(
+                params=self.event_dag_params,
+                detection_mode=self.detection_mode,
+                construction_mode='broadcast'
+                if self.detection_mode == 'univariate'
+                else 'full',
+                series_names=list(self.df_original.columns),
+            ),
         }
         self.components = {}
         self.trend_changepoints = {}
@@ -636,6 +660,14 @@ class TimeSeriesFeatureDetector(
         self.series_noise_levels = {}
         self.series_scales = {}
         self.shared_events = {'anomalies': [], 'level_shifts': []}
+        self.event_dag = empty_event_dag(
+            params=self.event_dag_params,
+            detection_mode=self.detection_mode,
+            construction_mode='broadcast'
+            if self.detection_mode == 'univariate'
+            else 'full',
+            series_names=list(self.df_original.columns),
+        )
         self.reconstructed = None
         self.reconstructed_components = None
         self.reconstruction_error = None
@@ -705,6 +737,11 @@ class TimeSeriesFeatureDetector(
                 )
             if include_components:
                 features['components'] = self._serialize_components(series_name)
+            features['event_dag'] = filter_event_dag(
+                self.event_dag,
+                series=[series_name],
+                include_members=True,
+            )
             return features
 
         series_names = list(self.df_original.columns)
@@ -799,12 +836,26 @@ class TimeSeriesFeatureDetector(
             }
 
         features['shared_events'] = copy.deepcopy(self.shared_events)
+        features['event_dag'] = copy.deepcopy(self.event_dag)
         return features
 
     def get_template(self, deep=True):
         if self.template is None:
             return None
         return copy.deepcopy(self.template) if deep else self.template
+
+    def get_event_dag(self, deep=True):
+        """Return Event DAG metadata derived from detector outputs."""
+        if self.df_original is None:
+            raise RuntimeError("TimeSeriesFeatureDetector has not been fit.")
+        return copy.deepcopy(self.event_dag) if deep else self.event_dag
+
+    def _rebuild_event_dag(self):
+        """Rebuild Event DAG metadata from current detector event outputs."""
+        self.event_dag = build_event_dag_from_detector(self)
+        if isinstance(self.template, dict):
+            self.template['event_dag'] = copy.deepcopy(self.event_dag)
+        return self.event_dag
 
     @classmethod
     def render_template(cls, template, return_components=False):
@@ -945,6 +996,8 @@ class TimeSeriesFeatureDetector(
         series=None,
         include_components=False,
         include_metadata=False,
+        include_event_dag=False,
+        include_event_members=False,
         return_json=False,
     ):
         """Query a specific slice of detected features with minimal token usage.
@@ -963,6 +1016,8 @@ class TimeSeriesFeatureDetector(
                 - None: all series
             include_components (bool): Include component time series values for the date range
             include_metadata (bool): Include metadata like noise levels, scales, etc.
+            include_event_dag (bool): Include Event DAG cluster and family metadata
+            include_event_members (bool): Include raw Event DAG member events
             return_json (bool): Return JSON string instead of dict
 
         Returns:
@@ -1299,6 +1354,24 @@ class TimeSeriesFeatureDetector(
             if shared:
                 result['shared_events'] = shared
 
+        if include_event_dag:
+            selected_series_arg = None if series is None else selected_series
+            if date_filter is None:
+                event_start = None
+                event_end = None
+            elif isinstance(date_filter, set):
+                event_start = min(date_filter) if date_filter else None
+                event_end = max(date_filter) if date_filter else None
+            else:
+                event_start, event_end = date_filter
+            result['event_dag'] = filter_event_dag(
+                self.event_dag,
+                series=selected_series_arg,
+                start_date=event_start,
+                end_date=event_end,
+                include_members=include_event_members,
+            )
+
         if return_json:
             import json
 
@@ -1362,6 +1435,43 @@ class TimeSeriesFeatureDetector(
             show_reconstructed_on_top=True,
         )
         return fig
+
+    def plot_event_dag(
+        self,
+        series=None,
+        start_date=None,
+        end_date=None,
+        show_members=False,
+        figsize=(14, 6),
+        save_path=None,
+        show=True,
+    ):
+        """Plot Event DAG macro-events on a timeline-first layout."""
+        if not HAS_MATPLOTLIB:
+            raise ImportError("matplotlib is required for plotting.")
+        if self.df_original is None:
+            raise RuntimeError("Call fit() before plot_event_dag().")
+        if series is None:
+            selected_series = None
+        elif isinstance(series, str):
+            if series not in self.df_original.columns:
+                raise ValueError(f"Series '{series}' not found.")
+            selected_series = [series]
+        else:
+            selected_series = list(series)
+            missing = set(selected_series) - set(self.df_original.columns)
+            if missing:
+                raise ValueError(f"Series not found: {missing}")
+        return plot_event_dag_timeline(
+            self.event_dag,
+            series=selected_series,
+            start_date=start_date,
+            end_date=end_date,
+            show_members=show_members,
+            figsize=figsize,
+            save_path=save_path,
+            show=show,
+        )
 
     @staticmethod
     def get_new_params(method='random'):
@@ -1498,6 +1608,10 @@ class TimeSeriesFeatureDetector(
             self.extended_anomaly_params = copy.deepcopy(
                 params['extended_anomaly_params']
             ) or {}
+        if 'event_dag_params' in params:
+            self.event_dag_params = resolve_event_dag_params(
+                copy.deepcopy(params['event_dag_params'])
+            )
 
     def tune_with_synthetic(
         self,

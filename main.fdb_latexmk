@@ -1,0 +1,16 @@
+# Fdb version 4
+["pdflatex"] 1774466747 "/Users/colincatlin/Documents/AutoTS/main.tex" "main.pdf" "main" 1774466748 2
+  "/Users/colincatlin/Documents/AutoTS/main.tex" 1769784952 109901 6f4df82f33c85c7e41c1541822cee8e6 ""
+  "/usr/local/texlive/2023/texmf-dist/tex/latex/base/article.cls" 1667332637 20144 d5ecf0a5140c8d8d8b72cbe86e320eff ""
+  "/usr/local/texlive/2023/texmf-dist/tex/latex/base/size10.clo" 1667332637 8448 c33a4e1cb35cee9b33c2b21033b73e39 ""
+  "/usr/local/texlive/2023/texmf-dist/web2c/texmf.cnf" 1677365944 40745 87bb86a62d462f93a1efc6b0c65c872e ""
+  "/usr/local/texlive/2023/texmf-var/web2c/pdftex/pdflatex.fmt" 1694872117 7883457 f4975f9bb775406e1b4f400acd6a957c ""
+  "/usr/local/texlive/2023/texmf.cnf" 1678822455 577 1b2b1af17af2508fb20dd85783af4050 ""
+  "iclr2025_conference.sty" 0 -1 0 ""
+  "main.aux" 1774466747 32 3985256e7290058c681f74d7a3565a19 "pdflatex"
+  "main.tex" 1769784952 109901 6f4df82f33c85c7e41c1541822cee8e6 ""
+  (generated)
+  "main.aux"
+  "main.log"
+  "main.pdf"
+  (rewritten before read)
