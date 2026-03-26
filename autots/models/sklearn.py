@@ -1272,7 +1272,7 @@ def generate_regressor_params(
                     "early_stopping": early_stopping,
                     "learning_rate_init": learning_rate_init,
                     "alpha": random.choices(
-                        [None, 0.0001, 0.1, 0.0], [0.5, 0.2, 0.2, 0.2]
+                        [0.0001, 0.001, 0.1, 0.0], [0.5, 0.2, 0.2, 0.2]
                     )[0],
                 },
             }
