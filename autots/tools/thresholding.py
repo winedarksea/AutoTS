@@ -12,6 +12,31 @@ from itertools import groupby
 from operator import itemgetter
 
 
+NONPARAMETRIC_THRESHOLD_KWARGS = {
+    'warmup_pts',
+    'p',
+    'error_buffer',
+    'z_init',
+    'z_limit',
+    'z_step',
+    'max_contamination',
+    'mean_weight',
+    'sd_weight',
+    'anomaly_count_weight',
+    'inverse',
+}
+
+
+def sanitize_nonparametric_threshold_params(method_params):
+    if not isinstance(method_params, dict):
+        return {}
+    return {
+        key: value
+        for key, value in method_params.items()
+        if key in NONPARAMETRIC_THRESHOLD_KWARGS
+    }
+
+
 def consecutive_groups(iterable, ordering=lambda x: x):
     """Yield groups of consecutive items using :func:`itertools.groupby`.
 
@@ -360,11 +385,12 @@ class NonparametricThreshold:
 
 
 def nonparametric(series, method_params):
-    mod = NonparametricThreshold(series.to_numpy().flatten(), **method_params)
+    sanitized_params = sanitize_nonparametric_threshold_params(method_params)
+    mod = NonparametricThreshold(series.to_numpy().flatten(), **sanitized_params)
     mod.find_epsilon()
     mod.prune_anoms()
     i_anom = mod.i_anom
-    if method_params.get('inverse', False):
+    if sanitized_params.get('inverse', False):
         mod.find_epsilon(inverse=True)
         mod.prune_anoms(inverse=True)
         i_anom = np.unique(np.concatenate([i_anom, mod.i_anom_inv]))

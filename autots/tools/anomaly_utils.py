@@ -15,7 +15,11 @@ import random
 import numpy as np
 import pandas as pd
 from autots.tools.percentile import nan_quantile
-from autots.tools.thresholding import NonparametricThreshold, nonparametric
+from autots.tools.thresholding import (
+    NonparametricThreshold,
+    nonparametric,
+    sanitize_nonparametric_threshold_params,
+)
 from autots.tools.calendar import (
     gregorian_to_chinese,
     gregorian_to_islamic,
@@ -343,6 +347,7 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
 
 
 def nonparametric_multivariate(df, output, method_params, n_jobs=1):
+    sanitized_params = sanitize_nonparametric_threshold_params(method_params)
     if output == "univariate":
         df_abs = df.abs()
         scores = 1 - (
@@ -350,11 +355,11 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
             / (df.abs().max(axis=0) - df_abs.min(axis=0)).replace(0, 1)
         )
         scores = np.abs((df - df.mean(axis=0))) / df.std(axis=0)
-        mod = NonparametricThreshold(scores.to_numpy().flatten(), **method_params)
+        mod = NonparametricThreshold(scores.to_numpy().flatten(), **sanitized_params)
         mod.find_epsilon()
         mod.prune_anoms()
         i_anom = mod.i_anom
-        if method_params.get("inverse", False):
+        if sanitized_params.get("inverse", False):
             mod.find_epsilon(inverse=True)
             mod.prune_anoms(inverse=True)
             i_anom = np.unique(np.concatenate([i_anom, mod.i_anom_inv]))
@@ -407,7 +412,7 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
             df_list = Parallel(n_jobs=(n_jobs - 1))(
                 delayed(nonparametric)(
                     series=df.iloc[:, i],
-                    method_params=method_params,
+                    method_params=sanitized_params,
                 )
                 for i in range(df.shape[1])
             )
@@ -417,7 +422,7 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
                 df_list.append(
                     nonparametric(
                         series=df.iloc[:, i],
-                        method_params=method_params,
+                        method_params=sanitized_params,
                     )
                 )
         complete = list(map(list, zip(*df_list)))

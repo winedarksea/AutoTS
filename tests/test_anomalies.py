@@ -7,7 +7,7 @@ Created on Mon Jul 18 16:27:48 2022
 import unittest
 import numpy as np
 import pandas as pd
-from autots.tools.anomaly_utils import available_methods, fast_methods
+from autots.tools.anomaly_utils import available_methods, fast_methods, values_to_anomalies
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.datasets import load_live_daily
 from autots.tools.transform import expanding_transformers
@@ -153,7 +153,34 @@ class TestAnomalies(unittest.TestCase):
         # this is a weak test, but will capture some functionality
         self.assertEqual(holidays_detected, 1, "no methods detected holidays")
 
+class TestNonparametricAnomalies(unittest.TestCase):
+    def test_nonparametric_ignores_unknown_method_params(self):
+        df = pd.DataFrame(
+            {
+                'series_1': [1.0, 1.1, 1.2, 8.0, 1.1, 1.0, 1.2],
+                'series_2': [2.0, 2.1, 2.2, 2.0, 9.5, 2.1, 2.0],
+            },
+            index=pd.date_range('2024-01-01', periods=7, freq='D'),
+        )
+        method_params = {
+            'alpha': 0.05,
+            'p': 0.1,
+            'z_init': 2.0,
+            'z_limit': 10,
+            'z_step': 0.5,
+            'inverse': False,
+        }
 
+        anomalies, scores = values_to_anomalies(
+            df,
+            output='multivariate',
+            threshold_method='nonparametric',
+            method_params=method_params,
+        )
+
+        self.assertEqual(anomalies.shape, df.shape)
+        self.assertEqual(scores.shape, df.shape)
+        self.assertTrue(np.all(np.isin(anomalies.to_numpy(), [-1, 1])))
 class TestVAEAnomalies(unittest.TestCase):
     """Test VAE anomaly detection functionality."""
 
