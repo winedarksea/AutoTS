@@ -269,7 +269,6 @@ class TVAModel(ModelObject):
             "structure_learning_enabled": self.structure_learning_enabled,
             "structure_learning_config": self.structure_learning_config,
             "detector_params": self.detector_params,
-            "holiday_country": self.holiday_country,
             "holiday_countries": self.holiday_countries,
         }
 
