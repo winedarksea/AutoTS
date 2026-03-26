@@ -26,15 +26,15 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
     """
 
     DEFAULT_WEIGHTS = {
-        'trend_loss': 1.1,
+        'trend_loss': 1.0,
         'level_shift_loss': 1.3,
-        'anomaly_loss': 1.45,
-        'holiday_event_loss': 1.4,
-        'holiday_impact_loss': 0.55,
+        'anomaly_loss': 1.3,
+        'holiday_event_loss': 1.2,
+        'holiday_impact_loss': 0.9,
         'holiday_splash_loss': 0.03,  # tends to have wayyy too much impact
-        'holiday_recall_loss': 1.25,
-        'seasonality_strength_loss': 2.2,
-        'seasonality_pattern_loss': 2.5,
+        'holiday_recall_loss': 0.9,
+        'seasonality_strength_loss': 2.0,
+        'seasonality_pattern_loss': 2.0,
         'seasonality_changepoint_loss': 0.01,
         'noise_level_loss': 0.5,
         'noise_regime_loss': 0.4,

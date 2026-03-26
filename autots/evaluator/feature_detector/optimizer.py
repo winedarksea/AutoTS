@@ -33,7 +33,7 @@ class FeatureDetectionOptimizer:
     """
     Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.
 
-    Defaults to a broad random/genetic search and raw-loss selection.
+    Defaults to a broad random/genetic search with recovery-first selection.
     """
 
     def __init__(
@@ -44,7 +44,7 @@ class FeatureDetectionOptimizer:
         random_seed=42,
         starting_params=None,
         search_strategy="random",
-        selection_strategy="raw_lexicographic",
+        selection_strategy="recovery_lexicographic",
         stage_budget=None,
     ):
         """
@@ -311,8 +311,7 @@ class FeatureDetectionOptimizer:
             print(f"  Min runtime: {min_runtime:.2f}s")
             print(f"  Max runtime: {max_runtime:.2f}s")
 
-        # Now select best model based on properly calculated balanced scores
-        print(f"\nSelecting best model from raw-loss history...")
+        print(f"\nSelecting best model from recovery-aware history...")
         best_params = self._select_best_from_history()
 
         return best_params
@@ -543,6 +542,12 @@ class FeatureDetectionOptimizer:
             true_labels,
             true_components=true_components,
             date_index=self.synthetic_generator.date_index,
+        )
+        loss = self._apply_legacy_changepoint_loss_for_optimize(
+            loss=loss,
+            detected_features=detected_features,
+            true_labels=true_labels,
+            true_components=true_components,
         )
         try:
             reconstruction = self.reconstruction_loss_calculator.calculate_loss(
@@ -1032,10 +1037,10 @@ class FeatureDetectionOptimizer:
             history = sorted(
                 history,
                 key=lambda entry: (
-                    entry.get('loss', float('inf')),
                     entry.get('loss_breakdown', {}).get(
                         'recovery_floor_violations', float('inf')
                     ),
+                    entry.get('loss', float('inf')),
                     entry.get('loss_breakdown', {}).get(
                         'reconstruction_total_loss', float('inf')
                     ),
@@ -1055,7 +1060,36 @@ class FeatureDetectionOptimizer:
 
         n_blocks = min(len(shared_keys), 1 if rng.random() < 0.7 else 2)
         for selected_key in rng.sample(shared_keys, n_blocks):
-            mutated[selected_key] = copy.deepcopy(fresh.get(selected_key))
+            current_value = mutated.get(selected_key)
+            fresh_value = fresh.get(selected_key)
+            if selected_key == 'changepoint_params':
+                if rng.random() < 0.7:
+                    mutated[selected_key] = self._local_mutate_changepoint_params(
+                        current_value,
+                        rng,
+                    )
+                else:
+                    mutated[selected_key] = copy.deepcopy(fresh_value)
+            elif selected_key == 'level_shift_params':
+                if rng.random() < 0.6:
+                    mutated[selected_key] = self._local_mutate_level_shift_params(
+                        current_value,
+                        rng,
+                    )
+                elif rng.random() < 0.75:
+                    mutated[selected_key] = copy.deepcopy(current_value)
+                else:
+                    mutated[selected_key] = copy.deepcopy(fresh_value)
+            elif isinstance(current_value, (dict, list)) and isinstance(
+                fresh_value, type(current_value)
+            ):
+                mutated[selected_key] = self._mutate_nested_block(
+                    current_value,
+                    fresh_value,
+                    rng,
+                )
+            else:
+                mutated[selected_key] = copy.deepcopy(fresh_value)
         return mutated
 
     def _mutate_nested_block(self, current, fresh, rng):
@@ -1165,12 +1199,12 @@ class FeatureDetectionOptimizer:
 
     def _select_best_from_history(self):
         """
-        Post-process optimization history and select the best raw candidate.
+        Post-process optimization history and select the best recovery-aware candidate.
 
         Returns
         -------
         dict
-            Best parameters based on lexicographic raw selection
+            Best parameters based on lexicographic recovery-aware selection
         """
         if not self.optimization_history:
             return None

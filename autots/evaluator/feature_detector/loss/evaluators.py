@@ -622,11 +622,6 @@ class LossEvaluatorsMixin:
         loss = 0.0
         n_items = 0
         for key, true_value in true_strengths.items():
-            component_weight = 1.0
-            if key == 'weekly':
-                component_weight = 1.35
-            elif key == 'yearly':
-                component_weight = 1.1
             det_value = detected_strengths.get(key)
             if det_value is None and isinstance(key, str) and key.startswith('period_'):
                 try:
@@ -662,22 +657,21 @@ class LossEvaluatorsMixin:
                         # Apply the same underprediction asymmetry (1.5×) used
                         if best_match_det_val < true_value:
                             best_match_penalty = min(best_match_penalty * 1.25, 2.0)
-                        loss += component_weight * best_match_penalty
+                        loss += best_match_penalty
                         n_items += 1
                         continue
             if det_value is None:
-                if key not in {'weekly', 'yearly'}:
-                    det_value = detected_strengths.get(
-                        'combined', detected_strengths.get('seasonality_strength')
-                    )
+                det_value = detected_strengths.get(
+                    'combined', detected_strengths.get('seasonality_strength')
+                )
             if det_value is None:
-                loss += component_weight * (0.5 + abs(true_value))
+                loss += 0.5 + abs(true_value)
             else:
                 error = det_value - true_value
                 penalty = abs(error) / (abs(true_value) + 1e-6)
                 if error < 0:
-                    penalty *= 1.45 if key == 'weekly' else 1.25
-                loss += component_weight * min(penalty, 2.0)
+                    penalty *= 1.25
+                loss += min(penalty, 2.0)
             n_items += 1
         return loss / max(1, n_items)
 
@@ -691,11 +685,6 @@ class LossEvaluatorsMixin:
         spectral_penalty = self._component_spectral_penalty(detected_series, true_series)
         profile_penalty = self._component_profile_correlation(
             detected_series, true_series, date_index=date_index,
-        )
-        yearly_fourier_penalty = self._component_yearly_fourier_penalty(
-            detected_series,
-            true_series,
-            date_index=date_index,
         )
         
         # Explicit asymmetric amplitude penalty to prevent underprediction
@@ -723,11 +712,10 @@ class LossEvaluatorsMixin:
         # Wasserstein weight is reduced because it is shape-tolerant
         # Profile weight is raised because it directly checks the seasonal profile
         return (
-            0.24 * rmse_penalty
-            + 0.08 * wasserstein_penalty
-            + 0.22 * spectral_penalty
-            + 0.28 * profile_penalty
-            + 0.18 * yearly_fourier_penalty
+            0.30 * rmse_penalty
+            + 0.10 * wasserstein_penalty
+            + 0.25 * spectral_penalty
+            + 0.35 * profile_penalty
             + amplitude_penalty
         )
 

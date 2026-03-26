@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """AnomalyMixin for TimeSeriesFeatureDetector."""
 
+import copy
 import numpy as np
 import pandas as pd
 import warnings
@@ -9,6 +10,16 @@ from autots.tools.transform import AnomalyRemoval
 
 class AnomalyMixin:
     """Mixin providing anomaly detection, noise analysis, and regime changepoint detection."""
+
+    def _build_anomaly_params(self, holiday_dates=None):
+        """Build call-scoped anomaly parameters without mutating detector defaults."""
+        params = copy.deepcopy(self.anomaly_params)
+        params['output'] = self.detection_mode
+        params.pop('holiday_dates', None)
+        if holiday_dates:
+            params['holiday_dates'] = list(holiday_dates)
+            params.setdefault('holiday_proximity_days', 2)
+        return params
 
     def _detect_anomalies(self, residual_df, anomaly_params=None, detector_attr='anomaly_detector'):
         """Detect anomalies using AnomalyRemoval."""

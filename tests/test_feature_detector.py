@@ -992,8 +992,8 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         # Verify it still has the same top-level structure (keys should be preserved)
         self.assertEqual(set(params.keys()), set(mutated.keys()))
 
-    def test_select_best_uses_raw_lexicographic_order(self):
-        """Test that the default selector prefers raw loss, then diagnostics."""
+    def test_select_best_uses_recovery_lexicographic_order_by_default(self):
+        """Default selector should prefer recovery-floor compliance before raw loss."""
         optimizer = FeatureDetectionOptimizer(self.generator)
         history = [
             {
@@ -1025,10 +1025,10 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
 
         best_params = optimizer._select_best_from_history()
 
-        self.assertEqual(best_params, {'p': 1})
+        self.assertEqual(best_params, {'p': 2})
         self.assertEqual(len(optimizer.history_df), 2)
         self.assertIn('balanced_loss', optimizer.history_df.columns)
-        self.assertEqual(optimizer.best_total_loss, 1.0)
+        self.assertEqual(optimizer.best_total_loss, 1.1)
 
     def test_select_best_can_use_recovery_lexicographic_order(self):
         """Alternate selector should prefer fewer recovery-floor misses."""
@@ -1116,7 +1116,7 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         self.assertEqual(optimizer.best_loss, 1.0)
         self.assertEqual(optimizer.best_total_loss, 1.0)
 
-    def test_example_benchmark_raw_best_matches_selected(self):
+    def test_example_benchmark_selected_matches_recovery_lexicographic_rank(self):
         """Regression check for the example benchmark selection path."""
         example_path = Path(__file__).resolve().parents[1] / 'examples' / 'synthetic_tuning_example.py'
         src = example_path.read_text()
@@ -1143,9 +1143,16 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         )
         best = optimizer.optimize()
         self.assertIsNotNone(best)
-        raw_best = min(optimizer.optimization_history, key=lambda entry: entry['loss'])
-        self.assertEqual(best, raw_best['params'])
-        metrics = raw_best.get('loss_breakdown', {}).get('recovery_metrics', {})
+        ranked_best = min(
+            optimizer.optimization_history,
+            key=lambda entry: (
+                entry.get('loss_breakdown', {}).get('recovery_floor_violations', float('inf')),
+                entry['loss'],
+                entry.get('loss_breakdown', {}).get('reconstruction_total_loss', float('inf')),
+            ),
+        )
+        self.assertEqual(best, ranked_best['params'])
+        metrics = ranked_best.get('loss_breakdown', {}).get('recovery_metrics', {})
         self.assertIn('weekly_profile_correlation', metrics)
         self.assertIn('yearly_profile_correlation', metrics)
 

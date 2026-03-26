@@ -172,8 +172,8 @@ class LossMetricsMixin:
         precision_scores = np.max(proximity, axis=0)
         soft_precision = float(np.mean(precision_scores))
 
-        # Soft F1 (beta=2.0, clearly recall-favoring for the synthetic benchmark)
-        beta = 2.0
+        # Soft F1 (beta=1.2, slightly recall-favoring)
+        beta = 1.2
         beta_sq = beta ** 2
         denom = beta_sq * soft_precision + soft_recall + 1e-9
         soft_f1 = (1.0 + beta_sq) * (soft_precision * soft_recall) / denom
@@ -489,15 +489,10 @@ class LossMetricsMixin:
                 p = _profile_corr(detected_arr, true_arr, dow_keys)
                 if p is not None:
                     penalties.append(p)
-                if len(idx) > 180:
-                    doy_keys = np.array(idx.dayofyear)
-                    p = _profile_corr(detected_arr, true_arr, doy_keys)
-                    if p is not None:
-                        penalties.append(p)
                 month_keys = np.array(idx.month)
                 p = _profile_corr(detected_arr, true_arr, month_keys)
                 if p is not None:
-                    penalties.append(0.5 * p)
+                    penalties.append(p)
             elif median_delta < 86400 * 10:  # Weekly
                 woy_keys = np.array(idx.isocalendar().week.values, dtype=int)
                 p = _profile_corr(detected_arr, true_arr, woy_keys)

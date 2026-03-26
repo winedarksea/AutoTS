@@ -44,17 +44,17 @@ class DecompositionMixin:
             else []
         )
 
-        # Optional suppression of holiday-proximate anomalies to reduce holiday
-        # double-counting in the final anomaly output.
+        anomaly_params = self._build_anomaly_params()
         if self.global_holiday_anomaly_suppression:
             combined_holiday_dates = self._flatten_holiday_dates(holiday_dates)
-            if combined_holiday_dates:
-                self.anomaly_params['holiday_dates'] = combined_holiday_dates
-                self.anomaly_params.setdefault('holiday_proximity_days', 2)
+            anomaly_params = self._build_anomaly_params(
+                holiday_dates=combined_holiday_dates
+            )
 
         # Anomaly detection
         residual_without_anomalies, anomaly_records = self._detect_anomalies(
-            rough_residual
+            rough_residual,
+            anomaly_params=anomaly_params,
         )
         self._anomaly_records_temp = anomaly_records
 
