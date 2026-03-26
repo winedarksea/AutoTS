@@ -711,11 +711,13 @@ class LossEvaluatorsMixin:
         # - Amplitude: asymmetric penalty forcing model to capture full swing
         # Wasserstein weight is reduced because it is shape-tolerant
         # Profile weight is raised because it directly checks the seasonal profile
+        # (now also includes the quarter profile for daily data, making it more
+        # reliable; RMSE is slightly downweighted because it is phase-sensitive)
         return (
-            0.30 * rmse_penalty
+            0.25 * rmse_penalty
             + 0.10 * wasserstein_penalty
             + 0.25 * spectral_penalty
-            + 0.35 * profile_penalty
+            + 0.40 * profile_penalty
             + amplitude_penalty
         )
 

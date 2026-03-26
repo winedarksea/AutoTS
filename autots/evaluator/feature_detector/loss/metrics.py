@@ -493,6 +493,14 @@ class LossMetricsMixin:
                 p = _profile_corr(detected_arr, true_arr, month_keys)
                 if p is not None:
                     penalties.append(p)
+                # Quarter profile: 4 stable groups (~90 obs each) provide a
+                # coarser but more robust yearly shape check than month alone.
+                # Requires at least one full year of data to populate all 4 quarters.
+                if len(idx) >= 365:
+                    quarter_keys = np.array(idx.quarter)
+                    p = _profile_corr(detected_arr, true_arr, quarter_keys)
+                    if p is not None:
+                        penalties.append(p)
             elif median_delta < 86400 * 10:  # Weekly
                 woy_keys = np.array(idx.isocalendar().week.values, dtype=int)
                 p = _profile_corr(detected_arr, true_arr, woy_keys)
