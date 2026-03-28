@@ -278,7 +278,9 @@ if HAS_TORCH:
                 composite_per_series: (B, N, T) optional trend reconstructed purely
                     from shared prototypes (composite_trend_per_series from network
                     output). When provided, each series is compared against its own
-                    structural anchor instead of an emergent group consensus.
+                    structural anchor instead of an emergent group consensus. The
+                    penalty is gated by anchor_dir.abs() so a flat composite anchor
+                    never drives the model toward flat forecasts.
             """
             B, N, T = trend_forecasts.shape
             K = prototype_weights.shape[-1]
@@ -299,13 +301,24 @@ if HAS_TORCH:
                 composite_per_series is not None
                 and composite_per_series.shape == trend_forecasts.shape
             ):
-                anchor_dir = self._trend_direction(composite_per_series)  # (B, N)
-                # Gate by assignment confidence: how committed each series is to
-                # any one prototype.  A series spread uniformly across prototypes
+                # Detach the composite anchor so gradients only flow through
+                # trend_forecasts here.  LocalTrendPenalty already trains the
+                # composite (via MSE); allowing gradients through anchor_strength
+                # would let the optimizer collapse _sacred_timeline_prototypes → 0
+                # to zero-out the gate — the same degenerate flat solution.
+                anchor_dir = self._trend_direction(composite_per_series.detach())  # (B, N)
+                # Gate by anchor strength: when the composite is near-flat
+                # (anchor_dir ≈ 0) the penalty vanishes, preventing the degenerate
+                # case where a flat anchor actively suppresses trend diversity.
+                # Only a composite with a genuine directional signal enforces
+                # alignment — same contract as consensus_strength in the fallback.
+                anchor_strength = anchor_dir.abs()  # (B, N), no gradient
+                # Also gate by assignment confidence: how committed each series is
+                # to any one prototype.  A series spread uniformly across prototypes
                 # has no clear structural home and gets a lower penalty.
                 assignment_confidence = prototype_weights.max(dim=-1).values  # (B, N)
                 deviation = (soft_dir - anchor_dir) ** 2  # (B, N)
-                penalty = (assignment_confidence * deviation).mean()
+                penalty = (anchor_strength * assignment_confidence * deviation).mean()
                 return self.penalty_weight * penalty
 
             # --- Fallback: prototype-consensus mode ---
