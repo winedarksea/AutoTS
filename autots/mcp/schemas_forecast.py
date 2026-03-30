@@ -31,8 +31,14 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, apply_constraints, apply_adjustments, get_model_params"},
-                    "data_id": {"type": "string", "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value"},
+                    "prediction_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_forecast, plot_forecast, apply_constraints, apply_adjustments, get_model_params",
+                    },
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value",
+                    },
                     "forecast_length": {"type": "integer"},
                 },
                 "required": ["prediction_id", "data_id", "forecast_length"],
@@ -59,12 +65,26 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments"},
-                    "autots_id": {"type": "string", "description": "Cache ID — pass to get_validation_results, plot_validation"},
-                    "data_id": {"type": "string", "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value"},
+                    "prediction_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments",
+                    },
+                    "autots_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_validation_results, plot_validation",
+                    },
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value",
+                    },
                     "forecast_length": {"type": "integer"},
                 },
-                "required": ["prediction_id", "autots_id", "data_id", "forecast_length"],
+                "required": [
+                    "prediction_id",
+                    "autots_id",
+                    "data_id",
+                    "forecast_length",
+                ],
             },
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
         ),
@@ -104,12 +124,26 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments"},
-                    "autots_id": {"type": "string", "description": "Cache ID — pass to get_validation_results, plot_validation"},
-                    "data_id": {"type": "string", "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value"},
+                    "prediction_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_forecast, plot_forecast, get_forecast_components, apply_constraints, apply_adjustments",
+                    },
+                    "autots_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_validation_results, plot_validation",
+                    },
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID for the input data — pass as data_id to apply_adjustments when using align_last_value",
+                    },
                     "forecast_length": {"type": "integer"},
                 },
-                "required": ["prediction_id", "autots_id", "data_id", "forecast_length"],
+                "required": [
+                    "prediction_id",
+                    "autots_id",
+                    "data_id",
+                    "forecast_length",
+                ],
             },
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False),
         ),
@@ -211,7 +245,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "prediction_id": {"type": "string", "description": "Cache ID for the constrained forecast"},
+                    "prediction_id": {
+                        "type": "string",
+                        "description": "Cache ID for the constrained forecast",
+                    },
                     "constraint_method": {"type": "string"},
                 },
                 "required": ["prediction_id", "constraint_method"],
@@ -261,7 +298,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "prediction_id": {"type": "string", "description": "Cache ID for the adjusted forecast"},
+                    "prediction_id": {
+                        "type": "string",
+                        "description": "Cache ID for the adjusted forecast",
+                    },
                     "adjustment_method": {"type": "string"},
                     "series_ids_applied": {},
                 },

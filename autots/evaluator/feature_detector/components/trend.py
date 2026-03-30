@@ -106,9 +106,7 @@ class TrendMixin:
         for col in residual_df.columns:
             series = residual_df[col]
             series_std = float(series.std()) or 1e-9
-            series_iqr = (
-                float(series.quantile(0.75) - series.quantile(0.25)) or 1e-9
-            )
+            series_iqr = float(series.quantile(0.75) - series.quantile(0.25)) or 1e-9
             series_median = float(np.nanmedian(series.to_numpy(dtype=float)))
             adaptive_abs_thresh = min(abs_thresh, series_std * 0.3)
             # Guard against near-zero medians which can explode relative thresholds.
@@ -350,4 +348,3 @@ class TrendMixin:
         if denom == 0:
             return 0.0
         return np.sum((x - x_mean) * (y - y_mean)) / denom
-

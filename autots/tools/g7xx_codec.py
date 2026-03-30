@@ -878,12 +878,14 @@ class G711Scaler(EmptyTransformer):
             "mode": mode,
             # Reduced mu values to lessen non-linear dampening
             # Favor lower values (50-150) for better forecast amplitude preservation
-            "mu": random.choices(
-                [50.0, 75.0, 100.0, 150.0, 200.0, 255.0],
-                [0.25, 0.25, 0.2, 0.15, 0.1, 0.05],
-            )[0]
-            if mode == "mu"
-            else 100.0,
+            "mu": (
+                random.choices(
+                    [50.0, 75.0, 100.0, 150.0, 200.0, 255.0],
+                    [0.25, 0.25, 0.2, 0.15, 0.1, 0.05],
+                )[0]
+                if mode == "mu"
+                else 100.0
+            ),
             "A": random.choice([50.0, 75.0, 87.6, 100.0]) if mode == "a" else 87.6,
             "center": random.choices(["median", "mean"], [0.8, 0.2])[0],
             "scale_method": random.choices(
@@ -1019,9 +1021,9 @@ class G726Filter(EmptyTransformer):
             "on_inverse": not selection,
             "quantizer": random.choices(["uniform", "nonuniform"], [0.4, 0.6])[0],
             "use_adaptive_predictor": use_adaptive,
-            "predictor_leak": random.uniform(0.9995, 0.99995)
-            if use_adaptive
-            else 0.9999,
+            "predictor_leak": (
+                random.uniform(0.9995, 0.99995) if use_adaptive else 0.9999
+            ),
         }
         if not selection:
             params["bounds_only"] = random.choices([True, False], [0.2, 0.8])[0]

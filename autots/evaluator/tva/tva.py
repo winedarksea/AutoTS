@@ -44,6 +44,7 @@ except Exception:
 try:
     from tqdm import tqdm
 except Exception:
+
     def tqdm(x, **kwargs):
         return x
 
@@ -279,7 +280,9 @@ class TVA:
             self._prior_adj = self._priors.build_structural_prior_adjacency()
             if self.series_metadata:
                 self._metadata_embeddings = self._priors.build_metadata_embeddings()
-                self._anchor_mask = self._priors.get_anchor_mask(self.min_anchor_history)
+                self._anchor_mask = self._priors.get_anchor_mask(
+                    self.min_anchor_history
+                )
             else:
                 self._metadata_embeddings = None
                 self._anchor_mask = np.ones(n_series, dtype=bool)
@@ -297,7 +300,11 @@ class TVA:
             )
             self._anchor_mask = np.ones(n_series, dtype=bool)
 
-        d_meta = self._metadata_embeddings.shape[1] if self._metadata_embeddings is not None else 0
+        d_meta = (
+            self._metadata_embeddings.shape[1]
+            if self._metadata_embeddings is not None
+            else 0
+        )
 
         # Step 3: Prepare training data
         trend_data = self._components['trend'].values  # (T, N)
@@ -314,10 +321,18 @@ class TVA:
             )
 
         # prepare other component windows for loss computation
-        seasonal_targets = self._create_target_windows(self._components['seasonality'].values)
-        holiday_targets = self._create_target_windows(self._components['holidays'].values)
-        level_shift_targets = self._create_target_windows(self._components['level_shifts'].values)
-        anomaly_targets = self._create_target_windows(self._components['anomalies'].values)
+        seasonal_targets = self._create_target_windows(
+            self._components['seasonality'].values
+        )
+        holiday_targets = self._create_target_windows(
+            self._components['holidays'].values
+        )
+        level_shift_targets = self._create_target_windows(
+            self._components['level_shifts'].values
+        )
+        anomaly_targets = self._create_target_windows(
+            self._components['anomalies'].values
+        )
 
         # to tensors
         device = torch.device(self.device)
@@ -347,7 +362,9 @@ class TVA:
 
         n_anchors = int(self._anchor_mask.sum())
         self._n_global_fit, self._n_meso_fit, self._n_prototypes_fit = (
-            self._resolve_network_sizes(n_anchors, self.n_global, self.n_meso, self.n_prototypes)
+            self._resolve_network_sizes(
+                n_anchors, self.n_global, self.n_meso, self.n_prototypes
+            )
         )
         if self.verbose >= 2:
             print(
@@ -372,11 +389,15 @@ class TVA:
 
         if self.trend_network_type == 'v2':
             network_kwargs['n_anchor_series'] = int(self._anchor_mask.sum())
-            network_kwargs['structure_learning_config'] = self._structure_config.to_dict()
+            network_kwargs['structure_learning_config'] = (
+                self._structure_config.to_dict()
+            )
             if self.causal_prior is not None:
                 network_kwargs['causal_prior'] = self.causal_prior
             elif self._priors is not None:
-                network_kwargs['causal_prior'] = self._priors.build_causal_prior_adjacency()
+                network_kwargs['causal_prior'] = (
+                    self._priors.build_causal_prior_adjacency()
+                )
             self._network = CompositeTrendNetworkV2(**network_kwargs).to(device)
         else:
             self._network = CompositeTrendNetworkV1(**network_kwargs).to(device)
@@ -418,13 +439,18 @@ class TVA:
         self._network.train()
         if isinstance(self._fusion_layer, nn.Module):
             self._fusion_layer.train()
-        fusion_trainable = (
-            isinstance(self._fusion_layer, nn.Module)
-            and any(p.requires_grad for p in self._fusion_layer.parameters())
+        fusion_trainable = isinstance(self._fusion_layer, nn.Module) and any(
+            p.requires_grad for p in self._fusion_layer.parameters()
         )
-        fusion_forecast_weight = float((self.loss_weights or {}).get('fusion_forecast', 0.25))
+        fusion_forecast_weight = float(
+            (self.loss_weights or {}).get('fusion_forecast', 0.25)
+        )
 
-        epoch_iter = tqdm(range(self.epochs), desc="TVA Training") if self.verbose else range(self.epochs)
+        epoch_iter = (
+            tqdm(range(self.epochs), desc="TVA Training")
+            if self.verbose
+            else range(self.epochs)
+        )
 
         for epoch in epoch_iter:
             epoch_loss = 0.0
@@ -441,7 +467,7 @@ class TVA:
                 # expand metadata for batch
                 meta_b = None
                 if meta_t is not None:
-                    meta_b = meta_t[:x_b.shape[0]]
+                    meta_b = meta_t[: x_b.shape[0]]
 
                 outputs = self._network(x_b, meta_b, anchor_mask_t)
 
@@ -458,7 +484,9 @@ class TVA:
                 targets['structure_loss_scale'] = (
                     structure_loss_scale if structure_regularization_enabled else 0.0
                 )
-                targets['structure_prior_weight'] = self._structure_config.prior_tether_weight
+                targets['structure_prior_weight'] = (
+                    self._structure_config.prior_tether_weight
+                )
                 targets['structure_config'] = self._structure_config
 
                 loss, breakdown = self._loss_fn(outputs, targets)
@@ -485,18 +513,23 @@ class TVA:
                 if fusion_trainable and fusion_forecast_weight > 0:
                     # level_shifts are always additive; fusion gates only the
                     # stochastic components (trend, seasonality, holidays).
-                    fused_forecast = self._fusion_layer(
-                        outputs['trend_forecast'],
-                        sea_b,
-                        hol_b,
-                    ) + lvl_b
+                    fused_forecast = (
+                        self._fusion_layer(
+                            outputs['trend_forecast'],
+                            sea_b,
+                            hol_b,
+                        )
+                        + lvl_b
+                    )
                     full_signal_target = y_b + sea_b + hol_b + lvl_b
                     fusion_loss = fusion_forecast_weight * torch.nn.functional.mse_loss(
                         fused_forecast,
                         full_signal_target,
                     )
                     if not torch.isfinite(fusion_loss):
-                        raise RuntimeError("TVA encountered a non-finite fusion training loss.")
+                        raise RuntimeError(
+                            "TVA encountered a non-finite fusion training loss."
+                        )
                     breakdown['fusion_forecast'] = fusion_loss.item()
                     loss = loss + fusion_loss
 
@@ -544,7 +577,7 @@ class TVA:
 
         # get last window of trend data
         trend_data = self._components['trend'].values  # (T, N)
-        last_window = trend_data[-self.window_size:]  # (window_size, N)
+        last_window = trend_data[-self.window_size :]  # (window_size, N)
 
         # to tensor: (1, N, T_window)
         x = torch.tensor(
@@ -553,10 +586,14 @@ class TVA:
 
         # metadata
         meta = None
-        if self._metadata_embeddings is not None and self._metadata_embeddings.shape[1] > 0:
+        if (
+            self._metadata_embeddings is not None
+            and self._metadata_embeddings.shape[1] > 0
+        ):
             meta = torch.tensor(
                 self._metadata_embeddings[np.newaxis, :, :],
-                dtype=torch.float32, device=device,
+                dtype=torch.float32,
+                device=device,
             )
 
         anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
@@ -582,15 +619,33 @@ class TVA:
         # fuse stochastic components; level_shifts always added additively afterward
         if isinstance(self._fusion_layer, nn.Module):
             with torch.no_grad():
-                t_trend = torch.tensor(trend_fc[np.newaxis], dtype=torch.float32, device=device)
-                t_sea = torch.tensor(seasonal[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
-                t_hol = torch.tensor(holidays[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
-                t_ls = torch.tensor(level_shifts[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
+                t_trend = torch.tensor(
+                    trend_fc[np.newaxis], dtype=torch.float32, device=device
+                )
+                t_sea = torch.tensor(
+                    seasonal[np.newaxis, :, :fc_length],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                t_hol = torch.tensor(
+                    holidays[np.newaxis, :, :fc_length],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                t_ls = torch.tensor(
+                    level_shifts[np.newaxis, :, :fc_length],
+                    dtype=torch.float32,
+                    device=device,
+                )
                 fused = self._fusion_layer(t_trend, t_sea, t_hol) + t_ls
                 forecast_values = fused.cpu().numpy()[0].T  # (T, N)
         else:
-            forecast_values = (trend_fc + seasonal[:, :fc_length] +
-                               holidays[:, :fc_length] + level_shifts[:, :fc_length]).T
+            forecast_values = (
+                trend_fc
+                + seasonal[:, :fc_length]
+                + holidays[:, :fc_length]
+                + level_shifts[:, :fc_length]
+            ).T
 
         # build output DataFrame
         future_index = forecast_comps['trend'].index[:fc_length]
@@ -619,14 +674,17 @@ class TVA:
 
         if 'growth_rate' in constraints:
             if 'series_name' not in constraints:
-                raise ValueError("what_if() with 'growth_rate' requires 'series_name' in constraints.")
+                raise ValueError(
+                    "what_if() with 'growth_rate' requires 'series_name' in constraints."
+                )
             return optimizer.apply_growth_constraint(
                 constraints['series_name'], constraints['growth_rate']
             )
         elif 'level_name' in constraints:
             S = self._priors.build_hierarchy_matrix() if self._priors else None
             return optimizer.apply_hierarchical_adjustment(
-                constraints['level_name'], constraints['target_value'],
+                constraints['level_name'],
+                constraints['target_value'],
                 hierarchy_matrix=S,
             )
         else:
@@ -650,7 +708,9 @@ class TVA:
 
         if self._reconciler is None:
             if self.reconciliation_method:
-                self._reconciler = ReconciliationBridge(method=self.reconciliation_method)
+                self._reconciler = ReconciliationBridge(
+                    method=self.reconciliation_method
+                )
             else:
                 return forecasts
 
@@ -677,10 +737,13 @@ class TVA:
         if forecasts.shape[1] == n_bottom and n_agg > 0:
             agg_values = (S[:n_agg] @ forecasts.values.T).T  # (T, n_agg)
             agg_cols = [f'_agg_{i}' for i in range(n_agg)]
-            full_df = pd.concat([
-                pd.DataFrame(agg_values, index=forecasts.index, columns=agg_cols),
-                forecasts,
-            ], axis=1)
+            full_df = pd.concat(
+                [
+                    pd.DataFrame(agg_values, index=forecasts.index, columns=agg_cols),
+                    forecasts,
+                ],
+                axis=1,
+            )
         else:
             full_df = forecasts
 
@@ -700,7 +763,9 @@ class TVA:
         outputs = self._get_last_window_outputs()
 
         result = {
-            'prototypes': self._network.prototype._sacred_timeline_prototypes.detach().cpu().numpy(),
+            'prototypes': self._network.prototype._sacred_timeline_prototypes.detach()
+            .cpu()
+            .numpy(),
             'composite_trend': outputs['composite_trend'].cpu().numpy()[0],
         }
         if 'prototype_weights' in outputs:
@@ -721,7 +786,11 @@ class TVA:
         elif self._prior_adj is not None:
             return self._prior_adj.copy()
         else:
-            n = self._n_global_fit if self._n_global_fit is not None else max(2, int(self.n_global) if self.n_global != 'auto' else 4)
+            n = (
+                self._n_global_fit
+                if self._n_global_fit is not None
+                else max(2, int(self.n_global) if self.n_global != 'auto' else 4)
+            )
             return np.ones((n, n), dtype=np.float32)
 
     def get_graph_snapshot(
@@ -768,9 +837,11 @@ class TVA:
         snapshot = build_graph_snapshot(
             adjacency_dense=snapshot_dict['adjacency_dense'],
             assignment_matrices=snapshot_dict['assignment_matrices'],
-            threshold=threshold
-            if threshold is not None
-            else self._structure_config.threshold_for_export,
+            threshold=(
+                threshold
+                if threshold is not None
+                else self._structure_config.threshold_for_export
+            ),
             prior_adjacency=snapshot_dict.get('prior_adjacency'),
             anchor_names=[
                 node['node_id']
@@ -804,6 +875,7 @@ class TVA:
         Integer values are passed through unchanged with a floor of 2.
         """
         import math
+
         n = max(int(n_anchors), 1)
 
         resolved_global = (
@@ -829,16 +901,20 @@ class TVA:
 
         device = torch.device(self.device)
         trend_data = self._components['trend'].values
-        last_window = trend_data[-self.window_size:]
+        last_window = trend_data[-self.window_size :]
         x = torch.tensor(
             last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
         )
 
         meta = None
-        if self._metadata_embeddings is not None and self._metadata_embeddings.shape[1] > 0:
+        if (
+            self._metadata_embeddings is not None
+            and self._metadata_embeddings.shape[1] > 0
+        ):
             meta = torch.tensor(
                 self._metadata_embeddings[np.newaxis, :, :],
-                dtype=torch.float32, device=device,
+                dtype=torch.float32,
+                device=device,
             )
 
         anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
@@ -890,8 +966,16 @@ class TVA:
     def _get_metadata(self):
         return {
             'network_type': self.trend_network_type,
-            'n_series': len(self._df_original.columns) if self._df_original is not None else 0,
-            'n_anchors': int(self._anchor_mask.sum()) if self._anchor_mask is not None else 0,
-            'n_prototypes': self._n_prototypes_fit if self._n_prototypes_fit is not None else self.n_prototypes,
+            'n_series': (
+                len(self._df_original.columns) if self._df_original is not None else 0
+            ),
+            'n_anchors': (
+                int(self._anchor_mask.sum()) if self._anchor_mask is not None else 0
+            ),
+            'n_prototypes': (
+                self._n_prototypes_fit
+                if self._n_prototypes_fit is not None
+                else self.n_prototypes
+            ),
             'prototype_assignment_method': self.prototype_assignment_method,
         }

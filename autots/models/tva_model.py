@@ -184,7 +184,9 @@ class TVAModel(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, future_regressor=None, just_point_forecast=False):
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
         """Generate forecast following training data.
 
         Args:
@@ -282,8 +284,12 @@ class TVAModel(ModelObject):
         fast_mode = "fast" in str(method).lower()
 
         trend_network = random.choices(["v2", "v1"], weights=[0.75, 0.25])[0]
-        fusion = random.choices(["attention", "additive", "direct"], weights=[0.35, 0.45, 0.15])[0]
-        d_token = random.choices([32, 48, 64, 96, 128], weights=[0.15, 0.2, 0.35, 0.2, 0.1])[0]
+        fusion = random.choices(
+            ["attention", "additive", "direct"], weights=[0.35, 0.45, 0.15]
+        )[0]
+        d_token = random.choices(
+            [32, 48, 64, 96, 128], weights=[0.15, 0.2, 0.35, 0.2, 0.1]
+        )[0]
         n_heads = random.choices([2, 4, 8, 10], weights=[0.2, 0.6, 0.2, 0.1])[0]
         # keep n_heads as divisor of d_token
         if d_token % n_heads != 0:
@@ -291,18 +297,33 @@ class TVAModel(ModelObject):
         if fast_mode:
             epochs = random.choices([15, 20, 30, 40], weights=[0.2, 0.4, 0.3, 0.1])[0]
             batch_size = random.choices([16, 32, 64], weights=[0.1, 0.45, 0.45])[0]
-            window_size = random.choices([30, 45, 60, 91], weights=[0.2, 0.3, 0.3, 0.2])[0]
+            window_size = random.choices(
+                [30, 45, 60, 91], weights=[0.2, 0.3, 0.3, 0.2]
+            )[0]
         else:
-            epochs = random.choices([20, 30, 50, 75, 100], weights=[0.2, 0.3, 0.3, 0.15, 0.05])[0]
+            epochs = random.choices(
+                [20, 30, 50, 75, 100], weights=[0.2, 0.3, 0.3, 0.15, 0.05]
+            )[0]
             batch_size = random.choices([16, 32, 64], weights=[0.2, 0.5, 0.3])[0]
-            window_size = random.choices([45, 60, 91, 120, 180], weights=[0.1, 0.2, 0.4, 0.2, 0.1])[0]
-        lr = random.choices([3e-4, 5e-4, 1e-3, 2e-3, 5e-3], weights=[0.1, 0.25, 0.35, 0.2, 0.1])[0]
+            window_size = random.choices(
+                [45, 60, 91, 120, 180], weights=[0.1, 0.2, 0.4, 0.2, 0.1]
+            )[0]
+        lr = random.choices(
+            [3e-4, 5e-4, 1e-3, 2e-3, 5e-3], weights=[0.1, 0.25, 0.35, 0.2, 0.1]
+        )[0]
         prior_confidence = random.choices(
             [0.05, 0.1, 0.2, 0.3, 0.5, 0.7], weights=[0.05, 0.15, 0.25, 0.3, 0.15, 0.1]
         )[0]
-        n_global = random.choices(["auto", 2, 3, 4, 5, 6], weights=[0.5, 0.08, 0.14, 0.14, 0.08, 0.06])[0]
-        n_meso = random.choices(["auto", 4, 6, 8, 10, 12], weights=[0.45, 0.1, 0.15, 0.15, 0.1, 0.05])[0]
-        n_prototypes = random.choices(["auto", 2, 3, 4, 5, 6, 8], weights=[0.55, 0.12, 0.14, 0.1, 0.06, 0.03, 0.03])[0]
+        n_global = random.choices(
+            ["auto", 2, 3, 4, 5, 6], weights=[0.5, 0.08, 0.14, 0.14, 0.08, 0.06]
+        )[0]
+        n_meso = random.choices(
+            ["auto", 4, 6, 8, 10, 12], weights=[0.45, 0.1, 0.15, 0.15, 0.1, 0.05]
+        )[0]
+        n_prototypes = random.choices(
+            ["auto", 2, 3, 4, 5, 6, 8],
+            weights=[0.55, 0.12, 0.14, 0.1, 0.06, 0.03, 0.03],
+        )[0]
         if n_meso != "auto" and n_global != "auto":
             n_meso = max(int(n_meso), int(n_global))
         prototype_assignment_method = random.choices(
@@ -314,15 +335,21 @@ class TVAModel(ModelObject):
         reconciliation_method = random.choices(
             [None, "mint", "erm"], weights=[0.6, 0.3, 0.1]
         )[0]
-        structure_learning_enabled = random.choices([True, False], weights=[0.7, 0.3])[0]
+        structure_learning_enabled = random.choices([True, False], weights=[0.7, 0.3])[
+            0
+        ]
         min_anchor_history = random.choices(
             [90, 120, 180, 365], weights=[0.15, 0.25, 0.45, 0.15]
         )[0]
         structure_learning_config = {
             "learn_hierarchy": random.choices([True, False], weights=[0.7, 0.3])[0],
             "learn_dag": random.choices([True, False], weights=[0.8, 0.2])[0],
-            "dag_penalty": random.choices([0.02, 0.05, 0.1, 0.2], weights=[0.2, 0.35, 0.3, 0.15])[0],
-            "sparsity_weight": random.choices([0.001, 0.005, 0.01, 0.02], weights=[0.2, 0.35, 0.3, 0.15])[0],
+            "dag_penalty": random.choices(
+                [0.02, 0.05, 0.1, 0.2], weights=[0.2, 0.35, 0.3, 0.15]
+            )[0],
+            "sparsity_weight": random.choices(
+                [0.001, 0.005, 0.01, 0.02], weights=[0.2, 0.35, 0.3, 0.15]
+            )[0],
             "assignment_entropy_weight": random.choices(
                 [0.0, 0.002, 0.005, 0.01], weights=[0.15, 0.25, 0.35, 0.25]
             )[0],

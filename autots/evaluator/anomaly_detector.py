@@ -405,7 +405,9 @@ class HolidayDetector(object):
         if "occurrence_rate" in combined.columns:
             score = score + combined["occurrence_rate"].fillna(0.0).astype(float) * 2.0
         if "avg_anomaly_score" in combined.columns:
-            score = score + combined["avg_anomaly_score"].fillna(0.0).abs().astype(float)
+            score = score + combined["avg_anomaly_score"].fillna(0.0).abs().astype(
+                float
+            )
         return score
 
     def _rank_cap_rules(self, combined):
@@ -736,7 +738,9 @@ class HolidayDetector(object):
         if np.min(self.anomaly_model.anomalies.values) != -1:
             print("No anomalies detected.")
         actuals = df if self.output != "univariate" else None
-        anomaly_scores = self.anomaly_model.scores if self.output != "univariate" else None
+        anomaly_scores = (
+            self.anomaly_model.scores if self.output != "univariate" else None
+        )
 
         selected_tables = self._extract_holidays(
             anomalies=self.anomaly_model.anomalies,
@@ -815,11 +819,16 @@ class HolidayDetector(object):
                         anomalies=relaxed_anomaly_model.anomalies,
                         actuals=actuals,
                         anomaly_scores=relaxed_scores,
-                        threshold=min(float(self.threshold), self.relax_threshold_floor),
+                        threshold=min(
+                            float(self.threshold), self.relax_threshold_floor
+                        ),
                         splash_threshold=(
                             self.relax_splash_threshold
                             if self.splash_threshold is None
-                            else min(float(self.splash_threshold), self.relax_splash_threshold)
+                            else min(
+                                float(self.splash_threshold),
+                                self.relax_splash_threshold,
+                            )
                         ),
                     )
                     relaxed_tables = self._apply_holiday_cap(
@@ -989,9 +998,9 @@ class HolidayDetector(object):
             [0.65, 0.55, 0.45], [0.3, 0.4, 0.3]
         )[0]
         holiday_params['relax_rounds'] = random.choices([1, 2, 3], [0.3, 0.5, 0.2])[0]
-        holiday_params['min_holidays_per_series'] = random.choices(
-            [1, 2], [0.9, 0.1]
-        )[0]
+        holiday_params['min_holidays_per_series'] = random.choices([1, 2], [0.9, 0.1])[
+            0
+        ]
         holiday_params['max_holidays_per_series'] = random.choices(
             [None, None, 24, 36, 52], [0.55, 0.2, 0.1, 0.1, 0.05]
         )[0]

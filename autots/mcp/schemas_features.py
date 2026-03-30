@@ -46,7 +46,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "event_risk_id": {"type": "string", "description": "Cache ID — pass to get_event_risk_results or plot_event_risk"},
+                    "event_risk_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_event_risk_results or plot_event_risk",
+                    },
                     "threshold": {},
                     "direction": {"type": "string"},
                     "forecast_length": {"type": "integer"},
@@ -111,7 +114,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "detector_id": {"type": "string", "description": "Cache ID — pass to get_detected_features, plot_features, forecast_from_features"},
+                    "detector_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_detected_features, plot_features, forecast_from_features",
+                    },
                     "series_count": {"type": "integer"},
                 },
                 "required": ["detector_id"],
@@ -201,7 +207,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "prediction_id": {"type": "string", "description": "Cache ID — pass to get_forecast or plot_forecast"},
+                    "prediction_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass to get_forecast or plot_forecast",
+                    },
                     "forecast_length": {"type": "integer"},
                     "note": {"type": "string"},
                 },

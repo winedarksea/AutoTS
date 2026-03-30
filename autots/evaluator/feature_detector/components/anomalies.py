@@ -21,7 +21,9 @@ class AnomalyMixin:
             params.setdefault('holiday_proximity_days', 2)
         return params
 
-    def _detect_anomalies(self, residual_df, anomaly_params=None, detector_attr='anomaly_detector'):
+    def _detect_anomalies(
+        self, residual_df, anomaly_params=None, detector_attr='anomaly_detector'
+    ):
         """Detect anomalies using AnomalyRemoval."""
         active_params = anomaly_params or self.anomaly_params
         detector = AnomalyRemoval(**active_params)
@@ -44,10 +46,7 @@ class AnomalyMixin:
                 magnitudes = residual_df.loc[date, :].values
                 magnitude = float(np.nanmean(magnitudes))
                 score = None
-                if (
-                    hasattr(detector, 'scores')
-                    and not detector.scores.empty
-                ):
+                if hasattr(detector, 'scores') and not detector.scores.empty:
                     try:
                         score = float(detector.scores.loc[date].iloc[0])
                     except Exception:
@@ -81,10 +80,7 @@ class AnomalyMixin:
                 for date in anomaly_dates:
                     magnitude = residual_df.at[date, col]
                     score = None
-                    if (
-                        hasattr(detector, 'scores')
-                        and not detector.scores.empty
-                    ):
+                    if hasattr(detector, 'scores') and not detector.scores.empty:
                         try:
                             score = float(detector.scores.loc[date, col])
                         except Exception:
@@ -163,7 +159,9 @@ class AnomalyMixin:
         post_deviations = np.abs(post_values - baseline)
 
         # Check for noisy burst.
-        n_outliers = np.sum(post_deviations > max(anomaly_mag * 0.4, baseline_std * 2.5))
+        n_outliers = np.sum(
+            post_deviations > max(anomaly_mag * 0.4, baseline_std * 2.5)
+        )
         if n_outliers >= 3:
             return 'noisy_burst'
 
@@ -235,10 +233,9 @@ class AnomalyMixin:
             try:
                 transformed = self.anomaly_detector.transform(df_work)
                 if transformed is not None:
-                    df_without_anomalies_scaled = (
-                        transformed.reindex(index=df_work.index, columns=df_work.columns)
-                        .astype(float)
-                    )
+                    df_without_anomalies_scaled = transformed.reindex(
+                        index=df_work.index, columns=df_work.columns
+                    ).astype(float)
             except Exception as exc:
                 warnings.warn(
                     f"Anomaly transform failed during noise analysis; using fallback interpolation. {exc}",
@@ -247,9 +244,8 @@ class AnomalyMixin:
 
         # Fallback: if transform did not materially change anything while anomaly
         # records exist, apply a conservative neighbor interpolation.
-        if (
-            df_without_anomalies_scaled.equals(df_work)
-            and getattr(self, '_anomaly_records_temp', None)
+        if df_without_anomalies_scaled.equals(df_work) and getattr(
+            self, '_anomaly_records_temp', None
         ):
             for col in df_work.columns:
                 for anom in self._anomaly_records_temp.get(col, []):
@@ -302,7 +298,9 @@ class AnomalyMixin:
         n = len(series)
         window = min(90, max(21, n // 12))
         min_periods = max(7, window // 3)
-        rolling_std = series.rolling(window=window, center=True, min_periods=min_periods).std()
+        rolling_std = series.rolling(
+            window=window, center=True, min_periods=min_periods
+        ).std()
         log_std = np.log(np.clip(rolling_std.to_numpy(dtype=float), 1e-9, None))
         diff = np.abs(np.diff(log_std, prepend=np.nan))
 

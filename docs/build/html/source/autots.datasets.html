@@ -14,10 +14,10 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.datasets package &#8212; AutoTS 1.0.1 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 1.0.2 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -78,7 +78,7 @@ if None, several default series are returned</p></li>
 <p>Matching test file in tests/test_synthetic_data.py</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.datasets.synthetic.</span></span><span class="sig-name descname"><span class="pre">SyntheticDailyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'2015-01-01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2555</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_changepoint_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_anomaly_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_level_shift_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weekly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yearly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_types</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_holiday_splash</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.datasets.synthetic.</span></span><span class="sig-name descname"><span class="pre">SyntheticDailyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'2015-01-01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2555</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_changepoint_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_anomaly_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_level_shift_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weekly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yearly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_types</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_holiday_splash</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_slope_scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_positive_bias</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_minimum_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_max_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weekly_profile_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yearly_fourier_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_ar_coefficient</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volatility_regime_intensity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_signal_floor_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_dom_holiday_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_wkdom_holiday_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_type_override</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Generate realistic synthetic daily time series data with labeled components.</p>
 <p>Creates multivariate time series with:
@@ -131,10 +131,46 @@ Actual per-series strength will vary 0.2x-2.0x this value</p></li>
 <li><p><strong>noise_level</strong> (<em>float</em>) – Base noise level (default 0.1, relative to signal)
 Actual per-series level will vary 0.5x-2.0x this value</p></li>
 <li><p><strong>include_regressors</strong> (<em>bool</em>) – Whether to include regressor effects (default False)</p></li>
-<li><p><strong>anomaly_types</strong> (<em>list</em><em> of </em><em>str</em><em> or </em><em>None</em>) – List of anomaly types to generate. Valid types are:
-‘point_outlier’, ‘noisy_burst’, ‘impulse_decay’, ‘linear_decay’, ‘transient_change’
-If None (default), all types will be generated</p></li>
+<li><p><strong>anomaly_types</strong> (<em>list</em><em> of </em><em>str</em><em> or </em><em>None</em>) – <p>List of anomaly types to generate. Valid types are:
+‘point_outlier’, ‘noisy_burst’, ‘impulse_decay’, ‘linear_decay’,
+‘transient_change’, ‘slope_reversion’
+If None (default), all types will be generated.</p>
+<p>The ‘slope_reversion’ type models SEV-like or failed-launch patterns common
+in real-world platform data: a sudden slope change (faster growth or decline)
+lasting 1-4 weeks, followed by gradual reversion to prior levels.  This produces
+the skewed first-difference distributions seen in real data without requiring
+discrete level shifts.</p>
+</p></li>
 <li><p><strong>disable_holiday_splash</strong> (<em>bool</em>) – If True, holidays will only affect a single day with no splash or bridge effects (default False)</p></li>
+<li><p><strong>trend_slope_scale</strong> (<em>float</em>) – Multiplier for trend slope magnitudes (default 1.0).
+Values &lt; 1.0 produce gentler slopes, &gt; 1.0 produce steeper slopes.</p></li>
+<li><p><strong>trend_positive_bias</strong> (<em>float</em>) – Probability [0, 1] of a trend segment being positive/upward (default 0.5 = balanced).
+Values &gt; 0.5 bias toward growth; set to ~0.85 for mostly-growing data.</p></li>
+<li><p><strong>level_shift_minimum_pct</strong> (<em>float</em>) – Minimum level shift as a fraction of baseline (default 0.12 = 12%).
+Lower values (e.g. 0.01) allow subtle shifts matching low-CV data.</p></li>
+<li><p><strong>level_shift_max_pct</strong> (<em>float</em><em> or </em><em>None</em>) – Maximum level shift as a fraction of baseline (default None = use level_shift_strength).
+When set, caps shift magnitudes to this percentage regardless of level_shift_strength.
+Useful for low-CV data where even “small” shifts should be bounded.</p></li>
+<li><p><strong>weekly_profile_target</strong> (<em>list</em><em> of </em><em>float</em><em> or </em><em>None</em>) – If provided, a 7-element list of normalized day-of-week effects [Mon..Sun].
+Weekly seasonality will use this exact shape instead of random coefficients.
+Extract from real data using _extract_data_statistics()[‘weekly_profile’].</p></li>
+<li><p><strong>yearly_fourier_target</strong> (<em>list</em><em> of </em><em>float</em><em> or </em><em>None</em>) – If provided, an even-length flat list of yearly Fourier coefficients in
+the form [a1, b1, a2, b2, …].
+Extract from real data using _extract_data_statistics()[‘yearly_fourier’].</p></li>
+<li><p><strong>noise_ar_coefficient</strong> (<em>float</em><em> or </em><em>None</em>) – If provided, controls the EMA smoothing coefficient for noise (0.0-0.99).
+Applies an exponential moving average filter:
+<code class="docutils literal notranslate"><span class="pre">filtered[t]</span> <span class="pre">=</span> <span class="pre">coef</span> <span class="pre">*</span> <span class="pre">filtered[t-1]</span> <span class="pre">+</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">coef)</span> <span class="pre">*</span> <span class="pre">noise[t]</span></code>
+Higher values produce smoother, more autocorrelated noise.
+When None, noise uses standard i.i.d. generation.</p></li>
+<li><p><strong>holiday_signal_floor_pct</strong> (<em>float</em>) – Optional floor for holiday magnitude as a fraction of baseline signal
+(<cite>scale * 50</cite>). Useful when noise_level is very low and holiday amplitudes
+would otherwise be too small to detect (default 0.0 = disabled).</p></li>
+<li><p><strong>random_dom_holiday_count</strong> (<em>int</em><em> or </em><em>None</em>) – If provided, fixes the number of random day-of-month holiday templates.
+None keeps the existing random count behavior.</p></li>
+<li><p><strong>random_wkdom_holiday_count</strong> (<em>int</em><em> or </em><em>None</em>) – If provided, fixes the number of random weekday-of-month holiday templates.
+None keeps the existing random count behavior.</p></li>
+<li><p><strong>series_type_override</strong> (<em>str</em><em> or </em><em>None</em>) – If set, ALL series use this type instead of the default type map.
+Use ‘standard’ to force all series to be standard type during tuning.</p></li>
 </ul>
 </dd>
 </dl>
@@ -168,6 +204,35 @@ If None (default), all types will be generated</p></li>
 <dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.TEMPLATE_VERSION">
 <span class="sig-name descname"><span class="pre">TEMPLATE_VERSION</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'1.0'</span></em><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.TEMPLATE_VERSION" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.compare_to_data">
+<span class="sig-name descname"><span class="pre">compare_to_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_multiplier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.compare_to_data" title="Link to this definition">¶</a></dt>
+<dd><p>Compare current synthetic data to real-world data for iterative tuning.</p>
+<p>Produces a structured comparison of key statistics and optional diagnostic
+plots showing distributional overlap between synthetic and target data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target_df</strong> (<em>pd.DataFrame</em>) – Real-world time series data to compare against (DatetimeIndex, numeric columns)</p></li>
+<li><p><strong>scale_multiplier</strong> (<em>float</em><em>, </em><em>optional</em>) – Factor to multiply synthetic data by before comparison.
+If None, uses self.tuning_results[‘scale_multiplier’] if available, else 1.0.</p></li>
+<li><p><strong>save_path</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, saves comparison plots to this path.</p></li>
+<li><p><strong>show</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to display plots (default True).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary containing:
+- ‘target_stats’: Statistics from target data
+- ‘synthetic_stats’: Statistics from (scaled) synthetic data
+- ‘comparison’: Per-statistic comparison with ratios and pass/fail
+- ‘overall_score’: Aggregate similarity score (lower is better)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.get_all_labels">
@@ -337,6 +402,31 @@ or single dict if series_name is specified</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.get_true_event_statistics">
+<span class="sig-name descname"><span class="pre">get_true_event_statistics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.get_true_event_statistics" title="Link to this definition">¶</a></dt>
+<dd><p>Get actual event counts from the generator’s internal labels (ground truth).</p>
+<p>This method returns statistics computed directly from the synthetic data’s
+known labels rather than statistical detection. Use this to verify that
+synthetic data has the expected number of anomalies, level shifts, etc.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dictionary containing:
+- ‘total_anomalies’: Total anomaly count across all series
+- ‘anomalies_per_series’: Mean anomalies per series
+- ‘anomaly_per_week’: Mean anomalies per week (averaged across series)
+- ‘total_level_shifts’: Total level shift count across all series
+- ‘level_shifts_per_series’: Mean level shifts per series
+- ‘level_shifts_per_year’: Mean level shifts per year (averaged across series)
+- ‘total_holidays’: Total holiday count across all series
+- ‘holidays_per_series’: Mean holidays per series</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.machine_summary">
 <span class="sig-name descname"><span class="pre">machine_summary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_events</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_events_per_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">round_decimals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">as_json</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.machine_summary" title="Link to this definition">¶</a></dt>
 <dd><p>Return a structured summary tailored for LLM or tool consumption.</p>
@@ -344,15 +434,21 @@ or single dict if series_name is specified</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">12)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.plot" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">14)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_noise_anomaly_panels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_seasonality_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_trend_level_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.plot" title="Link to this definition">¶</a></dt>
 <dd><p>Plot a series with all its labeled components clearly marked.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – Name of series to plot. If None, randomly selects one.</p></li>
-<li><p><strong>figsize</strong> (<em>tuple</em><em>, </em><em>optional</em>) – Figure size (width, height) in inches. Default (16, 12).</p></li>
+<li><p><strong>figsize</strong> (<em>tuple</em><em>, </em><em>optional</em>) – Figure size (width, height) in inches. Default (16, 14).</p></li>
 <li><p><strong>save_path</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, saves the plot to this path instead of displaying.</p></li>
 <li><p><strong>show</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to display the plot. Default True.</p></li>
+<li><p><strong>separate_noise_anomaly_panels</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, plots anomaly and noise components in separate panels.
+If False, combines them in one panel. Default True.</p></li>
+<li><p><strong>dual_axis_seasonality_holidays</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, plots seasonality and holidays with separate y-axes to
+improve readability when scales differ. Default True.</p></li>
+<li><p><strong>dual_axis_trend_level_shift</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, plots trend/combined on the left axis and level-shift
+component on a right axis to avoid scale compression. Default True.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -395,13 +491,20 @@ or single dict if series_name is specified</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.synthetic.SyntheticDailyGenerator.tune_to_data">
-<span class="sig-name descname"><span class="pre">tune_to_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_standard_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mse'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.tune_to_data" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">tune_to_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_standard_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mse'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.synthetic.SyntheticDailyGenerator.tune_to_data" title="Link to this definition">¶</a></dt>
 <dd><p>Tune generator parameters to match real-world time series data.</p>
 <p>This method optimizes the generator’s parameters to minimize the difference
 between synthetic data and real-world data based on distributional statistics.
 Special series types are not tuned but will still be generated with optimized
 base parameters.</p>
-<p>TODO: this is a fairly basic implementation, and won’t tune many aspects of real world data</p>
+<p>The enhanced objective function matches:
+- Weekly and yearly seasonality strength
+- Noise-to-signal ratio
+- Autocorrelation at lag 1 and lag 7 (smoothness structure)
+- Coefficient of variation distribution
+- Weekly profile shape (day-of-week correlation)
+- Anomaly and changepoint frequencies
+- Mean trend slope</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -412,6 +515,19 @@ If None, uses min(target_df.shape[1], 5) series.</p></li>
 <li><p><strong>metric</strong> (<em>str</em><em>, </em><em>optional</em>) – Distance metric to minimize: ‘mse’, ‘mae’, ‘wasserstein’ (default ‘mse’)</p></li>
 <li><p><strong>verbose</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to print progress (default True)</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em><em>, </em><em>optional</em>) – Random seed for tuning process (default None, uses current random_seed)</p></li>
+<li><p><strong>starting_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – <p>Known-good parameter dict to seed the optimization.  When provided,
+the differential-evolution solver receives this as its <code class="docutils literal notranslate"><span class="pre">x0</span></code> initial
+guess, biasing the search toward a known-good region of parameter
+space instead of starting from a purely random population.</p>
+<p>Expected keys (all optional — missing keys fall back to the midpoint
+of the parameter’s search bounds):</p>
+<p><code class="docutils literal notranslate"><span class="pre">trend_changepoint_freq</span></code>, <code class="docutils literal notranslate"><span class="pre">level_shift_freq</span></code>,
+<code class="docutils literal notranslate"><span class="pre">level_shift_strength</span></code>, <code class="docutils literal notranslate"><span class="pre">anomaly_freq</span></code>,
+<code class="docutils literal notranslate"><span class="pre">weekly_seasonality_strength</span></code>, <code class="docutils literal notranslate"><span class="pre">yearly_seasonality_strength</span></code>,
+<code class="docutils literal notranslate"><span class="pre">noise_level</span></code>, <code class="docutils literal notranslate"><span class="pre">trend_slope_scale</span></code>, <code class="docutils literal notranslate"><span class="pre">trend_positive_bias</span></code>,
+<code class="docutils literal notranslate"><span class="pre">level_shift_minimum_pct</span></code>, <code class="docutils literal notranslate"><span class="pre">level_shift_max_pct</span></code>,
+<code class="docutils literal notranslate"><span class="pre">noise_ar_coefficient</span></code></p>
+</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -496,7 +612,7 @@ synthetic data, ensuring the overall magnitude is similar.</p>
 <p>Tools for Importing Sample Data</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">SyntheticDailyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'2015-01-01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2555</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_changepoint_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_anomaly_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_level_shift_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weekly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yearly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_types</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_holiday_splash</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">SyntheticDailyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'2015-01-01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2555</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_changepoint_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_anomaly_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared_level_shift_prob</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weekly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yearly_seasonality_strength</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_types</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_holiday_splash</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_slope_scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_positive_bias</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_minimum_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_max_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weekly_profile_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yearly_fourier_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_ar_coefficient</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volatility_regime_intensity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_signal_floor_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_dom_holiday_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_wkdom_holiday_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_type_override</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Generate realistic synthetic daily time series data with labeled components.</p>
 <p>Creates multivariate time series with:
@@ -549,10 +665,46 @@ Actual per-series strength will vary 0.2x-2.0x this value</p></li>
 <li><p><strong>noise_level</strong> (<em>float</em>) – Base noise level (default 0.1, relative to signal)
 Actual per-series level will vary 0.5x-2.0x this value</p></li>
 <li><p><strong>include_regressors</strong> (<em>bool</em>) – Whether to include regressor effects (default False)</p></li>
-<li><p><strong>anomaly_types</strong> (<em>list</em><em> of </em><em>str</em><em> or </em><em>None</em>) – List of anomaly types to generate. Valid types are:
-‘point_outlier’, ‘noisy_burst’, ‘impulse_decay’, ‘linear_decay’, ‘transient_change’
-If None (default), all types will be generated</p></li>
+<li><p><strong>anomaly_types</strong> (<em>list</em><em> of </em><em>str</em><em> or </em><em>None</em>) – <p>List of anomaly types to generate. Valid types are:
+‘point_outlier’, ‘noisy_burst’, ‘impulse_decay’, ‘linear_decay’,
+‘transient_change’, ‘slope_reversion’
+If None (default), all types will be generated.</p>
+<p>The ‘slope_reversion’ type models SEV-like or failed-launch patterns common
+in real-world platform data: a sudden slope change (faster growth or decline)
+lasting 1-4 weeks, followed by gradual reversion to prior levels.  This produces
+the skewed first-difference distributions seen in real data without requiring
+discrete level shifts.</p>
+</p></li>
 <li><p><strong>disable_holiday_splash</strong> (<em>bool</em>) – If True, holidays will only affect a single day with no splash or bridge effects (default False)</p></li>
+<li><p><strong>trend_slope_scale</strong> (<em>float</em>) – Multiplier for trend slope magnitudes (default 1.0).
+Values &lt; 1.0 produce gentler slopes, &gt; 1.0 produce steeper slopes.</p></li>
+<li><p><strong>trend_positive_bias</strong> (<em>float</em>) – Probability [0, 1] of a trend segment being positive/upward (default 0.5 = balanced).
+Values &gt; 0.5 bias toward growth; set to ~0.85 for mostly-growing data.</p></li>
+<li><p><strong>level_shift_minimum_pct</strong> (<em>float</em>) – Minimum level shift as a fraction of baseline (default 0.12 = 12%).
+Lower values (e.g. 0.01) allow subtle shifts matching low-CV data.</p></li>
+<li><p><strong>level_shift_max_pct</strong> (<em>float</em><em> or </em><em>None</em>) – Maximum level shift as a fraction of baseline (default None = use level_shift_strength).
+When set, caps shift magnitudes to this percentage regardless of level_shift_strength.
+Useful for low-CV data where even “small” shifts should be bounded.</p></li>
+<li><p><strong>weekly_profile_target</strong> (<em>list</em><em> of </em><em>float</em><em> or </em><em>None</em>) – If provided, a 7-element list of normalized day-of-week effects [Mon..Sun].
+Weekly seasonality will use this exact shape instead of random coefficients.
+Extract from real data using _extract_data_statistics()[‘weekly_profile’].</p></li>
+<li><p><strong>yearly_fourier_target</strong> (<em>list</em><em> of </em><em>float</em><em> or </em><em>None</em>) – If provided, an even-length flat list of yearly Fourier coefficients in
+the form [a1, b1, a2, b2, …].
+Extract from real data using _extract_data_statistics()[‘yearly_fourier’].</p></li>
+<li><p><strong>noise_ar_coefficient</strong> (<em>float</em><em> or </em><em>None</em>) – If provided, controls the EMA smoothing coefficient for noise (0.0-0.99).
+Applies an exponential moving average filter:
+<code class="docutils literal notranslate"><span class="pre">filtered[t]</span> <span class="pre">=</span> <span class="pre">coef</span> <span class="pre">*</span> <span class="pre">filtered[t-1]</span> <span class="pre">+</span> <span class="pre">(1</span> <span class="pre">-</span> <span class="pre">coef)</span> <span class="pre">*</span> <span class="pre">noise[t]</span></code>
+Higher values produce smoother, more autocorrelated noise.
+When None, noise uses standard i.i.d. generation.</p></li>
+<li><p><strong>holiday_signal_floor_pct</strong> (<em>float</em>) – Optional floor for holiday magnitude as a fraction of baseline signal
+(<cite>scale * 50</cite>). Useful when noise_level is very low and holiday amplitudes
+would otherwise be too small to detect (default 0.0 = disabled).</p></li>
+<li><p><strong>random_dom_holiday_count</strong> (<em>int</em><em> or </em><em>None</em>) – If provided, fixes the number of random day-of-month holiday templates.
+None keeps the existing random count behavior.</p></li>
+<li><p><strong>random_wkdom_holiday_count</strong> (<em>int</em><em> or </em><em>None</em>) – If provided, fixes the number of random weekday-of-month holiday templates.
+None keeps the existing random count behavior.</p></li>
+<li><p><strong>series_type_override</strong> (<em>str</em><em> or </em><em>None</em>) – If set, ALL series use this type instead of the default type map.
+Use ‘standard’ to force all series to be standard type during tuning.</p></li>
 </ul>
 </dd>
 </dl>
@@ -586,6 +738,35 @@ If None (default), all types will be generated</p></li>
 <dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.TEMPLATE_VERSION">
 <span class="sig-name descname"><span class="pre">TEMPLATE_VERSION</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'1.0'</span></em><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.TEMPLATE_VERSION" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.compare_to_data">
+<span class="sig-name descname"><span class="pre">compare_to_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_multiplier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.compare_to_data" title="Link to this definition">¶</a></dt>
+<dd><p>Compare current synthetic data to real-world data for iterative tuning.</p>
+<p>Produces a structured comparison of key statistics and optional diagnostic
+plots showing distributional overlap between synthetic and target data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target_df</strong> (<em>pd.DataFrame</em>) – Real-world time series data to compare against (DatetimeIndex, numeric columns)</p></li>
+<li><p><strong>scale_multiplier</strong> (<em>float</em><em>, </em><em>optional</em>) – Factor to multiply synthetic data by before comparison.
+If None, uses self.tuning_results[‘scale_multiplier’] if available, else 1.0.</p></li>
+<li><p><strong>save_path</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, saves comparison plots to this path.</p></li>
+<li><p><strong>show</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to display plots (default True).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary containing:
+- ‘target_stats’: Statistics from target data
+- ‘synthetic_stats’: Statistics from (scaled) synthetic data
+- ‘comparison’: Per-statistic comparison with ratios and pass/fail
+- ‘overall_score’: Aggregate similarity score (lower is better)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.get_all_labels">
@@ -755,6 +936,31 @@ or single dict if series_name is specified</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.get_true_event_statistics">
+<span class="sig-name descname"><span class="pre">get_true_event_statistics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.get_true_event_statistics" title="Link to this definition">¶</a></dt>
+<dd><p>Get actual event counts from the generator’s internal labels (ground truth).</p>
+<p>This method returns statistics computed directly from the synthetic data’s
+known labels rather than statistical detection. Use this to verify that
+synthetic data has the expected number of anomalies, level shifts, etc.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dictionary containing:
+- ‘total_anomalies’: Total anomaly count across all series
+- ‘anomalies_per_series’: Mean anomalies per series
+- ‘anomaly_per_week’: Mean anomalies per week (averaged across series)
+- ‘total_level_shifts’: Total level shift count across all series
+- ‘level_shifts_per_series’: Mean level shifts per series
+- ‘level_shifts_per_year’: Mean level shifts per year (averaged across series)
+- ‘total_holidays’: Total holiday count across all series
+- ‘holidays_per_series’: Mean holidays per series</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.machine_summary">
 <span class="sig-name descname"><span class="pre">machine_summary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_events</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_events_per_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">round_decimals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">as_json</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.machine_summary" title="Link to this definition">¶</a></dt>
 <dd><p>Return a structured summary tailored for LLM or tool consumption.</p>
@@ -762,15 +968,21 @@ or single dict if series_name is specified</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">12)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.plot" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">14)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_noise_anomaly_panels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_seasonality_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_trend_level_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.plot" title="Link to this definition">¶</a></dt>
 <dd><p>Plot a series with all its labeled components clearly marked.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – Name of series to plot. If None, randomly selects one.</p></li>
-<li><p><strong>figsize</strong> (<em>tuple</em><em>, </em><em>optional</em>) – Figure size (width, height) in inches. Default (16, 12).</p></li>
+<li><p><strong>figsize</strong> (<em>tuple</em><em>, </em><em>optional</em>) – Figure size (width, height) in inches. Default (16, 14).</p></li>
 <li><p><strong>save_path</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, saves the plot to this path instead of displaying.</p></li>
 <li><p><strong>show</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to display the plot. Default True.</p></li>
+<li><p><strong>separate_noise_anomaly_panels</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, plots anomaly and noise components in separate panels.
+If False, combines them in one panel. Default True.</p></li>
+<li><p><strong>dual_axis_seasonality_holidays</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, plots seasonality and holidays with separate y-axes to
+improve readability when scales differ. Default True.</p></li>
+<li><p><strong>dual_axis_trend_level_shift</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, plots trend/combined on the left axis and level-shift
+component on a right axis to avoid scale compression. Default True.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -813,13 +1025,20 @@ or single dict if series_name is specified</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.datasets.SyntheticDailyGenerator.tune_to_data">
-<span class="sig-name descname"><span class="pre">tune_to_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_standard_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mse'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.tune_to_data" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">tune_to_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_standard_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mse'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.SyntheticDailyGenerator.tune_to_data" title="Link to this definition">¶</a></dt>
 <dd><p>Tune generator parameters to match real-world time series data.</p>
 <p>This method optimizes the generator’s parameters to minimize the difference
 between synthetic data and real-world data based on distributional statistics.
 Special series types are not tuned but will still be generated with optimized
 base parameters.</p>
-<p>TODO: this is a fairly basic implementation, and won’t tune many aspects of real world data</p>
+<p>The enhanced objective function matches:
+- Weekly and yearly seasonality strength
+- Noise-to-signal ratio
+- Autocorrelation at lag 1 and lag 7 (smoothness structure)
+- Coefficient of variation distribution
+- Weekly profile shape (day-of-week correlation)
+- Anomaly and changepoint frequencies
+- Mean trend slope</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -830,6 +1049,19 @@ If None, uses min(target_df.shape[1], 5) series.</p></li>
 <li><p><strong>metric</strong> (<em>str</em><em>, </em><em>optional</em>) – Distance metric to minimize: ‘mse’, ‘mae’, ‘wasserstein’ (default ‘mse’)</p></li>
 <li><p><strong>verbose</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to print progress (default True)</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em><em>, </em><em>optional</em>) – Random seed for tuning process (default None, uses current random_seed)</p></li>
+<li><p><strong>starting_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – <p>Known-good parameter dict to seed the optimization.  When provided,
+the differential-evolution solver receives this as its <code class="docutils literal notranslate"><span class="pre">x0</span></code> initial
+guess, biasing the search toward a known-good region of parameter
+space instead of starting from a purely random population.</p>
+<p>Expected keys (all optional — missing keys fall back to the midpoint
+of the parameter’s search bounds):</p>
+<p><code class="docutils literal notranslate"><span class="pre">trend_changepoint_freq</span></code>, <code class="docutils literal notranslate"><span class="pre">level_shift_freq</span></code>,
+<code class="docutils literal notranslate"><span class="pre">level_shift_strength</span></code>, <code class="docutils literal notranslate"><span class="pre">anomaly_freq</span></code>,
+<code class="docutils literal notranslate"><span class="pre">weekly_seasonality_strength</span></code>, <code class="docutils literal notranslate"><span class="pre">yearly_seasonality_strength</span></code>,
+<code class="docutils literal notranslate"><span class="pre">noise_level</span></code>, <code class="docutils literal notranslate"><span class="pre">trend_slope_scale</span></code>, <code class="docutils literal notranslate"><span class="pre">trend_positive_bias</span></code>,
+<code class="docutils literal notranslate"><span class="pre">level_shift_minimum_pct</span></code>, <code class="docutils literal notranslate"><span class="pre">level_shift_max_pct</span></code>,
+<code class="docutils literal notranslate"><span class="pre">noise_ar_coefficient</span></code></p>
+</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>

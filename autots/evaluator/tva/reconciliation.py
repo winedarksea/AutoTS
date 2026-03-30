@@ -91,11 +91,15 @@ class ReconciliationBridge:
         elif self.method == 'iterative_mint':
             reconciled = iterative_mint_reconcile(S, y_all, W)
         elif self.method == 'volatility_mint':
-            return self.reconcile_with_volatility(forecasts, S, residuals if residuals is not None else np.zeros((1, L)))
+            return self.reconcile_with_volatility(
+                forecasts, S, residuals if residuals is not None else np.zeros((1, L))
+            )
         else:
             reconciled = mint_reconcile(S, y_all, W)
 
-        return pd.DataFrame(reconciled, index=forecasts.index, columns=forecasts.columns)
+        return pd.DataFrame(
+            reconciled, index=forecasts.index, columns=forecasts.columns
+        )
 
     def reconcile_with_volatility(
         self,
@@ -131,9 +135,14 @@ class ReconciliationBridge:
             cov_bottom = self._estimate_covariance(bottom_residuals)
 
         reconciled = volatility_weighted_mint_reconcile(
-            S, y_all, W, cov_bottom,
+            S,
+            y_all,
+            W,
+            cov_bottom,
             volatility_method=volatility_method,
             volatility_power=volatility_power,
             alpha=alpha,
         )
-        return pd.DataFrame(reconciled, index=forecasts.index, columns=forecasts.columns)
+        return pd.DataFrame(
+            reconciled, index=forecasts.index, columns=forecasts.columns
+        )

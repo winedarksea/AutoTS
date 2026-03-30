@@ -114,9 +114,9 @@ class FormattingMixin:
             normalized_noise = numerator / (series_scale or 1e-9)
             self.series_noise_levels[series_name] = normalized_noise
 
-            self.series_seasonality_profiles[
-                series_name
-            ] = self._estimate_seasonality_profile(seasonality_series, series_scale)
+            self.series_seasonality_profiles[series_name] = (
+                self._estimate_seasonality_profile(seasonality_series, series_scale)
+            )
             noise_cp_entries = self._detect_noise_regime_changepoints(noise_series)
             self.noise_changepoints[series_name] = noise_cp_entries
             seasonality_cp_entries = seasonality_changepoints.get(series_name, [])

@@ -138,7 +138,9 @@ class ExtendedAnomalyDetector:
     ):
         self.point_anomaly_params = point_anomaly_params
         self.sustained_window = max(2, int(sustained_window))
-        self.sustained_baseline = max(self.sustained_window * 2, int(sustained_baseline))
+        self.sustained_baseline = max(
+            self.sustained_window * 2, int(sustained_baseline)
+        )
         self.sustained_threshold = float(sustained_threshold)
         self.cusum_k = float(cusum_k)
         self.cusum_h = float(cusum_h)
@@ -298,7 +300,11 @@ class ExtendedAnomalyDetector:
             params = self.point_anomaly_params or {
                 'output': 'multivariate',
                 'method': 'rolling_zscore',
-                'method_params': {'distribution': 'norm', 'alpha': 0.05, 'rolling_periods': 90},
+                'method_params': {
+                    'distribution': 'norm',
+                    'alpha': 0.05,
+                    'rolling_periods': 90,
+                },
                 'fillna': 'ffill',
             }
             params = copy.deepcopy(params)
@@ -318,12 +324,14 @@ class ExtendedAnomalyDetector:
                         score = float(detector.scores.iloc[idx, 0])
                     except Exception:
                         pass
-                events.append({
-                    'date': pd.Timestamp(date),
-                    'magnitude': abs(mag),
-                    'type': 'point_outlier',
-                    'score': score,
-                })
+                events.append(
+                    {
+                        'date': pd.Timestamp(date),
+                        'magnitude': abs(mag),
+                        'type': 'point_outlier',
+                        'score': score,
+                    }
+                )
             return events
         except Exception as exc:
             warnings.warn(
@@ -398,21 +406,25 @@ class ExtendedAnomalyDetector:
                 anomaly_type = 'noisy_burst' if duration <= 5 else 'transient_change'
 
                 # Magnitude = peak absolute value in window
-                window_vals = values[onset_idx:end_fall + 1]
+                window_vals = values[onset_idx : end_fall + 1]
                 finite_window = window_vals[np.isfinite(window_vals)]
-                mag = float(np.max(np.abs(finite_window))) if finite_window.size else 0.0
+                mag = (
+                    float(np.max(np.abs(finite_window))) if finite_window.size else 0.0
+                )
 
                 onset_date = date_index[onset_idx]
                 end_date = date_index[min(end_fall, n - 1)]
-                events.append({
-                    'date': pd.Timestamp(onset_date),
-                    'end_date': pd.Timestamp(end_date),
-                    'duration': duration,
-                    'magnitude': mag,
-                    'score': float(np.max(S[onset_idx:end_fall + 1])),
-                    'type': anomaly_type,
-                    'source': 'cusum',
-                })
+                events.append(
+                    {
+                        'date': pd.Timestamp(onset_date),
+                        'end_date': pd.Timestamp(end_date),
+                        'duration': duration,
+                        'magnitude': mag,
+                        'score': float(np.max(S[onset_idx : end_fall + 1])),
+                        'type': anomaly_type,
+                        'source': 'cusum',
+                    }
+                )
         return events
 
     # ------------------------------------------------------------------
@@ -440,9 +452,12 @@ class ExtendedAnomalyDetector:
 
         # Estimate rolling std of cumsum to normalise threshold
         cs_series = pd.Series(cumsum)
-        cs_std_roll = cs_series.rolling(
-            min(60, n // 3), center=True, min_periods=5
-        ).std().bfill().ffill()
+        cs_std_roll = (
+            cs_series.rolling(min(60, n // 3), center=True, min_periods=5)
+            .std()
+            .bfill()
+            .ffill()
+        )
         cs_std = cs_std_roll.to_numpy(dtype=float)
 
         threshold = self.slope_reversion_cumsum_threshold
@@ -458,7 +473,9 @@ class ExtendedAnomalyDetector:
             # Fallback: find points where cumsum sign changes after large deviation
             candidate_idx = []
             for i in range(1, n - 1):
-                if abs(cumsum[i]) > abs(cumsum[i - 1]) and abs(cumsum[i]) > abs(cumsum[i + 1]):
+                if abs(cumsum[i]) > abs(cumsum[i - 1]) and abs(cumsum[i]) > abs(
+                    cumsum[i + 1]
+                ):
                     candidate_idx.append(i)
 
         for peak_i in candidate_idx:
@@ -500,7 +517,7 @@ class ExtendedAnomalyDetector:
             if duration > self.slope_reversion_max_duration:
                 continue
 
-            window_vals = values[onset_i:revert_i + 1]
+            window_vals = values[onset_i : revert_i + 1]
             finite_window = window_vals[np.isfinite(window_vals)]
             mag = float(np.max(np.abs(finite_window))) if finite_window.size else 0.0
             if mag < 1e-9:
@@ -508,15 +525,17 @@ class ExtendedAnomalyDetector:
 
             onset_date = date_index[onset_i]
             end_date = date_index[min(revert_i, n - 1)]
-            events.append({
-                'date': pd.Timestamp(onset_date),
-                'end_date': pd.Timestamp(end_date),
-                'duration': duration,
-                'magnitude': mag,
-                'score': float(peak_z),
-                'type': 'slope_reversion',
-                'source': 'slope_template',
-            })
+            events.append(
+                {
+                    'date': pd.Timestamp(onset_date),
+                    'end_date': pd.Timestamp(end_date),
+                    'duration': duration,
+                    'magnitude': mag,
+                    'score': float(peak_z),
+                    'type': 'slope_reversion',
+                    'source': 'slope_template',
+                }
+            )
         return events
 
     # ------------------------------------------------------------------
@@ -544,12 +563,18 @@ class ExtendedAnomalyDetector:
             except (KeyError, TypeError):
                 # Nearest fallback
                 try:
-                    onset_loc = date_index.get_indexer([pd.Timestamp(ev['date'])], method='nearest')[0]
+                    onset_loc = date_index.get_indexer(
+                        [pd.Timestamp(ev['date'])], method='nearest'
+                    )[0]
                 except Exception:
                     extended.append(ev)
                     continue
 
-            peak_val = values[onset_loc] if np.isfinite(values[onset_loc]) else ev.get('magnitude', 0.0)
+            peak_val = (
+                values[onset_loc]
+                if np.isfinite(values[onset_loc])
+                else ev.get('magnitude', 0.0)
+            )
 
             if abs(peak_val) < 1e-9:
                 extended.append(ev)
@@ -560,7 +585,7 @@ class ExtendedAnomalyDetector:
                 extended.append(ev)
                 continue
 
-            post_vals = values[onset_loc + 1:look_end]
+            post_vals = values[onset_loc + 1 : look_end]
             post_t = np.arange(1, len(post_vals) + 1, dtype=float)
 
             if len(post_vals) < 3:
@@ -590,7 +615,16 @@ class ExtendedAnomalyDetector:
                     if lam > 0:
                         y_pred = np.exp(np.polyval(coeffs, t_valid))
                         ss_res = np.sum((np.abs(decay_vals[valid]) - y_pred) ** 2)
-                        ss_tot = np.sum((np.abs(decay_vals[valid]) - np.mean(np.abs(decay_vals[valid]))) ** 2) + 1e-12
+                        ss_tot = (
+                            np.sum(
+                                (
+                                    np.abs(decay_vals[valid])
+                                    - np.mean(np.abs(decay_vals[valid]))
+                                )
+                                ** 2
+                            )
+                            + 1e-12
+                        )
                         r2 = float(1.0 - ss_res / ss_tot)
                         # Find where the decay crosses 0.1 * |peak| (10% of peak)
                         T_cross = np.log(0.1) / (-lam + 1e-9)
@@ -612,12 +646,17 @@ class ExtendedAnomalyDetector:
                     if slope_lin < 0:
                         y_pred_lin = np.polyval(coeffs_lin, t_lin)
                         ss_res_lin = np.sum((decay_vals_lin - y_pred_lin) ** 2)
-                        ss_tot_lin = np.sum((decay_vals_lin - np.mean(decay_vals_lin)) ** 2) + 1e-12
+                        ss_tot_lin = (
+                            np.sum((decay_vals_lin - np.mean(decay_vals_lin)) ** 2)
+                            + 1e-12
+                        )
                         r2_lin = float(1.0 - ss_res_lin / ss_tot_lin)
                         # Intercept: t at which line crosses 0.1
                         if abs(slope_lin) > 1e-9:
                             T_zero = (0.1 - coeffs_lin[1]) / slope_lin
-                            T_zero = min(int(np.ceil(max(T_zero, 1.0))), self.decay_lookahead)
+                            T_zero = min(
+                                int(np.ceil(max(T_zero, 1.0))), self.decay_lookahead
+                            )
                         else:
                             T_zero = self.decay_lookahead
                         if r2_lin > best_r2 and T_zero >= 2:
@@ -678,7 +717,9 @@ class ExtendedAnomalyDetector:
         z = z.fillna(0.0).to_numpy(dtype=float)
 
         high_threshold = np.abs(z) > self.sustained_threshold
-        low_threshold = np.abs(z) > (self.sustained_threshold * self.sustained_hysteresis)
+        low_threshold = np.abs(z) > (
+            self.sustained_threshold * self.sustained_hysteresis
+        )
         flagged = self._apply_hysteresis(high_threshold, low_threshold)
         flagged = self._bridge_small_gaps(flagged, self.segment_max_gap)
 
@@ -702,21 +743,23 @@ class ExtendedAnomalyDetector:
             duration = actual_end - actual_start + 1
             anomaly_type = 'noisy_burst' if duration <= 5 else 'transient_change'
 
-            window_vals = values[actual_start:actual_end + 1]
+            window_vals = values[actual_start : actual_end + 1]
             finite_window = window_vals[np.isfinite(window_vals)]
             mag = float(np.max(np.abs(finite_window))) if finite_window.size else 0.0
 
             onset_date = date_index[actual_start]
             end_date = date_index[actual_end]
-            events.append({
-                'date': pd.Timestamp(onset_date),
-                'end_date': pd.Timestamp(end_date),
-                'duration': duration,
-                'magnitude': mag,
-                'score': float(np.max(np.abs(z[start_idx:end_idx + 1]))),
-                'type': anomaly_type,
-                'source': 'segmented_shift',
-            })
+            events.append(
+                {
+                    'date': pd.Timestamp(onset_date),
+                    'end_date': pd.Timestamp(end_date),
+                    'duration': duration,
+                    'magnitude': mag,
+                    'score': float(np.max(np.abs(z[start_idx : end_idx + 1]))),
+                    'type': anomaly_type,
+                    'source': 'segmented_shift',
+                }
+            )
         return events
 
     # ------------------------------------------------------------------
@@ -831,7 +874,11 @@ class ExtendedAnomalyDetector:
             'date': onset_date,
             'end_date': end_date,
             'duration': actual_duration,
-            'magnitude': float(abs(ev.get('magnitude', 0.0)) if np.isfinite(ev.get('magnitude', 0.0)) else 0.0),
+            'magnitude': float(
+                abs(ev.get('magnitude', 0.0))
+                if np.isfinite(ev.get('magnitude', 0.0))
+                else 0.0
+            ),
             'score': ev.get('score'),
             'type': ev.get('type', 'point_outlier'),
             'source': ev.get('source', 'pass1'),
@@ -943,7 +990,9 @@ class ExtendedAnomalyMixin:
                 # Mirror how AnomalyRemoval works with output='univariate':
                 # run detection once on the mean residual across all series,
                 # then broadcast the shared events to every column.
-                mean_residual = clean_residual_df.mean(axis=1).to_frame('__univariate__')
+                mean_residual = clean_residual_df.mean(axis=1).to_frame(
+                    '__univariate__'
+                )
 
                 # In univariate mode, pass-1 records are identical for all series;
                 # use the first series' records as the shared pass-1 proposals.
@@ -1020,7 +1069,9 @@ class ExtendedAnomalyMixin:
                         ext_start = pd.Timestamp(ext_ev['date'])
                         ext_dur = int(ext_ev.get('duration', 1) or 1)
                         ext_end = pd.Timestamp(
-                            ext_ev.get('end_date', ext_start + pd.Timedelta(days=ext_dur - 1))
+                            ext_ev.get(
+                                'end_date', ext_start + pd.Timedelta(days=ext_dur - 1)
+                            )
                         )
                         if ext_start <= onset <= ext_end:
                             covered = True
@@ -1031,7 +1082,9 @@ class ExtendedAnomalyMixin:
                 if not covered:
                     combined.append(event)
 
-            combined.sort(key=lambda e: pd.Timestamp(e.get('date', pd.Timestamp('1900-01-01'))))
+            combined.sort(
+                key=lambda e: pd.Timestamp(e.get('date', pd.Timestamp('1900-01-01')))
+            )
             merged[series_name] = combined
 
         return merged

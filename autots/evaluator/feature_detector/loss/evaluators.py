@@ -18,10 +18,14 @@ class LossEvaluatorsMixin:
         detected_entries = [self._parse_trend_event(event) for event in detected_cp]
         true_entries = [self._parse_trend_event(event) for event in true_cp]
         n_true = len(true_entries)
-        
+
         # Add Chamfer penalty to guide optimizer when points are far apart
-        chamfer_loss = self._chamfer_penalty([x[0] for x in detected_entries], [x[0] for x in true_entries], cap=self.changepoint_tolerance_days * 5)
-        
+        chamfer_loss = self._chamfer_penalty(
+            [x[0] for x in detected_entries],
+            [x[0] for x in true_entries],
+            cap=self.changepoint_tolerance_days * 5,
+        )
+
         n_detected = len(detected_entries)
         unmatched_detected = set(range(n_detected))
         focal_tversky = self._focal_tversky_changepoint_penalty(
@@ -47,7 +51,11 @@ class LossEvaluatorsMixin:
             if sign_change:
                 return 1.0
             if magnitude > 0:
-                scale = default_magnitude_scale if default_magnitude_scale > 0 else magnitude
+                scale = (
+                    default_magnitude_scale
+                    if default_magnitude_scale > 0
+                    else magnitude
+                )
                 relative = magnitude / (scale + 1e-9)
                 # Bounded via tanh so importance stays in [0.2, 0.9].  An
                 # unbounded linear scale amplifies the miss/no-detection penalty
@@ -85,7 +93,9 @@ class LossEvaluatorsMixin:
                 slope_change_true = true_post - true_prior
                 slope_change_detected = det_post - det_prior
                 slope_denom = max(abs(slope_change_true), 0.05, 1e-3)
-                slope_error = abs(slope_change_detected - slope_change_true) / slope_denom
+                slope_error = (
+                    abs(slope_change_detected - slope_change_true) / slope_denom
+                )
                 slope_penalty = min(slope_error, 2.0) * 0.3
 
                 sign_penalty = (
@@ -96,9 +106,19 @@ class LossEvaluatorsMixin:
                 # Absolute magnitude penalty: missing a large slope change is
                 # worse than missing a small one regardless of normalization — the
                 # old implementation baked raw size directly into the miss loss.
-                abs_mag_penalty = min(abs(true_mag) / (default_magnitude_scale + 1e-9), 2.0) * 0.5
+                abs_mag_penalty = (
+                    min(abs(true_mag) / (default_magnitude_scale + 1e-9), 2.0) * 0.5
+                )
                 if best_dist is not None:
-                    loss += (1.5 * np.tanh(np.log1p(best_dist / (self.changepoint_tolerance_days + 1e-9))) + abs_mag_penalty) * importance
+                    loss += (
+                        1.5
+                        * np.tanh(
+                            np.log1p(
+                                best_dist / (self.changepoint_tolerance_days + 1e-9)
+                            )
+                        )
+                        + abs_mag_penalty
+                    ) * importance
                 else:
                     loss += (1.5 + abs_mag_penalty) * importance
 
@@ -111,13 +131,11 @@ class LossEvaluatorsMixin:
 
         recall = matched_true / (n_true + 1e-9)
         precision = (
-            (n_detected - false_positives) / (n_detected + 1e-9)
-            if n_detected
-            else 1.0
+            (n_detected - false_positives) / (n_detected + 1e-9) if n_detected else 1.0
         )
         # β=2.0: strongly recall-biased — over-detecting is preferred over missing
-        f_beta = (1.0 + 2.0**2) * (precision * recall) / (
-            2.0**2 * precision + recall + 1e-9
+        f_beta = (
+            (1.0 + 2.0**2) * (precision * recall) / (2.0**2 * precision + recall + 1e-9)
         )
         loss += (1.0 - f_beta) * 2.4
         loss += focal_tversky * max(n_true, 1) * 1.25
@@ -192,9 +210,13 @@ class LossEvaluatorsMixin:
             self._parse_level_shift_event(event) for event in detected_ls
         ]
         true_entries = [self._parse_level_shift_event(event) for event in true_ls]
-        
-        chamfer_loss = self._chamfer_penalty([x[0] for x in detected_entries], [x[0] for x in true_entries], cap=self.level_shift_tolerance_days * 5)
-        
+
+        chamfer_loss = self._chamfer_penalty(
+            [x[0] for x in detected_entries],
+            [x[0] for x in true_entries],
+            cap=self.level_shift_tolerance_days * 5,
+        )
+
         changepoint_dates = [self._parse_trend_event(event)[0] for event in detected_cp]
         focal_tversky = self._focal_tversky_changepoint_penalty(
             detected_entries,
@@ -247,9 +269,19 @@ class LossEvaluatorsMixin:
                 else:
                     # Absolute magnitude penalty: missing a large level shift
                     # is worse than missing a small one — bake the raw size in.
-                    abs_mag_penalty = min(abs(true_mag) / (magnitude_scale + 1e-9), 2.0) * 0.5
+                    abs_mag_penalty = (
+                        min(abs(true_mag) / (magnitude_scale + 1e-9), 2.0) * 0.5
+                    )
                     if best_dist is not None:
-                        loss += (1.2 * np.tanh(np.log1p(best_dist / (self.level_shift_tolerance_days + 1e-9))) + abs_mag_penalty) * importance
+                        loss += (
+                            1.2
+                            * np.tanh(
+                                np.log1p(
+                                    best_dist / (self.level_shift_tolerance_days + 1e-9)
+                                )
+                            )
+                            + abs_mag_penalty
+                        ) * importance
                     else:
                         loss += (1.2 + abs_mag_penalty) * importance
 
@@ -261,13 +293,11 @@ class LossEvaluatorsMixin:
 
         recall = matched_true / (n_true + 1e-9)
         precision = (
-            (n_detected - false_positives) / (n_detected + 1e-9)
-            if n_detected
-            else 1.0
+            (n_detected - false_positives) / (n_detected + 1e-9) if n_detected else 1.0
         )
         # β=2.0: strongly recall-biased — over-detecting is preferred over missing
-        f_beta = (1.0 + 2.0**2) * (precision * recall) / (
-            2.0**2 * precision + recall + 1e-9
+        f_beta = (
+            (1.0 + 2.0**2) * (precision * recall) / (2.0**2 * precision + recall + 1e-9)
         )
         loss += (1.0 - f_beta) * 1.7
         loss += focal_tversky * max(n_true, 1) * 0.8
@@ -275,10 +305,15 @@ class LossEvaluatorsMixin:
 
     # Anomaly type categories for type-aware penalty logic
     _POINT_TYPES = frozenset({'point_outlier', 'spike'})
-    _EXTENDED_TYPES = frozenset({
-        'slope_reversion', 'transient_change', 'impulse_decay',
-        'linear_decay', 'noisy_burst',
-    })
+    _EXTENDED_TYPES = frozenset(
+        {
+            'slope_reversion',
+            'transient_change',
+            'impulse_decay',
+            'linear_decay',
+            'noisy_burst',
+        }
+    )
 
     def _anomaly_loss(
         self,
@@ -319,7 +354,7 @@ class LossEvaluatorsMixin:
 
         # Pre-parse changepoints and level shifts for partial-credit checks
         cp_dates = []
-        for cp_ev in (detected_cp or []):
+        for cp_ev in detected_cp or []:
             try:
                 if isinstance(cp_ev, dict):
                     cp_dates.append(pd.Timestamp(cp_ev.get('date')))
@@ -331,7 +366,7 @@ class LossEvaluatorsMixin:
                 pass
 
         ls_dates = []
-        for ls_ev in (detected_ls or []):
+        for ls_ev in detected_ls or []:
             try:
                 if isinstance(ls_ev, dict):
                     ls_dates.append(pd.Timestamp(ls_ev.get('date')))
@@ -392,7 +427,9 @@ class LossEvaluatorsMixin:
                 _, det_mag, det_type, det_duration = det_event
                 det_mag_safe = det_mag if np.isfinite(det_mag) else 0.0
 
-                mag_pen = abs(det_mag_safe - true_mag_safe) / (abs(true_mag_safe) + 1e-6)
+                mag_pen = abs(det_mag_safe - true_mag_safe) / (
+                    abs(true_mag_safe) + 1e-6
+                )
 
                 if is_extended:
                     # Softer type mismatch for extended types (hard to classify)
@@ -458,7 +495,7 @@ class LossEvaluatorsMixin:
         # that the level-shift detector should own.  Applying a small per-event
         # cross-penalty nudges the optimizer away from that configuration.
         true_ls_dates = []
-        for ls_ev in (true_ls or []):
+        for ls_ev in true_ls or []:
             try:
                 if isinstance(ls_ev, dict):
                     true_ls_dates.append(pd.Timestamp(ls_ev.get('date')))
@@ -484,9 +521,9 @@ class LossEvaluatorsMixin:
         precision = matches / max(len(detected_entries), 1)
         recall = matches / max(len(true_entries), 1)
         beta = 2.0
-        beta_sq = beta ** 2
-        f2 = (1.0 + beta_sq) * precision * recall / (
-            beta_sq * precision + recall + 1e-9
+        beta_sq = beta**2
+        f2 = (
+            (1.0 + beta_sq) * precision * recall / (beta_sq * precision + recall + 1e-9)
         )
         precision_floor_penalty = max(0.0, 0.7 - precision)
 
@@ -517,11 +554,18 @@ class LossEvaluatorsMixin:
                 if best_dist is None or dist < best_dist:
                     best_idx = idx
                     best_dist = dist
-            if best_idx is not None and best_dist is not None and best_dist <= self.holiday_tolerance_days:
+            if (
+                best_idx is not None
+                and best_dist is not None
+                and best_dist <= self.holiday_tolerance_days
+            ):
                 matched_true += 1
                 unmatched_detected.discard(best_idx)
                 continue
-            if any(abs(anomaly_date - true_date) <= self._anomaly_tolerance for anomaly_date in anomaly_dates):
+            if any(
+                abs(anomaly_date - true_date) <= self._anomaly_tolerance
+                for anomaly_date in anomaly_dates
+            ):
                 anomaly_credit += self.holiday_over_anomaly_bonus
 
         false_positives = len(unmatched_detected)
@@ -531,7 +575,9 @@ class LossEvaluatorsMixin:
         # positive.  holiday_recall_loss provides additional zero-detection gradient
         # so this function only needs a balanced quality signal.
         beta_sq = 4.0
-        f2 = (1.0 + beta_sq) * precision * recall / (beta_sq * precision + recall + 1e-9)
+        f2 = (
+            (1.0 + beta_sq) * precision * recall / (beta_sq * precision + recall + 1e-9)
+        )
         # Absolute FP term deters arbitrary over-detection independently of the
         # count ratio already captured by precision.
         fp_penalty = 0.18 * false_positives
@@ -599,9 +645,7 @@ class LossEvaluatorsMixin:
         matches = sum(
             1
             for td in true_dates
-            if any(
-                abs(td - dd) <= self._holiday_tolerance for dd in detected_dates
-            )
+            if any(abs(td - dd) <= self._holiday_tolerance for dd in detected_dates)
         )
 
         recall = matches / n_true
@@ -632,7 +676,9 @@ class LossEvaluatorsMixin:
                     best_match_penalty = None
                     best_match_det_val = None
                     for det_key, det_val in detected_strengths.items():
-                        if not (isinstance(det_key, str) and det_key.startswith('period_')):
+                        if not (
+                            isinstance(det_key, str) and det_key.startswith('period_')
+                        ):
                             continue
                         try:
                             det_period = int(det_key.split('_')[1])
@@ -675,18 +721,26 @@ class LossEvaluatorsMixin:
             n_items += 1
         return loss / max(1, n_items)
 
-    def _seasonality_pattern_loss(self, detected_components, true_components, date_index=None):
+    def _seasonality_pattern_loss(
+        self, detected_components, true_components, date_index=None
+    ):
         detected_series = detected_components.get('seasonality')
         true_series = true_components.get('seasonality')
         if detected_series is None or true_series is None:
             return 0.5
         rmse_penalty = self._component_rmse_penalty(detected_series, true_series)
-        wasserstein_penalty = self._component_wasserstein_penalty(detected_series, true_series)
-        spectral_penalty = self._component_spectral_penalty(detected_series, true_series)
-        profile_penalty = self._component_profile_correlation(
-            detected_series, true_series, date_index=date_index,
+        wasserstein_penalty = self._component_wasserstein_penalty(
+            detected_series, true_series
         )
-        
+        spectral_penalty = self._component_spectral_penalty(
+            detected_series, true_series
+        )
+        profile_penalty = self._component_profile_correlation(
+            detected_series,
+            true_series,
+            date_index=date_index,
+        )
+
         # Explicit asymmetric amplitude penalty to prevent underprediction
         detected_amp = np.nanstd(np.asarray(detected_series, dtype=float))
         true_amp = np.nanstd(np.asarray(true_series, dtype=float))
@@ -866,10 +920,14 @@ class LossEvaluatorsMixin:
         n_obs = detected_arr.size
         smooth_window = min(max(7, n_obs // 14), 45)
         detected_smooth = (
-            pd.Series(detected_arr).rolling(smooth_window, center=True, min_periods=1).mean()
+            pd.Series(detected_arr)
+            .rolling(smooth_window, center=True, min_periods=1)
+            .mean()
         ).to_numpy(dtype=float)
         true_smooth = (
-            pd.Series(true_arr).rolling(smooth_window, center=True, min_periods=1).mean()
+            pd.Series(true_arr)
+            .rolling(smooth_window, center=True, min_periods=1)
+            .mean()
         ).to_numpy(dtype=float)
 
         true_scale = float(np.nanstd(true_arr))
@@ -910,9 +968,7 @@ class LossEvaluatorsMixin:
             )
 
         combined = (
-            0.55 * smooth_rmse_penalty
-            + 0.25 * slope_penalty
-            + 0.20 * shift_penalty
+            0.55 * smooth_rmse_penalty + 0.25 * slope_penalty + 0.20 * shift_penalty
         )
         return float(min(max(combined, 0.0), 3.0))
 

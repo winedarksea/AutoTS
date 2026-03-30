@@ -64,7 +64,9 @@ class NornDecomposer:
             return self._components
 
         if self.detector is None:
-            raise RuntimeError("NornDecomposer must be fit before calling get_components.")
+            raise RuntimeError(
+                "NornDecomposer must be fit before calling get_components."
+            )
 
         index = self.detector.date_index
         columns = self._df_original.columns
@@ -100,7 +102,9 @@ class NornDecomposer:
         Useful for constructing priors or inspecting detection results.
         """
         if self.detector is None:
-            raise RuntimeError("NornDecomposer must be fit before calling get_features.")
+            raise RuntimeError(
+                "NornDecomposer must be fit before calling get_features."
+            )
         return self.detector.get_detected_features()
 
     def get_forecast_components(self, forecast_length: int) -> dict:
@@ -144,10 +148,14 @@ class NornDecomposer:
                     df = pred_components.xs(comp_key, axis=1, level=1)
                     result[output_key] = df.reindex(columns=columns, fill_value=0.0)
                 else:
-                    result[output_key] = pd.DataFrame(0.0, index=future_index, columns=columns)
+                    result[output_key] = pd.DataFrame(
+                        0.0, index=future_index, columns=columns
+                    )
         else:
             for output_key in component_map:
-                result[output_key] = pd.DataFrame(0.0, index=future_index, columns=columns)
+                result[output_key] = pd.DataFrame(
+                    0.0, index=future_index, columns=columns
+                )
 
         # anomalies and noise are not projected
         result['anomalies'] = pd.DataFrame(0.0, index=future_index, columns=columns)

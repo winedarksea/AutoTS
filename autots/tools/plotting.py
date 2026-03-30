@@ -736,7 +736,9 @@ def plot_feature_panels(
 
         # Panel 5: noise contribution only
         ax = axes[4]
-        ax.plot(date_index, noise, color='gray', linewidth=0.8, alpha=0.85, label='Noise')
+        ax.plot(
+            date_index, noise, color='gray', linewidth=0.8, alpha=0.85, label='Noise'
+        )
         for record in labels.get('noise_changepoints', []):
             date, *_ = _extract_event(record, ['date', 'from_params', 'to_params'])
             if date is None:
@@ -757,7 +759,9 @@ def plot_feature_panels(
     else:
         # Panel 4: combined noise and anomaly contributions (legacy layout)
         ax = axes[3]
-        ax.plot(date_index, noise, color='gray', linewidth=0.7, alpha=0.8, label='Noise')
+        ax.plot(
+            date_index, noise, color='gray', linewidth=0.7, alpha=0.8, label='Noise'
+        )
         ax.plot(
             date_index,
             anomalies_component,
@@ -796,7 +800,11 @@ def plot_feature_panels(
             if date is None:
                 continue
             ax.axvline(
-                _to_timestamp(date), color='gray', alpha=0.25, linestyle=':', linewidth=1.0
+                _to_timestamp(date),
+                color='gray',
+                alpha=0.25,
+                linestyle=':',
+                linewidth=1.0,
             )
 
         ax.set_ylabel('Value', fontsize=10)

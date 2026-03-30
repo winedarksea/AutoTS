@@ -14,18 +14,21 @@ import warnings
 def _get_detector_class():
     """Lazy import to avoid circular dependency."""
     from .detector import TimeSeriesFeatureDetector
+
     return TimeSeriesFeatureDetector
 
 
 def _get_loss_class():
     """Lazy import to avoid circular dependency."""
     from .loss import FeatureDetectionLoss
+
     return FeatureDetectionLoss
 
 
 def _get_reconstruction_loss_class():
     """Lazy import to avoid circular dependency."""
     from .loss import ReconstructionLoss
+
     return ReconstructionLoss
 
 
@@ -138,9 +141,7 @@ class FeatureDetectionOptimizer:
             ),
             'standardize': detector.standardize,
             'smoothing_window': detector.smoothing_window,
-            'extended_anomaly_params': copy.deepcopy(
-                detector.extended_anomaly_params
-            ),
+            'extended_anomaly_params': copy.deepcopy(detector.extended_anomaly_params),
         }
 
     def _record_evaluation(
@@ -392,9 +393,13 @@ class FeatureDetectionOptimizer:
         if isinstance(self.stage_budget, dict):
             budget = {
                 'portfolio': int(self.stage_budget.get('portfolio', 0)),
-                'seasonality_holiday': int(self.stage_budget.get('seasonality_holiday', 0)),
+                'seasonality_holiday': int(
+                    self.stage_budget.get('seasonality_holiday', 0)
+                ),
                 'anomaly': int(self.stage_budget.get('anomaly', 0)),
-                'changepoint_level_shift': int(self.stage_budget.get('changepoint_level_shift', 0)),
+                'changepoint_level_shift': int(
+                    self.stage_budget.get('changepoint_level_shift', 0)
+                ),
                 'joint_polish': int(self.stage_budget.get('joint_polish', 0)),
             }
             return budget
@@ -407,7 +412,9 @@ class FeatureDetectionOptimizer:
             'changepoint_level_shift': 0.25,
             'joint_polish': 0.10,
         }
-        budget = {key: int(math.floor(total * weight)) for key, weight in weights.items()}
+        budget = {
+            key: int(math.floor(total * weight)) for key, weight in weights.items()
+        }
         allocated = sum(budget.values())
         order = [
             'seasonality_holiday',
@@ -437,7 +444,9 @@ class FeatureDetectionOptimizer:
             return
 
         print(f"\n[Portfolio] evaluating up to {budget} curated seeds...")
-        seed_portfolio = self._build_seed_portfolio(detector_for_sampling, rng, starting_params)
+        seed_portfolio = self._build_seed_portfolio(
+            detector_for_sampling, rng, starting_params
+        )
         successes = 0
         for idx, params in enumerate(seed_portfolio):
             if successes >= budget:
@@ -584,7 +593,11 @@ class FeatureDetectionOptimizer:
             None,
         )
         detected_components = self.loss_calculator._resolve_components(
-            detected_features.get('components') if isinstance(detected_features, dict) else None,
+            (
+                detected_features.get('components')
+                if isinstance(detected_features, dict)
+                else None
+            ),
             None,
         )
         true_component_map = self.loss_calculator._resolve_components(
@@ -605,18 +618,33 @@ class FeatureDetectionOptimizer:
         zero_level_shift_fp = []
 
         for name in series_names:
-            det_series = self.loss_calculator._extract_detected_series(detected_features, name)
+            det_series = self.loss_calculator._extract_detected_series(
+                detected_features, name
+            )
             true_series = self.loss_calculator._extract_true_series(true_labels, name)
 
             det_strength = det_series.get('series_seasonality_strengths') or {}
             true_strength = true_series.get('series_seasonality_strengths') or {}
-            for key, container in [('weekly', weekly_errors), ('yearly', yearly_errors)]:
+            for key, container in [
+                ('weekly', weekly_errors),
+                ('yearly', yearly_errors),
+            ]:
                 truth = true_strength.get(key)
                 estimate = det_strength.get(key)
-                if truth is None or not np.isfinite(float(truth)) or abs(float(truth)) < 1e-9:
+                if (
+                    truth is None
+                    or not np.isfinite(float(truth))
+                    or abs(float(truth)) < 1e-9
+                ):
                     continue
-                estimate = 0.0 if estimate is None or not np.isfinite(float(estimate)) else float(estimate)
-                container.append(abs(estimate - float(truth)) / (abs(float(truth)) + 1e-6))
+                estimate = (
+                    0.0
+                    if estimate is None or not np.isfinite(float(estimate))
+                    else float(estimate)
+                )
+                container.append(
+                    abs(estimate - float(truth)) / (abs(float(truth)) + 1e-6)
+                )
 
             hol_stats = self._date_detection_stats(
                 det_series.get('holiday_dates', []),
@@ -626,7 +654,9 @@ class FeatureDetectionOptimizer:
             )
             holiday_precision.append(hol_stats['precision'])
             holiday_recall.append(hol_stats['recall'])
-            holiday_count_error.append(abs(hol_stats['detected_count'] - hol_stats['true_count']))
+            holiday_count_error.append(
+                abs(hol_stats['detected_count'] - hol_stats['true_count'])
+            )
 
             anomaly_stats = self._date_detection_stats(
                 det_series.get('anomalies', []),
@@ -644,7 +674,9 @@ class FeatureDetectionOptimizer:
                 beta=2.0,
             )
             trend_f2.append(trend_stats['fbeta'])
-            trend_count_error.append(abs(trend_stats['detected_count'] - trend_stats['true_count']))
+            trend_count_error.append(
+                abs(trend_stats['detected_count'] - trend_stats['true_count'])
+            )
             if trend_stats['matched_date_errors']:
                 trend_date_error.extend(trend_stats['matched_date_errors'])
 
@@ -653,16 +685,32 @@ class FeatureDetectionOptimizer:
             if not true_ls:
                 zero_level_shift_fp.append(float(len(det_ls)))
 
-        metrics['median_weekly_rel_error'] = float(np.median(weekly_errors)) if weekly_errors else np.nan
-        metrics['median_yearly_rel_error'] = float(np.median(yearly_errors)) if yearly_errors else np.nan
-        metrics['holiday_recall'] = float(np.mean(holiday_recall)) if holiday_recall else np.nan
-        metrics['holiday_precision'] = float(np.mean(holiday_precision)) if holiday_precision else np.nan
-        metrics['median_holiday_count_error'] = float(np.median(holiday_count_error)) if holiday_count_error else np.nan
+        metrics['median_weekly_rel_error'] = (
+            float(np.median(weekly_errors)) if weekly_errors else np.nan
+        )
+        metrics['median_yearly_rel_error'] = (
+            float(np.median(yearly_errors)) if yearly_errors else np.nan
+        )
+        metrics['holiday_recall'] = (
+            float(np.mean(holiday_recall)) if holiday_recall else np.nan
+        )
+        metrics['holiday_precision'] = (
+            float(np.mean(holiday_precision)) if holiday_precision else np.nan
+        )
+        metrics['median_holiday_count_error'] = (
+            float(np.median(holiday_count_error)) if holiday_count_error else np.nan
+        )
         metrics['anomaly_f2'] = float(np.mean(anomaly_f2)) if anomaly_f2 else np.nan
-        metrics['anomaly_precision'] = float(np.mean(anomaly_precision)) if anomaly_precision else np.nan
+        metrics['anomaly_precision'] = (
+            float(np.mean(anomaly_precision)) if anomaly_precision else np.nan
+        )
         metrics['trend_f2'] = float(np.mean(trend_f2)) if trend_f2 else np.nan
-        metrics['trend_mean_date_error_days'] = float(np.mean(trend_date_error)) if trend_date_error else np.nan
-        metrics['median_trend_count_error'] = float(np.median(trend_count_error)) if trend_count_error else np.nan
+        metrics['trend_mean_date_error_days'] = (
+            float(np.mean(trend_date_error)) if trend_date_error else np.nan
+        )
+        metrics['median_trend_count_error'] = (
+            float(np.median(trend_count_error)) if trend_count_error else np.nan
+        )
         metrics['zero_level_shift_false_positives'] = (
             float(np.max(zero_level_shift_fp)) if zero_level_shift_fp else 0.0
         )
@@ -686,8 +734,12 @@ class FeatureDetectionOptimizer:
                     weekly_profile.append(1.0 - weekly_penalty)
                 if yearly_penalty is not None:
                     yearly_profile.append(1.0 - yearly_penalty)
-            metrics['weekly_profile_correlation'] = float(np.mean(weekly_profile)) if weekly_profile else np.nan
-            metrics['yearly_profile_correlation'] = float(np.mean(yearly_profile)) if yearly_profile else np.nan
+            metrics['weekly_profile_correlation'] = (
+                float(np.mean(weekly_profile)) if weekly_profile else np.nan
+            )
+            metrics['yearly_profile_correlation'] = (
+                float(np.mean(yearly_profile)) if yearly_profile else np.nan
+            )
 
         return metrics
 
@@ -733,10 +785,18 @@ class FeatureDetectionOptimizer:
                 violations += 1
         return int(violations)
 
-    def _date_detection_stats(self, detected_events, true_events, tolerance_days=1, beta=1.0):
+    def _date_detection_stats(
+        self, detected_events, true_events, tolerance_days=1, beta=1.0
+    ):
         """Compute precision/recall/F-beta and matched date errors for dated event lists."""
-        detected_dates = [self.loss_calculator._parse_generic_date(event) for event in (detected_events or [])]
-        true_dates = [self.loss_calculator._parse_generic_date(event) for event in (true_events or [])]
+        detected_dates = [
+            self.loss_calculator._parse_generic_date(event)
+            for event in (detected_events or [])
+        ]
+        true_dates = [
+            self.loss_calculator._parse_generic_date(event)
+            for event in (true_events or [])
+        ]
         detected_dates = [d for d in detected_dates if d is not None]
         true_dates = [d for d in true_dates if d is not None]
         unmatched = set(range(len(detected_dates)))
@@ -750,7 +810,11 @@ class FeatureDetectionOptimizer:
                 if best_dist is None or dist < best_dist:
                     best_idx = idx
                     best_dist = dist
-            if best_idx is not None and best_dist is not None and best_dist <= tolerance_days:
+            if (
+                best_idx is not None
+                and best_dist is not None
+                and best_dist <= tolerance_days
+            ):
                 unmatched.discard(best_idx)
                 matches += 1
                 matched_errors.append(float(best_dist))
@@ -789,7 +853,9 @@ class FeatureDetectionOptimizer:
         if not true_cp:
             return 0.25 * len(detected_cp)
 
-        detected_entries = [loss_calc._parse_trend_event(event) for event in detected_cp]
+        detected_entries = [
+            loss_calc._parse_trend_event(event) for event in detected_cp
+        ]
         true_entries = [loss_calc._parse_trend_event(event) for event in true_cp]
         unmatched_detected = set(range(len(detected_entries)))
 
@@ -829,7 +895,10 @@ class FeatureDetectionOptimizer:
                 if dist_days > loss_calc.changepoint_tolerance_days:
                     overshoot = dist_days - loss_calc.changepoint_tolerance_days
                     combined_penalty += (
-                        min(overshoot / (loss_calc.changepoint_tolerance_days + 1e-6), 1.5)
+                        min(
+                            overshoot / (loss_calc.changepoint_tolerance_days + 1e-6),
+                            1.5,
+                        )
                         * 0.3
                     )
                 # Scale by true magnitude so large trend breaks matter more.
@@ -847,9 +916,7 @@ class FeatureDetectionOptimizer:
                 proximity_score = np.exp(
                     -0.5 * (nearest_distance / (sigma_days + 1e-9)) ** 2
                 )
-                loss += (
-                    0.15 + 0.25 * (1.0 - proximity_score) + 0.05 * min(det_mag, 2.0)
-                )
+                loss += 0.15 + 0.25 * (1.0 - proximity_score) + 0.05 * min(det_mag, 2.0)
         else:
             loss += 0.25 * len(unmatched_detected)
 
@@ -898,9 +965,11 @@ class FeatureDetectionOptimizer:
             return loss
 
         detected_components_by_name = self.loss_calculator._resolve_components(
-            detected_features.get('components')
-            if isinstance(detected_features, dict)
-            else None,
+            (
+                detected_features.get('components')
+                if isinstance(detected_features, dict)
+                else None
+            ),
             None,
         )
         true_components_by_name = self.loss_calculator._resolve_components(
@@ -1179,8 +1248,12 @@ class FeatureDetectionOptimizer:
             unique = np.unique(group_keys)
             if len(unique) < 3:
                 return None
-            det_profile = np.array([np.mean(detected_arr[group_keys == key]) for key in unique])
-            true_profile = np.array([np.mean(true_arr[group_keys == key]) for key in unique])
+            det_profile = np.array(
+                [np.mean(detected_arr[group_keys == key]) for key in unique]
+            )
+            true_profile = np.array(
+                [np.mean(true_arr[group_keys == key]) for key in unique]
+            )
             if np.std(true_profile) < 1e-12:
                 return 0.0 if np.std(det_profile) < 1e-12 else 1.0
             if np.std(det_profile) < 1e-12:
@@ -1216,12 +1289,12 @@ class FeatureDetectionOptimizer:
                 'iteration': entry.get('iteration'),
                 'loss': entry.get('loss'),
                 'runtime': entry.get('runtime'),
-                'recovery_floor_violations': (
-                    entry.get('loss_breakdown') or {}
-                ).get('recovery_floor_violations', np.nan),
-                'reconstruction_total_loss': (
-                    entry.get('loss_breakdown') or {}
-                ).get('reconstruction_total_loss', np.nan),
+                'recovery_floor_violations': (entry.get('loss_breakdown') or {}).get(
+                    'recovery_floor_violations', np.nan
+                ),
+                'reconstruction_total_loss': (entry.get('loss_breakdown') or {}).get(
+                    'reconstruction_total_loss', np.nan
+                ),
             }
             breakdown = entry.get('loss_breakdown', {})
             for key in self.loss_calculator.weights.keys():
@@ -1265,16 +1338,24 @@ class FeatureDetectionOptimizer:
 
         if self.selection_strategy == 'recovery_lexicographic':
             sort_key = lambda item: (
-                item.get('loss_breakdown', {}).get('recovery_floor_violations', float('inf')),
+                item.get('loss_breakdown', {}).get(
+                    'recovery_floor_violations', float('inf')
+                ),
                 item.get('loss', float('inf')),
-                item.get('loss_breakdown', {}).get('reconstruction_total_loss', float('inf')),
+                item.get('loss_breakdown', {}).get(
+                    'reconstruction_total_loss', float('inf')
+                ),
                 item.get('runtime', float('inf')),
             )
         else:
             sort_key = lambda item: (
                 item.get('loss', float('inf')),
-                item.get('loss_breakdown', {}).get('recovery_floor_violations', float('inf')),
-                item.get('loss_breakdown', {}).get('reconstruction_total_loss', float('inf')),
+                item.get('loss_breakdown', {}).get(
+                    'recovery_floor_violations', float('inf')
+                ),
+                item.get('loss_breakdown', {}).get(
+                    'reconstruction_total_loss', float('inf')
+                ),
                 item.get('runtime', float('inf')),
             )
         ranked_entries = sorted(self.optimization_history, key=sort_key)
@@ -1323,9 +1404,9 @@ class FeatureDetectionOptimizer:
             'best_loss': self.best_loss,
             'baseline_loss': self.baseline_loss,
             'best_total_loss': self.best_total_loss,
-            'best_params': copy.deepcopy(self.best_params)
-            if self.best_params
-            else None,
+            'best_params': (
+                copy.deepcopy(self.best_params) if self.best_params else None
+            ),
         }
 
         if self.optimization_history:
@@ -1645,7 +1726,9 @@ class FeatureDetectionOptimizer:
                     )
         else:
             numeric_keys = [
-                key for key, value in method_params.items() if isinstance(value, (int, float))
+                key
+                for key, value in method_params.items()
+                if isinstance(value, (int, float))
             ]
             if numeric_keys:
                 for key in rng.sample(numeric_keys, min(len(numeric_keys), 2)):
@@ -1878,19 +1961,28 @@ class FeatureDetectionOptimizer:
 
         try:
             best_loss = self._evaluate_changepoint_params(
-                frozen_params, sigma, tversky_alpha, tversky_beta,
-                tversky_gamma, level_shift_weight, over_prediction_penalty,
-                location_weight, count_weight, slope_match_weight,
+                frozen_params,
+                sigma,
+                tversky_alpha,
+                tversky_beta,
+                tversky_gamma,
+                level_shift_weight,
+                over_prediction_penalty,
+                location_weight,
+                count_weight,
+                slope_match_weight,
             )
         except Exception:
             best_loss = float('inf')
 
-        history = [{
-            'sigma': sigma,
-            'iteration': 'stage_start',
-            'params': copy.deepcopy(frozen_params),
-            'loss': best_loss,
-        }]
+        history = [
+            {
+                'sigma': sigma,
+                'iteration': 'stage_start',
+                'params': copy.deepcopy(frozen_params),
+                'loss': best_loss,
+            }
+        ]
         evaluated_sigs = {self._param_signature(frozen_params)}
 
         # ------------------------------------------------------------------
@@ -1900,14 +1992,28 @@ class FeatureDetectionOptimizer:
         # from a different one.
         # ------------------------------------------------------------------
         try:
-            from autots.tools.changepoints import valid_changepoint_methods as _all_cp_methods
+            from autots.tools.changepoints import (
+                valid_changepoint_methods as _all_cp_methods,
+            )
+
             all_cp_methods = list(_all_cp_methods)
         except Exception:
-            all_cp_methods = ['cusum', 'ewma', 'pelt', 'kcpd', 'bottom_up', 'wbs2',
-                              'l1_fused_lasso', 'l1_total_variation',
-                              'composite_fused_lasso', 'autoencoder', 'multiresolution']
+            all_cp_methods = [
+                'cusum',
+                'ewma',
+                'pelt',
+                'kcpd',
+                'bottom_up',
+                'wbs2',
+                'l1_fused_lasso',
+                'l1_total_variation',
+                'composite_fused_lasso',
+                'autoencoder',
+                'multiresolution',
+            ]
         diversity_methods = [
-            m for m in all_cp_methods
+            m
+            for m in all_cp_methods
             if not (exclude_changepoint_methods and m in exclude_changepoint_methods)
         ]
         for sweep_method in diversity_methods:
@@ -1923,16 +2029,25 @@ class FeatureDetectionOptimizer:
                 if sweep_sig not in evaluated_sigs:
                     evaluated_sigs.add(sweep_sig)
                     sweep_loss = self._evaluate_changepoint_params(
-                        sweep_candidate, sigma, tversky_alpha, tversky_beta,
-                        tversky_gamma, level_shift_weight, over_prediction_penalty,
-                        location_weight, count_weight, slope_match_weight,
+                        sweep_candidate,
+                        sigma,
+                        tversky_alpha,
+                        tversky_beta,
+                        tversky_gamma,
+                        level_shift_weight,
+                        over_prediction_penalty,
+                        location_weight,
+                        count_weight,
+                        slope_match_weight,
                     )
-                    history.append({
-                        'sigma': sigma,
-                        'iteration': f'diversity_sweep_{sweep_method}',
-                        'params': copy.deepcopy(sweep_candidate),
-                        'loss': sweep_loss,
-                    })
+                    history.append(
+                        {
+                            'sigma': sigma,
+                            'iteration': f'diversity_sweep_{sweep_method}',
+                            'params': copy.deepcopy(sweep_candidate),
+                            'loss': sweep_loss,
+                        }
+                    )
                     if sweep_loss < best_loss:
                         best_loss = sweep_loss
                         best_params = copy.deepcopy(sweep_candidate)
@@ -1952,7 +2067,9 @@ class FeatureDetectionOptimizer:
         for i in range(n_iters):
             candidate = copy.deepcopy(best_params)
             if i % 20 == 0:
-                print(f"  Stage {stage_idx + 1} iter {i}/{n_iters} (best loss so far: {best_loss:.4f})")
+                print(
+                    f"  Stage {stage_idx + 1} iter {i}/{n_iters} (best loss so far: {best_loss:.4f})"
+                )
 
             # Periodically break out of the local basin with a random sample,
             # regardless of the stage local_prob setting.
@@ -1964,7 +2081,10 @@ class FeatureDetectionOptimizer:
             else:
                 fresh_cp = ChangepointDetector.get_new_params(method='random')
             # If the sampled method is excluded, resample randomly.
-            if exclude_changepoint_methods and fresh_cp.get('method') in exclude_changepoint_methods:
+            if (
+                exclude_changepoint_methods
+                and fresh_cp.get('method') in exclude_changepoint_methods
+            ):
                 for _ in range(10):
                     fresh_cp = ChangepointDetector.get_new_params(method='random')
                     if fresh_cp.get('method') not in exclude_changepoint_methods:
@@ -1995,16 +2115,25 @@ class FeatureDetectionOptimizer:
 
             try:
                 loss = self._evaluate_changepoint_params(
-                    candidate, sigma, tversky_alpha, tversky_beta,
-                    tversky_gamma, level_shift_weight, over_prediction_penalty,
-                    location_weight, count_weight, slope_match_weight,
+                    candidate,
+                    sigma,
+                    tversky_alpha,
+                    tversky_beta,
+                    tversky_gamma,
+                    level_shift_weight,
+                    over_prediction_penalty,
+                    location_weight,
+                    count_weight,
+                    slope_match_weight,
                 )
-                history.append({
-                    'sigma': sigma,
-                    'iteration': i,
-                    'params': copy.deepcopy(candidate),
-                    'loss': loss,
-                })
+                history.append(
+                    {
+                        'sigma': sigma,
+                        'iteration': i,
+                        'params': copy.deepcopy(candidate),
+                        'loss': loss,
+                    }
+                )
                 if loss < best_loss:
                     best_loss = loss
                     best_params = copy.deepcopy(candidate)
@@ -2068,9 +2197,12 @@ class FeatureDetectionOptimizer:
                 for e in true_series.get('trend_changepoints', [])
             ]
             cp_loss = self.loss_calculator._focal_tversky_changepoint_penalty(
-                det_cp_entries, true_cp_entries,
-                sigma=sigma, alpha=tversky_alpha,
-                beta=tversky_beta, gamma=tversky_gamma,
+                det_cp_entries,
+                true_cp_entries,
+                sigma=sigma,
+                alpha=tversky_alpha,
+                beta=tversky_beta,
+                gamma=tversky_gamma,
             )
             cp_loss += location_weight * self._bounded_distance_penalty(
                 det_cp_entries, true_cp_entries, sigma
@@ -2095,17 +2227,24 @@ class FeatureDetectionOptimizer:
             ]
             ls_beta = max(tversky_beta - 0.1, tversky_alpha + 0.05)
             ls_loss = self.loss_calculator._focal_tversky_changepoint_penalty(
-                det_ls_entries, true_ls_entries,
-                sigma=sigma, alpha=tversky_alpha,
-                beta=ls_beta, gamma=tversky_gamma,
+                det_ls_entries,
+                true_ls_entries,
+                sigma=sigma,
+                alpha=tversky_alpha,
+                beta=ls_beta,
+                gamma=tversky_gamma,
             )
             ls_loss += location_weight * self._bounded_distance_penalty(
                 det_ls_entries, true_ls_entries, sigma
             )
-            ls_loss += 0.75 * count_weight * self._count_calibration_penalty(
-                len(det_ls_entries),
-                len(true_ls_entries),
-                over_scale=max(1.0, over_scale - 0.15),
+            ls_loss += (
+                0.75
+                * count_weight
+                * self._count_calibration_penalty(
+                    len(det_ls_entries),
+                    len(true_ls_entries),
+                    over_scale=max(1.0, over_scale - 0.15),
+                )
             )
             cp_loss = max(
                 cp_loss

@@ -317,4 +317,3 @@ class SeasonalityMixin:
         if yearly >= 0.02:
             return 'yearly'
         return 'none'
-

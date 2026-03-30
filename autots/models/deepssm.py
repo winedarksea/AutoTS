@@ -262,9 +262,7 @@ def create_training_batches(
 
     if series_feat_mapping is not None and series_names is not None:
         max_feats = max(len(feat_cols) for feat_cols in series_feat_mapping.values())
-        X_data = np.zeros(
-            (len(selected_indices), seq_len, max_feats), dtype=np.float32
-        )
+        X_data = np.zeros((len(selected_indices), seq_len, max_feats), dtype=np.float32)
     else:
         X_data = np.zeros(
             (len(selected_indices), seq_len, n_features), dtype=np.float32
@@ -894,7 +892,7 @@ def _parallel_linear_recurrence(a, b):
         #   running_b[i] = running_a[i] * running_b[i-stride] + running_b[i]
         #   running_a[i] = running_a[i] * running_a[i-stride]
         # Positions 0..stride-1 are untouched (no predecessor that far back).
-        suffix_a = running_a[:, stride:]       # [B, L-stride, D, S]
+        suffix_a = running_a[:, stride:]  # [B, L-stride, D, S]
         suffix_b = running_b[:, stride:]
         prefix_a = running_a[:, : L - stride]  # [B, L-stride, D, S]
         prefix_b = running_b[:, : L - stride]
@@ -910,8 +908,16 @@ def _parallel_linear_recurrence(a, b):
 
 # Self-contained Mamba Block and Core Model
 class MambaMinimalBlock(Module):
-    def __init__(self, d_model, d_state=16, d_conv=4, expand=2, use_extra_gating=False,
-                 use_complex_states=False, use_scan=False):
+    def __init__(
+        self,
+        d_model,
+        d_state=16,
+        d_conv=4,
+        expand=2,
+        use_extra_gating=False,
+        use_complex_states=False,
+        use_scan=False,
+    ):
         super().__init__()
         self.d_model, self.d_state, self.d_conv, self.expand = (
             d_model,
@@ -1011,10 +1017,10 @@ class MambaMinimalBlock(Module):
                 delta_4d_c = delta_4d.to(torch.complex64)
                 A_bar_all = torch.exp(delta_4d_c * A_cplx)  # [B, L, d_inner, d_state]
             else:
-                A_bar_all = torch.exp(delta_4d * A_cplx)    # [B, L, d_inner, d_state]
+                A_bar_all = torch.exp(delta_4d * A_cplx)  # [B, L, d_inner, d_state]
 
             # Mamba-3 Trapezoidal discretisation:  B_bar = (Δ/2)(1 + e^{ΔA}) B
-            B_val_4d = B_val.unsqueeze(2)                    # [B, L, 1, d_state]
+            B_val_4d = B_val.unsqueeze(2)  # [B, L, 1, d_state]
             if self.use_complex_states:
                 B_val_4d = B_val_4d.to(torch.complex64)
                 delta_4d_c_bc = delta_4d.to(torch.complex64)
@@ -1058,12 +1064,18 @@ class MambaMinimalBlock(Module):
                 if self.use_complex_states:
                     delta_i_c = delta_i.to(torch.complex64)
                     A_bar = torch.exp(delta_i_c * A_cplx)
-                    B_bar = (delta_i_c / 2.0) * (1.0 + A_bar) * B_val[:, i, :].unsqueeze(1).to(torch.complex64)
+                    B_bar = (
+                        (delta_i_c / 2.0)
+                        * (1.0 + A_bar)
+                        * B_val[:, i, :].unsqueeze(1).to(torch.complex64)
+                    )
                     x_i = x[:, i, :].unsqueeze(-1).to(torch.complex64)
                 else:
                     A_bar = torch.exp(delta_i * A_cplx)
                     # Mamba-3 Trapezoidal discretisation
-                    B_bar = (delta_i / 2.0) * (1.0 + A_bar) * B_val[:, i, :].unsqueeze(1)
+                    B_bar = (
+                        (delta_i / 2.0) * (1.0 + A_bar) * B_val[:, i, :].unsqueeze(1)
+                    )
                     x_i = x[:, i, :].unsqueeze(-1)
 
                 if self.use_extra_gating:
@@ -1941,8 +1953,12 @@ class MambaSSM(ModelObject):
                         if len(feat_indices) < max_feats_from_mapping:
                             pad_size = max_feats_from_mapping - len(feat_indices)
                             series_feats = np.concatenate(
-                                [series_feats,
-                                 np.zeros((actual_batch_size, pad_size), dtype=np.float32)],
+                                [
+                                    series_feats,
+                                    np.zeros(
+                                        (actual_batch_size, pad_size), dtype=np.float32
+                                    ),
+                                ],
                                 axis=1,
                             )
 
@@ -1951,9 +1967,17 @@ class MambaSSM(ModelObject):
                             ctx_s = ctx[:, feat_indices]
                             if len(feat_indices) < max_feats_from_mapping:
                                 ctx_s = np.concatenate(
-                                    [ctx_s,
-                                     np.zeros((cl, max_feats_from_mapping - len(feat_indices)),
-                                              dtype=np.float32)],
+                                    [
+                                        ctx_s,
+                                        np.zeros(
+                                            (
+                                                cl,
+                                                max_feats_from_mapping
+                                                - len(feat_indices),
+                                            ),
+                                            dtype=np.float32,
+                                        ),
+                                    ],
                                     axis=1,
                                 )
                             full_input = np.concatenate([ctx_s, series_feats], axis=0)
@@ -2012,10 +2036,7 @@ class MambaSSM(ModelObject):
                     ]
                     # Unscale using global stats — the naive feature column is still
                     # globally scaled by feature_scaler, so the window stores raw values.
-                    if (
-                        self.local_scaling
-                        and self.inference_local_mean is not None
-                    ):
+                    if self.local_scaling and self.inference_local_mean is not None:
                         batch_predictions_unscaled = (
                             batch_predictions_scaled * self.inference_local_std
                             + self.inference_local_mean
@@ -2043,7 +2064,8 @@ class MambaSSM(ModelObject):
         # the per-series baseline saved after fit().
         if self.local_scaling and self.inference_local_mean is not None:
             mu_unscaled = (
-                forecast_mu_scaled * self.inference_local_std + self.inference_local_mean
+                forecast_mu_scaled * self.inference_local_std
+                + self.inference_local_mean
             )
             sigma_unscaled = np.abs(forecast_sigma_scaled) * self.inference_local_std
         else:
@@ -2182,7 +2204,10 @@ class MambaSSM(ModelObject):
 
         # Complex states: useful for seasonal data; small overhead when enabled
         complex_states_options = [True, False]
-        complex_states_weights = [0.3, 0.7]  # Prefer False for stability on diverse datasets
+        complex_states_weights = [
+            0.3,
+            0.7,
+        ]  # Prefer False for stability on diverse datasets
 
         # Parallel scan: faster training (especially long sequences), numerically equivalent
         use_scan_options = [True, False]
@@ -2190,7 +2215,10 @@ class MambaSSM(ModelObject):
 
         # Local (instance) scaling: normalizes each window by context-window stats for better extrapolation
         local_scaling_options = [True, False]
-        local_scaling_weights = [0.3, 0.7]  # Prefer off by default; useful for trending series
+        local_scaling_weights = [
+            0.3,
+            0.7,
+        ]  # Prefer off by default; useful for trending series
 
         naive_feature_options = [True, False]
         naive_feature_weights = [0.5, 0.5]  # Default to using naive features
@@ -2234,9 +2262,9 @@ class MambaSSM(ModelObject):
             "use_complex_states": random.choices(
                 complex_states_options, weights=complex_states_weights, k=1
             )[0],
-            "use_scan": random.choices(
-                use_scan_options, weights=use_scan_weights, k=1
-            )[0],
+            "use_scan": random.choices(use_scan_options, weights=use_scan_weights, k=1)[
+                0
+            ],
             "local_scaling": random.choices(
                 local_scaling_options, weights=local_scaling_weights, k=1
             )[0],

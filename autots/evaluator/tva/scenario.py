@@ -185,9 +185,7 @@ class BifrostOptimizer:
                 shares = np.ones(len(constituent_indices)) / len(constituent_indices)
             adjusted_values[t, constituent_indices] += delta * shares
 
-        return pd.DataFrame(
-            adjusted_values, index=base_forecast.index, columns=columns
-        )
+        return pd.DataFrame(adjusted_values, index=base_forecast.index, columns=columns)
 
     def _optimize(self, constraints: list) -> pd.DataFrame:
         """Core optimization loop.
@@ -215,17 +213,20 @@ class BifrostOptimizer:
 
         # get baseline input
         trend_data = self.tva._components['trend'].values
-        last_window = trend_data[-self.tva.window_size:]
+        last_window = trend_data[-self.tva.window_size :]
         x = torch.tensor(
             last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
         )
 
         meta = None
-        if (self.tva._metadata_embeddings is not None
-                and self.tva._metadata_embeddings.shape[1] > 0):
+        if (
+            self.tva._metadata_embeddings is not None
+            and self.tva._metadata_embeddings.shape[1] > 0
+        ):
             meta = torch.tensor(
                 self.tva._metadata_embeddings[np.newaxis, :, :],
-                dtype=torch.float32, device=device,
+                dtype=torch.float32,
+                device=device,
             )
 
         anchor_mask_t = torch.tensor(
@@ -260,7 +261,7 @@ class BifrostOptimizer:
                 total_loss = total_loss + cfn(forecast)
 
             # perturbation regularizer (covariance-weighted)
-            reg_loss = (inv_var_t * perturbation ** 2).mean() * 10.0
+            reg_loss = (inv_var_t * perturbation**2).mean() * 10.0
             total_loss = total_loss + reg_loss
 
             total_loss.backward()
@@ -274,7 +275,9 @@ class BifrostOptimizer:
         with torch.no_grad():
             final_input = x + perturbation
             final_outputs = network(final_input, meta, anchor_mask_t)
-            trend_forecast = final_outputs['trend_forecast'].cpu().numpy()[0]  # (N, T_fc)
+            trend_forecast = (
+                final_outputs['trend_forecast'].cpu().numpy()[0]
+            )  # (N, T_fc)
 
         # fuse with other components
         fc_length = self.tva.forecast_horizon
@@ -288,15 +291,33 @@ class BifrostOptimizer:
 
         if isinstance(self.tva._fusion_layer, nn.Module):
             with torch.no_grad():
-                t_trend = torch.tensor(trend_fc[np.newaxis], dtype=torch.float32, device=device)
-                t_sea = torch.tensor(seasonal[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
-                t_hol = torch.tensor(holidays[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
-                t_ls = torch.tensor(level_shifts[np.newaxis, :, :fc_length], dtype=torch.float32, device=device)
+                t_trend = torch.tensor(
+                    trend_fc[np.newaxis], dtype=torch.float32, device=device
+                )
+                t_sea = torch.tensor(
+                    seasonal[np.newaxis, :, :fc_length],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                t_hol = torch.tensor(
+                    holidays[np.newaxis, :, :fc_length],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                t_ls = torch.tensor(
+                    level_shifts[np.newaxis, :, :fc_length],
+                    dtype=torch.float32,
+                    device=device,
+                )
                 fused = self.tva._fusion_layer(t_trend, t_sea, t_hol, t_ls)
                 forecast_values = fused.cpu().numpy()[0].T
         else:
-            forecast_values = (trend_fc + seasonal[:, :fc_length] +
-                               holidays[:, :fc_length] + level_shifts[:, :fc_length]).T
+            forecast_values = (
+                trend_fc
+                + seasonal[:, :fc_length]
+                + holidays[:, :fc_length]
+                + level_shifts[:, :fc_length]
+            ).T
 
         future_index = forecast_comps['trend'].index[:fc_length]
         return pd.DataFrame(

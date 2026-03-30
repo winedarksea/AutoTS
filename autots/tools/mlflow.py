@@ -258,8 +258,13 @@ def _build_autots_model_as_code_payload(autots_obj, best_row=None):
         ),
     }
     try:
-        if hasattr(autots_obj, "df_wide_numeric") and autots_obj.df_wide_numeric is not None:
-            payload["last_obs_date"] = _to_jsonable(autots_obj.df_wide_numeric.index[-1])
+        if (
+            hasattr(autots_obj, "df_wide_numeric")
+            and autots_obj.df_wide_numeric is not None
+        ):
+            payload["last_obs_date"] = _to_jsonable(
+                autots_obj.df_wide_numeric.index[-1]
+            )
     except Exception:
         pass
     if isinstance(best_row, pd.Series):
@@ -368,7 +373,9 @@ def _log_autots_summary(mlflow, autots_obj):
         if "ID" in best_row.index:
             _safe_mlflow_set_tag(mlflow, "best.model_id", best_row["ID"])
 
-    _safe_mlflow_log_param(mlflow, "best_model_name", getattr(autots_obj, "best_model_name", None))
+    _safe_mlflow_log_param(
+        mlflow, "best_model_name", getattr(autots_obj, "best_model_name", None)
+    )
     _safe_mlflow_log_param(
         mlflow,
         "best_model_ensemble",
@@ -379,7 +386,9 @@ def _log_autots_summary(mlflow, autots_obj):
     _safe_mlflow_log_dict(mlflow, model_as_code, "autots/model_as_code.json")
 
     if _AUTOLOG_CONFIG.get("tried_models_logging", "single") == "single":
-        _safe_mlflow_log_dataframe(mlflow, initial_df, "autots/model_results_initial.csv")
+        _safe_mlflow_log_dataframe(
+            mlflow, initial_df, "autots/model_results_initial.csv"
+        )
         if not validation_df.empty:
             _safe_mlflow_log_dataframe(
                 mlflow, validation_df, "autots/model_results_validation.csv"
@@ -436,7 +445,9 @@ def _log_autots_individual_model_runs(mlflow, autots_obj, max_runs: int = 400):
                 if metric in row.index:
                     _safe_mlflow_log_metric(
                         mlflow,
-                        metric.lower().replace("totalruntimeseconds", "runtime_seconds"),
+                        metric.lower().replace(
+                            "totalruntimeseconds", "runtime_seconds"
+                        ),
                         row.get(metric),
                     )
 
@@ -570,8 +581,14 @@ def _patch_autots_predict():
             run_ctx = _start_run(mlflow, "AutoTS.predict")
             _safe_mlflow_set_tag(mlflow, "autots.flavor", "AutoTS")
             _safe_mlflow_set_tag(mlflow, "autots.stage", "predict")
-            _safe_mlflow_log_param(mlflow, "best_model_name", getattr(self, "best_model_name", None))
-            fl = kwargs.get("forecast_length") if "forecast_length" in kwargs else (args[0] if args else None)
+            _safe_mlflow_log_param(
+                mlflow, "best_model_name", getattr(self, "best_model_name", None)
+            )
+            fl = (
+                kwargs.get("forecast_length")
+                if "forecast_length" in kwargs
+                else (args[0] if args else None)
+            )
             if fl is not None and fl != "self":
                 _safe_mlflow_log_param(mlflow, "forecast_length", fl)
 
@@ -592,9 +609,15 @@ def _patch_autots_predict():
                     _safe_mlflow_set_tag(mlflow, "autots.run_status", "finished")
                     forecast_df = getattr(result, "forecast", None)
                     if isinstance(forecast_df, pd.DataFrame):
-                        _safe_mlflow_log_param(mlflow, "forecast_rows", forecast_df.shape[0])
-                        _safe_mlflow_log_param(mlflow, "forecast_cols", forecast_df.shape[1])
-                _end_run(mlflow, run_ctx, status="FAILED" if err is not None else "FINISHED")
+                        _safe_mlflow_log_param(
+                            mlflow, "forecast_rows", forecast_df.shape[0]
+                        )
+                        _safe_mlflow_log_param(
+                            mlflow, "forecast_cols", forecast_df.shape[1]
+                        )
+                _end_run(
+                    mlflow, run_ctx, status="FAILED" if err is not None else "FINISHED"
+                )
 
     wrapped_predict._autots_mlflow_wrapped = True
     wrapped_predict._autots_mlflow_original = predict_method
@@ -658,7 +681,10 @@ def modelobject_fit_start(model_obj, args=None, kwargs=None):
     if mlflow is None:
         return None
 
-    run_ctx = _start_run(mlflow, f"ModelObject.fit::{getattr(model_obj, 'name', model_obj.__class__.__name__)}")
+    run_ctx = _start_run(
+        mlflow,
+        f"ModelObject.fit::{getattr(model_obj, 'name', model_obj.__class__.__name__)}",
+    )
     _safe_mlflow_set_tag(mlflow, "autots.flavor", "ModelObject")
     _safe_mlflow_set_tag(mlflow, "autots.stage", "fit")
     _safe_mlflow_set_tag(mlflow, "autots.model_class", model_obj.__class__.__name__)
@@ -761,10 +787,16 @@ def modelobject_predict_end(model_obj, context=None, result=None, error=None):
             _safe_mlflow_set_tag(mlflow, "autots.run_status", "finished")
             if result is not None:
                 pred_runtime = _timedelta_seconds(
-                    getattr(result, "predict_runtime", getattr(model_obj, "predict_runtime", None))
+                    getattr(
+                        result,
+                        "predict_runtime",
+                        getattr(model_obj, "predict_runtime", None),
+                    )
                 )
                 if pred_runtime is not None:
-                    _safe_mlflow_log_metric(mlflow, "predict_runtime_seconds", pred_runtime)
+                    _safe_mlflow_log_metric(
+                        mlflow, "predict_runtime_seconds", pred_runtime
+                    )
                 forecast = getattr(result, "forecast", None)
                 if isinstance(forecast, pd.DataFrame):
                     _safe_mlflow_log_param(mlflow, "forecast_rows", forecast.shape[0])
@@ -781,7 +813,9 @@ def modelobject_predict_end(model_obj, context=None, result=None, error=None):
                             _to_jsonable(forecast.index[-1]),
                         )
             payload = _build_model_as_code_payload(model_obj)
-            _safe_mlflow_log_dict(mlflow, payload, "modelobject/model_as_code_predict.json")
+            _safe_mlflow_log_dict(
+                mlflow, payload, "modelobject/model_as_code_predict.json"
+            )
     finally:
         if mlflow is not None:
             _end_run(mlflow, run_ctx, status=status)

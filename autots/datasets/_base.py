@@ -257,7 +257,6 @@ def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 1
 from autots.datasets._live import load_live_daily  # noqa: F401
 
 
-
 def load_zeroes(long=False, shape=None, start_date: str = "2021-01-01"):
     """Create a dataset of just zeroes for testing edge case."""
     if shape is None:

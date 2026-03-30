@@ -1,4 +1,5 @@
 """MCP Prompt & Resource definitions for the AutoTS MCP server."""
+
 import json
 from os.path import dirname, join, exists
 
@@ -34,7 +35,11 @@ try:
                         uri=f"file://{filepath}",
                         name=filename,
                         description=description,
-                        mimeType="text/markdown" if filename.endswith('.md') else "text/plain",
+                        mimeType=(
+                            "text/markdown"
+                            if filename.endswith('.md')
+                            else "text/plain"
+                        ),
                     )
                 )
 

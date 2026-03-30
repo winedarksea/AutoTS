@@ -57,14 +57,19 @@ if HAS_TORCH:
                 stacklevel=2,
             )
             try:
-                graph_prior = F.interpolate(
-                    torch.tensor(graph_prior, dtype=torch.float32)
-                    .unsqueeze(0)
-                    .unsqueeze(0),
-                    size=(target_size, target_size),
-                    mode='bilinear',
-                    align_corners=False,
-                ).squeeze(0).squeeze(0).numpy()
+                graph_prior = (
+                    F.interpolate(
+                        torch.tensor(graph_prior, dtype=torch.float32)
+                        .unsqueeze(0)
+                        .unsqueeze(0),
+                        size=(target_size, target_size),
+                        mode='bilinear',
+                        align_corners=False,
+                    )
+                    .squeeze(0)
+                    .squeeze(0)
+                    .numpy()
+                )
             except Exception:
                 graph_prior = np.zeros((target_size, target_size), dtype=np.float32)
         return graph_prior.astype(np.float32)
@@ -105,7 +110,9 @@ if HAS_TORCH:
             d_conv_out = d_token - d_meta if d_meta > 0 else d_token
 
             # temporal conv: treats each series independently
-            self.conv = nn.Conv1d(1, d_conv_out, kernel_size=min(7, window_size), padding=3)
+            self.conv = nn.Conv1d(
+                1, d_conv_out, kernel_size=min(7, window_size), padding=3
+            )
             self.pool = nn.AdaptiveAvgPool1d(1)
             self.norm = nn.LayerNorm(d_token)
 
@@ -186,7 +193,9 @@ if HAS_TORCH:
 
             # level 2: meso -> global
             global_q = self.global_queries.expand(B, -1, -1)
-            global_latent, _ = self._bifrost_bridge_global(global_q, meso_latent, meso_latent)
+            global_latent, _ = self._bifrost_bridge_global(
+                global_q, meso_latent, meso_latent
+            )
             global_latent = self.norm_global(global_latent)
 
             return meso_latent, global_latent, tokens
@@ -281,7 +290,7 @@ if HAS_TORCH:
             # Negative squared distance yields higher logits for closer prototypes.
             # latent: (B, M, 1, D), prototypes: (1, 1, K, D)
             diffs = latent.unsqueeze(-2) - prototypes.unsqueeze(0).unsqueeze(0)
-            sq_l2 = (diffs ** 2).sum(dim=-1)
+            sq_l2 = (diffs**2).sum(dim=-1)
             logits = -sq_l2
             return logits / self.assignment_temperature
 
@@ -360,7 +369,9 @@ if HAS_TORCH:
             B = global_latent.shape[0]
 
             # global -> meso
-            meso_upsampled, _ = self.upsample_to_meso(meso_latent, global_latent, global_latent)
+            meso_upsampled, _ = self.upsample_to_meso(
+                meso_latent, global_latent, global_latent
+            )
             meso_upsampled = self.norm_meso(meso_upsampled + meso_latent)
 
             # select anchor tokens for upsampling target
@@ -376,10 +387,14 @@ if HAS_TORCH:
             series_tokens = self.norm_series(series_tokens + skip_anchors)
 
             # project to forecast
-            anchor_forecasts = self.forecast_head(series_tokens)  # (B, N_anchor, T_forecast)
+            anchor_forecasts = self.forecast_head(
+                series_tokens
+            )  # (B, N_anchor, T_forecast)
 
             # composite trends from global latent
-            composite_trend = self.forecast_head(global_latent)  # (B, n_global, T_forecast)
+            composite_trend = self.forecast_head(
+                global_latent
+            )  # (B, n_global, T_forecast)
 
             return anchor_forecasts, composite_trend
 
@@ -412,7 +427,9 @@ if HAS_TORCH:
             Returns:
                 (B, N_responder, T_forecast) responder trend forecasts.
             """
-            attended, _ = self.cross_attn(responder_tokens, anchor_tokens, anchor_tokens)
+            attended, _ = self.cross_attn(
+                responder_tokens, anchor_tokens, anchor_tokens
+            )
             out = self.norm(attended + responder_tokens)
             return self.forecast_head(out)
 
@@ -468,8 +485,12 @@ if HAS_TORCH:
                 assignment_method=prototype_assignment_method,
                 assignment_temperature=prototype_assignment_temperature,
             )
-            self.decoder = HierarchicalDecoder(d_token, n_meso, forecast_horizon, n_heads)
-            self.responder = ResponderHead(d_token, forecast_horizon, max(n_heads // 2, 1))
+            self.decoder = HierarchicalDecoder(
+                d_token, n_meso, forecast_horizon, n_heads
+            )
+            self.responder = ResponderHead(
+                d_token, forecast_horizon, max(n_heads // 2, 1)
+            )
 
             # build fixed attention mask from prior adjacency
             self._register_attention_mask(prior_adjacency)
@@ -493,9 +514,7 @@ if HAS_TORCH:
                 # no mask = full attention over global latent nodes
                 mask = np.zeros((self.n_global, self.n_global), dtype=np.float32)
 
-            self.register_buffer(
-                '_attn_mask', torch.tensor(mask, dtype=torch.float32)
-            )
+            self.register_buffer('_attn_mask', torch.tensor(mask, dtype=torch.float32))
 
         def forward(
             self,
@@ -534,8 +553,10 @@ if HAS_TORCH:
             mask = self._attn_mask
             if mask.shape != (glob.shape[1], glob.shape[1]):
                 mask = torch.zeros(
-                    glob.shape[1], glob.shape[1],
-                    device=glob.device, dtype=glob.dtype,
+                    glob.shape[1],
+                    glob.shape[1],
+                    device=glob.device,
+                    dtype=glob.dtype,
                 )
             glob = self.sparse_attn(glob, mask)
 
@@ -544,7 +565,9 @@ if HAS_TORCH:
 
             # decode to anchor forecasts
             anchor_forecasts, composite_trend = self.decoder(
-                glob_conditioned, meso, skip if anchor_mask is None else tokens[:, anchor_mask],
+                glob_conditioned,
+                meso,
+                skip if anchor_mask is None else tokens[:, anchor_mask],
                 anchor_mask=None,  # already filtered
             )
 
@@ -607,7 +630,9 @@ if HAS_TORCH:
 
         def __init__(self, *args, causal_prior: np.ndarray = None, **kwargs):
             prior_adj = kwargs.get('prior_adjacency', None)
-            n_anchor_series = int(kwargs.pop('n_anchor_series', kwargs.get('n_series', 1)))
+            n_anchor_series = int(
+                kwargs.pop('n_anchor_series', kwargs.get('n_series', 1))
+            )
             structure_learning_config = kwargs.pop('structure_learning_config', None)
             super().__init__(*args, **kwargs)
             self.structure_config = StructureLearningConfig.from_dict(
@@ -640,9 +665,11 @@ if HAS_TORCH:
             )
             self.register_buffer(
                 '_structure_prior',
-                None
-                if resized_prior_adj is None
-                else torch.tensor(resized_prior_adj, dtype=torch.float32),
+                (
+                    None
+                    if resized_prior_adj is None
+                    else torch.tensor(resized_prior_adj, dtype=torch.float32)
+                ),
             )
 
             # causal prior regularizes learned edges as a soft target.
@@ -719,7 +746,9 @@ if HAS_TORCH:
                 glob = hierarchy_outputs['top_latent']
                 glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
                 glob_conditioned, usage_weights_global = self.prototype(glob)
-                regime_weights = self._regime_gate(glob_conditioned.mean(dim=1, keepdim=True))
+                regime_weights = self._regime_gate(
+                    glob_conditioned.mean(dim=1, keepdim=True)
+                )
                 usage_weights_global = usage_weights_global * regime_weights
                 decoded_levels = self.dynamic_hierarchy.decode(
                     glob_conditioned,
@@ -736,7 +765,9 @@ if HAS_TORCH:
                 meso, glob, skip = self.encoder(anchor_tokens)
                 glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
                 glob_conditioned, usage_weights_global = self.prototype(glob)
-                regime_weights = self._regime_gate(glob_conditioned.mean(dim=1, keepdim=True))
+                regime_weights = self._regime_gate(
+                    glob_conditioned.mean(dim=1, keepdim=True)
+                )
                 usage_weights_global = usage_weights_global * regime_weights
                 anchor_forecasts, composite_trend = self.decoder(
                     glob_conditioned,

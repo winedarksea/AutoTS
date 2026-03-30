@@ -80,7 +80,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass as data_id to other tools",
+                    },
                     "source": {"type": "string"},
                     "rows": {"type": "integer"},
                     "cols": {"type": "integer"},
@@ -117,13 +120,18 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass as data_id to other tools",
+                    },
                     "rows": {"type": "integer"},
                     "cols": {"type": "integer"},
                 },
                 "required": ["data_id"],
             },
-            annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, openWorldHint=True),
+            annotations=ToolAnnotations(
+                readOnlyHint=False, idempotentHint=False, openWorldHint=True
+            ),
         ),
         Tool(
             name="generate_synthetic_data",
@@ -142,7 +150,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass as data_id to other tools",
+                    },
                     "n_series": {"type": "integer"},
                     "rows": {"type": "integer"},
                     "cols": {"type": "integer"},
@@ -168,14 +179,19 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "data_id": {"type": "string", "description": "Cache ID — pass as data_id to other tools"},
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass as data_id to other tools",
+                    },
                     "source": {"type": "string"},
                     "rows": {"type": "integer"},
                     "cols": {"type": "integer"},
                 },
                 "required": ["data_id"],
             },
-            annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, openWorldHint=True),
+            annotations=ToolAnnotations(
+                readOnlyHint=False, idempotentHint=False, openWorldHint=True
+            ),
         ),
         Tool(
             name="get_data",
@@ -217,7 +233,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "data_id": {"type": "string", "description": "Cache ID for converted wide-format data"},
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID for converted wide-format data",
+                    },
                     "rows": {"type": "integer"},
                     "cols": {"type": "integer"},
                 },
@@ -252,7 +271,10 @@ try:
             outputSchema={
                 "type": "object",
                 "properties": {
-                    "data_id": {"type": "string", "description": "Cache ID for cleaned data"},
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID for cleaned data",
+                    },
                     "rows": {"type": "integer"},
                     "cols": {"type": "integer"},
                 },

@@ -532,7 +532,9 @@ def _topk_changepoints_from_differences(
         return np.array([], dtype=int)
 
     candidates = np.arange(scores.size, dtype=int) + int(difference_order)
-    valid = (candidates > int(difference_order)) & (candidates < int(n_obs) - int(difference_order))
+    valid = (candidates > int(difference_order)) & (
+        candidates < int(n_obs) - int(difference_order)
+    )
     if not np.any(valid):
         return np.array([], dtype=int)
 
@@ -844,9 +846,7 @@ def _detect_kcpd_changepoints(
     )
     candidate_positions = np.arange(win, n - win + 1, dtype=int)
     left_means = (csum[candidate_positions] - csum[candidate_positions - win]) / win
-    right_means = (
-        csum[candidate_positions + win] - csum[candidate_positions]
-    ) / win
+    right_means = (csum[candidate_positions + win] - csum[candidate_positions]) / win
     diffs = left_means - right_means
     local_scores = np.einsum('ij,ij->i', diffs, diffs)
 
@@ -1272,14 +1272,23 @@ def _wbs2_sample_intervals(segment_start, segment_end, M, interval_sampling, rng
     ends = ends + int(segment_start)
 
     # Ensure the current segment itself is part of the candidate interval set.
-    if starts.size == 0 or not np.any((starts == segment_start) & (ends == segment_end)):
+    if starts.size == 0 or not np.any(
+        (starts == segment_start) & (ends == segment_end)
+    ):
         starts = np.append(starts, int(segment_start))
         ends = np.append(ends, int(segment_end))
 
     return starts.astype(int, copy=False), ends.astype(int, copy=False)
 
 
-def _wbs2_best_split(prefix_sum, segment_start, segment_end, interval_starts, interval_ends, min_segment_length):
+def _wbs2_best_split(
+    prefix_sum,
+    segment_start,
+    segment_end,
+    interval_starts,
+    interval_ends,
+    min_segment_length,
+):
     """
     Evaluate sampled intervals and return the highest absolute CUSUM split.
 
@@ -1561,7 +1570,9 @@ def _detect_wbs2_changepoints(
     if sigma in {None, 'mad', 'auto'}:
         diffs = np.diff(series) / np.sqrt(2.0)
         if diffs.size == 0:
-            return np.array([], dtype=int), _piecewise_mean_from_changepoints(series, [])
+            return np.array([], dtype=int), _piecewise_mean_from_changepoints(
+                series, []
+            )
         med = float(np.median(diffs))
         mad = float(np.median(np.abs(diffs - med)))
         sigma_hat = 1.4826 * mad
@@ -2307,9 +2318,7 @@ def _approximate_l1_trend_filter_batch(
                     x_chunk = _solve_weighted_trend_system_batch(
                         chunk, D, identity, lambda_reg, pilot_weights
                     )
-                adaptive_scale = 1.0 / (
-                    np.abs(x_chunk @ D.T) + 1e-6
-                ) ** adaptive_gamma
+                adaptive_scale = 1.0 / (np.abs(x_chunk @ D.T) + 1e-6) ** adaptive_gamma
                 adaptive_scale = adaptive_scale / (
                     np.mean(adaptive_scale, axis=1, keepdims=True) + 1e-9
                 )
@@ -2418,9 +2427,7 @@ def _extract_changepoints_from_trend_batch(
 
         threshold = mean_diff[idx] + 1.5 * std_diff[idx]
         candidates = np.where(differences[idx] > threshold)[0] + order
-        candidates = candidates[
-            (candidates > order) & (candidates < n - max(2, order))
-        ]
+        candidates = candidates[(candidates > order) & (candidates < n - max(2, order))]
 
         if candidates.size == 0:
             results.append(np.array([], dtype=int))
@@ -2552,7 +2559,11 @@ def _vectorized_l0_detection(names, series_list, method_params, min_segment_leng
         short_indices = np.where(short_mask)[0]
         for idx in short_indices:
             arr = series_list[idx]
-            cp = _simple_threshold_changepoints(arr) if len(arr) >= 3 else np.array([], dtype=int)
+            cp = (
+                _simple_threshold_changepoints(arr)
+                if len(arr) >= 3
+                else np.array([], dtype=int)
+            )
             results[names[idx]] = {
                 'changepoints': cp,
                 'fitted': arr.astype(float, copy=False),
@@ -3471,7 +3482,12 @@ def _approximate_l1_trend_filter(
             for _ in range(pilot_steps):
                 diff = D @ x
                 pilot_weights = 1.0 / (np.abs(diff) + 1e-6)
-                WD = D * np.sqrt(np.maximum(0.0, float(lambda_reg)) * pilot_weights)[:, None]
+                WD = (
+                    D
+                    * np.sqrt(np.maximum(0.0, float(lambda_reg)) * pilot_weights)[
+                        :, None
+                    ]
+                )
                 x = np.linalg.solve(identity + WD.T @ WD, data)
 
             adaptive_scale = 1.0 / (np.abs(D @ x) + 1e-6) ** adaptive_gamma
@@ -4136,9 +4152,7 @@ class ChangepointDetector(object):
                     aggregated_data,
                     lambda_reg=self.method_params.get('lambda_reg', 1.0),
                     difference_order=self.method_params.get('difference_order', 2),
-                    max_changepoints=self.method_params.get(
-                        'max_changepoints', 'auto'
-                    ),
+                    max_changepoints=self.method_params.get('max_changepoints', 'auto'),
                     min_segment_length=self.method_params.get(
                         'min_segment_length', self.min_segment_length
                     ),
@@ -4247,9 +4261,7 @@ class ChangepointDetector(object):
                     sigma=self.method_params.get('sigma', 'mad'),
                     universal=self.method_params.get('universal', True),
                     th_const=self.method_params.get('th_const', None),
-                    th_const_min_mult=self.method_params.get(
-                        'th_const_min_mult', 0.3
-                    ),
+                    th_const_min_mult=self.method_params.get('th_const_min_mult', 0.3),
                     lambda_param=self.method_params.get('lambda_param', 0.9),
                     model_selection=self.method_params.get('model_selection', 'sdll'),
                     threshold=self.method_params.get('threshold', None),
@@ -4578,7 +4590,10 @@ class ChangepointDetector(object):
         # Merge nearby detections.
         merged = list(coarse_cps)
         for cp in fine_cps:
-            if len(coarse_cps) == 0 or np.min(np.abs(coarse_cps - cp)) > merge_tolerance:
+            if (
+                len(coarse_cps) == 0
+                or np.min(np.abs(coarse_cps - cp)) > merge_tolerance
+            ):
                 merged.append(cp)
         merged = np.array(sorted(set(merged)), dtype=int)
         merged = merged[(merged > 1) & (merged < n - 1)]
@@ -5163,18 +5178,20 @@ class ChangepointDetector(object):
                 )[0],
                 'difference_order': random.choices(
                     [1, 2] if new_method == 'l1_fused_lasso' else [2, 3, 4],
-                    weights=[0.85, 0.15]
-                    if new_method == 'l1_fused_lasso'
-                    else [0.75, 0.2, 0.05],
+                    weights=(
+                        [0.85, 0.15]
+                        if new_method == 'l1_fused_lasso'
+                        else [0.75, 0.2, 0.05]
+                    ),
                     k=1,
                 )[0],
                 'adaptive': random.choices([False, True], weights=[0.7, 0.3], k=1)[0],
                 'adaptive_gamma': random.choices(
                     [0.5, 1.0, 1.5], weights=[0.2, 0.65, 0.15], k=1
                 )[0],
-                'irls_iterations': random.choices([3, 4, 5], weights=[0.3, 0.5, 0.2], k=1)[
-                    0
-                ],
+                'irls_iterations': random.choices(
+                    [3, 4, 5], weights=[0.3, 0.5, 0.2], k=1
+                )[0],
             }
 
         elif new_method == 'l0_trend_filter':
@@ -5201,9 +5218,9 @@ class ChangepointDetector(object):
                 'max_changepoints': random.choices(
                     max_cp_options, weights=max_cp_weights, k=1
                 )[0],
-                'htp_iterations': random.choices(
-                    htp_options, weights=htp_weights, k=1
-                )[0],
+                'htp_iterations': random.choices(htp_options, weights=htp_weights, k=1)[
+                    0
+                ],
                 'hard_weight': random.choices(
                     [1000.0, 2500.0, 5000.0], weights=[0.3, 0.5, 0.2], k=1
                 )[0],
@@ -5415,9 +5432,7 @@ class ChangepointDetector(object):
                 'th_const_min_mult': random.choices(
                     min_mult_options, weights=min_mult_weights, k=1
                 )[0],
-                'lambda_param': random.choices([0.9, 0.95], weights=[0.8, 0.2], k=1)[
-                    0
-                ],
+                'lambda_param': random.choices([0.9, 0.95], weights=[0.8, 0.2], k=1)[0],
                 'model_selection': random.choices(
                     ['sdll', 'threshold'], weights=[0.9, 0.1], k=1
                 )[0],

@@ -24,7 +24,9 @@ def resolve_event_dag_params(params=None):
     if params:
         resolved.update(copy.deepcopy(params))
     resolved['enabled'] = bool(resolved.get('enabled', True))
-    families = resolved.get('source_families', DEFAULT_EVENT_DAG_PARAMS['source_families'])
+    families = resolved.get(
+        'source_families', DEFAULT_EVENT_DAG_PARAMS['source_families']
+    )
     if not isinstance(families, (list, tuple)):
         families = DEFAULT_EVENT_DAG_PARAMS['source_families']
     resolved['source_families'] = [str(x) for x in families if x]
@@ -131,9 +133,7 @@ def _extract_record_fields(family, record, step, shared_default=False):
 
     if isinstance(record, dict):
         start_date = pd.Timestamp(record.get('date'))
-        magnitude = _safe_float(
-            record.get('magnitude', record.get('new_slope', 0.0))
-        )
+        magnitude = _safe_float(record.get('magnitude', record.get('new_slope', 0.0)))
         shared_flag = bool(record.get('shared', shared_default))
         subtype = str(
             record.get(
@@ -174,7 +174,9 @@ def _extract_record_fields(family, record, step, shared_default=False):
             magnitude = _safe_float(values[1] if len(values) > 1 else 0.0)
             end_date = start_date
 
-    direction = 'positive' if magnitude > 0 else 'negative' if magnitude < 0 else 'neutral'
+    direction = (
+        'positive' if magnitude > 0 else 'negative' if magnitude < 0 else 'neutral'
+    )
     return {
         'date': start_date,
         'start_date': start_date,
@@ -256,9 +258,7 @@ def _serialize_member_event(event):
 def _finalize_cluster(cluster_events, cluster_id, step):
     start_date = min(pd.Timestamp(x['start_date']) for x in cluster_events)
     end_date = max(pd.Timestamp(x['end_date']) for x in cluster_events)
-    center_ns = int(
-        np.median([pd.Timestamp(x['date']).value for x in cluster_events])
-    )
+    center_ns = int(np.median([pd.Timestamp(x['date']).value for x in cluster_events]))
     center_date = pd.Timestamp(center_ns)
     source_counts = {}
     affected_series = []
@@ -382,7 +382,9 @@ def _build_families(clusters, member_lookup, params, series_names):
     source_families = list(params['source_families'])
     groups = []
     for cluster in clusters:
-        signature = _cluster_signature(cluster, member_lookup, series_names, source_families)
+        signature = _cluster_signature(
+            cluster, member_lookup, series_names, source_families
+        )
         best_idx = None
         best_score = -1.0
         for idx, group in enumerate(groups):
@@ -413,8 +415,12 @@ def _build_families(clusters, member_lookup, params, series_names):
         family_id = f"event_family:{len(event_families)}"
         family_clusters = group['clusters']
         cluster_ids = [cluster['cluster_id'] for cluster in family_clusters]
-        first_date = min(pd.Timestamp(cluster['start_date']) for cluster in family_clusters)
-        last_date = max(pd.Timestamp(cluster['end_date']) for cluster in family_clusters)
+        first_date = min(
+            pd.Timestamp(cluster['start_date']) for cluster in family_clusters
+        )
+        last_date = max(
+            pd.Timestamp(cluster['end_date']) for cluster in family_clusters
+        )
         affected_series = sorted(
             {
                 series_name
@@ -425,7 +431,9 @@ def _build_families(clusters, member_lookup, params, series_names):
         source_counts = {}
         for cluster in family_clusters:
             for source_family, count in cluster.get('source_family_counts', {}).items():
-                source_counts[source_family] = source_counts.get(source_family, 0) + count
+                source_counts[source_family] = (
+                    source_counts.get(source_family, 0) + count
+                )
             family_id_lookup[cluster['cluster_id']] = family_id
             edges.append(
                 {
@@ -493,4 +501,3 @@ def build_event_dag_from_detector(detector):
     dag['event_families'] = event_families
     dag['edges'] = family_edges + cluster_edges
     return dag
-

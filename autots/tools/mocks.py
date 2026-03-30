@@ -1,4 +1,5 @@
 """Fake/local imports for when libraries aren't available, to prevent the whole package from failing to load."""
+
 import math
 import numpy as np
 import pandas as pd

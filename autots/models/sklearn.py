@@ -365,8 +365,7 @@ def rolling_x_regressor_regressor(
         X = X.set_index("series_id", append=True)
     if series_id is not None:
         hashed = (
-            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16)
-            % 10**16
+            int(hashlib.sha256(str(series_id).encode('utf-8')).hexdigest(), 16) % 10**16
         )
         X['series_id'] = hashed
     return X
@@ -2891,6 +2890,7 @@ class MultivariateRegression(ModelObject):
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
+
         def get_max_val(x):
             if isinstance(x, (int, float)):
                 return x
@@ -3160,7 +3160,7 @@ class MultivariateRegression(ModelObject):
 
             # Remove near-constant and redundant columns to prevent slow optimization
             X_arr = self.X.to_numpy()
-            
+
             # Clip extreme values that cause precision/overflow issues in splitters
             X_arr = np.clip(X_arr, -1e12, 1e12)
             if np.any(np.isinf(X_arr)):
@@ -3198,10 +3198,10 @@ class MultivariateRegression(ModelObject):
                 if X_arr.shape[1] > 1 and X_arr.shape[1] < 10000:
                     mask_indices = np.where(self._nonzero_var_mask)[0]
                     X_subset = X_arr[:, self._nonzero_var_mask]
-                    
+
                     # 1. Near-duplicate removal via rounding to catch floating point noise
                     is_dupe = pd.DataFrame(X_subset).T.round(10).duplicated().to_numpy()
-                    
+
                     # 2. Highly correlated feature removal (for non-linear models)
                     # For moderate feature counts, remove almost perfectly correlated features (e.g. > 0.9999)
                     if X_subset.shape[1] > 1 and X_subset.shape[1] < 2000:
@@ -3212,7 +3212,7 @@ class MultivariateRegression(ModelObject):
                             is_dupe = is_dupe | is_corr
                         except Exception:
                             pass
-                    
+
                     if np.any(is_dupe):
                         # update existing mask
                         self._nonzero_var_mask[mask_indices[is_dupe]] = False
@@ -3446,10 +3446,10 @@ class MultivariateRegression(ModelObject):
                 c_x_pred = self.scale_data(self.X_pred).to_numpy()
             else:
                 c_x_pred = self.X_pred.to_numpy()
-            
+
             # Apply same preprocessing as during fit
             c_x_pred = np.clip(c_x_pred, -1e12, 1e12)
-            
+
             # Apply same zero-variance column filtering as during fit
             if self._nonzero_var_mask is not None:
                 c_x_pred = c_x_pred[:, self._nonzero_var_mask]
@@ -3596,11 +3596,17 @@ class MultivariateRegression(ModelObject):
             add_date_part_choice = random_datepart(method=method)
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
-        if model_choice.get("model", None) in ["MLP", "ExtraTrees", "HistGradientBoost"]:
+        if model_choice.get("model", None) in [
+            "MLP",
+            "ExtraTrees",
+            "HistGradientBoost",
+        ]:
             polynomial_degree_choice = None
         # expanded_binarized creates 58+ features per series; too slow for MLP predict loop
         if model_choice.get("model", None) == "MLP":
-            if isinstance(add_date_part_choice, str) and "expanded_binarized" in str(add_date_part_choice):
+            if isinstance(add_date_part_choice, str) and "expanded_binarized" in str(
+                add_date_part_choice
+            ):
                 add_date_part_choice = "common_fourier"
         if "regressor" in method:
             regression_choice = "User"
@@ -3768,9 +3774,7 @@ class VectorizedMultiOutputGPR:
         if gamma is None:
             gamma = 1.0 / x1.shape[1]
         distance = (
-            np.sum(x1**2, 1).reshape(-1, 1)
-            + np.sum(x2**2, 1)
-            - 2 * np.dot(x1, x2.T)
+            np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         )
         return np.exp(-gamma * distance)
 

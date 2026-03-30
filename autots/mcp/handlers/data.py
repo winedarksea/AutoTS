@@ -1,4 +1,5 @@
 """Handlers for cache management and data loading/conversion tools."""
+
 import json
 
 import pandas as pd
@@ -19,6 +20,7 @@ from autots.tools.transform import GeneralTransformer
 
 try:
     from mcp.types import TextContent
+
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -38,7 +40,9 @@ from autots.mcp.data_utils import (
 
 async def handle_list_cache(arguments: dict, log_progress) -> list:
     cache_info = list_all_cached_objects()
-    return [TextContent(type="text", text=json.dumps(cache_info, separators=(',', ':')))]
+    return [
+        TextContent(type="text", text=json.dumps(cache_info, separators=(',', ':')))
+    ]
 
 
 async def handle_clear_cache(arguments: dict, log_progress) -> dict:
@@ -172,10 +176,14 @@ async def handle_get_data(arguments: dict, log_progress) -> list:
         filepath = dataframe_to_output(df, output_format)
         is_long = output_format == "csv_long"
         metadata = build_csv_metadata(filepath, df, is_long)
-        return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+        return [
+            TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))
+        ]
     else:
         result = dataframe_to_output(df, output_format)
-        return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+        return [
+            TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
+        ]
 
 
 async def handle_convert_long_to_wide(arguments: dict, log_progress) -> dict:

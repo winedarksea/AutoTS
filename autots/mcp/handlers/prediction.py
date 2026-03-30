@@ -1,4 +1,5 @@
 """Handlers for retrieving and modifying cached predictions and AutoTS model results."""
+
 import base64
 import copy
 import io
@@ -11,6 +12,7 @@ import pandas as pd
 
 try:
     import matplotlib
+
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 except ImportError:
@@ -18,6 +20,7 @@ except ImportError:
 
 try:
     from mcp.types import TextContent, ImageContent
+
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -52,7 +55,10 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
         df_forecast_long['forecast_type'] = 'point'
         dfs_to_combine.append(df_forecast_long)
 
-        if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None:
+        if (
+            hasattr(prediction, 'upper_forecast')
+            and prediction.upper_forecast is not None
+        ):
             df_upper = prediction.upper_forecast.copy()
             df_upper.index = df_upper.index.strftime('%Y-%m-%d %H:%M:%S')
             df_upper_long = df_upper.reset_index().melt(
@@ -66,7 +72,10 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
             df_upper_long['forecast_type'] = 'upper'
             dfs_to_combine.append(df_upper_long)
 
-        if hasattr(prediction, 'lower_forecast') and prediction.lower_forecast is not None:
+        if (
+            hasattr(prediction, 'lower_forecast')
+            and prediction.lower_forecast is not None
+        ):
             df_lower = prediction.lower_forecast.copy()
             df_lower.index = df_lower.index.strftime('%Y-%m-%d %H:%M:%S')
             df_lower_long = df_lower.reset_index().melt(
@@ -92,7 +101,10 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
             metadata = {
                 'filepath': filepath,
                 'format': 'long_with_forecast_type',
-                'shape': {'rows': len(df_combined), 'columns': len(df_combined.columns)},
+                'shape': {
+                    'rows': len(df_combined),
+                    'columns': len(df_combined.columns),
+                },
                 'columns': ['datetime', 'series_id', 'forecast_type', 'value'],
                 'forecast_types': df_combined['forecast_type'].unique().tolist(),
                 'loading_instructions': {
@@ -101,10 +113,16 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
                     'autots_mcp': f"Use load_to_dataframe('{filepath}') then pivot on forecast_type if needed",
                 },
             }
-            return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+            return [
+                TextContent(
+                    type="text", text=json.dumps(metadata, separators=(',', ':'))
+                )
+            ]
         else:
             result = df_combined.to_dict(orient='list')
-            return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+            return [
+                TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
+            ]
 
     elif output == "forecast":
         df = prediction.forecast
@@ -119,10 +137,14 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
         filepath_out = str(dataframe_to_output(df, format_type))
         is_long = format_type == "csv_long"
         metadata = build_csv_metadata(filepath_out, df, is_long)
-        return [TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))]
+        return [
+            TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))
+        ]
     else:
         result = dataframe_to_output(df, format_type)
-        return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+        return [
+            TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
+        ]
 
 
 async def handle_plot_forecast(arguments: dict, log_progress) -> list:
@@ -161,10 +183,14 @@ async def handle_plot_forecast(arguments: dict, log_progress) -> list:
 
     if history_df is not None:
         for col in series_names:
-            ax.plot(history_df.index, history_df[col], label=f'{col} (history)', alpha=0.7)
+            ax.plot(
+                history_df.index, history_df[col], label=f'{col} (history)', alpha=0.7
+            )
 
     for col in series_names:
-        ax.plot(forecast_df.index, forecast_df[col], label=f'{col} (forecast)', linewidth=2)
+        ax.plot(
+            forecast_df.index, forecast_df[col], label=f'{col} (forecast)', linewidth=2
+        )
 
     if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None:
         for col in series_names:
@@ -176,7 +202,9 @@ async def handle_plot_forecast(arguments: dict, log_progress) -> list:
             )
 
     ax.set_title(
-        f'Forecast ({len(series_names)} series)' if len(series_names) > 1 else f'Forecast: {series_names[0]}'
+        f'Forecast ({len(series_names)} series)'
+        if len(series_names) > 1
+        else f'Forecast: {series_names[0]}'
     )
     ax.set_xlabel('Date')
     ax.set_ylabel('Value')
@@ -270,12 +298,18 @@ async def handle_apply_adjustments(arguments: dict, log_progress) -> dict:
         adjustment_params=adjustment_params,
         df_train=df_train,
         series_ids=series_ids,
-        lower_forecast=prediction.lower_forecast.copy()
-        if hasattr(prediction, 'lower_forecast') and prediction.lower_forecast is not None
-        else None,
-        upper_forecast=prediction.upper_forecast.copy()
-        if hasattr(prediction, 'upper_forecast') and prediction.upper_forecast is not None
-        else None,
+        lower_forecast=(
+            prediction.lower_forecast.copy()
+            if hasattr(prediction, 'lower_forecast')
+            and prediction.lower_forecast is not None
+            else None
+        ),
+        upper_forecast=(
+            prediction.upper_forecast.copy()
+            if hasattr(prediction, 'upper_forecast')
+            and prediction.upper_forecast is not None
+            else None
+        ),
     )
 
     new_prediction = copy.deepcopy(prediction)
@@ -353,23 +387,33 @@ async def handle_get_forecast_components(arguments: dict, log_progress) -> list:
                     "format": "simple",
                     "components": dataframe_to_output(components_df, "json_wide"),
                 }
-            return [TextContent(type="text", text=json.dumps(result, separators=(',', ':')))]
+            return [
+                TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
+            ]
         else:
-            return [TextContent(
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "error": f"Components has unexpected type: {type(components_df)}"
+                        },
+                        separators=(',', ':'),
+                    ),
+                )
+            ]
+    else:
+        return [
+            TextContent(
                 type="text",
                 text=json.dumps(
-                    {"error": f"Components has unexpected type: {type(components_df)}"},
+                    {
+                        "error": "Components not available for this model type. Only certain models (Cassandra, TVVAR) provide component decomposition."
+                    },
                     separators=(',', ':'),
                 ),
-            )]
-    else:
-        return [TextContent(
-            type="text",
-            text=json.dumps(
-                {"error": "Components not available for this model type. Only certain models (Cassandra, TVVAR) provide component decomposition."},
-                separators=(',', ':'),
-            ),
-        )]
+            )
+        ]
 
 
 async def handle_get_validation_results(arguments: dict, log_progress) -> list:
@@ -380,10 +424,12 @@ async def handle_get_validation_results(arguments: dict, log_progress) -> list:
     metadata = cached.get('metadata', {})
 
     if not hasattr(model, 'results'):
-        return [TextContent(
-            type="text",
-            text=json.dumps({"error": "No validation results available"}, indent=2),
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps({"error": "No validation results available"}, indent=2),
+            )
+        ]
 
     results_df = model.results()
 
@@ -400,15 +446,32 @@ async def handle_get_validation_results(arguments: dict, log_progress) -> list:
             'smape': float(row.get('smape', 0)) if pd.notna(row.get('smape')) else None,
             'mae': float(row.get('mae', 0)) if pd.notna(row.get('mae')) else None,
             'rmse': float(row.get('rmse', 0)) if pd.notna(row.get('rmse')) else None,
-            'runtime_seconds': float(row.get('TotalRuntimeSeconds', 0)) if pd.notna(row.get('TotalRuntimeSeconds')) else None,
-            'validation_round': int(row.get('ValidationRound', 0)) if pd.notna(row.get('ValidationRound')) else None,
+            'runtime_seconds': (
+                float(row.get('TotalRuntimeSeconds', 0))
+                if pd.notna(row.get('TotalRuntimeSeconds'))
+                else None
+            ),
+            'validation_round': (
+                int(row.get('ValidationRound', 0))
+                if pd.notna(row.get('ValidationRound'))
+                else None
+            ),
         }
         for col in results_df.columns:
-            if col not in ['Model', 'smape', 'mae', 'rmse', 'TotalRuntimeSeconds', 'ValidationRound']:
+            if col not in [
+                'Model',
+                'smape',
+                'mae',
+                'rmse',
+                'TotalRuntimeSeconds',
+                'ValidationRound',
+            ]:
                 val = row.get(col)
                 if pd.notna(val):
                     try:
-                        model_info[col] = float(val) if isinstance(val, (int, float)) else str(val)
+                        model_info[col] = (
+                            float(val) if isinstance(val, (int, float)) else str(val)
+                        )
                     except Exception:
                         model_info[col] = str(val)
         top_models.append(model_info)
@@ -425,7 +488,10 @@ async def handle_get_validation_results(arguments: dict, log_progress) -> list:
 
     df_wide = getattr(model, "df_wide_numeric", None)
     if df_wide is not None:
-        train_info['train_shape'] = {'rows': df_wide.shape[0], 'columns': df_wide.shape[1]}
+        train_info['train_shape'] = {
+            'rows': df_wide.shape[0],
+            'columns': df_wide.shape[1],
+        }
         train_info['date_range'] = {
             'start': df_wide.index[0].strftime('%Y-%m-%d'),
             'end': df_wide.index[-1].strftime('%Y-%m-%d'),

@@ -80,9 +80,11 @@ if HAS_TORCH:
                 t_centered = trend_flat - trend_flat.mean(dim=-1, keepdim=True)
                 c_centered = comp_flat - comp_flat.mean(dim=-1, keepdim=True)
                 num = (t_centered * c_centered).sum(dim=-1)
-                den = (t_centered.norm(dim=-1) * c_centered.norm(dim=-1)).clamp(min=1e-8)
+                den = (t_centered.norm(dim=-1) * c_centered.norm(dim=-1)).clamp(
+                    min=1e-8
+                )
                 corr = num / den
-                penalty = penalty + (corr ** 2).mean()
+                penalty = penalty + (corr**2).mean()
 
             return self.penalty_weight * penalty
 
@@ -128,8 +130,12 @@ if HAS_TORCH:
             if composite_trend.shape[-1] < 3:
                 return torch.tensor(0.0, device=composite_trend.device)
             # second-order differences
-            d2 = composite_trend[..., 2:] - 2 * composite_trend[..., 1:-1] + composite_trend[..., :-2]
-            return self.penalty_weight * (d2 ** 2).mean()
+            d2 = (
+                composite_trend[..., 2:]
+                - 2 * composite_trend[..., 1:-1]
+                + composite_trend[..., :-2]
+            )
+            return self.penalty_weight * (d2**2).mean()
 
     class SoftPriorLoss(nn.Module):
         """Keeps learned adjacency near the event-cluster / business-prior structure.
@@ -166,12 +172,16 @@ if HAS_TORCH:
                 if prior_adjacency.ndim == 2 and m > 0:
                     # resize prior to latent space by adaptive avg pooling
                     # unsqueeze to (1, 1, M_prior, M_prior) for interpolation
-                    prior_resized = F.interpolate(
-                        prior_adjacency.unsqueeze(0).unsqueeze(0).float(),
-                        size=(m, m),
-                        mode='bilinear',
-                        align_corners=False,
-                    ).squeeze(0).squeeze(0)
+                    prior_resized = (
+                        F.interpolate(
+                            prior_adjacency.unsqueeze(0).unsqueeze(0).float(),
+                            size=(m, m),
+                            mode='bilinear',
+                            align_corners=False,
+                        )
+                        .squeeze(0)
+                        .squeeze(0)
+                    )
                     prior_adjacency = prior_resized
                 else:
                     return torch.tensor(0.0, device=learned_adjacency.device)
@@ -306,7 +316,9 @@ if HAS_TORCH:
                 # composite (via MSE); allowing gradients through anchor_strength
                 # would let the optimizer collapse _sacred_timeline_prototypes → 0
                 # to zero-out the gate — the same degenerate flat solution.
-                anchor_dir = self._trend_direction(composite_per_series.detach())  # (B, N)
+                anchor_dir = self._trend_direction(
+                    composite_per_series.detach()
+                )  # (B, N)
                 # Gate by anchor strength: when the composite is near-flat
                 # (anchor_dir ≈ 0) the penalty vanishes, preventing the degenerate
                 # case where a flat anchor actively suppresses trend diversity.
@@ -333,7 +345,9 @@ if HAS_TORCH:
                 consensus_strength = consensus.abs()
                 deviation = (soft_dir - consensus) ** 2
                 weighted_dev = (w_k * deviation).sum(dim=-1)
-                penalty = penalty + (consensus_strength.squeeze(-1) * weighted_dev).mean()
+                penalty = (
+                    penalty + (consensus_strength.squeeze(-1) * weighted_dev).mean()
+                )
             return self.penalty_weight * penalty / max(K, 1)
 
     class TemporalLossComposite(nn.Module):
@@ -501,21 +515,23 @@ if HAS_TORCH:
                     loss_rank = (
                         structure_loss_scale
                         * float(
-                            getattr(structure_config, 'assignment_full_rank_weight', 0.0)
+                            getattr(
+                                structure_config, 'assignment_full_rank_weight', 0.0
+                            )
                         )
                         * assignment_full_rank_penalty(assignments)
                     )
                     breakdown['assignment_full_rank'] = loss_rank.item()
                     total = total + loss_rank
 
-                if outputs.get('structure_prior') is not None and structure_prior_weight > 0:
-                    loss_structure_prior = (
-                        structure_loss_scale
-                        * self.structure_prior(
-                            outputs['adjacency'],
-                            outputs['structure_prior'],
-                            prior_confidence=structure_prior_weight,
-                        )
+                if (
+                    outputs.get('structure_prior') is not None
+                    and structure_prior_weight > 0
+                ):
+                    loss_structure_prior = structure_loss_scale * self.structure_prior(
+                        outputs['adjacency'],
+                        outputs['structure_prior'],
+                        prior_confidence=structure_prior_weight,
                     )
                     breakdown['structure_prior'] = loss_structure_prior.item()
                     total = total + loss_structure_prior

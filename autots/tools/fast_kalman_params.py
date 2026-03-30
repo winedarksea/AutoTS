@@ -1,6 +1,7 @@
 """
 Generate random state-space model parameters paired with fast_kalman.py.
 """
+
 import random
 import numpy as np
 
@@ -206,7 +207,9 @@ def new_kalman_params(method=None, allow_auto=True):
     elif method == "superfast":
         em_iter = None
     elif method == "deep":
-        em_iter = random.choices([None, 10, 20, 50, 100], [0.5, 0.4, 0.05, 0.04, 0.01])[0]
+        em_iter = random.choices([None, 10, 20, 50, 100], [0.5, 0.4, 0.05, 0.04, 0.01])[
+            0
+        ]
     else:
         em_iter = random.choices(
             [

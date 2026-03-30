@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-P2KLF8302E"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-P2KLF8302E');
+    </script>
+    
+    <title>autots.evaluator.feature_detector package &#8212; AutoTS 1.0.2 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="autots.evaluator.feature_detector.components package" href="autots.evaluator.feature_detector.components.html" />
+    <link rel="prev" title="autots.evaluator package" href="autots.evaluator.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="autots-evaluator-feature-detector-package">
+<h1>autots.evaluator.feature_detector package<a class="headerlink" href="#autots-evaluator-feature-detector-package" title="Link to this heading">¶</a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="autots.evaluator.feature_detector.components.html">autots.evaluator.feature_detector.components package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.anomalies">autots.evaluator.feature_detector.components.anomalies module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.decomposition">autots.evaluator.feature_detector.components.decomposition module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.holidays">autots.evaluator.feature_detector.components.holidays module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.seasonality">autots.evaluator.feature_detector.components.seasonality module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.trend">autots.evaluator.feature_detector.components.trend module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="docutils literal notranslate"><span class="pre">TrendMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html">autots.evaluator.feature_detector.loss package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.base">autots.evaluator.feature_detector.loss.base module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.base.FeatureDetectionLoss"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.base.FeatureDetectionLoss.DEFAULT_WEIGHTS"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.DEFAULT_WEIGHTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.base.FeatureDetectionLoss.INVALID_LOSS_PENALTY"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.INVALID_LOSS_PENALTY</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.base.FeatureDetectionLoss.calculate_loss"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.calculate_loss()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.evaluators">autots.evaluator.feature_detector.loss.evaluators module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.evaluators.LossEvaluatorsMixin"><code class="docutils literal notranslate"><span class="pre">LossEvaluatorsMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.metrics">autots.evaluator.feature_detector.loss.metrics module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.metrics.LossMetricsMixin"><code class="docutils literal notranslate"><span class="pre">LossMetricsMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.reconstruction">autots.evaluator.feature_detector.loss.reconstruction module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.reconstruction.ReconstructionLoss"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.reconstruction.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss.DEFAULT_METRIC_WEIGHTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.reconstruction.ReconstructionLoss.calculate_loss"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss.calculate_loss()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss">Module contents</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.FeatureDetectionLoss"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.FeatureDetectionLoss.DEFAULT_WEIGHTS"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.DEFAULT_WEIGHTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.FeatureDetectionLoss.INVALID_LOSS_PENALTY"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.INVALID_LOSS_PENALTY</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.FeatureDetectionLoss.calculate_loss"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.calculate_loss()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.ReconstructionLoss"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss.DEFAULT_METRIC_WEIGHTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.ReconstructionLoss.calculate_loss"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss.calculate_loss()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html">autots.evaluator.feature_detector.utils package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.formatting">autots.evaluator.feature_detector.utils.formatting module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.rescaling">autots.evaluator.feature_detector.utils.rescaling module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-autots.evaluator.feature_detector.detector">
+<span id="autots-evaluator-feature-detector-detector-module"></span><h2>autots.evaluator.feature_detector.detector module<a class="headerlink" href="#module-autots.evaluator.feature_detector.detector" title="Link to this heading">¶</a></h2>
+<p>TimeSeriesFeatureDetector - Main orchestrator class.</p>
+<p>Composes functionality from component mixins for decomposition,
+seasonality, trend, holidays, anomalies, rescaling, and formatting.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_holiday_anomaly_suppression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extended_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_dag_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_country</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_countries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin" title="autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin" title="autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin" title="autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin" title="autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a>, <a class="reference internal" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin" title="autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></p>
+<p>Comprehensive feature detection pipeline for time series.</p>
+<p>TODO: upstream more of this code into the component classes (e.g., HolidayDetector, AnomalyRemoval, ChangepointDetector)
+TODO: Handle multiplicative seasonality
+TODO: Handle time varying seasonality using fast_kalman
+TODO: Improve holiday “splash” effect and weekend interactions
+TODO: Support identifying regressor impacts and granger lag impacts
+TODO: Build upon the JSON template so that it can be converted to a fixed size embedding (probably a 2d embedding). The fixed size may vary by parameters, but for a given parameter set should always be the same size. The embedding does not need to be capable of fully reconstructing the time series, just representing it.
+TODO: Support for modeling the trend with a fast kalman state space approach, ideally aligned with changepoints in some way if possible.
+TODO: consider also having “deviation from group” type anomaly detection for multivariate series
+TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
+TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.</p>
+<blockquote>
+<div><p>Parameters</p>
+</div></blockquote>
+<dl>
+<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p>
+</dd>
+<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
+</dd>
+<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
+</dd>
+<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
+</dd>
+<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
+</dd>
+<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
+</dd>
+<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
+</dd>
+<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
+</dd>
+<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
+</dd>
+<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
+shared across all series (‘univariate’).
+- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
+- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
+<blockquote>
+<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
+</div></blockquote>
+</dd>
+<dt>global_holiday_anomaly_suppression<span class="classifier">bool, default=True</span></dt><dd><p>If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
+date set from all series. Set False to disable this suppression.</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION">
+<span class="sig-name descname"><span class="pre">TEMPLATE_VERSION</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'1.2'</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.fit" title="Link to this definition">¶</a></dt>
+<dd><p>Fit the feature detector to time series data.</p>
+<p>Decomposition follows this sequential removal strategy:</p>
+<ol class="arabic simple">
+<li><p>INITIAL DECOMPOSITION (for detection only):
+- Remove rough seasonality → rough_residual
+- Detect holidays on rough_residual
+- Detect anomalies on rough_residual</p></li>
+<li><p>FINAL SEASONALITY FIT:
+- Fit on: original - anomalies
+- Holidays fitted simultaneously as regressors
+- Output: final_residual (has seasonality + holidays removed)</p></li>
+<li><p>LEVEL SHIFT DETECTION:
+- Detect on: original - anomalies - seasonality - holidays
+- (This is final_residual)</p></li>
+<li><p>TREND DETECTION:
+- Detect on: original - anomalies - seasonality - holidays - level_shifts</p></li>
+<li><p>NOISE &amp; ANOMALY COMPONENTS:
+- Noise: original - trend - level_shifts - seasonality - holidays - anomalies
+- Anomalies: difference between original and de-anomalied version</p></li>
+</ol>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.forecast">
+<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
+<dd><p>Generate a simple forward projection similar to BasicLinearModel.
+This detector is not optimized for forecasting; dedicated forecasting models may provide better results.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_cleaned_data">
+<span class="sig-name descname"><span class="pre">get_cleaned_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_cleaned_data" title="Link to this definition">¶</a></dt>
+<dd><p>Return cleaned time series data with anomalies, noise, and level shifts removed.</p>
+<p>The cleaned data consists of:
+- Trend (with mean included)
+- Seasonality
+- Holiday effects</p>
+<p>Level shifts are corrected by removing the cumulative shift effect, returning
+the data to its baseline level. Anomalies and noise are excluded entirely.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, return cleaned data for only this series.
+If None, return cleaned data for all series.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Cleaned time series data with the same index as the original data.
+If series_name is specified, returns a DataFrame with a single column.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>RuntimeError</strong> – If fit() has not been called yet.</p></li>
+<li><p><strong>ValueError</strong> – If series_name is provided but not found in the original data.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span> <span class="o">=</span> <span class="n">TimeSeriesFeatureDetector</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cleaned</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">get_cleaned_data</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cleaned_single</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">get_cleaned_data</span><span class="p">(</span><span class="s1">&#39;series_1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_detected_features">
+<span class="sig-name descname"><span class="pre">get_detected_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_detected_features" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_event_dag">
+<span class="sig-name descname"><span class="pre">get_event_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_event_dag" title="Link to this definition">¶</a></dt>
+<dd><p>Return Event DAG metadata derived from detector outputs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_new_params">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_new_params" title="Link to this definition">¶</a></dt>
+<dd><p>Sample random parameters for detector optimization.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_template">
+<span class="sig-name descname"><span class="pre">get_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_template" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.plot">
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">14)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_noise_anomaly_panels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_seasonality_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_trend_level_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.plot" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.plot_event_dag">
+<span class="sig-name descname"><span class="pre">plot_event_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(14,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.plot_event_dag" title="Link to this definition">¶</a></dt>
+<dd><p>Plot Event DAG macro-events on a timeline-first layout.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.query_features">
+<span class="sig-name descname"><span class="pre">query_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_event_dag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_event_members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_json</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.query_features" title="Link to this definition">¶</a></dt>
+<dd><p>Query a specific slice of detected features with minimal token usage.</p>
+<p>Designed for LLM-friendly output with compact representation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>str</em><em>, </em><em>datetime</em><em>, </em><em>list</em><em>, </em><em>slice</em>) – Date(s) to query for features.
+- Single date: “2024-01-15” or datetime object
+- Date range: slice(“2024-01-01”, “2024-01-31”)
+- List of dates: [“2024-01-15”, “2024-01-20”]
+- None: return all features (not filtered by date)</p></li>
+<li><p><strong>series</strong> (<em>str</em><em>, </em><em>list</em>) – Series name(s) to query.
+- Single series: “sales”
+- Multiple series: [“sales”, “revenue”]
+- None: all series</p></li>
+<li><p><strong>include_components</strong> (<em>bool</em>) – Include component time series values for the date range</p></li>
+<li><p><strong>include_metadata</strong> (<em>bool</em>) – Include metadata like noise levels, scales, etc.</p></li>
+<li><p><strong>include_event_dag</strong> (<em>bool</em>) – Include Event DAG cluster and family metadata</p></li>
+<li><p><strong>include_event_members</strong> (<em>bool</em>) – Include raw Event DAG member events</p></li>
+<li><p><strong>return_json</strong> (<em>bool</em>) – Return JSON string instead of dict</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>Compact feature data including anomalies, changepoints,</dt><dd><p>level shifts, holidays, and optionally components</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict or str</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get all features for one series</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span><span class="n">series</span><span class="o">=</span><span class="s2">&quot;sales&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get features occurring in a date range</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">dates</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="s2">&quot;2024-01-01&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-31&quot;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">series</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;revenue&quot;</span><span class="p">]</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get components for specific dates</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">dates</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;2024-01-15&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-16&quot;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">series</span><span class="o">=</span><span class="s2">&quot;sales&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">include_components</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.render_template">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">render_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.render_template" title="Link to this definition">¶</a></dt>
+<dd><p>Render a feature detection template back into time series data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.summary">
+<span class="sig-name descname"><span class="pre">summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.summary" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.tune_with_synthetic">
+<span class="sig-name descname"><span class="pre">tune_with_synthetic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">real_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_synthetic_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_tune_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_detector_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tune_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">synthetic_starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.tune_with_synthetic" title="Link to this definition">¶</a></dt>
+<dd><p>Tune synthetic data to a real dataset, optimize detector params, and fit self.</p>
+<p>After completion, this instance is fitted on <code class="docutils literal notranslate"><span class="pre">real_df</span></code> with the optimized
+detector parameters and stores optimization artifacts on the instance.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector.event_dag">
+<span id="autots-evaluator-feature-detector-event-dag-module"></span><h2>autots.evaluator.feature_detector.event_dag module<a class="headerlink" href="#module-autots.evaluator.feature_detector.event_dag" title="Link to this heading">¶</a></h2>
+<p>Event DAG utilities for TimeSeriesFeatureDetector.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.event_dag.build_event_dag_from_detector">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.event_dag.</span></span><span class="sig-name descname"><span class="pre">build_event_dag_from_detector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">detector</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.event_dag.build_event_dag_from_detector" title="Link to this definition">¶</a></dt>
+<dd><p>Build an Event DAG from detector public event outputs.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.event_dag.empty_event_dag">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.event_dag.</span></span><span class="sig-name descname"><span class="pre">empty_event_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">construction_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'full'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.event_dag.empty_event_dag" title="Link to this definition">¶</a></dt>
+<dd><p>Return a valid empty Event DAG container.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.event_dag.resolve_event_dag_params">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.event_dag.</span></span><span class="sig-name descname"><span class="pre">resolve_event_dag_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.event_dag.resolve_event_dag_params" title="Link to this definition">¶</a></dt>
+<dd><p>Return normalized Event DAG params.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector.event_dag_view">
+<span id="autots-evaluator-feature-detector-event-dag-view-module"></span><h2>autots.evaluator.feature_detector.event_dag_view module<a class="headerlink" href="#module-autots.evaluator.feature_detector.event_dag_view" title="Link to this heading">¶</a></h2>
+<p>Event DAG filtering and plotting helpers.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.event_dag_view.filter_event_dag">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.event_dag_view.</span></span><span class="sig-name descname"><span class="pre">filter_event_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event_dag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.event_dag_view.filter_event_dag" title="Link to this definition">¶</a></dt>
+<dd><p>Filter an Event DAG view by series and date range.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.event_dag_view.plot_event_dag_timeline">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.event_dag_view.</span></span><span class="sig-name descname"><span class="pre">plot_event_dag_timeline</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event_dag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(14,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.event_dag_view.plot_event_dag_timeline" title="Link to this definition">¶</a></dt>
+<dd><p>Render a timeline-first Event DAG view.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector.extended_anomaly">
+<span id="autots-evaluator-feature-detector-extended-anomaly-module"></span><h2>autots.evaluator.feature_detector.extended_anomaly module<a class="headerlink" href="#module-autots.evaluator.feature_detector.extended_anomaly" title="Link to this heading">¶</a></h2>
+<p>ExtendedAnomalyDetector - Two-pass anomaly detector for multi-day patterns.</p>
+<p>Pass 1: Point anomaly proposals via AnomalyRemoval.
+Pass 2: Extended/multi-day pattern detection:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>CUSUM (sustained mean shift for noisy_burst / transient_change)</p></li>
+<li><p>Cumulative-sum template matching (slope_reversion onset + hold + reversion)</p></li>
+<li><p>Decay extension of pass-1 points (impulse_decay / linear_decay)</p></li>
+<li><p>Segmented sliding-window mean shift (noisy_burst / transient_change)</p></li>
+</ul>
+</div></blockquote>
+<p>Can be used standalone or embedded in TimeSeriesFeatureDetector via ExtendedAnomalyMixin.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.extended_anomaly.</span></span><span class="sig-name descname"><span class="pre">ExtendedAnomalyDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">point_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_baseline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cusum_k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cusum_h</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_min_hold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_min_reversion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_cumsum_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_max_duration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">84</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_lookahead</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">14</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_fit_min_r2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_segment_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_hysteresis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">segment_max_gap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">merge_distance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_anomalies_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Two-pass anomaly detector combining point detection with multi-day pattern detection.</p>
+<p>Pass 1 produces point-level proposals via AnomalyRemoval (optional if
+<code class="docutils literal notranslate"><span class="pre">pass1_records</span></code> are provided externally).</p>
+<p>Pass 2 runs four independent detection methods on a clean residual:
+- <strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.
+- <strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for</p>
+<blockquote>
+<div><p>slow onset → hold → reversion patterns.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p><strong>Decay extension</strong>: extends pass-1 point detections with exponential or
+linear decay tails.</p></li>
+<li><p><strong>Segmented mean shift</strong>: sliding-window mean comparison against a rolling
+baseline.</p></li>
+</ul>
+<p>All per-series events are then merged and de-duplicated into a final list
+that preserves <code class="docutils literal notranslate"><span class="pre">start_date</span></code>, <code class="docutils literal notranslate"><span class="pre">end_date</span></code>, <code class="docutils literal notranslate"><span class="pre">duration</span></code>, <code class="docutils literal notranslate"><span class="pre">type</span></code>,
+<code class="docutils literal notranslate"><span class="pre">magnitude</span></code>, and <code class="docutils literal notranslate"><span class="pre">score</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>point_anomaly_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Keyword arguments forwarded to <a class="reference internal" href="autots.tools.html#autots.tools.transform.AnomalyRemoval" title="autots.tools.transform.AnomalyRemoval"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyRemoval</span></code></a>
+for pass-1 point detection.  If <em>None</em> a conservative rolling-zscore
+detector is used.</p></li>
+<li><p><strong>sustained_window</strong> (<em>int</em>) – Short rolling window (days) used by the segmented-shift and CUSUM
+detectors to compute local means.</p></li>
+<li><p><strong>sustained_baseline</strong> (<em>int</em>) – Longer window used to estimate the baseline mean and standard deviation.</p></li>
+<li><p><strong>sustained_threshold</strong> (<em>float</em>) – Standardized deviation threshold (in units of baseline σ) above which a
+window is considered anomalous.</p></li>
+<li><p><strong>cusum_k</strong> (<em>float</em>) – CUSUM allowance parameter (slack / half-width) in standardized units.
+Smaller values are more sensitive.</p></li>
+<li><p><strong>cusum_h</strong> (<em>float</em>) – CUSUM decision threshold.  An alarm fires when the accumulated statistic
+exceeds this value.</p></li>
+<li><p><strong>slope_reversion_min_hold</strong> (<em>int</em>) – Minimum number of days that the cumulative sum must stay elevated before
+a slope-reversion event is flagged.</p></li>
+<li><p><strong>slope_reversion_min_reversion</strong> (<em>int</em>) – Minimum number of days the reversion phase must last.</p></li>
+<li><p><strong>slope_reversion_cumsum_threshold</strong> (<em>float</em>) – Minimum peak z-score of the cumulative sum (relative to its rolling σ)
+required to trigger a slope-reversion candidate.</p></li>
+<li><p><strong>slope_reversion_max_duration</strong> (<em>int</em>) – Maximum allowed duration (days) for slope-reversion events. Longer
+candidates are treated as structural drift and ignored.</p></li>
+<li><p><strong>decay_lookahead</strong> (<em>int</em>) – Number of days to inspect after a pass-1 peak for a decay tail.</p></li>
+<li><p><strong>decay_fit_min_r2</strong> (<em>float</em>) – Minimum R² required for a decay template fit to extend a point event.</p></li>
+<li><p><strong>min_segment_run</strong> (<em>int</em>) – Minimum number of consecutive elevated windows required by the
+segmented-shift detector to form an event.</p></li>
+<li><p><strong>sustained_hysteresis</strong> (<em>float</em>) – Fraction of <code class="docutils literal notranslate"><span class="pre">sustained_threshold</span></code> used to keep an in-progress
+segmented run active after it starts. Values in (0, 1] reduce
+fragmentation from brief dips.</p></li>
+<li><p><strong>segment_max_gap</strong> (<em>int</em>) – Maximum number of non-flagged days allowed between two segmented runs
+before stitching them into one event.</p></li>
+<li><p><strong>merge_distance_days</strong> (<em>int</em>) – Events within this many days of each other (or overlapping) are merged.</p></li>
+<li><p><strong>max_anomalies_per_series</strong> (<em>int</em>) – Cap on the number of events returned per series.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">residual_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pass1_records</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.fit" title="Link to this definition">¶</a></dt>
+<dd><p>Detect extended anomalies in <em>residual_df</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>residual_df</strong> (<em>pd.DataFrame</em>) – Clean residual DataFrame (original minus all structured components).
+Each column is treated as an independent series.</p></li>
+<li><p><strong>pass1_records</strong> (<em>dict</em><em>, </em><em>optional</em>) – Pre-computed point anomaly records keyed by series name
+({series: [{‘date’: …, ‘magnitude’: …, ‘type’: …, ‘score’: …}]}).
+When provided the internal pass-1 AnomalyRemoval run is skipped.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.get_events">
+<span class="sig-name descname"><span class="pre">get_events</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.get_events" title="Link to this definition">¶</a></dt>
+<dd><p>Return detected events.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If given, return events for that series only (as a list).
+Otherwise return the full dict.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.get_new_params">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.get_new_params" title="Link to this definition">¶</a></dt>
+<dd><p>Sample random parameters for optimizer search.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.extended_anomaly.</span></span><span class="sig-name descname"><span class="pre">ExtendedAnomalyMixin</span></span><a class="headerlink" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Mixin for <code class="xref py py-class docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector</span></code> that adds a second extended
+anomaly detection pass after the main decomposition is complete.</p>
+<p>The extended pass operates on the cleanest available residual:
+<code class="docutils literal notranslate"><span class="pre">noise_component</span> <span class="pre">+</span> <span class="pre">anomaly_component</span></code> (= original minus all structured
+components), so that structured effects do not contaminate the extended
+anomaly detection.</p>
+<p>Requires the host class to expose:
+- <code class="docutils literal notranslate"><span class="pre">self.extended_anomaly_params</span></code> (dict or falsy to disable)
+- <code class="docutils literal notranslate"><span class="pre">self._anomaly_records_temp</span></code> (populated by pass-1 in DecompositionMixin)</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector.optimizer">
+<span id="autots-evaluator-feature-detector-optimizer-module"></span><h2>autots.evaluator.feature_detector.optimizer module<a class="headerlink" href="#module-autots.evaluator.feature_detector.optimizer" title="Link to this heading">¶</a></h2>
+<p>FeatureDetectionOptimizer - Hyperparameter optimization using synthetic data.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.optimizer.</span></span><span class="sig-name descname"><span class="pre">FeatureDetectionOptimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">synthetic_generator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_calculator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_strategy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">selection_strategy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'recovery_lexicographic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stage_budget</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.</p>
+<p>Defaults to a broad random/genetic search with recovery-first selection.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.fine_tune_changepoints">
+<span class="sig-name descname"><span class="pre">fine_tune_changepoints</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">starting_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_per_stage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">curriculum_sigmas</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tversky_alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tversky_beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tversky_gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_changepoint_methods</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">over_prediction_penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">location_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">count_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_match_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.15</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.fine_tune_changepoints" title="Link to this definition">¶</a></dt>
+<dd><p>Focused fine-tuning pass that freezes every parameter group except
+<code class="docutils literal notranslate"><span class="pre">changepoint_params</span></code> and <code class="docutils literal notranslate"><span class="pre">level_shift_params</span></code>.</p>
+<p>All other parameters (seasonality, anomaly, holiday, etc.) are held fixed
+so the optimizer can zero in on changepoint quality without interference.</p>
+<p>The loss function is a statistical translation of techniques designed for
+neural changepoint training:</p>
+<dl>
+<dt>Gaussian Label Smoothing</dt><dd><p>Instead of a hard ±tolerance binary label, each true changepoint is
+represented as a Gaussian probability distribution centred on its date
+with standard deviation <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.  This converts the step-function
+loss landscape into smooth, convex basins and ensures that detections
+that are “close but not exact” receive a constructive gradient signal.</p>
+</dd>
+<dt>Focal Tversky Loss (statistical translation)</dt><dd><p>The metric used for scoring is the Focal Tversky index with
+<code class="docutils literal notranslate"><span class="pre">alpha</span> <span class="pre">&lt;</span> <span class="pre">beta</span></code> (default 0.3 / 0.7), which heavily penalises false
+negatives over false positives, directly preventing the zero-prediction
+collapse that plagues changepoint tuning.  The focal exponent
+<code class="docutils literal notranslate"><span class="pre">gamma=2.0</span></code> concentrates the gradient on partially-matched
+changepoints rather than already-correct ones.</p>
+</dd>
+<dt>Curriculum Learning (sigma annealing)</dt><dd><p>Three stages with decreasing sigma drive the search from coarse to
+fine sensitivity:</p>
+<blockquote>
+<div><p>Stage 1: sigma=14 days — wide window builds initial recall
+Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
+Stage 3: sigma=3.5 days — tight window polishes placement precision</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>starting_params</strong> (<em>dict</em>) – Full detector parameter dict to use as the frozen baseline.
+All keys except <code class="docutils literal notranslate"><span class="pre">changepoint_params</span></code> and <code class="docutils literal notranslate"><span class="pre">level_shift_params</span></code>
+are immutably frozen throughout the run.</p></li>
+<li><p><strong>n_per_stage</strong> (<em>int</em>) – Number of candidate configurations evaluated per curriculum stage.</p></li>
+<li><p><strong>curriculum_sigmas</strong> (<em>list</em><em> of </em><em>float</em><em>, </em><em>optional</em>) – Sigma values (in days) for each curriculum stage.
+Defaults to [14.0, 7.0, 3.5].</p></li>
+<li><p><strong>tversky_alpha</strong> (<em>float</em>) – FP weight in Tversky denominator (keep &lt; tversky_beta).</p></li>
+<li><p><strong>tversky_beta</strong> (<em>float</em>) – FN weight in Tversky denominator (keep &gt; tversky_alpha).</p></li>
+<li><p><strong>tversky_gamma</strong> (<em>float</em>) – Focal exponent applied to (1 - Tversky_index).</p></li>
+<li><p><strong>level_shift_weight</strong> (<em>float</em>) – Blend weight for level-shift Tversky loss in the final score
+(trend changepoints get 1 - weight). Defaults below 0.5 so the
+fine-tune remains changepoint-first while still rewarding cleaner
+level-shift separation.</p></li>
+<li><p><strong>exclude_changepoint_methods</strong> (<em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em>) – Changepoint method names to exclude from the search.  Defaults to
+<code class="docutils literal notranslate"><span class="pre">['basic']</span></code>, which prevents the evenly-spaced pseudo-detector
+from being selected (it cannot be used for analytic purposes).
+Pass an empty list <code class="docutils literal notranslate"><span class="pre">[]</span></code> to allow all methods including ‘basic’.</p></li>
+<li><p><strong>over_prediction_penalty</strong> (<em>float</em>) – Scales how quickly the count penalty ramps once detections exceed the
+slight-over buffer. Higher values curb severe over-segmentation
+without removing the mild recall bias near the target count.</p></li>
+<li><p><strong>location_weight</strong> (<em>float</em>) – Weight on an explicit symmetric distance penalty.  This makes a
+count-correct but badly misplaced solution score worse than a nearby
+over-detected one, which is the balance needed for downstream trend
+fitting.</p></li>
+<li><p><strong>count_weight</strong> (<em>float</em>) – Weight on count calibration. Slight over-detection is tolerated more
+than under-detection, but the penalty ramps quickly once excess
+changepoints move beyond the preferred buffer.</p></li>
+<li><p><strong>slope_match_weight</strong> (<em>float</em>) – Weight on slope-change alignment for nearby trend changepoints.  This
+favors candidates that place changepoints where the underlying trend
+change is directionally and numerically similar to ground truth.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Best full parameter dict found, with only changepoint/level-shift
+params potentially changed from <code class="docutils literal notranslate"><span class="pre">starting_params</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.get_optimization_summary">
+<span class="sig-name descname"><span class="pre">get_optimization_summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.get_optimization_summary" title="Link to this definition">¶</a></dt>
+<dd><p>Return summary of optimization results.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.optimize">
+<span class="sig-name descname"><span class="pre">optimize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.optimize" title="Link to this definition">¶</a></dt>
+<dd><p>Run genetic-style optimization to find best detector parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>starting_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Optional seed parameter configuration. Overrides constructor value
+when provided.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Best parameters found</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.evaluator.feature_detector" title="Link to this heading">¶</a></h2>
+<p>Time Series Feature Detection and Optimization package.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ExtendedAnomalyDetector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">ExtendedAnomalyDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">point_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_baseline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cusum_k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cusum_h</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_min_hold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_min_reversion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_cumsum_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_reversion_max_duration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">84</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_lookahead</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">14</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_fit_min_r2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_segment_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sustained_hysteresis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">segment_max_gap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">merge_distance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_anomalies_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ExtendedAnomalyDetector" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Two-pass anomaly detector combining point detection with multi-day pattern detection.</p>
+<p>Pass 1 produces point-level proposals via AnomalyRemoval (optional if
+<code class="docutils literal notranslate"><span class="pre">pass1_records</span></code> are provided externally).</p>
+<p>Pass 2 runs four independent detection methods on a clean residual:
+- <strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.
+- <strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for</p>
+<blockquote>
+<div><p>slow onset → hold → reversion patterns.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p><strong>Decay extension</strong>: extends pass-1 point detections with exponential or
+linear decay tails.</p></li>
+<li><p><strong>Segmented mean shift</strong>: sliding-window mean comparison against a rolling
+baseline.</p></li>
+</ul>
+<p>All per-series events are then merged and de-duplicated into a final list
+that preserves <code class="docutils literal notranslate"><span class="pre">start_date</span></code>, <code class="docutils literal notranslate"><span class="pre">end_date</span></code>, <code class="docutils literal notranslate"><span class="pre">duration</span></code>, <code class="docutils literal notranslate"><span class="pre">type</span></code>,
+<code class="docutils literal notranslate"><span class="pre">magnitude</span></code>, and <code class="docutils literal notranslate"><span class="pre">score</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>point_anomaly_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Keyword arguments forwarded to <a class="reference internal" href="autots.tools.html#autots.tools.transform.AnomalyRemoval" title="autots.tools.transform.AnomalyRemoval"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyRemoval</span></code></a>
+for pass-1 point detection.  If <em>None</em> a conservative rolling-zscore
+detector is used.</p></li>
+<li><p><strong>sustained_window</strong> (<em>int</em>) – Short rolling window (days) used by the segmented-shift and CUSUM
+detectors to compute local means.</p></li>
+<li><p><strong>sustained_baseline</strong> (<em>int</em>) – Longer window used to estimate the baseline mean and standard deviation.</p></li>
+<li><p><strong>sustained_threshold</strong> (<em>float</em>) – Standardized deviation threshold (in units of baseline σ) above which a
+window is considered anomalous.</p></li>
+<li><p><strong>cusum_k</strong> (<em>float</em>) – CUSUM allowance parameter (slack / half-width) in standardized units.
+Smaller values are more sensitive.</p></li>
+<li><p><strong>cusum_h</strong> (<em>float</em>) – CUSUM decision threshold.  An alarm fires when the accumulated statistic
+exceeds this value.</p></li>
+<li><p><strong>slope_reversion_min_hold</strong> (<em>int</em>) – Minimum number of days that the cumulative sum must stay elevated before
+a slope-reversion event is flagged.</p></li>
+<li><p><strong>slope_reversion_min_reversion</strong> (<em>int</em>) – Minimum number of days the reversion phase must last.</p></li>
+<li><p><strong>slope_reversion_cumsum_threshold</strong> (<em>float</em>) – Minimum peak z-score of the cumulative sum (relative to its rolling σ)
+required to trigger a slope-reversion candidate.</p></li>
+<li><p><strong>slope_reversion_max_duration</strong> (<em>int</em>) – Maximum allowed duration (days) for slope-reversion events. Longer
+candidates are treated as structural drift and ignored.</p></li>
+<li><p><strong>decay_lookahead</strong> (<em>int</em>) – Number of days to inspect after a pass-1 peak for a decay tail.</p></li>
+<li><p><strong>decay_fit_min_r2</strong> (<em>float</em>) – Minimum R² required for a decay template fit to extend a point event.</p></li>
+<li><p><strong>min_segment_run</strong> (<em>int</em>) – Minimum number of consecutive elevated windows required by the
+segmented-shift detector to form an event.</p></li>
+<li><p><strong>sustained_hysteresis</strong> (<em>float</em>) – Fraction of <code class="docutils literal notranslate"><span class="pre">sustained_threshold</span></code> used to keep an in-progress
+segmented run active after it starts. Values in (0, 1] reduce
+fragmentation from brief dips.</p></li>
+<li><p><strong>segment_max_gap</strong> (<em>int</em>) – Maximum number of non-flagged days allowed between two segmented runs
+before stitching them into one event.</p></li>
+<li><p><strong>merge_distance_days</strong> (<em>int</em>) – Events within this many days of each other (or overlapping) are merged.</p></li>
+<li><p><strong>max_anomalies_per_series</strong> (<em>int</em>) – Cap on the number of events returned per series.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ExtendedAnomalyDetector.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">residual_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pass1_records</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ExtendedAnomalyDetector.fit" title="Link to this definition">¶</a></dt>
+<dd><p>Detect extended anomalies in <em>residual_df</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>residual_df</strong> (<em>pd.DataFrame</em>) – Clean residual DataFrame (original minus all structured components).
+Each column is treated as an independent series.</p></li>
+<li><p><strong>pass1_records</strong> (<em>dict</em><em>, </em><em>optional</em>) – Pre-computed point anomaly records keyed by series name
+({series: [{‘date’: …, ‘magnitude’: …, ‘type’: …, ‘score’: …}]}).
+When provided the internal pass-1 AnomalyRemoval run is skipped.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ExtendedAnomalyDetector.get_events">
+<span class="sig-name descname"><span class="pre">get_events</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ExtendedAnomalyDetector.get_events" title="Link to this definition">¶</a></dt>
+<dd><p>Return detected events.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If given, return events for that series only (as a list).
+Otherwise return the full dict.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ExtendedAnomalyDetector.get_new_params">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ExtendedAnomalyDetector.get_new_params" title="Link to this definition">¶</a></dt>
+<dd><p>Sample random parameters for optimizer search.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">FeatureDetectionLoss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">changepoint_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">14</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_over_anomaly_bonus</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_component_penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'component'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_complexity_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_complexity_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">focus_component_weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validation_strictness</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invalid_loss_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'penalty'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invalid_loss_penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000000.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.metrics.LossMetricsMixin" title="autots.evaluator.feature_detector.loss.metrics.LossMetricsMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">LossMetricsMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.evaluators.LossEvaluatorsMixin" title="autots.evaluator.feature_detector.loss.evaluators.LossEvaluatorsMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">LossEvaluatorsMixin</span></code></a></p>
+<p>Comprehensive loss calculator for feature detection optimization.</p>
+<p>Each synthetic label family contributes to the total loss:
+- Trend changepoints and slopes
+- Level shifts
+- Anomalies (including shared events and post patterns)
+- Holiday timing, direct impacts, and splash/bridge days
+- Seasonality strength, patterns, and changepoints
+- Noise regimes and noise-to-signal characteristics
+- Low-frequency noise structure consistency (drift/shift leakage)
+- Series-level metadata consistency (scale, type)
+- Regressor impacts when present</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss.DEFAULT_WEIGHTS">
+<span class="sig-name descname"><span class="pre">DEFAULT_WEIGHTS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'anomaly_loss':</span> <span class="pre">1.3,</span> <span class="pre">'holiday_event_loss':</span> <span class="pre">1.2,</span> <span class="pre">'holiday_impact_loss':</span> <span class="pre">0.9,</span> <span class="pre">'holiday_recall_loss':</span> <span class="pre">0.9,</span> <span class="pre">'holiday_splash_loss':</span> <span class="pre">0.03,</span> <span class="pre">'level_shift_loss':</span> <span class="pre">1.3,</span> <span class="pre">'metadata_loss':</span> <span class="pre">0.05,</span> <span class="pre">'noise_level_loss':</span> <span class="pre">0.5,</span> <span class="pre">'noise_regime_loss':</span> <span class="pre">0.4,</span> <span class="pre">'noise_structure_loss':</span> <span class="pre">0.2,</span> <span class="pre">'regressor_loss':</span> <span class="pre">0.3,</span> <span class="pre">'seasonality_changepoint_loss':</span> <span class="pre">0.01,</span> <span class="pre">'seasonality_pattern_loss':</span> <span class="pre">2.0,</span> <span class="pre">'seasonality_strength_loss':</span> <span class="pre">2.0,</span> <span class="pre">'trend_loss':</span> <span class="pre">1.0}</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss.DEFAULT_WEIGHTS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss.INVALID_LOSS_PENALTY">
+<span class="sig-name descname"><span class="pre">INVALID_LOSS_PENALTY</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1000000.0</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss.INVALID_LOSS_PENALTY" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss.calculate_loss">
+<span class="sig-name descname"><span class="pre">calculate_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">detected_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">true_labels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">true_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss.calculate_loss" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate overall loss comparing detected features to true labels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>detected_features</strong> (<em>dict</em>) – Output from TimeSeriesFeatureDetector.get_detected_features(…)</p></li>
+<li><p><strong>true_labels</strong> (<em>dict</em>) – Labels from SyntheticDailyGenerator.get_all_labels(…)</p></li>
+<li><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, only evaluate the named series.</p></li>
+<li><p><strong>true_components</strong> (<em>dict</em><em>, </em><em>optional</em>) – Mapping of series -&gt; component arrays from SyntheticDailyGenerator.get_components()</p></li>
+<li><p><strong>date_index</strong> (<em>pd.DatetimeIndex</em><em>, </em><em>optional</em>) – Index used for the time series. Required for seasonality changepoint evaluation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Loss breakdown with per-component metrics and total weighted loss.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">FeatureDetectionOptimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">synthetic_generator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_calculator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_strategy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">selection_strategy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'recovery_lexicographic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stage_budget</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.</p>
+<p>Defaults to a broad random/genetic search with recovery-first selection.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer.fine_tune_changepoints">
+<span class="sig-name descname"><span class="pre">fine_tune_changepoints</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">starting_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_per_stage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">curriculum_sigmas</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tversky_alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tversky_beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tversky_gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_changepoint_methods</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">over_prediction_penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">location_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">count_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_match_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.15</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer.fine_tune_changepoints" title="Link to this definition">¶</a></dt>
+<dd><p>Focused fine-tuning pass that freezes every parameter group except
+<code class="docutils literal notranslate"><span class="pre">changepoint_params</span></code> and <code class="docutils literal notranslate"><span class="pre">level_shift_params</span></code>.</p>
+<p>All other parameters (seasonality, anomaly, holiday, etc.) are held fixed
+so the optimizer can zero in on changepoint quality without interference.</p>
+<p>The loss function is a statistical translation of techniques designed for
+neural changepoint training:</p>
+<dl>
+<dt>Gaussian Label Smoothing</dt><dd><p>Instead of a hard ±tolerance binary label, each true changepoint is
+represented as a Gaussian probability distribution centred on its date
+with standard deviation <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.  This converts the step-function
+loss landscape into smooth, convex basins and ensures that detections
+that are “close but not exact” receive a constructive gradient signal.</p>
+</dd>
+<dt>Focal Tversky Loss (statistical translation)</dt><dd><p>The metric used for scoring is the Focal Tversky index with
+<code class="docutils literal notranslate"><span class="pre">alpha</span> <span class="pre">&lt;</span> <span class="pre">beta</span></code> (default 0.3 / 0.7), which heavily penalises false
+negatives over false positives, directly preventing the zero-prediction
+collapse that plagues changepoint tuning.  The focal exponent
+<code class="docutils literal notranslate"><span class="pre">gamma=2.0</span></code> concentrates the gradient on partially-matched
+changepoints rather than already-correct ones.</p>
+</dd>
+<dt>Curriculum Learning (sigma annealing)</dt><dd><p>Three stages with decreasing sigma drive the search from coarse to
+fine sensitivity:</p>
+<blockquote>
+<div><p>Stage 1: sigma=14 days — wide window builds initial recall
+Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
+Stage 3: sigma=3.5 days — tight window polishes placement precision</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>starting_params</strong> (<em>dict</em>) – Full detector parameter dict to use as the frozen baseline.
+All keys except <code class="docutils literal notranslate"><span class="pre">changepoint_params</span></code> and <code class="docutils literal notranslate"><span class="pre">level_shift_params</span></code>
+are immutably frozen throughout the run.</p></li>
+<li><p><strong>n_per_stage</strong> (<em>int</em>) – Number of candidate configurations evaluated per curriculum stage.</p></li>
+<li><p><strong>curriculum_sigmas</strong> (<em>list</em><em> of </em><em>float</em><em>, </em><em>optional</em>) – Sigma values (in days) for each curriculum stage.
+Defaults to [14.0, 7.0, 3.5].</p></li>
+<li><p><strong>tversky_alpha</strong> (<em>float</em>) – FP weight in Tversky denominator (keep &lt; tversky_beta).</p></li>
+<li><p><strong>tversky_beta</strong> (<em>float</em>) – FN weight in Tversky denominator (keep &gt; tversky_alpha).</p></li>
+<li><p><strong>tversky_gamma</strong> (<em>float</em>) – Focal exponent applied to (1 - Tversky_index).</p></li>
+<li><p><strong>level_shift_weight</strong> (<em>float</em>) – Blend weight for level-shift Tversky loss in the final score
+(trend changepoints get 1 - weight). Defaults below 0.5 so the
+fine-tune remains changepoint-first while still rewarding cleaner
+level-shift separation.</p></li>
+<li><p><strong>exclude_changepoint_methods</strong> (<em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em>) – Changepoint method names to exclude from the search.  Defaults to
+<code class="docutils literal notranslate"><span class="pre">['basic']</span></code>, which prevents the evenly-spaced pseudo-detector
+from being selected (it cannot be used for analytic purposes).
+Pass an empty list <code class="docutils literal notranslate"><span class="pre">[]</span></code> to allow all methods including ‘basic’.</p></li>
+<li><p><strong>over_prediction_penalty</strong> (<em>float</em>) – Scales how quickly the count penalty ramps once detections exceed the
+slight-over buffer. Higher values curb severe over-segmentation
+without removing the mild recall bias near the target count.</p></li>
+<li><p><strong>location_weight</strong> (<em>float</em>) – Weight on an explicit symmetric distance penalty.  This makes a
+count-correct but badly misplaced solution score worse than a nearby
+over-detected one, which is the balance needed for downstream trend
+fitting.</p></li>
+<li><p><strong>count_weight</strong> (<em>float</em>) – Weight on count calibration. Slight over-detection is tolerated more
+than under-detection, but the penalty ramps quickly once excess
+changepoints move beyond the preferred buffer.</p></li>
+<li><p><strong>slope_match_weight</strong> (<em>float</em>) – Weight on slope-change alignment for nearby trend changepoints.  This
+favors candidates that place changepoints where the underlying trend
+change is directionally and numerically similar to ground truth.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Best full parameter dict found, with only changepoint/level-shift
+params potentially changed from <code class="docutils literal notranslate"><span class="pre">starting_params</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer.get_optimization_summary">
+<span class="sig-name descname"><span class="pre">get_optimization_summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer.get_optimization_summary" title="Link to this definition">¶</a></dt>
+<dd><p>Return summary of optimization results.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer.optimize">
+<span class="sig-name descname"><span class="pre">optimize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer.optimize" title="Link to this definition">¶</a></dt>
+<dd><p>Run genetic-style optimization to find best detector parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>starting_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Optional seed parameter configuration. Overrides constructor value
+when provided.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Best parameters found</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ReconstructionLoss">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">ReconstructionLoss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trend_complexity_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_complexity_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_dominance_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.65</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_min_other_variance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_lags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(7,</span> <span class="pre">365)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_min_autocorr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_improvement_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_improvement_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_min_pre_std</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ReconstructionLoss" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.loss.html#autots.evaluator.feature_detector.loss.base.FeatureDetectionLoss" title="autots.evaluator.feature_detector.loss.base.FeatureDetectionLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">FeatureDetectionLoss</span></code></a></p>
+<p>Loss function tailored for real-world datasets lacking component-level labels.</p>
+<p>Focuses on reconstruction quality while discouraging overly complex trend fits and
+encouraging variance to be attributed to seasonality, holidays, anomalies, and level shifts.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS">
+<span class="sig-name descname"><span class="pre">DEFAULT_METRIC_WEIGHTS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'anomaly_capture_loss':</span> <span class="pre">0.7,</span> <span class="pre">'noise_whiteness_loss':</span> <span class="pre">0.5,</span> <span class="pre">'reconstruction_loss':</span> <span class="pre">0.5,</span> <span class="pre">'seasonality_capture_loss':</span> <span class="pre">0.8,</span> <span class="pre">'seasonality_shape_loss':</span> <span class="pre">0.6,</span> <span class="pre">'structural_loss':</span> <span class="pre">1.0,</span> <span class="pre">'trend_dominance_loss':</span> <span class="pre">0.9,</span> <span class="pre">'trend_smoothness_loss':</span> <span class="pre">1.2}</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ReconstructionLoss.calculate_loss">
+<span class="sig-name descname"><span class="pre">calculate_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">observed_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detected_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ReconstructionLoss.calculate_loss" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate reconstruction-oriented loss for unlabeled datasets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>observed_df</strong> (<em>pd.DataFrame</em>) – Original time series data used for detection.</p></li>
+<li><p><strong>detected_features</strong> (<em>dict</em>) – Output from TimeSeriesFeatureDetector.get_detected_features(…, include_components=True).</p></li>
+<li><p><strong>components</strong> (<em>dict</em><em>, </em><em>optional</em>) – Explicit component container matching <cite>get_detected_features()[‘components’]</cite>.</p></li>
+<li><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – Restrict evaluation to a single series.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Loss metrics per series and aggregate total weighted loss.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_holiday_anomaly_suppression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extended_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_dag_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_country</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_countries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin" title="autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin" title="autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin" title="autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin" title="autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a>, <a class="reference internal" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin" title="autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></p>
+<p>Comprehensive feature detection pipeline for time series.</p>
+<p>TODO: upstream more of this code into the component classes (e.g., HolidayDetector, AnomalyRemoval, ChangepointDetector)
+TODO: Handle multiplicative seasonality
+TODO: Handle time varying seasonality using fast_kalman
+TODO: Improve holiday “splash” effect and weekend interactions
+TODO: Support identifying regressor impacts and granger lag impacts
+TODO: Build upon the JSON template so that it can be converted to a fixed size embedding (probably a 2d embedding). The fixed size may vary by parameters, but for a given parameter set should always be the same size. The embedding does not need to be capable of fully reconstructing the time series, just representing it.
+TODO: Support for modeling the trend with a fast kalman state space approach, ideally aligned with changepoints in some way if possible.
+TODO: consider also having “deviation from group” type anomaly detection for multivariate series
+TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
+TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.</p>
+<blockquote>
+<div><p>Parameters</p>
+</div></blockquote>
+<dl>
+<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p>
+</dd>
+<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
+</dd>
+<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
+</dd>
+<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
+</dd>
+<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
+</dd>
+<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
+</dd>
+<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
+</dd>
+<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
+</dd>
+<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
+</dd>
+<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
+shared across all series (‘univariate’).
+- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
+- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
+<blockquote>
+<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
+</div></blockquote>
+</dd>
+<dt>global_holiday_anomaly_suppression<span class="classifier">bool, default=True</span></dt><dd><p>If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
+date set from all series. Set False to disable this suppression.</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION">
+<span class="sig-name descname"><span class="pre">TEMPLATE_VERSION</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'1.2'</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.fit" title="Link to this definition">¶</a></dt>
+<dd><p>Fit the feature detector to time series data.</p>
+<p>Decomposition follows this sequential removal strategy:</p>
+<ol class="arabic simple">
+<li><p>INITIAL DECOMPOSITION (for detection only):
+- Remove rough seasonality → rough_residual
+- Detect holidays on rough_residual
+- Detect anomalies on rough_residual</p></li>
+<li><p>FINAL SEASONALITY FIT:
+- Fit on: original - anomalies
+- Holidays fitted simultaneously as regressors
+- Output: final_residual (has seasonality + holidays removed)</p></li>
+<li><p>LEVEL SHIFT DETECTION:
+- Detect on: original - anomalies - seasonality - holidays
+- (This is final_residual)</p></li>
+<li><p>TREND DETECTION:
+- Detect on: original - anomalies - seasonality - holidays - level_shifts</p></li>
+<li><p>NOISE &amp; ANOMALY COMPONENTS:
+- Noise: original - trend - level_shifts - seasonality - holidays - anomalies
+- Anomalies: difference between original and de-anomalied version</p></li>
+</ol>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast">
+<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
+<dd><p>Generate a simple forward projection similar to BasicLinearModel.
+This detector is not optimized for forecasting; dedicated forecasting models may provide better results.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_cleaned_data">
+<span class="sig-name descname"><span class="pre">get_cleaned_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_cleaned_data" title="Link to this definition">¶</a></dt>
+<dd><p>Return cleaned time series data with anomalies, noise, and level shifts removed.</p>
+<p>The cleaned data consists of:
+- Trend (with mean included)
+- Seasonality
+- Holiday effects</p>
+<p>Level shifts are corrected by removing the cumulative shift effect, returning
+the data to its baseline level. Anomalies and noise are excluded entirely.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, return cleaned data for only this series.
+If None, return cleaned data for all series.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Cleaned time series data with the same index as the original data.
+If series_name is specified, returns a DataFrame with a single column.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>RuntimeError</strong> – If fit() has not been called yet.</p></li>
+<li><p><strong>ValueError</strong> – If series_name is provided but not found in the original data.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span> <span class="o">=</span> <span class="n">TimeSeriesFeatureDetector</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cleaned</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">get_cleaned_data</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cleaned_single</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">get_cleaned_data</span><span class="p">(</span><span class="s1">&#39;series_1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_detected_features">
+<span class="sig-name descname"><span class="pre">get_detected_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_detected_features" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_event_dag">
+<span class="sig-name descname"><span class="pre">get_event_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_event_dag" title="Link to this definition">¶</a></dt>
+<dd><p>Return Event DAG metadata derived from detector outputs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_new_params">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_new_params" title="Link to this definition">¶</a></dt>
+<dd><p>Sample random parameters for detector optimization.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_template">
+<span class="sig-name descname"><span class="pre">get_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_template" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot">
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">14)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_noise_anomaly_panels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_seasonality_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dual_axis_trend_level_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot_event_dag">
+<span class="sig-name descname"><span class="pre">plot_event_dag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(14,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot_event_dag" title="Link to this definition">¶</a></dt>
+<dd><p>Plot Event DAG macro-events on a timeline-first layout.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.query_features">
+<span class="sig-name descname"><span class="pre">query_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_event_dag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_event_members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_json</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.query_features" title="Link to this definition">¶</a></dt>
+<dd><p>Query a specific slice of detected features with minimal token usage.</p>
+<p>Designed for LLM-friendly output with compact representation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>str</em><em>, </em><em>datetime</em><em>, </em><em>list</em><em>, </em><em>slice</em>) – Date(s) to query for features.
+- Single date: “2024-01-15” or datetime object
+- Date range: slice(“2024-01-01”, “2024-01-31”)
+- List of dates: [“2024-01-15”, “2024-01-20”]
+- None: return all features (not filtered by date)</p></li>
+<li><p><strong>series</strong> (<em>str</em><em>, </em><em>list</em>) – Series name(s) to query.
+- Single series: “sales”
+- Multiple series: [“sales”, “revenue”]
+- None: all series</p></li>
+<li><p><strong>include_components</strong> (<em>bool</em>) – Include component time series values for the date range</p></li>
+<li><p><strong>include_metadata</strong> (<em>bool</em>) – Include metadata like noise levels, scales, etc.</p></li>
+<li><p><strong>include_event_dag</strong> (<em>bool</em>) – Include Event DAG cluster and family metadata</p></li>
+<li><p><strong>include_event_members</strong> (<em>bool</em>) – Include raw Event DAG member events</p></li>
+<li><p><strong>return_json</strong> (<em>bool</em>) – Return JSON string instead of dict</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>Compact feature data including anomalies, changepoints,</dt><dd><p>level shifts, holidays, and optionally components</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict or str</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get all features for one series</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span><span class="n">series</span><span class="o">=</span><span class="s2">&quot;sales&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get features occurring in a date range</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">dates</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="s2">&quot;2024-01-01&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-31&quot;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">series</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;revenue&quot;</span><span class="p">]</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get components for specific dates</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">dates</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;2024-01-15&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-16&quot;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">series</span><span class="o">=</span><span class="s2">&quot;sales&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">include_components</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.render_template">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">render_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.render_template" title="Link to this definition">¶</a></dt>
+<dd><p>Render a feature detection template back into time series data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.summary">
+<span class="sig-name descname"><span class="pre">summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.summary" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.tune_with_synthetic">
+<span class="sig-name descname"><span class="pre">tune_with_synthetic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">real_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_synthetic_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_tune_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_detector_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tune_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">synthetic_starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">starting_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.tune_with_synthetic" title="Link to this definition">¶</a></dt>
+<dd><p>Tune synthetic data to a real dataset, optimize detector params, and fit self.</p>
+<p>After completion, this instance is fitted on <code class="docutils literal notranslate"><span class="pre">real_df</span></code> with the optimized
+detector parameters and stores optimization artifacts on the instance.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">Automated Forecasting</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=winedarksea&repo=autots&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="autots.html">autots package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">autots</a><ul>
+  <li><a href="autots.html">autots package</a><ul>
+  <li><a href="autots.evaluator.html">autots.evaluator package</a><ul>
+      <li>Previous: <a href="autots.evaluator.html" title="previous chapter">autots.evaluator package</a></li>
+      <li>Next: <a href="autots.evaluator.feature_detector.components.html" title="next chapter">autots.evaluator.feature_detector.components package</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2026, Colin Catlin.
+      
+      |
+      <a href="../_sources/source/autots.evaluator.feature_detector.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1638,7 +1638,7 @@ def _eval_prediction_for_template(
         if round_smape < best_smape:
             best_smape = round_smape
             try:
-                print("\U0001F4C8 " + validation_accuracy_print)
+                print("\U0001f4c8 " + validation_accuracy_print)
             except Exception:
                 print(validation_accuracy_print)
         else:

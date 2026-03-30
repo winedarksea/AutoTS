@@ -129,14 +129,19 @@ class GraphSnapshot:
             'node_table': list(self.node_table),
             'edge_table': list(self.edge_table),
             'adjacency_dense': np.asarray(self.adjacency_dense, dtype=np.float32),
-            'adjacency_thresholded': np.asarray(self.adjacency_thresholded, dtype=np.float32),
+            'adjacency_thresholded': np.asarray(
+                self.adjacency_thresholded, dtype=np.float32
+            ),
             'assignment_matrices': [
-                np.asarray(matrix, dtype=np.float32) for matrix in self.assignment_matrices
+                np.asarray(matrix, dtype=np.float32)
+                for matrix in self.assignment_matrices
             ],
             'topological_order': list(self.topological_order),
-            'prior_adjacency': None
-            if self.prior_adjacency is None
-            else np.asarray(self.prior_adjacency, dtype=np.float32),
+            'prior_adjacency': (
+                None
+                if self.prior_adjacency is None
+                else np.asarray(self.prior_adjacency, dtype=np.float32)
+            ),
             'is_acyclic': bool(self.is_acyclic),
             'cycle_score': float(self.cycle_score),
         }
@@ -272,12 +277,16 @@ def build_graph_snapshot(
                 continue
             edge_table.append(
                 {
-                    'source': node_table[dag_level_offset + source]['node_id']
-                    if dag_level_offset + source < len(node_table)
-                    else f'top_{source}',
-                    'target': node_table[dag_level_offset + target]['node_id']
-                    if dag_level_offset + target < len(node_table)
-                    else f'top_{target}',
+                    'source': (
+                        node_table[dag_level_offset + source]['node_id']
+                        if dag_level_offset + source < len(node_table)
+                        else f'top_{source}'
+                    ),
+                    'target': (
+                        node_table[dag_level_offset + target]['node_id']
+                        if dag_level_offset + target < len(node_table)
+                        else f'top_{target}'
+                    ),
                     'weight': weight,
                     'edge_type': 'dag',
                 }
@@ -290,9 +299,11 @@ def build_graph_snapshot(
         adjacency_thresholded=thresholded,
         assignment_matrices=assignment_arrays,
         topological_order=topological_order,
-        prior_adjacency=None
-        if prior_adjacency is None
-        else np.asarray(prior_adjacency, dtype=np.float32),
+        prior_adjacency=(
+            None
+            if prior_adjacency is None
+            else np.asarray(prior_adjacency, dtype=np.float32)
+        ),
         is_acyclic=is_acyclic,
         cycle_score=cycle_score,
     )
@@ -315,7 +326,9 @@ def plot_graph_snapshot(
     ax.clear()
     view = str(view).lower()
     if view == 'heatmap':
-        ax.imshow(snapshot.adjacency_dense, cmap='Blues', aspect='auto', vmin=0.0, vmax=1.0)
+        ax.imshow(
+            snapshot.adjacency_dense, cmap='Blues', aspect='auto', vmin=0.0, vmax=1.0
+        )
         ax.set_title("TVA Learned Adjacency")
         ax.set_xlabel("Target node")
         ax.set_ylabel("Source node")
@@ -334,8 +347,14 @@ def plot_graph_snapshot(
         title = "TVA Learned DAG"
         if show_priors and snapshot.prior_adjacency is not None:
             prior = np.asarray(snapshot.prior_adjacency, dtype=np.float32)
-            offset = max(node['level'] for node in snapshot.node_table) if snapshot.node_table else 0
-            top_nodes = [node for node in snapshot.node_table if node['level'] == offset]
+            offset = (
+                max(node['level'] for node in snapshot.node_table)
+                if snapshot.node_table
+                else 0
+            )
+            top_nodes = [
+                node for node in snapshot.node_table if node['level'] == offset
+            ]
             for source in range(min(prior.shape[0], len(top_nodes))):
                 for target in range(min(prior.shape[1], len(top_nodes))):
                     if source == target or prior[source, target] <= 0:
@@ -352,7 +371,9 @@ def plot_graph_snapshot(
                         zorder=1,
                     )
 
-    candidate_edges = sorted(candidate_edges, key=lambda x: x['weight'], reverse=True)[:max_edges]
+    candidate_edges = sorted(candidate_edges, key=lambda x: x['weight'], reverse=True)[
+        :max_edges
+    ]
     for edge in candidate_edges:
         source = nodes_by_id.get(edge['source'])
         target = nodes_by_id.get(edge['target'])
@@ -402,13 +423,17 @@ if HAS_TORCH:
                     init = np.full((self.n_nodes, self.n_nodes), 0.5, dtype=np.float32)
             np.fill_diagonal(init, 0.0)
             init = np.clip(init, 1e-4, 1 - 1e-4)
-            self.edge_logits = nn.Parameter(torch.logit(torch.tensor(init, dtype=torch.float32)))
+            self.edge_logits = nn.Parameter(
+                torch.logit(torch.tensor(init, dtype=torch.float32))
+            )
 
         @property
         def adjacency(self) -> torch.Tensor:
             logits = torch.clamp(self.edge_logits, min=-8.0, max=8.0)
             adjacency = torch.sigmoid(logits)
-            adjacency = adjacency * (1.0 - torch.eye(self.n_nodes, device=adjacency.device))
+            adjacency = adjacency * (
+                1.0 - torch.eye(self.n_nodes, device=adjacency.device)
+            )
             return adjacency
 
         def attention_mask(self) -> torch.Tensor:
@@ -417,7 +442,9 @@ if HAS_TORCH:
     class DynamicHierarchyLearner(nn.Module):
         """Learn a bounded latent hierarchy with soft parent-child assignments."""
 
-        def __init__(self, n_anchor: int, d_token: int, config: StructureLearningConfig):
+        def __init__(
+            self, n_anchor: int, d_token: int, config: StructureLearningConfig
+        ):
             super().__init__()
             self.n_anchor = int(max(n_anchor, 1))
             self.d_token = int(d_token)
@@ -481,9 +508,14 @@ if HAS_TORCH:
             drift_total = torch.tensor(0.0, device=anchor_tokens.device)
             current = anchor_tokens
             for assignment, norm in zip(assignments, self.encoder_norms):
-                batch_assignment = self._batch_conditioned_assignments(current, assignment)
+                batch_assignment = self._batch_conditioned_assignments(
+                    current, assignment
+                )
                 dynamic_assignments.append(batch_assignment)
-                drift_total = drift_total + ((batch_assignment - assignment.unsqueeze(0)) ** 2).mean()
+                drift_total = (
+                    drift_total
+                    + ((batch_assignment - assignment.unsqueeze(0)) ** 2).mean()
+                )
 
                 column_norm = batch_assignment.sum(dim=1, keepdim=True).clamp(min=1e-6)
                 pooled = torch.einsum(
@@ -501,7 +533,9 @@ if HAS_TORCH:
                 'assignment_drift': drift_total / max(len(assignments), 1),
             }
 
-        def decode(self, top_latent: torch.Tensor, skip_levels: list, assignment_matrices=None) -> list:
+        def decode(
+            self, top_latent: torch.Tensor, skip_levels: list, assignment_matrices=None
+        ) -> list:
             assignments = assignment_matrices or self.assignment_matrices()
             current = top_latent
             decoded_levels = [None] * len(skip_levels)

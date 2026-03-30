@@ -66,7 +66,9 @@ def filter_event_dag(
             end_date=end_date,
         ):
             continue
-        member_intersection = selected_member_ids.intersection(cluster.get('member_ids', []))
+        member_intersection = selected_member_ids.intersection(
+            cluster.get('member_ids', [])
+        )
         if series_filter is not None and not member_intersection:
             continue
         selected_cluster_ids.add(cluster['cluster_id'])

@@ -1,4 +1,5 @@
 """DataFrame loading and CSV formatting utilities for the AutoTS MCP server."""
+
 import os
 import tempfile
 import uuid
@@ -41,6 +42,7 @@ def load_to_dataframe(
     """
     if data_id:
         from autots.mcp.cache import get_cached_object
+
         cached = get_cached_object(data_id, 'data')
         return cached['object']
 
@@ -162,7 +164,9 @@ def build_csv_metadata(filepath: str, df: pd.DataFrame, is_long: bool = False) -
         columns_info = ['datetime', 'series_id', 'value']
         description = 'Long format: datetime,series_id,value columns'
         pandas_cmd = f"pd.read_csv('{filepath}')"
-        autots_mcp_cmd = f"Use load_to_dataframe('{filepath}') then convert_long_to_wide"
+        autots_mcp_cmd = (
+            f"Use load_to_dataframe('{filepath}') then convert_long_to_wide"
+        )
     else:
         columns_info = list(df.columns)
         description = 'Wide format: datetime index, series as columns'

@@ -2,7 +2,7 @@
 """
 YggdrasilPriors — Prior specification and encoding for the TVA graph.
 
-Acts as the 'world tree' for the forecasting graph, connecting 
+Acts as the 'world tree' for the forecasting graph, connecting
 related time series across different domains through shared metadata.
 """
 
@@ -31,6 +31,7 @@ class SeriesMetadata:
         hierarchy_path: Ordered path from root to leaf (e.g. ['global', 'NA', 'US']).
         history_periods: Number of observed time periods available.
     """
+
     name: str
     attribute_values: Dict[str, str] = field(default_factory=dict)
     hierarchy_path: Optional[list] = field(default_factory=list)
@@ -262,7 +263,11 @@ class YggdrasilPriors:
             if not parsed_records:
                 continue
 
-            scale = float(np.nanmedian(np.abs(family_magnitudes))) if family_magnitudes else 0.0
+            scale = (
+                float(np.nanmedian(np.abs(family_magnitudes)))
+                if family_magnitudes
+                else 0.0
+            )
             if not np.isfinite(scale) or scale <= 0:
                 scale = 1.0
 
@@ -363,7 +368,9 @@ class YggdrasilPriors:
             family_weight = float(family_weights.get(family, 1.0))
             if family_weight <= 0:
                 continue
-            for cluster in self._cluster_records_by_time(family_records, max_distance_days):
+            for cluster in self._cluster_records_by_time(
+                family_records, max_distance_days
+            ):
                 per_series = {}
                 for event in cluster:
                     existing = per_series.get(event['series_name'])
@@ -404,7 +411,9 @@ class YggdrasilPriors:
 
         return self._normalize_off_diagonal(adjacency)
 
-    def _blend_structural_sources(self, source_matrices: dict, config: dict) -> Optional[np.ndarray]:
+    def _blend_structural_sources(
+        self, source_matrices: dict, config: dict
+    ) -> Optional[np.ndarray]:
         if not source_matrices:
             return None
         if len(source_matrices) == 1:
@@ -468,7 +477,9 @@ class YggdrasilPriors:
 
         valid_columns = []
         for column in trend_data.columns:
-            history = int(self.observed_history.get(column, trend_data[column].notna().sum()))
+            history = int(
+                self.observed_history.get(column, trend_data[column].notna().sum())
+            )
             if history >= min_history:
                 valid_columns.append(column)
         if len(valid_columns) < 2:
@@ -532,7 +543,9 @@ class YggdrasilPriors:
 
                 lag_factor = 1.0 / max(best_lag, 1)
                 significance = 1.0 - min(best_pvalue / alpha, 1.0)
-                weight = float(np.clip(corr_strength * significance * lag_factor, 0.0, 1.0))
+                weight = float(
+                    np.clip(corr_strength * significance * lag_factor, 0.0, 1.0)
+                )
                 if weight <= 0:
                     continue
 
@@ -568,10 +581,13 @@ class YggdrasilPriors:
         n = self.n_series
         vocabs = {}
         for attr in self._attribute_names():
-            unique_vals = sorted(set(
-                m.attribute_values.get(attr) for m in self.series_metadata
-                if m.attribute_values.get(attr) is not None
-            ))
+            unique_vals = sorted(
+                set(
+                    m.attribute_values.get(attr)
+                    for m in self.series_metadata
+                    if m.attribute_values.get(attr) is not None
+                )
+            )
             vocabs[attr] = {v: i for i, v in enumerate(unique_vals)}
 
         d_meta = sum(len(v) for v in vocabs.values())

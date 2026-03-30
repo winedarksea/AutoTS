@@ -142,46 +142,46 @@ class TimeSeriesFeatureDetector(
             copy.deepcopy(rough_seasonality_params)
             if rough_seasonality_params is not None
             else {
-            'regression_model': {
-                'model': 'RandomForest',
-                'model_params': {
-                    'n_estimators': 100,
-                    'min_samples_leaf': 4,
-                    'bootstrap': True,
+                'regression_model': {
+                    'model': 'RandomForest',
+                    'model_params': {
+                        'n_estimators': 100,
+                        'min_samples_leaf': 4,
+                        'bootstrap': True,
+                    },
                 },
-            },
-            'datepart_method': 'simple',
-            'polynomial_degree': 2,
-            'transform_dict': {
-                'fillna': None,
-                'transformations': {'0': 'EWMAFilter'},
-                'transformation_params': {'0': {'span': 2}},
-            },
-            'holiday_countries_used': False,
-            'lags': None,
-            'forward_lags': None,
-        }
+                'datepart_method': 'simple',
+                'polynomial_degree': 2,
+                'transform_dict': {
+                    'fillna': None,
+                    'transformations': {'0': 'EWMAFilter'},
+                    'transformation_params': {'0': {'span': 2}},
+                },
+                'holiday_countries_used': False,
+                'lags': None,
+                'forward_lags': None,
+            }
         )
         self.seasonality_params = (
             copy.deepcopy(seasonality_params)
             if seasonality_params is not None
             else {
-            'regression_model': {
-                'model': 'SVM',
-                'model_params': {
-                    'C': 1.0,
-                    'tol': 0.0001,
-                    'loss': 'squared_epsilon_insensitive',
-                    'max_iter': 500,
+                'regression_model': {
+                    'model': 'SVM',
+                    'model_params': {
+                        'C': 1.0,
+                        'tol': 0.0001,
+                        'loss': 'squared_epsilon_insensitive',
+                        'max_iter': 500,
+                    },
                 },
-            },
-            'datepart_method': 'common_fourier',
-            'polynomial_degree': None,
-            'transform_dict': None,
-            'holiday_countries_used': False,
-            'lags': None,
-            'forward_lags': None,
-        }
+                'datepart_method': 'common_fourier',
+                'polynomial_degree': None,
+                'transform_dict': None,
+                'holiday_countries_used': False,
+                'lags': None,
+                'forward_lags': None,
+            }
         )
         self.holiday_country = holiday_country
         self.holiday_countries = (
@@ -298,7 +298,9 @@ class TimeSeriesFeatureDetector(
             }
         else:
             # Explicitly setting to False/empty dict disables; any truthy dict enables
-            self.extended_anomaly_params = extended_anomaly_params if extended_anomaly_params else {}
+            self.extended_anomaly_params = (
+                extended_anomaly_params if extended_anomaly_params else {}
+            )
         self.event_dag_params = resolve_event_dag_params(event_dag_params)
 
         # Model artifacts
@@ -344,9 +346,9 @@ class TimeSeriesFeatureDetector(
         self.event_dag = empty_event_dag(
             params=self.event_dag_params,
             detection_mode=self.detection_mode,
-            construction_mode='broadcast'
-            if self.detection_mode == 'univariate'
-            else 'full',
+            construction_mode=(
+                'broadcast' if self.detection_mode == 'univariate' else 'full'
+            ),
         )
         self.reconstructed = None
         self.reconstructed_components = None
@@ -434,8 +436,12 @@ class TimeSeriesFeatureDetector(
         # and broadcasts shared events back, mirroring AnomalyRemoval behaviour.
         if self.extended_anomaly_params:
             try:
-                clean_residual_scaled = noise_component_scaled + anomaly_component_scaled
-                extended_records = self._detect_extended_anomalies(clean_residual_scaled)
+                clean_residual_scaled = (
+                    noise_component_scaled + anomaly_component_scaled
+                )
+                extended_records = self._detect_extended_anomalies(
+                    clean_residual_scaled
+                )
                 self._anomaly_records_temp = self._merge_anomaly_records(
                     self._anomaly_records_temp, extended_records
                 )
@@ -634,9 +640,9 @@ class TimeSeriesFeatureDetector(
             'event_dag': empty_event_dag(
                 params=self.event_dag_params,
                 detection_mode=self.detection_mode,
-                construction_mode='broadcast'
-                if self.detection_mode == 'univariate'
-                else 'full',
+                construction_mode=(
+                    'broadcast' if self.detection_mode == 'univariate' else 'full'
+                ),
                 series_names=list(self.df_original.columns),
             ),
         }
@@ -663,9 +669,9 @@ class TimeSeriesFeatureDetector(
         self.event_dag = empty_event_dag(
             params=self.event_dag_params,
             detection_mode=self.detection_mode,
-            construction_mode='broadcast'
-            if self.detection_mode == 'univariate'
-            else 'full',
+            construction_mode=(
+                'broadcast' if self.detection_mode == 'univariate' else 'full'
+            ),
             series_names=list(self.df_original.columns),
         )
         self.reconstructed = None
@@ -731,7 +737,9 @@ class TimeSeriesFeatureDetector(
                         ),
                         'series_scale': self.series_scales.get(series_name, 0.0),
                         'series_type': self.series_types.get(series_name, 'detected'),
-                        'season_type': self.series_season_types.get(series_name, 'none'),
+                        'season_type': self.series_season_types.get(
+                            series_name, 'none'
+                        ),
                         'regressor_impacts': {},
                     }
                 )
@@ -1173,8 +1181,12 @@ class TimeSeriesFeatureDetector(
                             entry = {
                                 'date': pd.to_datetime(anomaly[0]).isoformat(),
                                 'magnitude': float(anomaly[1]),
-                                'type': anomaly[2] if len(anomaly) > 2 else 'point_outlier',
-                                'duration': int(anomaly[3]) if len(anomaly) > 3 else None,
+                                'type': (
+                                    anomaly[2] if len(anomaly) > 2 else 'point_outlier'
+                                ),
+                                'duration': (
+                                    int(anomaly[3]) if len(anomaly) > 3 else None
+                                ),
                             }
                         anomaly_entries.append(entry)
                     series_features['anomalies'] = anomaly_entries
@@ -1216,7 +1228,9 @@ class TimeSeriesFeatureDetector(
                     }
 
             # Seasonality changepoints.
-            seasonality_cps = getattr(self, '_seasonality_changepoints', {}).get(col, [])
+            seasonality_cps = getattr(self, '_seasonality_changepoints', {}).get(
+                col, []
+            )
             if seasonality_cps:
                 filtered_scp = _filter_by_date(seasonality_cps)
                 if filtered_scp:
@@ -1226,14 +1240,18 @@ class TimeSeriesFeatureDetector(
                             cp_entries.append(
                                 {
                                     'date': pd.to_datetime(cp.get('date')).isoformat(),
-                                    'description': cp.get('description', 'seasonality_change'),
+                                    'description': cp.get(
+                                        'description', 'seasonality_change'
+                                    ),
                                 }
                             )
                         else:
                             cp_entries.append(
                                 {
                                     'date': pd.to_datetime(cp[0]).isoformat(),
-                                    'description': cp[1] if len(cp) > 1 else 'seasonality_change',
+                                    'description': (
+                                        cp[1] if len(cp) > 1 else 'seasonality_change'
+                                    ),
                                 }
                             )
                     series_features['seasonality_changepoints'] = cp_entries
@@ -1565,7 +1583,9 @@ class TimeSeriesFeatureDetector(
         if 'holiday_countries' in params:
             holiday_countries = params.get('holiday_countries')
             self.holiday_countries = (
-                copy.deepcopy(holiday_countries) if holiday_countries is not None else {}
+                copy.deepcopy(holiday_countries)
+                if holiday_countries is not None
+                else {}
             )
 
         if params.get('holiday_params') is not None:
@@ -1605,9 +1625,9 @@ class TimeSeriesFeatureDetector(
                 params['global_holiday_anomaly_suppression']
             )
         if 'extended_anomaly_params' in params:
-            self.extended_anomaly_params = copy.deepcopy(
-                params['extended_anomaly_params']
-            ) or {}
+            self.extended_anomaly_params = (
+                copy.deepcopy(params['extended_anomaly_params']) or {}
+            )
         if 'event_dag_params' in params:
             self.event_dag_params = resolve_event_dag_params(
                 copy.deepcopy(params['event_dag_params'])
@@ -1641,7 +1661,9 @@ class TimeSeriesFeatureDetector(
 
         if verbose:
             print("=" * 80)
-            print("TUNE WITH SYNTHETIC: real data -> synthetic labels -> detector tuning")
+            print(
+                "TUNE WITH SYNTHETIC: real data -> synthetic labels -> detector tuning"
+            )
             print("=" * 80)
 
         if verbose:
@@ -1688,13 +1710,17 @@ class TimeSeriesFeatureDetector(
             )
 
         if verbose:
-            print("\n[Step 3/4] Optimizing feature detector on labeled synthetic data...")
+            print(
+                "\n[Step 3/4] Optimizing feature detector on labeled synthetic data..."
+            )
         loss_kwargs = copy.deepcopy(loss_params) if loss_params else {}
         if loss_weights is not None:
             loss_kwargs['weights'] = copy.deepcopy(loss_weights)
         from .loss import FeatureDetectionLoss
+
         loss_calc = FeatureDetectionLoss(**loss_kwargs)
         from .optimizer import FeatureDetectionOptimizer
+
         optimizer = FeatureDetectionOptimizer(
             synthetic_generator=tuned_generator,
             loss_calculator=loss_calc,
@@ -1704,10 +1730,14 @@ class TimeSeriesFeatureDetector(
         )
         best_detector_params = optimizer.optimize()
         if best_detector_params is None:
-            raise RuntimeError("Feature detector optimization did not produce parameters.")
+            raise RuntimeError(
+                "Feature detector optimization did not produce parameters."
+            )
 
         if verbose:
-            print("\n[Step 4/4] Applying optimized parameters and fitting on real data...")
+            print(
+                "\n[Step 4/4] Applying optimized parameters and fitting on real data..."
+            )
         self._apply_detector_params(best_detector_params)
         self.fit(real_df)
 

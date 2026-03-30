@@ -160,7 +160,7 @@ class ReconstructionLoss(FeatureDetectionLoss):
 
         # Structural components (predictable signal)
         structural_sum = trend + level_shift + seasonality + holidays
-        
+
         structural_loss = self._robust_structural_loss(observed_series, structural_sum)
         noise_whiteness = self._noise_whiteness_penalty(noise)
 
@@ -247,7 +247,7 @@ class ReconstructionLoss(FeatureDetectionLoss):
         if mask.sum() < 2:
             return 0.0
         resid = resid[mask]
-        
+
         # Robust scale estimation (MAD)
         median = np.median(resid)
         abs_dev = np.abs(resid - median)
@@ -255,15 +255,15 @@ class ReconstructionLoss(FeatureDetectionLoss):
         scale = mad * 1.4826  # Consistency with sigma for normal distribution
         if scale < 1e-9:
             scale = np.std(resid) + 1e-9
-            
+
         # Huber Loss with delta = 1.5 * scale
         delta = 1.5 * scale
         error = np.abs(resid)
         is_small = error <= delta
-        
-        squared_loss = 0.5 * error[is_small]**2
+
+        squared_loss = 0.5 * error[is_small] ** 2
         linear_loss = delta * (error[~is_small] - 0.5 * delta)
-        
+
         loss = np.sum(squared_loss) + np.sum(linear_loss)
         return (loss / len(resid)) / (scale**2 + 1e-9)
 
@@ -362,7 +362,9 @@ class ReconstructionLoss(FeatureDetectionLoss):
             pre_kurtosis = self._excess_kurtosis(pre_finite)
             post_kurtosis = self._excess_kurtosis(post_finite)
             if pre_kurtosis > 0.5:  # Only penalize if there are heavy tails to capture
-                kurtosis_improvement = max(0.0, (pre_kurtosis - post_kurtosis) / (pre_kurtosis + 1e-6))
+                kurtosis_improvement = max(
+                    0.0, (pre_kurtosis - post_kurtosis) / (pre_kurtosis + 1e-6)
+                )
 
         # Blend std and kurtosis improvement
         combined_improvement = 0.7 * std_improvement + 0.3 * kurtosis_improvement
@@ -372,9 +374,7 @@ class ReconstructionLoss(FeatureDetectionLoss):
         deficit = self.anomaly_improvement_target - combined_improvement
         return min(max(deficit, 0.0), 1.5)
 
-    def _seasonality_shape_penalty(
-        self, observed, trend, level_shift, seasonal_bundle
-    ):
+    def _seasonality_shape_penalty(self, observed, trend, level_shift, seasonal_bundle):
         """
         Wasserstein-based penalty assessing whether the seasonal component captures
         the right shape/energy of the detrended signal's periodic structure.
@@ -410,15 +410,21 @@ class ReconstructionLoss(FeatureDetectionLoss):
         if diff_scale < 1e-6 or not np.isfinite(diff_scale):
             diff_scale = float(np.mean(np.abs(det_diff))) + 1e-6
 
-        diff_wasserstein = np.mean(np.abs(det_diff_sorted - sea_diff_sorted)) / (diff_scale + 1e-6)
+        diff_wasserstein = np.mean(np.abs(det_diff_sorted - sea_diff_sorted)) / (
+            diff_scale + 1e-6
+        )
 
         # Energy ratio: seasonal should capture a meaningful portion of detrended energy
-        detrended_energy = float(np.sum(detrended ** 2))
+        detrended_energy = float(np.sum(detrended**2))
         residual_energy = float(np.sum((detrended - seasonal_arr) ** 2))
         if detrended_energy > 1e-6:
             energy_capture = 1.0 - (residual_energy / detrended_energy)
             # Penalize if capturing too little or negative (worse than nothing)
-            energy_penalty = max(0.0, 0.3 - energy_capture) if energy_capture >= 0 else abs(energy_capture)
+            energy_penalty = (
+                max(0.0, 0.3 - energy_capture)
+                if energy_capture >= 0
+                else abs(energy_capture)
+            )
         else:
             energy_penalty = 0.0
 
@@ -436,7 +442,7 @@ class ReconstructionLoss(FeatureDetectionLoss):
         if std < 1e-9:
             return 0.0
         m4 = np.mean((values - mean) ** 4)
-        return (m4 / (std ** 4)) - 3.0
+        return (m4 / (std**4)) - 3.0
 
     @staticmethod
     def _autocorrelation(values, lag):

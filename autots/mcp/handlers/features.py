@@ -1,4 +1,5 @@
 """Handlers for event risk forecasting and time series feature detection tools."""
+
 import base64
 import io
 import json
@@ -7,6 +8,7 @@ import pandas as pd
 
 try:
     import matplotlib
+
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 except ImportError:
@@ -14,6 +16,7 @@ except ImportError:
 
 try:
     from mcp.types import TextContent, ImageContent
+
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -22,7 +25,11 @@ from autots import EventRiskForecast
 from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 
 from autots.mcp.cache import cache_object, get_cached_object
-from autots.mcp.data_utils import load_to_dataframe, dataframe_to_output, build_csv_metadata
+from autots.mcp.data_utils import (
+    load_to_dataframe,
+    dataframe_to_output,
+    build_csv_metadata,
+)
 
 
 async def handle_forecast_event_risk(arguments: dict, log_progress) -> dict:
@@ -104,8 +111,16 @@ async def handle_get_event_risk_results(arguments: dict, log_progress) -> list:
         result = {
             'threshold': metadata.get('threshold'),
             'forecast_length': metadata.get('forecast_length'),
-            'upper_risk': dataframe_to_output(upper_risk_df, format_type) if upper_risk_df is not None else None,
-            'lower_risk': dataframe_to_output(lower_risk_df, format_type) if lower_risk_df is not None else None,
+            'upper_risk': (
+                dataframe_to_output(upper_risk_df, format_type)
+                if upper_risk_df is not None
+                else None
+            ),
+            'lower_risk': (
+                dataframe_to_output(lower_risk_df, format_type)
+                if lower_risk_df is not None
+                else None
+            ),
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 

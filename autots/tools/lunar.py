@@ -2,6 +2,7 @@
 Modified from https://stackoverflow.com/a/2531541/9492254
 by keturn and earlier from John Walker
 """
+
 from math import sin, cos, floor, sqrt, pi, radians
 import bisect
 import numpy as np

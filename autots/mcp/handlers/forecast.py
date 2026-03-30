@@ -1,4 +1,5 @@
 """Handlers for running forecasts: forecast_fast, forecast_explainable, forecast_custom."""
+
 import json
 from pathlib import Path
 
@@ -6,6 +7,7 @@ import pandas as pd
 
 try:
     from mcp.types import TextContent
+
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -39,7 +41,9 @@ async def handle_forecast_fast(arguments: dict, log_progress) -> dict:
         )
 
     if not profile_template:
-        template_path = str(Path(__file__).parent.parent / 'mosaic_profile_template.json')
+        template_path = str(
+            Path(__file__).parent.parent / 'mosaic_profile_template.json'
+        )
         with open(template_path, 'r') as f:
             profile_template = json.load(f)
 
@@ -124,7 +128,9 @@ async def handle_forecast_explainable(arguments: dict, log_progress) -> dict:
         validation_method='backwards',
     )
     model.fit(df)
-    await log_progress("forecast_explainable: model search complete, generating forecast")
+    await log_progress(
+        "forecast_explainable: model search complete, generating forecast"
+    )
     prediction = model.predict()
 
     prediction_id = cache_object(
@@ -171,9 +177,13 @@ async def handle_forecast_custom(arguments: dict, log_progress) -> dict:
     future_regressor_train_df = None
     future_regressor_forecast_df = None
     if future_regressor_train:
-        future_regressor_train_df = load_to_dataframe(future_regressor_train, data_format="wide")
+        future_regressor_train_df = load_to_dataframe(
+            future_regressor_train, data_format="wide"
+        )
     if future_regressor_forecast:
-        future_regressor_forecast_df = load_to_dataframe(future_regressor_forecast, data_format="wide")
+        future_regressor_forecast_df = load_to_dataframe(
+            future_regressor_forecast, data_format="wide"
+        )
 
     if not data_id:
         data_id = cache_object(

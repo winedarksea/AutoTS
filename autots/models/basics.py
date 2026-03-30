@@ -5077,7 +5077,9 @@ class BallTreeRegressionMotif(ModelObject):
         failed_flag = False
         if parallel:
             try:
-                self.Xa = Parallel(n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000)(
+                self.Xa = Parallel(
+                    n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000
+                )(
                     delayed(rolling_x_regressor_regressor)(
                         compare_df[x_col].to_frame(),
                         mean_rolling_periods=self.mean_rolling_periods,

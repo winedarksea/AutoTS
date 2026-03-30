@@ -107,9 +107,7 @@ class ModelObject(object):
                 try:
                     from autots.tools.mlflow import modelobject_fit_start
 
-                    mlflow_ctx = modelobject_fit_start(
-                        self, args=args, kwargs=kwargs
-                    )
+                    mlflow_ctx = modelobject_fit_start(self, args=args, kwargs=kwargs)
                 except Exception:
                     mlflow_ctx = None
                 try:
@@ -706,50 +704,74 @@ class PredictionObject(object):
         new_obj = PredictionObject(
             model_name=self.model_name,
             forecast_length=self.forecast_length,
-            forecast_index=self.forecast_index.copy()
-            if isinstance(self.forecast_index, pd.Index)
-            else self.forecast_index,
-            forecast_columns=self.forecast_columns.copy()
-            if isinstance(self.forecast_columns, pd.Index)
-            else self.forecast_columns,
-            lower_forecast=self.lower_forecast.copy()
-            if isinstance(self.lower_forecast, pd.DataFrame)
-            else self.lower_forecast,
-            forecast=self.forecast.copy()
-            if isinstance(self.forecast, pd.DataFrame)
-            else self.forecast,
-            upper_forecast=self.upper_forecast.copy()
-            if isinstance(self.upper_forecast, pd.DataFrame)
-            else self.upper_forecast,
+            forecast_index=(
+                self.forecast_index.copy()
+                if isinstance(self.forecast_index, pd.Index)
+                else self.forecast_index
+            ),
+            forecast_columns=(
+                self.forecast_columns.copy()
+                if isinstance(self.forecast_columns, pd.Index)
+                else self.forecast_columns
+            ),
+            lower_forecast=(
+                self.lower_forecast.copy()
+                if isinstance(self.lower_forecast, pd.DataFrame)
+                else self.lower_forecast
+            ),
+            forecast=(
+                self.forecast.copy()
+                if isinstance(self.forecast, pd.DataFrame)
+                else self.forecast
+            ),
+            upper_forecast=(
+                self.upper_forecast.copy()
+                if isinstance(self.upper_forecast, pd.DataFrame)
+                else self.upper_forecast
+            ),
             prediction_interval=self.prediction_interval,
             predict_runtime=self.predict_runtime,
             fit_runtime=self.fit_runtime,
             model_parameters=copy.deepcopy(self.model_parameters),
             transformation_parameters=copy.deepcopy(self.transformation_parameters),
             transformation_runtime=self.transformation_runtime,
-            per_series_metrics=self.per_series_metrics.copy()
-            if isinstance(self.per_series_metrics, pd.DataFrame)
-            else self.per_series_metrics,
-            per_timestamp=self.per_timestamp.copy()
-            if isinstance(self.per_timestamp, pd.DataFrame)
-            else self.per_timestamp,
-            avg_metrics=self.avg_metrics.copy()
-            if isinstance(self.avg_metrics, pd.Series)
-            else self.avg_metrics,
-            avg_metrics_weighted=self.avg_metrics_weighted.copy()
-            if isinstance(self.avg_metrics_weighted, pd.Series)
-            else self.avg_metrics_weighted,
-            full_mae_error=self.full_mae_error.copy()
-            if isinstance(self.full_mae_error, np.ndarray)
-            else self.full_mae_error,
+            per_series_metrics=(
+                self.per_series_metrics.copy()
+                if isinstance(self.per_series_metrics, pd.DataFrame)
+                else self.per_series_metrics
+            ),
+            per_timestamp=(
+                self.per_timestamp.copy()
+                if isinstance(self.per_timestamp, pd.DataFrame)
+                else self.per_timestamp
+            ),
+            avg_metrics=(
+                self.avg_metrics.copy()
+                if isinstance(self.avg_metrics, pd.Series)
+                else self.avg_metrics
+            ),
+            avg_metrics_weighted=(
+                self.avg_metrics_weighted.copy()
+                if isinstance(self.avg_metrics_weighted, pd.Series)
+                else self.avg_metrics_weighted
+            ),
+            full_mae_error=(
+                self.full_mae_error.copy()
+                if isinstance(self.full_mae_error, np.ndarray)
+                else self.full_mae_error
+            ),
             model=None,  # Don't copy model objects as they can be complex
             transformer=None,  # Don't copy transformer objects
-            result_windows=copy.deepcopy(self.result_windows)
-            if self.result_windows is not None
-            else None,
-            components=self.components.copy()
-            if isinstance(self.components, pd.DataFrame)
-            else self.components,
+            result_windows=(
+                copy.deepcopy(self.result_windows)
+                if self.result_windows is not None
+                else None
+            ),
+            components=(
+                self.components.copy()
+                if isinstance(self.components, pd.DataFrame)
+                else self.components
+            ),
         )
 
         # Copy additional attributes that may have been set after initialization
@@ -812,18 +834,18 @@ class PredictionObject(object):
             value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
-        upload_upper[
-            interval_name
-        ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
+        upload_upper[interval_name] = (
+            f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
+        )
         upload_lower = pd.melt(
             self.lower_forecast.rename_axis(index='datetime').reset_index(),
             var_name=id_name,
             value_name=value_name,
             id_vars="datetime",
         ).set_index("datetime")
-        upload_lower[
-            interval_name
-        ] = f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
+        upload_lower[interval_name] = (
+            f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
+        )
 
         upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
         if datetime_column is not None:

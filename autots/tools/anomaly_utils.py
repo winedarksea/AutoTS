@@ -1281,7 +1281,9 @@ def dates_to_holidays(
                         if "weekofmonth" in on and "weekofmonth" not in hdates.columns:
                             hdates["weekofmonth"] = (hdates["day"] - 1) // 7 + 1
                         if "weekfromend" in on and "weekfromend" not in hdates.columns:
-                            hdates["weekfromend"] = (hdates["day"] - hdates["day"].max()) // -7
+                            hdates["weekfromend"] = (
+                                hdates["day"] - hdates["day"].max()
+                            ) // -7
                         if "dayofweek" in on and "dayofweek" not in hdates.columns:
                             hdates["dayofweek"] = hdates.index.dayofweek
                         populated_holidays = (
@@ -1301,7 +1303,9 @@ def dates_to_holidays(
                         if "weekofmonth" in on and "weekofmonth" not in idates.columns:
                             idates["weekofmonth"] = (idates["day"] - 1) // 7 + 1
                         if "weekfromend" in on and "weekfromend" not in idates.columns:
-                            idates["weekfromend"] = (idates["day"] - idates["day"].max()) // -7
+                            idates["weekfromend"] = (
+                                idates["day"] - idates["day"].max()
+                            ) // -7
                         if "dayofweek" in on and "dayofweek" not in idates.columns:
                             idates["dayofweek"] = idates.index.dayofweek
                         populated_holidays = (
@@ -1321,7 +1325,9 @@ def dates_to_holidays(
                         if "weekofmonth" in on and "weekofmonth" not in idates.columns:
                             idates["weekofmonth"] = (idates["day"] - 1) // 7 + 1
                         if "weekfromend" in on and "weekfromend" not in idates.columns:
-                            idates["weekfromend"] = (idates["day"] - idates["day"].max()) // -7
+                            idates["weekfromend"] = (
+                                idates["day"] - idates["day"].max()
+                            ) // -7
                         if "dayofweek" in on and "dayofweek" not in idates.columns:
                             idates["dayofweek"] = idates.index.dayofweek
                         populated_holidays = (

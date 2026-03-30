@@ -169,16 +169,16 @@ if HAS_TORCH:
             C = len(components)
 
             stacked = torch.stack(components, dim=-1)  # (B, N, T, C)
-            original = stacked.reshape(B * N * T, C)   # (B*N*T, C)
+            original = stacked.reshape(B * N * T, C)  # (B*N*T, C)
 
             # project scalar components to d_model embeddings
             x = stacked.reshape(B * N * T, C, 1)
-            x = F.gelu(self.component_proj(x))          # (B*N*T, C, D)
+            x = F.gelu(self.component_proj(x))  # (B*N*T, C, D)
 
             # self-attention: each component's representation is contextualized
             # by all other components before producing its contribution
             attended, _ = self._direct_weave(x, x, x)  # (B*N*T, C, D)
-            attended = self.norm(attended + x)           # residual in embedding space
+            attended = self.norm(attended + x)  # residual in embedding space
 
             # project attended representation directly to scalar contribution.
             # unconstrained output: each component can contribute any signed amount.

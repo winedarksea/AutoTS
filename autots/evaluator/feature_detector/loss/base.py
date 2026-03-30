@@ -85,9 +85,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         self.focus_component_weights = bool(focus_component_weights)
         invalid_loss_mode = str(invalid_loss_mode).lower().strip()
         if invalid_loss_mode not in {'penalty', 'raise'}:
-            raise ValueError(
-                "invalid_loss_mode must be either 'penalty' or 'raise'."
-            )
+            raise ValueError("invalid_loss_mode must be either 'penalty' or 'raise'.")
         self.invalid_loss_mode = invalid_loss_mode
         self.invalid_loss_penalty = max(1.0, float(invalid_loss_penalty))
         self._invalid_loss_warnings = set()
@@ -161,9 +159,11 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             raise ValueError('detected_features and true_labels must be provided.')
 
         detected_components = self._resolve_components(
-            detected_features.get('components')
-            if isinstance(detected_features, dict)
-            else None,
+            (
+                detected_features.get('components')
+                if isinstance(detected_features, dict)
+                else None
+            ),
             series_name,
         )
         true_components = self._resolve_components(true_components, series_name)
@@ -443,7 +443,9 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             return not self._is_empty_label(true_series.get('seasonality_changepoints'))
         if key == 'noise_level_loss':
             has_level = not self._is_empty_label(true_series.get('series_noise_level'))
-            has_ratio = not self._is_empty_label(true_series.get('noise_to_signal_ratio'))
+            has_ratio = not self._is_empty_label(
+                true_series.get('noise_to_signal_ratio')
+            )
             return bool(has_level or has_ratio)
         if key == 'noise_regime_loss':
             return not self._is_empty_label(true_series.get('noise_changepoints'))
@@ -500,7 +502,11 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         if not invalid:
             return numeric
 
-        context = f"{component_name}" if series_name is None else f"{component_name}:{series_name}"
+        context = (
+            f"{component_name}"
+            if series_name is None
+            else f"{component_name}:{series_name}"
+        )
         message = (
             f"Invalid loss value encountered for {context}. "
             f"Using mode '{self.invalid_loss_mode}'."

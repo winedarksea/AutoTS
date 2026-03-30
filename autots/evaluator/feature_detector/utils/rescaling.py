@@ -132,4 +132,3 @@ class RescalingMixin:
                 converted[name] = float(value * scale)
             rescaled[series_name] = converted
         return rescaled
-

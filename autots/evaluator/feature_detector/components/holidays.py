@@ -18,10 +18,14 @@ class HolidayMixin:
         if value is None:
             return None
         if isinstance(value, (list, tuple, set)):
-            cleaned = [str(x).upper() for x in value if x is not None and str(x).strip()]
+            cleaned = [
+                str(x).upper() for x in value if x is not None and str(x).strip()
+            ]
             return cleaned if cleaned else None
         if isinstance(value, dict):
-            cleaned = [str(x).upper() for x in value.keys() if x is not None and str(x).strip()]
+            cleaned = [
+                str(x).upper() for x in value.keys() if x is not None and str(x).strip()
+            ]
             return cleaned if cleaned else None
         value = str(value).strip()
         if not value:
@@ -147,7 +151,9 @@ class HolidayMixin:
         for series_name in added_flags.columns:
             existing = {pd.Timestamp(x) for x in merged.get(series_name, [])}
             series_flags = added_flags[series_name]
-            existing.update(pd.Timestamp(x) for x in series_flags[series_flags > 0].index)
+            existing.update(
+                pd.Timestamp(x) for x in series_flags[series_flags > 0].index
+            )
             merged[series_name] = sorted(existing)
         return merged
 
@@ -157,7 +163,10 @@ class HolidayMixin:
         """Build the merged holiday regressor design matrix for any date index."""
         index = pd.DatetimeIndex(dates)
         anomaly_regressors = pd.DataFrame(index=index)
-        if include_anomaly_rules and getattr(self, 'holiday_detector', None) is not None:
+        if (
+            include_anomaly_rules
+            and getattr(self, 'holiday_detector', None) is not None
+        ):
             try:
                 anomaly_regressors = self.holiday_detector.dates_to_holidays(
                     index, style='flag'
@@ -278,7 +287,9 @@ class HolidayMixin:
         if holiday_regressors.empty:
             holiday_regressors = pd.DataFrame(index=residual_df.index)
         else:
-            holiday_regressors = holiday_regressors.reindex(residual_df.index).fillna(0.0)
+            holiday_regressors = holiday_regressors.reindex(residual_df.index).fillna(
+                0.0
+            )
 
         holiday_dates = {}
         holiday_splash_dates = {}  # For storing splash/bridge days separately
@@ -293,9 +304,9 @@ class HolidayMixin:
                 # In univariate mode, all series share the same holidays
                 for col in residual_df.columns:
                     holiday_dates[col] = holiday_list
-                    holiday_splash_dates[
-                        col
-                    ] = []  # Will be populated during final seasonality fit
+                    holiday_splash_dates[col] = (
+                        []
+                    )  # Will be populated during final seasonality fit
             else:
                 for col in residual_df.columns:
                     holiday_dates[col] = []
@@ -310,9 +321,9 @@ class HolidayMixin:
                 )
                 flagged = series_flags[series_flags > 0].index
                 holiday_dates[col] = [pd.Timestamp(ix) for ix in flagged]
-                holiday_splash_dates[
-                    col
-                ] = []  # Will be populated during final seasonality fit
+                holiday_splash_dates[col] = (
+                    []
+                )  # Will be populated during final seasonality fit
 
         holiday_dates = self._merge_holiday_dates_by_series(
             holiday_dates, calendar_flags

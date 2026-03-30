@@ -96,9 +96,7 @@ class LossMetricsMixin:
         # Precision: unmatched detections are false positives at full penalty (1.0).
         n_fp = n_det - n_matched
         precision_score = (
-            (n_matched * matched_log_penalty + n_fp * 1.0) / n_det
-            if n_det > 0
-            else 0.0
+            (n_matched * matched_log_penalty + n_fp * 1.0) / n_det if n_det > 0 else 0.0
         )
 
         # Count-mismatch penalty — stronger signal than the old 0.15 factor
@@ -107,7 +105,11 @@ class LossMetricsMixin:
         count_penalty = 0.3 * count_ratio
 
         precision_weight = 1.0 - recall_weight
-        combined = recall_weight * recall_score + precision_weight * precision_score + count_penalty
+        combined = (
+            recall_weight * recall_score
+            + precision_weight * precision_score
+            + count_penalty
+        )
         # Cap at 1.0 so that wrong detections are never penalized more than no
         # detections (which also return 1.0).  Unbounded values invert the
         # gradient: the optimizer would prefer zero detections over any
@@ -144,20 +146,39 @@ class LossMetricsMixin:
             sigma_days = max(self.anomaly_tolerance_days, 0.5)
 
         if not true_entries and not detected_entries:
-            return {'soft_precision': 1.0, 'soft_recall': 1.0, 'soft_f1': 1.0, 'match_scores': []}
+            return {
+                'soft_precision': 1.0,
+                'soft_recall': 1.0,
+                'soft_f1': 1.0,
+                'match_scores': [],
+            }
         if not true_entries:
-            return {'soft_precision': 0.0, 'soft_recall': 1.0, 'soft_f1': 0.0, 'match_scores': []}
+            return {
+                'soft_precision': 0.0,
+                'soft_recall': 1.0,
+                'soft_f1': 0.0,
+                'match_scores': [],
+            }
         if not detected_entries:
-            return {'soft_precision': 1.0, 'soft_recall': 0.0, 'soft_f1': 0.0, 'match_scores': []}
+            return {
+                'soft_precision': 1.0,
+                'soft_recall': 0.0,
+                'soft_f1': 0.0,
+                'match_scores': [],
+            }
 
-        t_dates = np.array([
-            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
-            for e in true_entries
-        ])
-        d_dates = np.array([
-            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
-            for e in detected_entries
-        ])
+        t_dates = np.array(
+            [
+                (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for e in true_entries
+            ]
+        )
+        d_dates = np.array(
+            [
+                (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for e in detected_entries
+            ]
+        )
 
         # Pairwise distance matrix
         dists = np.abs(t_dates[:, None] - d_dates[None, :])  # (n_true, n_det)
@@ -174,7 +195,7 @@ class LossMetricsMixin:
 
         # Soft F1 (beta=1.2, slightly recall-favoring)
         beta = 1.2
-        beta_sq = beta ** 2
+        beta_sq = beta**2
         denom = beta_sq * soft_precision + soft_recall + 1e-9
         soft_f1 = (1.0 + beta_sq) * (soft_precision * soft_recall) / denom
 
@@ -210,9 +231,10 @@ class LossMetricsMixin:
         amplitude_penalty = abs(det_std - true_std) / (true_std + 1e-6)
 
         mean_scale = true_std + abs(float(np.nanmean(true_arr))) + 1e-6
-        mean_penalty = abs(
-            float(np.nanmean(detected_arr)) - float(np.nanmean(true_arr))
-        ) / mean_scale
+        mean_penalty = (
+            abs(float(np.nanmean(detected_arr)) - float(np.nanmean(true_arr)))
+            / mean_scale
+        )
 
         if detected_arr.size < 3:
             corr_penalty = 1.0
@@ -275,7 +297,9 @@ class LossMetricsMixin:
         # 1. Value-level Wasserstein: compare sorted distributions
         det_sorted = np.sort(detected_arr)
         true_sorted = np.sort(true_arr)
-        value_wasserstein = np.mean(np.abs(det_sorted - true_sorted)) / (true_std + 1e-6)
+        value_wasserstein = np.mean(np.abs(det_sorted - true_sorted)) / (
+            true_std + 1e-6
+        )
 
         # 2. Differential Wasserstein: compare step-to-step changes
         # This captures shape/energy better than point-wise comparison
@@ -287,7 +311,9 @@ class LossMetricsMixin:
 
         det_diff_sorted = np.sort(det_diff)
         true_diff_sorted = np.sort(true_diff)
-        diff_wasserstein = np.mean(np.abs(det_diff_sorted - true_diff_sorted)) / (diff_std + 1e-6)
+        diff_wasserstein = np.mean(np.abs(det_diff_sorted - true_diff_sorted)) / (
+            diff_std + 1e-6
+        )
 
         # 3. Energy ratio: total absolute energy comparison
         det_energy = float(np.sum(np.abs(detected_arr)))
@@ -344,14 +370,18 @@ class LossMetricsMixin:
 
         # 1. Overall spectral error (normalized by true spectral power)
         # Using L2 norm (power) is critical because L1 metric scales with N when evaluating noise
-        true_power = true_spectrum ** 2
-        detected_power = detected_spectrum ** 2
-        
+        true_power = true_spectrum**2
+        detected_power = detected_spectrum**2
+
         true_spectral_power = float(np.mean(true_power))
         if true_spectral_power < 1e-12:
             # True seasonality has negligible spectral energy
             det_spectral_power = float(np.mean(detected_power))
-            return min(det_spectral_power * 100.0, 3.0) if det_spectral_power > 1e-12 else 0.0
+            return (
+                min(det_spectral_power * 100.0, 3.0)
+                if det_spectral_power > 1e-12
+                else 0.0
+            )
 
         spectral_mse = float(np.mean(np.abs(true_power - detected_power)))
         normalized_spectral_mae = spectral_mse / (true_spectral_power + 1e-12)
@@ -386,7 +416,9 @@ class LossMetricsMixin:
                 else:
                     spectral_corr_penalty = 1.0 - max(0.0, corr)
             else:
-                spectral_corr_penalty = 0.0 if (t_std < 1e-12 and d_std < 1e-12) else 1.0
+                spectral_corr_penalty = (
+                    0.0 if (t_std < 1e-12 and d_std < 1e-12) else 1.0
+                )
         else:
             spectral_corr_penalty = 0.0
 
@@ -446,8 +478,12 @@ class LossMetricsMixin:
             unique_keys = np.unique(group_keys)
             if len(unique_keys) < 3:
                 return None  # Too few groups for meaningful profile
-            det_means = np.array([np.mean(values_det[group_keys == k]) for k in unique_keys])
-            true_means = np.array([np.mean(values_true[group_keys == k]) for k in unique_keys])
+            det_means = np.array(
+                [np.mean(values_det[group_keys == k]) for k in unique_keys]
+            )
+            true_means = np.array(
+                [np.mean(values_true[group_keys == k]) for k in unique_keys]
+            )
             d_std = float(np.std(det_means))
             t_std = float(np.std(true_means))
             if t_std < 1e-12:
@@ -471,7 +507,9 @@ class LossMetricsMixin:
 
             # Infer frequency from median timedelta
             if len(idx) > 1:
-                median_delta = np.median(np.diff(idx.values).astype('timedelta64[s]').astype(float))
+                median_delta = np.median(
+                    np.diff(idx.values).astype('timedelta64[s]').astype(float)
+                )
             else:
                 median_delta = 86400.0  # Default to daily
 
@@ -529,7 +567,9 @@ class LossMetricsMixin:
         return min(avg_penalty, 3.0)
 
     @staticmethod
-    def _component_yearly_fourier_penalty(detected, true, date_index=None, max_harmonics=3):
+    def _component_yearly_fourier_penalty(
+        detected, true, date_index=None, max_harmonics=3
+    ):
         """Compare yearly seasonal shape through low-order Fourier coefficients."""
         if date_index is None or not isinstance(date_index, pd.DatetimeIndex):
             return 0.5
@@ -616,14 +656,18 @@ class LossMetricsMixin:
             # All FN: maximum penalty regardless of sigma
             return 1.0
 
-        t_days = np.array([
-            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
-            for e in true_entries
-        ])
-        d_days = np.array([
-            (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
-            for e in detected_entries
-        ])
+        t_days = np.array(
+            [
+                (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for e in true_entries
+            ]
+        )
+        d_days = np.array(
+            [
+                (e[0] - pd.Timestamp('1970-01-01')).total_seconds() / 86400.0
+                for e in detected_entries
+            ]
+        )
 
         safe_sigma = max(float(sigma), 0.5)
         dists = np.abs(t_days[:, None] - d_days[None, :])  # (n_true, n_det)
@@ -635,7 +679,7 @@ class LossMetricsMixin:
         soft_fn = float(np.sum(1.0 - best_true_match))  # recall gap = FN mass
 
         # Soft FP: for each detection, how well it aligns with any true CP.
-        best_det_match = np.max(proximity, axis=0)   # (n_det,)
+        best_det_match = np.max(proximity, axis=0)  # (n_det,)
         soft_fp = float(np.sum(1.0 - best_det_match))  # precision gap = FP mass
 
         # Tversky Index: TP / (TP + alpha·FP + beta·FN), alpha<beta → prefers recall

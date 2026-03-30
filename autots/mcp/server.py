@@ -10,6 +10,7 @@ Main entry point and request routing. Delegates to:
 Re-exports of sub-module symbols are provided at the bottom of this file for
 backwards compatibility (tests and other code that imports from autots.mcp.server).
 """
+
 import asyncio
 import json
 import logging
@@ -46,6 +47,7 @@ try:
     from mcp.types import TextContent
 
     import matplotlib
+
     matplotlib.use('Agg')
 
     MCP_AVAILABLE = True
@@ -83,7 +85,9 @@ if MCP_AVAILABLE:
                 return [
                     TextContent(
                         type="text",
-                        text=json.dumps({"error": f"Unknown tool: {name}"}, separators=(',', ':')),
+                        text=json.dumps(
+                            {"error": f"Unknown tool: {name}"}, separators=(',', ':')
+                        ),
                     )
                 ]
             return await handler(arguments, _log_progress)
