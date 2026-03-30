@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Union
+from typing import Any, Iterable, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -374,8 +374,12 @@ def plot_feature_panels(
     title_prefix: str = "Feature Analysis",
     save_path: Optional[str] = None,
     show: bool = True,
+    separate_noise_anomaly_panels: bool = True,
+    dual_axis_seasonality_holidays: bool = True,
+    dual_axis_trend_level_shift: bool = True,
+    show_reconstructed_on_top: bool = False,
 ):
-    """Create a four-panel diagnostic plot shared by generator and detector."""
+    """Create a diagnostic plot shared by generator and detector."""
     # TODO: switch the anomaly type labels to colored by type, only impact number shown on label, and prevent label overlap
     if not HAS_MATPLOTLIB:  # pragma: no cover - runtime guard
         raise ImportError("matplotlib is required for plotting")
@@ -392,8 +396,14 @@ def plot_feature_panels(
     anomalies_component = _component_array(components, 'anomalies', n)
 
     combined_trend = trend + level_shift
+    reconstructed_no_residual = (
+        trend + level_shift + seasonality + holidays + anomalies_component
+    )
 
-    fig, axes = plt.subplots(4, 1, figsize=figsize, sharex=True)
+    panel_count = 5 if separate_noise_anomaly_panels else 4
+    fig, axes = plt.subplots(panel_count, 1, figsize=figsize, sharex=True)
+    if not isinstance(axes, np.ndarray):
+        axes = np.asarray([axes])
 
     # Overall Title
     type_suffix = (
@@ -413,6 +423,16 @@ def plot_feature_panels(
         linewidth=1.2,
         label='Series',
     )
+    if show_reconstructed_on_top:
+        ax.plot(
+            date_index,
+            reconstructed_no_residual,
+            color='tab:orange',
+            alpha=0.8,
+            linewidth=1.15,
+            linestyle='--',
+            label='Reconstructed (No Residual)',
+        )
 
     anomalies = labels.get('anomalies', [])
     if anomalies:
@@ -478,24 +498,86 @@ def plot_feature_panels(
             label='Seasonality CPs',
         ),
     ]
+    if show_reconstructed_on_top:
+        legend_elements.insert(
+            1,
+            Line2D(
+                [0],
+                [0],
+                color='tab:orange',
+                linestyle='--',
+                linewidth=1.5,
+                label='Reconstructed (No Residual)',
+            ),
+        )
+    top_values = [np.asarray(series_data.values, dtype=float)]
+    if show_reconstructed_on_top:
+        top_values.append(np.asarray(reconstructed_no_residual, dtype=float))
+    top_values = np.concatenate(top_values)
+    finite_top_values = top_values[np.isfinite(top_values)]
+    if finite_top_values.size > 0:
+        ymin = float(np.nanmin(finite_top_values))
+        ymax = float(np.nanmax(finite_top_values))
+        if np.isfinite(ymin) and np.isfinite(ymax):
+            if np.isclose(ymin, ymax):
+                pad = max(abs(ymin) * 0.05, 1.0)
+            else:
+                pad = (ymax - ymin) * 0.03
+            ax.set_ylim(ymin - pad, ymax + pad)
+
     ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
     ax.set_ylabel('Value', fontsize=10)
     ax.set_title('Series with Key Events', fontsize=12, fontweight='bold')
     ax.grid(True, alpha=0.3)
 
-    # Panel 2: Trend vs Level Shifts
+    # Panel 2: Trend and level-shift decomposition
     ax = axes[1]
-    ax.plot(
+    trend_line = ax.plot(
         date_index, trend, color='tab:green', linewidth=1.4, alpha=0.8, label='Trend'
     )
-    ax.plot(
+    combined_line = ax.plot(
         date_index,
         combined_trend,
         color='black',
         linewidth=1.4,
         alpha=0.85,
-        label='Trend + Level Shifts',
+        label='Trend + Level Shift',
     )
+
+    level_axis = ax
+    level_shift_for_annotation = combined_trend
+    if dual_axis_trend_level_shift:
+        level_axis = ax.twinx()
+        level_line = level_axis.plot(
+            date_index,
+            level_shift,
+            color='purple',
+            linewidth=1.1,
+            alpha=0.8,
+            label='Level Shift Component (right axis)',
+        )
+        level_shift_for_annotation = level_shift
+        finite_ls = level_shift[np.isfinite(level_shift)]
+        if finite_ls.size > 0:
+            abs_scale = float(np.nanpercentile(np.abs(finite_ls), 98))
+            if not np.isfinite(abs_scale) or abs_scale < 1e-9:
+                abs_scale = float(np.nanstd(finite_ls)) * 2.0
+            if not np.isfinite(abs_scale) or abs_scale < 1e-9:
+                abs_scale = 1.0
+            level_axis.set_ylim(-abs_scale * 1.15, abs_scale * 1.15)
+        level_axis.set_ylabel('Level Shift', fontsize=10, color='purple')
+        level_axis.tick_params(axis='y', labelcolor='purple')
+        legend_lines = trend_line + combined_line + level_line
+    else:
+        level_line = ax.plot(
+            date_index,
+            level_shift,
+            color='purple',
+            linewidth=1.0,
+            alpha=0.75,
+            label='Level Shift Component',
+        )
+        legend_lines = trend_line + combined_line + level_line
 
     for record in labels.get('trend_changepoints', []):
         date, *_ = _extract_event(record, ['date', 'prior_slope', 'new_slope'])
@@ -515,9 +597,9 @@ def plot_feature_panels(
         ax.axvline(ts, color='purple', alpha=0.45, linestyle=':', linewidth=1.4)
         try:
             idx = date_index.get_loc(ts)
-            ax.annotate(
+            level_axis.annotate(
                 f"{magnitude:+.1f}" if magnitude is not None else '',
-                xy=(ts, combined_trend[idx]),
+                xy=(ts, level_shift_for_annotation[idx]),
                 xytext=(8, 10),
                 textcoords='offset points',
                 fontsize=8,
@@ -528,31 +610,69 @@ def plot_feature_panels(
             pass
 
     ax.set_ylabel('Value', fontsize=10)
-    ax.set_title('Trend & Level Shifts', fontsize=12, fontweight='bold')
-    ax.legend(loc='best', fontsize=9)
+    ax.set_title('Trend and Level Shift Overlay', fontsize=12, fontweight='bold')
+    ax.legend(
+        legend_lines,
+        [line.get_label() for line in legend_lines],
+        loc='best',
+        fontsize=9,
+    )
     ax.grid(True, alpha=0.3)
 
     # Panel 3: Seasonality + Holiday impacts
     ax = axes[2]
-    ax.plot(
-        date_index,
-        seasonality,
-        color='tab:cyan',
-        linewidth=1.0,
-        alpha=0.7,
-        label='Seasonality',
-    )
-    ax.plot(
-        date_index, holidays, color='orange', linewidth=1.2, alpha=0.8, label='Holidays'
-    )
-    ax.plot(
-        date_index,
-        seasonality + holidays,
-        color='tab:blue',
-        linewidth=1.2,
-        alpha=0.75,
-        label='Combined',
-    )
+    if dual_axis_seasonality_holidays:
+        line_season = ax.plot(
+            date_index,
+            seasonality,
+            color='tab:cyan',
+            linewidth=1.1,
+            alpha=0.8,
+            label='Seasonality (left axis)',
+        )
+        ax.set_ylabel('Seasonality', fontsize=10, color='tab:cyan')
+        ax.tick_params(axis='y', labelcolor='tab:cyan')
+
+        ax_holiday = ax.twinx()
+        line_holiday = ax_holiday.plot(
+            date_index,
+            holidays,
+            color='orange',
+            linewidth=1.2,
+            alpha=0.85,
+            label='Holidays (right axis)',
+        )
+        ax_holiday.set_ylabel('Holiday Impact', fontsize=10, color='orange')
+        ax_holiday.tick_params(axis='y', labelcolor='orange')
+
+        combined_lines = line_season + line_holiday
+        combined_labels = [line.get_label() for line in combined_lines]
+        ax.legend(combined_lines, combined_labels, loc='best', fontsize=9)
+    else:
+        ax.plot(
+            date_index,
+            seasonality,
+            color='tab:cyan',
+            linewidth=1.0,
+            alpha=0.7,
+            label='Seasonality',
+        )
+        ax.plot(
+            date_index,
+            holidays,
+            color='orange',
+            linewidth=1.2,
+            alpha=0.8,
+            label='Holidays',
+        )
+        ax.plot(
+            date_index,
+            seasonality + holidays,
+            color='tab:blue',
+            linewidth=1.2,
+            alpha=0.75,
+            label='Combined',
+        )
 
     holiday_impacts = labels.get('holiday_impacts', {})
     for date in holiday_impacts.keys():
@@ -566,60 +686,132 @@ def plot_feature_panels(
         except KeyError:
             pass
 
-    ax.set_ylabel('Value', fontsize=10)
+    if not dual_axis_seasonality_holidays:
+        ax.set_ylabel('Value', fontsize=10)
     ax.set_title('Seasonality & Holiday Effects', fontsize=12, fontweight='bold')
-    ax.legend(loc='best', fontsize=9)
+    if not dual_axis_seasonality_holidays:
+        ax.legend(loc='best', fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # Panel 4: Noise and anomaly contributions
-    ax = axes[3]
-    ax.plot(date_index, noise, color='gray', linewidth=0.7, alpha=0.8, label='Noise')
-    ax.plot(
-        date_index,
-        anomalies_component,
-        color='red',
-        linewidth=1.2,
-        alpha=0.75,
-        label='Anomaly Component',
-    )
-
-    for record in labels.get('anomalies', []):
-        date, magnitude, pattern, duration, shared = _extract_event(
-            record, ['date', 'magnitude', 'pattern', 'duration', 'shared']
+    if separate_noise_anomaly_panels:
+        # Panel 4: anomaly contribution only
+        ax = axes[3]
+        ax.plot(
+            date_index,
+            anomalies_component,
+            color='red',
+            linewidth=1.2,
+            alpha=0.8,
+            label='Anomaly Component',
         )
-        if date is None:
-            continue
-        ts = _to_timestamp(date)
-        ax.axvline(ts, color='red', alpha=0.2, linestyle='--', linewidth=0.9)
-        try:
-            idx = date_index.get_loc(ts)
-            text = pattern if pattern is not None else 'anomaly'
-            ax.annotate(
-                f"{text}\n{magnitude:+.1f}" if magnitude is not None else text,
-                xy=(ts, anomalies_component[idx]),
-                xytext=(10, 10),
-                textcoords='offset points',
-                fontsize=7,
-                color='red',
-                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8),
-                arrowprops=dict(arrowstyle='->', color='red', alpha=0.4),
+
+        for record in labels.get('anomalies', []):
+            date, magnitude, pattern, duration, shared = _extract_event(
+                record, ['date', 'magnitude', 'pattern', 'duration', 'shared']
             )
-        except KeyError:
-            pass
+            if date is None:
+                continue
+            ts = _to_timestamp(date)
+            ax.axvline(ts, color='red', alpha=0.2, linestyle='--', linewidth=0.9)
+            try:
+                idx = date_index.get_loc(ts)
+                text = pattern if pattern is not None else 'anomaly'
+                ax.annotate(
+                    f"{text}\n{magnitude:+.1f}" if magnitude is not None else text,
+                    xy=(ts, anomalies_component[idx]),
+                    xytext=(10, 10),
+                    textcoords='offset points',
+                    fontsize=7,
+                    color='red',
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8),
+                    arrowprops=dict(arrowstyle='->', color='red', alpha=0.4),
+                )
+            except KeyError:
+                pass
 
-    for record in labels.get('noise_changepoints', []):
-        date, *_ = _extract_event(record, ['date', 'from_params', 'to_params'])
-        if date is None:
-            continue
-        ax.axvline(
-            _to_timestamp(date), color='gray', alpha=0.25, linestyle=':', linewidth=1.0
+        ax.set_ylabel('Value', fontsize=10)
+        ax.set_title('Anomaly Component', fontsize=12, fontweight='bold')
+        ax.legend(loc='best', fontsize=9)
+        ax.grid(True, alpha=0.3)
+
+        # Panel 5: noise contribution only
+        ax = axes[4]
+        ax.plot(
+            date_index, noise, color='gray', linewidth=0.8, alpha=0.85, label='Noise'
+        )
+        for record in labels.get('noise_changepoints', []):
+            date, *_ = _extract_event(record, ['date', 'from_params', 'to_params'])
+            if date is None:
+                continue
+            ax.axvline(
+                _to_timestamp(date),
+                color='gray',
+                alpha=0.3,
+                linestyle=':',
+                linewidth=1.0,
+            )
+
+        ax.set_ylabel('Value', fontsize=10)
+        ax.set_xlabel('Date', fontsize=10)
+        ax.set_title('Noise Component', fontsize=12, fontweight='bold')
+        ax.legend(loc='best', fontsize=9)
+        ax.grid(True, alpha=0.3)
+    else:
+        # Panel 4: combined noise and anomaly contributions (legacy layout)
+        ax = axes[3]
+        ax.plot(
+            date_index, noise, color='gray', linewidth=0.7, alpha=0.8, label='Noise'
+        )
+        ax.plot(
+            date_index,
+            anomalies_component,
+            color='red',
+            linewidth=1.2,
+            alpha=0.75,
+            label='Anomaly Component',
         )
 
-    ax.set_ylabel('Value', fontsize=10)
-    ax.set_xlabel('Date', fontsize=10)
-    ax.set_title('Noise & Anomaly Components', fontsize=12, fontweight='bold')
-    ax.legend(loc='best', fontsize=9)
-    ax.grid(True, alpha=0.3)
+        for record in labels.get('anomalies', []):
+            date, magnitude, pattern, duration, shared = _extract_event(
+                record, ['date', 'magnitude', 'pattern', 'duration', 'shared']
+            )
+            if date is None:
+                continue
+            ts = _to_timestamp(date)
+            ax.axvline(ts, color='red', alpha=0.2, linestyle='--', linewidth=0.9)
+            try:
+                idx = date_index.get_loc(ts)
+                text = pattern if pattern is not None else 'anomaly'
+                ax.annotate(
+                    f"{text}\n{magnitude:+.1f}" if magnitude is not None else text,
+                    xy=(ts, anomalies_component[idx]),
+                    xytext=(10, 10),
+                    textcoords='offset points',
+                    fontsize=7,
+                    color='red',
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8),
+                    arrowprops=dict(arrowstyle='->', color='red', alpha=0.4),
+                )
+            except KeyError:
+                pass
+
+        for record in labels.get('noise_changepoints', []):
+            date, *_ = _extract_event(record, ['date', 'from_params', 'to_params'])
+            if date is None:
+                continue
+            ax.axvline(
+                _to_timestamp(date),
+                color='gray',
+                alpha=0.25,
+                linestyle=':',
+                linewidth=1.0,
+            )
+
+        ax.set_ylabel('Value', fontsize=10)
+        ax.set_xlabel('Date', fontsize=10)
+        ax.set_title('Noise & Anomaly Components', fontsize=12, fontweight='bold')
+        ax.legend(loc='best', fontsize=9)
+        ax.grid(True, alpha=0.3)
 
     # Format x-axis for all subplots
     for axis in axes:

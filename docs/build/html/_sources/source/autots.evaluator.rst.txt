@@ -1,6 +1,15 @@
 autots.evaluator package
 ========================
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   autots.evaluator.feature_detector
+   autots.evaluator.tva
+
 Submodules
 ----------
 
@@ -40,14 +49,6 @@ autots.evaluator.event\_forecasting module
 ------------------------------------------
 
 .. automodule:: autots.evaluator.event_forecasting
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-autots.evaluator.feature\_detector module
------------------------------------------
-
-.. automodule:: autots.evaluator.feature_detector
    :members:
    :undoc-members:
    :show-inheritance:

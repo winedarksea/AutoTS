@@ -459,9 +459,9 @@ class AutoTS(object):
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[
-                    index, 'TransformationParameters'
-                ] = json.dumps(full_params)
+                self.initial_template.loc[index, 'TransformationParameters'] = (
+                    json.dumps(full_params)
+                )
 
         self.regressor_used = False
         self.subset_flag = False
@@ -512,7 +512,7 @@ class AutoTS(object):
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
             # unicode may not be supported on all platforms
             try:
-                print("\N{dagger} " + msg)
+                print("\N{DAGGER} " + msg)
             except Exception:
                 print(msg)
 
@@ -1290,7 +1290,7 @@ class AutoTS(object):
             ), "validation_indexes needs to be filled with 'custom' validation"
             # if auto num_validation, use as many as provided in custom
             if self.num_validations in ["auto", 'max']:
-                self.num_validations == len(validation_indexes) - 1
+                self.num_validations = len(validation_indexes) - 1
             else:
                 assert len(validation_indexes) >= (
                     self.num_validations + 1
@@ -2122,10 +2122,10 @@ class AutoTS(object):
             self.model_count = template_result.model_count
         # capture results from lower-level template run
         if "TotalRuntime" in template_result.model_results.columns:
-            template_result.model_results[
-                'TotalRuntime'
-            ] = template_result.model_results['TotalRuntime'].fillna(
-                pd.Timedelta(seconds=60)
+            template_result.model_results['TotalRuntime'] = (
+                template_result.model_results['TotalRuntime'].fillna(
+                    pd.Timedelta(seconds=60)
+                )
             )
         else:
             # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
@@ -2284,9 +2284,9 @@ class AutoTS(object):
                         frac=0.8, random_state=self.random_seed
                     ).reindex(idx)
                 nan_frac = val_df_train.shape[1] / num_validations
-                val_df_train.iloc[
-                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
-                ] = np.nan
+                val_df_train.iloc[-2:, int(nan_frac * y) : int(nan_frac * (y + 1))] = (
+                    np.nan
+                )
 
             # run validation template on current slice
             result = self._run_template(
@@ -5054,9 +5054,9 @@ class AutoTS(object):
                     )
                     y = pd.json_normalize(json.loads(row["ModelParameters"]))
                     y.index = [row['ID']]
-                    y[
-                        'Model'
-                    ] = x  # might need to remove this and do analysis independently for each
+                    y['Model'] = (
+                        x  # might need to remove this and do analysis independently for each
+                    )
                     res.append(
                         pd.DataFrame(
                             {

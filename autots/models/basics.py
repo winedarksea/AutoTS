@@ -5074,50 +5074,58 @@ class BallTreeRegressionMotif(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         # this might be causing issues, TBD Key Error from Resource Tracker
+        failed_flag = False
         if parallel:
-            self.Xa = Parallel(n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000)(
-                delayed(rolling_x_regressor_regressor)(
-                    compare_df[x_col].to_frame(),
-                    mean_rolling_periods=self.mean_rolling_periods,
-                    macd_periods=self.macd_periods,
-                    std_rolling_periods=self.std_rolling_periods,
-                    max_rolling_periods=self.max_rolling_periods,
-                    min_rolling_periods=self.min_rolling_periods,
-                    ewm_var_alpha=self.ewm_var_alpha,
-                    quantile90_rolling_periods=self.quantile90_rolling_periods,
-                    quantile10_rolling_periods=self.quantile10_rolling_periods,
-                    additional_lag_periods=self.additional_lag_periods,
-                    ewm_alpha=self.ewm_alpha,
-                    abs_energy=self.abs_energy,
-                    rolling_autocorr_periods=self.rolling_autocorr_periods,
-                    nonzero_last_n=self.nonzero_last_n,
-                    add_date_part=self.datepart_method,
-                    holiday=self.holiday,
-                    holiday_country=self.holiday_country,
-                    polynomial_degree=self.polynomial_degree,
-                    window=self.window,
-                    future_regressor=cut_regr,
-                    # these rely the if part not being run if None
-                    regressor_per_series=(
-                        self.regressor_per_series_train[x_col]
-                        if self.regressor_per_series_train is not None
-                        else None
-                    ),
-                    static_regressor=(
-                        self.static_regressor.loc[x_col].to_frame().T
-                        if self.static_regressor is not None
-                        else None
-                    ),
-                    cointegration=self.cointegration,
-                    cointegration_lag=self.cointegration_lag,
-                    series_id=x_col if self.series_hash else None,
-                    slice_index=self.slice_index,
-                    series_id_to_multiindex=x_col,
+            try:
+                self.Xa = Parallel(
+                    n_jobs=self.n_jobs, verbose=self.verbose, timeout=36000
+                )(
+                    delayed(rolling_x_regressor_regressor)(
+                        compare_df[x_col].to_frame(),
+                        mean_rolling_periods=self.mean_rolling_periods,
+                        macd_periods=self.macd_periods,
+                        std_rolling_periods=self.std_rolling_periods,
+                        max_rolling_periods=self.max_rolling_periods,
+                        min_rolling_periods=self.min_rolling_periods,
+                        ewm_var_alpha=self.ewm_var_alpha,
+                        quantile90_rolling_periods=self.quantile90_rolling_periods,
+                        quantile10_rolling_periods=self.quantile10_rolling_periods,
+                        additional_lag_periods=self.additional_lag_periods,
+                        ewm_alpha=self.ewm_alpha,
+                        abs_energy=self.abs_energy,
+                        rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        nonzero_last_n=self.nonzero_last_n,
+                        add_date_part=self.datepart_method,
+                        holiday=self.holiday,
+                        holiday_country=self.holiday_country,
+                        polynomial_degree=self.polynomial_degree,
+                        window=self.window,
+                        future_regressor=cut_regr,
+                        # these rely the if part not being run if None
+                        regressor_per_series=(
+                            self.regressor_per_series_train[x_col]
+                            if self.regressor_per_series_train is not None
+                            else None
+                        ),
+                        static_regressor=(
+                            self.static_regressor.loc[x_col].to_frame().T
+                            if self.static_regressor is not None
+                            else None
+                        ),
+                        cointegration=self.cointegration,
+                        cointegration_lag=self.cointegration_lag,
+                        series_id=x_col if self.series_hash else None,
+                        slice_index=self.slice_index,
+                        series_id_to_multiindex=x_col,
+                    )
+                    for x_col in compare_df.columns
                 )
-                for x_col in compare_df.columns
-            )
-            self.Xa = pd.concat(self.Xa)
-        else:
+                self.Xa = pd.concat(self.Xa)
+            except Exception as e:
+                failed_flag = True  # multiprocessing fault tolerance
+                if self.verbose > 0:
+                    print(repr(e))
+        if not parallel or failed_flag:
             self.Xa = pd.concat(
                 [
                     rolling_x_regressor_regressor(

@@ -15,7 +15,11 @@ import random
 import numpy as np
 import pandas as pd
 from autots.tools.percentile import nan_quantile
-from autots.tools.thresholding import NonparametricThreshold, nonparametric
+from autots.tools.thresholding import (
+    NonparametricThreshold,
+    nonparametric,
+    sanitize_nonparametric_threshold_params,
+)
 from autots.tools.calendar import (
     gregorian_to_chinese,
     gregorian_to_islamic,
@@ -71,29 +75,42 @@ def sk_outliers(df, method, method_params={}):
         res = model.fit_predict(df_scaled)
         scores = model.decision_function(df_scaled)
     elif method == "EE":
-        if method_params['contamination'] == "auto":
-            method_params['contamination'] = 0.1
+        ee_params = method_params.copy()
+        if ee_params.get('contamination') == "auto":
+            ee_params['contamination'] = 0.1
         # EllipticEnvelope is sensitive to NaN values and needs sufficient samples
         # Fill NaN with mean to avoid covariance matrix errors
         df_filled = df.fillna(df.mean()).fillna(0)
         # Ensure we have enough samples for the support_fraction
         if (
-            'support_fraction' in method_params
-            and method_params['support_fraction'] is not None
+            'support_fraction' in ee_params
+            and ee_params['support_fraction'] is not None
         ):
             min_samples = max(df_filled.shape[1] + 1, 2)  # at least n_features + 1
-            required_samples = int(
-                np.ceil(min_samples / method_params['support_fraction'])
-            )
+            required_samples = int(np.ceil(min_samples / ee_params['support_fraction']))
             if len(df_filled) < required_samples:
                 # Increase support_fraction to ensure we have enough samples
-                method_params = method_params.copy()
-                method_params['support_fraction'] = max(
-                    min_samples / len(df_filled), 0.5
+                ee_params['support_fraction'] = min(
+                    max(min_samples / max(len(df_filled), 1), 0.5), 1.0
                 )
-        model = EllipticEnvelope(**method_params)
-        res = model.fit_predict(df_filled)
-        scores = model.decision_function(df_filled)
+        model = EllipticEnvelope(**ee_params)
+        try:
+            res = model.fit_predict(df_filled)
+            scores = model.decision_function(df_filled)
+        except ValueError as ex:
+            # Known sklearn EE failure on degenerate low-variance support data.
+            if "covariance matrix of the support data is equal to 0" in str(ex).lower():
+                # Retry with full support before giving up
+                ee_params['support_fraction'] = 1.0
+                try:
+                    model = EllipticEnvelope(**ee_params)
+                    res = model.fit_predict(df_filled)
+                    scores = model.decision_function(df_filled)
+                except ValueError:
+                    res = np.ones(len(df_filled), dtype=int)
+                    scores = np.zeros(len(df_filled), dtype=float)
+            else:
+                raise
     elif method == "GaussianMixture":
         model = GaussianMixture(**method_params)
         model.fit(df)
@@ -330,6 +347,7 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
 
 
 def nonparametric_multivariate(df, output, method_params, n_jobs=1):
+    sanitized_params = sanitize_nonparametric_threshold_params(method_params)
     if output == "univariate":
         df_abs = df.abs()
         scores = 1 - (
@@ -337,11 +355,11 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
             / (df.abs().max(axis=0) - df_abs.min(axis=0)).replace(0, 1)
         )
         scores = np.abs((df - df.mean(axis=0))) / df.std(axis=0)
-        mod = NonparametricThreshold(scores.to_numpy().flatten(), **method_params)
+        mod = NonparametricThreshold(scores.to_numpy().flatten(), **sanitized_params)
         mod.find_epsilon()
         mod.prune_anoms()
         i_anom = mod.i_anom
-        if method_params.get("inverse", False):
+        if sanitized_params.get("inverse", False):
             mod.find_epsilon(inverse=True)
             mod.prune_anoms(inverse=True)
             i_anom = np.unique(np.concatenate([i_anom, mod.i_anom_inv]))
@@ -394,7 +412,7 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
             df_list = Parallel(n_jobs=(n_jobs - 1))(
                 delayed(nonparametric)(
                     series=df.iloc[:, i],
-                    method_params=method_params,
+                    method_params=sanitized_params,
                 )
                 for i in range(df.shape[1])
             )
@@ -404,7 +422,7 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
                 df_list.append(
                     nonparametric(
                         series=df.iloc[:, i],
-                        method_params=method_params,
+                        method_params=sanitized_params,
                     )
                 )
         complete = list(map(list, zip(*df_list)))
@@ -1260,6 +1278,14 @@ def dates_to_holidays(
                     sample = holiday_df['holiday_name'].iloc[0]
                     if "hebrew" in sample:
                         hdates = gregorian_to_hebrew(dates)
+                        if "weekofmonth" in on and "weekofmonth" not in hdates.columns:
+                            hdates["weekofmonth"] = (hdates["day"] - 1) // 7 + 1
+                        if "weekfromend" in on and "weekfromend" not in hdates.columns:
+                            hdates["weekfromend"] = (
+                                hdates["day"] - hdates["day"].max()
+                            ) // -7
+                        if "dayofweek" in on and "dayofweek" not in hdates.columns:
+                            hdates["dayofweek"] = hdates.index.dayofweek
                         populated_holidays = (
                             hdates.drop(
                                 columns=hdates.columns.difference(on + ['date']),
@@ -1274,6 +1300,14 @@ def dates_to_holidays(
                         )
                     elif "islamic" in sample:
                         idates = gregorian_to_islamic(dates)
+                        if "weekofmonth" in on and "weekofmonth" not in idates.columns:
+                            idates["weekofmonth"] = (idates["day"] - 1) // 7 + 1
+                        if "weekfromend" in on and "weekfromend" not in idates.columns:
+                            idates["weekfromend"] = (
+                                idates["day"] - idates["day"].max()
+                            ) // -7
+                        if "dayofweek" in on and "dayofweek" not in idates.columns:
+                            idates["dayofweek"] = idates.index.dayofweek
                         populated_holidays = (
                             idates.drop(
                                 columns=idates.columns.difference(on + ['date']),
@@ -1288,6 +1322,14 @@ def dates_to_holidays(
                         )
                     elif "hindu" in sample:
                         idates = gregorian_to_hindu(dates)
+                        if "weekofmonth" in on and "weekofmonth" not in idates.columns:
+                            idates["weekofmonth"] = (idates["day"] - 1) // 7 + 1
+                        if "weekfromend" in on and "weekfromend" not in idates.columns:
+                            idates["weekfromend"] = (
+                                idates["day"] - idates["day"].max()
+                            ) // -7
+                        if "dayofweek" in on and "dayofweek" not in idates.columns:
+                            idates["dayofweek"] = idates.index.dayofweek
                         populated_holidays = (
                             idates.drop(
                                 columns=idates.columns.difference(on + ['date']),
@@ -1344,12 +1386,23 @@ def dates_to_holidays(
                     result_per_holiday.index = populated_holidays['date']
                     result.append(result_per_holiday.groupby(level=0).sum())
                 elif style in ["impact", 'series_flag']:
-                    temp = populated_holidays.pivot(
-                        index='date', columns='series', values='holiday_name'
-                    ).reindex(columns=df_cols)
                     if style == "series_flag":
-                        result = result + temp.where(temp.isnull(), 1).fillna(0.0)
+                        temp = (
+                            populated_holidays.assign(_holiday_flag=1.0)
+                            .pivot_table(
+                                index='date',
+                                columns='series',
+                                values='_holiday_flag',
+                                aggfunc='max',
+                            )
+                            .reindex(index=dates, columns=df_cols)
+                            .fillna(0.0)
+                        )
+                        result = result + temp
                     else:
+                        temp = populated_holidays.pivot(
+                            index='date', columns='series', values='holiday_name'
+                        ).reindex(columns=df_cols)
                         if isinstance(holiday_impacts, dict):
                             result = result + temp.replace(holiday_impacts).astype(
                                 float

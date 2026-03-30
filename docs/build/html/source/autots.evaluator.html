@@ -14,15 +14,15 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.evaluator package &#8212; AutoTS 1.0.1 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 1.0.2 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="autots.mcp package" href="autots.mcp.html" />
+    <link rel="next" title="autots.evaluator.feature_detector package" href="autots.evaluator.feature_detector.html" />
     <link rel="prev" title="autots.datasets package" href="autots.datasets.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -42,6 +42,337 @@
             
   <section id="autots-evaluator-package">
 <h1>autots.evaluator package<a class="headerlink" href="#autots-evaluator-package" title="Link to this heading">¶</a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="autots.evaluator.feature_detector.html">autots.evaluator.feature_detector package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html">autots.evaluator.feature_detector.components package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.anomalies">autots.evaluator.feature_detector.components.anomalies module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.decomposition">autots.evaluator.feature_detector.components.decomposition module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.holidays">autots.evaluator.feature_detector.components.holidays module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.seasonality">autots.evaluator.feature_detector.components.seasonality module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.trend">autots.evaluator.feature_detector.components.trend module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html">autots.evaluator.feature_detector.loss package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.base">autots.evaluator.feature_detector.loss.base module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.evaluators">autots.evaluator.feature_detector.loss.evaluators module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.metrics">autots.evaluator.feature_detector.loss.metrics module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss.reconstruction">autots.evaluator.feature_detector.loss.reconstruction module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.loss.html#module-autots.evaluator.feature_detector.loss">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html">autots.evaluator.feature_detector.utils package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.formatting">autots.evaluator.feature_detector.utils.formatting module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.rescaling">autots.evaluator.feature_detector.utils.rescaling module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#module-autots.evaluator.feature_detector.detector">autots.evaluator.feature_detector.detector module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.TEMPLATE_VERSION</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.fit"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.forecast"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.forecast()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_cleaned_data"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_cleaned_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_detected_features"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_detected_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_event_dag"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_event_dag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_new_params"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_new_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.get_template"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_template()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.plot"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.plot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.plot_event_dag"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.plot_event_dag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.query_features"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.query_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.render_template"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.render_template()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.summary"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.summary()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.tune_with_synthetic"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.tune_with_synthetic()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#module-autots.evaluator.feature_detector.event_dag">autots.evaluator.feature_detector.event_dag module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.event_dag.build_event_dag_from_detector"><code class="docutils literal notranslate"><span class="pre">build_event_dag_from_detector()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.event_dag.empty_event_dag"><code class="docutils literal notranslate"><span class="pre">empty_event_dag()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.event_dag.resolve_event_dag_params"><code class="docutils literal notranslate"><span class="pre">resolve_event_dag_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#module-autots.evaluator.feature_detector.event_dag_view">autots.evaluator.feature_detector.event_dag_view module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.event_dag_view.filter_event_dag"><code class="docutils literal notranslate"><span class="pre">filter_event_dag()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.event_dag_view.plot_event_dag_timeline"><code class="docutils literal notranslate"><span class="pre">plot_event_dag_timeline()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#module-autots.evaluator.feature_detector.extended_anomaly">autots.evaluator.feature_detector.extended_anomaly module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.fit"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.get_events"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector.get_events()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyDetector.get_new_params"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector.get_new_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#module-autots.evaluator.feature_detector.optimizer">autots.evaluator.feature_detector.optimizer module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.fine_tune_changepoints"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer.fine_tune_changepoints()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.get_optimization_summary"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer.get_optimization_summary()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.optimizer.FeatureDetectionOptimizer.optimize"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer.optimize()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.html#module-autots.evaluator.feature_detector">Module contents</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ExtendedAnomalyDetector"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ExtendedAnomalyDetector.fit"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ExtendedAnomalyDetector.get_events"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector.get_events()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ExtendedAnomalyDetector.get_new_params"><code class="docutils literal notranslate"><span class="pre">ExtendedAnomalyDetector.get_new_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionLoss"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionLoss.DEFAULT_WEIGHTS"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.DEFAULT_WEIGHTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionLoss.INVALID_LOSS_PENALTY"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.INVALID_LOSS_PENALTY</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionLoss.calculate_loss"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionLoss.calculate_loss()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionOptimizer"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionOptimizer.fine_tune_changepoints"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer.fine_tune_changepoints()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionOptimizer.get_optimization_summary"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer.get_optimization_summary()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.FeatureDetectionOptimizer.optimize"><code class="docutils literal notranslate"><span class="pre">FeatureDetectionOptimizer.optimize()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ReconstructionLoss"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss.DEFAULT_METRIC_WEIGHTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.ReconstructionLoss.calculate_loss"><code class="docutils literal notranslate"><span class="pre">ReconstructionLoss.calculate_loss()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.TEMPLATE_VERSION</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.fit"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.forecast()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_cleaned_data"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_cleaned_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_detected_features"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_detected_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_event_dag"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_event_dag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_new_params"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_new_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_template"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_template()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.plot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot_event_dag"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.plot_event_dag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.query_features"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.query_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.render_template"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.render_template()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.summary"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.summary()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.html#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.tune_with_synthetic"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.tune_with_synthetic()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="autots.evaluator.tva.html">autots.evaluator.tva package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.decomposition">autots.evaluator.tva.decomposition module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.decomposition.NornDecomposer"><code class="docutils literal notranslate"><span class="pre">NornDecomposer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.decomposition.NornDecomposer.fit"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.decomposition.NornDecomposer.get_components"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.get_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.decomposition.NornDecomposer.get_features"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.get_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.decomposition.NornDecomposer.get_forecast_components"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.get_forecast_components()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.fusion">autots.evaluator.tva.fusion module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.losses">autots.evaluator.tva.losses module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.priors">autots.evaluator.tva.priors module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.name"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.attribute_values"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.attribute_values</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.hierarchy_path"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.hierarchy_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.history_periods"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.history_periods</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id0"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.attribute_values</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.geography"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.geography</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id1"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.hierarchy_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id2"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.history_periods</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.metric_type"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.metric_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id3"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.SeriesMetadata.surface"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.surface</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.build_causal_prior_adjacency"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_causal_prior_adjacency()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.build_hierarchy_matrix"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_hierarchy_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.build_metadata_embeddings"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_metadata_embeddings()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.build_prior_adjacency"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_prior_adjacency()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.build_structural_prior_adjacency"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_structural_prior_adjacency()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.get_anchor_mask"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.get_anchor_mask()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.get_series_names"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.get_series_names()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.priors.YggdrasilPriors.n_series"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.n_series</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.reconciliation">autots.evaluator.tva.reconciliation module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.reconciliation.ReconciliationBridge"><code class="docutils literal notranslate"><span class="pre">ReconciliationBridge</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.reconciliation.ReconciliationBridge.reconcile"><code class="docutils literal notranslate"><span class="pre">ReconciliationBridge.reconcile()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.reconciliation.ReconciliationBridge.reconcile_with_volatility"><code class="docutils literal notranslate"><span class="pre">ReconciliationBridge.reconcile_with_volatility()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.scenario">autots.evaluator.tva.scenario module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.scenario.BifrostOptimizer"><code class="docutils literal notranslate"><span class="pre">BifrostOptimizer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.scenario.BifrostOptimizer.apply_constraint"><code class="docutils literal notranslate"><span class="pre">BifrostOptimizer.apply_constraint()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.scenario.BifrostOptimizer.apply_growth_constraint"><code class="docutils literal notranslate"><span class="pre">BifrostOptimizer.apply_growth_constraint()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.scenario.BifrostOptimizer.apply_hierarchical_adjustment"><code class="docutils literal notranslate"><span class="pre">BifrostOptimizer.apply_hierarchical_adjustment()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.structure">autots.evaluator.tva.structure module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.adjacency_dense"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.adjacency_dense</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.adjacency_thresholded"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.adjacency_thresholded</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.assignment_matrices"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.assignment_matrices</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.cycle_score"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.cycle_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.edge_table"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.edge_table</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.is_acyclic"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.is_acyclic</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.node_table"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.node_table</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.prior_adjacency"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.prior_adjacency</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.to_dict"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.GraphSnapshot.topological_order"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.topological_order</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.assignment_entropy_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.assignment_entropy_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.assignment_full_rank_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.assignment_full_rank_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.dag_penalty"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.dag_penalty</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.dag_warmup_epochs"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.dag_warmup_epochs</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.derive_latent_sizes"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.derive_latent_sizes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.enabled"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.enabled</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.from_dict"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.learn_dag"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.learn_dag</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.learn_hierarchy"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.learn_hierarchy</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.max_levels"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.max_levels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.min_nodes_per_level"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.min_nodes_per_level</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.pool_ratio"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.pool_ratio</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.prior_tether_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.prior_tether_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.sparsity_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.sparsity_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.structure_scale"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.structure_scale()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.temporal_drift_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.temporal_drift_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.threshold_for_export"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.threshold_for_export</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.to_dict"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.StructureLearningConfig.warmup_start_epoch"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.warmup_start_epoch()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.build_graph_snapshot"><code class="docutils literal notranslate"><span class="pre">build_graph_snapshot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.plot_graph_snapshot"><code class="docutils literal notranslate"><span class="pre">plot_graph_snapshot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.structure.topological_order_from_adjacency"><code class="docutils literal notranslate"><span class="pre">topological_order_from_adjacency()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.trend_network">autots.evaluator.tva.trend_network module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva.tva">autots.evaluator.tva.tva module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA"><code class="docutils literal notranslate"><span class="pre">TVA</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.fit"><code class="docutils literal notranslate"><span class="pre">TVA.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.get_composite_trends"><code class="docutils literal notranslate"><span class="pre">TVA.get_composite_trends()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.get_graph"><code class="docutils literal notranslate"><span class="pre">TVA.get_graph()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.get_graph_snapshot"><code class="docutils literal notranslate"><span class="pre">TVA.get_graph_snapshot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.plot_graph"><code class="docutils literal notranslate"><span class="pre">TVA.plot_graph()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.predict"><code class="docutils literal notranslate"><span class="pre">TVA.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.reconcile"><code class="docutils literal notranslate"><span class="pre">TVA.reconcile()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.tva.TVA.what_if"><code class="docutils literal notranslate"><span class="pre">TVA.what_if()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.tva.html#module-autots.evaluator.tva">Module contents</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.adjacency_dense"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.adjacency_dense</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.adjacency_thresholded"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.adjacency_thresholded</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.assignment_matrices"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.assignment_matrices</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.cycle_score"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.cycle_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.edge_table"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.edge_table</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.is_acyclic"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.is_acyclic</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.node_table"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.node_table</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.prior_adjacency"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.prior_adjacency</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.to_dict"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.GraphSnapshot.topological_order"><code class="docutils literal notranslate"><span class="pre">GraphSnapshot.topological_order</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.NornDecomposer"><code class="docutils literal notranslate"><span class="pre">NornDecomposer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.NornDecomposer.fit"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.NornDecomposer.get_components"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.get_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.NornDecomposer.get_features"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.get_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.NornDecomposer.get_forecast_components"><code class="docutils literal notranslate"><span class="pre">NornDecomposer.get_forecast_components()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.name"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.attribute_values"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.attribute_values</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.hierarchy_path"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.hierarchy_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.history_periods"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.history_periods</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id4"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.attribute_values</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.geography"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.geography</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id5"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.hierarchy_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id6"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.history_periods</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.metric_type"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.metric_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#id7"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.SeriesMetadata.surface"><code class="docutils literal notranslate"><span class="pre">SeriesMetadata.surface</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.assignment_entropy_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.assignment_entropy_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.assignment_full_rank_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.assignment_full_rank_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.dag_penalty"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.dag_penalty</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.dag_warmup_epochs"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.dag_warmup_epochs</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.derive_latent_sizes"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.derive_latent_sizes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.enabled"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.enabled</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.from_dict"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.learn_dag"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.learn_dag</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.learn_hierarchy"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.learn_hierarchy</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.max_levels"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.max_levels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.min_nodes_per_level"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.min_nodes_per_level</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.pool_ratio"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.pool_ratio</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.prior_tether_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.prior_tether_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.sparsity_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.sparsity_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.structure_scale"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.structure_scale()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.temporal_drift_weight"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.temporal_drift_weight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.threshold_for_export"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.threshold_for_export</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.to_dict"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.StructureLearningConfig.warmup_start_epoch"><code class="docutils literal notranslate"><span class="pre">StructureLearningConfig.warmup_start_epoch()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA"><code class="docutils literal notranslate"><span class="pre">TVA</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.fit"><code class="docutils literal notranslate"><span class="pre">TVA.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.get_composite_trends"><code class="docutils literal notranslate"><span class="pre">TVA.get_composite_trends()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.get_graph"><code class="docutils literal notranslate"><span class="pre">TVA.get_graph()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.get_graph_snapshot"><code class="docutils literal notranslate"><span class="pre">TVA.get_graph_snapshot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.plot_graph"><code class="docutils literal notranslate"><span class="pre">TVA.plot_graph()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.predict"><code class="docutils literal notranslate"><span class="pre">TVA.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.reconcile"><code class="docutils literal notranslate"><span class="pre">TVA.reconcile()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.TVA.what_if"><code class="docutils literal notranslate"><span class="pre">TVA.what_if()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.build_causal_prior_adjacency"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_causal_prior_adjacency()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.build_hierarchy_matrix"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_hierarchy_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.build_metadata_embeddings"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_metadata_embeddings()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.build_prior_adjacency"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_prior_adjacency()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.build_structural_prior_adjacency"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.build_structural_prior_adjacency()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.get_anchor_mask"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.get_anchor_mask()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.get_series_names"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.get_series_names()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.tva.html#autots.evaluator.tva.YggdrasilPriors.n_series"><code class="docutils literal notranslate"><span class="pre">YggdrasilPriors.n_series</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
 </section>
@@ -52,7 +383,7 @@ Created on Mon Jul 18 14:19:55 2022</p>
 <p>&#64;author: Colin</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.AnomalyDetector">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.anomaly_detector.</span></span><span class="sig-name descname"><span class="pre">AnomalyDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'zscore'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{'transformation_params':</span> <span class="pre">{0:</span> <span class="pre">{'datepart_method':</span> <span class="pre">'simple_3',</span> <span class="pre">'regression_model':</span> <span class="pre">{'model':</span> <span class="pre">'ElasticNet',</span> <span class="pre">'model_params':</span> <span class="pre">{}}}},</span> <span class="pre">'transformations':</span> <span class="pre">{0:</span> <span class="pre">'DatepartRegression'}}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forecast_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eval_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">isolated_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.anomaly_detector.</span></span><span class="sig-name descname"><span class="pre">AnomalyDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output='multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method='zscore'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform_dict=&lt;object</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forecast_params=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method_params=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eval_period=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">isolated_only=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs=1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.AnomalyDetector.detect">
@@ -84,7 +415,7 @@ Created on Mon Jul 18 14:19:55 2022</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.AnomalyDetector.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.plot" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.plot" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -111,11 +442,11 @@ Created on Mon Jul 18 14:19:55 2022</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.HolidayDetector">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.anomaly_detector.</span></span><span class="sig-name descname"><span class="pre">HolidayDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">anomaly_detector_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_occurrences</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">splash_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.65</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_dayofmonth_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_wkdom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_wkdeom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_lunar_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_lunar_weekday</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_islamic_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_hebrew_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_hindu_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.anomaly_detector.</span></span><span class="sig-name descname"><span class="pre">HolidayDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">anomaly_detector_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_occurrences</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">splash_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.65</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_dayofmonth_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_wkdom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_wkdeom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_lunar_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_lunar_weekday</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_islamic_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_hebrew_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_hindu_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_relax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relax_threshold_floor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.55</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relax_splash_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.55</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relax_rounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_holidays_per_series</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_holidays_per_series</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_selection_strategy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'score'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.HolidayDetector.dates_to_holidays">
-<span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'flag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.dates_to_holidays" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'flag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.dates_to_holidays" title="Link to this definition">¶</a></dt>
 <dd><p>Populate date information for a given pd.DatetimeIndex.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -146,18 +477,24 @@ Created on Mon Jul 18 14:19:55 2022</p>
 <dd></dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.HolidayDetector.get_detection_stats">
+<span class="sig-name descname"><span class="pre">get_detection_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.get_detection_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Return summary stats from the most recent holiday detection run.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.HolidayDetector.get_new_params">
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.get_new_params" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.HolidayDetector.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_anomalies</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.plot" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_anomalies</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">marker_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.plot" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.anomaly_detector.HolidayDetector.plot_anomaly">
-<span class="sig-name descname"><span class="pre">plot_anomaly</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.plot_anomaly" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">plot_anomaly</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.plot_anomaly" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -1673,331 +2010,6 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 </dd></dl>
 
 </section>
-<section id="module-autots.evaluator.feature_detector">
-<span id="autots-evaluator-feature-detector-module"></span><h2>autots.evaluator.feature_detector module<a class="headerlink" href="#module-autots.evaluator.feature_detector" title="Link to this heading">¶</a></h2>
-<p>Time Series Feature Detection and Optimization</p>
-<p>&#64;author: Colin with Claude Sonnet v4.5</p>
-<p>Matching test file in tests/test_feature_detector.py</p>
-<dl class="py class">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">FeatureDetectionLoss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">changepoint_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_tolerance_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">14</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_over_anomaly_bonus</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_component_penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'component'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_complexity_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_complexity_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">focus_component_weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Comprehensive loss calculator for feature detection optimization.</p>
-<p>Each synthetic label family contributes to the total loss:
-- Trend changepoints and slopes
-- Level shifts
-- Anomalies (including shared events and post patterns)
-- Holiday timing, direct impacts, and splash/bridge days
-- Seasonality strength, patterns, and changepoints
-- Noise regimes and noise-to-signal characteristics
-- Series-level metadata consistency (scale, type)
-- Regressor impacts when present</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss.DEFAULT_WEIGHTS">
-<span class="sig-name descname"><span class="pre">DEFAULT_WEIGHTS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'anomaly_loss':</span> <span class="pre">1.3,</span> <span class="pre">'holiday_event_loss':</span> <span class="pre">1.2,</span> <span class="pre">'holiday_impact_loss':</span> <span class="pre">0.9,</span> <span class="pre">'holiday_splash_loss':</span> <span class="pre">0.5,</span> <span class="pre">'level_shift_loss':</span> <span class="pre">0.9,</span> <span class="pre">'metadata_loss':</span> <span class="pre">0.2,</span> <span class="pre">'noise_level_loss':</span> <span class="pre">0.5,</span> <span class="pre">'noise_regime_loss':</span> <span class="pre">0.4,</span> <span class="pre">'regressor_loss':</span> <span class="pre">0.3,</span> <span class="pre">'seasonality_changepoint_loss':</span> <span class="pre">0.6,</span> <span class="pre">'seasonality_pattern_loss':</span> <span class="pre">1.0,</span> <span class="pre">'seasonality_strength_loss':</span> <span class="pre">0.8,</span> <span class="pre">'trend_loss':</span> <span class="pre">1.0}</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss.DEFAULT_WEIGHTS" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionLoss.calculate_loss">
-<span class="sig-name descname"><span class="pre">calculate_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">detected_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">true_labels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">true_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionLoss.calculate_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Calculate overall loss comparing detected features to true labels.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>detected_features</strong> (<em>dict</em>) – Output from TimeSeriesFeatureDetector.get_detected_features(…)</p></li>
-<li><p><strong>true_labels</strong> (<em>dict</em>) – Labels from SyntheticDailyGenerator.get_all_labels(…)</p></li>
-<li><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, only evaluate the named series.</p></li>
-<li><p><strong>true_components</strong> (<em>dict</em><em>, </em><em>optional</em>) – Mapping of series -&gt; component arrays from SyntheticDailyGenerator.get_components()</p></li>
-<li><p><strong>date_index</strong> (<em>pd.DatetimeIndex</em><em>, </em><em>optional</em>) – Index used for the time series. Required for seasonality changepoint evaluation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Loss breakdown with per-component metrics and total weighted loss.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">FeatureDetectionOptimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">synthetic_generator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loss_calculator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Optimize TimeSeriesFeatureDetector parameters using synthetic labeled data.</p>
-<p>Uses a genetic-style search with balanced scoring to minimize detection loss.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer.get_optimization_summary">
-<span class="sig-name descname"><span class="pre">get_optimization_summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer.get_optimization_summary" title="Link to this definition">¶</a></dt>
-<dd><p>Return summary of optimization results.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.FeatureDetectionOptimizer.optimize">
-<span class="sig-name descname"><span class="pre">optimize</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.FeatureDetectionOptimizer.optimize" title="Link to this definition">¶</a></dt>
-<dd><p>Run genetic-style optimization to find best detector parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Best parameters found</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>dict</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ReconstructionLoss">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">ReconstructionLoss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trend_complexity_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_complexity_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_weights</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_dominance_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.65</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_min_other_variance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_lags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(7,</span> <span class="pre">365)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_min_autocorr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_improvement_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_improvement_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_min_pre_std</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ReconstructionLoss" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#autots.evaluator.feature_detector.FeatureDetectionLoss" title="autots.evaluator.feature_detector.FeatureDetectionLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">FeatureDetectionLoss</span></code></a></p>
-<p>Loss function tailored for real-world datasets lacking component-level labels.</p>
-<p>Focuses on reconstruction quality while discouraging overly complex trend fits and
-encouraging variance to be attributed to seasonality, holidays, anomalies, and level shifts.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS">
-<span class="sig-name descname"><span class="pre">DEFAULT_METRIC_WEIGHTS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'anomaly_capture_loss':</span> <span class="pre">0.7,</span> <span class="pre">'reconstruction_loss':</span> <span class="pre">1.0,</span> <span class="pre">'seasonality_capture_loss':</span> <span class="pre">0.8,</span> <span class="pre">'trend_dominance_loss':</span> <span class="pre">0.9,</span> <span class="pre">'trend_smoothness_loss':</span> <span class="pre">1.2}</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.ReconstructionLoss.DEFAULT_METRIC_WEIGHTS" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.ReconstructionLoss.calculate_loss">
-<span class="sig-name descname"><span class="pre">calculate_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">observed_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detected_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.ReconstructionLoss.calculate_loss" title="Link to this definition">¶</a></dt>
-<dd><p>Calculate reconstruction-oriented loss for unlabeled datasets.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>observed_df</strong> (<em>pd.DataFrame</em>) – Original time series data used for detection.</p></li>
-<li><p><strong>detected_features</strong> (<em>dict</em>) – Output from TimeSeriesFeatureDetector.get_detected_features(…, include_components=True).</p></li>
-<li><p><strong>components</strong> (<em>dict</em><em>, </em><em>optional</em>) – Explicit component container matching <cite>get_detected_features()[‘components’]</cite>.</p></li>
-<li><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – Restrict evaluation to a single series.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Loss metrics per series and aggregate total weighted loss.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Comprehensive feature detection pipeline for time series.</p>
-<p>TODO: upstream more of this code into the component classes (e.g., HolidayDetector, AnomalyRemoval, ChangepointDetector)
-TODO: Handle multiplicative seasonality
-TODO: Handle time varying seasonality using fast_kalman
-TODO: Improve holiday “splash” effect and weekend interactions
-TODO: Support identifying anomaly types beyond just point_outlier
-TODO: Support identifying regressor impacts and granger lag impacts
-TODO: Support identifying variance regime changes
-TODO: Build upon the JSON template so that it can be converted to a fixed size embedding (probably a 2d embedding). The fixed size may vary by parameters, but for a given parameter set should always be the same size. The embedding does not need to be capable of fully reconstructing the time series, just representing it.
-TODO: Support for modeling the trend with a fast kalman state space approach, ideally aligned with changepoints in some way if possible.
-TODO: Improved scaling and option to skip scaling
-TODO: consider also having “deviation from group” type anomaly detection for multivariate series</p>
-<blockquote>
-<div><p>Parameters</p>
-</div></blockquote>
-<dl>
-<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition</p>
-</dd>
-<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
-</dd>
-<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
-</dd>
-<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
-</dd>
-<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
-</dd>
-<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
-</dd>
-<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
-</dd>
-<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
-</dd>
-<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
-</dd>
-<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
-shared across all series (‘univariate’).
-- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
-- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
-<blockquote>
-<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
-</div></blockquote>
-</dd>
-</dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION">
-<span class="sig-name descname"><span class="pre">TEMPLATE_VERSION</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'1.0'</span></em><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.TEMPLATE_VERSION" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.fit">
-<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.fit" title="Link to this definition">¶</a></dt>
-<dd><p>Fit the feature detector to time series data.</p>
-<p>Decomposition follows this sequential removal strategy:</p>
-<ol class="arabic simple">
-<li><p>INITIAL DECOMPOSITION (for detection only):
-- Remove rough seasonality → rough_residual
-- Detect holidays on rough_residual
-- Detect anomalies on rough_residual</p></li>
-<li><p>FINAL SEASONALITY FIT:
-- Fit on: original - anomalies
-- Holidays fitted simultaneously as regressors
-- Output: final_residual (has seasonality + holidays removed)</p></li>
-<li><p>LEVEL SHIFT DETECTION:
-- Detect on: original - anomalies - seasonality - holidays
-- (This is final_residual)</p></li>
-<li><p>TREND DETECTION:
-- Detect on: original - anomalies - seasonality - holidays - level_shifts</p></li>
-<li><p>NOISE &amp; ANOMALY COMPONENTS:
-- Noise: original - trend - level_shifts - seasonality - holidays - anomalies
-- Anomalies: difference between original and de-anomalied version</p></li>
-</ol>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast">
-<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
-<dd><p>Generate a simple forward projection similar to BasicLinearModel.
-This detector is not optimized for forecasting; dedicated forecasting models may provide better results.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_cleaned_data">
-<span class="sig-name descname"><span class="pre">get_cleaned_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_cleaned_data" title="Link to this definition">¶</a></dt>
-<dd><p>Return cleaned time series data with anomalies, noise, and level shifts removed.</p>
-<p>The cleaned data consists of:
-- Trend (with mean included)
-- Seasonality
-- Holiday effects</p>
-<p>Level shifts are corrected by removing the cumulative shift effect, returning
-the data to its baseline level. Anomalies and noise are excluded entirely.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>series_name</strong> (<em>str</em><em>, </em><em>optional</em>) – If provided, return cleaned data for only this series.
-If None, return cleaned data for all series.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Cleaned time series data with the same index as the original data.
-If series_name is specified, returns a DataFrame with a single column.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>pd.DataFrame</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
-<li><p><strong>RuntimeError</strong> – If fit() has not been called yet.</p></li>
-<li><p><strong>ValueError</strong> – If series_name is provided but not found in the original data.</p></li>
-</ul>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span> <span class="o">=</span> <span class="n">TimeSeriesFeatureDetector</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">cleaned</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">get_cleaned_data</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">cleaned_single</span> <span class="o">=</span> <span class="n">detector</span><span class="o">.</span><span class="n">get_cleaned_data</span><span class="p">(</span><span class="s1">&#39;series_1&#39;</span><span class="p">)</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_detected_features">
-<span class="sig-name descname"><span class="pre">get_detected_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_detected_features" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_new_params">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_new_params" title="Link to this definition">¶</a></dt>
-<dd><p>Sample random parameters for detector optimization.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_template">
-<span class="sig-name descname"><span class="pre">get_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.get_template" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">12)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.plot" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.query_features">
-<span class="sig-name descname"><span class="pre">query_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_json</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.query_features" title="Link to this definition">¶</a></dt>
-<dd><p>Query a specific slice of detected features with minimal token usage.</p>
-<p>Designed for LLM-friendly output with compact representation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>dates</strong> (<em>str</em><em>, </em><em>datetime</em><em>, </em><em>list</em><em>, </em><em>slice</em>) – Date(s) to query for features.
-- Single date: “2024-01-15” or datetime object
-- Date range: slice(“2024-01-01”, “2024-01-31”)
-- List of dates: [“2024-01-15”, “2024-01-20”]
-- None: return all features (not filtered by date)</p></li>
-<li><p><strong>series</strong> (<em>str</em><em>, </em><em>list</em>) – Series name(s) to query.
-- Single series: “sales”
-- Multiple series: [“sales”, “revenue”]
-- None: all series</p></li>
-<li><p><strong>include_components</strong> (<em>bool</em>) – Include component time series values for the date range</p></li>
-<li><p><strong>include_metadata</strong> (<em>bool</em>) – Include metadata like noise levels, scales, etc.</p></li>
-<li><p><strong>return_json</strong> (<em>bool</em>) – Return JSON string instead of dict</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><dl class="simple">
-<dt>Compact feature data including anomalies, changepoints,</dt><dd><p>level shifts, holidays, and optionally components</p>
-</dd>
-</dl>
-</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict or str</p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get all features for one series</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span><span class="n">series</span><span class="o">=</span><span class="s2">&quot;sales&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get features occurring in a date range</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span>
-<span class="gp">... </span>    <span class="n">dates</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="s2">&quot;2024-01-01&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-31&quot;</span><span class="p">),</span>
-<span class="gp">... </span>    <span class="n">series</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;revenue&quot;</span><span class="p">]</span>
-<span class="gp">... </span><span class="p">)</span>
-</pre></div>
-</div>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get components for specific dates</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">detector</span><span class="o">.</span><span class="n">query_features</span><span class="p">(</span>
-<span class="gp">... </span>    <span class="n">dates</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;2024-01-15&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-16&quot;</span><span class="p">],</span>
-<span class="gp">... </span>    <span class="n">series</span><span class="o">=</span><span class="s2">&quot;sales&quot;</span><span class="p">,</span>
-<span class="gp">... </span>    <span class="n">include_components</span><span class="o">=</span><span class="kc">True</span>
-<span class="gp">... </span><span class="p">)</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.render_template">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">render_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.render_template" title="Link to this definition">¶</a></dt>
-<dd><p>Render a feature detection template back into time series data.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.summary">
-<span class="sig-name descname"><span class="pre">summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.summary" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-</section>
 <section id="module-autots.evaluator.metrics">
 <span id="autots-evaluator-metrics-module"></span><h2>autots.evaluator.metrics module<a class="headerlink" href="#module-autots.evaluator.metrics" title="Link to this heading">¶</a></h2>
 <p>Tools for calculating forecast errors.</p>
@@ -2462,7 +2474,7 @@ mixed_length now returns a tuple of (train index, test index).</p>
   <li><a href="modules.html">autots</a><ul>
   <li><a href="autots.html">autots package</a><ul>
       <li>Previous: <a href="autots.datasets.html" title="previous chapter">autots.datasets package</a></li>
-      <li>Next: <a href="autots.mcp.html" title="next chapter">autots.mcp package</a></li>
+      <li>Next: <a href="autots.evaluator.feature_detector.html" title="next chapter">autots.evaluator.feature_detector package</a></li>
   </ul></li>
   </ul></li>
   </ul></li>

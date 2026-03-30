@@ -99,10 +99,57 @@ class SyntheticDailyGenerator:
         Whether to include regressor effects (default False)
     anomaly_types : list of str or None
         List of anomaly types to generate. Valid types are:
-        'point_outlier', 'noisy_burst', 'impulse_decay', 'linear_decay', 'transient_change'
-        If None (default), all types will be generated
+        'point_outlier', 'noisy_burst', 'impulse_decay', 'linear_decay',
+        'transient_change', 'slope_reversion'
+        If None (default), all types will be generated.
+
+        The 'slope_reversion' type models SEV-like or failed-launch patterns common
+        in real-world platform data: a sudden slope change (faster growth or decline)
+        lasting 1-4 weeks, followed by gradual reversion to prior levels.  This produces
+        the skewed first-difference distributions seen in real data without requiring
+        discrete level shifts.
     disable_holiday_splash : bool
         If True, holidays will only affect a single day with no splash or bridge effects (default False)
+    trend_slope_scale : float
+        Multiplier for trend slope magnitudes (default 1.0).
+        Values < 1.0 produce gentler slopes, > 1.0 produce steeper slopes.
+    trend_positive_bias : float
+        Probability [0, 1] of a trend segment being positive/upward (default 0.5 = balanced).
+        Values > 0.5 bias toward growth; set to ~0.85 for mostly-growing data.
+    level_shift_minimum_pct : float
+        Minimum level shift as a fraction of baseline (default 0.12 = 12%).
+        Lower values (e.g. 0.01) allow subtle shifts matching low-CV data.
+    level_shift_max_pct : float or None
+        Maximum level shift as a fraction of baseline (default None = use level_shift_strength).
+        When set, caps shift magnitudes to this percentage regardless of level_shift_strength.
+        Useful for low-CV data where even "small" shifts should be bounded.
+    weekly_profile_target : list of float or None
+        If provided, a 7-element list of normalized day-of-week effects [Mon..Sun].
+        Weekly seasonality will use this exact shape instead of random coefficients.
+        Extract from real data using _extract_data_statistics()['weekly_profile'].
+    yearly_fourier_target : list of float or None
+        If provided, an even-length flat list of yearly Fourier coefficients in
+        the form [a1, b1, a2, b2, ...].
+        Extract from real data using _extract_data_statistics()['yearly_fourier'].
+    noise_ar_coefficient : float or None
+        If provided, controls the EMA smoothing coefficient for noise (0.0-0.99).
+        Applies an exponential moving average filter:
+        ``filtered[t] = coef * filtered[t-1] + (1 - coef) * noise[t]``
+        Higher values produce smoother, more autocorrelated noise.
+        When None, noise uses standard i.i.d. generation.
+    holiday_signal_floor_pct : float
+        Optional floor for holiday magnitude as a fraction of baseline signal
+        (`scale * 50`). Useful when noise_level is very low and holiday amplitudes
+        would otherwise be too small to detect (default 0.0 = disabled).
+    random_dom_holiday_count : int or None
+        If provided, fixes the number of random day-of-month holiday templates.
+        None keeps the existing random count behavior.
+    random_wkdom_holiday_count : int or None
+        If provided, fixes the number of random weekday-of-month holiday templates.
+        None keeps the existing random count behavior.
+    series_type_override : str or None
+        If set, ALL series use this type instead of the default type map.
+        Use 'standard' to force all series to be standard type during tuning.
 
     Examples
     --------
@@ -164,6 +211,18 @@ class SyntheticDailyGenerator:
         include_regressors=False,
         anomaly_types=None,
         disable_holiday_splash=False,
+        trend_slope_scale=1.0,
+        trend_positive_bias=0.5,
+        level_shift_minimum_pct=0.12,
+        level_shift_max_pct=None,
+        weekly_profile_target=None,
+        yearly_fourier_target=None,
+        noise_ar_coefficient=None,
+        volatility_regime_intensity=0.0,
+        holiday_signal_floor_pct=0.0,
+        random_dom_holiday_count=None,
+        random_wkdom_holiday_count=None,
+        series_type_override=None,
     ):
         self.start_date = pd.Timestamp(start_date)
         self.n_days = n_days
@@ -180,6 +239,65 @@ class SyntheticDailyGenerator:
         self.noise_level = noise_level
         self.include_regressors = include_regressors
         self.disable_holiday_splash = disable_holiday_splash
+        self.trend_slope_scale = trend_slope_scale
+        self.trend_positive_bias = float(np.clip(trend_positive_bias, 0.0, 1.0))
+        self.level_shift_minimum_pct = level_shift_minimum_pct
+        if (
+            level_shift_max_pct is not None
+            and level_shift_max_pct < level_shift_minimum_pct
+        ):
+            level_shift_max_pct = level_shift_minimum_pct
+        self.level_shift_max_pct = level_shift_max_pct
+        if weekly_profile_target is not None:
+            weekly_profile_arr = np.asarray(weekly_profile_target, dtype=float).reshape(
+                -1
+            )
+            if weekly_profile_arr.size != 7 or not np.all(
+                np.isfinite(weekly_profile_arr)
+            ):
+                raise ValueError(
+                    "weekly_profile_target must be a 7-element finite numeric sequence."
+                )
+            weekly_profile_arr = weekly_profile_arr - np.mean(weekly_profile_arr)
+            weekly_std = float(np.std(weekly_profile_arr))
+            if weekly_std > 1e-9:
+                weekly_profile_arr = weekly_profile_arr / weekly_std
+            else:
+                weekly_profile_arr = np.zeros(7, dtype=float)
+            self.weekly_profile_target = weekly_profile_arr.tolist()
+        else:
+            self.weekly_profile_target = None
+        if yearly_fourier_target is not None:
+            yearly_fourier_arr = np.asarray(yearly_fourier_target, dtype=float).reshape(
+                -1
+            )
+            if (
+                yearly_fourier_arr.size < 2
+                or yearly_fourier_arr.size % 2 != 0
+                or not np.all(np.isfinite(yearly_fourier_arr))
+            ):
+                raise ValueError(
+                    "yearly_fourier_target must be an even-length finite numeric sequence."
+                )
+            self.yearly_fourier_target = yearly_fourier_arr.tolist()
+        else:
+            self.yearly_fourier_target = None
+        if noise_ar_coefficient is not None:
+            noise_ar_coefficient = float(np.clip(noise_ar_coefficient, 0.0, 0.99))
+        self.noise_ar_coefficient = noise_ar_coefficient
+        self.volatility_regime_intensity = max(0.0, float(volatility_regime_intensity))
+        self.holiday_signal_floor_pct = max(0.0, float(holiday_signal_floor_pct))
+        self.random_dom_holiday_count = (
+            None
+            if random_dom_holiday_count is None
+            else max(0, int(random_dom_holiday_count))
+        )
+        self.random_wkdom_holiday_count = (
+            None
+            if random_wkdom_holiday_count is None
+            else max(0, int(random_wkdom_holiday_count))
+        )
+        self.series_type_override = series_type_override
 
         # Validate and set anomaly types
         valid_anomaly_types = [
@@ -188,6 +306,7 @@ class SyntheticDailyGenerator:
             'impulse_decay',
             'linear_decay',
             'transient_change',
+            'slope_reversion',
         ]
         if anomaly_types is None:
             self.anomaly_types = valid_anomaly_types
@@ -286,6 +405,24 @@ class SyntheticDailyGenerator:
                     'noise_level': float(self.noise_level),
                     'include_regressors': bool(self.include_regressors),
                     'disable_holiday_splash': bool(self.disable_holiday_splash),
+                    'trend_slope_scale': float(self.trend_slope_scale),
+                    'trend_positive_bias': float(self.trend_positive_bias),
+                    'level_shift_minimum_pct': float(self.level_shift_minimum_pct),
+                    'level_shift_max_pct': (
+                        float(self.level_shift_max_pct)
+                        if self.level_shift_max_pct is not None
+                        else None
+                    ),
+                    'weekly_profile_target': self.weekly_profile_target,
+                    'yearly_fourier_target': self.yearly_fourier_target,
+                    'noise_ar_coefficient': self.noise_ar_coefficient,
+                    'volatility_regime_intensity': float(
+                        self.volatility_regime_intensity
+                    ),
+                    'holiday_signal_floor_pct': float(self.holiday_signal_floor_pct),
+                    'random_dom_holiday_count': self.random_dom_holiday_count,
+                    'random_wkdom_holiday_count': self.random_wkdom_holiday_count,
+                    'series_type_override': self.series_type_override,
                 },
                 'random_dom_holidays': copy.deepcopy(self.random_dom_holidays),
                 'random_wkdom_holidays': copy.deepcopy(self.random_wkdom_holidays),
@@ -328,11 +465,17 @@ class SyntheticDailyGenerator:
 
         for i in range(self.n_series):
             series_name = f"series_{i}"
-            series_type = series_type_map.get(i, 'standard')
+            if self.series_type_override is not None:
+                series_type = self.series_type_override
+            else:
+                series_type = series_type_map.get(i, 'standard')
             self.series_types[series_name] = series_type
 
             # Set scale for this series (every 3rd series is 10x larger)
-            scale = 10.0 if i % 3 == 0 else 1.0
+            if self.series_type_override is not None:
+                scale = 1.0
+            else:
+                scale = 10.0 if i % 3 == 0 else 1.0
             self.series_scales[series_name] = scale
 
             # Build template for this series and then render it
@@ -524,13 +667,24 @@ class SyntheticDailyGenerator:
         self.components[series_name] = {}
 
         # Assign per-series noise level (varying around base noise_level)
-        noise_multiplier = self.rng.uniform(0.5, 2.0)
+        # Narrow the range when noise is very low to avoid outlier-noisy series
+        if self.noise_level < 0.02:
+            noise_multiplier = self.rng.uniform(0.8, 1.3)
+        else:
+            noise_multiplier = self.rng.uniform(0.5, 2.0)
         series_noise_level = self.noise_level * noise_multiplier
         self.series_noise_levels[series_name] = series_noise_level
 
         # Assign per-series seasonality strengths
-        weekly_mult = self.rng.uniform(0.3, 2.5)
-        yearly_mult = self.rng.uniform(0.2, 2.0)
+        # Narrow range for very low seasonality to preserve subtle patterns
+        if self.weekly_seasonality_strength < 0.3:
+            weekly_mult = self.rng.uniform(0.7, 1.5)
+        else:
+            weekly_mult = self.rng.uniform(0.3, 2.5)
+        if self.yearly_seasonality_strength < 0.3:
+            yearly_mult = self.rng.uniform(0.7, 1.5)
+        else:
+            yearly_mult = self.rng.uniform(0.2, 2.0)
         series_weekly_strength = self.weekly_seasonality_strength * weekly_mult
         series_yearly_strength = self.yearly_seasonality_strength * yearly_mult
         self.series_seasonality_strengths[series_name] = {
@@ -542,9 +696,11 @@ class SyntheticDailyGenerator:
             'series_name': series_name,
             'series_type': series_type,
             'scale_factor': scale,
-            'combination': 'multiplicative'
-            if series_type == 'multiplicative_seasonality'
-            else 'additive',
+            'combination': (
+                'multiplicative'
+                if series_type == 'multiplicative_seasonality'
+                else 'additive'
+            ),
             'components': {},
             'labels': {},
             'metadata': {
@@ -560,9 +716,11 @@ class SyntheticDailyGenerator:
         trend = self._generate_trend(series_name, series_type, scale)
         series_template['components']['trend'] = {
             'values': trend.tolist(),
-            'mode': 'saturating'
-            if series_type == 'saturating_trend'
-            else 'piecewise_linear',
+            'mode': (
+                'saturating'
+                if series_type == 'saturating_trend'
+                else 'piecewise_linear'
+            ),
         }
         series_template['labels']['trend_changepoints'] = self._serialize_event_list(
             self.trend_changepoints.get(series_name, []),
@@ -597,11 +755,11 @@ class SyntheticDailyGenerator:
             'values': seasonality.tolist(),
             'mode': seasonality_mode,
         }
-        series_template['labels'][
-            'seasonality_changepoints'
-        ] = self._serialize_event_list(
-            self.seasonality_changepoints.get(series_name, []),
-            ['date', 'description'],
+        series_template['labels']['seasonality_changepoints'] = (
+            self._serialize_event_list(
+                self.seasonality_changepoints.get(series_name, []),
+                ['date', 'description'],
+            )
         )
 
         # 4. Generate holiday effects
@@ -609,13 +767,13 @@ class SyntheticDailyGenerator:
         series_template['components']['holidays'] = {
             'values': holidays.tolist(),
         }
-        series_template['labels'][
-            'holiday_impacts'
-        ] = self._serialize_datetime_key_dict(self.holiday_impacts.get(series_name, {}))
-        series_template['labels'][
-            'holiday_splash_impacts'
-        ] = self._serialize_datetime_key_dict(
-            self.holiday_splash_impacts.get(series_name, {})
+        series_template['labels']['holiday_impacts'] = (
+            self._serialize_datetime_key_dict(self.holiday_impacts.get(series_name, {}))
+        )
+        series_template['labels']['holiday_splash_impacts'] = (
+            self._serialize_datetime_key_dict(
+                self.holiday_splash_impacts.get(series_name, {})
+            )
         )
         series_template['labels']['holiday_dates'] = [
             pd.Timestamp(date).isoformat()
@@ -750,52 +908,43 @@ class SyntheticDailyGenerator:
             changepoint_days = [0] + changepoint_days + [self.n_days]
 
             # Generate slopes with validation for meaningful changes
-            # Use a weighted distribution to favor stronger trends
-            # 50% chance of stronger slope, 50% chance of moderate slope
+            # trend_slope_scale controls magnitude (1.0 = original, <1 = gentler)
+            # trend_positive_bias controls direction (0.5 = balanced, 1.0 = all upward)
+            slope_scale = self.trend_slope_scale
+            pos_bias = self.trend_positive_bias
+
             slopes = []
             prev_slope = None
-            min_change = (
-                0.015 * scale
-            )  # Minimum detectable change threshold (increased from 0.008)
+            min_change = 0.005 * scale * slope_scale
 
             for i in range(len(changepoint_days) - 1):
+                # Determine if this slope should be positive
+                is_positive = self.rng.random() < pos_bias
+
                 if prev_slope is None:
-                    # First slope - favor stronger initial trends
                     if self.rng.random() < 0.5:
-                        # Stronger trend: -0.05 to -0.02 or 0.025 to 0.07
-                        if self.rng.random() < 0.5:
-                            new_slope = self.rng.uniform(-0.05, -0.02) * scale
-                        else:
-                            new_slope = self.rng.uniform(0.025, 0.07) * scale
+                        mag = self.rng.uniform(0.005, 0.03) * scale * slope_scale
                     else:
-                        # Moderate trend
-                        new_slope = self.rng.uniform(-0.015, 0.04) * scale
+                        mag = self.rng.uniform(0.001, 0.015) * scale * slope_scale
+                    new_slope = mag if is_positive else -mag
                 else:
-                    # Ensure meaningful change: try up to 20 times, then force it
                     for attempt in range(20):
-                        # 50% chance of stronger slope
                         if self.rng.random() < 0.5:
-                            # Stronger trend
-                            if self.rng.random() < 0.5:
-                                new_slope = self.rng.uniform(-0.05, -0.02) * scale
-                            else:
-                                new_slope = self.rng.uniform(0.025, 0.07) * scale
+                            mag = self.rng.uniform(0.005, 0.03) * scale * slope_scale
                         else:
-                            # Moderate trend
-                            new_slope = self.rng.uniform(-0.015, 0.04) * scale
-                        # Accept if change is large enough (allow 10% to be subtler)
+                            mag = self.rng.uniform(0.001, 0.015) * scale * slope_scale
+                        new_slope = mag if is_positive else -mag
                         threshold = min_change * (
                             0.6 if self.rng.random() > 0.9 else 1.0
                         )
                         if abs(new_slope - prev_slope) >= threshold:
                             break
                     else:
-                        # Force a meaningful change if random sampling failed
-                        sign = 1 if self.rng.random() > 0.5 else -1
+                        sign = 1 if is_positive else -1
                         new_slope = np.clip(
                             prev_slope + sign * min_change * 2.5,
-                            -0.05 * scale,
-                            0.07 * scale,
+                            -0.03 * scale * slope_scale,
+                            0.03 * scale * slope_scale,
                         )
 
                 slopes.append(new_slope)
@@ -873,16 +1022,31 @@ class SyntheticDailyGenerator:
             # For longer datasets, use Poisson
             n_shifts = int(self.rng.poisson(expected_shifts))
 
-        # Generate non-shared shift locations
+        # Get trend changepoint day indices to avoid same-day collisions
+        trend_cp_indices = set()
+        for cp_info in self.trend_changepoints.get(series_name, []):
+            try:
+                day_idx = (cp_info[0] - self.date_index[0]).days
+                if 0 <= day_idx < self.n_days:
+                    trend_cp_indices.add(day_idx)
+            except Exception:
+                pass
+
+        # Generate non-shared shift locations, excluding trend changepoint days
         shift_days = []
         if n_shifts > 0:
-            shift_days = sorted(
-                self.rng.choice(
-                    range(int(self.n_days * 0.2), int(self.n_days * 0.9)),
-                    size=n_shifts,
-                    replace=False,
+            candidate_pool = [
+                d
+                for d in range(int(self.n_days * 0.2), int(self.n_days * 0.9))
+                if d not in trend_cp_indices
+            ]
+            n_to_pick = min(n_shifts, len(candidate_pool))
+            if n_to_pick > 0:
+                shift_days = sorted(
+                    self.rng.choice(
+                        candidate_pool, size=n_to_pick, replace=False
+                    ).tolist()
                 )
-            )
 
         shift_info = []
 
@@ -893,8 +1057,19 @@ class SyntheticDailyGenerator:
 
         for shift_day, is_shared in sorted(all_shift_days.items()):
             # Determine shift type
+            # Real-world level shifts are rarely truly instantaneous.  Favor
+            # longer ramps (5-14 day) to avoid the discrete stairstep look.
+            # 10% instant, 15% ramp-2, 20% ramp-3, 25% ramp-5, 20% ramp-7, 10% ramp-14
             shift_type = self.rng.choice(
-                ['instant', 'ramp_2_day', 'ramp_3_day'], p=[0.6, 0.2, 0.2]
+                [
+                    'instant',
+                    'ramp_2_day',
+                    'ramp_3_day',
+                    'ramp_5_day',
+                    'ramp_7_day',
+                    'ramp_14_day',
+                ],
+                p=[0.10, 0.15, 0.20, 0.25, 0.20, 0.10],
             )
 
             # Determine magnitude using series baseline percentage approach
@@ -904,33 +1079,38 @@ class SyntheticDailyGenerator:
             baseline_value = abs(signal_strength)  # Baseline signal magnitude
 
             # Generate shift magnitude as percentage of baseline
-            # Skewed distribution toward 12%, ranging up to level_shift_strength
-            # Using beta distribution with alpha=2, beta=5 gives right-skewed distribution
-            level_shift_minimum_shift = 0.12  # Minimum 12% shift
-            percent_range = self.level_shift_strength - level_shift_minimum_shift
-            shift_percent = (
-                level_shift_minimum_shift + self.rng.beta(2, 5) * percent_range
+            # Heavily right-skewed distribution producing many small shifts
+            # and few large ones (matching real-world data where small level
+            # shifts are common but large ones are rare).
+            # Beta(1.2, 8) concentrates ~70% of mass below 20% of the range.
+            level_shift_minimum_shift = self.level_shift_minimum_pct
+            percent_range = max(
+                0.0, self.level_shift_strength - level_shift_minimum_shift
             )
+            shift_percent = (
+                level_shift_minimum_shift + self.rng.beta(1.2, 8) * percent_range
+            )
+
+            # Apply max cap if specified (critical for low-CV data)
+            if self.level_shift_max_pct is not None:
+                shift_percent = min(shift_percent, self.level_shift_max_pct)
 
             # Calculate magnitude as percentage of baseline
             magnitude_from_baseline = shift_percent * baseline_value
 
-            # Ensure minimum detectability: at least 5x noise std
-            # If below minimum, scale the percentage-based value up proportionally
-            # This preserves the relative variation from the beta distribution
+            # Only enforce minimum detectability when noise level is moderate
+            # For very low noise (< 0.01), skip the floor — the percentage-based
+            # magnitude is already appropriate and the floor would force oversized shifts
             noise_std = series_noise_level * signal_strength
-            min_magnitude = 5.0 * noise_std
-
-            if magnitude_from_baseline < min_magnitude:
-                # Scale up proportionally: maintain the ratio within the 10% to strength range
-                # but ensure final value is at least min_magnitude
-                # Use a simple approach: shift_percent is preserved as metadata,
-                # but actual magnitude is boosted to minimum
-                magnitude = min_magnitude
-                # Store the original intended percentage for metadata/analysis
-                actual_percent_used = magnitude / baseline_value
+            if series_noise_level >= 0.01:
+                min_magnitude = 3.0 * noise_std
+                if magnitude_from_baseline < min_magnitude:
+                    magnitude = min_magnitude
+                    actual_percent_used = magnitude / baseline_value
+                else:
+                    magnitude = magnitude_from_baseline
+                    actual_percent_used = shift_percent
             else:
-                # Use percentage-based magnitude directly
                 magnitude = magnitude_from_baseline
                 actual_percent_used = shift_percent
 
@@ -941,17 +1121,40 @@ class SyntheticDailyGenerator:
             if shift_type == 'instant':
                 level_shift[shift_day:] += magnitude
             elif shift_type == 'ramp_2_day':
-                if shift_day + 2 <= self.n_days:
-                    level_shift[shift_day : shift_day + 2] += np.linspace(
-                        magnitude / 2, magnitude, 2
+                ramp_len = min(2, self.n_days - shift_day)
+                if ramp_len > 0:
+                    level_shift[shift_day : shift_day + ramp_len] += np.linspace(
+                        magnitude / ramp_len, magnitude, ramp_len
                     )
-                    level_shift[shift_day + 2 :] += magnitude
+                    level_shift[shift_day + ramp_len :] += magnitude
             elif shift_type == 'ramp_3_day':
-                if shift_day + 3 <= self.n_days:
-                    level_shift[shift_day : shift_day + 3] += np.linspace(
-                        magnitude / 3, magnitude, 3
+                ramp_len = min(3, self.n_days - shift_day)
+                if ramp_len > 0:
+                    level_shift[shift_day : shift_day + ramp_len] += np.linspace(
+                        magnitude / ramp_len, magnitude, ramp_len
                     )
-                    level_shift[shift_day + 3 :] += magnitude
+                    level_shift[shift_day + ramp_len :] += magnitude
+            elif shift_type == 'ramp_5_day':
+                ramp_len = min(5, self.n_days - shift_day)
+                if ramp_len > 0:
+                    level_shift[shift_day : shift_day + ramp_len] += np.linspace(
+                        magnitude / ramp_len, magnitude, ramp_len
+                    )
+                    level_shift[shift_day + ramp_len :] += magnitude
+            elif shift_type == 'ramp_7_day':
+                ramp_len = min(7, self.n_days - shift_day)
+                if ramp_len > 0:
+                    level_shift[shift_day : shift_day + ramp_len] += np.linspace(
+                        magnitude / ramp_len, magnitude, ramp_len
+                    )
+                    level_shift[shift_day + ramp_len :] += magnitude
+            elif shift_type == 'ramp_14_day':
+                ramp_len = min(14, self.n_days - shift_day)
+                if ramp_len > 0:
+                    level_shift[shift_day : shift_day + ramp_len] += np.linspace(
+                        magnitude / ramp_len, magnitude, ramp_len
+                    )
+                    level_shift[shift_day + ramp_len :] += magnitude
 
             shift_info.append(
                 (self.date_index[shift_day], magnitude, shift_type, is_shared)
@@ -974,10 +1177,18 @@ class SyntheticDailyGenerator:
         signal_strength = scale * 50
         noise_std = series_noise_level * signal_strength
 
-        # Scale base seasonality amplitude to be a multiple of noise
-        # Weekly seasonality should be 1-4x noise (depending on strength setting)
-        weekly_amplitude = weekly_strength * noise_std * 2
-        yearly_amplitude = yearly_strength * noise_std * 1.5
+        # Scale seasonality amplitude using BOTH noise-relative and signal-relative
+        # components.  When noise is very low (e.g. noise_level < 0.01), the pure
+        # noise-based amplitude becomes negligible and weekly patterns vanish.
+        # The signal-relative floor ensures weekly seasonality stays visible even
+        # when noise_level converges to near-zero during tuning.
+        noise_based_weekly = weekly_strength * noise_std * 2
+        signal_based_weekly = weekly_strength * signal_strength * 0.005
+        weekly_amplitude = max(noise_based_weekly, signal_based_weekly)
+
+        noise_based_yearly = yearly_strength * noise_std * 1.5
+        signal_based_yearly = yearly_strength * signal_strength * 0.004
+        yearly_amplitude = max(noise_based_yearly, signal_based_yearly)
 
         # Weekly seasonality with noise
         n_weeks = int(np.ceil(self.n_days / 7))
@@ -1036,7 +1247,15 @@ class SyntheticDailyGenerator:
 
         else:
             # Standard weekly seasonality with stochastic variation
-            weekly_pattern = self.rng.uniform(-1, 1, 7) * weekly_amplitude
+            # If a target weekly profile shape is provided, use it instead of random
+            if self.weekly_profile_target is not None:
+                target_profile = np.array(self.weekly_profile_target)
+                # Scale the normalized profile by the weekly amplitude
+                # The target profile is normalized (zero-mean, unit-std),
+                # so multiply by amplitude to get correct magnitude
+                weekly_pattern = target_profile * weekly_amplitude
+            else:
+                weekly_pattern = self.rng.uniform(-1, 1, 7) * weekly_amplitude
 
             for day_of_week in range(7):
                 day_mask = self.date_index.dayofweek == day_of_week
@@ -1053,11 +1272,20 @@ class SyntheticDailyGenerator:
         # Yearly seasonality (Fourier basis with stochastic amplitude)
         n_fourier = 10
         yearly_seasonality = np.zeros(self.n_days)
+        yearly_target = (
+            np.asarray(self.yearly_fourier_target, dtype=float)
+            if self.yearly_fourier_target is not None
+            else None
+        )
 
         for n in range(1, n_fourier + 1):
             # Base Fourier coefficients
-            a_n = self.rng.uniform(-1, 1) * yearly_amplitude
-            b_n = self.rng.uniform(-1, 1) * yearly_amplitude
+            if yearly_target is not None and len(yearly_target) >= (2 * n):
+                a_n = yearly_target[2 * (n - 1)] * yearly_amplitude
+                b_n = yearly_target[2 * (n - 1) + 1] * yearly_amplitude
+            else:
+                a_n = self.rng.uniform(-1, 1) * yearly_amplitude
+                b_n = self.rng.uniform(-1, 1) * yearly_amplitude
 
             # Add small amplitude drift (random walk)
             amplitude_drift = np.cumsum(
@@ -1091,8 +1319,15 @@ class SyntheticDailyGenerator:
         signal_strength = scale * 50
         noise_std = series_noise_level * signal_strength
 
-        # Holiday impacts should be 2-6x noise for detectability
-        holiday_scale = self.rng.uniform(2, 6) * noise_std
+        # Holiday impacts should be 2-6x noise for detectability.
+        # When noise is extremely low, apply an optional signal-relative floor.
+        noise_based_holiday = self.rng.uniform(2, 6) * noise_std
+        signal_based_floor = (
+            signal_strength
+            * self.holiday_signal_floor_pct
+            * self.rng.uniform(0.85, 1.15)
+        )
+        holiday_scale = max(noise_based_holiday, signal_based_floor)
 
         # Determine splash/bridge configuration for each holiday type (consistent across years)
         if not self.holiday_config:
@@ -1496,7 +1731,11 @@ class SyntheticDailyGenerator:
     def _init_random_dom_holidays(self):
         """Create random day-of-month holiday templates shared across series."""
         holidays = []
-        n_dom = int(self.rng.randint(2, 4))
+        n_dom = (
+            int(self.random_dom_holiday_count)
+            if self.random_dom_holiday_count is not None
+            else int(self.rng.randint(2, 4))
+        )
         protected = {
             'dom_12_25',
             'dom_12_24',
@@ -1531,7 +1770,11 @@ class SyntheticDailyGenerator:
     def _init_random_wkdom_holidays(self):
         """Create random weekday-of-month holiday templates shared across series."""
         holidays = []
-        n_wkdom = int(self.rng.randint(1, 3))
+        n_wkdom = (
+            int(self.random_wkdom_holiday_count)
+            if self.random_wkdom_holiday_count is not None
+            else int(self.rng.randint(1, 3))
+        )
         protected = {
             'wkdom_11_4_4',
             'wkdom_11_4_3',
@@ -1587,7 +1830,7 @@ class SyntheticDailyGenerator:
             # Smoother, autocorrelated noise (also used for multiplicative seasonality)
             noise = self._generate_ar_noise(series_name, scale)
         else:
-            # Standard noise with changepoints
+            # Standard noise with changepoints (may include EMA smoothing if configured)
             noise = self._generate_standard_noise(series_name, scale)
 
         return noise
@@ -1667,6 +1910,45 @@ class SyntheticDailyGenerator:
 
         # Add random walk to noise
         noise += random_walk
+
+        # Apply volatility regime envelope.
+        # This creates smooth periods of higher/lower noise amplitude,
+        # bridging the gap between constant-variance noise and discrete
+        # level shifts.  A log-normal random walk on the noise multiplier
+        # produces heavy-tailed first-differences (higher kurtosis) via
+        # heteroscedasticity, which is how real data typically gets its
+        # excess kurtosis — NOT from large permanent level shifts.
+        vri = getattr(self, 'volatility_regime_intensity', 0.0) or 0.0
+        if vri > 0:
+            log_vol = np.zeros(self.n_days)
+            # Mean-reversion speed: higher intensity → longer regimes
+            vol_mean_revert = 0.02 + 0.03 * (1.0 - min(vri, 1.0))
+            # Innovation std controls how extreme the regimes get
+            vol_innovation_std = 0.04 * vri
+            for t in range(1, self.n_days):
+                log_vol[t] = (
+                    log_vol[t - 1]
+                    - vol_mean_revert * log_vol[t - 1]
+                    + self.rng.normal(0, vol_innovation_std)
+                )
+            # Convert log-volatility to multiplicative envelope (centered at 1.0)
+            vol_envelope = np.exp(log_vol)
+            noise = noise * vol_envelope
+
+        # Apply EMA smoothing filter if noise_ar_coefficient is set.
+        # This is an exponential moving average (not a standard AR(1) process)
+        # that smooths noise to match autocorrelation structure of real data.
+        # EMA: y[t] = coef * y[t-1] + (1 - coef) * x[t]
+        ar_coef = self.noise_ar_coefficient
+        if ar_coef is not None and ar_coef > 0:
+            ar_coef = min(ar_coef, 0.99)
+            filtered = np.zeros_like(noise)
+            filtered[0] = noise[0]
+            for t_idx in range(1, len(noise)):
+                filtered[t_idx] = (
+                    ar_coef * filtered[t_idx - 1] + (1 - ar_coef) * noise[t_idx]
+                )
+            noise = filtered
 
         return noise
 
@@ -1803,15 +2085,36 @@ class SyntheticDailyGenerator:
                     return True
             return False
 
+        # Build set of forbidden start days (trend changepoints + level shift starts)
+        # so anomaly onset never lands on the same day as a changepoint or shift.
+        forbidden_start_days = set()
+        for cp_info in self.trend_changepoints.get(series_name, []):
+            try:
+                day_idx = (cp_info[0] - self.date_index[0]).days
+                if 0 <= day_idx < self.n_days:
+                    forbidden_start_days.add(day_idx)
+            except Exception:
+                pass
+        for ls_info in self.level_shifts.get(series_name, []):
+            try:
+                day_idx = (ls_info[0] - self.date_index[0]).days
+                if 0 <= day_idx < self.n_days:
+                    forbidden_start_days.add(day_idx)
+            except Exception:
+                pass
+
         # Generate non-shared anomalies
         anomaly_days = []
         attempts = 0
         while len(anomaly_days) < n_anomalies and attempts < n_anomalies * 10:
             candidate = self.rng.randint(0, self.n_days - 10)
-            # Ensure at least 7 days spacing, not on holiday, and no overlap with holiday range
-            if all(
-                abs(candidate - existing) > 7 for existing in anomaly_days
-            ) and not has_holiday_overlap(candidate):
+            # Ensure at least 7 days spacing, not on holiday, no holiday range overlap,
+            # and first day does not coincide with a trend changepoint or level shift.
+            if (
+                all(abs(candidate - existing) > 7 for existing in anomaly_days)
+                and not has_holiday_overlap(candidate)
+                and candidate not in forbidden_start_days
+            ):
                 anomaly_days.append(candidate)
             attempts += 1
 
@@ -1823,6 +2126,7 @@ class SyntheticDailyGenerator:
                 for day in self.shared_events['anomalies']
                 if all(abs(day - existing) > 7 for existing in anomaly_days)
                 and not has_holiday_overlap(day)
+                and day not in forbidden_start_days
             ],
             participation_prob=0.5,
         )
@@ -1837,14 +2141,16 @@ class SyntheticDailyGenerator:
             if len(self.anomaly_types) == 1:
                 anomaly_type = self.anomaly_types[0]
             else:
-                # Use proportional probabilities if multiple types are allowed
-                # Default probabilities: point_outlier=0.4, noisy_burst=0.2, impulse_decay=0.15, linear_decay=0.15, transient_change=0.1
+                # Use proportional probabilities if multiple types are allowed.
+                # slope_reversion models SEV/failed-launch patterns: sudden slope
+                # change lasting weeks, then gradual reversion to prior levels.
                 default_probs = {
-                    'point_outlier': 0.4,
-                    'noisy_burst': 0.2,
-                    'impulse_decay': 0.15,
-                    'linear_decay': 0.15,
-                    'transient_change': 0.1,
+                    'point_outlier': 0.30,
+                    'noisy_burst': 0.15,
+                    'impulse_decay': 0.12,
+                    'linear_decay': 0.12,
+                    'transient_change': 0.08,
+                    'slope_reversion': 0.23,
                 }
                 # Filter to allowed types and normalize
                 allowed_probs = [default_probs[t] for t in self.anomaly_types]
@@ -1900,6 +2206,45 @@ class SyntheticDailyGenerator:
                     if anomaly_day + d < self.n_days:
                         anomalies[anomaly_day + d] += magnitude
                 duration = change_duration
+
+            elif anomaly_type == 'slope_reversion':
+                # SEV/failed-launch pattern: sudden slope change (faster growth
+                # or decline) lasting 1-4 weeks, then gradual reversion to prior
+                # levels.  This models real-world platform events where a SEV
+                # causes accelerated decline, or a failed product launch causes
+                # a temporary boost, and then the metric slowly recovers.
+                #
+                # Unlike level shifts (permanent step changes), slope_reversion
+                # anomalies produce skewed first-differences and excess kurtosis
+                # through *slope* changes rather than *level* jumps.  The onset
+                # is fast (over a few days) and the reversion is slow (weeks),
+                # creating the asymmetric diff distribution seen in real data.
+                onset_days = self.rng.randint(2, 6)
+                hold_days = self.rng.randint(7, 28)
+                reversion_days = self.rng.randint(14, 42)
+                total_duration = onset_days + hold_days + reversion_days
+
+                # Onset phase: ramp up the displacement over onset_days
+                for d in range(onset_days):
+                    if anomaly_day + d < self.n_days:
+                        frac = (d + 1) / onset_days
+                        anomalies[anomaly_day + d] += magnitude * frac
+
+                # Hold phase: stay near peak displacement with slight noise
+                for d in range(onset_days, onset_days + hold_days):
+                    if anomaly_day + d < self.n_days:
+                        noise_frac = 1.0 + self.rng.normal(0, 0.05)
+                        anomalies[anomaly_day + d] += magnitude * noise_frac
+
+                # Reversion phase: slow exponential-like decay back to zero
+                for d in range(reversion_days):
+                    day_idx = anomaly_day + onset_days + hold_days + d
+                    if day_idx < self.n_days:
+                        # Exponential decay: starts at magnitude, decays to ~0
+                        decay = np.exp(-3.0 * d / reversion_days)
+                        anomalies[day_idx] += magnitude * decay
+
+                duration = total_duration
 
             anomaly_info.append(
                 (
@@ -2079,10 +2424,14 @@ class SyntheticDailyGenerator:
             return data
         return data.get(
             series_name,
-            default
-            if default is not None
-            else (
-                [] if isinstance(data.get(next(iter(data), None), None), list) else {}
+            (
+                default
+                if default is not None
+                else (
+                    []
+                    if isinstance(data.get(next(iter(data), None), None), list)
+                    else {}
+                )
             ),
         )
 
@@ -2639,6 +2988,11 @@ class SyntheticDailyGenerator:
         """
         Extract key statistics from real-world time series data.
 
+        Includes both basic distributional statistics and richer structural
+        metrics (autocorrelation, coefficient of variation, weekly profile
+        shape, trend direction) that are important for matching real-world
+        time series with changepoints and level shifts.
+
         Parameters
         ----------
         df : pd.DataFrame
@@ -2647,7 +3001,20 @@ class SyntheticDailyGenerator:
         Returns
         -------
         dict
-            Dictionary of statistics useful for tuning
+            Dictionary of statistics useful for tuning, including:
+            - Basic: n_days, n_series, mean_value, std_value, scale
+            - Trend: mean_trend_slope
+            - Seasonality: weekly_seasonality, yearly_seasonality
+            - Noise: noise_std, noise_to_signal
+            - Events: anomaly_per_week, changepoint_per_year
+            - Autocorrelation: median_acf_lag1, median_acf_lag7
+            - Distribution: median_cv, cv_iqr
+            - Shape: weekly_profile (7 values), frac_positive_trend
+            - Diff distribution: median_diff_kurtosis, median_diff_skewness,
+              abs_diff_skewness
+            - Changepoint structure: changepoint_energy (Wasserstein-like total
+              slope-change energy), max_jump_ratio (largest single-day jump
+              relative to std — captures how discrete the biggest shifts are)
         """
         stats = {}
 
@@ -2661,21 +3028,23 @@ class SyntheticDailyGenerator:
         stats['scale'] = float(df.abs().max().max())
 
         # Simple trend estimation (linear slope per series)
-        from sklearn.linear_model import LinearRegression
-
-        X = np.arange(len(df)).reshape(-1, 1)
         slopes = []
+        trend_directions = []
         for col in df.columns:
             y = df[col].ffill().bfill().values
             if len(y) > 0 and not np.all(np.isnan(y)):
-                lr = LinearRegression()
-                lr.fit(X, y)
-                slopes.append(abs(lr.coef_[0]))
+                coeffs = np.polyfit(np.arange(len(y)), y, 1)
+                slopes.append(abs(coeffs[0]))
+                trend_directions.append(1 if coeffs[0] > 0 else 0)
         stats['mean_trend_slope'] = float(np.mean(slopes)) if slopes else 0.0
+        stats['frac_positive_trend'] = (
+            float(np.mean(trend_directions)) if trend_directions else 0.5
+        )
 
         # Estimate seasonality strength (simple weekly and yearly patterns)
         weekly_strength = []
         yearly_strength = []
+        weekly_profiles = []
         for col in df.columns:
             series = df[col].ffill().bfill()
             if len(series) > 0:
@@ -2686,6 +3055,13 @@ class SyntheticDailyGenerator:
                     weekly_var = weekly_means.var() if len(weekly_means) > 1 else 0
                     total_var = series.var()
                     weekly_strength.append(float(weekly_var / (total_var + 1e-9)))
+
+                    # Collect normalized weekly profile for shape matching
+                    if weekly_means.std() > 0:
+                        normalized = (
+                            weekly_means - weekly_means.mean()
+                        ) / weekly_means.std()
+                        weekly_profiles.append(normalized.values)
 
                 # Yearly: compare variance within day-of-year vs across years
                 if len(series) >= 365:
@@ -2702,6 +3078,12 @@ class SyntheticDailyGenerator:
             float(np.median(yearly_strength)) if yearly_strength else 0.1
         )
 
+        # Mean weekly profile shape (7 normalized values)
+        if weekly_profiles:
+            stats['weekly_profile'] = np.mean(weekly_profiles, axis=0).tolist()
+        else:
+            stats['weekly_profile'] = [0.0] * 7
+
         # Noise estimation (first differences std)
         diff_std = []
         for col in df.columns:
@@ -2715,21 +3097,62 @@ class SyntheticDailyGenerator:
             stats['noise_std'] / (stats['std_value'] + 1e-9)
         )
 
+        # Autocorrelation structure (important for matching smooth vs choppy data)
+        acf_lag1_vals = []
+        acf_lag7_vals = []
+        cv_vals = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 7:
+                acf1 = series.autocorr(lag=1)
+                if not np.isnan(acf1):
+                    acf_lag1_vals.append(acf1)
+                acf7 = series.autocorr(lag=7)
+                if not np.isnan(acf7):
+                    acf_lag7_vals.append(acf7)
+                cv = series.std() / (abs(series.mean()) + 1e-9)
+                cv_vals.append(cv)
+
+        stats['median_acf_lag1'] = (
+            float(np.median(acf_lag1_vals)) if acf_lag1_vals else 0.0
+        )
+        stats['median_acf_lag7'] = (
+            float(np.median(acf_lag7_vals)) if acf_lag7_vals else 0.0
+        )
+        stats['median_cv'] = float(np.median(cv_vals)) if cv_vals else 0.1
+        stats['cv_iqr'] = (
+            float(np.subtract(*np.percentile(cv_vals, [75, 25])))
+            if len(cv_vals) > 2
+            else 0.05
+        )
+
         # Event frequency estimation (rough changepoint detection)
         changepoint_freq = []
         anomaly_freq = []
         for col in df.columns:
             series = df[col].ffill().bfill()
             if len(series) > 30:
-                # Detect outliers as proxy for anomalies
+                # Detect outliers using BOTH raw z-scores and first-diff z-scores
+                # Raw z-scores can miss anomalies in trending data, diff z-scores capture abrupt changes
                 z_scores = np.abs((series - series.mean()) / (series.std() + 1e-9))
-                n_outliers = np.sum(z_scores > 3)
+                n_raw_outliers = np.sum(z_scores > 3)
+
+                # First-difference z-scores (more robust to trends/level shifts)
+                diffs = series.diff().dropna()
+                if len(diffs) > 3:
+                    diff_z = np.abs((diffs - diffs.mean()) / (diffs.std() + 1e-9))
+                    n_diff_outliers = np.sum(diff_z > 3.5)  # slightly higher threshold
+                else:
+                    n_diff_outliers = 0
+
+                # Use whichever is higher (more sensitive detection)
+                n_outliers = max(n_raw_outliers, n_diff_outliers)
                 anomaly_freq.append(n_outliers / (len(series) / 7))  # per week
 
                 # Detect abrupt changes as proxy for changepoints
-                diffs = series.diff().abs()
-                threshold = diffs.quantile(0.95)
-                n_changes = np.sum(diffs > threshold * 2)
+                diffs_abs = series.diff().abs()
+                threshold = diffs_abs.quantile(0.95)
+                n_changes = np.sum(diffs_abs > threshold * 2)
                 changepoint_freq.append(n_changes / (len(series) / 365.25))  # per year
 
         stats['anomaly_per_week'] = (
@@ -2739,7 +3162,190 @@ class SyntheticDailyGenerator:
             float(np.median(changepoint_freq)) if changepoint_freq else 0.5
         )
 
+        # Diff kurtosis — heavy-tailed first differences indicate level shifts / anomalies
+        diff_kurtosis_vals = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 7:
+                diff = series.diff().dropna()
+                if len(diff) > 3:
+                    kurt = float(diff.kurtosis())
+                    if np.isfinite(kurt):
+                        diff_kurtosis_vals.append(kurt)
+        stats['median_diff_kurtosis'] = (
+            float(np.median(diff_kurtosis_vals)) if diff_kurtosis_vals else 0.0
+        )
+
+        # Diff skewness — asymmetric first differences indicate the direction
+        # bias of jumps (e.g. more sudden drops than gradual ones, or vice versa).
+        # Real data often has non-zero skew from SEV-like events (sudden onset,
+        # gradual recovery), while excess level shifts produce near-zero skew
+        # because positive and negative shifts are equally likely.
+        diff_skewness_vals = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 7:
+                diff = series.diff().dropna()
+                if len(diff) > 3:
+                    skew = float(diff.skew())
+                    if np.isfinite(skew):
+                        diff_skewness_vals.append(skew)
+        stats['median_diff_skewness'] = (
+            float(np.median(diff_skewness_vals)) if diff_skewness_vals else 0.0
+        )
+        stats['abs_diff_skewness'] = (
+            float(np.median([abs(s) for s in diff_skewness_vals]))
+            if diff_skewness_vals
+            else 0.0
+        )
+
+        # Changepoint energy — a Wasserstein-like measure of total slope-change
+        # energy.  Instead of just counting changepoints (which misses their
+        # magnitude), this sums the absolute magnitude of the largest slope
+        # changes, giving a measure of "total changepoint energy" that better
+        # distinguishes between many small level shifts and a few large trend
+        # changes.  Computed as the sum of the top-5% absolute diff values
+        # divided by series std, averaged across series.
+        cp_energy_vals = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 30:
+                diffs = series.diff().dropna().values
+                abs_diffs = np.abs(diffs)
+                # Top 5% of absolute diffs captures the "energy" of rare events
+                threshold = np.percentile(abs_diffs, 95)
+                top_diffs = abs_diffs[abs_diffs >= threshold]
+                energy = float(np.sum(top_diffs) / (series.std() + 1e-9))
+                cp_energy_vals.append(energy)
+        stats['changepoint_energy'] = (
+            float(np.median(cp_energy_vals)) if cp_energy_vals else 0.0
+        )
+
+        # Max jump ratio — the ratio of the largest single-day absolute change
+        # to series std.  This captures how "discrete" the biggest jumps are.
+        # Real data with gradual transitions will have lower max_jump_ratio
+        # than synthetic data with too many instant level shifts.
+        max_jump_vals = []
+        for col in df.columns:
+            series = df[col].ffill().bfill()
+            if len(series) > 7:
+                diffs = series.diff().dropna().values
+                if len(diffs) > 0:
+                    max_jump = float(np.max(np.abs(diffs)) / (series.std() + 1e-9))
+                    max_jump_vals.append(max_jump)
+        stats['max_jump_ratio'] = (
+            float(np.median(max_jump_vals)) if max_jump_vals else 0.0
+        )
+
+        # Yearly Fourier decomposition — extract dominant yearly shape
+        if len(df) >= 365:
+            yearly_fourier_all = []
+            for col in df.columns:
+                series = df[col].ffill().bfill()
+                if len(series) >= 365:
+                    # Detrend
+                    x = np.arange(len(series), dtype=float)
+                    coeffs = np.polyfit(x, series.values, 1)
+                    detrended = series.values - np.polyval(coeffs, x)
+                    # Compute Fourier coefficients for first 3 harmonics.
+                    # Normalize globally (by the max harmonic amplitude) so
+                    # that relative harmonic strengths are preserved.
+                    t = np.arange(len(detrended), dtype=float)
+                    raw_coeffs = []
+                    for n in range(1, 4):
+                        a_n = (
+                            2.0
+                            / len(t)
+                            * np.sum(detrended * np.cos(2 * np.pi * n * t / 365.25))
+                        )
+                        b_n = (
+                            2.0
+                            / len(t)
+                            * np.sum(detrended * np.sin(2 * np.pi * n * t / 365.25))
+                        )
+                        raw_coeffs.extend([a_n, b_n])
+                    # Normalize by max harmonic amplitude (preserves ratios)
+                    amps = [
+                        np.sqrt(raw_coeffs[2 * i] ** 2 + raw_coeffs[2 * i + 1] ** 2)
+                        for i in range(3)
+                    ]
+                    max_amp = max(amps) if amps else 0.0
+                    if max_amp > 0:
+                        fourier_coeffs = [c / max_amp for c in raw_coeffs]
+                    else:
+                        fourier_coeffs = [0.0] * 6
+                    yearly_fourier_all.append(fourier_coeffs)
+            if yearly_fourier_all:
+                stats['yearly_fourier'] = np.mean(yearly_fourier_all, axis=0).tolist()
+            else:
+                stats['yearly_fourier'] = [0.0] * 6
+        else:
+            stats['yearly_fourier'] = [0.0] * 6
+
         return stats
+
+    def get_true_event_statistics(self):
+        """
+        Get actual event counts from the generator's internal labels (ground truth).
+
+        This method returns statistics computed directly from the synthetic data's
+        known labels rather than statistical detection. Use this to verify that
+        synthetic data has the expected number of anomalies, level shifts, etc.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - 'total_anomalies': Total anomaly count across all series
+            - 'anomalies_per_series': Mean anomalies per series
+            - 'anomaly_per_week': Mean anomalies per week (averaged across series)
+            - 'total_level_shifts': Total level shift count across all series
+            - 'level_shifts_per_series': Mean level shifts per series
+            - 'level_shifts_per_year': Mean level shifts per year (averaged across series)
+            - 'total_holidays': Total holiday count across all series
+            - 'holidays_per_series': Mean holidays per series
+        """
+        n_weeks = self.n_days / 7
+        n_years = self.n_days / 365.25
+
+        # Anomaly counts from self.anomalies dict
+        anomaly_counts = []
+        for series_name, anomaly_list in self.anomalies.items():
+            anomaly_counts.append(len(anomaly_list))
+
+        total_anomalies = sum(anomaly_counts)
+        anomalies_per_series = float(np.mean(anomaly_counts)) if anomaly_counts else 0.0
+        anomaly_per_week = float(anomalies_per_series / n_weeks) if n_weeks > 0 else 0.0
+
+        # Level shift counts from self.level_shifts dict
+        ls_counts = []
+        for series_name, ls_list in self.level_shifts.items():
+            ls_counts.append(len(ls_list))
+
+        total_level_shifts = sum(ls_counts)
+        level_shifts_per_series = float(np.mean(ls_counts)) if ls_counts else 0.0
+        level_shifts_per_year = (
+            float(level_shifts_per_series / n_years) if n_years > 0 else 0.0
+        )
+
+        # Holiday counts from self.holiday_dates dict
+        holiday_counts = []
+        for series_name, holiday_list in self.holiday_dates.items():
+            holiday_counts.append(len(holiday_list))
+
+        total_holidays = sum(holiday_counts)
+        holidays_per_series = float(np.mean(holiday_counts)) if holiday_counts else 0.0
+
+        return {
+            'total_anomalies': total_anomalies,
+            'anomalies_per_series': anomalies_per_series,
+            'anomaly_per_week': anomaly_per_week,
+            'total_level_shifts': total_level_shifts,
+            'level_shifts_per_series': level_shifts_per_series,
+            'level_shifts_per_year': level_shifts_per_year,
+            'total_holidays': total_holidays,
+            'holidays_per_series': holidays_per_series,
+        }
 
     def tune_to_data(
         self,
@@ -2749,6 +3355,7 @@ class SyntheticDailyGenerator:
         metric='mse',
         verbose=True,
         random_seed=None,
+        starting_params=None,
     ):
         """
         Tune generator parameters to match real-world time series data.
@@ -2758,7 +3365,14 @@ class SyntheticDailyGenerator:
         Special series types are not tuned but will still be generated with optimized
         base parameters.
 
-        TODO: this is a fairly basic implementation, and won't tune many aspects of real world data
+        The enhanced objective function matches:
+        - Weekly and yearly seasonality strength
+        - Noise-to-signal ratio
+        - Autocorrelation at lag 1 and lag 7 (smoothness structure)
+        - Coefficient of variation distribution
+        - Weekly profile shape (day-of-week correlation)
+        - Anomaly and changepoint frequencies
+        - Mean trend slope
 
         Parameters
         ----------
@@ -2775,6 +3389,21 @@ class SyntheticDailyGenerator:
             Whether to print progress (default True)
         random_seed : int, optional
             Random seed for tuning process (default None, uses current random_seed)
+        starting_params : dict, optional
+            Known-good parameter dict to seed the optimization.  When provided,
+            the differential-evolution solver receives this as its ``x0`` initial
+            guess, biasing the search toward a known-good region of parameter
+            space instead of starting from a purely random population.
+
+            Expected keys (all optional — missing keys fall back to the midpoint
+            of the parameter's search bounds):
+
+            ``trend_changepoint_freq``, ``level_shift_freq``,
+            ``level_shift_strength``, ``anomaly_freq``,
+            ``weekly_seasonality_strength``, ``yearly_seasonality_strength``,
+            ``noise_level``, ``trend_slope_scale``, ``trend_positive_bias``,
+            ``level_shift_minimum_pct``, ``level_shift_max_pct``,
+            ``noise_ar_coefficient``
 
         Returns
         -------
@@ -2818,9 +3447,13 @@ class SyntheticDailyGenerator:
 
         if not isinstance(target_df.index, pd.DatetimeIndex):
             raise ValueError("target_df must have a DatetimeIndex")
+        if starting_params is not None and not isinstance(starting_params, dict):
+            raise ValueError("starting_params must be a dict if provided.")
 
-        # Extract target statistics
+        # Extract target statistics (enhanced with autocorrelation, CV, weekly profile)
         target_stats = self._extract_data_statistics(target_df)
+        target_weekly_profile = np.array(target_stats.get('weekly_profile', [0.0] * 7))
+        target_yearly_fourier = np.array(target_stats.get('yearly_fourier', [0.0] * 6))
 
         if verbose:
             print("=" * 80)
@@ -2832,6 +3465,8 @@ class SyntheticDailyGenerator:
             for key, value in target_stats.items():
                 if isinstance(value, float):
                     print(f"  {key}: {value:.6f}")
+                elif isinstance(value, list) and len(value) <= 7:
+                    print(f"  {key}: {[round(x, 3) for x in value]}")
                 else:
                     print(f"  {key}: {value}")
 
@@ -2843,10 +3478,8 @@ class SyntheticDailyGenerator:
         tune_seed = random_seed if random_seed is not None else self.random_seed
 
         # Calculate scale adjustment to match target data magnitude
-        # Synthetic data has base magnitude of ~50 (for scale=1.0), so we need to scale it
-        # Use mean of absolute means to handle series with different scales robustly
         target_scale_measure = target_df.abs().mean().mean()
-        base_synthetic_magnitude = 50.0  # Base signal strength in synthetic generator
+        base_synthetic_magnitude = 50.0
         scale_multiplier = (
             target_scale_measure / base_synthetic_magnitude
             if target_scale_measure > 0
@@ -2859,171 +3492,296 @@ class SyntheticDailyGenerator:
             print(f"  Synthetic base magnitude: {base_synthetic_magnitude:.2f}")
             print(f"  Scale multiplier: {scale_multiplier:.2f}")
 
-        # Define parameter bounds for optimization
-        # [trend_cp_freq, level_shift_freq, anomaly_freq, weekly_str, yearly_str, noise_level]
+        # Define parameter bounds for optimization (13 parameters)
+        # [trend_cp_freq, level_shift_freq, level_shift_strength, anomaly_freq,
+        #  weekly_str, yearly_str, noise_level,
+        #  trend_slope_scale, trend_positive_bias, level_shift_minimum_pct,
+        #  level_shift_max_pct, noise_ar_coefficient, volatility_regime_intensity]
+        #
+        # Note: Reduced upper bounds for changepoint/level_shift frequencies to produce
+        # more subtle, realistic synthetic data (fewer but more meaningful events)
         bounds = [
-            (0.0, 3.0),  # trend_changepoint_freq
-            (0.0, 1.0),  # level_shift_freq
-            (0.0, 0.5),  # anomaly_freq
-            (0.1, 3.0),  # weekly_seasonality_strength
-            (0.1, 3.0),  # yearly_seasonality_strength
-            (0.01, 0.5),  # noise_level
+            (
+                0.0,
+                1.5,
+            ),  # trend_changepoint_freq (reduced from 3.0 for fewer changepoints)
+            (0.0, 0.5),  # level_shift_freq (reduced from 1.0 for fewer level shifts)
+            (0.03, 0.5),  # level_shift_strength (narrower range for subtler shifts)
+            (0.0, 0.3),  # anomaly_freq (reduced from 0.5 for fewer anomalies)
+            (0.1, 5.0),  # weekly_seasonality_strength
+            (0.1, 5.0),  # yearly_seasonality_strength
+            (0.001, 0.5),  # noise_level
+            (0.01, 1.5),  # trend_slope_scale (reduced from 2.0 for subtler trends)
+            (0.0, 1.0),  # trend_positive_bias
+            (
+                0.005,
+                0.10,
+            ),  # level_shift_minimum_pct (tightened from 0.15 — smaller shifts)
+            (
+                0.005,
+                0.10,
+            ),  # level_shift_max_pct (tightened from 0.2 — caps extreme shifts)
+            (0.0, 0.95),  # noise_ar_coefficient
+            (0.0, 2.0),  # volatility_regime_intensity (smooth heteroscedasticity)
         ]
 
         # Objective function to minimize
         def objective(params):
             """Generate synthetic data with given params and compute distance to target."""
-            trend_cp, level_shift, anomaly, weekly, yearly, noise = params
+            (
+                trend_cp,
+                level_shift,
+                ls_strength,
+                anomaly,
+                weekly,
+                yearly,
+                noise,
+                slope_scale,
+                pos_bias,
+                ls_min_pct,
+                ls_max_pct,
+                noise_ar_coef,
+                vol_regime_intensity,
+            ) = params
 
-            # Create temporary generator with these parameters
-            # Only generate standard series for comparison
-            temp_gen = SyntheticDailyGenerator(
-                start_date=target_df.index[0],
-                n_days=len(target_df),
-                n_series=n_standard_series,
-                random_seed=tune_seed,
-                trend_changepoint_freq=trend_cp,
-                level_shift_freq=level_shift,
-                anomaly_freq=anomaly,
-                weekly_seasonality_strength=weekly,
-                yearly_seasonality_strength=yearly,
-                noise_level=noise,
-                include_regressors=False,
-                disable_holiday_splash=self.disable_holiday_splash,
-            )
-
-            # Scale synthetic data to match target data magnitude
-            scaled_data = temp_gen.data * scale_multiplier
-
-            # Extract statistics from scaled synthetic data
-            synth_stats = self._extract_data_statistics(scaled_data)
-
-            # Compute distance between target and synthetic statistics
-            # Focus on key distributional properties
-            if metric == 'mse':
-                distance = (
-                    (
-                        (
-                            synth_stats['weekly_seasonality']
-                            - target_stats['weekly_seasonality']
-                        )
-                        ** 2
-                    )
-                    + (
-                        (
-                            synth_stats['yearly_seasonality']
-                            - target_stats['yearly_seasonality']
-                        )
-                        ** 2
-                    )
-                    + (
-                        (
-                            synth_stats['noise_to_signal']
-                            - target_stats['noise_to_signal']
-                        )
-                        ** 2
-                    )
-                    + (
-                        (
-                            synth_stats['anomaly_per_week']
-                            - target_stats['anomaly_per_week']
-                        )
-                        ** 2
-                    )
-                    + (
-                        (
-                            synth_stats['changepoint_per_year']
-                            - target_stats['changepoint_per_year']
-                        )
-                        ** 2
-                    )
-                    * 0.5
-                    + (
-                        (
-                            synth_stats['mean_trend_slope']
-                            - target_stats['mean_trend_slope']
-                        )
-                        / (target_stats['scale'] + 1e-9)
-                    )
-                    ** 2
-                )
-            elif metric == 'mae':
-                distance = (
-                    abs(
-                        synth_stats['weekly_seasonality']
-                        - target_stats['weekly_seasonality']
-                    )
-                    + abs(
-                        synth_stats['yearly_seasonality']
-                        - target_stats['yearly_seasonality']
-                    )
-                    + abs(
-                        synth_stats['noise_to_signal'] - target_stats['noise_to_signal']
-                    )
-                    + abs(
-                        synth_stats['anomaly_per_week']
-                        - target_stats['anomaly_per_week']
-                    )
-                    + abs(
-                        synth_stats['changepoint_per_year']
-                        - target_stats['changepoint_per_year']
-                    )
-                    * 0.5
-                    + abs(
-                        synth_stats['mean_trend_slope']
-                        - target_stats['mean_trend_slope']
-                    )
-                    / (target_stats['scale'] + 1e-9)
-                )
-            else:  # wasserstein or other
-                # Simple L1 distance for simplicity
-                distance = sum(
-                    abs(synth_stats.get(k, 0) - target_stats.get(k, 0))
-                    for k in [
-                        'weekly_seasonality',
-                        'yearly_seasonality',
-                        'noise_to_signal',
-                        'anomaly_per_week',
-                        'changepoint_per_year',
-                    ]
+            try:
+                # Create temporary generator — force ALL series to 'standard' type
+                # so tuned parameters actually apply instead of special-type hardcoding
+                temp_gen = SyntheticDailyGenerator(
+                    start_date=target_df.index[0],
+                    n_days=len(target_df),
+                    n_series=n_standard_series,
+                    random_seed=tune_seed,
+                    trend_changepoint_freq=trend_cp,
+                    level_shift_freq=level_shift,
+                    level_shift_strength=ls_strength,
+                    anomaly_freq=anomaly,
+                    weekly_seasonality_strength=weekly,
+                    yearly_seasonality_strength=yearly,
+                    noise_level=noise,
+                    trend_slope_scale=slope_scale,
+                    trend_positive_bias=pos_bias,
+                    level_shift_minimum_pct=ls_min_pct,
+                    level_shift_max_pct=ls_max_pct,
+                    noise_ar_coefficient=noise_ar_coef,
+                    volatility_regime_intensity=vol_regime_intensity,
+                    weekly_profile_target=target_weekly_profile.tolist(),
+                    yearly_fourier_target=target_yearly_fourier.tolist(),
+                    include_regressors=False,
+                    disable_holiday_splash=self.disable_holiday_splash,
+                    holiday_signal_floor_pct=self.holiday_signal_floor_pct,
+                    random_dom_holiday_count=self.random_dom_holiday_count,
+                    random_wkdom_holiday_count=self.random_wkdom_holiday_count,
+                    series_type_override='standard',
                 )
 
-            return distance
+                # Scale synthetic data to match target data magnitude
+                scaled_data = temp_gen.data * scale_multiplier
+
+                # Extract statistics from scaled synthetic data
+                synth_stats = self._extract_data_statistics(scaled_data)
+
+                # Normalized objective: (synth - target)^2 / (target^2 + eps)
+                # This equalizes the contribution of each statistic regardless of scale
+                eps = 1e-9
+
+                def normed_sq(key, weight=1.0):
+                    sv = synth_stats.get(key, 0)
+                    tv = target_stats.get(key, 0)
+                    return weight * (sv - tv) ** 2 / (tv**2 + eps)
+
+                if metric == 'mse':
+                    distance = (
+                        normed_sq('weekly_seasonality', 4.5)
+                        + normed_sq('yearly_seasonality', 2.0)
+                        + normed_sq('noise_to_signal', 1.5)
+                        + normed_sq('median_acf_lag1', 3.0)
+                        + normed_sq('median_acf_lag7', 2.0)
+                        + normed_sq('median_cv', 2.0)
+                        + normed_sq('anomaly_per_week', 0.5)
+                        + normed_sq('mean_trend_slope', 2.5)
+                        + normed_sq('changepoint_energy', 1.5)
+                        + normed_sq('max_jump_ratio', 1.5)
+                        + normed_sq('abs_diff_skewness', 1.0)
+                    )
+
+                    # Asymmetric kurtosis penalty: penalize EXCESS kurtosis
+                    # much more heavily than deficit.  The optimizer was dumping
+                    # in level shifts to inflate kurtosis; penalizing overcount
+                    # discourages that pathological strategy.
+                    sk = synth_stats.get('median_diff_kurtosis', 0)
+                    tk = target_stats.get('median_diff_kurtosis', 0)
+                    kurtosis_err = (sk - tk) ** 2 / (tk**2 + eps)
+                    if sk > tk:
+                        distance += 4.5 * kurtosis_err
+                    else:
+                        distance += 1.5 * kurtosis_err
+
+                    # Asymmetric changepoint penalty: penalize excess
+                    # changepoints more heavily than deficit.
+                    sc = synth_stats.get('changepoint_per_year', 0)
+                    tc = target_stats.get('changepoint_per_year', 0)
+                    cp_err = (sc - tc) ** 2 / (tc**2 + eps)
+                    if sc > tc:
+                        distance += 2.0 * cp_err
+                    else:
+                        distance += 0.5 * cp_err
+                elif metric == 'mae':
+
+                    def normed_abs(key, weight=1.0):
+                        sv = synth_stats.get(key, 0)
+                        tv = target_stats.get(key, 0)
+                        return weight * abs(sv - tv) / (abs(tv) + eps)
+
+                    distance = (
+                        normed_abs('weekly_seasonality', 3.0)
+                        + normed_abs('yearly_seasonality', 2.0)
+                        + normed_abs('noise_to_signal', 1.5)
+                        + normed_abs('median_acf_lag1', 3.0)
+                        + normed_abs('median_acf_lag7', 2.0)
+                        + normed_abs('median_cv', 2.0)
+                        + normed_abs('anomaly_per_week', 0.5)
+                        + normed_abs('changepoint_per_year', 0.5)
+                        + normed_abs('mean_trend_slope', 1.0)
+                        + normed_abs('median_diff_kurtosis', 1.5)
+                        + normed_abs('changepoint_energy', 1.5)
+                        + normed_abs('max_jump_ratio', 1.5)
+                        + normed_abs('abs_diff_skewness', 1.0)
+                    )
+                else:  # wasserstein or other
+                    distance = sum(
+                        abs(synth_stats.get(k, 0) - target_stats.get(k, 0))
+                        for k in [
+                            'weekly_seasonality',
+                            'yearly_seasonality',
+                            'noise_to_signal',
+                            'median_acf_lag1',
+                            'median_acf_lag7',
+                            'median_cv',
+                            'anomaly_per_week',
+                            'changepoint_per_year',
+                            'median_diff_kurtosis',
+                            'changepoint_energy',
+                            'max_jump_ratio',
+                            'abs_diff_skewness',
+                        ]
+                    )
+
+                # Weekly profile shape matching (correlation penalty)
+                synth_weekly = np.array(synth_stats.get('weekly_profile', [0.0] * 7))
+                if np.std(synth_weekly) > 0 and np.std(target_weekly_profile) > 0:
+                    corr = np.corrcoef(synth_weekly, target_weekly_profile)[0, 1]
+                    if np.isnan(corr):
+                        corr = 0.0
+                    distance += 2.0 * (1.0 - corr) ** 2
+
+                # Yearly Fourier profile matching
+                target_yf = np.array(target_stats.get('yearly_fourier', [0.0] * 6))
+                synth_yf = np.array(synth_stats.get('yearly_fourier', [0.0] * 6))
+                if np.linalg.norm(target_yf) > 0.01:
+                    yf_dist = np.sum((synth_yf - target_yf) ** 2) / (
+                        np.sum(target_yf**2) + eps
+                    )
+                    distance += 1.0 * yf_dist
+
+                return distance
+            except Exception:
+                return 1e6
 
         # Run optimization
         if verbose:
             print(f"\nRunning optimization with {n_iterations} iterations...")
-            print(f"Generating {n_standard_series} standard series per iteration")
+            print(f"Generating {n_standard_series} standard-type series per iteration")
+            print(
+                f"Optimizing 13 parameters (including AR noise, volatility regimes, slope/shift/profile structural params)"
+            )
 
-        result = differential_evolution(
-            objective,
-            bounds,
+        # Build x0 initial guess from starting_params if provided.
+        # The vector order must match the bounds list above.
+        _param_order = [
+            'trend_changepoint_freq',
+            'level_shift_freq',
+            'level_shift_strength',
+            'anomaly_freq',
+            'weekly_seasonality_strength',
+            'yearly_seasonality_strength',
+            'noise_level',
+            'trend_slope_scale',
+            'trend_positive_bias',
+            'level_shift_minimum_pct',
+            'level_shift_max_pct',
+            'noise_ar_coefficient',
+            'volatility_regime_intensity',
+        ]
+
+        x0 = None
+        if starting_params is not None:
+            x0 = []
+            for i, name in enumerate(_param_order):
+                lo, hi = bounds[i]
+                val = starting_params.get(name)
+                if val is not None:
+                    # Clip to the search bounds so DE doesn't reject the point
+                    val = float(np.clip(val, lo, hi))
+                else:
+                    # Fall back to midpoint of the bound if key is missing
+                    val = (lo + hi) / 2.0
+                x0.append(val)
+            if verbose:
+                print("Seeding differential_evolution with starting_params (x0)")
+
+        de_kwargs = dict(
             maxiter=n_iterations,
             seed=tune_seed,
             workers=1,
             updating='deferred',
             disp=verbose,
+            tol=1e-8,
+            polish=True,
+            popsize=20,
+        )
+        if x0 is not None:
+            de_kwargs['x0'] = x0
+
+        result = differential_evolution(
+            objective,
+            bounds,
+            **de_kwargs,
         )
 
         # Extract best parameters
         best_params = {
             'trend_changepoint_freq': float(result.x[0]),
             'level_shift_freq': float(result.x[1]),
-            'anomaly_freq': float(result.x[2]),
-            'weekly_seasonality_strength': float(result.x[3]),
-            'yearly_seasonality_strength': float(result.x[4]),
-            'noise_level': float(result.x[5]),
+            'level_shift_strength': float(result.x[2]),
+            'anomaly_freq': float(result.x[3]),
+            'weekly_seasonality_strength': float(result.x[4]),
+            'yearly_seasonality_strength': float(result.x[5]),
+            'noise_level': float(result.x[6]),
+            'trend_slope_scale': float(result.x[7]),
+            'trend_positive_bias': float(result.x[8]),
+            'level_shift_minimum_pct': float(result.x[9]),
+            'level_shift_max_pct': float(result.x[10]),
+            'noise_ar_coefficient': float(result.x[11]),
+            'volatility_regime_intensity': float(result.x[12]),
         }
 
         # Generate final synthetic data with best parameters for validation
+        # Use series_type_override='standard' to match what was optimized
         final_gen = SyntheticDailyGenerator(
             start_date=target_df.index[0],
             n_days=len(target_df),
             n_series=n_standard_series,
             random_seed=tune_seed,
             **best_params,
+            weekly_profile_target=target_weekly_profile.tolist(),
+            yearly_fourier_target=target_yearly_fourier.tolist(),
             include_regressors=self.include_regressors,
             disable_holiday_splash=self.disable_holiday_splash,
+            holiday_signal_floor_pct=self.holiday_signal_floor_pct,
+            random_dom_holiday_count=self.random_dom_holiday_count,
+            random_wkdom_holiday_count=self.random_wkdom_holiday_count,
+            series_type_override='standard',
         )
         # Scale the final synthetic data to match target magnitude
         scaled_final_data = final_gen.data * scale_multiplier
@@ -3044,25 +3802,44 @@ class SyntheticDailyGenerator:
                 'weekly_seasonality',
                 'yearly_seasonality',
                 'noise_to_signal',
+                'median_acf_lag1',
+                'median_acf_lag7',
+                'median_cv',
                 'anomaly_per_week',
                 'changepoint_per_year',
                 'mean_trend_slope',
+                'median_diff_kurtosis',
+                'median_diff_skewness',
+                'changepoint_energy',
+                'max_jump_ratio',
             ]
             for stat in key_stats:
                 target_val = target_stats.get(stat, 0)
                 synth_val = final_stats.get(stat, 0)
                 diff = synth_val - target_val
-                print(
-                    f"{stat:<30} {target_val:<15.6f} {synth_val:<15.6f} {diff:<15.6f}"
-                )
+                if isinstance(target_val, (int, float)) and isinstance(
+                    synth_val, (int, float)
+                ):
+                    print(
+                        f"{stat:<30} {target_val:<15.6f} {synth_val:<15.6f} {diff:<15.6f}"
+                    )
 
         # Update self with best parameters
         self.trend_changepoint_freq = best_params['trend_changepoint_freq']
         self.level_shift_freq = best_params['level_shift_freq']
+        self.level_shift_strength = best_params['level_shift_strength']
         self.anomaly_freq = best_params['anomaly_freq']
         self.weekly_seasonality_strength = best_params['weekly_seasonality_strength']
         self.yearly_seasonality_strength = best_params['yearly_seasonality_strength']
         self.noise_level = best_params['noise_level']
+        self.trend_slope_scale = best_params['trend_slope_scale']
+        self.trend_positive_bias = best_params['trend_positive_bias']
+        self.level_shift_minimum_pct = best_params['level_shift_minimum_pct']
+        self.level_shift_max_pct = best_params['level_shift_max_pct']
+        self.noise_ar_coefficient = best_params['noise_ar_coefficient']
+        self.volatility_regime_intensity = best_params['volatility_regime_intensity']
+        self.weekly_profile_target = target_weekly_profile.tolist()
+        self.yearly_fourier_target = target_yearly_fourier.tolist()
 
         # Store tuning results including scale multiplier
         self.tuning_results = {
@@ -3073,6 +3850,7 @@ class SyntheticDailyGenerator:
             'scale_multiplier': float(scale_multiplier),
             'n_iterations': n_iterations,
             'metric': metric,
+            'tuned_with_series_type': 'standard',
         }
 
         if verbose:
@@ -3083,10 +3861,221 @@ class SyntheticDailyGenerator:
             print("\nGenerator parameters have been updated with tuned values.")
             print("Regenerate data to use new parameters.")
             print("Then multiply by scale_multiplier to match target data magnitude.")
+            if self.series_type_override != 'standard':
+                print(
+                    "\nNote: Parameters were tuned with series_type_override='standard'.\n"
+                    "  For best match, set series_type_override='standard' before regenerating,\n"
+                    "  or call: generator.series_type_override = 'standard'"
+                )
 
         return self.tuning_results
 
-    def plot(self, series_name=None, figsize=(16, 12), save_path=None, show=True):
+    def compare_to_data(
+        self,
+        target_df,
+        scale_multiplier=None,
+        save_path=None,
+        show=True,
+    ):
+        """
+        Compare current synthetic data to real-world data for iterative tuning.
+
+        Produces a structured comparison of key statistics and optional diagnostic
+        plots showing distributional overlap between synthetic and target data.
+
+        Parameters
+        ----------
+        target_df : pd.DataFrame
+            Real-world time series data to compare against (DatetimeIndex, numeric columns)
+        scale_multiplier : float, optional
+            Factor to multiply synthetic data by before comparison.
+            If None, uses self.tuning_results['scale_multiplier'] if available, else 1.0.
+        save_path : str, optional
+            If provided, saves comparison plots to this path.
+        show : bool, optional
+            Whether to display plots (default True).
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - 'target_stats': Statistics from target data
+            - 'synthetic_stats': Statistics from (scaled) synthetic data
+            - 'comparison': Per-statistic comparison with ratios and pass/fail
+            - 'overall_score': Aggregate similarity score (lower is better)
+        """
+        if self.data is None:
+            raise ValueError("No synthetic data generated. Call _generate() first.")
+
+        if scale_multiplier is None:
+            if self.tuning_results and 'scale_multiplier' in self.tuning_results:
+                scale_multiplier = self.tuning_results['scale_multiplier']
+            else:
+                scale_multiplier = 1.0
+
+        scaled_synth = self.data * scale_multiplier
+        target_stats = self._extract_data_statistics(target_df)
+        synth_stats = self._extract_data_statistics(scaled_synth)
+
+        # Build comparison table
+        comparison = {}
+        key_stats = [
+            'weekly_seasonality',
+            'yearly_seasonality',
+            'noise_to_signal',
+            'median_acf_lag1',
+            'median_acf_lag7',
+            'median_cv',
+            'anomaly_per_week',
+            'changepoint_per_year',
+            'mean_trend_slope',
+            'frac_positive_trend',
+            'median_diff_kurtosis',
+        ]
+
+        total_score = 0.0
+        for stat in key_stats:
+            tv = target_stats.get(stat, 0)
+            sv = synth_stats.get(stat, 0)
+            if isinstance(tv, (int, float)) and isinstance(sv, (int, float)):
+                ratio = sv / (tv + 1e-9) if tv != 0 else float('inf')
+                passed = 0.5 < ratio < 2.0
+                score = (sv - tv) ** 2 / (tv**2 + 1e-9)
+                total_score += score
+                comparison[stat] = {
+                    'target': tv,
+                    'synthetic': sv,
+                    'ratio': ratio,
+                    'passed': passed,
+                    'score': score,
+                }
+
+        # Print comparison
+        print("=" * 85)
+        print("SYNTHETIC vs REAL DATA COMPARISON")
+        print("=" * 85)
+        print(
+            f"{'Statistic':<30} {'Target':<14} {'Synthetic':<14} {'Ratio':<10} {'OK?':<5}"
+        )
+        print("-" * 85)
+        for stat, info in comparison.items():
+            mark = '✓' if info['passed'] else '✗'
+            print(
+                f"{stat:<30} {info['target']:<14.6f} "
+                f"{info['synthetic']:<14.6f} {info['ratio']:<10.2f} {mark}"
+            )
+        print(f"\nOverall similarity score: {total_score:.6f} (lower is better)")
+
+        # Weekly profile shape comparison
+        target_wp = np.array(target_stats.get('weekly_profile', [0.0] * 7))
+        synth_wp = np.array(synth_stats.get('weekly_profile', [0.0] * 7))
+        if np.std(target_wp) > 0 and np.std(synth_wp) > 0:
+            profile_corr = float(np.corrcoef(target_wp, synth_wp)[0, 1])
+            print(f"Weekly profile shape correlation: {profile_corr:.4f}")
+        else:
+            profile_corr = 0.0
+
+        # Optional plotting
+        if HAS_MATPLOTLIB and (save_path or show):
+            import matplotlib.pyplot as plt
+
+            fig, axes = plt.subplots(2, 3, figsize=(16, 8))
+            fig.suptitle('Distribution Comparison: Real vs Synthetic', fontsize=14)
+
+            # Profile both datasets for histograms
+            def _quick_profile(df):
+                result = {}
+                for col in df.columns:
+                    s = df[col].ffill().bfill()
+                    if s.isna().all() or s.std() == 0:
+                        continue
+                    result[col] = {
+                        'cv': s.std() / (abs(s.mean()) + 1e-9),
+                        'acf_lag1': s.autocorr(lag=1) if len(s) > 1 else 0,
+                        'acf_lag7': s.autocorr(lag=7) if len(s) > 7 else 0,
+                        'weekly_seas': (
+                            s.groupby(s.index.dayofweek).mean().var() / (s.var() + 1e-9)
+                            if len(s) >= 14
+                            else 0
+                        ),
+                        'diff_cv': (
+                            s.diff().dropna().std() / (abs(s.mean()) + 1e-9)
+                            if len(s) > 1
+                            else 0
+                        ),
+                    }
+                return pd.DataFrame(result).T
+
+            real_prof = _quick_profile(target_df)
+            synth_prof = _quick_profile(scaled_synth)
+
+            plot_stats = [
+                ('cv', 'CV'),
+                ('acf_lag1', 'ACF Lag-1'),
+                ('acf_lag7', 'ACF Lag-7'),
+                ('weekly_seas', 'Weekly Seasonality'),
+                ('diff_cv', 'Diff CV'),
+            ]
+            for ax, (stat, title) in zip(axes.flat[:5], plot_stats):
+                rv = (
+                    real_prof[stat].dropna()
+                    if stat in real_prof.columns
+                    else pd.Series(dtype=float)
+                )
+                sv = (
+                    synth_prof[stat].dropna()
+                    if stat in synth_prof.columns
+                    else pd.Series(dtype=float)
+                )
+                if len(rv) > 0:
+                    ax.hist(
+                        rv, bins=12, alpha=0.5, label='Real', color='blue', density=True
+                    )
+                if len(sv) > 0:
+                    ax.hist(
+                        sv,
+                        bins=12,
+                        alpha=0.5,
+                        label='Synth',
+                        color='green',
+                        density=True,
+                    )
+                ax.set_title(title)
+                ax.legend(fontsize=8)
+
+            # Weekly profile shape
+            ax_wp = axes.flat[5]
+            days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            ax_wp.plot(days, target_wp, 'b-o', label='Real', markersize=6)
+            ax_wp.plot(days, synth_wp, 'g-s', label='Synth', markersize=6)
+            ax_wp.set_title(f'Weekly Profile (corr={profile_corr:.3f})')
+            ax_wp.legend(fontsize=8)
+
+            plt.tight_layout()
+            if save_path:
+                plt.savefig(save_path, dpi=100)
+                print(f"\nSaved comparison plot: {save_path}")
+            if show:
+                plt.show()
+
+        return {
+            'target_stats': target_stats,
+            'synthetic_stats': synth_stats,
+            'comparison': comparison,
+            'overall_score': total_score,
+            'weekly_profile_correlation': profile_corr,
+        }
+
+    def plot(
+        self,
+        series_name=None,
+        figsize=(16, 14),
+        save_path=None,
+        show=True,
+        separate_noise_anomaly_panels=True,
+        dual_axis_seasonality_holidays=True,
+        dual_axis_trend_level_shift=True,
+    ):
         """
         Plot a series with all its labeled components clearly marked.
 
@@ -3095,11 +4084,20 @@ class SyntheticDailyGenerator:
         series_name : str, optional
             Name of series to plot. If None, randomly selects one.
         figsize : tuple, optional
-            Figure size (width, height) in inches. Default (16, 12).
+            Figure size (width, height) in inches. Default (16, 14).
         save_path : str, optional
             If provided, saves the plot to this path instead of displaying.
         show : bool, optional
             Whether to display the plot. Default True.
+        separate_noise_anomaly_panels : bool, optional
+            If True, plots anomaly and noise components in separate panels.
+            If False, combines them in one panel. Default True.
+        dual_axis_seasonality_holidays : bool, optional
+            If True, plots seasonality and holidays with separate y-axes to
+            improve readability when scales differ. Default True.
+        dual_axis_trend_level_shift : bool, optional
+            If True, plots trend/combined on the left axis and level-shift
+            component on a right axis to avoid scale compression. Default True.
 
         Returns
         -------
@@ -3141,6 +4139,9 @@ class SyntheticDailyGenerator:
             title_prefix='Synthetic Data Analysis',
             save_path=save_path,
             show=show,
+            separate_noise_anomaly_panels=separate_noise_anomaly_panels,
+            dual_axis_seasonality_holidays=dual_axis_seasonality_holidays,
+            dual_axis_trend_level_shift=dual_axis_trend_level_shift,
         )
 
         if save_path:

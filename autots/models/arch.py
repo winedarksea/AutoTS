@@ -135,7 +135,7 @@ class ARCH(ModelObject):
         self.regressor_train = None
         self.verbose_bool = False
         if self.verbose > 2:
-            print("\U0001F3F9 ARCHers, draw")
+            print("\U0001f3f9 ARCHers, draw")
             self.verbose_bool = True
         elif self.verbose > 1:
             self.verbose_bool = True
@@ -286,7 +286,7 @@ class ARCH(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if self.verbose > 2:
-            print("\U0001F3F9 ARCHers, loose!")
+            print("\U0001f3f9 ARCHers, loose!")
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(

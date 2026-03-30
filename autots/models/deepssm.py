@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import numpy as np
 import datetime
@@ -173,6 +174,8 @@ def create_training_batches(
     y_train_raw=None,
     feature_means=None,
     feature_scales=None,
+    context_length=0,
+    local_scaling=False,
 ):
     """
     Create training batches for models that predict multiple future steps at once.
@@ -180,48 +183,60 @@ def create_training_batches(
     Each sample contains features for prediction_batch_size future timesteps,
     with naive features properly handled to avoid data leakage.
 
+    When context_length > 0 the sample also contains a context_length warm-up
+    prefix drawn from the history immediately preceding the prediction window.
+    This prefix lets the SSM build a non-zero hidden state before predicting,
+    addressing the "state-space amnesia" problem.  The Y targets only cover the
+    prediction window (not the context prefix), so the context prefix never
+    contributes to the loss directly.
+
+    When local_scaling=True each prediction window's Y targets are normalised
+    relative to the mean and std of the context window (instance normalisation).
+    This keeps the target in a consistent range regardless of the series' global
+    trend level and helps the model generalise to values outside its training
+    distribution.  The context features themselves remain globally scaled so
+    that the SSM's warm-up input is unambiguous.
+
     Args:
-        y_train_scaled: Scaled time series data (n_timesteps, n_series)
+        y_train_scaled: Globally scaled time series data (n_timesteps, n_series)
         train_feats_scaled: Scaled feature data (n_timesteps, n_features)
         prediction_batch_size: Number of timesteps to predict in each batch
         max_samples: Maximum number of training samples to generate
         random_seed: Random seed for sampling
         series_feat_mapping: Optional dict mapping series index to feature column indices
         series_names: Optional list of series names (for per-series features)
-        naive_feature_indices: Indices of naive features (if single value) or window features (if use_naive_window=True)
-        use_naive_window: If True, naive features are windows that are already lagged in train_feats_scaled
-        y_train_raw: Optional raw target values (unscaled) for building naive windows without the shift bug
-        feature_means: Optional per-feature mean from the fitted feature scaler
-        feature_scales: Optional per-feature scale from the fitted feature scaler
+        naive_feature_indices: Indices of naive features in train_feats_scaled
+        use_naive_window: Whether to back-fill naive features with the true historical window
+        y_train_raw: Raw (unscaled) target values; required for local_scaling and naive window filling
+        feature_means: Per-feature mean from the fitted feature scaler
+        feature_scales: Per-feature scale from the fitted feature scaler
+        context_length: Number of historical timesteps to prepend to each training sample
+                        as SSM warm-up context.  Returned X_data has shape
+                        (n_samples, context_length + prediction_batch_size, n_features).
+        local_scaling: If True, normalize each window's Y targets using the context
+                       window's per-series mean/std (instance normalisation).  Requires
+                       y_train_raw and context_length > 0.
 
     Returns:
         tuple: (X_data, Y_data) where:
-            - X_data has shape (n_samples, prediction_batch_size, n_features)
+            - X_data has shape (n_samples, context_length + prediction_batch_size, n_features)
             - Y_data has shape (n_samples, prediction_batch_size, 1)
     """
     n_timesteps, n_series = y_train_scaled.shape
     n_features = train_feats_scaled.shape[1]
 
-    # Validate that we have enough data
-    # When using naive windows, we need prediction_batch_size extra for the initial window
-    min_required = (
-        (2 * prediction_batch_size) if use_naive_window else (prediction_batch_size + 1)
-    )
+    # start_offset must be large enough to supply both the naive window history and
+    # the context prefix (whichever is larger).
+    naive_offset = prediction_batch_size if use_naive_window else 0
+    start_offset = max(naive_offset, context_length)
+
+    # Minimum data required: enough for the start_offset plus one full prediction window.
+    min_required = start_offset + prediction_batch_size + 1
     if n_timesteps < min_required:
         raise ValueError(
             f"Training data has {n_timesteps} timesteps but need at least {min_required}. "
-            f"Either increase training data length or decrease prediction_batch_size."
+            f"Either increase training data length or decrease prediction_batch_size/context_length."
         )
-
-    # When using naive windows, exclude first prediction_batch_size timesteps
-    # since they don't have complete windows before them
-    start_offset = prediction_batch_size if use_naive_window else 0
-
-    # Calculate maximum possible samples (excluding the offset)
-    max_possible_samples = (
-        n_timesteps - prediction_batch_size - start_offset
-    ) * n_series
-    max_samples = min(max_samples, max_possible_samples)
 
     # Calculate maximum possible samples (excluding the offset)
     max_possible_samples = (
@@ -238,159 +253,138 @@ def create_training_batches(
     else:
         selected_indices = np.arange(max_possible_samples)
 
-    # Calculate which series and starting timestep for each sample
-    # Add start_offset to ensure we skip the first prediction_batch_size timesteps when using naive windows
+    # Calculate which series and starting timestep for each sample.
+    # start_idx is the FIRST timestep being predicted (i.e. context ends at start_idx).
     series_indices = selected_indices % n_series
     start_indices = (selected_indices // n_series) + start_offset
 
+    seq_len = context_length + prediction_batch_size  # total input sequence length
+
     if series_feat_mapping is not None and series_names is not None:
-        # Per-series features: different feature subsets per series
         max_feats = max(len(feat_cols) for feat_cols in series_feat_mapping.values())
-        X_data = np.zeros(
-            (len(selected_indices), prediction_batch_size, max_feats), dtype=np.float32
-        )
+        X_data = np.zeros((len(selected_indices), seq_len, max_feats), dtype=np.float32)
     else:
         X_data = np.zeros(
-            (len(selected_indices), prediction_batch_size, n_features), dtype=np.float32
+            (len(selected_indices), seq_len, n_features), dtype=np.float32
         )
 
     Y_data = np.zeros(
         (len(selected_indices), prediction_batch_size, 1), dtype=np.float32
     )
 
+    # Pre-compute a flag: local_scaling is only active when we have what we need.
+    do_local = local_scaling and context_length > 0 and y_train_raw is not None
+
     # Fill in data for each sample
     for i, (start_idx, series_idx) in enumerate(zip(start_indices, series_indices)):
         end_idx = start_idx + prediction_batch_size
 
-        # Get target values for this series and window
-        Y_data[i, :, 0] = y_train_scaled[start_idx:end_idx, series_idx]
+        # --- Instance (local) normalisation stats for this window ---------------
+        if do_local:
+            ctx_y = y_train_raw[start_idx - context_length : start_idx, series_idx]
+            local_mean = float(np.mean(ctx_y))
+            local_std = float(np.std(ctx_y))
+            if local_std < 1e-3:
+                local_std = 1e-3  # avoid division by zero on flat series
+            Y_data[i, :, 0] = (
+                y_train_raw[start_idx:end_idx, series_idx] - local_mean
+            ) / local_std
+        else:
+            Y_data[i, :, 0] = y_train_scaled[start_idx:end_idx, series_idx]
 
         if series_feat_mapping is not None and series_names is not None:
-            # Get feature indices for this series
+            # Per-series features: different feature subsets per series
             feat_indices = series_feat_mapping.get(series_idx, [])
             if len(feat_indices) > 0:
-                # Get features for this window
+                # --- Context prefix (SSM warm-up) -------------------------------
+                if context_length > 0:
+                    ctx_feats = train_feats_scaled[
+                        start_idx - context_length : start_idx, :
+                    ][:, feat_indices]
+                    X_data[i, :context_length, : len(feat_indices)] = ctx_feats
+
+                # --- Prediction window features ---------------------------------
                 batch_features = train_feats_scaled[
                     start_idx:end_idx, feat_indices
                 ].copy()
 
-                # For window-based naive features, populate with proper historical window
                 if use_naive_window and naive_feature_indices is not None:
                     for naive_idx in naive_feature_indices:
                         if naive_idx in feat_indices:
-                            # Find position in the subset
                             local_idx = feat_indices.index(naive_idx)
-                            # Fill this feature with window values: [t-1, t-2, ..., t-prediction_batch_size]
-                            # where t is start_idx (the beginning of the prediction window)
-                            # REVERSED so most recent value comes first
-                            if start_idx >= prediction_batch_size:
-                                # Get window from [start_idx-prediction_batch_size : start_idx]
-                                if (
-                                    y_train_raw is not None
-                                    and feature_means is not None
-                                    and feature_scales is not None
-                                ):
-                                    # Use true targets, then scale to feature space to avoid shifted naive column
-                                    window_raw = y_train_raw[
-                                        start_idx - prediction_batch_size : start_idx,
-                                        series_idx,
-                                    ]
+                            # start_idx >= start_offset >= prediction_batch_size guaranteed
+                            if (
+                                y_train_raw is not None
+                                and feature_means is not None
+                                and feature_scales is not None
+                            ):
+                                window_raw = y_train_raw[
+                                    start_idx - prediction_batch_size : start_idx,
+                                    series_idx,
+                                ]
+                                if do_local:
+                                    window_values = (
+                                        window_raw - local_mean
+                                    ) / local_std
+                                else:
                                     window_values = (
                                         window_raw - feature_means[naive_idx]
                                     ) / feature_scales[naive_idx]
-                                else:
-                                    window_values = train_feats_scaled[
-                                        start_idx - prediction_batch_size : start_idx,
-                                        naive_idx,
-                                    ]
-                                # Reverse so most recent (t-1) is at index 0
-                                batch_features[:, local_idx] = window_values[::-1]
                             else:
-                                # Edge case: not enough history, pad with earliest available values
-                                if (
-                                    y_train_raw is not None
-                                    and feature_means is not None
-                                    and feature_scales is not None
-                                ):
-                                    available = (
-                                        y_train_raw[:start_idx, series_idx]
-                                        - feature_means[naive_idx]
-                                    ) / feature_scales[naive_idx]
-                                else:
-                                    available = train_feats_scaled[
-                                        :start_idx, naive_idx
-                                    ]
-                                if len(available) > 0:
-                                    padded = np.pad(
-                                        available,
-                                        (prediction_batch_size - len(available), 0),
-                                        mode='edge',
-                                    )
-                                    # Reverse so most recent is first
-                                    batch_features[:, local_idx] = padded[::-1]
+                                window_values = train_feats_scaled[
+                                    start_idx - prediction_batch_size : start_idx,
+                                    naive_idx,
+                                ]
+                            # Reverse: most-recent lag at position 0
+                            batch_features[:, local_idx] = window_values[::-1]
 
-                X_data[i, :, : len(feat_indices)] = batch_features
+                X_data[i, context_length:, : len(feat_indices)] = batch_features
         else:
             # Shared features across all series
+            # --- Context prefix -------------------------------------------------
+            if context_length > 0:
+                X_data[i, :context_length, :] = train_feats_scaled[
+                    start_idx - context_length : start_idx, :
+                ]
+
+            # --- Prediction window features -------------------------------------
             batch_features = train_feats_scaled[start_idx:end_idx, :].copy()
 
-            # For window-based naive features, populate with proper historical window
             if use_naive_window and naive_feature_indices is not None:
                 for naive_idx in naive_feature_indices:
-                    # Fill this feature with window values for the corresponding series
-                    # Since this is shared features, we need to fill with THIS series' historical values
-                    if start_idx >= prediction_batch_size:
-                        # Get window from [start_idx-prediction_batch_size : start_idx]
-                        if (
-                            y_train_raw is not None
-                            and feature_means is not None
-                            and feature_scales is not None
-                        ):
-                            window_raw = y_train_raw[
-                                start_idx - prediction_batch_size : start_idx,
-                                series_idx,
-                            ]
+                    # start_idx >= start_offset >= prediction_batch_size guaranteed
+                    if (
+                        y_train_raw is not None
+                        and feature_means is not None
+                        and feature_scales is not None
+                    ):
+                        window_raw = y_train_raw[
+                            start_idx - prediction_batch_size : start_idx,
+                            series_idx,
+                        ]
+                        if do_local:
+                            window_values = (window_raw - local_mean) / local_std
+                        else:
                             window_values = (
                                 window_raw - feature_means[naive_idx]
                             ) / feature_scales[naive_idx]
-                        else:
-                            window_values = train_feats_scaled[
-                                start_idx - prediction_batch_size : start_idx,
-                                naive_idx,
-                            ]
-                        # Reverse so most recent (t-1) is at index 0
-                        batch_features[:, naive_idx] = window_values[::-1]
                     else:
-                        # Edge case: not enough history, pad with earliest available values
-                        if (
-                            y_train_raw is not None
-                            and feature_means is not None
-                            and feature_scales is not None
-                        ):
-                            available = (
-                                y_train_raw[:start_idx, series_idx]
-                                - feature_means[naive_idx]
-                            ) / feature_scales[naive_idx]
-                        else:
-                            available = train_feats_scaled[:start_idx, naive_idx]
-                        if len(available) > 0:
-                            padded = np.pad(
-                                available,
-                                (prediction_batch_size - len(available), 0),
-                                mode='edge',
-                            )
-                            # Reverse so most recent is first
-                            batch_features[:, naive_idx] = padded[::-1]
+                        window_values = train_feats_scaled[
+                            start_idx - prediction_batch_size : start_idx,
+                            naive_idx,
+                        ]
+                    batch_features[:, naive_idx] = window_values[::-1]
             elif not use_naive_window and naive_feature_indices is not None:
                 # Legacy single-value naive features
                 for naive_idx in naive_feature_indices:
-                    if start_idx > 0:
-                        naive_val = train_feats_scaled[start_idx - 1, naive_idx]
-                    else:
-                        naive_val = train_feats_scaled[0, naive_idx]
+                    naive_val = (
+                        train_feats_scaled[start_idx - 1, naive_idx]
+                        if start_idx > 0
+                        else train_feats_scaled[0, naive_idx]
+                    )
                     batch_features[:, naive_idx] = naive_val
 
-            X_data[i, :, :] = batch_features
+            X_data[i, context_length:, :] = batch_features
 
     return X_data, Y_data
 
@@ -866,9 +860,64 @@ class ShortHorizonRankLoss(Module):
         return total_loss
 
 
+def _parallel_linear_recurrence(a, b):
+    """Parallel prefix scan for first-order linear recurrence h_t = a_t * h_{t-1} + b_t.
+
+    Uses the Kogge-Stone iterative-doubling algorithm: O(L log L) work, O(log L) depth.
+    Supports both real and complex tensors natively (PyTorch autograd compatible).
+
+    After k iterations each element's value spans 2^k predecessors, so after
+    ceil(log2(L)) iterations b[i] holds the full prefix h[i].
+
+    Args:
+        a: [B, L, D, S] per-step multipliers (A_bar values)
+        b: [B, L, D, S] per-step inputs    (B_bar * u  values, already zero at t=-1)
+    Returns:
+        [B, L, D, S] hidden states at every timestep
+    """
+    _B, L, _D, _S = a.shape
+    if L == 1:
+        return b
+
+    # Clone to avoid mutating caller tensors; work in-place after this point
+    running_a = a.clone()
+    running_b = b.clone()
+
+    n_iters = math.ceil(math.log2(L))
+    for k in range(n_iters):
+        stride = 1 << k  # 2**k
+        if stride >= L:
+            break
+        # For all positions i >= stride:
+        #   running_b[i] = running_a[i] * running_b[i-stride] + running_b[i]
+        #   running_a[i] = running_a[i] * running_a[i-stride]
+        # Positions 0..stride-1 are untouched (no predecessor that far back).
+        suffix_a = running_a[:, stride:]  # [B, L-stride, D, S]
+        suffix_b = running_b[:, stride:]
+        prefix_a = running_a[:, : L - stride]  # [B, L-stride, D, S]
+        prefix_b = running_b[:, : L - stride]
+
+        new_b_suffix = suffix_a * prefix_b + suffix_b
+        new_a_suffix = suffix_a * prefix_a
+
+        running_b = torch.cat([running_b[:, :stride], new_b_suffix], dim=1)
+        running_a = torch.cat([running_a[:, :stride], new_a_suffix], dim=1)
+
+    return running_b
+
+
 # Self-contained Mamba Block and Core Model
 class MambaMinimalBlock(Module):
-    def __init__(self, d_model, d_state=16, d_conv=4, expand=2, use_extra_gating=False):
+    def __init__(
+        self,
+        d_model,
+        d_state=16,
+        d_conv=4,
+        expand=2,
+        use_extra_gating=False,
+        use_complex_states=False,
+        use_scan=False,
+    ):
         super().__init__()
         self.d_model, self.d_state, self.d_conv, self.expand = (
             d_model,
@@ -877,6 +926,8 @@ class MambaMinimalBlock(Module):
             expand,
         )
         self.use_extra_gating = use_extra_gating
+        self.use_complex_states = use_complex_states
+        self.use_scan = use_scan
         self.d_inner = int(self.expand * self.d_model)
         self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=False)
         self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=False)
@@ -902,6 +953,13 @@ class MambaMinimalBlock(Module):
             .T
         )
         self.A_log = nn.Parameter(A_log)
+
+        if self.use_complex_states:
+            # Imaginary part of A: A = -exp(A_log) + i*A_omega
+            # Init near zero so the model starts as a pure EMA and learns frequencies.
+            # Shape matches A_log: [d_inner, d_state]
+            self.A_omega = nn.Parameter(torch.zeros(self.d_inner, d_state))
+
         self.D = nn.Parameter(torch.ones(self.d_inner))
 
     def forward(self, x):
@@ -924,33 +982,116 @@ class MambaMinimalBlock(Module):
 
     def ssm(self, x):
         B, L, d_inner = x.shape
-        A = -torch.exp(self.A_log.float())
-        delta = F.softplus(self.dt_proj(x))
+        A_real = -torch.exp(self.A_log.float())  # [d_inner, d_state], always negative
 
-        # Optional extra gating mechanism
+        # --- A. Complex-Valued States (Mamba-3) ---
+        # When enabled, A gains an imaginary frequency component so the hidden
+        # state acts as a learnable Fourier basis, capturing seasonality natively.
+        if self.use_complex_states:
+            # A_cplx: [d_inner, d_state] complex
+            A_cplx = torch.complex(A_real, self.A_omega.float())
+        else:
+            A_cplx = A_real  # plain real tensor, same paths below
+
+        delta = F.softplus(self.dt_proj(x))  # [B, L, d_inner]
+
         if self.use_extra_gating:
-            gate = torch.sigmoid(self.gate_proj(x))
+            gate = torch.sigmoid(self.gate_proj(x))  # [B, L, d_inner]
 
         bc = self.x_proj(x)
-        B_val, C_val = torch.split(bc, self.d_state, dim=-1)
+        B_val, C_val = torch.split(bc, self.d_state, dim=-1)  # each [B, L, d_state]
 
-        h = torch.zeros(B, d_inner, self.d_state, device=x.device, dtype=x.dtype)
-        y = torch.zeros(B, L, d_inner, device=x.device, dtype=x.dtype)
+        # Mamba-3: BC Normalisation (RMSNorm) — keeps projections well-conditioned.
+        # Using mean(x²) rather than sum(x²) so scale is independent of d_state size.
+        B_val = B_val / torch.sqrt(torch.mean(B_val**2, dim=-1, keepdim=True) + 1e-6)
+        C_val = C_val / torch.sqrt(torch.mean(C_val**2, dim=-1, keepdim=True) + 1e-6)
 
-        for i in range(L):
-            delta_i = delta[:, i, :].unsqueeze(-1)
-            A_bar = torch.exp(delta_i * A)
-            B_bar = delta_i * B_val[:, i, :].unsqueeze(1)
+        # --- B. MIMO / Parallel Scan path ---
+        if self.use_scan:
+            # Pre-compute A_bar and B_bar for the whole sequence at once — fully vectorised.
+            # delta_4d: [B, L, d_inner, 1]
+            delta_4d = delta.unsqueeze(-1)
+
+            if self.use_complex_states:
+                # cast delta to complex so matmul broadcasts correctly
+                delta_4d_c = delta_4d.to(torch.complex64)
+                A_bar_all = torch.exp(delta_4d_c * A_cplx)  # [B, L, d_inner, d_state]
+            else:
+                A_bar_all = torch.exp(delta_4d * A_cplx)  # [B, L, d_inner, d_state]
+
+            # Mamba-3 Trapezoidal discretisation:  B_bar = (Δ/2)(1 + e^{ΔA}) B
+            B_val_4d = B_val.unsqueeze(2)  # [B, L, 1, d_state]
+            if self.use_complex_states:
+                B_val_4d = B_val_4d.to(torch.complex64)
+                delta_4d_c_bc = delta_4d.to(torch.complex64)
+                B_bar_all = (delta_4d_c_bc / 2.0) * (1.0 + A_bar_all) * B_val_4d
+            else:
+                B_bar_all = (delta_4d / 2.0) * (1.0 + A_bar_all) * B_val_4d
+
+            # b_t = B_bar_t * u_t     [B, L, d_inner, d_state]
+            x_4d = x.unsqueeze(-1)
+            if self.use_complex_states:
+                x_4d = x_4d.to(torch.complex64)
+            b_all = B_bar_all * x_4d
 
             if self.use_extra_gating:
-                # Additional gating on state transition
-                gate_i = gate[:, i, :].unsqueeze(-1)
-                h = (gate_i * A_bar) * h + B_bar * x[:, i, :].unsqueeze(-1)
-            else:
-                # Standard Mamba SSM update (already has implicit gating via delta/A_bar)
-                h = A_bar * h + B_bar * x[:, i, :].unsqueeze(-1)
+                # Fold gate into A_bar so the scan sees gated transitions
+                gate_4d = gate.unsqueeze(-1)
+                if self.use_complex_states:
+                    gate_4d = gate_4d.to(torch.complex64)
+                A_bar_all = gate_4d * A_bar_all
 
-            y[:, i, :] = torch.sum(h * C_val[:, i, :].unsqueeze(1), dim=-1)
+            # Parallel scan: h_all [B, L, d_inner, d_state]
+            h_all = _parallel_linear_recurrence(A_bar_all, b_all)
+
+            # Output projection: y_t = Re( C_t · h_t )
+            C_val_4d = C_val.unsqueeze(2)  # [B, L, 1, d_state]
+            if self.use_complex_states:
+                C_val_4d = C_val_4d.to(torch.complex64)
+                y = torch.sum(h_all * C_val_4d, dim=-1).real.to(x.dtype)
+            else:
+                y = torch.sum(h_all * C_val_4d, dim=-1)  # [B, L, d_inner]
+
+        else:
+            # --- Sequential scan (original path, extended for complex) ---
+            h_dtype = torch.complex64 if self.use_complex_states else x.dtype
+            h = torch.zeros(B, d_inner, self.d_state, device=x.device, dtype=h_dtype)
+            y = torch.zeros(B, L, d_inner, device=x.device, dtype=x.dtype)
+
+            for i in range(L):
+                delta_i = delta[:, i, :].unsqueeze(-1)  # [B, d_inner, 1]
+
+                if self.use_complex_states:
+                    delta_i_c = delta_i.to(torch.complex64)
+                    A_bar = torch.exp(delta_i_c * A_cplx)
+                    B_bar = (
+                        (delta_i_c / 2.0)
+                        * (1.0 + A_bar)
+                        * B_val[:, i, :].unsqueeze(1).to(torch.complex64)
+                    )
+                    x_i = x[:, i, :].unsqueeze(-1).to(torch.complex64)
+                else:
+                    A_bar = torch.exp(delta_i * A_cplx)
+                    # Mamba-3 Trapezoidal discretisation
+                    B_bar = (
+                        (delta_i / 2.0) * (1.0 + A_bar) * B_val[:, i, :].unsqueeze(1)
+                    )
+                    x_i = x[:, i, :].unsqueeze(-1)
+
+                if self.use_extra_gating:
+                    gate_i = gate[:, i, :].unsqueeze(-1)
+                    if self.use_complex_states:
+                        gate_i = gate_i.to(torch.complex64)
+                    h = (gate_i * A_bar) * h + B_bar * x_i
+                else:
+                    h = A_bar * h + B_bar * x_i
+
+                C_i = C_val[:, i, :].unsqueeze(1)  # [B, 1, d_state]
+                if self.use_complex_states:
+                    C_i = C_i.to(torch.complex64)
+                    y[:, i, :] = torch.sum(h * C_i, dim=-1).real.to(x.dtype)
+                else:
+                    y[:, i, :] = torch.sum(h * C_i, dim=-1)
 
         y = y + x * self.D
         return y
@@ -965,6 +1106,8 @@ class MambaCore(Module):
         d_state=16,
         d_conv=4,
         use_extra_gating=False,
+        use_complex_states=False,
+        use_scan=False,
     ):
         super().__init__()
         self.input_projection = nn.Linear(input_dim, d_model)
@@ -979,6 +1122,8 @@ class MambaCore(Module):
                             d_state=d_state,
                             d_conv=d_conv,
                             use_extra_gating=use_extra_gating,
+                            use_complex_states=use_complex_states,
+                            use_scan=use_scan,
                         ),
                     ]
                 )
@@ -1304,6 +1449,9 @@ class MambaSSM(ModelObject):
         datepart_method: str = "expanded",
         holiday_countries_used: bool = False,
         use_extra_gating: bool = False,
+        use_complex_states: bool = False,
+        use_scan: bool = False,
+        local_scaling: bool = False,
         use_naive_feature: bool = True,
         changepoint_method: str = "basic",
         changepoint_params: dict = None,
@@ -1324,6 +1472,9 @@ class MambaSSM(ModelObject):
         self.datepart_method = datepart_method
         self.holiday_countries_used = holiday_countries_used
         self.use_extra_gating = use_extra_gating
+        self.use_complex_states = use_complex_states
+        self.use_scan = use_scan
+        self.local_scaling = local_scaling
         normalized_method = (
             changepoint_method if changepoint_method is not None else "none"
         )
@@ -1561,6 +1712,8 @@ class MambaSSM(ModelObject):
             y_train_raw=y_train,
             feature_means=self.feature_scaler.mean_,
             feature_scales=self.feature_scaler.scale_,
+            context_length=self.context_length,
+            local_scaling=self.local_scaling,
         )
 
         # 5. Torch plumbing
@@ -1577,6 +1730,8 @@ class MambaSSM(ModelObject):
             self.n_layers,
             self.d_state,
             use_extra_gating=self.use_extra_gating,
+            use_complex_states=self.use_complex_states,
+            use_scan=self.use_scan,
         ).to(self.device)
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
         criterion = self._get_loss_function()
@@ -1620,10 +1775,14 @@ class MambaSSM(ModelObject):
                 optimizer.zero_grad()
                 mu, sigma = self.model(x_batch)
 
-                # mu and sigma now have shape (batch_size, prediction_batch_size, 1)
-                # y_batch has shape (batch_size, prediction_batch_size, 1)
-                # Calculate loss across all timesteps in the batch
-                loss = criterion(mu, sigma, y_batch)
+                # When context_length > 0 the model sees (context + prediction) steps
+                # and outputs (context + prediction) timesteps.  The loss is computed
+                # only on the prediction portion; the context prefix acts as warm-up.
+                cl = self.context_length
+                if cl > 0:
+                    loss = criterion(mu[:, cl:, :], sigma[:, cl:, :], y_batch)
+                else:
+                    loss = criterion(mu, sigma, y_batch)
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
@@ -1631,6 +1790,24 @@ class MambaSSM(ModelObject):
                 print(
                     f"Epoch {epoch+1}  avg-loss: {running_loss / len(dataloader):.4f}"
                 )
+
+        # Store context features and local stats for warm-up and local_scaling during predict.
+        cl = self.context_length
+        if cl > 0 and train_feats_scaled.shape[0] >= cl:
+            self.context_feats_scaled = train_feats_scaled[-cl:, :].copy()
+        else:
+            self.context_feats_scaled = None
+
+        if self.local_scaling and cl > 0 and y_train.shape[0] >= cl:
+            ctx_y = y_train[-cl:, :]  # (cl, n_series)
+            self.inference_local_mean = np.mean(ctx_y, axis=0)  # (n_series,)
+            self.inference_local_std = np.std(ctx_y, axis=0)
+            self.inference_local_std = np.where(
+                self.inference_local_std < 1e-3, 1e-3, self.inference_local_std
+            )
+        else:
+            self.inference_local_mean = None
+            self.inference_local_std = None
 
         self.fit_runtime = datetime.datetime.now() - fit_start_time
         return self
@@ -1754,6 +1931,12 @@ class MambaSSM(ModelObject):
                 )
                 batch_feats_scaled = self.feature_scaler.transform(feat_batch_df.values)
 
+                # Context warm-up: prepend the last context_length training features
+                # (already scaled) so the SSM builds a non-zero hidden state before
+                # the first prediction timestep.
+                cl = self.context_length
+                ctx = self.context_feats_scaled  # (cl, n_features) or None
+
                 # Handle per-series vs shared features
                 if getattr(self, 'has_per_series_features', False):
                     # Per-series features: process each series individually
@@ -1763,70 +1946,106 @@ class MambaSSM(ModelObject):
                     )
 
                     for series_idx in range(num_series):
-                        # Get feature indices for this series
                         feat_indices = self.series_feat_mapping.get(series_idx, [])
 
-                        # Extract features for this series
+                        # Prediction-window features for this series
                         series_feats = batch_feats_scaled[:, feat_indices]
-
-                        # Pad if needed
                         if len(feat_indices) < max_feats_from_mapping:
                             pad_size = max_feats_from_mapping - len(feat_indices)
-                            padding = np.zeros(
-                                (actual_batch_size, pad_size), dtype=np.float32
-                            )
                             series_feats = np.concatenate(
-                                [series_feats, padding], axis=1
+                                [
+                                    series_feats,
+                                    np.zeros(
+                                        (actual_batch_size, pad_size), dtype=np.float32
+                                    ),
+                                ],
+                                axis=1,
                             )
 
-                        # Create input tensor: (1, actual_batch_size, n_features)
+                        # Prepend context prefix for SSM warm-up
+                        if cl > 0 and ctx is not None:
+                            ctx_s = ctx[:, feat_indices]
+                            if len(feat_indices) < max_feats_from_mapping:
+                                ctx_s = np.concatenate(
+                                    [
+                                        ctx_s,
+                                        np.zeros(
+                                            (
+                                                cl,
+                                                max_feats_from_mapping
+                                                - len(feat_indices),
+                                            ),
+                                            dtype=np.float32,
+                                        ),
+                                    ],
+                                    axis=1,
+                                )
+                            full_input = np.concatenate([ctx_s, series_feats], axis=0)
+                        else:
+                            full_input = series_feats
+
                         model_in = torch.tensor(
-                            series_feats, device=self.device, dtype=torch.float32
+                            full_input, device=self.device, dtype=torch.float32
                         ).unsqueeze(0)
 
-                        # Predict for this series
                         mu, sigma = self.model(model_in)
 
-                        # Store predictions: (actual_batch_size, 1)
-                        # Take only actual_batch_size elements in case model outputs more
+                        # Slice past the context prefix to get prediction outputs
                         forecast_mu_scaled[start_step:end_step, series_idx] = (
-                            mu[0, :actual_batch_size, 0].cpu().numpy()
+                            mu[0, cl : cl + actual_batch_size, 0].cpu().numpy()
                         )
                         forecast_sigma_scaled[start_step:end_step, series_idx] = (
-                            sigma[0, :actual_batch_size, 0].cpu().numpy()
+                            sigma[0, cl : cl + actual_batch_size, 0].cpu().numpy()
                         )
                 else:
-                    # Shared features: broadcast for all series
-                    # batch_feats_scaled shape: (actual_batch_size, n_features)
-                    # Expand to (num_series, actual_batch_size, n_features)
-                    batch_feats_tensor = torch.tensor(
-                        batch_feats_scaled, device=self.device, dtype=torch.float32
-                    )
-                    model_in = batch_feats_tensor.unsqueeze(0).expand(
-                        num_series, -1, -1
-                    )
+                    # Shared features: all series share the same feature columns
+                    if cl > 0 and ctx is not None:
+                        ctx_tensor = torch.tensor(
+                            ctx, device=self.device, dtype=torch.float32
+                        )  # (cl, n_features)
+                        batch_tensor = torch.tensor(
+                            batch_feats_scaled, device=self.device, dtype=torch.float32
+                        )  # (actual_batch_size, n_features)
+                        # Combine: (cl + actual_batch_size, n_features) then expand for all series
+                        combined = torch.cat([ctx_tensor, batch_tensor], dim=0)
+                        model_in = combined.unsqueeze(0).expand(num_series, -1, -1)
+                    else:
+                        batch_feats_tensor = torch.tensor(
+                            batch_feats_scaled, device=self.device, dtype=torch.float32
+                        )
+                        model_in = batch_feats_tensor.unsqueeze(0).expand(
+                            num_series, -1, -1
+                        )
 
-                    # Predict for all series at once
                     mu, sigma = self.model(model_in)
 
-                    # Store predictions: (num_series, actual_batch_size, 1)
-                    # Take only actual_batch_size elements in case model outputs more
+                    # Slice past the context prefix to get prediction outputs
                     forecast_mu_scaled[start_step:end_step, :] = (
-                        mu[:, :actual_batch_size, 0].T.cpu().numpy()
+                        mu[:, cl : cl + actual_batch_size, 0].T.cpu().numpy()
                     )
                     forecast_sigma_scaled[start_step:end_step, :] = (
-                        sigma[:, :actual_batch_size, 0].T.cpu().numpy()
+                        sigma[:, cl : cl + actual_batch_size, 0].T.cpu().numpy()
                     )
 
-                # Update naive window with predictions from this batch for next batch
+                # Update naive window with predictions from this batch for next batch.
+                # Always unscale to raw space using global scaler; the naive window stores
+                # raw values that are re-scaled by feature_scaler at input time.
                 if current_naive_windows is not None:
-                    # Get all predictions from this batch (unscaled to match stored window)
                     batch_predictions_scaled = forecast_mu_scaled[
                         start_step:end_step, :
                     ]
-                    batch_predictions_unscaled = (
-                        batch_predictions_scaled * self.scaler_stds + self.scaler_means
-                    )
+                    # Unscale using global stats — the naive feature column is still
+                    # globally scaled by feature_scaler, so the window stores raw values.
+                    if self.local_scaling and self.inference_local_mean is not None:
+                        batch_predictions_unscaled = (
+                            batch_predictions_scaled * self.inference_local_std
+                            + self.inference_local_mean
+                        )
+                    else:
+                        batch_predictions_unscaled = (
+                            batch_predictions_scaled * self.scaler_stds
+                            + self.scaler_means
+                        )
 
                     # Update window for each series
                     for col_idx, col in enumerate(self.df_train.columns):
@@ -1840,8 +2059,18 @@ class MambaSSM(ModelObject):
                         current_naive_windows[col] = updated_window
 
         # 4. Un-scale & wrap
-        mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means
-        sigma_unscaled = forecast_sigma_scaled * self.scaler_stds
+        # When local_scaling is active the model outputs are in the instance-normalised
+        # space (relative to the last context_length observations). Denormalise using
+        # the per-series baseline saved after fit().
+        if self.local_scaling and self.inference_local_mean is not None:
+            mu_unscaled = (
+                forecast_mu_scaled * self.inference_local_std
+                + self.inference_local_mean
+            )
+            sigma_unscaled = np.abs(forecast_sigma_scaled) * self.inference_local_std
+        else:
+            mu_unscaled = forecast_mu_scaled * self.scaler_stds + self.scaler_means
+            sigma_unscaled = forecast_sigma_scaled * self.scaler_stds
 
         z = norm.ppf(1 - (1 - self.prediction_interval) / 2)
         lower = mu_unscaled - z * sigma_unscaled
@@ -1888,6 +2117,9 @@ class MambaSSM(ModelObject):
             "datepart_method": self.datepart_method,
             "holiday_countries_used": self.holiday_countries_used,
             "use_extra_gating": self.use_extra_gating,
+            "use_complex_states": self.use_complex_states,
+            "use_scan": self.use_scan,
+            "local_scaling": self.local_scaling,
             "use_naive_feature": self.use_naive_feature,
             "changepoint_method": self.changepoint_method,
             "changepoint_params": self.changepoint_params,
@@ -1922,11 +2154,11 @@ class MambaSSM(ModelObject):
 
         # Number of layers - more layers can be more accurate but much slower
         n_layers_options = [1, 2, 3, 4, 6]
-        n_layers_weights = [0.15, 0.35, 0.25, 0.2, 0.05]  # Prefer 2-3 layers
+        n_layers_weights = [0.15, 0.45, 0.25, 0.1, 0.05]  # Prefer 2-3 layers
 
         # State dimension - affects model capacity
         d_states = [4, 8, 12, 16, 24, 32]
-        d_state_weights = [0.1, 0.25, 0.2, 0.25, 0.15, 0.05]  # Prefer 8-16 range
+        d_state_weights = [0.1, 0.25, 0.2, 0.25, 0.15, 0.0005]  # Prefer 8-16 range
 
         # Training epochs - more epochs more accurate but slower
         epochs_options = [5, 8, 10, 15, 20, 30]
@@ -1950,7 +2182,7 @@ class MambaSSM(ModelObject):
             "short_horizon_rank",  # Best for short horizon ranked Sharpe
             "ranked_sharpe",  # General ranked Sharpe optimization
         ]
-        loss_weights = [0.3, 0.25, 0.2, 0.15, 0.05, 0.03, 0.03]
+        loss_weights = [0.3, 0.05, 0.2, 0.15, 0.01, 0.03, 0.03]
 
         # NLL weight for combined loss
         nll_weights = [0.5, 0.8, 1.0, 1.2, 1.5]
@@ -1969,6 +2201,24 @@ class MambaSSM(ModelObject):
 
         extra_gating_options = [True, False]
         gating_weights = [0.25, 0.75]  # Prefer False for stability
+
+        # Complex states: useful for seasonal data; small overhead when enabled
+        complex_states_options = [True, False]
+        complex_states_weights = [
+            0.3,
+            0.7,
+        ]  # Prefer False for stability on diverse datasets
+
+        # Parallel scan: faster training (especially long sequences), numerically equivalent
+        use_scan_options = [True, False]
+        use_scan_weights = [1.0, 0.000001]  # Scan is consistently faster and better
+
+        # Local (instance) scaling: normalizes each window by context-window stats for better extrapolation
+        local_scaling_options = [True, False]
+        local_scaling_weights = [
+            0.3,
+            0.7,
+        ]  # Prefer off by default; useful for trending series
 
         naive_feature_options = [True, False]
         naive_feature_weights = [0.5, 0.5]  # Default to using naive features
@@ -2009,6 +2259,15 @@ class MambaSSM(ModelObject):
             "use_extra_gating": random.choices(
                 extra_gating_options, weights=gating_weights, k=1
             )[0],
+            "use_complex_states": random.choices(
+                complex_states_options, weights=complex_states_weights, k=1
+            )[0],
+            "use_scan": random.choices(use_scan_options, weights=use_scan_weights, k=1)[
+                0
+            ],
+            "local_scaling": random.choices(
+                local_scaling_options, weights=local_scaling_weights, k=1
+            )[0],
             "use_naive_feature": random.choices(
                 naive_feature_options, weights=naive_feature_weights, k=1
             )[0],
@@ -2020,11 +2279,11 @@ class MambaSSM(ModelObject):
         # Add prediction_batch_size based on context_length (longer contexts need smaller batches)
         if selected_params["context_length"] >= 180:
             selected_params["prediction_batch_size"] = random.choices(
-                [30, 45, 60], weights=[0.4, 0.4, 0.2], k=1
+                [1, 30, 45, 60], weights=[0.01, 0.4, 0.4, 0.2], k=1
             )[0]
         else:
             selected_params["prediction_batch_size"] = random.choices(
-                [45, 60, 90], weights=[0.3, 0.4, 0.3], k=1
+                [1, 45, 60, 90], weights=[0.02, 0.3, 0.4, 0.3], k=1
             )[0]
 
         return selected_params

@@ -14,16 +14,16 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.mcp package &#8212; AutoTS 1.0.1 documentation</title>
+    <title>autots.mcp package &#8212; AutoTS 1.0.2 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="autots.models package" href="autots.models.html" />
-    <link rel="prev" title="autots.evaluator package" href="autots.evaluator.html" />
+    <link rel="next" title="autots.mcp.handlers package" href="autots.mcp.handlers.html" />
+    <link rel="prev" title="autots.evaluator.tva package" href="autots.evaluator.tva.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -42,135 +42,203 @@
             
   <section id="autots-mcp-package">
 <h1>autots.mcp package<a class="headerlink" href="#autots-mcp-package" title="Link to this heading">¶</a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="autots.mcp.handlers.html">autots.mcp.handlers package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.mcp.handlers.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.mcp.handlers.html#module-autots.mcp.handlers.data">autots.mcp.handlers.data module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_clean_data"><code class="docutils literal notranslate"><span class="pre">handle_clean_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_clear_cache"><code class="docutils literal notranslate"><span class="pre">handle_clear_cache()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_convert_long_to_wide"><code class="docutils literal notranslate"><span class="pre">handle_convert_long_to_wide()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_generate_synthetic_data"><code class="docutils literal notranslate"><span class="pre">handle_generate_synthetic_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_get_data"><code class="docutils literal notranslate"><span class="pre">handle_get_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_list_cache"><code class="docutils literal notranslate"><span class="pre">handle_list_cache()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_load_data_from_file"><code class="docutils literal notranslate"><span class="pre">handle_load_data_from_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_load_live_data"><code class="docutils literal notranslate"><span class="pre">handle_load_live_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.data.handle_load_sample_data"><code class="docutils literal notranslate"><span class="pre">handle_load_sample_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.mcp.handlers.html#module-autots.mcp.handlers.features">autots.mcp.handlers.features module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_detect_features"><code class="docutils literal notranslate"><span class="pre">handle_detect_features()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_forecast_event_risk"><code class="docutils literal notranslate"><span class="pre">handle_forecast_event_risk()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_forecast_from_features"><code class="docutils literal notranslate"><span class="pre">handle_forecast_from_features()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_get_detected_features"><code class="docutils literal notranslate"><span class="pre">handle_get_detected_features()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_get_event_risk_results"><code class="docutils literal notranslate"><span class="pre">handle_get_event_risk_results()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_plot_event_risk"><code class="docutils literal notranslate"><span class="pre">handle_plot_event_risk()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.features.handle_plot_features"><code class="docutils literal notranslate"><span class="pre">handle_plot_features()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.mcp.handlers.html#module-autots.mcp.handlers.forecast">autots.mcp.handlers.forecast module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.forecast.handle_forecast_custom"><code class="docutils literal notranslate"><span class="pre">handle_forecast_custom()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.forecast.handle_forecast_explainable"><code class="docutils literal notranslate"><span class="pre">handle_forecast_explainable()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.forecast.handle_forecast_fast"><code class="docutils literal notranslate"><span class="pre">handle_forecast_fast()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.mcp.handlers.html#module-autots.mcp.handlers.prediction">autots.mcp.handlers.prediction module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_apply_adjustments"><code class="docutils literal notranslate"><span class="pre">handle_apply_adjustments()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_apply_constraints"><code class="docutils literal notranslate"><span class="pre">handle_apply_constraints()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_get_forecast"><code class="docutils literal notranslate"><span class="pre">handle_get_forecast()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_get_forecast_components"><code class="docutils literal notranslate"><span class="pre">handle_get_forecast_components()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_get_model_params"><code class="docutils literal notranslate"><span class="pre">handle_get_model_params()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_get_validation_results"><code class="docutils literal notranslate"><span class="pre">handle_get_validation_results()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_plot_forecast"><code class="docutils literal notranslate"><span class="pre">handle_plot_forecast()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.mcp.handlers.html#autots.mcp.handlers.prediction.handle_plot_validation"><code class="docutils literal notranslate"><span class="pre">handle_plot_validation()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.mcp.handlers.html#module-autots.mcp.handlers">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
 </section>
-<section id="module-autots.mcp.server">
-<span id="autots-mcp-server-module"></span><h2>autots.mcp.server module<a class="headerlink" href="#module-autots.mcp.server" title="Link to this heading">¶</a></h2>
-<p>MCP Server for AutoTS Time Series Forecasting</p>
-<p>This server exposes AutoTS forecasting and analysis functions as MCP tools
-for integration with LLM environments like VS Code.</p>
+<section id="module-autots.mcp.cache">
+<span id="autots-mcp-cache-module"></span><h2>autots.mcp.cache module<a class="headerlink" href="#module-autots.mcp.cache" title="Link to this heading">¶</a></h2>
+<p>State management &amp; global caches for the AutoTS MCP server.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.build_csv_metadata">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">build_csv_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.mcp.server.build_csv_metadata" title="Link to this definition">¶</a></dt>
-<dd><p>Build metadata for CSV export with loading instructions.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>filepath</strong> – Path to CSV file</p></li>
-<li><p><strong>df</strong> – DataFrame that was saved</p></li>
-<li><p><strong>is_long</strong> – Whether CSV is in long format</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Metadata dictionary with loading instructions</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.cache_object">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">cache_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.server.cache_object" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.mcp.cache.cache_object">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.cache.</span></span><span class="sig-name descname"><span class="pre">cache_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.cache.cache_object" title="Link to this definition">¶</a></dt>
 <dd><p>Cache an object and return a unique ID.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>obj</strong> – Object to cache</p></li>
-<li><p><strong>cache_type</strong> – Type of cache (‘prediction’, ‘autots’, ‘event_risk’, ‘feature_detector’, ‘data’)</p></li>
-<li><p><strong>metadata</strong> – Optional metadata</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Unique object ID</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.clear_cache">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">clear_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.server.clear_cache" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.mcp.cache.clear_cache">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.cache.</span></span><span class="sig-name descname"><span class="pre">clear_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.cache.clear_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Clear cache - specific ID, specific type, or all if both None.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.dataframe_to_output">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">dataframe_to_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'json_wide'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.server.dataframe_to_output" title="Link to this definition">¶</a></dt>
-<dd><p>Convert DataFrame to requested output format (token-efficient).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> – DataFrame with DatetimeIndex</p></li>
-<li><p><strong>output_format</strong> – “json_wide”, “json_long”, “csv_wide”, “csv_long”</p></li>
-<li><p><strong>save_path</strong> – Optional path to save CSV (returns path)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Dictionary (JSON) or string (CSV path)</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.get_cached_object">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">get_cached_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#autots.mcp.server.get_cached_object" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.mcp.cache.get_cached_object">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.cache.</span></span><span class="sig-name descname"><span class="pre">get_cached_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#autots.mcp.cache.get_cached_object" title="Link to this definition">¶</a></dt>
 <dd><p>Retrieve a cached object by ID and type.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.list_all_cached_objects">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">list_all_cached_objects</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.mcp.server.list_all_cached_objects" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.mcp.cache.list_all_cached_objects">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.cache.</span></span><span class="sig-name descname"><span class="pre">list_all_cached_objects</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.mcp.cache.list_all_cached_objects" title="Link to this definition">¶</a></dt>
 <dd><p>List all cached objects across all cache types.</p>
 </dd></dl>
 
+</section>
+<section id="module-autots.mcp.data_utils">
+<span id="autots-mcp-data-utils-module"></span><h2>autots.mcp.data_utils module<a class="headerlink" href="#module-autots.mcp.data_utils" title="Link to this heading">¶</a></h2>
+<p>DataFrame loading and CSV formatting utilities for the AutoTS MCP server.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.load_to_dataframe">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">load_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'wide'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#autots.mcp.server.load_to_dataframe" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.mcp.data_utils.build_csv_metadata">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.data_utils.</span></span><span class="sig-name descname"><span class="pre">build_csv_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.mcp.data_utils.build_csv_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Build metadata dict for a CSV export with loading instructions.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.data_utils.dataframe_to_output">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.data_utils.</span></span><span class="sig-name descname"><span class="pre">dataframe_to_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'json_wide'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.data_utils.dataframe_to_output" title="Link to this definition">¶</a></dt>
+<dd><p>Convert DataFrame to requested output format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> – DataFrame with DatetimeIndex.</p></li>
+<li><p><strong>output_format</strong> – “json_wide”, “json_long”, “csv_wide”, or “csv_long”.</p></li>
+<li><p><strong>save_path</strong> – Optional path to save CSV (returns path).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary (JSON) or string (CSV path).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.data_utils.load_to_dataframe">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.data_utils.</span></span><span class="sig-name descname"><span class="pre">load_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'wide'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#autots.mcp.data_utils.load_to_dataframe" title="Link to this definition">¶</a></dt>
 <dd><p>Load data to pandas DataFrame from multiple sources.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>data</strong> – JSON dict, CSV file path, or URL. If None, must provide data_id</p></li>
-<li><p><strong>data_format</strong> – “wide” or “long” (for JSON input)</p></li>
-<li><p><strong>data_id</strong> – Optional cached data ID to load from cache</p></li>
+<li><p><strong>data</strong> – JSON dict, CSV file path, or URL. If None, must provide data_id.</p></li>
+<li><p><strong>data_format</strong> – “wide” or “long” (for JSON dict input).</p></li>
+<li><p><strong>data_id</strong> – Optional cached data ID to load from cache.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>DataFrame with DatetimeIndex</p>
+<dd class="field-even"><p>DataFrame with DatetimeIndex.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.save_temp_csv">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">save_temp_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.server.save_temp_csv" title="Link to this definition">¶</a></dt>
-<dd><p>Save DataFrame to temporary CSV file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> – DataFrame to save</p></li>
-<li><p><strong>is_long</strong> – Convert to long format before saving</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Full path to saved CSV</p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="autots.mcp.data_utils.save_temp_csv">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.data_utils.</span></span><span class="sig-name descname"><span class="pre">save_temp_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.data_utils.save_temp_csv" title="Link to this definition">¶</a></dt>
+<dd><p>Save DataFrame to a temporary CSV file and return the path.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="autots.mcp.server.serialize_timestamps">
-<span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">serialize_timestamps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.server.serialize_timestamps" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.mcp.data_utils.serialize_timestamps">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.data_utils.</span></span><span class="sig-name descname"><span class="pre">serialize_timestamps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.data_utils.serialize_timestamps" title="Link to this definition">¶</a></dt>
 <dd><p>Recursively convert pandas Timestamp objects to strings for JSON serialization.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>obj</strong> – Object that may contain Timestamp objects</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Object with Timestamps converted to strings</p>
-</dd>
-</dl>
 </dd></dl>
 
+</section>
+<section id="module-autots.mcp.prompts">
+<span id="autots-mcp-prompts-module"></span><h2>autots.mcp.prompts module<a class="headerlink" href="#module-autots.mcp.prompts" title="Link to this heading">¶</a></h2>
+<p>MCP Prompt &amp; Resource definitions for the AutoTS MCP server.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.prompts.get_prompt">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.mcp.prompts.</span></span><span class="sig-name descname"><span class="pre">get_prompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">arguments</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.prompts.get_prompt" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.prompts.get_resources">
+<span class="sig-prename descclassname"><span class="pre">autots.mcp.prompts.</span></span><span class="sig-name descname"><span class="pre">get_resources</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mcp_file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#autots.mcp.prompts.get_resources" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.mcp.prompts.read_resource">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">autots.mcp.prompts.</span></span><span class="sig-name descname"><span class="pre">read_resource</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#autots.mcp.prompts.read_resource" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-autots.mcp.schemas">
+<span id="autots-mcp-schemas-module"></span><h2>autots.mcp.schemas module<a class="headerlink" href="#module-autots.mcp.schemas" title="Link to this heading">¶</a></h2>
+<p>MCP Tool definitions for the AutoTS MCP server.</p>
+<dl class="simple">
+<dt>Combines tool schemas from:</dt><dd><ul class="simple">
+<li><p>schemas_data.py     — cache management + data loading/conversion tools</p></li>
+<li><p>schemas_forecast.py — forecasting and prediction manipulation tools</p></li>
+<li><p>schemas_features.py — event risk and feature detection tools</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="module-autots.mcp.schemas_data">
+<span id="autots-mcp-schemas-data-module"></span><h2>autots.mcp.schemas_data module<a class="headerlink" href="#module-autots.mcp.schemas_data" title="Link to this heading">¶</a></h2>
+<p>MCP Tool schemas for cache management and data loading/conversion tools.</p>
+</section>
+<section id="module-autots.mcp.schemas_features">
+<span id="autots-mcp-schemas-features-module"></span><h2>autots.mcp.schemas_features module<a class="headerlink" href="#module-autots.mcp.schemas_features" title="Link to this heading">¶</a></h2>
+<p>MCP Tool schemas for event risk forecasting and feature detection tools.</p>
+</section>
+<section id="module-autots.mcp.schemas_forecast">
+<span id="autots-mcp-schemas-forecast-module"></span><h2>autots.mcp.schemas_forecast module<a class="headerlink" href="#module-autots.mcp.schemas_forecast" title="Link to this heading">¶</a></h2>
+<p>MCP Tool schemas for forecasting, prediction, event risk, and feature detection tools.</p>
+</section>
+<section id="module-autots.mcp.server">
+<span id="autots-mcp-server-module"></span><h2>autots.mcp.server module<a class="headerlink" href="#module-autots.mcp.server" title="Link to this heading">¶</a></h2>
+<p>MCP Server for AutoTS Time Series Forecasting</p>
+<dl class="simple">
+<dt>Main entry point and request routing. Delegates to:</dt><dd><ul class="simple">
+<li><p>autots.mcp.schemas    — Tool definitions</p></li>
+<li><p>autots.mcp.prompts    — Prompt &amp; Resource definitions</p></li>
+<li><p>autots.mcp.handlers   — Tool execution logic</p></li>
+<li><p>autots.mcp.cache      — State management</p></li>
+</ul>
+</dd>
+</dl>
+<p>Re-exports of sub-module symbols are provided at the bottom of this file for
+backwards compatibility (tests and other code that imports from autots.mcp.server).</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.mcp.server.serve">
 <span class="sig-prename descclassname"><span class="pre">autots.mcp.server.</span></span><span class="sig-name descname"><span class="pre">serve</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.mcp.server.serve" title="Link to this definition">¶</a></dt>
@@ -242,8 +310,8 @@ enabling LLM integration for time series forecasting tasks.</p>
   <li><a href="../index.html">Documentation overview</a><ul>
   <li><a href="modules.html">autots</a><ul>
   <li><a href="autots.html">autots package</a><ul>
-      <li>Previous: <a href="autots.evaluator.html" title="previous chapter">autots.evaluator package</a></li>
-      <li>Next: <a href="autots.models.html" title="next chapter">autots.models package</a></li>
+      <li>Previous: <a href="autots.evaluator.tva.html" title="previous chapter">autots.evaluator.tva package</a></li>
+      <li>Next: <a href="autots.mcp.handlers.html" title="next chapter">autots.mcp.handlers package</a></li>
   </ul></li>
   </ul></li>
   </ul></li>

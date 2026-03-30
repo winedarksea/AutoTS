@@ -148,6 +148,14 @@ autots.models.tide module
    :undoc-members:
    :show-inheritance:
 
+autots.models.tva\_model module
+-------------------------------
+
+.. automodule:: autots.models.tva_model
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

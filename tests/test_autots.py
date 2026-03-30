@@ -659,19 +659,22 @@ class AutoTSTest(unittest.TestCase):
         model.expand_horizontal()
         orig_param = json.loads(model.best_model_original.iloc[0]['ModelParameters'])
         new_param = json.loads(model.best_model.iloc[0]['ModelParameters'])
-        diff_mods = [
+        # Expansion reruns models on the full dataset and drops any that fail
+        # all validation runs — so the expanded set is a subset of the original.
+        # Require at least one model survived and none were invented from scratch.
+        added_mods = [
             x
-            for x in orig_param['models'].keys()
-            if x not in new_param['models'].keys()
+            for x in new_param['models'].keys()
+            if x not in orig_param['models'].keys()
         ]
-        if diff_mods:
-            details = orig_param['models'][diff_mods[0]]
-        else:
-            details = ""
-        self.assertCountEqual(
-            orig_param['models'].keys(),
-            new_param['models'].keys(),
-            msg=f"model expansion failed to use the same models {details}",
+        self.assertFalse(
+            added_mods,
+            msg=f"model expansion introduced unexpected new models: {added_mods}",
+        )
+        self.assertGreater(
+            len(new_param['models']),
+            0,
+            msg="model expansion dropped all models",
         )
         num_series = len(df['series_id'].unique().tolist()) if long else df.shape[1]
         self.assertEqual(

@@ -1,16 +1,16 @@
 import setuptools
 
 required = [
-    "numpy>=1.14.6",
-    "pandas>=0.25.0",
-    "statsmodels>=0.10.0",
-    "scikit-learn>=0.20.0",
+    "numpy>=1.21.6",
+    "pandas>=1.1.0",
+    "statsmodels>=0.13.0",
+    "scikit-learn>=1.0.0",
 ]
 
 extras = {
     'additional': [
         "holidays>=0.9",
-        'prophet>=0.4.0',
+        'prophet>=1.0.0',
         'fredapi',
         'tensorflow',
         'xgboost',
@@ -24,6 +24,21 @@ extras = {
         'pytrends',
         'matplotlib',
         'requests',
+    ],
+    'mcp': [
+        "holidays>=0.9",
+        'fredapi',
+        'lightgbm',
+        'joblib',
+        'scipy',
+        'numexpr',
+        'bottleneck',
+        'yfinance',
+        'pytrends',
+        'matplotlib',
+        'requests',
+        'seaborn',
+        "mcp>=1.0.0",
     ]
 }
 
@@ -31,8 +46,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="AutoTS",
-    version="1.0.1",
+    name="autots",
+    version="1.0.2",
     author="Colin Catlin",
     author_email="colin.catlin@syllepsis.live",
     description="Automated Time Series Forecasting",
@@ -50,4 +65,9 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.9',
+    entry_points={
+        "console_scripts": [
+            "autots-mcp = autots.mcp.server:serve",
+        ],
+    },
 )

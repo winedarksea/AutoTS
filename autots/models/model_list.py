@@ -51,6 +51,7 @@ all_models = [
     "PreprocessingExperts",
     "MambaSSM",
     "pMLP",
+    "TVAModel",
 ]
 # used for graphing, not for model selection
 model_classes = {
@@ -105,6 +106,7 @@ model_classes = {
     "MLEnsemble": "ensemble",
     "MambaSSM": "DL",
     "pMLP": "DL",
+    "TVAModel": "DL",
 }
 all_pragmatic = list(
     (
@@ -255,6 +257,7 @@ gpu = [
     "NeuralForecast",
     "MambaSSM",
     "pMLP",
+    "TVAModel",
 ]
 # models with model-based upper/lower forecasts
 probabilistic = [
@@ -314,6 +317,7 @@ multivariate = [
     "DMD",
     "TVVAR",
     "BallTreeRegressionMotif",
+    "TVAModel",
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -363,6 +367,7 @@ recombination_approved = [
     "PreprocessingExperts",
     "MambaSSM",
     "pMLP",
+    "TVAModel",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

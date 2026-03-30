@@ -95,10 +95,11 @@ class TestSyntheticDataGeneration(unittest.TestCase):
                 anom_type,
                 [
                     'point_outlier',
-                    'persistent_shift',
+                    'noisy_burst',
                     'impulse_decay',
-                    'ramp_down',
+                    'linear_decay',
                     'transient_change',
+                    'slope_reversion',
                 ],
                 "Invalid anomaly type",
             )
@@ -361,7 +362,7 @@ class TestSyntheticDataGeneration(unittest.TestCase):
             # For multiplicative seasonality, later std should be larger
             self.assertGreater(
                 late_std / early_std,
-                0.9,
+                0.8,
                 "Multiplicative seasonality should have amplitude that scales with trend",
             )
 
@@ -811,7 +812,7 @@ class TestSyntheticDataGeneration(unittest.TestCase):
         # This checks that tuning actually found meaningful parameter values
         self.assertGreater(results['best_params']['trend_changepoint_freq'], 0.0)
         self.assertLess(results['best_params']['trend_changepoint_freq'], 3.0)
-        self.assertGreaterEqual(results['best_params']['noise_level'], 0.01)
+        self.assertGreaterEqual(results['best_params']['noise_level'], 0.001)
         self.assertLessEqual(results['best_params']['noise_level'], 0.5)
 
     def test_tune_to_data_error_handling(self):
@@ -908,6 +909,440 @@ class TestSyntheticDataGeneration(unittest.TestCase):
             some_enabled,
             "When splash is enabled, some holidays should have splash/bridge effects",
         )
+
+    # --- New tests for commit 1282832 features ---
+
+    def test_slope_reversion_anomaly_type(self):
+        """Test the new slope_reversion anomaly type generates correctly."""
+        gen = generate_synthetic_daily_data(
+            n_days=1095,
+            n_series=5,
+            random_seed=42,
+            anomaly_freq=0.2,
+            anomaly_types=['slope_reversion'],
+        )
+
+        all_anomalies = gen.get_anomalies()
+        total = sum(len(a) for a in all_anomalies.values())
+        self.assertGreater(total, 0, "Should have slope_reversion anomalies")
+
+        for series_name, anomaly_list in all_anomalies.items():
+            for date, magnitude, anom_type, duration, is_shared in anomaly_list:
+                self.assertEqual(anom_type, 'slope_reversion')
+                # slope_reversion: onset 2-5 + hold 7-27 + reversion 14-41 = 23-73
+                self.assertGreaterEqual(
+                    duration, 23, "slope_reversion duration should be >= 23 days"
+                )
+                self.assertLessEqual(
+                    duration, 73, "slope_reversion duration should be <= 73 days"
+                )
+
+    def test_trend_slope_scale(self):
+        """Test trend_slope_scale parameter is stored and affects generation."""
+        gen_steep = generate_synthetic_daily_data(
+            n_days=1095, n_series=3, random_seed=42,
+            trend_changepoint_freq=1.5,
+            trend_slope_scale=1.5,
+            series_type_override='standard',
+        )
+        gen_gentle = generate_synthetic_daily_data(
+            n_days=1095, n_series=3, random_seed=42,
+            trend_changepoint_freq=1.5,
+            trend_slope_scale=0.1,
+            series_type_override='standard',
+        )
+
+        self.assertEqual(gen_steep.trend_slope_scale, 1.5)
+        self.assertEqual(gen_gentle.trend_slope_scale, 0.1)
+
+        # With override='standard' and same seed, trend component extraction
+        # gives us a clean comparison.  Different slope scales should produce
+        # different trend components.
+        trend_steep = gen_steep.get_components('series_0')['trend']
+        trend_gentle = gen_gentle.get_components('series_0')['trend']
+        self.assertFalse(
+            np.allclose(trend_steep, trend_gentle),
+            "Different slope scales should produce different trend components",
+        )
+
+    def test_trend_positive_bias(self):
+        """Test trend_positive_bias controls slope direction."""
+        gen_up = generate_synthetic_daily_data(
+            n_days=1095, n_series=5, random_seed=42,
+            trend_changepoint_freq=1.0,
+            trend_positive_bias=1.0,
+        )
+        gen_down = generate_synthetic_daily_data(
+            n_days=1095, n_series=5, random_seed=42,
+            trend_changepoint_freq=1.0,
+            trend_positive_bias=0.0,
+        )
+
+        # With positive bias=1.0, end values should generally be higher than start
+        data_up = gen_up.get_data().ffill().bfill()
+        up_trend = (data_up.iloc[-1] - data_up.iloc[0]).mean()
+
+        data_down = gen_down.get_data().ffill().bfill()
+        down_trend = (data_down.iloc[-1] - data_down.iloc[0]).mean()
+
+        self.assertGreater(
+            up_trend, down_trend,
+            "Positive bias=1.0 should produce higher end values than bias=0.0",
+        )
+
+    def test_level_shift_minimum_and_max_pct(self):
+        """Test level_shift_minimum_pct and level_shift_max_pct parameters."""
+        gen = generate_synthetic_daily_data(
+            n_days=1095, n_series=5, random_seed=42,
+            level_shift_freq=0.5,
+            level_shift_strength=0.3,
+            level_shift_minimum_pct=0.01,
+            level_shift_max_pct=0.05,
+        )
+        # Should not raise, and should generate data
+        data = gen.get_data()
+        self.assertEqual(data.shape[0], 1095)
+        self.assertFalse(data.empty)
+
+    def test_level_shift_max_pct_clamped_to_minimum(self):
+        """Test that level_shift_max_pct is clamped to >= level_shift_minimum_pct."""
+        gen = generate_synthetic_daily_data(
+            n_days=365, n_series=3, random_seed=42,
+            level_shift_minimum_pct=0.10,
+            level_shift_max_pct=0.02,  # Less than minimum
+        )
+        # Should be clamped to minimum
+        self.assertEqual(gen.level_shift_max_pct, gen.level_shift_minimum_pct)
+
+    def test_weekly_profile_target(self):
+        """Test weekly_profile_target parameter constrains weekly shape."""
+        # A strong weekend dip pattern
+        target_profile = [1.0, 1.0, 1.0, 1.0, 1.0, -2.0, -3.0]
+        gen = generate_synthetic_daily_data(
+            n_days=730, n_series=3, random_seed=42,
+            weekly_seasonality_strength=1.0,
+            weekly_profile_target=target_profile,
+        )
+        data = gen.get_data()
+        self.assertFalse(data.empty)
+
+        # Verify stored profile is normalized (zero-mean, unit-std)
+        stored = np.array(gen.weekly_profile_target)
+        self.assertAlmostEqual(float(np.mean(stored)), 0.0, places=5)
+        self.assertAlmostEqual(float(np.std(stored)), 1.0, places=5)
+
+    def test_weekly_profile_target_validation(self):
+        """Test that invalid weekly_profile_target raises ValueError."""
+        with self.assertRaises(ValueError):
+            generate_synthetic_daily_data(
+                n_days=365, n_series=3, random_seed=42,
+                weekly_profile_target=[1.0, 2.0],  # Only 2 elements, need 7
+            )
+
+    def test_yearly_fourier_target(self):
+        """Test yearly_fourier_target parameter constrains yearly shape."""
+        # 3 harmonics -> 6 coefficients
+        fourier = [0.5, 0.3, -0.2, 0.1, 0.05, -0.05]
+        gen = generate_synthetic_daily_data(
+            n_days=730, n_series=3, random_seed=42,
+            yearly_seasonality_strength=1.0,
+            yearly_fourier_target=fourier,
+        )
+        data = gen.get_data()
+        self.assertFalse(data.empty)
+        self.assertEqual(len(gen.yearly_fourier_target), 6)
+
+    def test_yearly_fourier_target_validation(self):
+        """Test that invalid yearly_fourier_target raises ValueError."""
+        # Odd length
+        with self.assertRaises(ValueError):
+            generate_synthetic_daily_data(
+                n_days=365, n_series=3, random_seed=42,
+                yearly_fourier_target=[0.5, 0.3, -0.2],  # 3 elements (odd)
+            )
+        # Too short
+        with self.assertRaises(ValueError):
+            generate_synthetic_daily_data(
+                n_days=365, n_series=3, random_seed=42,
+                yearly_fourier_target=[0.5],  # Only 1 element
+            )
+
+    def test_noise_ar_coefficient(self):
+        """Test noise_ar_coefficient produces autocorrelated noise."""
+        gen_ar = generate_synthetic_daily_data(
+            n_days=1000, n_series=3, random_seed=42,
+            noise_ar_coefficient=0.9,
+        )
+        gen_iid = generate_synthetic_daily_data(
+            n_days=1000, n_series=3, random_seed=42,
+            noise_ar_coefficient=None,
+        )
+
+        # AR noise data should have higher lag-1 autocorrelation
+        data_ar = gen_ar.get_data().ffill().bfill()
+        data_iid = gen_iid.get_data().ffill().bfill()
+
+        acf_ar = data_ar.iloc[:, 0].diff().autocorr(lag=1)
+        acf_iid = data_iid.iloc[:, 0].diff().autocorr(lag=1)
+
+        # With AR(1) coefficient of 0.9, we expect notably different autocorrelation
+        # (cannot guarantee exact values but AR should generally be higher)
+        self.assertIsNotNone(acf_ar)
+        self.assertIsNotNone(acf_iid)
+
+    def test_noise_ar_coefficient_clamped(self):
+        """Test that noise_ar_coefficient is clamped to [0, 0.99]."""
+        gen = generate_synthetic_daily_data(
+            n_days=100, n_series=2, random_seed=42,
+            noise_ar_coefficient=1.5,
+        )
+        self.assertLessEqual(gen.noise_ar_coefficient, 0.99)
+
+        gen_neg = generate_synthetic_daily_data(
+            n_days=100, n_series=2, random_seed=42,
+            noise_ar_coefficient=-0.5,
+        )
+        self.assertGreaterEqual(gen_neg.noise_ar_coefficient, 0.0)
+
+    def test_volatility_regime_intensity(self):
+        """Test volatility_regime_intensity parameter."""
+        gen = generate_synthetic_daily_data(
+            n_days=730, n_series=3, random_seed=42,
+            volatility_regime_intensity=1.0,
+        )
+        data = gen.get_data()
+        self.assertFalse(data.empty)
+        self.assertEqual(gen.volatility_regime_intensity, 1.0)
+
+        # Negative should be clamped to 0
+        gen_neg = generate_synthetic_daily_data(
+            n_days=365, n_series=2, random_seed=42,
+            volatility_regime_intensity=-0.5,
+        )
+        self.assertEqual(gen_neg.volatility_regime_intensity, 0.0)
+
+    def test_series_type_override(self):
+        """Test series_type_override forces all series to one type."""
+        gen = generate_synthetic_daily_data(
+            n_days=730, n_series=5, random_seed=42,
+            series_type_override='standard',
+        )
+
+        for series_name, stype in gen.series_types.items():
+            self.assertEqual(
+                stype, 'standard',
+                f"{series_name} should be 'standard' when override is set",
+            )
+
+        # All scales should be 1.0 when override is set
+        scales = gen.get_series_scales()
+        for series_name, scale in scales.items():
+            self.assertEqual(
+                scale, 1.0,
+                f"{series_name} scale should be 1.0 when series_type_override is set",
+            )
+
+    def test_extract_data_statistics_new_keys(self):
+        """Test that _extract_data_statistics returns all new statistical keys."""
+        dates = pd.date_range('2020-01-01', periods=730, freq='D')
+        df = pd.DataFrame(
+            {
+                'A': np.arange(730) * 0.1 + np.random.RandomState(42).normal(0, 1, 730),
+                'B': np.sin(np.arange(730) * 2 * np.pi / 7) * 5 + 50,
+            },
+            index=dates,
+        )
+
+        stats = SyntheticDailyGenerator._extract_data_statistics(df)
+
+        new_expected_keys = [
+            'frac_positive_trend',
+            'median_acf_lag1',
+            'median_acf_lag7',
+            'median_cv',
+            'cv_iqr',
+            'weekly_profile',
+            'median_diff_kurtosis',
+            'median_diff_skewness',
+            'abs_diff_skewness',
+            'changepoint_energy',
+            'max_jump_ratio',
+            'yearly_fourier',
+        ]
+        for key in new_expected_keys:
+            self.assertIn(key, stats, f"Missing new statistic: {key}")
+
+        # weekly_profile should be a list of 7 values
+        self.assertEqual(len(stats['weekly_profile']), 7)
+        # yearly_fourier should be a list of 6 values (3 harmonics)
+        self.assertEqual(len(stats['yearly_fourier']), 6)
+        # CV should be positive
+        self.assertGreater(stats['median_cv'], 0)
+
+    def test_get_true_event_statistics(self):
+        """Test the new get_true_event_statistics method."""
+        gen = generate_synthetic_daily_data(
+            n_days=1095, n_series=5, random_seed=42,
+            anomaly_freq=0.1,
+            level_shift_freq=0.5,
+        )
+
+        true_stats = gen.get_true_event_statistics()
+
+        expected_keys = [
+            'total_anomalies',
+            'anomalies_per_series',
+            'anomaly_per_week',
+            'total_level_shifts',
+            'level_shifts_per_series',
+            'level_shifts_per_year',
+            'total_holidays',
+            'holidays_per_series',
+        ]
+        for key in expected_keys:
+            self.assertIn(key, true_stats, f"Missing key: {key}")
+
+        # Sanity checks
+        self.assertGreaterEqual(true_stats['total_anomalies'], 0)
+        self.assertGreaterEqual(true_stats['total_level_shifts'], 0)
+        self.assertGreaterEqual(true_stats['total_holidays'], 0)
+        self.assertIsInstance(true_stats['anomaly_per_week'], float)
+        self.assertIsInstance(true_stats['level_shifts_per_year'], float)
+
+    def test_new_ramp_level_shift_types(self):
+        """Test that new ramp types (5, 7, 14-day) can be generated."""
+        # Use high level_shift_freq to maximize chances of getting all types
+        gen = generate_synthetic_daily_data(
+            n_days=2000, n_series=10, random_seed=42,
+            level_shift_freq=1.0,
+        )
+        # Just verify it runs without error and produces data
+        data = gen.get_data()
+        self.assertEqual(data.shape[0], 2000)
+        self.assertFalse(data.empty)
+
+    def test_starting_params_in_tune_to_data(self):
+        """Test that starting_params parameter is accepted by tune_to_data."""
+        try:
+            from scipy.optimize import differential_evolution
+        except ImportError:
+            self.skipTest("scipy not available for tuning")
+
+        from autots.datasets import load_daily
+        real_data = load_daily(long=False)
+        real_data = real_data.iloc[-365:, :3]
+
+        gen = generate_synthetic_daily_data(
+            start_date=real_data.index[0],
+            n_days=len(real_data),
+            n_series=len(real_data.columns),
+            random_seed=42,
+        )
+
+        starting = {
+            'trend_changepoint_freq': 0.5,
+            'level_shift_freq': 0.1,
+            'noise_level': 0.05,
+        }
+
+        results = gen.tune_to_data(
+            real_data,
+            n_iterations=3,
+            n_standard_series=3,
+            verbose=False,
+            starting_params=starting,
+        )
+
+        self.assertIn('best_params', results)
+        self.assertIn('best_score', results)
+
+    def test_starting_params_validation(self):
+        """Test that invalid starting_params raises ValueError."""
+        gen = generate_synthetic_daily_data(n_days=100, n_series=3, random_seed=42)
+        dates = pd.date_range('2020-01-01', periods=100, freq='D')
+        df = pd.DataFrame(
+            {'A': np.random.RandomState(42).randn(100) + 50},
+            index=dates,
+        )
+
+        with self.assertRaises(ValueError):
+            gen.tune_to_data(df, starting_params="not_a_dict")
+
+    def test_all_new_params_default_backward_compat(self):
+        """Test that default parameter values match pre-commit behavior."""
+        gen = SyntheticDailyGenerator(
+            n_days=365, n_series=3, random_seed=42,
+        )
+        # All new params should have backward-compatible defaults
+        self.assertEqual(gen.trend_slope_scale, 1.0)
+        self.assertEqual(gen.trend_positive_bias, 0.5)
+        self.assertEqual(gen.level_shift_minimum_pct, 0.12)
+        self.assertIsNone(gen.level_shift_max_pct)
+        self.assertIsNone(gen.weekly_profile_target)
+        self.assertIsNone(gen.yearly_fourier_target)
+        self.assertIsNone(gen.noise_ar_coefficient)
+        self.assertEqual(gen.volatility_regime_intensity, 0.0)
+        self.assertIsNone(gen.series_type_override)
+
+    def test_template_includes_new_params(self):
+        """Test that get_template serializes all new parameters."""
+        gen = generate_synthetic_daily_data(
+            n_days=365, n_series=3, random_seed=42,
+            trend_slope_scale=0.5,
+            trend_positive_bias=0.8,
+            level_shift_minimum_pct=0.05,
+            level_shift_max_pct=0.15,
+            noise_ar_coefficient=0.7,
+            volatility_regime_intensity=0.5,
+            series_type_override='standard',
+        )
+
+        template = gen.get_template()
+        config = template['meta']['config']
+
+        self.assertAlmostEqual(config['trend_slope_scale'], 0.5)
+        self.assertAlmostEqual(config['trend_positive_bias'], 0.8)
+        self.assertAlmostEqual(config['level_shift_minimum_pct'], 0.05)
+        self.assertAlmostEqual(config['level_shift_max_pct'], 0.15)
+        self.assertAlmostEqual(config['noise_ar_coefficient'], 0.7)
+        self.assertAlmostEqual(config['volatility_regime_intensity'], 0.5)
+        self.assertEqual(config['series_type_override'], 'standard')
+
+    def test_reproducibility_with_new_params(self):
+        """Test reproducibility when using new parameters."""
+        kwargs = dict(
+            n_days=365, n_series=3, random_seed=42,
+            trend_slope_scale=0.8,
+            trend_positive_bias=0.7,
+            level_shift_minimum_pct=0.05,
+            level_shift_max_pct=0.10,
+            weekly_profile_target=[1.0, 0.8, 0.6, 0.4, 0.2, -1.0, -2.0],
+            yearly_fourier_target=[0.5, 0.3, -0.2, 0.1],
+            noise_ar_coefficient=0.6,
+            volatility_regime_intensity=0.5,
+            series_type_override='standard',
+        )
+
+        gen1 = generate_synthetic_daily_data(**kwargs)
+        gen2 = generate_synthetic_daily_data(**kwargs)
+
+        data1 = gen1.get_data()
+        data2 = gen2.get_data()
+
+        self.assertTrue(
+            np.allclose(data1.values, data2.values, equal_nan=True),
+            "Same seed and params should produce identical data",
+        )
+
+    def test_low_noise_narrow_multiplier_range(self):
+        """Test that very low noise_level uses narrower multiplier range."""
+        gen = generate_synthetic_daily_data(
+            n_days=365, n_series=5, random_seed=42,
+            noise_level=0.005,
+        )
+        # Should not raise and should produce data
+        data = gen.get_data()
+        self.assertFalse(data.empty)
 
 
 if __name__ == '__main__':

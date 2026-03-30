@@ -2,6 +2,7 @@ import os
 import tempfile
 import random
 import unittest
+import datetime
 
 import numpy as np
 import pandas as pd
@@ -256,6 +257,35 @@ class TestMultivariateRegression(unittest.TestCase):
 
         # Check that sktraindata was updated
         self.assertEqual(len(model.sktraindata), min(model.min_threshold, len(df_new)))
+
+    def test_fit_runtime_captures_fit_work(self):
+        """fit_runtime should reflect fit execution, not be reset to near-zero."""
+        idx = pd.date_range("2020-01-01", periods=300, freq="D")
+        data = {
+            f"series_{i}": np.arange(300) * (i + 1) + np.random.randn(300) * 0.1
+            for i in range(8)
+        }
+        df = pd.DataFrame(data, index=idx)
+
+        model = MultivariateRegression(
+            forecast_length=5,
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            mean_rolling_periods=7,
+            window=7,
+            verbose=0,
+        )
+        wall_start = datetime.datetime.now()
+        model.fit(df)
+        elapsed = datetime.datetime.now() - wall_start
+
+        self.assertGreater(model.fit_runtime.total_seconds(), 0)
+        self.assertLessEqual(
+            model.fit_runtime.total_seconds(), elapsed.total_seconds() + 0.05
+        )
+        if elapsed.total_seconds() > 0.05:
+            self.assertGreater(
+                model.fit_runtime.total_seconds(), elapsed.total_seconds() * 0.2
+            )
 
 
 class TestWindowRegression(unittest.TestCase):

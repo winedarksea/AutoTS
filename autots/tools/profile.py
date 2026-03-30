@@ -185,9 +185,9 @@ def profile_time_series(
         (value_counts <= 3) & (value_counts > 1),
         'PROFILE',
     ] = 'binary'
-    metrics_df.loc[
-        metrics_df['zero_diff_proportion'] >= flat_threshold, 'PROFILE'
-    ] = 'flat'
+    metrics_df.loc[metrics_df['zero_diff_proportion'] >= flat_threshold, 'PROFILE'] = (
+        'flat'
+    )
     metrics_df.loc[
         metrics_df['null_percentage'] >= new_product_threshold, 'PROFILE'
     ] = 'new_product'

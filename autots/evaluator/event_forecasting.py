@@ -820,13 +820,15 @@ class EventRiskForecast(object):
                 pd.DataFrame(
                     self.historic_upper_risk_array,
                     columns=self.outcome_columns,
-                    index=self.df_train.tail(
-                        self.historic_upper_risk_array.shape[0]
+                    index=(
+                        self.df_train.tail(
+                            self.historic_upper_risk_array.shape[0]
+                            if self.historic_upper_risk_array is not None
+                            else 0
+                        ).index
                         if self.historic_upper_risk_array is not None
-                        else 0
-                    ).index
-                    if self.historic_upper_risk_array is not None
-                    else None,
+                        else None
+                    ),
                 )
                 if hasattr(self, 'historic_upper_risk_array')
                 and self.historic_upper_risk_array is not None
@@ -837,13 +839,15 @@ class EventRiskForecast(object):
                 pd.DataFrame(
                     self.historic_lower_risk_array,
                     columns=self.outcome_columns,
-                    index=self.df_train.tail(
-                        self.historic_lower_risk_array.shape[0]
+                    index=(
+                        self.df_train.tail(
+                            self.historic_lower_risk_array.shape[0]
+                            if self.historic_lower_risk_array is not None
+                            else 0
+                        ).index
                         if self.historic_lower_risk_array is not None
-                        else 0
-                    ).index
-                    if self.historic_lower_risk_array is not None
-                    else None,
+                        else None
+                    ),
                 )
                 if hasattr(self, 'historic_lower_risk_array')
                 and self.historic_lower_risk_array is not None

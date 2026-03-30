@@ -24,13 +24,14 @@ from autots.evaluator.event_forecasting import EventRiskForecast
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide, infer_frequency
 from autots.tools.regressor import create_lagged_regressor, create_regressor
+from autots.tools.mlflow import autolog as mlflow_autolog
 from autots.evaluator.auto_model import model_forecast, ModelPrediction
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
 from autots.tools.impute import FillNA
 
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 TransformTS = GeneralTransformer
 
@@ -53,6 +54,7 @@ __all__ = [
     'model_forecast',
     'create_lagged_regressor',
     'create_regressor',
+    'mlflow_autolog',
     'EventRiskForecast',
     'AnomalyDetector',
     'HolidayDetector',

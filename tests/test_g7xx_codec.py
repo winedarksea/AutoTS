@@ -246,8 +246,9 @@ class TestG726AdpcmFilter(unittest.TestCase):
 
     def test_blend_parameter(self):
         """Test that blend parameter mixes signal with baseline."""
-        # Use legacy mode for more predictable blending behavior
-        data = np.random.randn(100).cumsum()
+        # Use fixed seed to prevent random chance failures
+        rng = np.random.default_rng(42)
+        data = rng.standard_normal(100).cumsum()
 
         # High blend should produce smoother output in legacy mode
         filtered_low_blend = g726_adpcm_filter(

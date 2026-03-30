@@ -855,7 +855,7 @@ def ddot_t_right(A, B):
 
 def douter(a, b):
     "Outer product, last two axes"
-    return a * b.transpose((0, 2, 1))
+    return a * np.swapaxes(b, -1, -2)
 
 
 def stable_pinv(A, tol=1e-5, regularization=1e-4):
@@ -902,7 +902,6 @@ def autoshape(func):
     return reshaped_func
 
 
-@autoshape
 def predict(mean, covariance, state_transition, process_noise):
     """
     Kalman filter prediction step
@@ -918,9 +917,8 @@ def predict(mean, covariance, state_transition, process_noise):
         :math:`{\\mathbb E}[x_j]`, :math:`{\\rm Cov}[x_j]`
     """
 
-    n = mean.shape[1]
+    n = mean.shape[-2]
 
-    assert covariance.shape[-2:] == (n, n)
     assert covariance.shape[-2:] == (n, n)
     assert process_noise.shape[-2:] == (n, n)
     assert state_transition.shape[-2:] == (n, n)
@@ -936,7 +934,6 @@ def predict(mean, covariance, state_transition, process_noise):
     return prior_mean, prior_cov
 
 
-@autoshape
 def _update(
     prior_mean,
     prior_covariance,
@@ -945,8 +942,8 @@ def _update(
     measurement,
     log_likelihood=False,
 ):
-    n = prior_mean.shape[1]
-    m = observation_model.shape[1]
+    n = prior_mean.shape[-2]
+    m = observation_model.shape[-2]
 
     assert measurement.shape[-2:] == (m, 1)
     assert prior_covariance.shape[-2:] == (n, n)
@@ -977,7 +974,7 @@ def _update(
     # inv-chi2 test var
     # outlier_test = np.sum(v * ddot(invS, v), axis=0)
     if log_likelihood:
-        lx = np.ravel(ddot(v.transpose((0, 2, 1)), ddot(invS, v)))
+        lx = np.ravel(ddot(np.swapaxes(v, -1, -2), ddot(invS, v)))
         lx += np.log(np.linalg.det(S))
         lx *= -0.5
         return posterior_mean, posterior_covariance, K, lx
@@ -1010,7 +1007,6 @@ def update(
     )[:2]
 
 
-@autoshape
 def priv_smooth(
     posterior_mean,
     posterior_covariance,
@@ -1019,7 +1015,7 @@ def priv_smooth(
     next_smooth_mean,
     next_smooth_covariance,
 ):
-    n = posterior_mean.shape[1]
+    n = posterior_mean.shape[-2]
 
     assert posterior_covariance.shape[-2:] == (n, n)
     assert process_noise.shape[-2:] == (n, n)
@@ -1086,7 +1082,6 @@ def smooth(
     )[:2]
 
 
-@autoshape
 def predict_observation(mean, covariance, observation_model, observation_noise):
     """
     Compute probability distribution of the observation :math:`y`, given
@@ -1100,8 +1095,8 @@ def predict_observation(mean, covariance, observation_model, observation_noise):
     :rtype: mean :math:`{\\mathbb E}[y]` and covariance :math:`{\\rm Cov}[y]`
     """
 
-    n = mean.shape[1]
-    m = observation_model.shape[1]
+    n = mean.shape[-2]
+    m = observation_model.shape[-2]
     assert observation_model.shape[-2:] == (m, n)
     assert covariance.shape[-2:] == (n, n)
     assert observation_model.shape[-2:] == (m, n)
@@ -1118,7 +1113,6 @@ def predict_observation(mean, covariance, observation_model, observation_noise):
     return obs_mean, obs_cov
 
 
-@autoshape
 def priv_update_with_nan_check(
     prior_mean,
     prior_covariance,
