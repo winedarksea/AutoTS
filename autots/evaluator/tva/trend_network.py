@@ -509,6 +509,8 @@ if HAS_TORCH:
                 # threshold to binary and convert to attention mask format
                 # 0 = attend, -inf = block
                 binary = (prior_adjacency > 0.1).astype(np.float32)
+                # Always preserve self-attention to avoid fully-masked rows.
+                np.fill_diagonal(binary, 1.0)
                 mask = np.where(binary > 0, 0.0, float('-inf'))
             else:
                 # no mask = full attention over global latent nodes

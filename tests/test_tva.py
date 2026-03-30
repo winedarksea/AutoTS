@@ -1076,6 +1076,26 @@ class TestCompositeTrendNetworkV1(unittest.TestCase):
         self.assertTrue(torch.isneginf(net._attn_mask[0, 1]))
         self.assertTrue(torch.isneginf(net._attn_mask[1, 0]))
 
+    def test_v1_mask_keeps_self_attention_with_zero_diagonal_prior(self):
+        from autots.evaluator.tva.trend_network import CompositeTrendNetworkV1
+
+        prior = np.zeros((4, 4), dtype=np.float32)
+        net = CompositeTrendNetworkV1(
+            n_series=4,
+            window_size=30,
+            forecast_horizon=10,
+            d_token=32,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            prior_adjacency=prior,
+        )
+
+        self.assertEqual(tuple(net._attn_mask.shape), (2, 2))
+        self.assertTrue(torch.isfinite(torch.diag(net._attn_mask)).all())
+        self.assertTrue(torch.all(torch.diag(net._attn_mask) == 0.0))
+
     def test_prototype_weights_sum_to_one(self):
         net = self._make_net(K=4)
         x = torch.randn(2, 4, 30)
