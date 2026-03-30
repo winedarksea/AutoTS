@@ -20,7 +20,7 @@ except Exception:
 
 
 class BifrostOptimizer:
-    """Inference-time optimizer for scenario planning / what-if analysis.
+    """Inference-time optimizer for scenario planning and what-if analysis.
 
     Freezes all network weights. Creates an optimizable perturbation in
     latent space and runs gradient descent to satisfy user constraints
