@@ -176,7 +176,7 @@ class YggdrasilPriors:
             return None
         result = result / max_off_diag
         result = np.clip(result, 0.0, 1.0)
-        np.fill_diagonal(result, 1.0)
+        np.fill_diagonal(result, 0.0)
         return result.astype(np.float32)
 
     @staticmethod
@@ -226,7 +226,7 @@ class YggdrasilPriors:
         if np.count_nonzero(adj) == 0:
             return None
         adj = np.clip(adj, 0.0, 1.0)
-        np.fill_diagonal(adj, 1.0)
+        np.fill_diagonal(adj, 0.0)
         return adj.astype(np.float32)
 
     def _extract_event_records(self) -> list:
@@ -439,7 +439,7 @@ class YggdrasilPriors:
             return None
         blended = blended / total_weight
         blended = np.clip(blended, 0.0, 1.0)
-        np.fill_diagonal(blended, 1.0)
+        np.fill_diagonal(blended, 0.0)
         return blended.astype(np.float32)
 
     def build_structural_prior_adjacency(self) -> Optional[np.ndarray]:
@@ -562,7 +562,7 @@ class YggdrasilPriors:
         if max_off_diag > 0:
             adjacency = adjacency / max_off_diag
         adjacency = np.clip(adjacency, 0.0, 1.0)
-        np.fill_diagonal(adjacency, 1.0)
+        np.fill_diagonal(adjacency, 0.0)
         return adjacency.astype(np.float32)
 
     def build_prior_adjacency(self) -> Optional[np.ndarray]:
@@ -576,7 +576,8 @@ class YggdrasilPriors:
         Returns zeros if no metadata is available.
         """
         if not self.series_metadata:
-            return np.zeros((1, 1), dtype=np.float32)
+            n = self.n_series
+            return np.zeros((n, 1), dtype=np.float32)
 
         n = self.n_series
         vocabs = {}
@@ -613,7 +614,7 @@ class YggdrasilPriors:
         trends but do not perturb the core geometry.
         """
         if not self.series_metadata:
-            return np.ones(1, dtype=bool)
+            return np.ones(self.n_series, dtype=bool)
         return np.array(
             [m.history_periods >= min_history for m in self.series_metadata],
             dtype=bool,
@@ -628,7 +629,7 @@ class YggdrasilPriors:
         Returns identity if no hierarchy paths are specified.
         """
         if not self.series_metadata:
-            return np.eye(1, dtype=np.float32)
+            return np.eye(self.n_series, dtype=np.float32)
 
         paths = [m.hierarchy_path for m in self.series_metadata if m.hierarchy_path]
         if not paths:

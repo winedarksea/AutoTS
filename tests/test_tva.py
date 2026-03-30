@@ -160,9 +160,30 @@ class TestYggdrasilPriors(unittest.TestCase):
         adj = p.build_prior_adjacency()
         self.assertIsNone(adj)
         emb = p.build_metadata_embeddings()
-        self.assertEqual(emb.shape[0], 1)
+        self.assertEqual(emb.shape, (0, 1))
         mask = p.get_anchor_mask(100)
-        self.assertEqual(len(mask), 1)
+        self.assertEqual(len(mask), 0)
+        S = p.build_hierarchy_matrix()
+        self.assertEqual(S.shape, (0, 0))
+
+    def test_no_metadata_defaults_follow_series_count(self):
+        from autots.evaluator.tva.priors import YggdrasilPriors
+
+        trend = pd.DataFrame(
+            np.zeros((8, 3), dtype=float),
+            index=pd.date_range("2024-01-01", periods=8, freq="D"),
+            columns=['a', 'b', 'c'],
+        )
+        p = YggdrasilPriors(trend_data=trend)
+
+        emb = p.build_metadata_embeddings()
+        self.assertEqual(emb.shape, (3, 1))
+
+        mask = p.get_anchor_mask(100)
+        np.testing.assert_array_equal(mask, np.array([True, True, True], dtype=bool))
+
+        S = p.build_hierarchy_matrix()
+        np.testing.assert_allclose(S, np.eye(3, dtype=np.float32), atol=1e-6)
 
     def test_prior_adjacency_shape_and_symmetry(self):
         from autots.evaluator.tva.priors import YggdrasilPriors
@@ -171,8 +192,8 @@ class TestYggdrasilPriors(unittest.TestCase):
         n = 4
         self.assertEqual(adj.shape, (n, n))
         np.testing.assert_allclose(adj, adj.T, atol=1e-6)
-        # diagonal must be 1
-        np.testing.assert_allclose(np.diag(adj), np.ones(n), atol=1e-6)
+        # self-edges are excluded from priors
+        np.testing.assert_allclose(np.diag(adj), np.zeros(n), atol=1e-6)
 
     def test_shared_attribute_raises_adjacency(self):
         from autots.evaluator.tva.priors import YggdrasilPriors
@@ -385,6 +406,7 @@ class TestYggdrasilPriors(unittest.TestCase):
         self.assertIsNotNone(adj)
         self.assertGreater(adj[0, 1], adj[1, 0])
         self.assertGreater(adj[0, 1], adj[2, 1])
+        np.testing.assert_allclose(np.diag(adj), np.zeros(3), atol=1e-6)
 
     def test_causal_prior_skip_when_statsmodels_missing(self):
         from autots.evaluator.tva import priors as priors_module

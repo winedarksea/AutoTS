@@ -6,6 +6,7 @@ separate from the forecast orchestration layer so new approaches can be
 swapped in without rewriting the TVA training loop.
 """
 
+from collections import deque
 from dataclasses import dataclass, asdict
 from typing import Optional
 
@@ -178,11 +179,11 @@ def topological_order_from_adjacency(adjacency: np.ndarray) -> list:
         return []
     n_nodes = adjacency.shape[0]
     indegree = adjacency.sum(axis=0).astype(int).tolist()
-    queue = [idx for idx in range(n_nodes) if indegree[idx] == 0]
+    queue = deque(idx for idx in range(n_nodes) if indegree[idx] == 0)
     order = []
 
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         order.append(node)
         outgoing = np.where(adjacency[node] > 0)[0]
         for child in outgoing:
@@ -220,6 +221,7 @@ def build_graph_snapshot(
         level_sizes.extend([matrix.shape[1] for matrix in assignment_arrays])
     else:
         level_sizes = [dense.shape[0]]
+    level_offsets = np.cumsum([0] + level_sizes).tolist()
 
     node_table = []
     edge_table = []
@@ -259,17 +261,17 @@ def build_graph_snapshot(
                 edge_table.append(
                     {
                         'source': node_table[
-                            sum(level_sizes[:level_index]) + lower_idx
+                            level_offsets[level_index] + lower_idx
                         ]['node_id'],
                         'target': node_table[
-                            sum(level_sizes[: level_index + 1]) + upper_idx
+                            level_offsets[level_index + 1] + upper_idx
                         ]['node_id'],
                         'weight': weight,
                         'edge_type': 'hierarchy',
                     }
                 )
 
-    dag_level_offset = sum(level_sizes[:-1]) if level_sizes else 0
+    dag_level_offset = level_offsets[-2] if len(level_offsets) >= 2 else 0
     for source in range(dense.shape[0]):
         for target in range(dense.shape[1]):
             weight = float(dense[source, target])

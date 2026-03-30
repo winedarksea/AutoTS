@@ -207,7 +207,10 @@ class BifrostOptimizer:
         device = torch.device(self.tva.device)
         network = self.tva._network
 
-        # freeze network
+        # freeze network, preserving original requires_grad state for each parameter
+        original_grad_state = {
+            param: param.requires_grad for param in network.parameters()
+        }
         for param in network.parameters():
             param.requires_grad_(False)
 
@@ -267,9 +270,9 @@ class BifrostOptimizer:
             total_loss.backward()
             optimizer.step()
 
-        # re-enable gradients
-        for param in network.parameters():
-            param.requires_grad_(True)
+        # restore original requires_grad state per parameter
+        for param, grad_state in original_grad_state.items():
+            param.requires_grad_(grad_state)
 
         # generate final adjusted forecast
         with torch.no_grad():

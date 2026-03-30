@@ -3,7 +3,7 @@
 * more optimization of MultivariateRegression
 * MLFlow logging function added (limited testing done)
 * MCP server breaking changes, async setup
-* MambaSSM enchance (still slow and mediocre)
+* MambaSSM enhanced (still slow and mediocre)
 * TVA model added
 * significant changes to optimizer for Feature Detection with synthetic, refactor of feature detector code
 
