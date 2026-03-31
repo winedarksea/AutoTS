@@ -11,14 +11,18 @@
     "url": "https://github.com/winedarksea/AutoTS",
     "source": "github"
   },
-  "version": "1.0.1",
+  "version": "1.0.3",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "autots[mcp]",
-      "version": "1.0.1",
+      "version": "1.0.3",
       "transport": {
         "type": "stdio"
+      },
+      "runtime": {
+        "command": "python",
+        "args": ["-m", "autots.mcp"]
       }
     }
   ]
