@@ -775,6 +775,104 @@ class LossEvaluatorsMixin:
             + amplitude_penalty
         )
 
+    def _seasonality_leakage_loss(self, detected_components, true_components):
+        """
+        Penalize seasonality components that capture non-seasonal structure.
+
+        The goal is component purity: the detected seasonality should align with the
+        true seasonality term while remaining weakly coupled to trend, level shift,
+        anomaly, holiday, and noise components.
+        """
+        detected_series = detected_components.get('seasonality')
+        true_seasonality = true_components.get('seasonality')
+        if detected_series is None or true_seasonality is None:
+            return 0.0
+
+        detected_arr, true_season_arr = self._aligned_finite_arrays(
+            detected_series, true_seasonality
+        )
+        if detected_arr.size < 8:
+            return 0.0
+
+        def _safe_abs_corr(x_vals, y_vals):
+            if x_vals.size < 3 or y_vals.size < 3:
+                return 0.0
+            x_std = float(np.nanstd(x_vals))
+            y_std = float(np.nanstd(y_vals))
+            if x_std < 1e-9 or y_std < 1e-9:
+                return 0.0
+            corr = np.corrcoef(x_vals, y_vals)[0, 1]
+            if not np.isfinite(corr):
+                return 0.0
+            return float(abs(corr))
+
+        def _focused_energy_ratio(det_vals, ref_vals, percentile=85):
+            abs_ref = np.abs(ref_vals)
+            if abs_ref.size < 4 or np.nanmax(abs_ref) < 1e-9:
+                return 0.0
+            threshold = np.nanpercentile(abs_ref, percentile)
+            if not np.isfinite(threshold):
+                return 0.0
+            mask = abs_ref >= max(threshold, 1e-9)
+            if mask.sum() < 3:
+                return 0.0
+            denom = float(np.nanmean(np.abs(det_vals))) + 1e-6
+            num = float(np.nanmean(np.abs(det_vals[mask])))
+            return max(0.0, min(num / denom, 3.0))
+
+        component_specs = [
+            ('trend', 0.28),
+            ('level_shift', 0.24),
+            ('anomalies', 0.20),
+            ('holidays', 0.14),
+            ('noise', 0.14),
+        ]
+
+        weighted_penalty = 0.0
+        active_weight = 0.0
+        for comp_name, comp_weight in component_specs:
+            true_component = true_components.get(comp_name)
+            if true_component is None:
+                continue
+
+            det_vals, ref_vals = self._aligned_finite_arrays(detected_series, true_component)
+            if det_vals.size < 8:
+                continue
+
+            corr_penalty = _safe_abs_corr(det_vals, ref_vals)
+            focus_penalty = _focused_energy_ratio(det_vals, ref_vals)
+            component_penalty = 0.65 * corr_penalty + 0.35 * focus_penalty
+
+            if comp_name == 'level_shift':
+                ref_diff = np.diff(ref_vals)
+                det_diff = np.diff(det_vals)
+                if ref_diff.size >= 4 and np.nanmax(np.abs(ref_diff)) > 1e-9:
+                    step_threshold = np.nanpercentile(np.abs(ref_diff), 85)
+                    if np.isfinite(step_threshold) and step_threshold > 1e-9:
+                        step_mask = np.abs(ref_diff) >= step_threshold
+                        if step_mask.sum() >= 2:
+                            step_ratio = (
+                                float(np.nanmean(np.abs(det_diff[step_mask])))
+                                / (float(np.nanmean(np.abs(det_diff))) + 1e-6)
+                            )
+                            component_penalty += 0.20 * max(
+                                0.0, min(step_ratio, 3.0)
+                            )
+
+            component_penalty = min(max(component_penalty, 0.0), 3.0)
+            weighted_penalty += comp_weight * component_penalty
+            active_weight += comp_weight
+
+        if active_weight <= 0:
+            return 0.0
+
+        # Strongly reward alignment with true seasonality itself.
+        seasonality_alignment = _safe_abs_corr(detected_arr, true_season_arr)
+        leakage_penalty = weighted_penalty / active_weight
+        purity_adjustment = max(0.0, 1.0 - seasonality_alignment)
+        total = 0.8 * leakage_penalty + 0.2 * purity_adjustment
+        return float(min(max(total, 0.0), 3.0))
+
     def _seasonality_changepoint_loss(
         self, detected_cp, true_cp, detected_components, true_components, date_index
     ):
