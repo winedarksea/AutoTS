@@ -1889,12 +1889,15 @@ class SyntheticDailyGenerator:
                 )
                 params = ('laplace', base_noise_std * 0.7)
             elif dist_type == 't':
-                df = self.rng.uniform(3, 10)
+                df = self.rng.uniform(5, 10)  # raised floor from 3 to avoid extreme tails
                 segment_noise = (
                     self.rng.standard_t(df, segment_length) * base_noise_std * 0.8
                 )
                 params = ('t', df, base_noise_std * 0.8)
 
+            # Clip each segment at ±3σ so heavy-tailed draws can't produce
+            # anomaly-scale spikes in the noise component.
+            segment_noise = np.clip(segment_noise, -3.0 * base_noise_std, 3.0 * base_noise_std)
             noise[start_day:end_day] = segment_noise
 
             if start_day > 0:
