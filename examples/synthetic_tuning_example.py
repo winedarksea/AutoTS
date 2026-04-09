@@ -10,15 +10,17 @@ from autots.evaluator.feature_detector.loss import FeatureDetectionLoss
 
 # 1. Define synthetic parameters (known_good_bp)
 known_good_bp = {  # second tuning
-    'trend_changepoint_freq': 1.1311196948895457,
-    'level_shift_freq': 0.11235106798095876,
-    'level_shift_strength': 0.10391796521529073,
+    'trend_changepoint_freq': 1.13111969,
+    'level_shift_freq': 0.04,  # 0.112
+    'level_shift_strength': 0.103917965,
     'anomaly_freq': 0.04654080084797309,
-    'weekly_seasonality_strength': 0.8646796590839558,
-    'yearly_seasonality_strength': 1.2232927741109423,
-    'noise_level': 0.0016485471075049773,  # about 0.5275%
+    'weekly_seasonality_strength': 1.2,  # 0.864679659
+    'yearly_seasonality_strength': 2.0,  # 1.22329277
+    'noise_level': 0.0008,  # 0.0016485 is about 0.5275%
     'trend_slope_scale': 0.4964492705041623,
     'trend_positive_bias': 0.7313495354794045,
+    'trend_changepoint_min_slope_factor': 2.0,  # 1.0 = default; >1 = less subtle changepoints
+    'anomaly_magnitude_scale': 3.0,  # 1.0 = default; scales anomaly size independently of noise_level
     'level_shift_minimum_pct': 0.0944925100542184,
     'level_shift_max_pct': 0.03147911401873594,
     'noise_ar_coefficient': 0.07932349693757101,
