@@ -2038,8 +2038,12 @@ class SyntheticDailyGenerator:
 
         # Generate noise
         noise = np.zeros(self.n_days)
+        innovation_clip = 3.0 * innovation_std
         for t in range(1, self.n_days):
-            noise[t] = ar_phi * noise[t - 1] + self.rng.normal(0, innovation_std)
+            innovation = np.clip(
+                self.rng.normal(0, innovation_std), -innovation_clip, innovation_clip
+            )
+            noise[t] = ar_phi * noise[t - 1] + innovation
 
         # Store a record of the noise type
         self.noise_changepoints[series_name] = [
