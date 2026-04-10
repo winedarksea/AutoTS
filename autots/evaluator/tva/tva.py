@@ -812,26 +812,14 @@ class TVA:
         prototype_weights = None
         if 'prototype_weights' in outputs:
             prototype_weights = outputs['prototype_weights'].detach().cpu().numpy()[0]
-
-        prototype_forecasts = None
-        if (
-            hasattr(self._network, 'prototype')
-            and hasattr(self._network, 'decoder')
-            and hasattr(self._network.decoder, 'forecast_head')
-        ):
-            with torch.no_grad():
-                parameter_device = next(self._network.parameters()).device
-                prototype_tokens = (
-                    self._network.prototype._sacred_timeline_prototypes.detach()
-                    .unsqueeze(0)
-                    .to(parameter_device)
-                )
-                prototype_forecasts = (
-                    self._network.decoder.forecast_head(prototype_tokens)
-                    .detach()
-                    .cpu()
-                    .numpy()[0]
-                )
+        global_prototype_weights = None
+        if 'global_prototype_weights' in outputs:
+            global_prototype_weights = (
+                outputs['global_prototype_weights'].detach().cpu().numpy()[0]
+            )
+        decoded_top_trends = None
+        if 'composite_trend' in outputs:
+            decoded_top_trends = outputs['composite_trend'].detach().cpu().numpy()[0]
         snapshot = build_graph_snapshot(
             adjacency_dense=self.get_graph(),
             assignment_matrices=assignment_matrices,
@@ -846,7 +834,8 @@ class TVA:
             anchor_mask=self._anchor_mask,
             series_metadata=self.series_metadata,
             prototype_weights=prototype_weights,
-            prototype_forecasts=prototype_forecasts,
+            global_prototype_weights=global_prototype_weights,
+            decoded_top_trends=decoded_top_trends,
         )
         return snapshot.to_dict()
 
@@ -886,6 +875,7 @@ class TVA:
             series_table=snapshot_dict.get('series_table', []),
             prototype_table=snapshot_dict.get('prototype_table', []),
             affinity_table=snapshot_dict.get('affinity_table', []),
+            prototype_edge_table=snapshot_dict.get('prototype_edge_table', []),
         )
         return plot_graph_snapshot(
             snapshot=snapshot,

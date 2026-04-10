@@ -23,13 +23,16 @@ except Exception:
 
 try:
     import matplotlib.pyplot as plt
-    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch
 
     HAS_MATPLOTLIB = True
 except Exception:
     plt = None
+    Line2D = None
     FancyArrowPatch = None
     FancyBboxPatch = None
+    Patch = None
     HAS_MATPLOTLIB = False
 
 
@@ -130,6 +133,7 @@ class GraphSnapshot:
     series_table: Optional[list] = None
     prototype_table: Optional[list] = None
     affinity_table: Optional[list] = None
+    prototype_edge_table: Optional[list] = None
 
     def to_dict(self) -> dict:
         return {
@@ -154,6 +158,7 @@ class GraphSnapshot:
             'series_table': list(self.series_table or []),
             'prototype_table': list(self.prototype_table or []),
             'affinity_table': list(self.affinity_table or []),
+            'prototype_edge_table': list(self.prototype_edge_table or []),
         }
 
 
@@ -314,6 +319,64 @@ def _build_series_and_prototype_tables(
     return series_table, prototype_table, affinity_table
 
 
+def _infer_prototype_graph(
+    adjacency_dense: np.ndarray = None,
+    global_prototype_weights: np.ndarray = None,
+    decoded_top_trends: np.ndarray = None,
+    threshold: float = 0.2,
+) -> tuple:
+    """Project the driver-layer graph into prototype space for interpretation.
+
+    This is an inferred prototype graph, not a directly learned object.
+    """
+    if global_prototype_weights is None:
+        return None, []
+
+    weights = np.asarray(global_prototype_weights, dtype=np.float32)
+    if weights.ndim != 2:
+        return None, []
+
+    row_sums = weights.sum(axis=1, keepdims=True).clip(min=1e-6)
+    weights = weights / row_sums
+    n_drivers, n_prototypes = weights.shape
+
+    prototype_trends = None
+    if decoded_top_trends is not None:
+        decoded = np.asarray(decoded_top_trends, dtype=np.float32)
+        if decoded.ndim == 2 and decoded.shape[0] == n_drivers:
+            prototype_mass = weights.sum(axis=0, keepdims=True).clip(min=1e-6)
+            prototype_trends = (weights.T @ decoded) / prototype_mass.T
+
+    prototype_edge_table = []
+    adjacency = np.asarray(adjacency_dense, dtype=np.float32)
+    if (
+        adjacency.ndim == 2
+        and adjacency.shape[0] == n_drivers
+        and adjacency.shape[1] == n_drivers
+    ):
+        prototype_mass = weights.sum(axis=0, keepdims=True)
+        projected = weights.T @ adjacency @ weights
+        normalization = np.maximum(prototype_mass.T @ prototype_mass, 1e-6)
+        projected = np.clip(projected / normalization, 0.0, 1.0)
+        np.fill_diagonal(projected, 0.0)
+        for source in range(n_prototypes):
+            for target in range(n_prototypes):
+                weight = float(projected[source, target])
+                if source == target or weight < float(threshold):
+                    continue
+                prototype_edge_table.append(
+                    {
+                        'source': f'prototype_{source}',
+                        'target': f'prototype_{target}',
+                        'weight': weight,
+                        'edge_type': 'prototype_dag',
+                        'is_inferred': True,
+                    }
+                )
+
+    return prototype_trends, prototype_edge_table
+
+
 def _safe_cycle_score_numpy(adjacency: np.ndarray) -> float:
     adjacency = np.asarray(adjacency, dtype=np.float64)
     if adjacency.ndim != 2 or adjacency.shape[0] != adjacency.shape[1]:
@@ -371,6 +434,8 @@ def build_graph_snapshot(
     series_metadata: Optional[list] = None,
     prototype_weights: np.ndarray = None,
     prototype_forecasts: np.ndarray = None,
+    global_prototype_weights: np.ndarray = None,
+    decoded_top_trends: np.ndarray = None,
 ) -> GraphSnapshot:
     """Create a serializable snapshot from TVA structure state."""
     dense = np.asarray(adjacency_dense, dtype=np.float32)
@@ -410,6 +475,15 @@ def build_graph_snapshot(
                 kind = 'anchor'
             elif level_index == len(level_sizes) - 1:
                 label = f'driver_{node_index + 1}'
+                if global_prototype_weights is not None:
+                    driver_weights = np.asarray(global_prototype_weights, dtype=np.float32)
+                    if (
+                        driver_weights.ndim == 2
+                        and node_index < driver_weights.shape[0]
+                        and driver_weights.shape[1] > 0
+                    ):
+                        dominant_prototype = int(np.argmax(driver_weights[node_index])) + 1
+                        label = f'{label} [P{dominant_prototype}]'
                 kind = 'driver'
             else:
                 label = f'latent_{level_index}_{node_index}'
@@ -468,6 +542,15 @@ def build_graph_snapshot(
                 }
             )
 
+    inferred_prototype_trends, prototype_edge_table = _infer_prototype_graph(
+        adjacency_dense=dense,
+        global_prototype_weights=global_prototype_weights,
+        decoded_top_trends=decoded_top_trends,
+        threshold=threshold,
+    )
+    if inferred_prototype_trends is not None:
+        prototype_forecasts = inferred_prototype_trends
+
     series_table, prototype_table, affinity_table = _build_series_and_prototype_tables(
         full_series_names=full_series_names,
         anchor_mask=anchor_mask,
@@ -493,6 +576,7 @@ def build_graph_snapshot(
         series_table=series_table,
         prototype_table=prototype_table,
         affinity_table=affinity_table,
+        prototype_edge_table=prototype_edge_table,
     )
 
 
@@ -643,6 +727,7 @@ def _draw_arrow(
     linestyle: str = '-',
     mutation_scale: float = 12,
     zorder: int = 2,
+    connection_rad: float = 0.03,
 ):
     if FancyArrowPatch is None:
         ax.plot(
@@ -667,7 +752,7 @@ def _draw_arrow(
         alpha=alpha,
         shrinkA=10,
         shrinkB=10,
-        connectionstyle='arc3,rad=0.03',
+        connectionstyle=f'arc3,rad={float(connection_rad)}',
         zorder=zorder,
     )
     ax.add_patch(arrow)
@@ -698,6 +783,7 @@ def _plot_overview_snapshot(
     series_table = list(snapshot.series_table or [])
     prototype_table = list(snapshot.prototype_table or [])
     affinity_table = list(snapshot.affinity_table or [])
+    prototype_edge_table = list(snapshot.prototype_edge_table or [])
 
     if not series_table or not prototype_table:
         ax.text(
@@ -716,7 +802,7 @@ def _plot_overview_snapshot(
     prototype_positions = {}
     prototype_y_positions = np.linspace(0.85, 0.15, len(prototype_table))
     for row, y_pos in zip(prototype_table, prototype_y_positions):
-        prototype_positions[row['node_id']] = (0.62, float(y_pos))
+        prototype_positions[row['node_id']] = (0.76, float(y_pos))
 
     grouped_series = {row['node_id']: row for row in series_table}
     for row in grouped_series.values():
@@ -788,6 +874,31 @@ def _plot_overview_snapshot(
             zorder=1,
         )
 
+    prototype_edge_table = sorted(
+        prototype_edge_table,
+        key=lambda edge: edge.get('weight', 0.0),
+        reverse=True,
+    )[:max_edges]
+    for edge in prototype_edge_table:
+        source_pos = prototype_positions.get(edge['source'])
+        target_pos = prototype_positions.get(edge['target'])
+        if source_pos is None or target_pos is None:
+            continue
+        curve = 0.28 if source_pos[1] > target_pos[1] else -0.28
+        _draw_arrow(
+            ax,
+            source_pos[0] + 0.07,
+            source_pos[1],
+            target_pos[0] + 0.07,
+            target_pos[1],
+            color='#c44e52',
+            linewidth=1.0 + (2.2 * float(edge['weight'])),
+            alpha=0.30 + (0.55 * float(edge['weight'])),
+            mutation_scale=12,
+            zorder=2,
+            connection_rad=curve,
+        )
+
     for row in prototype_table:
         x_pos, y_pos = prototype_positions[row['node_id']]
         if FancyBboxPatch is not None:
@@ -852,26 +963,59 @@ def _plot_overview_snapshot(
             zorder=5,
         )
 
-    if selected_key is not None and color_map:
-        legend_text = f"color by {selected_key}: " + ", ".join(
-            [str(category) for category in color_map.keys()]
+    legend_handles = []
+    if Line2D is not None:
+        legend_handles.extend(
+            [
+                Line2D(
+                    [0],
+                    [0],
+                    marker='o',
+                    color='w',
+                    label='anchor',
+                    markerfacecolor='#888888',
+                    markeredgecolor='#111111',
+                    markersize=7,
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker='s',
+                    color='w',
+                    label='responder',
+                    markerfacecolor='#888888',
+                    markeredgecolor='#111111',
+                    markersize=7,
+                ),
+            ]
         )
-        ax.text(
-            0.02,
-            0.02,
-            legend_text,
+    if Patch is not None and selected_key is not None and color_map:
+        legend_handles.extend(
+            [
+                Patch(facecolor=color, edgecolor='none', label=str(category))
+                for category, color in color_map.items()
+            ]
+        )
+    if legend_handles:
+        legend_title = "Series role"
+        if selected_key is not None and color_map:
+            legend_title = f"Role and {selected_key}"
+        ax.legend(
+            handles=legend_handles,
+            title=legend_title,
+            loc='lower left',
+            bbox_to_anchor=(0.01, 0.01),
+            frameon=False,
             fontsize=8,
-            ha='left',
-            va='bottom',
-            color='#333333',
+            title_fontsize=8,
         )
 
     ax.text(0.08, 0.95, "Series", fontsize=10, ha='left', va='center')
-    ax.text(0.62, 0.95, "Shared Prototypes", fontsize=10, ha='center', va='center')
+    ax.text(0.76, 0.95, "Shared Prototypes", fontsize=10, ha='center', va='center')
     ax.text(
         0.02,
         0.98,
-        "Anchors are circles. Responders are squares.",
+        "Prototype arrows are inferred from driver adjacency, not directly learned.",
         fontsize=8,
         ha='left',
         va='top',

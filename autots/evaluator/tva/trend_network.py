@@ -612,6 +612,7 @@ if HAS_TORCH:
                 'prototype_weights': prototype_weights,
                 'composite_trend': composite_trend,
                 'composite_trend_per_series': composite_per_series,
+                'global_prototype_weights': usage_weights_global,
             }
 
     class CompositeTrendNetworkV2(CompositeTrendNetworkV1):
@@ -814,6 +815,7 @@ if HAS_TORCH:
                 'prototype_weights': prototype_weights,
                 'composite_trend': composite_trend,
                 'composite_trend_per_series': composite_per_series,
+                'global_prototype_weights': usage_weights_global,
                 'adjacency': self.learned_adjacency,
                 'structure_mode': bool(self.structure_config.enabled),
                 'assignment_matrices': structure_assignments,

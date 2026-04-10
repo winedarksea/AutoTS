@@ -847,6 +847,31 @@ class TestStructureLearningUtilities(unittest.TestCase):
         self.assertEqual(snapshot.topological_order, [0, 1, 2])
         self.assertEqual(snapshot.assignment_matrices[0].shape, (2, 2))
 
+    def test_graph_snapshot_infers_prototype_structure(self):
+        from autots.evaluator.tva.structure import build_graph_snapshot
+
+        adjacency = np.array(
+            [
+                [0.0, 0.9],
+                [0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        snapshot = build_graph_snapshot(
+            adjacency_dense=adjacency,
+            threshold=0.2,
+            full_series_names=['s0', 's1'],
+            anchor_mask=np.array([True, False]),
+            prototype_weights=np.array([[0.9, 0.1], [0.2, 0.8]], dtype=np.float32),
+            global_prototype_weights=np.array([[0.8, 0.2], [0.1, 0.9]], dtype=np.float32),
+            decoded_top_trends=np.array(
+                [[1.0, 2.0, 3.0], [3.0, 2.0, 1.0]], dtype=np.float32
+            ),
+        )
+        self.assertEqual(len(snapshot.prototype_table), 2)
+        self.assertEqual(len(snapshot.prototype_table[0]['sparkline']), 3)
+        self.assertGreaterEqual(len(snapshot.prototype_edge_table), 1)
+
     def test_temporal_loss_composite_structure_terms(self):
         from autots.evaluator.tva.losses import TemporalLossComposite
         from autots.evaluator.tva.structure import StructureLearningConfig
@@ -1640,12 +1665,14 @@ class TestTVAIntegration(unittest.TestCase):
         self.assertEqual(len(snapshot['series_table']), 3)
         self.assertEqual(len(snapshot['prototype_table']), 3)
         self.assertEqual(len(snapshot['affinity_table']), 9)
+        self.assertIn('prototype_edge_table', snapshot)
         self.assertIn('metadata', snapshot['series_table'][0])
         self.assertEqual(snapshot['series_table'][2]['kind'], 'responder')
         self.assertEqual(
             len(snapshot['prototype_table'][0].get('sparkline', [])),
             tva.forecast_horizon,
         )
+        self.assertEqual(snapshot['prototype_table'][0]['label'], 'prototype_1')
         ax = tva.plot_graph(view='overview')
         self.assertIsNotNone(ax)
 
