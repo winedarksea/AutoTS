@@ -1603,8 +1603,51 @@ class TestTVAIntegration(unittest.TestCase):
         tva.fit(df)
         snapshot = tva.get_graph_snapshot()
         self.assertEqual(len(snapshot['node_table']), 3)
+        self.assertEqual(len(snapshot['series_table']), 3)
+        self.assertEqual(snapshot['series_table'][2]['kind'], 'responder')
         forecast = tva.predict()
         self.assertEqual(forecast.shape, (14, 3))
+
+    def test_graph_snapshot_exports_series_prototype_overview_context(self):
+        from autots.evaluator.tva.tva import TVA
+        from autots.evaluator.tva.priors import SeriesMetadata
+
+        metadata = [
+            SeriesMetadata("s0", metric_type="dau", geography="US", history_periods=400),
+            SeriesMetadata("s1", metric_type="dau", geography="US", history_periods=400),
+            SeriesMetadata("s2", metric_type="views", geography="DE", history_periods=30),
+        ]
+        df = self.df.copy()
+        df.columns = ['s0', 's1', 's2']
+        tva = TVA(
+            trend_network='v2',
+            fusion='additive',
+            series_metadata=metadata,
+            epochs=1,
+            window_size=60,
+            forecast_horizon=14,
+            d_token=16,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            batch_size=8,
+            verbose=0,
+            min_anchor_history=100,
+        )
+        tva.fit(df)
+        snapshot = tva.get_graph_snapshot()
+        self.assertEqual(len(snapshot['series_table']), 3)
+        self.assertEqual(len(snapshot['prototype_table']), 3)
+        self.assertEqual(len(snapshot['affinity_table']), 9)
+        self.assertIn('metadata', snapshot['series_table'][0])
+        self.assertEqual(snapshot['series_table'][2]['kind'], 'responder')
+        self.assertEqual(
+            len(snapshot['prototype_table'][0].get('sparkline', [])),
+            tva.forecast_horizon,
+        )
+        ax = tva.plot_graph(view='overview')
+        self.assertIsNotNone(ax)
 
     def test_he_who_remains(self):
         tva = self._make_tva()

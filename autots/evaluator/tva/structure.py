@@ -23,10 +23,13 @@ except Exception:
 
 try:
     import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
     HAS_MATPLOTLIB = True
 except Exception:
     plt = None
+    FancyArrowPatch = None
+    FancyBboxPatch = None
     HAS_MATPLOTLIB = False
 
 
@@ -124,6 +127,9 @@ class GraphSnapshot:
     prior_adjacency: Optional[np.ndarray]
     is_acyclic: bool
     cycle_score: float
+    series_table: Optional[list] = None
+    prototype_table: Optional[list] = None
+    affinity_table: Optional[list] = None
 
     def to_dict(self) -> dict:
         return {
@@ -145,7 +151,167 @@ class GraphSnapshot:
             ),
             'is_acyclic': bool(self.is_acyclic),
             'cycle_score': float(self.cycle_score),
+            'series_table': list(self.series_table or []),
+            'prototype_table': list(self.prototype_table or []),
+            'affinity_table': list(self.affinity_table or []),
         }
+
+
+def _normalize_node_color(color_value, fallback: str = '#4c78a8') -> str:
+    if color_value is None:
+        return fallback
+    return str(color_value)
+
+
+def _series_metadata_lookup(series_metadata: Optional[list]) -> dict:
+    lookup = {}
+    for metadata in series_metadata or []:
+        name = getattr(metadata, 'name', None)
+        if name is not None:
+            lookup[name] = metadata
+    return lookup
+
+
+def _metadata_color_mapping(series_table: list, color_by: str = 'auto') -> tuple:
+    series_table = list(series_table or [])
+    if not series_table:
+        return {}, None
+
+    available_keys = []
+    for series_row in series_table:
+        metadata = dict(series_row.get('metadata') or {})
+        for key, value in metadata.items():
+            if value not in (None, ''):
+                available_keys.append(key)
+    available_keys = sorted(set(available_keys))
+
+    selected_key = None
+    if color_by == 'auto':
+        for key in available_keys:
+            distinct_values = {
+                row.get('metadata', {}).get(key)
+                for row in series_table
+                if row.get('metadata', {}).get(key) not in (None, '')
+            }
+            if 1 < len(distinct_values) <= 10:
+                selected_key = key
+                break
+    elif color_by in available_keys:
+        selected_key = color_by
+
+    if selected_key is None:
+        return {}, None
+
+    palette = [
+        '#4c78a8',
+        '#f58518',
+        '#54a24b',
+        '#e45756',
+        '#72b7b2',
+        '#b279a2',
+        '#ff9da6',
+        '#9d755d',
+        '#bab0ab',
+        '#2f4b7c',
+    ]
+    categories = sorted(
+        {
+            row.get('metadata', {}).get(selected_key)
+            for row in series_table
+            if row.get('metadata', {}).get(selected_key) not in (None, '')
+        }
+    )
+    color_map = {
+        category: palette[idx % len(palette)] for idx, category in enumerate(categories)
+    }
+    return color_map, selected_key
+
+
+def _build_series_and_prototype_tables(
+    full_series_names: Optional[list] = None,
+    anchor_mask: np.ndarray = None,
+    series_metadata: Optional[list] = None,
+    prototype_weights: np.ndarray = None,
+    prototype_forecasts: np.ndarray = None,
+) -> tuple:
+    series_names = list(full_series_names or [])
+    metadata_lookup = _series_metadata_lookup(series_metadata)
+    if anchor_mask is None:
+        resolved_anchor_mask = np.ones(len(series_names), dtype=bool)
+    else:
+        resolved_anchor_mask = np.asarray(anchor_mask, dtype=bool).reshape(-1)
+        if resolved_anchor_mask.shape[0] != len(series_names):
+            resolved_anchor_mask = np.ones(len(series_names), dtype=bool)
+
+    affinity = None
+    if prototype_weights is not None:
+        affinity = np.asarray(prototype_weights, dtype=np.float32)
+        if affinity.ndim != 2 or affinity.shape[0] != len(series_names):
+            affinity = None
+
+    prototype_table = []
+    if affinity is not None:
+        n_prototypes = int(affinity.shape[1])
+    elif prototype_forecasts is not None:
+        prototype_forecasts = np.asarray(prototype_forecasts, dtype=np.float32)
+        n_prototypes = (
+            int(prototype_forecasts.shape[0]) if prototype_forecasts.ndim == 2 else 0
+        )
+    else:
+        n_prototypes = 0
+
+    forecast_values = None
+    if prototype_forecasts is not None:
+        forecast_values = np.asarray(prototype_forecasts, dtype=np.float32)
+        if forecast_values.ndim != 2 or forecast_values.shape[0] != n_prototypes:
+            forecast_values = None
+
+    for prototype_index in range(n_prototypes):
+        prototype_row = {
+            'node_id': f'prototype_{prototype_index}',
+            'label': f'prototype_{prototype_index + 1}',
+            'index': int(prototype_index),
+        }
+        if forecast_values is not None:
+            prototype_row['sparkline'] = forecast_values[prototype_index].tolist()
+        prototype_table.append(prototype_row)
+
+    series_table = []
+    affinity_table = []
+    for idx, name in enumerate(series_names):
+        metadata = metadata_lookup.get(name)
+        metadata_values = dict(getattr(metadata, 'attribute_values', {}) or {})
+        history_periods = int(getattr(metadata, 'history_periods', 0) or 0)
+        dominant_prototype = None
+        dominant_weight = None
+        if affinity is not None and affinity.shape[1] > 0:
+            dominant_prototype = int(np.argmax(affinity[idx]))
+            dominant_weight = float(affinity[idx, dominant_prototype])
+            for prototype_index in range(affinity.shape[1]):
+                affinity_table.append(
+                    {
+                        'source': name,
+                        'target': f'prototype_{prototype_index}',
+                        'weight': float(affinity[idx, prototype_index]),
+                        'edge_type': 'affinity',
+                        'is_dominant': bool(prototype_index == dominant_prototype),
+                    }
+                )
+
+        series_table.append(
+            {
+                'node_id': name,
+                'label': name,
+                'index': int(idx),
+                'kind': 'anchor' if resolved_anchor_mask[idx] else 'responder',
+                'history_periods': history_periods,
+                'metadata': metadata_values,
+                'dominant_prototype': dominant_prototype,
+                'dominant_weight': dominant_weight,
+            }
+        )
+
+    return series_table, prototype_table, affinity_table
 
 
 def _safe_cycle_score_numpy(adjacency: np.ndarray) -> float:
@@ -200,6 +366,11 @@ def build_graph_snapshot(
     threshold: float = 0.2,
     prior_adjacency: np.ndarray = None,
     anchor_names: Optional[list] = None,
+    full_series_names: Optional[list] = None,
+    anchor_mask: np.ndarray = None,
+    series_metadata: Optional[list] = None,
+    prototype_weights: np.ndarray = None,
+    prototype_forecasts: np.ndarray = None,
 ) -> GraphSnapshot:
     """Create a serializable snapshot from TVA structure state."""
     dense = np.asarray(adjacency_dense, dtype=np.float32)
@@ -237,6 +408,9 @@ def build_graph_snapshot(
                     else f'anchor_{node_index}'
                 )
                 kind = 'anchor'
+            elif level_index == len(level_sizes) - 1:
+                label = f'driver_{node_index + 1}'
+                kind = 'driver'
             else:
                 label = f'latent_{level_index}_{node_index}'
                 kind = 'latent'
@@ -294,6 +468,14 @@ def build_graph_snapshot(
                 }
             )
 
+    series_table, prototype_table, affinity_table = _build_series_and_prototype_tables(
+        full_series_names=full_series_names,
+        anchor_mask=anchor_mask,
+        series_metadata=series_metadata,
+        prototype_weights=prototype_weights,
+        prototype_forecasts=prototype_forecasts,
+    )
+
     return GraphSnapshot(
         node_table=node_table,
         edge_table=edge_table,
@@ -308,6 +490,9 @@ def build_graph_snapshot(
         ),
         is_acyclic=is_acyclic,
         cycle_score=cycle_score,
+        series_table=series_table,
+        prototype_table=prototype_table,
+        affinity_table=affinity_table,
     )
 
 
@@ -317,6 +502,7 @@ def plot_graph_snapshot(
     max_edges: int = 50,
     show_priors: bool = False,
     ax=None,
+    metadata_color_by: str = 'auto',
 ):
     """Render a TVA structure snapshot with matplotlib."""
     if not HAS_MATPLOTLIB:
@@ -335,6 +521,13 @@ def plot_graph_snapshot(
         ax.set_xlabel("Target node")
         ax.set_ylabel("Source node")
         return ax
+    if view == 'overview':
+        return _plot_overview_snapshot(
+            snapshot=snapshot,
+            max_edges=max_edges,
+            ax=ax,
+            metadata_color_by=metadata_color_by,
+        )
 
     nodes_by_id = {node['node_id']: node for node in snapshot.node_table}
     if view == 'hierarchy':
@@ -363,13 +556,17 @@ def plot_graph_snapshot(
                         continue
                     left = top_nodes[source]
                     right = top_nodes[target]
-                    ax.plot(
-                        [left['x'], right['x']],
-                        [left['y'], right['y']],
-                        linestyle='--',
-                        linewidth=1.0,
+                    _draw_arrow(
+                        ax,
+                        left['x'],
+                        left['y'],
+                        right['x'],
+                        right['y'],
                         color='lightgray',
-                        alpha=float(min(prior[source, target], 1.0)),
+                        linewidth=1.0,
+                        alpha=float(min(prior[source, target], 0.8)),
+                        linestyle='--',
+                        mutation_scale=10,
                         zorder=1,
                     )
 
@@ -381,12 +578,37 @@ def plot_graph_snapshot(
         target = nodes_by_id.get(edge['target'])
         if source is None or target is None:
             continue
-        ax.plot(
-            [source['x'], target['x']],
-            [source['y'], target['y']],
+        line_color = '#1f77b4' if edge['edge_type'] == 'dag' else '#2ca02c'
+        if edge['edge_type'] == 'dag' and snapshot.prior_adjacency is not None:
+            prior = np.asarray(snapshot.prior_adjacency, dtype=np.float32)
+            source_index = int(source.get('index', -1))
+            target_index = int(target.get('index', -1))
+            forward_prior = 0.0
+            reverse_prior = 0.0
+            if (
+                0 <= source_index < prior.shape[0]
+                and 0 <= target_index < prior.shape[1]
+            ):
+                forward_prior = float(prior[source_index, target_index])
+            if (
+                0 <= target_index < prior.shape[0]
+                and 0 <= source_index < prior.shape[1]
+            ):
+                reverse_prior = float(prior[target_index, source_index])
+            if reverse_prior > 0 and forward_prior <= 0:
+                line_color = '#d62728'
+            elif forward_prior <= 0:
+                line_color = '#ff7f0e'
+        _draw_arrow(
+            ax,
+            source['x'],
+            source['y'],
+            target['x'],
+            target['y'],
             linewidth=1.0 + (2.5 * edge['weight']),
-            color='#1f77b4' if edge['edge_type'] == 'dag' else '#2ca02c',
+            color=line_color,
             alpha=0.3 + (0.6 * edge['weight']),
+            mutation_scale=12,
             zorder=2,
         )
 
@@ -403,6 +625,259 @@ def plot_graph_snapshot(
         )
 
     ax.set_title(title)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.axis('off')
+    return ax
+
+
+def _draw_arrow(
+    ax,
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    color: str,
+    linewidth: float,
+    alpha: float,
+    linestyle: str = '-',
+    mutation_scale: float = 12,
+    zorder: int = 2,
+):
+    if FancyArrowPatch is None:
+        ax.plot(
+            [start_x, end_x],
+            [start_y, end_y],
+            color=color,
+            linewidth=linewidth,
+            alpha=alpha,
+            linestyle=linestyle,
+            zorder=zorder,
+        )
+        return
+
+    arrow = FancyArrowPatch(
+        (start_x, start_y),
+        (end_x, end_y),
+        arrowstyle='-|>',
+        mutation_scale=mutation_scale,
+        linewidth=linewidth,
+        linestyle=linestyle,
+        color=color,
+        alpha=alpha,
+        shrinkA=10,
+        shrinkB=10,
+        connectionstyle='arc3,rad=0.03',
+        zorder=zorder,
+    )
+    ax.add_patch(arrow)
+
+
+def _draw_prototype_sparkline(ax, x_center: float, y_center: float, values, width=0.16):
+    if values is None:
+        return
+    sparkline = np.asarray(values, dtype=np.float32).reshape(-1)
+    if sparkline.size < 2:
+        return
+    xmin = x_center - (width / 2.0)
+    xmax = x_center + (width / 2.0)
+    x_values = np.linspace(xmin, xmax, sparkline.size)
+    min_value = float(np.min(sparkline))
+    max_value = float(np.max(sparkline))
+    span = max(max_value - min_value, 1e-6)
+    y_values = y_center - 0.035 + (0.07 * ((sparkline - min_value) / span))
+    ax.plot(x_values, y_values, color='#222222', linewidth=1.1, alpha=0.9, zorder=5)
+
+
+def _plot_overview_snapshot(
+    snapshot: GraphSnapshot,
+    max_edges: int = 50,
+    ax=None,
+    metadata_color_by: str = 'auto',
+):
+    series_table = list(snapshot.series_table or [])
+    prototype_table = list(snapshot.prototype_table or [])
+    affinity_table = list(snapshot.affinity_table or [])
+
+    if not series_table or not prototype_table:
+        ax.text(
+            0.5,
+            0.5,
+            "Overview requires series metadata and prototype affinities.",
+            ha='center',
+            va='center',
+            fontsize=10,
+        )
+        ax.set_xlim(0.0, 1.0)
+        ax.set_ylim(0.0, 1.0)
+        ax.axis('off')
+        return ax
+
+    prototype_positions = {}
+    prototype_y_positions = np.linspace(0.85, 0.15, len(prototype_table))
+    for row, y_pos in zip(prototype_table, prototype_y_positions):
+        prototype_positions[row['node_id']] = (0.62, float(y_pos))
+
+    grouped_series = {row['node_id']: row for row in series_table}
+    for row in grouped_series.values():
+        if row.get('dominant_prototype') is None:
+            row['_cluster_key'] = (10**6, row['label'])
+        else:
+            row['_cluster_key'] = (int(row['dominant_prototype']), row['label'])
+    ordered_series = sorted(grouped_series.values(), key=lambda row: row['_cluster_key'])
+
+    cluster_counts = {}
+    for row in ordered_series:
+        prototype_index = row.get('dominant_prototype')
+        cluster_counts[prototype_index] = cluster_counts.get(prototype_index, 0) + 1
+
+    cluster_offsets = {}
+    for prototype_index, count in cluster_counts.items():
+        if prototype_index is None or prototype_index >= len(prototype_y_positions):
+            base_y = 0.5
+        else:
+            base_y = float(prototype_y_positions[prototype_index])
+        if count == 1:
+            cluster_offsets[prototype_index] = [base_y]
+        else:
+            spread = min(0.12 + (0.02 * (count - 1)), 0.22)
+            cluster_offsets[prototype_index] = np.linspace(
+                base_y + spread / 2.0,
+                base_y - spread / 2.0,
+                count,
+            ).tolist()
+
+    color_map, selected_key = _metadata_color_mapping(
+        series_table=ordered_series, color_by=metadata_color_by
+    )
+    cluster_seen = {key: 0 for key in cluster_counts}
+    series_positions = {}
+    for row in ordered_series:
+        prototype_index = row.get('dominant_prototype')
+        seen = cluster_seen[prototype_index]
+        cluster_seen[prototype_index] += 1
+        y_pos = cluster_offsets[prototype_index][seen]
+        x_pos = 0.16 if row.get('kind') == 'anchor' else 0.08
+        series_positions[row['node_id']] = (x_pos, float(y_pos))
+
+    dominant_affinity_edges = [
+        edge for edge in affinity_table if edge.get('is_dominant')
+    ]
+    dominant_affinity_edges = sorted(
+        dominant_affinity_edges,
+        key=lambda edge: edge.get('weight', 0.0),
+        reverse=True,
+    )[:max_edges]
+
+    for edge in dominant_affinity_edges:
+        source_pos = series_positions.get(edge['source'])
+        target_pos = prototype_positions.get(edge['target'])
+        if source_pos is None or target_pos is None:
+            continue
+        edge_color = '#7f8c8d'
+        _draw_arrow(
+            ax,
+            source_pos[0],
+            source_pos[1],
+            target_pos[0],
+            target_pos[1],
+            color=edge_color,
+            linewidth=0.8 + (2.6 * float(edge['weight'])),
+            alpha=0.25 + (0.55 * float(edge['weight'])),
+            mutation_scale=12,
+            zorder=1,
+        )
+
+    for row in prototype_table:
+        x_pos, y_pos = prototype_positions[row['node_id']]
+        if FancyBboxPatch is not None:
+            ax.add_patch(
+                FancyBboxPatch(
+                    (x_pos - 0.085, y_pos - 0.055),
+                    0.17,
+                    0.11,
+                    boxstyle='round,pad=0.012,rounding_size=0.02',
+                    facecolor='#f7f4ea',
+                    edgecolor='#5b5b5b',
+                    linewidth=1.0,
+                    zorder=3,
+                )
+            )
+        else:
+            ax.scatter(x_pos, y_pos, s=420, c='#f7f4ea', edgecolors='#5b5b5b', zorder=3)
+        _draw_prototype_sparkline(
+            ax,
+            x_center=x_pos,
+            y_center=y_pos + 0.006,
+            values=row.get('sparkline'),
+        )
+        ax.text(
+            x_pos,
+            y_pos - 0.062,
+            row.get('label', row['node_id']),
+            fontsize=8,
+            ha='center',
+            va='top',
+            zorder=5,
+        )
+
+    for row in ordered_series:
+        x_pos, y_pos = series_positions[row['node_id']]
+        metadata_value = (
+            row.get('metadata', {}).get(selected_key) if selected_key else None
+        )
+        fill_color = color_map.get(metadata_value, '#4c78a8')
+        marker = 'o' if row.get('kind') == 'anchor' else 's'
+        size = (
+            80
+            + min(max(float(row.get('history_periods', 0) or 0), 0.0), 365.0) * 0.35
+        )
+        ax.scatter(
+            x_pos,
+            y_pos,
+            s=size,
+            c=_normalize_node_color(fill_color),
+            marker=marker,
+            edgecolors='#111111',
+            linewidths=0.6,
+            zorder=4,
+        )
+        ax.text(
+            x_pos + 0.018,
+            y_pos,
+            row.get('label', row['node_id']),
+            fontsize=8,
+            ha='left',
+            va='center',
+            zorder=5,
+        )
+
+    if selected_key is not None and color_map:
+        legend_text = f"color by {selected_key}: " + ", ".join(
+            [str(category) for category in color_map.keys()]
+        )
+        ax.text(
+            0.02,
+            0.02,
+            legend_text,
+            fontsize=8,
+            ha='left',
+            va='bottom',
+            color='#333333',
+        )
+
+    ax.text(0.08, 0.95, "Series", fontsize=10, ha='left', va='center')
+    ax.text(0.62, 0.95, "Shared Prototypes", fontsize=10, ha='center', va='center')
+    ax.text(
+        0.02,
+        0.98,
+        "Anchors are circles. Responders are squares.",
+        fontsize=8,
+        ha='left',
+        va='top',
+        color='#444444',
+    )
+    ax.set_title("TVA Series-Prototype Overview")
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0.0, 1.0)
     ax.axis('off')

@@ -27,6 +27,7 @@ from autots.evaluator.tva.decomposition import NornDecomposer
 from autots.evaluator.tva.priors import YggdrasilPriors, SeriesMetadata
 from autots.evaluator.tva.reconciliation import ReconciliationBridge
 from autots.evaluator.tva.structure import (
+    GraphSnapshot,
     StructureLearningConfig,
     build_graph_snapshot,
     plot_graph_snapshot,
@@ -808,6 +809,29 @@ class TVA:
             for matrix in outputs.get('assignment_matrices', [])
         ]
         anchor_names = list(np.asarray(self._df_original.columns)[self._anchor_mask])
+        prototype_weights = None
+        if 'prototype_weights' in outputs:
+            prototype_weights = outputs['prototype_weights'].detach().cpu().numpy()[0]
+
+        prototype_forecasts = None
+        if (
+            hasattr(self._network, 'prototype')
+            and hasattr(self._network, 'decoder')
+            and hasattr(self._network.decoder, 'forecast_head')
+        ):
+            with torch.no_grad():
+                parameter_device = next(self._network.parameters()).device
+                prototype_tokens = (
+                    self._network.prototype._sacred_timeline_prototypes.detach()
+                    .unsqueeze(0)
+                    .to(parameter_device)
+                )
+                prototype_forecasts = (
+                    self._network.decoder.forecast_head(prototype_tokens)
+                    .detach()
+                    .cpu()
+                    .numpy()[0]
+                )
         snapshot = build_graph_snapshot(
             adjacency_dense=self.get_graph(),
             assignment_matrices=assignment_matrices,
@@ -818,6 +842,11 @@ class TVA:
             ),
             prior_adjacency=self._prior_adj if include_priors else None,
             anchor_names=anchor_names,
+            full_series_names=list(self._df_original.columns),
+            anchor_mask=self._anchor_mask,
+            series_metadata=self.series_metadata,
+            prototype_weights=prototype_weights,
+            prototype_forecasts=prototype_forecasts,
         )
         return snapshot.to_dict()
 
@@ -828,26 +857,35 @@ class TVA:
         max_edges: int = 50,
         show_priors: bool = False,
         ax=None,
+        metadata_color_by: str = 'auto',
     ):
         """Plot the learned graph, hierarchy, or adjacency heatmap."""
         snapshot_dict = self.get_graph_snapshot(
             threshold=threshold,
             include_priors=show_priors,
         )
-        snapshot = build_graph_snapshot(
-            adjacency_dense=snapshot_dict['adjacency_dense'],
-            assignment_matrices=snapshot_dict['assignment_matrices'],
-            threshold=(
-                threshold
-                if threshold is not None
-                else self._structure_config.threshold_for_export
+        snapshot = GraphSnapshot(
+            node_table=snapshot_dict['node_table'],
+            edge_table=snapshot_dict['edge_table'],
+            adjacency_dense=np.asarray(snapshot_dict['adjacency_dense'], dtype=np.float32),
+            adjacency_thresholded=np.asarray(
+                snapshot_dict['adjacency_thresholded'], dtype=np.float32
             ),
-            prior_adjacency=snapshot_dict.get('prior_adjacency'),
-            anchor_names=[
-                node['node_id']
-                for node in snapshot_dict['node_table']
-                if node.get('level') == 0
+            assignment_matrices=[
+                np.asarray(matrix, dtype=np.float32)
+                for matrix in snapshot_dict['assignment_matrices']
             ],
+            topological_order=snapshot_dict['topological_order'],
+            prior_adjacency=(
+                None
+                if snapshot_dict.get('prior_adjacency') is None
+                else np.asarray(snapshot_dict['prior_adjacency'], dtype=np.float32)
+            ),
+            is_acyclic=bool(snapshot_dict['is_acyclic']),
+            cycle_score=float(snapshot_dict['cycle_score']),
+            series_table=snapshot_dict.get('series_table', []),
+            prototype_table=snapshot_dict.get('prototype_table', []),
+            affinity_table=snapshot_dict.get('affinity_table', []),
         )
         return plot_graph_snapshot(
             snapshot=snapshot,
@@ -855,6 +893,7 @@ class TVA:
             max_edges=max_edges,
             show_priors=show_priors,
             ax=ax,
+            metadata_color_by=metadata_color_by,
         )
 
     # ---- internal helpers ----
