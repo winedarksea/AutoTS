@@ -246,10 +246,16 @@ if HAS_TORCH:
         series are left to follow their own data-driven history.
         """
 
-        def __init__(self, penalty_weight: float = 2.0, temperature: float = 1.0):
+        def __init__(
+            self,
+            penalty_weight: float = 2.0,
+            temperature: float = 1.0,
+            magnitude_weight: float = 1.0,
+        ):
             super().__init__()
             self.penalty_weight = penalty_weight
             self.temperature = temperature
+            self.magnitude_weight = magnitude_weight
 
         def _trend_direction(self, x: torch.Tensor) -> torch.Tensor:
             """Multi-scale soft direction signal.
@@ -274,6 +280,13 @@ if HAS_TORCH:
                 + torch.tanh(s_first / t)
                 + torch.tanh(s_second / t)
             ) / 3.0
+
+        def _relative_growth_rate(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scale-stable, non-saturating growth summary."""
+            if x.shape[-1] < 2:
+                return torch.zeros(x.shape[:-1], device=x.device, dtype=x.dtype)
+            baseline = x[..., :-1].abs().mean(dim=-1).clamp(min=1e-3)
+            return (x[..., -1] - x[..., 0]) / baseline
 
         def forward(
             self,
@@ -319,6 +332,9 @@ if HAS_TORCH:
                 anchor_dir = self._trend_direction(
                     composite_per_series.detach()
                 )  # (B, N)
+                anchor_growth = self._relative_growth_rate(
+                    composite_per_series.detach()
+                )  # (B, N)
                 # Gate by anchor strength: when the composite is near-flat
                 # (anchor_dir ≈ 0) the penalty vanishes, preventing the degenerate
                 # case where a flat anchor actively suppresses trend diversity.
@@ -330,7 +346,13 @@ if HAS_TORCH:
                 # has no clear structural home and gets a lower penalty.
                 assignment_confidence = prototype_weights.max(dim=-1).values  # (B, N)
                 deviation = (soft_dir - anchor_dir) ** 2  # (B, N)
-                penalty = (anchor_strength * assignment_confidence * deviation).mean()
+                growth_rate = self._relative_growth_rate(trend_forecasts)
+                magnitude_deviation = (growth_rate - anchor_growth) ** 2
+                penalty = (
+                    anchor_strength
+                    * assignment_confidence
+                    * (deviation + self.magnitude_weight * magnitude_deviation)
+                ).mean()
                 return self.penalty_weight * penalty
 
             # --- Fallback: prototype-consensus mode ---
@@ -338,13 +360,18 @@ if HAS_TORCH:
             # is not available.  Uses multi-scale direction signal in place of the
             # previous endpoint-only slope.
             penalty = torch.tensor(0.0, device=trend_forecasts.device)
+            growth_rate = self._relative_growth_rate(trend_forecasts)  # (B, N)
             for k in range(K):
                 w_k = prototype_weights[:, :, k]  # (B, N)
                 w_sum = w_k.sum(dim=-1, keepdim=True).clamp(min=1e-8)
                 consensus = (w_k * soft_dir).sum(dim=-1, keepdim=True) / w_sum
+                consensus_growth = (w_k * growth_rate).sum(dim=-1, keepdim=True) / w_sum
                 consensus_strength = consensus.abs()
                 deviation = (soft_dir - consensus) ** 2
-                weighted_dev = (w_k * deviation).sum(dim=-1)
+                magnitude_deviation = (growth_rate - consensus_growth) ** 2
+                weighted_dev = (
+                    w_k * (deviation + self.magnitude_weight * magnitude_deviation)
+                ).sum(dim=-1)
                 penalty = (
                     penalty + (consensus_strength.squeeze(-1) * weighted_dev).mean()
                 )

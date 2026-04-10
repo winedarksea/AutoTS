@@ -204,6 +204,33 @@ class TestYggdrasilPriors(unittest.TestCase):
         # a & d share nothing
         self.assertEqual(adj[0, 3], 0.0)
 
+    def test_metadata_attribute_weights_raise_higher_priority_matches(self):
+        from autots.evaluator.tva.priors import SeriesMetadata, YggdrasilPriors
+
+        metadata = [
+            SeriesMetadata(
+                "a",
+                attribute_values={"surface": "search", "geography": "US"},
+                attribute_weights={"surface": 0.8, "geography": 0.2},
+            ),
+            SeriesMetadata(
+                "b",
+                attribute_values={"surface": "search", "geography": "CA"},
+                attribute_weights={"surface": 0.8, "geography": 0.2},
+            ),
+            SeriesMetadata(
+                "c",
+                attribute_values={"surface": "video", "geography": "US"},
+                attribute_weights={"surface": 0.8, "geography": 0.2},
+            ),
+        ]
+        p = YggdrasilPriors(series_metadata=metadata)
+        adj = p.build_prior_adjacency()
+
+        self.assertGreater(adj[0, 1], adj[0, 2])
+        self.assertAlmostEqual(adj[0, 1], 0.8, places=6)
+        self.assertAlmostEqual(adj[0, 2], 0.2, places=6)
+
     def test_metadata_embeddings_shape(self):
         from autots.evaluator.tva.priors import YggdrasilPriors
         p = YggdrasilPriors(series_metadata=self._make_metadata())
@@ -512,6 +539,23 @@ class TestReconciliationBridge(unittest.TestCase):
         self.assertEqual(result.shape, df.shape)
 
 
+class TestTVAUtilities(unittest.TestCase):
+    def test_recency_window_weights_increase_for_recent_targets(self):
+        from autots.evaluator.tva.tva import TVA
+
+        tva = TVA.__new__(TVA)
+        tva.window_size = 10
+        tva.forecast_horizon = 5
+        tva.recency_halflife_days = 7
+
+        index = pd.date_range("2025-01-01", periods=40, freq="D")
+        weights = tva._compute_window_sample_weights(index)
+
+        self.assertIsNotNone(weights)
+        self.assertEqual(len(weights), 26)
+        self.assertGreater(weights[-1], weights[0])
+
+
 # ---------------------------------------------------------------------------
 # PyTorch-dependent unit tests
 # ---------------------------------------------------------------------------
@@ -623,6 +667,23 @@ class TestLossFunctions(unittest.TestCase):
         loss = CrossSeriesCoherenceLoss()
         val = loss(torch.randn(2, 3, 1), torch.ones(2, 3, 2) / 2)
         self.assertEqual(val.item(), 0.0)
+
+    def test_coherence_loss_penalizes_growth_magnitude_mismatch(self):
+        from autots.evaluator.tva.losses import CrossSeriesCoherenceLoss
+
+        loss = CrossSeriesCoherenceLoss()
+        matched = torch.tensor(
+            [[[1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0]]], dtype=torch.float32
+        )
+        mismatched = torch.tensor(
+            [[[1.0, 2.0, 3.0, 4.0], [1.0, 4.0, 7.0, 10.0]]], dtype=torch.float32
+        )
+        weights = torch.ones(1, 2, 1, dtype=torch.float32)
+
+        self.assertLess(
+            loss(matched, weights).item(),
+            loss(mismatched, weights).item(),
+        )
 
     def test_temporal_loss_composite_forward(self):
         from autots.evaluator.tva.losses import TemporalLossComposite
@@ -824,6 +885,16 @@ class TestStructureLearningUtilities(unittest.TestCase):
         )
         self.assertEqual(config.derive_latent_sizes(8), [4, 2])
         self.assertEqual(config.derive_latent_sizes(5), [3, 2])
+
+    def test_directed_graph_learner_breaks_symmetric_initialization(self):
+        from autots.evaluator.tva.structure import DirectedGraphLearner
+
+        learner = DirectedGraphLearner(n_nodes=3)
+        adj = learner.adjacency.detach().cpu().numpy()
+
+        self.assertGreater(adj[0, 1], adj[1, 0])
+        self.assertGreater(adj[0, 2], adj[2, 0])
+        np.testing.assert_allclose(np.diag(adj), np.zeros(3), atol=1e-6)
 
     def test_graph_snapshot_marks_acyclic_graph(self):
         from autots.evaluator.tva.structure import build_graph_snapshot

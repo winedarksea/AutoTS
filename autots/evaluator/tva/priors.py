@@ -34,6 +34,7 @@ class SeriesMetadata:
 
     name: str
     attribute_values: Dict[str, str] = field(default_factory=dict)
+    attribute_weights: Dict[str, float] = field(default_factory=dict)
     hierarchy_path: Optional[list] = field(default_factory=list)
     history_periods: int = 0
 
@@ -41,6 +42,7 @@ class SeriesMetadata:
         self,
         name: str,
         attribute_values: Optional[Dict[str, str]] = None,
+        attribute_weights: Optional[Dict[str, float]] = None,
         hierarchy_path: Optional[list] = None,
         history_periods: int = 0,
         metric_type: Optional[str] = None,
@@ -49,6 +51,11 @@ class SeriesMetadata:
     ):
         self.name = name
         self.attribute_values = dict(attribute_values or {})
+        self.attribute_weights = {
+            key: float(value)
+            for key, value in dict(attribute_weights or {}).items()
+            if value is not None
+        }
         self.hierarchy_path = list(hierarchy_path or [])
         self.history_periods = history_periods
 
@@ -207,11 +214,11 @@ class YggdrasilPriors:
 
         adj = np.zeros((n, n), dtype=np.float32)
         attribute_names = self._attribute_names()
-        n_attrs = len(attribute_names)
-        if n_attrs == 0:
+        attribute_weights = self._resolve_metadata_attribute_weights(attribute_names)
+        if not attribute_weights:
             return None
 
-        for attr in attribute_names:
+        for attr, attr_weight in attribute_weights.items():
             values = [m.attribute_values.get(attr) for m in self.series_metadata]
             for i in range(n):
                 for j in range(i + 1, n):
@@ -220,14 +227,78 @@ class YggdrasilPriors:
                         and values[j] is not None
                         and values[i] == values[j]
                     ):
-                        adj[i, j] += 1.0 / n_attrs
-                        adj[j, i] += 1.0 / n_attrs
+                        adj[i, j] += attr_weight
+                        adj[j, i] += attr_weight
 
         if np.count_nonzero(adj) == 0:
             return None
         adj = np.clip(adj, 0.0, 1.0)
         np.fill_diagonal(adj, 0.0)
         return adj.astype(np.float32)
+
+    def _resolve_metadata_attribute_weights(
+        self, attribute_names: list
+    ) -> Dict[str, float]:
+        """Resolve normalized per-attribute weights for metadata priors."""
+        if not attribute_names:
+            return {}
+
+        config_weights = {}
+        if isinstance(self.prior_construction_config, dict):
+            config_weights = dict(
+                self.prior_construction_config.get('metadata_attribute_weights', {})
+            )
+
+        series_weight_sums = {}
+        series_weight_counts = {}
+        for metadata in self.series_metadata:
+            for attr, value in getattr(metadata, 'attribute_weights', {}).items():
+                if attr not in attribute_names:
+                    continue
+                try:
+                    numeric = float(value)
+                except Exception:
+                    continue
+                if not np.isfinite(numeric):
+                    continue
+                series_weight_sums[attr] = series_weight_sums.get(attr, 0.0) + numeric
+                series_weight_counts[attr] = series_weight_counts.get(attr, 0) + 1
+
+        resolved = {}
+        explicit_weight_found = False
+        for attr in attribute_names:
+            weight = config_weights.get(attr)
+            if weight is None and series_weight_counts.get(attr, 0) > 0:
+                weight = series_weight_sums[attr] / float(series_weight_counts[attr])
+            if weight is not None:
+                try:
+                    weight = float(weight)
+                except Exception:
+                    weight = None
+            if weight is not None and np.isfinite(weight) and weight > 0:
+                explicit_weight_found = True
+                resolved[attr] = weight
+
+        if not explicit_weight_found:
+            # Preserve equal weighting by default; only apply directional heuristics
+            # when TVA sees the common surface/geography-only metadata shape.
+            if set(attribute_names) == {'surface', 'geography'}:
+                resolved = {'surface': 0.7, 'geography': 0.3}
+            else:
+                resolved = {attr: 1.0 for attr in attribute_names}
+        else:
+            for attr in attribute_names:
+                if attr not in resolved:
+                    resolved[attr] = 1.0
+
+        total_weight = float(sum(resolved.values()))
+        if total_weight <= 0:
+            return {}
+        return {
+            attr: float(weight) / total_weight
+            for attr, weight in resolved.items()
+            if float(weight) > 0
+        }
 
     def _extract_event_records(self) -> list:
         features = self.detected_features or {}

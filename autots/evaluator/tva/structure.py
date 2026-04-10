@@ -1038,15 +1038,32 @@ if HAS_TORCH:
             self.n_nodes = int(max(n_nodes, 1))
             if prior_adjacency is None:
                 init = np.full((self.n_nodes, self.n_nodes), 0.5, dtype=np.float32)
+                init = self._break_symmetry(init)
             else:
                 init = np.asarray(prior_adjacency, dtype=np.float32)
                 if init.shape != (self.n_nodes, self.n_nodes):
                     init = np.full((self.n_nodes, self.n_nodes), 0.5, dtype=np.float32)
+                if np.allclose(init, init.T, atol=1e-6):
+                    init = self._break_symmetry(init)
             np.fill_diagonal(init, 0.0)
             init = np.clip(init, 1e-4, 1 - 1e-4)
             self.edge_logits = nn.Parameter(
                 torch.logit(torch.tensor(init, dtype=torch.float32))
             )
+
+        @staticmethod
+        def _break_symmetry(
+            init: np.ndarray, off_diagonal_bias: float = 0.075
+        ) -> np.ndarray:
+            """Inject a small deterministic direction bias into symmetric priors."""
+            init = np.asarray(init, dtype=np.float32).copy()
+            if init.ndim != 2 or init.shape[0] != init.shape[1]:
+                return init
+            upper = np.triu(np.ones_like(init, dtype=np.float32), k=1)
+            lower = np.tril(np.ones_like(init, dtype=np.float32), k=-1)
+            init = init + off_diagonal_bias * upper - off_diagonal_bias * lower
+            np.fill_diagonal(init, 0.0)
+            return np.clip(init, 1e-4, 1 - 1e-4)
 
         @property
         def adjacency(self) -> torch.Tensor:

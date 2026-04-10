@@ -36,7 +36,7 @@ from autots.evaluator.tva.structure import (
 try:
     import torch
     import torch.nn as nn
-    from torch.utils.data import DataLoader, TensorDataset
+    from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
     HAS_TORCH = True
 except Exception:
@@ -131,6 +131,7 @@ class TVA:
         batch_size: int = 32,
         window_size: int = 91,
         forecast_horizon: int = 28,
+        recency_halflife_days: Optional[float] = None,
         loss_weights: dict = None,
         reconciliation_method: str = None,
         min_anchor_history: int = 180,
@@ -200,6 +201,7 @@ class TVA:
         self.batch_size = batch_size
         self.window_size = window_size
         self.forecast_horizon = forecast_horizon
+        self.recency_halflife_days = recency_halflife_days
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
         self.min_anchor_history = min_anchor_history
@@ -435,7 +437,23 @@ class TVA:
         optimizer = torch.optim.AdamW(all_params, lr=self.lr)
 
         dataset = TensorDataset(X, Y, S_sea, S_hol, S_lvl, S_ano)
-        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        sample_weights = self._compute_window_sample_weights(
+            self._components['trend'].index
+        )
+        if sample_weights is not None:
+            sampler = WeightedRandomSampler(
+                weights=torch.tensor(sample_weights, dtype=torch.double),
+                num_samples=len(sample_weights),
+                replacement=True,
+            )
+            loader = DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                sampler=sampler,
+                shuffle=False,
+            )
+        else:
+            loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
         self._network.train()
         if isinstance(self._fusion_layer, nn.Module):
@@ -991,6 +1009,43 @@ class TVA:
             targets[i] = data[i + self.window_size : i + total_len].T
 
         return targets
+
+    def _compute_window_sample_weights(
+        self, index: Optional[pd.Index]
+    ) -> Optional[np.ndarray]:
+        """Compute optional recency weights aligned to _create_windows output."""
+        halflife_days = self.recency_halflife_days
+        if halflife_days is None:
+            return None
+        try:
+            halflife_days = float(halflife_days)
+        except Exception:
+            return None
+        if not np.isfinite(halflife_days) or halflife_days <= 0:
+            return None
+        if index is None:
+            return None
+
+        total_len = self.window_size + self.forecast_horizon
+        n_windows = max(len(index) - total_len + 1, 0)
+        if n_windows <= 1:
+            return None
+
+        timestamp_index = pd.DatetimeIndex(index)
+        target_end_index = timestamp_index[total_len - 1 :]
+        if len(target_end_index) != n_windows:
+            return None
+
+        latest_timestamp = target_end_index.max()
+        ages = np.asarray(
+            (latest_timestamp - target_end_index).total_seconds(),
+            dtype=np.float64,
+        ) / 86400.0
+        ages = np.maximum(ages, 0.0)
+        weights = np.power(0.5, ages / halflife_days)
+        weights = np.clip(weights, 1e-8, None)
+        weights = weights / weights.mean()
+        return weights.astype(np.float32)
 
     def _get_metadata(self):
         return {
