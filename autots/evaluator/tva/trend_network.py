@@ -258,9 +258,12 @@ if HAS_TORCH:
             self.n_prototypes = n_prototypes
             self.assignment_method = str(assignment_method).lower()
             self.assignment_temperature = max(float(assignment_temperature), 1e-6)
-            self._sacred_timeline_prototypes = nn.Parameter(
-                torch.randn(n_prototypes, d_latent) * 0.02
-            )
+            prototype_bank = torch.empty(n_prototypes, d_latent)
+            if n_prototypes <= d_latent:
+                nn.init.orthogonal_(prototype_bank)
+            else:
+                nn.init.normal_(prototype_bank, mean=0.0, std=1.0)
+            self._sacred_timeline_prototypes = nn.Parameter(prototype_bank)
             self.project = nn.Linear(d_latent, n_prototypes)
             supported = {'cosine', 'l2', 'linear'}
             if self.assignment_method not in supported:

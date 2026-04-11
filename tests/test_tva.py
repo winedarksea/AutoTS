@@ -1027,6 +1027,17 @@ class TestPrototypeBottleneck(unittest.TestCase):
         row_sums = weights.sum(dim=-1)
         np.testing.assert_allclose(row_sums.detach().numpy(), np.ones_like(row_sums.detach().numpy()), atol=1e-5)
 
+    def test_orthogonal_prototype_init_separates_initial_bank(self):
+        from autots.evaluator.tva.trend_network import PrototypeBottleneck
+
+        pb = PrototypeBottleneck(d_latent=8, n_prototypes=4)
+        proto = pb._sacred_timeline_prototypes.detach().cpu().numpy()
+        gram = proto @ proto.T
+
+        np.testing.assert_allclose(np.diag(gram), np.ones(4), atol=1e-5)
+        off_diag = gram - np.diag(np.diag(gram))
+        self.assertLess(np.abs(off_diag).max(), 1e-5)
+
 
 @SKIP_TORCH
 class TestFusionLayers(unittest.TestCase):
