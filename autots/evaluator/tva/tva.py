@@ -98,7 +98,7 @@ class TVA:
         loss_weights: Dict overriding loss component weights.
         reconciliation_method: None, 'mint', 'erm', etc.
         min_anchor_history: Minimum periods for a series to be an anchor.
-        device: 'cpu' or 'cuda'.
+        device: 'cpu', 'cuda', or None (auto-detects cuda if available, else cpu).
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
         prototype_assignment_method: Prototype assignment method for bottleneck
@@ -137,7 +137,7 @@ class TVA:
         min_anchor_history: int = 180,
         holiday_country=None,
         holiday_countries: dict = None,
-        device: str = 'cpu',
+        device: str = None,
         random_seed: int = 42,
         verbose: int = 1,
         prototype_assignment_method: str = 'cosine',
@@ -207,7 +207,10 @@ class TVA:
         self.min_anchor_history = min_anchor_history
         self.holiday_country = holiday_country
         self.holiday_countries = holiday_countries
-        self.device = device
+        if device is None:
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        else:
+            self.device = device
         self.random_seed = random_seed
         self.verbose = verbose
 
