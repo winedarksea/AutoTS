@@ -940,10 +940,7 @@ class SyntheticDailyGenerator:
                         else:
                             mag = self.rng.uniform(0.001, 0.015) * scale * slope_scale
                         new_slope = mag if is_positive else -mag
-                        threshold = min_change * (
-                            0.6 if self.rng.random() > 0.9 else 1.0
-                        )
-                        if abs(new_slope - prev_slope) >= threshold:
+                        if abs(new_slope - prev_slope) >= min_change:
                             break
                     else:
                         sign = 1 if is_positive else -1
