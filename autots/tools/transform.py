@@ -1400,6 +1400,12 @@ class DatepartRegressionTransformer(EmptyTransformer):
         if self.transform_dict is not None:
             model = GeneralTransformer(**self.transform_dict)
             y = model.fit_transform(df_local)
+            # Some transforms (e.g. Slice) reduce the row count. Sync df_local
+            # and regressor to y's index so X and y have the same length.
+            if isinstance(y, pd.DataFrame) and len(y) != len(df_local):
+                df_local = df_local.reindex(y.index)
+                if regressor is not None:
+                    regressor = regressor.reindex(y.index)
         else:
             y = df_local.to_numpy()
         if y.shape[1] == 1:
