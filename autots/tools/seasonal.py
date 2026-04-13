@@ -162,6 +162,7 @@ def date_part(
     Returns:
         pd.Dataframe with DTindex
     """
+    requested_index = DTindex.copy()
     # recursive
     is_seasonality_list = _is_seasonality_order_list(method)
     if is_seasonality_list:
@@ -186,7 +187,6 @@ def date_part(
     if expansion_flag:
         # code shared with holiday_flag
         frequency = infer_frequency(DTindex)
-        backup = DTindex.copy()
         new_index = pd.date_range(
             DTindex[-1], end=DTindex[-1] + pd.Timedelta(days=900), freq=frequency
         )
@@ -496,16 +496,17 @@ def date_part(
         date_part_df.columns = ['dp' + str(x) for x in date_part_df.columns]
     if isinstance(date_part_df, pd.Index):
         date_part_df = pd.Series(date_part_df)
+    output_index = requested_index if expansion_flag else DTindex
     if set_index:
         date_part_df.index = DTindex
         if expansion_flag:
-            date_part_df = date_part_df.reindex(backup)
+            date_part_df = date_part_df.reindex(requested_index)
     if holiday_country is not None and holiday_countries_used:
         date_part_df = pd.concat(
             [
                 date_part_df,
                 holiday_flag(
-                    DTindex, country=holiday_country, encode_holiday_type=True
+                    output_index, country=holiday_country, encode_holiday_type=True
                 ),
             ],
             axis=1,
@@ -513,13 +514,13 @@ def date_part(
         )
     # recursive
     if lags is not None:
-        frequency = infer_frequency(DTindex)
+        frequency = infer_frequency(output_index)
         longer_idx = pd.date_range(
-            end=DTindex[-1], periods=len(DTindex) + lags, freq=frequency
+            end=output_index[-1], periods=len(output_index) + lags, freq=frequency
         )
         for laggy in range(lags):
             add_X = date_part(
-                longer_idx[lags - (laggy + 1) :][0 : len(DTindex)],
+                longer_idx[lags - (laggy + 1) :][0 : len(output_index)],
                 method=method,
                 polynomial_degree=polynomial_degree,
                 holiday_country=holiday_country,
@@ -528,16 +529,18 @@ def date_part(
                 forward_lags=None,
                 set_index=False,
             ).rename(columns=lambda x: str(x) + f"_lag{laggy}")
-            add_X.index = DTindex
+            add_X.index = output_index
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     if forward_lags is not None:
-        frequency = infer_frequency(DTindex)
+        frequency = infer_frequency(output_index)
         longer_idx = pd.date_range(
-            start=DTindex[0], periods=len(DTindex) + forward_lags, freq=frequency
+            start=output_index[0],
+            periods=len(output_index) + forward_lags,
+            freq=frequency,
         )
         for laggy in range(forward_lags):
             add_X = date_part(
-                longer_idx[laggy + 1 :][0 : len(DTindex)],
+                longer_idx[laggy + 1 :][0 : len(output_index)],
                 method=method,
                 polynomial_degree=polynomial_degree,
                 holiday_country=holiday_country,
@@ -546,7 +549,7 @@ def date_part(
                 forward_lags=None,
                 set_index=False,
             ).rename(columns=lambda x: str(x) + f"_flag{laggy}")
-            add_X.index = DTindex
+            add_X.index = output_index
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     return date_part_df
 

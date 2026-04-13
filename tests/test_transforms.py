@@ -9,6 +9,7 @@ from autots.tools.transform import (
     FIRFilter,
     HistoricValues,
     GeneralTransformer,
+    DatepartRegressionTransformer,
     ReconciliationTransformer,
     UpscaleDownscaleTransformer,
     MeanPercentSplitter,
@@ -19,6 +20,71 @@ from autots.models.base import PredictionObject
 
 
 class TestTransforms(unittest.TestCase):
+    def test_datepart_regression_aligns_misaligned_regressor(self):
+        """Misaligned regressors should be reindexed, not expand the design matrix."""
+        dates = pd.date_range(start='2020-01-01', periods=8, freq='D')
+        df = pd.DataFrame(
+            {
+                'series1': np.linspace(1.0, 8.0, 8),
+                'series2': np.linspace(2.0, 9.0, 8),
+            },
+            index=dates,
+        )
+        shifted_regressor = pd.DataFrame(
+            {'holiday_flag': np.arange(8, dtype=float)},
+            index=pd.date_range(start='2020-01-02', periods=8, freq='D'),
+        )
+
+        transformer = DatepartRegressionTransformer(
+            regression_model={
+                'model': 'ElasticNet',
+                'model_params': {'max_iter': 1000},
+            },
+            datepart_method='simple_binarized',
+            forward_lags=1,
+        )
+        transformer.fit(df, regressor=shifted_regressor)
+
+        self.assertEqual(transformer.X.shape[0], len(df))
+        transformed = transformer.transform(df, regressor=shifted_regressor)
+        restored = transformer.inverse_transform(transformed, regressor=shifted_regressor)
+        self.assertEqual(transformed.shape, df.shape)
+        self.assertEqual(restored.shape, df.shape)
+
+    def test_datepart_regression_restores_fit_feature_schema(self):
+        """Predict paths should tolerate missing fit-time regressor columns."""
+        dates = pd.date_range(start='2020-01-01', periods=40, freq='D')
+        df = pd.DataFrame(
+            {
+                'series1': np.sin(np.arange(40) / 3.0),
+                'series2': np.cos(np.arange(40) / 4.0),
+            },
+            index=dates,
+        )
+        train_regressor = pd.DataFrame(
+            {
+                'adaptive_cos_179.3_3': np.linspace(0.0, 1.0, 40),
+                'adaptive_cos_179.3_4': np.linspace(1.0, 2.0, 40),
+            },
+            index=dates,
+        )
+        future_regressor = train_regressor[['adaptive_cos_179.3_3']].iloc[-5:].copy()
+        future_index = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=5, freq='D')
+        future_regressor.index = future_index
+        zeros = pd.DataFrame(0.0, index=future_index, columns=df.columns)
+
+        transformer = DatepartRegressionTransformer(
+            regression_model={
+                'model': 'ExtraTrees',
+                'model_params': {'n_estimators': 5},
+            },
+            datepart_method='simple_3',
+        )
+        transformer.fit(df, regressor=train_regressor)
+
+        restored = transformer.inverse_transform(zeros, regressor=future_regressor)
+        self.assertEqual(restored.shape, zeros.shape)
+
     def test_theta(self):
         # Sample DataFrame with a DatetimeIndex and multiple time series columns
         dates = pd.date_range(start='2020-01-01', periods=100, freq='D')
