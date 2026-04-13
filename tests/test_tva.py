@@ -815,6 +815,88 @@ class TestLossFunctions(unittest.TestCase):
         _, breakdown = loss_fn(outputs, targets)
         self.assertNotIn('probabilistic', breakdown)
 
+    def test_slope_incentive_zero_when_phi_zero(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=0.0)
+        pred = torch.randn(2, 4, 10)
+        target = torch.randn(2, 4, 10)
+        self.assertEqual(loss(pred, target).item(), 0.0)
+
+    def test_slope_incentive_fires_when_pred_flatter(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        # target has clear upward trend, pred is flat
+        target = torch.zeros(1, 2, 10)
+        for t in range(10):
+            target[:, :, t] = float(t)
+        pred = torch.zeros(1, 2, 10)  # flat
+        val = loss(pred, target)
+        self.assertGreater(val.item(), 0.0)
+
+    def test_slope_incentive_near_zero_when_pred_steeper(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        # target has mild trend, pred has steeper trend in same direction
+        target = torch.zeros(1, 2, 10)
+        pred = torch.zeros(1, 2, 10)
+        for t in range(10):
+            target[:, :, t] = float(t)
+            pred[:, :, t] = float(t) * 2.0  # steeper
+        val_steeper = loss(pred, target)
+        # compare with flatter pred
+        flat_pred = torch.zeros(1, 2, 10)
+        val_flatter = loss(flat_pred, target)
+        self.assertLess(val_steeper.item(), val_flatter.item())
+
+    def test_slope_incentive_direction_disagreement(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        target = torch.zeros(1, 2, 10)
+        for t in range(10):
+            target[:, :, t] = float(t)  # upward
+        # same-sign pred with matching magnitude (near-zero penalty)
+        same_sign = target.clone()
+        # opposite-sign pred with matching magnitude (direction penalty fires)
+        opposite = -target.clone()
+        val_same = loss(same_sign, target)
+        val_opposite = loss(opposite, target)
+        self.assertLess(val_same.item(), val_opposite.item())
+
+    def test_slope_incentive_short_series(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        val = loss(torch.randn(2, 3, 1), torch.randn(2, 3, 1))
+        self.assertEqual(val.item(), 0.0)
+
+    def test_temporal_loss_composite_with_trend_phi(self):
+        from autots.evaluator.tva.losses import TemporalLossComposite
+
+        loss_fn = TemporalLossComposite(weights={'trend_phi': 0.5})
+        B, N, T, K = 2, 4, 10, 3
+        target = torch.zeros(B, N, T)
+        for t in range(T):
+            target[:, :, t] = float(t)
+        outputs = {
+            'trend_forecast': torch.zeros(B, N, T),  # flat pred
+            'prototype_weights': torch.softmax(torch.randn(B, N, K), dim=-1),
+            'composite_trend': torch.randn(B, K, T),
+            'composite_trend_per_series': torch.randn(B, N, T),
+        }
+        targets = {
+            'true_trend': target,
+            'seasonal': torch.randn(B, N, T),
+            'holidays': torch.randn(B, N, T),
+            'anomalies': torch.randn(B, N, T),
+        }
+        total, breakdown = loss_fn(outputs, targets)
+        self.assertIn('trend_slope_incentive', breakdown)
+        self.assertGreater(breakdown['trend_slope_incentive'], 0.0)
+
     def test_loss_component_balance(self):
         """No single weighted loss component should dominate by orders of magnitude.
 
