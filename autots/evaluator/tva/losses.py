@@ -297,9 +297,10 @@ if HAS_TORCH:
                 # Direction disagreement: penalize when signs differ,
                 # scaled by target magnitude so flat targets don't trigger this
                 sign_disagree = F.relu(-ts.sign() * ps) * ts.abs()
-                penalty = penalty + (
-                    shortfall**2 + self.direction_alpha * sign_disagree**2
-                ).mean()
+                penalty = (
+                    penalty
+                    + (shortfall**2 + self.direction_alpha * sign_disagree**2).mean()
+                )
 
             return self.trend_phi * penalty / 3.0  # average over 3 scales
 

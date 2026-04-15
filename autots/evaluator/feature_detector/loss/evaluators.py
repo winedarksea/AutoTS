@@ -835,7 +835,9 @@ class LossEvaluatorsMixin:
             if true_component is None:
                 continue
 
-            det_vals, ref_vals = self._aligned_finite_arrays(detected_series, true_component)
+            det_vals, ref_vals = self._aligned_finite_arrays(
+                detected_series, true_component
+            )
             if det_vals.size < 8:
                 continue
 
@@ -851,13 +853,10 @@ class LossEvaluatorsMixin:
                     if np.isfinite(step_threshold) and step_threshold > 1e-9:
                         step_mask = np.abs(ref_diff) >= step_threshold
                         if step_mask.sum() >= 2:
-                            step_ratio = (
-                                float(np.nanmean(np.abs(det_diff[step_mask])))
-                                / (float(np.nanmean(np.abs(det_diff))) + 1e-6)
-                            )
-                            component_penalty += 0.20 * max(
-                                0.0, min(step_ratio, 3.0)
-                            )
+                            step_ratio = float(
+                                np.nanmean(np.abs(det_diff[step_mask]))
+                            ) / (float(np.nanmean(np.abs(det_diff))) + 1e-6)
+                            component_penalty += 0.20 * max(0.0, min(step_ratio, 3.0))
 
             component_penalty = min(max(component_penalty, 0.0), 3.0)
             weighted_penalty += comp_weight * component_penalty

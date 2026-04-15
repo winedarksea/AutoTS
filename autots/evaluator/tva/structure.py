@@ -476,13 +476,17 @@ def build_graph_snapshot(
             elif level_index == len(level_sizes) - 1:
                 label = f'driver_{node_index + 1}'
                 if global_prototype_weights is not None:
-                    driver_weights = np.asarray(global_prototype_weights, dtype=np.float32)
+                    driver_weights = np.asarray(
+                        global_prototype_weights, dtype=np.float32
+                    )
                     if (
                         driver_weights.ndim == 2
                         and node_index < driver_weights.shape[0]
                         and driver_weights.shape[1] > 0
                     ):
-                        dominant_prototype = int(np.argmax(driver_weights[node_index])) + 1
+                        dominant_prototype = (
+                            int(np.argmax(driver_weights[node_index])) + 1
+                        )
                         label = f'{label} [P{dominant_prototype}]'
                 kind = 'driver'
             else:
@@ -508,9 +512,9 @@ def build_graph_snapshot(
                     continue
                 edge_table.append(
                     {
-                        'source': node_table[
-                            level_offsets[level_index] + lower_idx
-                        ]['node_id'],
+                        'source': node_table[level_offsets[level_index] + lower_idx][
+                            'node_id'
+                        ],
                         'target': node_table[
                             level_offsets[level_index + 1] + upper_idx
                         ]['node_id'],
@@ -810,7 +814,9 @@ def _plot_overview_snapshot(
             row['_cluster_key'] = (10**6, row['label'])
         else:
             row['_cluster_key'] = (int(row['dominant_prototype']), row['label'])
-    ordered_series = sorted(grouped_series.values(), key=lambda row: row['_cluster_key'])
+    ordered_series = sorted(
+        grouped_series.values(), key=lambda row: row['_cluster_key']
+    )
 
     cluster_counts = {}
     for row in ordered_series:
@@ -940,8 +946,7 @@ def _plot_overview_snapshot(
         fill_color = color_map.get(metadata_value, '#4c78a8')
         marker = 'o' if row.get('kind') == 'anchor' else 's'
         size = (
-            80
-            + min(max(float(row.get('history_periods', 0) or 0), 0.0), 365.0) * 0.35
+            80 + min(max(float(row.get('history_periods', 0) or 0), 0.0), 365.0) * 0.35
         )
         ax.scatter(
             x_pos,

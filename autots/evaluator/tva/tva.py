@@ -877,7 +877,9 @@ class TVA:
         snapshot = GraphSnapshot(
             node_table=snapshot_dict['node_table'],
             edge_table=snapshot_dict['edge_table'],
-            adjacency_dense=np.asarray(snapshot_dict['adjacency_dense'], dtype=np.float32),
+            adjacency_dense=np.asarray(
+                snapshot_dict['adjacency_dense'], dtype=np.float32
+            ),
             adjacency_thresholded=np.asarray(
                 snapshot_dict['adjacency_thresholded'], dtype=np.float32
             ),
@@ -1040,10 +1042,13 @@ class TVA:
             return None
 
         latest_timestamp = target_end_index.max()
-        ages = np.asarray(
-            (latest_timestamp - target_end_index).total_seconds(),
-            dtype=np.float64,
-        ) / 86400.0
+        ages = (
+            np.asarray(
+                (latest_timestamp - target_end_index).total_seconds(),
+                dtype=np.float64,
+            )
+            / 86400.0
+        )
         ages = np.maximum(ages, 0.0)
         weights = np.power(0.5, ages / halflife_days)
         weights = np.clip(weights, 1e-8, None)

@@ -5368,7 +5368,16 @@ class ChangepointDetector(object):
                     1.5,
                     2.0,
                 ]
-                bandwidth_scale_weights = [0.04, 0.08, 0.11, 0.28, 0.16, 0.13, 0.12, 0.08]
+                bandwidth_scale_weights = [
+                    0.04,
+                    0.08,
+                    0.11,
+                    0.28,
+                    0.16,
+                    0.13,
+                    0.12,
+                    0.08,
+                ]
                 score_threshold_options = ['auto', 1.5, 1.75, 2.0, 2.5, 3.0]
                 score_threshold_weights = [0.65, 0.05, 0.08, 0.1, 0.08, 0.04]
                 random_state_options = [42, 7, 21, 91, 2024]

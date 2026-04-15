@@ -243,7 +243,9 @@ class SyntheticDailyGenerator:
         self.disable_holiday_splash = disable_holiday_splash
         self.trend_slope_scale = trend_slope_scale
         self.trend_positive_bias = float(np.clip(trend_positive_bias, 0.0, 1.0))
-        self.trend_changepoint_min_slope_factor = float(trend_changepoint_min_slope_factor)
+        self.trend_changepoint_min_slope_factor = float(
+            trend_changepoint_min_slope_factor
+        )
         self.anomaly_magnitude_scale = float(anomaly_magnitude_scale)
         self.level_shift_minimum_pct = level_shift_minimum_pct
         if (
@@ -411,7 +413,9 @@ class SyntheticDailyGenerator:
                     'disable_holiday_splash': bool(self.disable_holiday_splash),
                     'trend_slope_scale': float(self.trend_slope_scale),
                     'trend_positive_bias': float(self.trend_positive_bias),
-                    'trend_changepoint_min_slope_factor': float(self.trend_changepoint_min_slope_factor),
+                    'trend_changepoint_min_slope_factor': float(
+                        self.trend_changepoint_min_slope_factor
+                    ),
                     'anomaly_magnitude_scale': float(self.anomaly_magnitude_scale),
                     'level_shift_minimum_pct': float(self.level_shift_minimum_pct),
                     'level_shift_max_pct': (
@@ -921,7 +925,9 @@ class SyntheticDailyGenerator:
 
             slopes = []
             prev_slope = None
-            min_change = 0.005 * scale * slope_scale * self.trend_changepoint_min_slope_factor
+            min_change = (
+                0.005 * scale * slope_scale * self.trend_changepoint_min_slope_factor
+            )
 
             for i in range(len(changepoint_days) - 1):
                 # Determine if this slope should be positive
@@ -1886,7 +1892,9 @@ class SyntheticDailyGenerator:
                 )
                 params = ('laplace', base_noise_std * 0.7)
             elif dist_type == 't':
-                df = self.rng.uniform(5, 10)  # raised floor from 3 to avoid extreme tails
+                df = self.rng.uniform(
+                    5, 10
+                )  # raised floor from 3 to avoid extreme tails
                 segment_noise = (
                     self.rng.standard_t(df, segment_length) * base_noise_std * 0.8
                 )
@@ -1894,7 +1902,9 @@ class SyntheticDailyGenerator:
 
             # Clip each segment at ±3σ so heavy-tailed draws can't produce
             # anomaly-scale spikes in the noise component.
-            segment_noise = np.clip(segment_noise, -3.0 * base_noise_std, 3.0 * base_noise_std)
+            segment_noise = np.clip(
+                segment_noise, -3.0 * base_noise_std, 3.0 * base_noise_std
+            )
             noise[start_day:end_day] = segment_noise
 
             if start_day > 0:
@@ -3859,7 +3869,9 @@ class SyntheticDailyGenerator:
         self.level_shift_max_pct = best_params['level_shift_max_pct']
         self.noise_ar_coefficient = best_params['noise_ar_coefficient']
         self.volatility_regime_intensity = best_params['volatility_regime_intensity']
-        self.trend_changepoint_min_slope_factor = best_params['trend_changepoint_min_slope_factor']
+        self.trend_changepoint_min_slope_factor = best_params[
+            'trend_changepoint_min_slope_factor'
+        ]
         self.anomaly_magnitude_scale = best_params['anomaly_magnitude_scale']
         self.weekly_profile_target = target_weekly_profile.tolist()
         self.yearly_fourier_target = target_yearly_fourier.tolist()
