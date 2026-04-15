@@ -29,9 +29,10 @@ from autots.evaluator.auto_model import model_forecast, ModelPrediction
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
 from autots.tools.impute import FillNA
+from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 
 
-__version__ = '1.0.3'
+__version__ = '1.0.4'
 
 TransformTS = GeneralTransformer
 
@@ -64,4 +65,5 @@ __all__ = [
     'SyntheticDailyGenerator',
     'generate_synthetic_daily_data',
     'FillNA',
+    'TimeSeriesFeatureDetector',
 ]
