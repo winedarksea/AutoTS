@@ -5323,31 +5323,65 @@ class ChangepointDetector(object):
 
         elif new_method == 'kcpd':
             if selection_mode == "fast":
-                kernel_options = ['rbf', 'linear']
-                kernel_weights = [0.9, 0.1]
-                window_options = [16, 24, 32, 48]
-                window_weights = [0.2, 0.4, 0.3, 0.1]
-                feature_options = [12, 16, 24]
-                feature_weights = [0.25, 0.5, 0.25]
-                distance_options = [8, 10, 14, 20]
-                distance_weights = [0.2, 0.4, 0.3, 0.1]
-                quantile_options = [0.85, 0.9, 0.93]
-                quantile_weights = [0.25, 0.5, 0.25]
-                max_cp_options = [6, 8, 10]
-                max_cp_weights = [0.4, 0.4, 0.2]
+                kernel_options = ['rbf', 'laplacian', 'linear']
+                kernel_weights = [0.82, 0.08, 0.1]
+                window_options = [12, 16, 24, 32, 48]
+                window_weights = [0.15, 0.25, 0.3, 0.2, 0.1]
+                feature_options = [10, 12, 16, 24]
+                feature_weights = [0.15, 0.3, 0.35, 0.2]
+                distance_options = [5, 6, 8, 10, 14, 20]
+                distance_weights = [0.1, 0.15, 0.25, 0.25, 0.15, 0.1]
+                quantile_options = [0.82, 0.85, 0.9, 0.93]
+                quantile_weights = [0.1, 0.25, 0.45, 0.2]
+                max_cp_options = [5, 6, 8, 10]
+                max_cp_weights = [0.2, 0.35, 0.3, 0.15]
+                bandwidth_options = ['auto', 0.75, 1.0, 1.5]
+                bandwidth_weights = [0.8, 0.08, 0.08, 0.04]
+                bandwidth_scale_options = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+                bandwidth_scale_weights = [0.1, 0.12, 0.38, 0.15, 0.15, 0.1]
+                score_threshold_options = ['auto', 1.75, 2.0, 2.5]
+                score_threshold_weights = [0.82, 0.06, 0.08, 0.04]
+                random_state_options = [42, 7, 91]
+                random_state_weights = [0.8, 0.1, 0.1]
             else:
                 kernel_options = ['rbf', 'laplacian', 'linear']
-                kernel_weights = [0.7, 0.15, 0.15]
-                window_options = [12, 16, 24, 32, 48]
-                window_weights = [0.1, 0.2, 0.35, 0.25, 0.1]
-                feature_options = [12, 16, 24, 32]
-                feature_weights = [0.15, 0.35, 0.35, 0.15]
-                distance_options = [6, 8, 10, 14, 20]
-                distance_weights = [0.1, 0.2, 0.35, 0.25, 0.1]
-                quantile_options = [0.8, 0.85, 0.9, 0.93]
-                quantile_weights = [0.1, 0.2, 0.45, 0.25]
-                max_cp_options = [6, 8, 10, 14]
-                max_cp_weights = [0.25, 0.35, 0.25, 0.15]
+                kernel_weights = [0.68, 0.17, 0.15]
+                window_options = [8, 10, 12, 16, 24, 32, 48, 64]
+                window_weights = [0.04, 0.08, 0.14, 0.18, 0.26, 0.16, 0.1, 0.04]
+                feature_options = [8, 10, 12, 16, 24, 32, 48]
+                feature_weights = [0.05, 0.12, 0.18, 0.25, 0.2, 0.12, 0.08]
+                distance_options = [4, 5, 6, 8, 10, 12, 14, 20]
+                distance_weights = [0.03, 0.08, 0.12, 0.2, 0.24, 0.12, 0.14, 0.07]
+                quantile_options = [0.75, 0.8, 0.85, 0.9, 0.93, 0.95]
+                quantile_weights = [0.04, 0.1, 0.2, 0.34, 0.22, 0.1]
+                max_cp_options = [4, 5, 6, 8, 10, 14]
+                max_cp_weights = [0.06, 0.14, 0.22, 0.25, 0.2, 0.13]
+                bandwidth_options = ['auto', 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+                bandwidth_weights = [0.55, 0.06, 0.1, 0.12, 0.07, 0.06, 0.04]
+                bandwidth_scale_options = [
+                    0.625,
+                    0.75,
+                    0.875,
+                    1.0,
+                    1.125,
+                    1.25,
+                    1.5,
+                    2.0,
+                ]
+                bandwidth_scale_weights = [
+                    0.04,
+                    0.08,
+                    0.11,
+                    0.28,
+                    0.16,
+                    0.13,
+                    0.12,
+                    0.08,
+                ]
+                score_threshold_options = ['auto', 1.5, 1.75, 2.0, 2.5, 3.0]
+                score_threshold_weights = [0.65, 0.05, 0.08, 0.1, 0.08, 0.04]
+                random_state_options = [42, 7, 21, 91, 2024]
+                random_state_weights = [0.65, 0.08, 0.08, 0.09, 0.1]
 
             new_params = {
                 'kernel': random.choices(kernel_options, weights=kernel_weights, k=1)[
@@ -5359,11 +5393,15 @@ class ChangepointDetector(object):
                 'n_features': random.choices(
                     feature_options, weights=feature_weights, k=1
                 )[0],
-                'bandwidth': 'auto',
-                'bandwidth_scale': random.choices(
-                    [0.75, 1.0, 1.25, 1.5], weights=[0.15, 0.5, 0.2, 0.15], k=1
+                'bandwidth': random.choices(
+                    bandwidth_options, weights=bandwidth_weights, k=1
                 )[0],
-                'score_threshold': 'auto',
+                'bandwidth_scale': random.choices(
+                    bandwidth_scale_options, weights=bandwidth_scale_weights, k=1
+                )[0],
+                'score_threshold': random.choices(
+                    score_threshold_options, weights=score_threshold_weights, k=1
+                )[0],
                 'score_quantile': random.choices(
                     quantile_options, weights=quantile_weights, k=1
                 )[0],
@@ -5373,7 +5411,9 @@ class ChangepointDetector(object):
                 'max_changepoints': random.choices(
                     max_cp_options, weights=max_cp_weights, k=1
                 )[0],
-                'random_state': 42,
+                'random_state': random.choices(
+                    random_state_options, weights=random_state_weights, k=1
+                )[0],
             }
 
         elif new_method == 'bottom_up':

@@ -1,11 +1,8 @@
-# 1.0.2 🇺🇦 🇺🇦 🇺🇦
+# 1.0.3 🇺🇦 🇺🇦 🇺🇦
 * more tuning of MCP download install
-* more optimization of MultivariateRegression
-* MLFlow logging function added (limited testing done)
-* MCP server breaking changes, async setup
-* MambaSSM enhanced (still slow and mediocre)
-* TVA model added
-* significant changes to optimizer for Feature Detection with synthetic, refactor of feature detector code
+* TVA optimizations
+* Synthetic data minor new options
+* Feature detector and associated transformer bug fixes
 
 ### New Model Checklist:
 * Add to ModelMonster in auto_model.py

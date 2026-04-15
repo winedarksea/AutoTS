@@ -35,6 +35,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
         'holiday_recall_loss': 0.9,
         'seasonality_strength_loss': 2.0,
         'seasonality_pattern_loss': 2.0,
+        'seasonality_leakage_loss': 1.4,
         'seasonality_changepoint_loss': 0.01,
         'noise_level_loss': 0.5,
         'noise_regime_loss': 0.4,
@@ -120,6 +121,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             'holiday_recall_loss': 1.15,
             'seasonality_strength_loss': 1.05,
             'seasonality_pattern_loss': 1.15,
+            'seasonality_leakage_loss': 1.15,
             'seasonality_changepoint_loss': 1.1,
         }
         for key, factor in emphasis.items():
@@ -314,6 +316,14 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             true_components=true_components,
             date_index=date_index,
         )
+        seasonality_leakage_loss = self._evaluate_component_loss(
+            key='seasonality_leakage_loss',
+            series_name=series_name,
+            effective_weights=effective_weights,
+            fn=self._seasonality_leakage_loss,
+            detected_components=detected_components,
+            true_components=true_components,
+        )
         seasonality_changepoint_loss = self._evaluate_component_loss(
             key='seasonality_changepoint_loss',
             series_name=series_name,
@@ -383,6 +393,7 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             'holiday_recall_loss': holiday_recall_loss,
             'seasonality_strength_loss': seasonality_strength_loss,
             'seasonality_pattern_loss': seasonality_pattern_loss,
+            'seasonality_leakage_loss': seasonality_leakage_loss,
             'seasonality_changepoint_loss': seasonality_changepoint_loss,
             'noise_level_loss': noise_level_loss,
             'noise_regime_loss': noise_regime_loss,
@@ -439,6 +450,20 @@ class FeatureDetectionLoss(LossMetricsMixin, LossEvaluatorsMixin):
             )
         if key == 'seasonality_pattern_loss':
             return not self._is_empty_label(true_component_map.get('seasonality'))
+        if key == 'seasonality_leakage_loss':
+            if self._is_empty_label(true_component_map.get('seasonality')):
+                return False
+            non_seasonal_components = (
+                'trend',
+                'level_shift',
+                'anomalies',
+                'holidays',
+                'noise',
+            )
+            return any(
+                not self._is_empty_label(true_component_map.get(name))
+                for name in non_seasonal_components
+            )
         if key == 'seasonality_changepoint_loss':
             return not self._is_empty_label(true_series.get('seasonality_changepoints'))
         if key == 'noise_level_loss':

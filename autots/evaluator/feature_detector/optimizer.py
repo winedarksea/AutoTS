@@ -571,6 +571,7 @@ class FeatureDetectionOptimizer:
             detected_features,
             true_labels,
             true_components,
+            loss_breakdown=loss,
         )
         loss['reconstruction_total_loss'] = reconstruction_total_loss
         loss['recovery_metrics'] = recovery_metrics
@@ -584,9 +585,11 @@ class FeatureDetectionOptimizer:
         detected_features,
         true_labels,
         true_components,
+        loss_breakdown=None,
     ):
         """Compute benchmark-facing recovery metrics for selection and reporting."""
         metrics = {}
+        breakdown = loss_breakdown if isinstance(loss_breakdown, dict) else {}
         series_names = self.loss_calculator._resolve_series_names(
             detected_features,
             true_labels,
@@ -714,6 +717,18 @@ class FeatureDetectionOptimizer:
         metrics['zero_level_shift_false_positives'] = (
             float(np.max(zero_level_shift_fp)) if zero_level_shift_fp else 0.0
         )
+
+        leakage_loss = breakdown.get('seasonality_leakage_loss')
+        pattern_loss = breakdown.get('seasonality_pattern_loss')
+        if leakage_loss is not None and np.isfinite(float(leakage_loss)):
+            leakage_loss = float(leakage_loss)
+            metrics['seasonality_leakage_loss'] = leakage_loss
+            metrics['seasonality_purity_score'] = float(1.0 / (1.0 + leakage_loss))
+            if pattern_loss is not None and np.isfinite(float(pattern_loss)):
+                pattern_loss = float(pattern_loss)
+                metrics['seasonality_leakage_ratio'] = float(
+                    leakage_loss / (pattern_loss + leakage_loss + 1e-6)
+                )
 
         if series_names:
             weekly_profile = []

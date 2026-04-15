@@ -394,6 +394,10 @@ class TVAModel(ModelObject):
                 [0.0, 0.25, 0.5, 0.75, 1.0],
                 weights=[0.1, 0.2, 0.25, 0.2, 0.25],
             )[0],
+            "trend_phi": random.choices(
+                [0.0, 0.1, 0.25, 0.5, 1.0],
+                weights=[0.6, 0.12, 0.12, 0.1, 0.06],
+            )[0],
         }
 
         from autots.evaluator.feature_detector import TimeSeriesFeatureDetector

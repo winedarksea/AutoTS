@@ -204,6 +204,33 @@ class TestYggdrasilPriors(unittest.TestCase):
         # a & d share nothing
         self.assertEqual(adj[0, 3], 0.0)
 
+    def test_metadata_attribute_weights_raise_higher_priority_matches(self):
+        from autots.evaluator.tva.priors import SeriesMetadata, YggdrasilPriors
+
+        metadata = [
+            SeriesMetadata(
+                "a",
+                attribute_values={"surface": "search", "geography": "US"},
+                attribute_weights={"surface": 0.8, "geography": 0.2},
+            ),
+            SeriesMetadata(
+                "b",
+                attribute_values={"surface": "search", "geography": "CA"},
+                attribute_weights={"surface": 0.8, "geography": 0.2},
+            ),
+            SeriesMetadata(
+                "c",
+                attribute_values={"surface": "video", "geography": "US"},
+                attribute_weights={"surface": 0.8, "geography": 0.2},
+            ),
+        ]
+        p = YggdrasilPriors(series_metadata=metadata)
+        adj = p.build_prior_adjacency()
+
+        self.assertGreater(adj[0, 1], adj[0, 2])
+        self.assertAlmostEqual(adj[0, 1], 0.8, places=6)
+        self.assertAlmostEqual(adj[0, 2], 0.2, places=6)
+
     def test_metadata_embeddings_shape(self):
         from autots.evaluator.tva.priors import YggdrasilPriors
         p = YggdrasilPriors(series_metadata=self._make_metadata())
@@ -512,6 +539,23 @@ class TestReconciliationBridge(unittest.TestCase):
         self.assertEqual(result.shape, df.shape)
 
 
+class TestTVAUtilities(unittest.TestCase):
+    def test_recency_window_weights_increase_for_recent_targets(self):
+        from autots.evaluator.tva.tva import TVA
+
+        tva = TVA.__new__(TVA)
+        tva.window_size = 10
+        tva.forecast_horizon = 5
+        tva.recency_halflife_days = 7
+
+        index = pd.date_range("2025-01-01", periods=40, freq="D")
+        weights = tva._compute_window_sample_weights(index)
+
+        self.assertIsNotNone(weights)
+        self.assertEqual(len(weights), 26)
+        self.assertGreater(weights[-1], weights[0])
+
+
 # ---------------------------------------------------------------------------
 # PyTorch-dependent unit tests
 # ---------------------------------------------------------------------------
@@ -623,6 +667,23 @@ class TestLossFunctions(unittest.TestCase):
         loss = CrossSeriesCoherenceLoss()
         val = loss(torch.randn(2, 3, 1), torch.ones(2, 3, 2) / 2)
         self.assertEqual(val.item(), 0.0)
+
+    def test_coherence_loss_penalizes_growth_magnitude_mismatch(self):
+        from autots.evaluator.tva.losses import CrossSeriesCoherenceLoss
+
+        loss = CrossSeriesCoherenceLoss()
+        matched = torch.tensor(
+            [[[1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0]]], dtype=torch.float32
+        )
+        mismatched = torch.tensor(
+            [[[1.0, 2.0, 3.0, 4.0], [1.0, 4.0, 7.0, 10.0]]], dtype=torch.float32
+        )
+        weights = torch.ones(1, 2, 1, dtype=torch.float32)
+
+        self.assertLess(
+            loss(matched, weights).item(),
+            loss(mismatched, weights).item(),
+        )
 
     def test_temporal_loss_composite_forward(self):
         from autots.evaluator.tva.losses import TemporalLossComposite
@@ -754,6 +815,88 @@ class TestLossFunctions(unittest.TestCase):
         _, breakdown = loss_fn(outputs, targets)
         self.assertNotIn('probabilistic', breakdown)
 
+    def test_slope_incentive_zero_when_phi_zero(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=0.0)
+        pred = torch.randn(2, 4, 10)
+        target = torch.randn(2, 4, 10)
+        self.assertEqual(loss(pred, target).item(), 0.0)
+
+    def test_slope_incentive_fires_when_pred_flatter(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        # target has clear upward trend, pred is flat
+        target = torch.zeros(1, 2, 10)
+        for t in range(10):
+            target[:, :, t] = float(t)
+        pred = torch.zeros(1, 2, 10)  # flat
+        val = loss(pred, target)
+        self.assertGreater(val.item(), 0.0)
+
+    def test_slope_incentive_near_zero_when_pred_steeper(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        # target has mild trend, pred has steeper trend in same direction
+        target = torch.zeros(1, 2, 10)
+        pred = torch.zeros(1, 2, 10)
+        for t in range(10):
+            target[:, :, t] = float(t)
+            pred[:, :, t] = float(t) * 2.0  # steeper
+        val_steeper = loss(pred, target)
+        # compare with flatter pred
+        flat_pred = torch.zeros(1, 2, 10)
+        val_flatter = loss(flat_pred, target)
+        self.assertLess(val_steeper.item(), val_flatter.item())
+
+    def test_slope_incentive_direction_disagreement(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        target = torch.zeros(1, 2, 10)
+        for t in range(10):
+            target[:, :, t] = float(t)  # upward
+        # same-sign pred with matching magnitude (near-zero penalty)
+        same_sign = target.clone()
+        # opposite-sign pred with matching magnitude (direction penalty fires)
+        opposite = -target.clone()
+        val_same = loss(same_sign, target)
+        val_opposite = loss(opposite, target)
+        self.assertLess(val_same.item(), val_opposite.item())
+
+    def test_slope_incentive_short_series(self):
+        from autots.evaluator.tva.losses import TrendSlopeIncentive
+
+        loss = TrendSlopeIncentive(trend_phi=1.0)
+        val = loss(torch.randn(2, 3, 1), torch.randn(2, 3, 1))
+        self.assertEqual(val.item(), 0.0)
+
+    def test_temporal_loss_composite_with_trend_phi(self):
+        from autots.evaluator.tva.losses import TemporalLossComposite
+
+        loss_fn = TemporalLossComposite(weights={'trend_phi': 0.5})
+        B, N, T, K = 2, 4, 10, 3
+        target = torch.zeros(B, N, T)
+        for t in range(T):
+            target[:, :, t] = float(t)
+        outputs = {
+            'trend_forecast': torch.zeros(B, N, T),  # flat pred
+            'prototype_weights': torch.softmax(torch.randn(B, N, K), dim=-1),
+            'composite_trend': torch.randn(B, K, T),
+            'composite_trend_per_series': torch.randn(B, N, T),
+        }
+        targets = {
+            'true_trend': target,
+            'seasonal': torch.randn(B, N, T),
+            'holidays': torch.randn(B, N, T),
+            'anomalies': torch.randn(B, N, T),
+        }
+        total, breakdown = loss_fn(outputs, targets)
+        self.assertIn('trend_slope_incentive', breakdown)
+        self.assertGreater(breakdown['trend_slope_incentive'], 0.0)
+
     def test_loss_component_balance(self):
         """No single weighted loss component should dominate by orders of magnitude.
 
@@ -825,6 +968,16 @@ class TestStructureLearningUtilities(unittest.TestCase):
         self.assertEqual(config.derive_latent_sizes(8), [4, 2])
         self.assertEqual(config.derive_latent_sizes(5), [3, 2])
 
+    def test_directed_graph_learner_breaks_symmetric_initialization(self):
+        from autots.evaluator.tva.structure import DirectedGraphLearner
+
+        learner = DirectedGraphLearner(n_nodes=3)
+        adj = learner.adjacency.detach().cpu().numpy()
+
+        self.assertGreater(adj[0, 1], adj[1, 0])
+        self.assertGreater(adj[0, 2], adj[2, 0])
+        np.testing.assert_allclose(np.diag(adj), np.zeros(3), atol=1e-6)
+
     def test_graph_snapshot_marks_acyclic_graph(self):
         from autots.evaluator.tva.structure import build_graph_snapshot
 
@@ -846,6 +999,31 @@ class TestStructureLearningUtilities(unittest.TestCase):
         self.assertTrue(snapshot.is_acyclic)
         self.assertEqual(snapshot.topological_order, [0, 1, 2])
         self.assertEqual(snapshot.assignment_matrices[0].shape, (2, 2))
+
+    def test_graph_snapshot_infers_prototype_structure(self):
+        from autots.evaluator.tva.structure import build_graph_snapshot
+
+        adjacency = np.array(
+            [
+                [0.0, 0.9],
+                [0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        snapshot = build_graph_snapshot(
+            adjacency_dense=adjacency,
+            threshold=0.2,
+            full_series_names=['s0', 's1'],
+            anchor_mask=np.array([True, False]),
+            prototype_weights=np.array([[0.9, 0.1], [0.2, 0.8]], dtype=np.float32),
+            global_prototype_weights=np.array([[0.8, 0.2], [0.1, 0.9]], dtype=np.float32),
+            decoded_top_trends=np.array(
+                [[1.0, 2.0, 3.0], [3.0, 2.0, 1.0]], dtype=np.float32
+            ),
+        )
+        self.assertEqual(len(snapshot.prototype_table), 2)
+        self.assertEqual(len(snapshot.prototype_table[0]['sparkline']), 3)
+        self.assertGreaterEqual(len(snapshot.prototype_edge_table), 1)
 
     def test_temporal_loss_composite_structure_terms(self):
         from autots.evaluator.tva.losses import TemporalLossComposite
@@ -930,6 +1108,17 @@ class TestPrototypeBottleneck(unittest.TestCase):
         # softmax → each row sums to 1
         row_sums = weights.sum(dim=-1)
         np.testing.assert_allclose(row_sums.detach().numpy(), np.ones_like(row_sums.detach().numpy()), atol=1e-5)
+
+    def test_orthogonal_prototype_init_separates_initial_bank(self):
+        from autots.evaluator.tva.trend_network import PrototypeBottleneck
+
+        pb = PrototypeBottleneck(d_latent=8, n_prototypes=4)
+        proto = pb._sacred_timeline_prototypes.detach().cpu().numpy()
+        gram = proto @ proto.T
+
+        np.testing.assert_allclose(np.diag(gram), np.ones(4), atol=1e-5)
+        off_diag = gram - np.diag(np.diag(gram))
+        self.assertLess(np.abs(off_diag).max(), 1e-5)
 
 
 @SKIP_TORCH
@@ -1603,8 +1792,53 @@ class TestTVAIntegration(unittest.TestCase):
         tva.fit(df)
         snapshot = tva.get_graph_snapshot()
         self.assertEqual(len(snapshot['node_table']), 3)
+        self.assertEqual(len(snapshot['series_table']), 3)
+        self.assertEqual(snapshot['series_table'][2]['kind'], 'responder')
         forecast = tva.predict()
         self.assertEqual(forecast.shape, (14, 3))
+
+    def test_graph_snapshot_exports_series_prototype_overview_context(self):
+        from autots.evaluator.tva.tva import TVA
+        from autots.evaluator.tva.priors import SeriesMetadata
+
+        metadata = [
+            SeriesMetadata("s0", metric_type="dau", geography="US", history_periods=400),
+            SeriesMetadata("s1", metric_type="dau", geography="US", history_periods=400),
+            SeriesMetadata("s2", metric_type="views", geography="DE", history_periods=30),
+        ]
+        df = self.df.copy()
+        df.columns = ['s0', 's1', 's2']
+        tva = TVA(
+            trend_network='v2',
+            fusion='additive',
+            series_metadata=metadata,
+            epochs=1,
+            window_size=60,
+            forecast_horizon=14,
+            d_token=16,
+            n_meso=4,
+            n_global=2,
+            n_prototypes=3,
+            n_heads=2,
+            batch_size=8,
+            verbose=0,
+            min_anchor_history=100,
+        )
+        tva.fit(df)
+        snapshot = tva.get_graph_snapshot()
+        self.assertEqual(len(snapshot['series_table']), 3)
+        self.assertEqual(len(snapshot['prototype_table']), 3)
+        self.assertEqual(len(snapshot['affinity_table']), 9)
+        self.assertIn('prototype_edge_table', snapshot)
+        self.assertIn('metadata', snapshot['series_table'][0])
+        self.assertEqual(snapshot['series_table'][2]['kind'], 'responder')
+        self.assertEqual(
+            len(snapshot['prototype_table'][0].get('sparkline', [])),
+            tva.forecast_horizon,
+        )
+        self.assertEqual(snapshot['prototype_table'][0]['label'], 'prototype_1')
+        ax = tva.plot_graph(view='overview')
+        self.assertIsNotNone(ax)
 
     def test_he_who_remains(self):
         tva = self._make_tva()

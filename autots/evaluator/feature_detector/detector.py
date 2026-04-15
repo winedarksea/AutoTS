@@ -522,6 +522,18 @@ class TimeSeriesFeatureDetector(
                 future_reg = future_reg.reindex(columns=fit_columns, fill_value=0.0)
                 if future_reg.empty:
                     future_reg = None
+            # Rebuild adaptive Fourier features for the future index if they were
+            # added to the regressor during fit (detected_seasonal_periods is set
+            # only when build_adaptive_fourier_features was actually used).
+            detected_periods = getattr(self, 'detected_seasonal_periods', None)
+            if detected_periods is not None:
+                adaptive_features = build_adaptive_fourier_features(
+                    future_index, detected_periods, max_order=12
+                )
+                if future_reg is not None:
+                    future_reg = pd.concat([future_reg, adaptive_features], axis=1)
+                else:
+                    future_reg = adaptive_features
             if future_reg is not None:
                 zero_reg = future_reg.copy()
                 zero_reg.loc[:, :] = 0.0

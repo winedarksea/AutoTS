@@ -213,6 +213,8 @@ class SyntheticDailyGenerator:
         disable_holiday_splash=False,
         trend_slope_scale=1.0,
         trend_positive_bias=0.5,
+        trend_changepoint_min_slope_factor=1.0,
+        anomaly_magnitude_scale=1.0,
         level_shift_minimum_pct=0.12,
         level_shift_max_pct=None,
         weekly_profile_target=None,
@@ -241,6 +243,10 @@ class SyntheticDailyGenerator:
         self.disable_holiday_splash = disable_holiday_splash
         self.trend_slope_scale = trend_slope_scale
         self.trend_positive_bias = float(np.clip(trend_positive_bias, 0.0, 1.0))
+        self.trend_changepoint_min_slope_factor = float(
+            trend_changepoint_min_slope_factor
+        )
+        self.anomaly_magnitude_scale = float(anomaly_magnitude_scale)
         self.level_shift_minimum_pct = level_shift_minimum_pct
         if (
             level_shift_max_pct is not None
@@ -407,6 +413,10 @@ class SyntheticDailyGenerator:
                     'disable_holiday_splash': bool(self.disable_holiday_splash),
                     'trend_slope_scale': float(self.trend_slope_scale),
                     'trend_positive_bias': float(self.trend_positive_bias),
+                    'trend_changepoint_min_slope_factor': float(
+                        self.trend_changepoint_min_slope_factor
+                    ),
+                    'anomaly_magnitude_scale': float(self.anomaly_magnitude_scale),
                     'level_shift_minimum_pct': float(self.level_shift_minimum_pct),
                     'level_shift_max_pct': (
                         float(self.level_shift_max_pct)
@@ -915,7 +925,9 @@ class SyntheticDailyGenerator:
 
             slopes = []
             prev_slope = None
-            min_change = 0.005 * scale * slope_scale
+            min_change = (
+                0.005 * scale * slope_scale * self.trend_changepoint_min_slope_factor
+            )
 
             for i in range(len(changepoint_days) - 1):
                 # Determine if this slope should be positive
@@ -934,10 +946,7 @@ class SyntheticDailyGenerator:
                         else:
                             mag = self.rng.uniform(0.001, 0.015) * scale * slope_scale
                         new_slope = mag if is_positive else -mag
-                        threshold = min_change * (
-                            0.6 if self.rng.random() > 0.9 else 1.0
-                        )
-                        if abs(new_slope - prev_slope) >= threshold:
+                        if abs(new_slope - prev_slope) >= min_change:
                             break
                     else:
                         sign = 1 if is_positive else -1
@@ -1883,12 +1892,19 @@ class SyntheticDailyGenerator:
                 )
                 params = ('laplace', base_noise_std * 0.7)
             elif dist_type == 't':
-                df = self.rng.uniform(3, 10)
+                df = self.rng.uniform(
+                    5, 10
+                )  # raised floor from 3 to avoid extreme tails
                 segment_noise = (
                     self.rng.standard_t(df, segment_length) * base_noise_std * 0.8
                 )
                 params = ('t', df, base_noise_std * 0.8)
 
+            # Clip each segment at ±3σ so heavy-tailed draws can't produce
+            # anomaly-scale spikes in the noise component.
+            segment_noise = np.clip(
+                segment_noise, -3.0 * base_noise_std, 3.0 * base_noise_std
+            )
             noise[start_day:end_day] = segment_noise
 
             if start_day > 0:
@@ -2029,8 +2045,12 @@ class SyntheticDailyGenerator:
 
         # Generate noise
         noise = np.zeros(self.n_days)
+        innovation_clip = 3.0 * innovation_std
         for t in range(1, self.n_days):
-            noise[t] = ar_phi * noise[t - 1] + self.rng.normal(0, innovation_std)
+            innovation = np.clip(
+                self.rng.normal(0, innovation_std), -innovation_clip, innovation_clip
+            )
+            noise[t] = ar_phi * noise[t - 1] + innovation
 
         # Store a record of the noise type
         self.noise_changepoints[series_name] = [
@@ -2052,7 +2072,7 @@ class SyntheticDailyGenerator:
         signal_strength = scale * 50
         noise_level = series_noise_level * signal_strength
         # Anomalies should be at least 4x the series-specific noise level
-        anomaly_threshold = noise_level * 4
+        anomaly_threshold = noise_level * 4 * self.anomaly_magnitude_scale
 
         # Generate anomalies
         n_weeks = self.n_days / 7
@@ -3403,7 +3423,8 @@ class SyntheticDailyGenerator:
             ``weekly_seasonality_strength``, ``yearly_seasonality_strength``,
             ``noise_level``, ``trend_slope_scale``, ``trend_positive_bias``,
             ``level_shift_minimum_pct``, ``level_shift_max_pct``,
-            ``noise_ar_coefficient``
+            ``noise_ar_coefficient``, ``trend_changepoint_min_slope_factor``,
+            ``anomaly_magnitude_scale``
 
         Returns
         -------
@@ -3523,6 +3544,8 @@ class SyntheticDailyGenerator:
             ),  # level_shift_max_pct (tightened from 0.2 — caps extreme shifts)
             (0.0, 0.95),  # noise_ar_coefficient
             (0.0, 2.0),  # volatility_regime_intensity (smooth heteroscedasticity)
+            (0.5, 5.0),  # trend_changepoint_min_slope_factor (min slope change at CPs)
+            (0.5, 10.0),  # anomaly_magnitude_scale (anomaly size relative to noise)
         ]
 
         # Objective function to minimize
@@ -3542,6 +3565,8 @@ class SyntheticDailyGenerator:
                 ls_max_pct,
                 noise_ar_coef,
                 vol_regime_intensity,
+                cp_min_slope_factor,
+                anomaly_mag_scale,
             ) = params
 
             try:
@@ -3565,6 +3590,8 @@ class SyntheticDailyGenerator:
                     level_shift_max_pct=ls_max_pct,
                     noise_ar_coefficient=noise_ar_coef,
                     volatility_regime_intensity=vol_regime_intensity,
+                    trend_changepoint_min_slope_factor=cp_min_slope_factor,
+                    anomaly_magnitude_scale=anomaly_mag_scale,
                     weekly_profile_target=target_weekly_profile.tolist(),
                     yearly_fourier_target=target_yearly_fourier.tolist(),
                     include_regressors=False,
@@ -3693,7 +3720,7 @@ class SyntheticDailyGenerator:
             print(f"\nRunning optimization with {n_iterations} iterations...")
             print(f"Generating {n_standard_series} standard-type series per iteration")
             print(
-                f"Optimizing 13 parameters (including AR noise, volatility regimes, slope/shift/profile structural params)"
+                f"Optimizing 15 parameters (including AR noise, volatility regimes, slope/shift/profile structural params)"
             )
 
         # Build x0 initial guess from starting_params if provided.
@@ -3712,6 +3739,8 @@ class SyntheticDailyGenerator:
             'level_shift_max_pct',
             'noise_ar_coefficient',
             'volatility_regime_intensity',
+            'trend_changepoint_min_slope_factor',
+            'anomaly_magnitude_scale',
         ]
 
         x0 = None
@@ -3764,6 +3793,8 @@ class SyntheticDailyGenerator:
             'level_shift_max_pct': float(result.x[10]),
             'noise_ar_coefficient': float(result.x[11]),
             'volatility_regime_intensity': float(result.x[12]),
+            'trend_changepoint_min_slope_factor': float(result.x[13]),
+            'anomaly_magnitude_scale': float(result.x[14]),
         }
 
         # Generate final synthetic data with best parameters for validation
@@ -3838,6 +3869,10 @@ class SyntheticDailyGenerator:
         self.level_shift_max_pct = best_params['level_shift_max_pct']
         self.noise_ar_coefficient = best_params['noise_ar_coefficient']
         self.volatility_regime_intensity = best_params['volatility_regime_intensity']
+        self.trend_changepoint_min_slope_factor = best_params[
+            'trend_changepoint_min_slope_factor'
+        ]
+        self.anomaly_magnitude_scale = best_params['anomaly_magnitude_scale']
         self.weekly_profile_target = target_weekly_profile.tolist()
         self.yearly_fourier_target = target_yearly_fourier.tolist()
 

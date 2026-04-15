@@ -1400,8 +1400,13 @@ class DatepartRegressionTransformer(EmptyTransformer):
         if self.transform_dict is not None:
             model = GeneralTransformer(**self.transform_dict)
             y = model.fit_transform(df_local)
+            # Some transforms (e.g. Slice) reduce the row count. Sync df_local
+            # and regressor to y's index so X and y have the same length.
+            if isinstance(y, pd.DataFrame) and len(y) != len(df_local):
+                df_local = df_local.reindex(y.index)
         else:
             y = df_local.to_numpy()
+        regressor = self._align_regressor_to_index(regressor, df_local.index)
         if y.shape[1] == 1:
             y = np.asarray(y).ravel()
         X = date_part(
@@ -1457,11 +1462,39 @@ class DatepartRegressionTransformer(EmptyTransformer):
             X.fillna(0) if isinstance(X, pd.DataFrame) else np.nan_to_num(X),
             y.fillna(0) if isinstance(y, pd.DataFrame) else np.nan_to_num(y),
         )
+        self.feature_columns_ = list(X.columns) if isinstance(X, pd.DataFrame) else None
         self.shape = df_local.shape
         return self
 
+    @staticmethod
+    def _align_regressor_to_index(regressor, target_index):
+        """Force auxiliary regressors onto the model index before joining."""
+        if regressor is None:
+            return None
+        if isinstance(regressor, pd.Series):
+            regressor = regressor.to_frame()
+        if not isinstance(regressor, pd.DataFrame):
+            return regressor
+        if not regressor.index.is_unique:
+            regressor = regressor.groupby(level=0, sort=False).mean()
+        if not regressor.columns.is_unique:
+            regressor = regressor.T.groupby(level=0, sort=False).mean().T
+        if not regressor.index.equals(target_index):
+            regressor = regressor.reindex(target_index)
+        return regressor
+
+    def _align_feature_frame(self, X):
+        """Restore the fit-time feature schema for sklearn models with name checks."""
+        feature_columns = getattr(self, 'feature_columns_', None)
+        if feature_columns is None or not isinstance(X, pd.DataFrame):
+            return X
+        if not X.columns.equals(pd.Index(feature_columns)):
+            X = X.reindex(columns=feature_columns, fill_value=0.0)
+        return X
+
     def impute(self, df, regressor=None):
         """Fill Missing. Needs to have same general pattern of missingness (full rows of NaN only or scattered NaN) as was present during .fit()"""
+        regressor = self._align_regressor_to_index(regressor, df.index)
         X = date_part(
             df.index,
             method=self.datepart_method,
@@ -1481,6 +1514,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
+        X = self._align_feature_frame(X)
         if self.partial_nan_rows:
             # process into a single output approach
             X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
@@ -1488,7 +1522,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 [X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1
             )
 
-        pred = self.model.predict(X)
+        pred = self.model.predict(
+            X.fillna(0) if isinstance(X, pd.DataFrame) else np.nan_to_num(X)
+        )
         if self.partial_nan_rows:
             pred = pred.reshape(-1, df.shape[1])
         y = pd.DataFrame(pred, columns=df.columns, index=df.index)
@@ -1515,6 +1551,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
+        regressor = self._align_regressor_to_index(regressor, df.index)
         X = date_part(
             df.index,
             method=self.datepart_method,
@@ -1534,6 +1571,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
+        X = self._align_feature_frame(X)
         if self.partial_nan_rows:
             # process into a single output approach
             X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
@@ -1541,7 +1579,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 [X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1
             )
         # X.columns = [str(xc) for xc in X.columns]
-        pred = self.model.predict(X)
+        pred = self.model.predict(
+            X.fillna(0) if isinstance(X, pd.DataFrame) else np.nan_to_num(X)
+        )
         if self.partial_nan_rows:
             pred = pred.reshape(-1, df.shape[1])
         y = pd.DataFrame(pred, columns=df.columns, index=df.index)
@@ -1559,6 +1599,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
+        regressor = self._align_regressor_to_index(regressor, df.index)
         X = date_part(
             df.index,
             method=self.datepart_method,
@@ -1578,13 +1619,16 @@ class DatepartRegressionTransformer(EmptyTransformer):
             )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
+        X = self._align_feature_frame(X)
         if self.partial_nan_rows:
             # process into a single output approach
             X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
             X = np.concatenate(
                 [X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1
             )
-        pred = self.model.predict(X)
+        pred = self.model.predict(
+            X.fillna(0) if isinstance(X, pd.DataFrame) else np.nan_to_num(X)
+        )
         if self.partial_nan_rows:
             pred = pred.reshape(-1, df.shape[1])
         y = pd.DataFrame(pred, columns=df.columns, index=df.index)

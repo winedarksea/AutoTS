@@ -27,6 +27,7 @@ from autots.evaluator.tva.decomposition import NornDecomposer
 from autots.evaluator.tva.priors import YggdrasilPriors, SeriesMetadata
 from autots.evaluator.tva.reconciliation import ReconciliationBridge
 from autots.evaluator.tva.structure import (
+    GraphSnapshot,
     StructureLearningConfig,
     build_graph_snapshot,
     plot_graph_snapshot,
@@ -35,7 +36,7 @@ from autots.evaluator.tva.structure import (
 try:
     import torch
     import torch.nn as nn
-    from torch.utils.data import DataLoader, TensorDataset
+    from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
     HAS_TORCH = True
 except Exception:
@@ -97,7 +98,7 @@ class TVA:
         loss_weights: Dict overriding loss component weights.
         reconciliation_method: None, 'mint', 'erm', etc.
         min_anchor_history: Minimum periods for a series to be an anchor.
-        device: 'cpu' or 'cuda'.
+        device: 'cpu', 'cuda', or None (auto-detects cuda if available, else cpu).
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
         prototype_assignment_method: Prototype assignment method for bottleneck
@@ -130,12 +131,13 @@ class TVA:
         batch_size: int = 32,
         window_size: int = 91,
         forecast_horizon: int = 28,
+        recency_halflife_days: Optional[float] = None,
         loss_weights: dict = None,
         reconciliation_method: str = None,
         min_anchor_history: int = 180,
         holiday_country=None,
         holiday_countries: dict = None,
-        device: str = 'cpu',
+        device: str = None,
         random_seed: int = 42,
         verbose: int = 1,
         prototype_assignment_method: str = 'cosine',
@@ -199,12 +201,16 @@ class TVA:
         self.batch_size = batch_size
         self.window_size = window_size
         self.forecast_horizon = forecast_horizon
+        self.recency_halflife_days = recency_halflife_days
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
         self.min_anchor_history = min_anchor_history
         self.holiday_country = holiday_country
         self.holiday_countries = holiday_countries
-        self.device = device
+        if device is None:
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        else:
+            self.device = device
         self.random_seed = random_seed
         self.verbose = verbose
 
@@ -434,7 +440,23 @@ class TVA:
         optimizer = torch.optim.AdamW(all_params, lr=self.lr)
 
         dataset = TensorDataset(X, Y, S_sea, S_hol, S_lvl, S_ano)
-        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        sample_weights = self._compute_window_sample_weights(
+            self._components['trend'].index
+        )
+        if sample_weights is not None:
+            sampler = WeightedRandomSampler(
+                weights=torch.tensor(sample_weights, dtype=torch.double),
+                num_samples=len(sample_weights),
+                replacement=True,
+            )
+            loader = DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                sampler=sampler,
+                shuffle=False,
+            )
+        else:
+            loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
         self._network.train()
         if isinstance(self._fusion_layer, nn.Module):
@@ -808,6 +830,17 @@ class TVA:
             for matrix in outputs.get('assignment_matrices', [])
         ]
         anchor_names = list(np.asarray(self._df_original.columns)[self._anchor_mask])
+        prototype_weights = None
+        if 'prototype_weights' in outputs:
+            prototype_weights = outputs['prototype_weights'].detach().cpu().numpy()[0]
+        global_prototype_weights = None
+        if 'global_prototype_weights' in outputs:
+            global_prototype_weights = (
+                outputs['global_prototype_weights'].detach().cpu().numpy()[0]
+            )
+        decoded_top_trends = None
+        if 'composite_trend' in outputs:
+            decoded_top_trends = outputs['composite_trend'].detach().cpu().numpy()[0]
         snapshot = build_graph_snapshot(
             adjacency_dense=self.get_graph(),
             assignment_matrices=assignment_matrices,
@@ -818,6 +851,12 @@ class TVA:
             ),
             prior_adjacency=self._prior_adj if include_priors else None,
             anchor_names=anchor_names,
+            full_series_names=list(self._df_original.columns),
+            anchor_mask=self._anchor_mask,
+            series_metadata=self.series_metadata,
+            prototype_weights=prototype_weights,
+            global_prototype_weights=global_prototype_weights,
+            decoded_top_trends=decoded_top_trends,
         )
         return snapshot.to_dict()
 
@@ -828,26 +867,38 @@ class TVA:
         max_edges: int = 50,
         show_priors: bool = False,
         ax=None,
+        metadata_color_by: str = 'auto',
     ):
         """Plot the learned graph, hierarchy, or adjacency heatmap."""
         snapshot_dict = self.get_graph_snapshot(
             threshold=threshold,
             include_priors=show_priors,
         )
-        snapshot = build_graph_snapshot(
-            adjacency_dense=snapshot_dict['adjacency_dense'],
-            assignment_matrices=snapshot_dict['assignment_matrices'],
-            threshold=(
-                threshold
-                if threshold is not None
-                else self._structure_config.threshold_for_export
+        snapshot = GraphSnapshot(
+            node_table=snapshot_dict['node_table'],
+            edge_table=snapshot_dict['edge_table'],
+            adjacency_dense=np.asarray(
+                snapshot_dict['adjacency_dense'], dtype=np.float32
             ),
-            prior_adjacency=snapshot_dict.get('prior_adjacency'),
-            anchor_names=[
-                node['node_id']
-                for node in snapshot_dict['node_table']
-                if node.get('level') == 0
+            adjacency_thresholded=np.asarray(
+                snapshot_dict['adjacency_thresholded'], dtype=np.float32
+            ),
+            assignment_matrices=[
+                np.asarray(matrix, dtype=np.float32)
+                for matrix in snapshot_dict['assignment_matrices']
             ],
+            topological_order=snapshot_dict['topological_order'],
+            prior_adjacency=(
+                None
+                if snapshot_dict.get('prior_adjacency') is None
+                else np.asarray(snapshot_dict['prior_adjacency'], dtype=np.float32)
+            ),
+            is_acyclic=bool(snapshot_dict['is_acyclic']),
+            cycle_score=float(snapshot_dict['cycle_score']),
+            series_table=snapshot_dict.get('series_table', []),
+            prototype_table=snapshot_dict.get('prototype_table', []),
+            affinity_table=snapshot_dict.get('affinity_table', []),
+            prototype_edge_table=snapshot_dict.get('prototype_edge_table', []),
         )
         return plot_graph_snapshot(
             snapshot=snapshot,
@@ -855,6 +906,7 @@ class TVA:
             max_edges=max_edges,
             show_priors=show_priors,
             ax=ax,
+            metadata_color_by=metadata_color_by,
         )
 
     # ---- internal helpers ----
@@ -962,6 +1014,46 @@ class TVA:
             targets[i] = data[i + self.window_size : i + total_len].T
 
         return targets
+
+    def _compute_window_sample_weights(
+        self, index: Optional[pd.Index]
+    ) -> Optional[np.ndarray]:
+        """Compute optional recency weights aligned to _create_windows output."""
+        halflife_days = self.recency_halflife_days
+        if halflife_days is None:
+            return None
+        try:
+            halflife_days = float(halflife_days)
+        except Exception:
+            return None
+        if not np.isfinite(halflife_days) or halflife_days <= 0:
+            return None
+        if index is None:
+            return None
+
+        total_len = self.window_size + self.forecast_horizon
+        n_windows = max(len(index) - total_len + 1, 0)
+        if n_windows <= 1:
+            return None
+
+        timestamp_index = pd.DatetimeIndex(index)
+        target_end_index = timestamp_index[total_len - 1 :]
+        if len(target_end_index) != n_windows:
+            return None
+
+        latest_timestamp = target_end_index.max()
+        ages = (
+            np.asarray(
+                (latest_timestamp - target_end_index).total_seconds(),
+                dtype=np.float64,
+            )
+            / 86400.0
+        )
+        ages = np.maximum(ages, 0.0)
+        weights = np.power(0.5, ages / halflife_days)
+        weights = np.clip(weights, 1e-8, None)
+        weights = weights / weights.mean()
+        return weights.astype(np.float32)
 
     def _get_metadata(self):
         return {

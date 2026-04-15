@@ -227,6 +227,83 @@ if HAS_TORCH:
             nll = torch.log(sigma) + 0.5 * ((target - mu) / sigma) ** 2
             return self.penalty_weight * nll.mean()
 
+    class TrendSlopeIncentive(nn.Module):
+        """Anti-flat bias: penalizes predicted trends that are flatter than targets.
+
+        Computes multi-scale slope shortfall between predicted and target trends.
+        Only fires meaningfully when predicted slopes are less steep than target
+        slopes (asymmetric). When trend_phi=0, returns zero with no computation.
+
+        Uses softplus-based shortfall for smooth gradients and a secondary
+        direction-disagreement term to penalize sign reversals gated by target
+        magnitude so flat targets do not trigger it.
+
+        Args:
+            trend_phi: Scaling weight. 0.0 = disabled (default). Typical range
+                0.1--2.0. Negative values are clamped to 0.
+            direction_alpha: Weight of direction-disagreement term relative to
+                magnitude shortfall. Default 0.5.
+        """
+
+        def __init__(self, trend_phi: float = 0.0, direction_alpha: float = 0.5):
+            super().__init__()
+            self.trend_phi = max(0.0, float(trend_phi))
+            self.direction_alpha = direction_alpha
+
+        def _multi_scale_slopes(self, x: torch.Tensor) -> list:
+            """Compute raw slopes at three scales: full, first-half, second-half.
+
+            Same window scheme as CrossSeriesCoherenceLoss._trend_direction()
+            but without tanh squashing, to preserve magnitude information.
+
+            Args:
+                x: (..., T) tensor.
+            Returns:
+                List of 3 tensors, each (...) shaped, containing raw slopes.
+            """
+            T = x.shape[-1]
+            mid = max(T // 2, 1)
+            s_full = (x[..., -1] - x[..., 0]) / T
+            s_first = (x[..., mid] - x[..., 0]) / mid
+            s_second = (x[..., -1] - x[..., mid]) / max(T - mid, 1)
+            return [s_full, s_first, s_second]
+
+        def forward(
+            self,
+            pred_trend: torch.Tensor,
+            target_trend: torch.Tensor,
+        ) -> torch.Tensor:
+            """
+            Args:
+                pred_trend: (B, N, T) predicted trend.
+                target_trend: (B, N, T) target trend.
+            Returns:
+                Scalar penalty.
+            """
+            if self.trend_phi == 0.0:
+                return torch.tensor(0.0, device=pred_trend.device)
+
+            T = pred_trend.shape[-1]
+            if T < 2:
+                return torch.tensor(0.0, device=pred_trend.device)
+
+            pred_slopes = self._multi_scale_slopes(pred_trend)
+            target_slopes = self._multi_scale_slopes(target_trend)
+
+            penalty = torch.tensor(0.0, device=pred_trend.device)
+            for ps, ts in zip(pred_slopes, target_slopes):
+                # Magnitude shortfall: penalize when |pred| < |target|
+                shortfall = F.softplus(ts.abs() - ps.abs())
+                # Direction disagreement: penalize when signs differ,
+                # scaled by target magnitude so flat targets don't trigger this
+                sign_disagree = F.relu(-ts.sign() * ps) * ts.abs()
+                penalty = (
+                    penalty
+                    + (shortfall**2 + self.direction_alpha * sign_disagree**2).mean()
+                )
+
+            return self.trend_phi * penalty / 3.0  # average over 3 scales
+
     class CrossSeriesCoherenceLoss(nn.Module):
         """Ensures related metrics produce consistent macro direction.
 
@@ -246,10 +323,16 @@ if HAS_TORCH:
         series are left to follow their own data-driven history.
         """
 
-        def __init__(self, penalty_weight: float = 2.0, temperature: float = 1.0):
+        def __init__(
+            self,
+            penalty_weight: float = 2.0,
+            temperature: float = 1.0,
+            magnitude_weight: float = 1.0,
+        ):
             super().__init__()
             self.penalty_weight = penalty_weight
             self.temperature = temperature
+            self.magnitude_weight = magnitude_weight
 
         def _trend_direction(self, x: torch.Tensor) -> torch.Tensor:
             """Multi-scale soft direction signal.
@@ -274,6 +357,13 @@ if HAS_TORCH:
                 + torch.tanh(s_first / t)
                 + torch.tanh(s_second / t)
             ) / 3.0
+
+        def _relative_growth_rate(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scale-stable, non-saturating growth summary."""
+            if x.shape[-1] < 2:
+                return torch.zeros(x.shape[:-1], device=x.device, dtype=x.dtype)
+            baseline = x[..., :-1].abs().mean(dim=-1).clamp(min=1e-3)
+            return (x[..., -1] - x[..., 0]) / baseline
 
         def forward(
             self,
@@ -319,6 +409,9 @@ if HAS_TORCH:
                 anchor_dir = self._trend_direction(
                     composite_per_series.detach()
                 )  # (B, N)
+                anchor_growth = self._relative_growth_rate(
+                    composite_per_series.detach()
+                )  # (B, N)
                 # Gate by anchor strength: when the composite is near-flat
                 # (anchor_dir ≈ 0) the penalty vanishes, preventing the degenerate
                 # case where a flat anchor actively suppresses trend diversity.
@@ -330,7 +423,13 @@ if HAS_TORCH:
                 # has no clear structural home and gets a lower penalty.
                 assignment_confidence = prototype_weights.max(dim=-1).values  # (B, N)
                 deviation = (soft_dir - anchor_dir) ** 2  # (B, N)
-                penalty = (anchor_strength * assignment_confidence * deviation).mean()
+                growth_rate = self._relative_growth_rate(trend_forecasts)
+                magnitude_deviation = (growth_rate - anchor_growth) ** 2
+                penalty = (
+                    anchor_strength
+                    * assignment_confidence
+                    * (deviation + self.magnitude_weight * magnitude_deviation)
+                ).mean()
                 return self.penalty_weight * penalty
 
             # --- Fallback: prototype-consensus mode ---
@@ -338,13 +437,18 @@ if HAS_TORCH:
             # is not available.  Uses multi-scale direction signal in place of the
             # previous endpoint-only slope.
             penalty = torch.tensor(0.0, device=trend_forecasts.device)
+            growth_rate = self._relative_growth_rate(trend_forecasts)  # (B, N)
             for k in range(K):
                 w_k = prototype_weights[:, :, k]  # (B, N)
                 w_sum = w_k.sum(dim=-1, keepdim=True).clamp(min=1e-8)
                 consensus = (w_k * soft_dir).sum(dim=-1, keepdim=True) / w_sum
+                consensus_growth = (w_k * growth_rate).sum(dim=-1, keepdim=True) / w_sum
                 consensus_strength = consensus.abs()
                 deviation = (soft_dir - consensus) ** 2
-                weighted_dev = (w_k * deviation).sum(dim=-1)
+                magnitude_deviation = (growth_rate - consensus_growth) ** 2
+                weighted_dev = (
+                    w_k * (deviation + self.magnitude_weight * magnitude_deviation)
+                ).sum(dim=-1)
                 penalty = (
                     penalty + (consensus_strength.squeeze(-1) * weighted_dev).mean()
                 )
@@ -358,7 +462,7 @@ if HAS_TORCH:
         Args:
             weights: Dict overriding default weights for each loss component.
                 Keys: 'forecast', 'orthogonality', 'local_trend', 'smoothness',
-                      'soft_prior', 'causal_prior', 'coherence'.
+                      'soft_prior', 'causal_prior', 'coherence', 'trend_phi'.
             base_forecast_loss: 'mse', 'mae', or 'huber'.
         """
 
@@ -382,6 +486,7 @@ if HAS_TORCH:
             self.structure_prior = SoftPriorLoss(1.0)
             self.coherence = CrossSeriesCoherenceLoss(w.get('coherence', 2.0))
             self.probabilistic = ProbabilisticLoss(w.get('probabilistic', 0.2))
+            self.slope_incentive = TrendSlopeIncentive(w.get('trend_phi', 0.0))
             self._forecast_weight = w.get('forecast', 1.0)
 
         def forward(self, outputs: dict, targets: dict) -> tuple:
@@ -567,6 +672,14 @@ if HAS_TORCH:
                 )
                 breakdown['probabilistic'] = loss_prob.item()
                 total = total + loss_prob
+
+            # trend slope incentive (anti-flat bias)
+            if self.slope_incentive.trend_phi > 0:
+                loss_slope = self.slope_incentive(
+                    outputs['trend_forecast'], targets['true_trend']
+                )
+                breakdown['trend_slope_incentive'] = loss_slope.item()
+                total = total + loss_slope
 
             breakdown['total'] = total.item()
             return total, breakdown
