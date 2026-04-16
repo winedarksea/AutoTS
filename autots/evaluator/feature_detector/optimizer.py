@@ -855,12 +855,17 @@ class FeatureDetectionOptimizer:
         true_cp,
         detected_components,
         true_components,
+        date_index=None,
+        trend_segment_weight=0.04,
     ):
         """
         Legacy trend changepoint loss used by the older optimizer path.
 
         This is kept local to optimize so the broader loss implementation and
         fine_tune_changepoints objective can continue evolving independently.
+        A very small segment-level trend penalty is added here as a guardrail
+        against decompositions that recover changepoint dates but push most
+        trend mass into noise.
         """
         loss_calc = self.loss_calculator
         if not true_cp and not detected_cp:
@@ -960,6 +965,14 @@ class FeatureDetectionOptimizer:
             )
             loss += float(loss_calc.trend_complexity_weight) * complexity_penalty
 
+        if trend_detected_series is not None and trend_true_series is not None:
+            loss += float(trend_segment_weight) * self._trend_segment_level_penalty(
+                trend_detected_series,
+                trend_true_series,
+                true_entries,
+                date_index=date_index,
+            )
+
         return float(loss)
 
     def _apply_legacy_changepoint_loss_for_optimize(
@@ -1003,6 +1016,7 @@ class FeatureDetectionOptimizer:
                 true_series.get('trend_changepoints', []),
                 detected_components_by_name.get(name, {}),
                 true_components_by_name.get(name, {}),
+                date_index=getattr(self.synthetic_generator, 'date_index', None),
             )
             trend_losses.append(trend_loss)
             if isinstance(series_breakdown, dict):
