@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/winedarksea-autots-badge.png)](https://mseep.ai/app/winedarksea-autots)
+
 # AutoTS
 
 <img src="/img/autots_1280.png" width="400" height="184" title="AutoTS Logo">
