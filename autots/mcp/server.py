@@ -59,9 +59,11 @@ logger = logging.getLogger(__name__)
 
 
 if MCP_AVAILABLE:
+    from mcp.types import ImageContent
+
     from autots.mcp.schemas import TOOLS
     from autots.mcp.prompts import PROMPTS, get_resources, read_resource, get_prompt
-    from autots.mcp.handlers import TOOL_HANDLERS
+    from autots.mcp.core import run_tool
 
     app = Server("autots")
 
@@ -72,25 +74,33 @@ if MCP_AVAILABLE:
         except Exception:
             pass
 
+    def _to_mcp_content(result):
+        """Wrap a handler's plain-data result into MCP content blocks."""
+        if isinstance(result, dict) and "image_base64" in result:
+            return [
+                ImageContent(
+                    type="image",
+                    data=result["image_base64"],
+                    mimeType=result.get("mime_type", "image/png"),
+                )
+            ]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(result, separators=(',', ':'), default=str),
+            )
+        ]
+
     @app.list_tools()
     async def list_tools():
         return TOOLS
 
     @app.call_tool()
     async def call_tool(name: str, arguments: Any) -> list[TextContent]:
-        """Dispatch tool calls to the appropriate handler."""
+        """Dispatch tool calls to the shared core and wrap the result for MCP."""
         try:
-            handler = TOOL_HANDLERS.get(name)
-            if handler is None:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {"error": f"Unknown tool: {name}"}, separators=(',', ':')
-                        ),
-                    )
-                ]
-            return await handler(arguments, _log_progress)
+            result = await run_tool(name, arguments, _log_progress)
+            return _to_mcp_content(result)
         except Exception:
             logger.exception(f"Error in tool {name}")
             raise

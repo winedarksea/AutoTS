@@ -1,0 +1,10 @@
+{
+  "name": "AutoTS Forecasting",
+  "short_name": "AutoTS",
+  "description": "Upload a spreadsheet and forecast it in your browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdfbff",
+  "theme_color": "#4658b8",
+  "icons": []
+}

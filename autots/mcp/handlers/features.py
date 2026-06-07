@@ -1,8 +1,12 @@
-"""Handlers for event risk forecasting and time series feature detection tools."""
+"""Handlers for event risk forecasting and time series feature detection tools.
+
+Handlers return plain, JSON-serializable data. Plot handlers return
+``{"image_base64": ..., "mime_type": "image/png"}``. Transport layers wrap the
+result as needed.
+"""
 
 import base64
 import io
-import json
 
 import pandas as pd
 
@@ -13,13 +17,6 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
-
-try:
-    from mcp.types import TextContent, ImageContent
-
-    MCP_AVAILABLE = True
-except ImportError:
-    MCP_AVAILABLE = False
 
 from autots import EventRiskForecast
 from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
@@ -90,7 +87,7 @@ async def handle_forecast_event_risk(arguments: dict, log_progress) -> dict:
     }
 
 
-async def handle_get_event_risk_results(arguments: dict, log_progress) -> list:
+async def handle_get_event_risk_results(arguments: dict, log_progress) -> dict:
     event_risk_id = arguments.get("event_risk_id")
     format_type = arguments.get("format", "json_wide")
 
@@ -108,7 +105,7 @@ async def handle_get_event_risk_results(arguments: dict, log_progress) -> list:
         df = lower_risk_df
         risk_type = 'lower_risk'
     else:
-        result = {
+        return {
             'threshold': metadata.get('threshold'),
             'forecast_length': metadata.get('forecast_length'),
             'upper_risk': (
@@ -122,7 +119,6 @@ async def handle_get_event_risk_results(arguments: dict, log_progress) -> list:
                 else None
             ),
         }
-        return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     if format_type.startswith("csv"):
         filepath = dataframe_to_output(df, format_type)
@@ -131,18 +127,17 @@ async def handle_get_event_risk_results(arguments: dict, log_progress) -> list:
         csv_metadata['risk_type'] = risk_type
         csv_metadata['threshold'] = metadata.get('threshold')
         csv_metadata['forecast_length'] = metadata.get('forecast_length')
-        return [TextContent(type="text", text=json.dumps(csv_metadata, indent=2))]
+        return csv_metadata
     else:
-        result = {
+        return {
             'risk_type': risk_type,
             'threshold': metadata.get('threshold'),
             'forecast_length': metadata.get('forecast_length'),
             'probabilities': dataframe_to_output(df, format_type),
         }
-        return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-async def handle_plot_event_risk(arguments: dict, log_progress) -> list:
+async def handle_plot_event_risk(arguments: dict, log_progress) -> dict:
     event_risk_id = arguments.get("event_risk_id")
 
     cached = get_cached_object(event_risk_id, 'event_risk')
@@ -156,7 +151,7 @@ async def handle_plot_event_risk(arguments: dict, log_progress) -> list:
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
 
-    return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+    return {"image_base64": img_base64, "mime_type": "image/png"}
 
 
 async def handle_detect_features(arguments: dict, log_progress) -> dict:
@@ -188,7 +183,7 @@ async def handle_detect_features(arguments: dict, log_progress) -> dict:
     }
 
 
-async def handle_get_detected_features(arguments: dict, log_progress) -> list:
+async def handle_get_detected_features(arguments: dict, log_progress) -> dict:
     detector_id = arguments.get("detector_id")
     date_start = arguments.get("date_start")
     date_end = arguments.get("date_end")
@@ -237,16 +232,14 @@ async def handle_get_detected_features(arguments: dict, log_progress) -> list:
             counts['seasonality_strength'] = series_data['seasonality_strength']
         detection_counts[sname] = counts
 
-    output = {
+    return {
         'summary': summary,
         'detection_counts': detection_counts,
         'features': results,
     }
 
-    return [TextContent(type="text", text=json.dumps(output, indent=2))]
 
-
-async def handle_plot_features(arguments: dict, log_progress) -> list:
+async def handle_plot_features(arguments: dict, log_progress) -> dict:
     detector_id = arguments.get("detector_id")
     series = arguments.get("series")
 
@@ -264,7 +257,7 @@ async def handle_plot_features(arguments: dict, log_progress) -> list:
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
 
-    return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+    return {"image_base64": img_base64, "mime_type": "image/png"}
 
 
 async def handle_forecast_from_features(arguments: dict, log_progress) -> dict:

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoTS — Forecasting for everyone</title>
+  <meta name="description" content="Upload a spreadsheet and forecast it in your browser. No code, no server." />
+
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#4658b8" />
+
+  <!-- Runtime configuration consumed by autots_client.js / the worker -->
+  <script>
+    self.AUTOTS_WORKER_URL = '/pyodide_worker.js';
+    // Wheel URL is discovered at runtime from /autots_wheel.json (built by
+    // scripts/build_wheel.sh) because micropip needs the exact PEP-427 name.
+    self.AUTOTS_PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js';
+  </script>
+
+  <!-- The language-neutral client facade (defines window.autotsClient) -->
+  <link data-trunk rel="copy-file" href="js/autots_client.js" />
+  <link data-trunk rel="copy-file" href="worker/pyodide_worker.js" />
+  <link data-trunk rel="copy-file" href="public/llms.txt" />
+  <link data-trunk rel="copy-file" href="public/manifest.webmanifest" />
+  <link data-trunk rel="css" href="styles/md3.css" />
+  <script src="/autots_client.js"></script>
+</head>
+<body></body>
+</html>

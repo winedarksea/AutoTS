@@ -1,0 +1,170 @@
+/* Material Design 3 tokens + components for the AutoTS PWA.
+   A focused subset of MD3: color roles, typography scale, shape, elevation,
+   and the handful of components the app uses (top app bar, cards, buttons,
+   text fields, segmented tabs, sliders). */
+
+:root {
+  /* Color roles (MD3 baseline, indigo-ish primary) */
+  --md-primary: #4658b8;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #dfe0ff;
+  --md-on-primary-container: #00105c;
+  --md-secondary-container: #e1e0f9;
+  --md-surface: #fdfbff;
+  --md-surface-container: #f2f0fa;
+  --md-surface-container-high: #ece9f4;
+  --md-on-surface: #1b1b1f;
+  --md-on-surface-variant: #46464f;
+  --md-outline: #777680;
+  --md-outline-variant: #c7c5d0;
+  --md-error: #ba1a1a;
+  --md-success: #2e7d32;
+
+  /* Shape */
+  --md-shape-sm: 8px;
+  --md-shape-md: 12px;
+  --md-shape-lg: 16px;
+  --md-shape-xl: 28px;
+
+  /* Elevation */
+  --md-elev-1: 0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15);
+  --md-elev-2: 0 1px 2px rgba(0,0,0,.30), 0 2px 6px 2px rgba(0,0,0,.15);
+
+  --md-font: "Roboto", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--md-font);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  line-height: 1.5;
+}
+
+/* Typography scale */
+.md-display { font-size: 2.25rem; font-weight: 400; letter-spacing: 0; }
+.md-headline { font-size: 1.5rem; font-weight: 500; }
+.md-title { font-size: 1.125rem; font-weight: 500; }
+.md-body { font-size: 0.95rem; }
+.md-label { font-size: 0.8rem; font-weight: 500; color: var(--md-on-surface-variant); }
+
+/* Top app bar */
+.md-appbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: var(--md-surface-container);
+  box-shadow: var(--md-elev-1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.md-appbar .brand { font-weight: 600; font-size: 1.25rem; }
+.md-appbar .spacer { flex: 1; }
+
+.md-container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Card */
+.md-card {
+  background: var(--md-surface-container);
+  border-radius: var(--md-shape-lg);
+  padding: 20px;
+  box-shadow: var(--md-elev-1);
+}
+.md-card > h2 { margin: 0 0 12px; font-size: 1.125rem; font-weight: 500; }
+
+/* Buttons */
+.md-btn {
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: box-shadow .15s, background .15s, opacity .15s;
+}
+.md-btn:disabled { opacity: .5; cursor: not-allowed; }
+.md-btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
+.md-btn.filled:hover:not(:disabled) { box-shadow: var(--md-elev-2); }
+.md-btn.tonal { background: var(--md-secondary-container); color: var(--md-on-primary-container); }
+.md-btn.outlined { background: transparent; color: var(--md-primary); border: 1px solid var(--md-outline); }
+.md-btn.text { background: transparent; color: var(--md-primary); padding: 10px 12px; }
+
+.md-btn-row { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* Text fields */
+.md-field { display: flex; flex-direction: column; gap: 6px; }
+.md-field textarea,
+.md-field input[type="text"],
+.md-field input[type="url"],
+.md-field input[type="number"],
+.md-field select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 12px 14px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.md-field textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, monospace; }
+.md-field textarea:focus,
+.md-field input:focus,
+.md-field select:focus { outline: 2px solid var(--md-primary); border-color: var(--md-primary); }
+
+/* Segmented tabs */
+.md-tabs { display: inline-flex; border: 1px solid var(--md-outline); border-radius: 999px; overflow: hidden; }
+.md-tabs button {
+  font-family: inherit; font-size: 0.85rem; font-weight: 500;
+  border: none; background: transparent; color: var(--md-on-surface-variant);
+  padding: 8px 18px; cursor: pointer;
+}
+.md-tabs button.active { background: var(--md-secondary-container); color: var(--md-on-primary-container); }
+
+/* Expander */
+.md-expander summary {
+  cursor: pointer; font-weight: 500; color: var(--md-primary);
+  padding: 8px 0; list-style: none;
+}
+.md-expander summary::-webkit-details-marker { display: none; }
+.md-expander summary::before { content: "▸ "; }
+.md-expander[open] summary::before { content: "▾ "; }
+
+/* Chart */
+.md-chart { width: 100%; background: var(--md-surface); border-radius: var(--md-shape-md); }
+.md-chart svg { display: block; width: 100%; height: auto; }
+
+/* Accessible data table (paired with every chart) */
+.md-table-wrap { max-height: 280px; overflow: auto; border-radius: var(--md-shape-sm); }
+table.md-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+table.md-table th, table.md-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--md-outline-variant); }
+table.md-table th:first-child, table.md-table td:first-child { text-align: left; }
+table.md-table thead th { position: sticky; top: 0; background: var(--md-surface-container-high); }
+
+/* Adjustment sliders */
+.md-adjust-row { display: grid; grid-template-columns: 120px 1fr 90px; gap: 12px; align-items: center; padding: 4px 0; }
+.md-adjust-row input[type="range"] { width: 100%; accent-color: var(--md-primary); }
+
+/* Status / chips */
+.md-status { font-size: 0.85rem; color: var(--md-on-surface-variant); min-height: 1.2em; }
+.md-chip { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--md-primary-container); color: var(--md-on-primary-container); font-size: 0.8rem; font-weight: 500; margin: 2px; }
+.md-error { color: var(--md-error); }
+
+/* Progress bar (indeterminate) */
+.md-progress { height: 4px; background: var(--md-primary-container); border-radius: 2px; overflow: hidden; }
+.md-progress > div { height: 100%; width: 40%; background: var(--md-primary); border-radius: 2px; animation: md-indeterminate 1.2s infinite ease-in-out; }
+@keyframes md-indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+
+.muted { color: var(--md-on-surface-variant); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }

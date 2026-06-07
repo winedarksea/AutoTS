@@ -1,9 +1,13 @@
-"""Handlers for retrieving and modifying cached predictions and AutoTS model results."""
+"""Handlers for retrieving and modifying cached predictions and AutoTS model results.
+
+Handlers return plain, JSON-serializable data. Plot handlers return
+``{"image_base64": ..., "mime_type": "image/png"}``. Transport layers wrap the
+result as needed.
+"""
 
 import base64
 import copy
 import io
-import json
 import os
 import tempfile
 import uuid
@@ -18,20 +22,13 @@ try:
 except ImportError:
     plt = None
 
-try:
-    from mcp.types import TextContent, ImageContent
-
-    MCP_AVAILABLE = True
-except ImportError:
-    MCP_AVAILABLE = False
-
 from autots.tools.constraint import apply_adjustment_single
 
 from autots.mcp.cache import cache_object, get_cached_object
 from autots.mcp.data_utils import dataframe_to_output, build_csv_metadata
 
 
-async def handle_get_forecast(arguments: dict, log_progress) -> list:
+async def handle_get_forecast(arguments: dict, log_progress) -> dict:
     prediction_id = arguments.get("prediction_id")
     output = arguments.get("output", "forecast")
     format_type = arguments.get("format", "json_wide")
@@ -113,16 +110,9 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
                     'autots_mcp': f"Use load_to_dataframe('{filepath}') then pivot on forecast_type if needed",
                 },
             }
-            return [
-                TextContent(
-                    type="text", text=json.dumps(metadata, separators=(',', ':'))
-                )
-            ]
+            return metadata
         else:
-            result = df_combined.to_dict(orient='list')
-            return [
-                TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
-            ]
+            return df_combined.to_dict(orient='list')
 
     elif output == "forecast":
         df = prediction.forecast
@@ -136,18 +126,12 @@ async def handle_get_forecast(arguments: dict, log_progress) -> list:
     if format_type.startswith("csv"):
         filepath_out = str(dataframe_to_output(df, format_type))
         is_long = format_type == "csv_long"
-        metadata = build_csv_metadata(filepath_out, df, is_long)
-        return [
-            TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))
-        ]
+        return build_csv_metadata(filepath_out, df, is_long)
     else:
-        result = dataframe_to_output(df, format_type)
-        return [
-            TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
-        ]
+        return dataframe_to_output(df, format_type)
 
 
-async def handle_plot_forecast(arguments: dict, log_progress) -> list:
+async def handle_plot_forecast(arguments: dict, log_progress) -> dict:
     prediction_id = arguments.get("prediction_id")
     include_history = arguments.get("include_history", True)
     series = arguments.get("series")
@@ -222,7 +206,7 @@ async def handle_plot_forecast(arguments: dict, log_progress) -> list:
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
 
-    return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+    return {"image_base64": img_base64, "mime_type": "image/png"}
 
 
 async def handle_apply_constraints(arguments: dict, log_progress) -> dict:
@@ -338,23 +322,21 @@ async def handle_apply_adjustments(arguments: dict, log_progress) -> dict:
     }
 
 
-async def handle_get_model_params(arguments: dict, log_progress) -> list:
+async def handle_get_model_params(arguments: dict, log_progress) -> dict:
     prediction_id = arguments.get("prediction_id")
 
     cached = get_cached_object(prediction_id, 'prediction')
     prediction = cached['object']
 
-    params = {
+    return {
         'model_name': prediction.model_name,
         'model_parameters': prediction.model_parameters,
         'transformation_parameters': prediction.transformation_parameters,
         'forecast_length': len(prediction.forecast),
     }
 
-    return [TextContent(type="text", text=json.dumps(params, separators=(',', ':')))]
 
-
-async def handle_get_forecast_components(arguments: dict, log_progress) -> list:
+async def handle_get_forecast_components(arguments: dict, log_progress) -> dict:
     prediction_id = arguments.get("prediction_id")
 
     cached = get_cached_object(prediction_id, 'prediction')
@@ -387,36 +369,18 @@ async def handle_get_forecast_components(arguments: dict, log_progress) -> list:
                     "format": "simple",
                     "components": dataframe_to_output(components_df, "json_wide"),
                 }
-            return [
-                TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
-            ]
+            return result
         else:
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "error": f"Components has unexpected type: {type(components_df)}"
-                        },
-                        separators=(',', ':'),
-                    ),
-                )
-            ]
+            return {
+                "error": f"Components has unexpected type: {type(components_df)}"
+            }
     else:
-        return [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "error": "Components not available for this model type. Only certain models (Cassandra, TVVAR) provide component decomposition."
-                    },
-                    separators=(',', ':'),
-                ),
-            )
-        ]
+        return {
+            "error": "Components not available for this model type. Only certain models (Cassandra, TVVAR) provide component decomposition."
+        }
 
 
-async def handle_get_validation_results(arguments: dict, log_progress) -> list:
+async def handle_get_validation_results(arguments: dict, log_progress) -> dict:
     autots_id = arguments.get("autots_id")
 
     cached = get_cached_object(autots_id, 'autots')
@@ -424,12 +388,7 @@ async def handle_get_validation_results(arguments: dict, log_progress) -> list:
     metadata = cached.get('metadata', {})
 
     if not hasattr(model, 'results'):
-        return [
-            TextContent(
-                type="text",
-                text=json.dumps({"error": "No validation results available"}, indent=2),
-            )
-        ]
+        return {"error": "No validation results available"}
 
     results_df = model.results()
 
@@ -497,17 +456,15 @@ async def handle_get_validation_results(arguments: dict, log_progress) -> list:
             'end': df_wide.index[-1].strftime('%Y-%m-%d'),
         }
 
-    result = {
+    return {
         'best_model': best_model,
         'train_info': train_info,
         'top_10_models': top_models,
         'available_metrics': list(results_df.columns),
     }
 
-    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
-
-async def handle_plot_validation(arguments: dict, log_progress) -> list:
+async def handle_plot_validation(arguments: dict, log_progress) -> dict:
     autots_id = arguments.get("autots_id")
 
     cached = get_cached_object(autots_id, 'autots')
@@ -521,7 +478,7 @@ async def handle_plot_validation(arguments: dict, log_progress) -> list:
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
 
-    return [ImageContent(type="image", data=img_base64, mimeType="image/png")]
+    return {"image_base64": img_base64, "mime_type": "image/png"}
 
 
 PREDICTION_HANDLERS = {

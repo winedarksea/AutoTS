@@ -1,0 +1,63 @@
+# AutoTS PWA — guide for LLMs and automated clients
+
+This is a browser app for time-series forecasting. All computation runs locally
+in your browser via Pyodide (Python compiled to WebAssembly). There is no server
+and no API key.
+
+## How forecasting works here
+
+Every capability is a "command" dispatched to a shared Python core
+(`autots.mcp.pyodide_api.run_command_json`). The browser calls:
+
+    autotsClient.callTool(command, argsJson) -> Promise<JSON string>
+
+Each chart in the page is paired with an accessible `<table class="md-table">`
+holding the same numbers, and each result is also valid JSON — prefer those over
+reading pixels.
+
+## Minimal workflow
+
+1. Load data (returns a `data_id`):
+   - `smart_load` with `{ "text": "<csv or tsv>" }` — auto-cleans messy
+     spreadsheets (drops empty/padding rows & columns) and auto-detects wide vs
+     long orientation. Also accepts `{ "url": "<csv url>" }` or
+     `{ "content_base64": "<bytes>", "filename": "x.xlsx" }`.
+   - or `load_sample_data` with `{ "dataset": "monthly" }`.
+   Result: `{ "data_id": "...", "report": { ... }, "rows": N, "cols": M }`.
+
+2. Inspect (optional):
+   - `get_data` `{ "data_id", "output_format": "json_wide" }` ->
+     `{ "datetime": [...], "<series>": [...] }`.
+   - `detect_features` `{ "data_id" }` -> `{ "detector_id" }`, then
+     `get_detected_features` `{ "detector_id" }` -> anomalies / changepoints /
+     level shifts / holidays / seasonality per series.
+
+3. Forecast (returns a `prediction_id`):
+   - `make_forecast` `{ "data_id", "forecast_length": 30 }` — fast forecast via
+     the feature detector. Best first choice.
+   - `search_forecast` `{ "data_id", "forecast_length" }` — model search over a
+     Pyodide-safe model set.
+   - `search_all_night` — a larger search budget.
+
+4. Read the forecast:
+   - `get_forecast` `{ "prediction_id", "output": "forecast", "format":
+     "json_wide" }` -> `{ "datetime": [...], "<series>": [...] }`.
+   - `output` may be `forecast` | `upper_forecast` | `lower_forecast` | `all`.
+
+5. Adjust & export:
+   - Forecast points can be hand-adjusted in the UI; the CSV download reflects
+     those overrides.
+   - `apply_adjustments` and `apply_constraints` apply structured changes and
+     return a new `prediction_id`.
+
+## Data shapes
+
+- Wide JSON: `{ "datetime": ["YYYY-MM-DD", ...], "series_a": [..], "series_b": [..] }`
+- Long JSON: `{ "datetime": [...], "series_id": [...], "value": [...] }`
+
+## Notes
+
+- Heavy models (TensorFlow / Prophet / XGBoost / LightGBM) are unavailable in
+  the browser; forecasting is restricted to pure-Python models.
+- The same command set is served by the AutoTS MCP server (`autots-mcp`) for
+  use from coding agents outside the browser.

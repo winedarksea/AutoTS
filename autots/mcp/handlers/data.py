@@ -1,6 +1,10 @@
-"""Handlers for cache management and data loading/conversion tools."""
+"""Handlers for cache management and data loading/conversion tools.
 
-import json
+Handlers return plain, JSON-serializable data. Transport layers (the MCP server,
+the Pyodide worker) are responsible for wrapping the result.
+"""
+
+import base64
 
 import pandas as pd
 
@@ -18,13 +22,6 @@ from autots import (
 from autots.datasets.synthetic import SyntheticDailyGenerator
 from autots.tools.transform import GeneralTransformer
 
-try:
-    from mcp.types import TextContent
-
-    MCP_AVAILABLE = True
-except ImportError:
-    MCP_AVAILABLE = False
-
 from autots.mcp.cache import (
     cache_object,
     get_cached_object,
@@ -36,13 +33,11 @@ from autots.mcp.data_utils import (
     dataframe_to_output,
     build_csv_metadata,
 )
+from autots.mcp.ingest import smart_load
 
 
-async def handle_list_cache(arguments: dict, log_progress) -> list:
-    cache_info = list_all_cached_objects()
-    return [
-        TextContent(type="text", text=json.dumps(cache_info, separators=(',', ':')))
-    ]
+async def handle_list_cache(arguments: dict, log_progress) -> dict:
+    return list_all_cached_objects()
 
 
 async def handle_clear_cache(arguments: dict, log_progress) -> dict:
@@ -165,7 +160,56 @@ async def handle_load_data_from_file(arguments: dict, log_progress) -> dict:
     }
 
 
-async def handle_get_data(arguments: dict, log_progress) -> list:
+async def handle_smart_load(arguments: dict, log_progress) -> dict:
+    """Load messy user data (paste / upload / URL) with auto cleanup + detection.
+
+    Accepts pasted ``text`` (CSV/TSV), a ``url``, or base64-encoded
+    ``content_base64`` (CSV or Excel; ``filename`` disambiguates). Returns a
+    ``data_id`` plus a ``report`` describing what was cleaned and detected.
+    """
+    text = arguments.get("text")
+    url = arguments.get("url")
+    filename = arguments.get("filename")
+    content_base64 = arguments.get("content_base64")
+    data_format = arguments.get("data_format", "auto")
+    long_cols = arguments.get("long_cols")
+
+    csv_bytes = base64.b64decode(content_base64) if content_base64 else None
+    if text is None and url is None and csv_bytes is None:
+        raise ValueError(
+            "Must provide one of: 'text', 'url', or 'content_base64'"
+        )
+
+    await log_progress("smart_load: parsing and cleaning uploaded data")
+    df, report = smart_load(
+        text=text,
+        csv_bytes=csv_bytes,
+        url=url,
+        filename=filename,
+        data_format=data_format,
+        long_cols=long_cols,
+    )
+
+    data_id = cache_object(
+        df,
+        'data',
+        {
+            'source': 'smart_load',
+            'detected_format': report.get('detected_format'),
+            'rows': len(df),
+            'columns': len(df.columns),
+        },
+    )
+
+    return {
+        "data_id": data_id,
+        "report": report,
+        "rows": len(df),
+        "cols": len(df.columns),
+    }
+
+
+async def handle_get_data(arguments: dict, log_progress) -> dict:
     data_id = arguments.get("data_id")
     output_format = arguments.get("output_format", "json_wide")
 
@@ -175,15 +219,9 @@ async def handle_get_data(arguments: dict, log_progress) -> list:
     if output_format.startswith("csv"):
         filepath = dataframe_to_output(df, output_format)
         is_long = output_format == "csv_long"
-        metadata = build_csv_metadata(filepath, df, is_long)
-        return [
-            TextContent(type="text", text=json.dumps(metadata, separators=(',', ':')))
-        ]
+        return build_csv_metadata(filepath, df, is_long)
     else:
-        result = dataframe_to_output(df, output_format)
-        return [
-            TextContent(type="text", text=json.dumps(result, separators=(',', ':')))
-        ]
+        return dataframe_to_output(df, output_format)
 
 
 async def handle_convert_long_to_wide(arguments: dict, log_progress) -> dict:
@@ -256,6 +294,7 @@ DATA_HANDLERS = {
     "load_live_data": handle_load_live_data,
     "generate_synthetic_data": handle_generate_synthetic_data,
     "load_data_from_file": handle_load_data_from_file,
+    "smart_load": handle_smart_load,
     "get_data": handle_get_data,
     "convert_long_to_wide": handle_convert_long_to_wide,
     "clean_data": handle_clean_data,
