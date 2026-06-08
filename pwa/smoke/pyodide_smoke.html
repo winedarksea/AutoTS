@@ -24,7 +24,18 @@
         await pyodide.loadPackage(["micropip","numpy","pandas","scipy","scikit-learn","statsmodels"]);
         log("installing AutoTS wheel…");
         const micropip = pyodide.pyimport("micropip");
-        await micropip.install(new URL("../autots.whl", location.href).href);
+        // Resolve wheel URL from autots_wheel.json (written by the build script),
+        // falling back to the versioned filename if the manifest is unavailable.
+        let wheelUrl;
+        try {
+          const wj = await fetch(new URL("../autots_wheel.json", location.href).href, { cache: 'no-store' });
+          if (wj.ok) {
+            const wm = await wj.json();
+            wheelUrl = wm && wm.url ? new URL(wm.url, new URL("../", location.href).href).href : null;
+          }
+        } catch (_) {}
+        if (!wheelUrl) wheelUrl = new URL("../autots-1.0.4-py3-none-any.whl", location.href).href;
+        await micropip.install(wheelUrl);
         await pyodide.runPythonAsync("from autots.mcp.pyodide_api import run_command_json");
         const run = pyodide.globals.get("run_command_json");
         const prog = (t) => log("  · " + t);

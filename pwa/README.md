@@ -35,6 +35,7 @@ would bind to the same `autotsClient` facade without touching Python.
 ```bash
 cd pwa
 trunk serve --open
+trunk serve --port 8082 --open=false
 ```
 
 The `post_build` hook ([scripts/build_wheel.sh](scripts/build_wheel.sh)) builds

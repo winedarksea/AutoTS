@@ -269,31 +269,58 @@ pub fn App() -> impl IntoView {
             return;
         };
         let name = file.name();
+        let is_binary = name.ends_with(".xlsx") || name.ends_with(".xls");
         busy.set(true);
         error.set(None);
         status.set("Reading file…".into());
         spawn_local(async move {
             let blob: web_sys::Blob = file.unchecked_into();
-            match wasm_bindgen_futures::JsFuture::from(blob.text()).await {
-                Ok(txt) => {
-                    let text = txt.as_string().unwrap_or_default();
-                    status.set("Cleaning & detecting format…".into());
-                    match call_tool(
-                        "smart_load",
-                        json!({ "text": text, "filename": name }),
-                    )
-                    .await
-                    {
-                        Ok(v) => {
-                            report.set(v.get("report").cloned());
-                            if let Some(id) = v.get("data_id").and_then(|x| x.as_str()) {
-                                after_loaded(id.to_string());
+            if is_binary {
+                match wasm_bindgen_futures::JsFuture::from(blob.array_buffer()).await {
+                    Ok(buf) => {
+                        let bytes = js_sys::Uint8Array::new(&buf).to_vec();
+                        use base64::Engine as _;
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                        status.set("Cleaning & detecting format…".into());
+                        match call_tool(
+                            "smart_load",
+                            json!({ "content_base64": b64, "filename": name }),
+                        )
+                        .await
+                        {
+                            Ok(v) => {
+                                report.set(v.get("report").cloned());
+                                if let Some(id) = v.get("data_id").and_then(|x| x.as_str()) {
+                                    after_loaded(id.to_string());
+                                }
                             }
+                            Err(e) => error.set(Some(e)),
                         }
-                        Err(e) => error.set(Some(e)),
                     }
+                    Err(e) => error.set(Some(format!("{e:?}"))),
                 }
-                Err(e) => error.set(Some(format!("{e:?}"))),
+            } else {
+                match wasm_bindgen_futures::JsFuture::from(blob.text()).await {
+                    Ok(txt) => {
+                        let text = txt.as_string().unwrap_or_default();
+                        status.set("Cleaning & detecting format…".into());
+                        match call_tool(
+                            "smart_load",
+                            json!({ "text": text, "filename": name }),
+                        )
+                        .await
+                        {
+                            Ok(v) => {
+                                report.set(v.get("report").cloned());
+                                if let Some(id) = v.get("data_id").and_then(|x| x.as_str()) {
+                                    after_loaded(id.to_string());
+                                }
+                            }
+                            Err(e) => error.set(Some(e)),
+                        }
+                    }
+                    Err(e) => error.set(Some(format!("{e:?}"))),
+                }
             }
             busy.set(false);
         });

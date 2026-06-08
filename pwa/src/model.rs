@@ -49,18 +49,27 @@ impl WideData {
     }
 }
 
+/// RFC4180: wrap a field in double-quotes if it contains comma, quote, or newline.
+fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
 /// Build a wide CSV (datetime + one column per series), applying per-point
 /// overrides from drag/slider adjustments where present.
 pub fn forecast_to_csv(fc: &WideData, overrides: &[Vec<Option<f64>>]) -> String {
     let mut out = String::from("datetime");
     for s in &fc.series {
         out.push(',');
-        out.push_str(&s.name);
+        out.push_str(&csv_field(&s.name));
     }
     out.push('\n');
 
     for (r, dt) in fc.datetime.iter().enumerate() {
-        out.push_str(dt);
+        out.push_str(&csv_field(dt));
         for (c, s) in fc.series.iter().enumerate() {
             out.push(',');
             let v = overrides

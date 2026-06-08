@@ -50,20 +50,24 @@
     }
   }
 
-  // micropip needs the real PEP-427 wheel filename; the build publishes
-  // autots_wheel.json (relative to the page) with the exact URL. Fall back to a
-  // conventional name. Relative paths keep the app portable under a subpath.
+  // micropip needs an absolute wheel URL — relative URLs are ambiguous inside a
+  // Pyodide web worker (the worker base URL differs from the page base URL).
+  // autots_wheel.json (relative to the page) carries the exact filename; we
+  // resolve it to an absolute URL here in the main-thread context.
   async function resolveWheelUrl(explicit) {
     if (explicit) return explicit;
     if (self.AUTOTS_WHEEL_URL) return self.AUTOTS_WHEEL_URL;
+    const base = (typeof document !== 'undefined' && document.baseURI) ||
+                 (typeof location !== 'undefined' && location.href) || '';
     try {
       const res = await fetch('autots_wheel.json', { cache: 'no-store' });
       if (res.ok) {
         const m = await res.json();
-        if (m && m.url) return m.url;
+        if (m && m.url) return base ? new URL(m.url, base).href : m.url;
       }
     } catch (_) { /* ignore, use fallback */ }
-    return 'autots-1.0.3-py3-none-any.whl';
+    return base ? new URL('autots-1.0.4-py3-none-any.whl', base).href
+                : 'autots-1.0.4-py3-none-any.whl';
   }
 
   function initRuntime(wheelUrl, pyodideUrl) {

@@ -16,6 +16,7 @@ It deliberately avoids importing ``mcp`` so it runs where the MCP SDK is absent.
 """
 
 import json
+import math
 
 from autots.models.model_list import superfast as _superfast
 from autots.mcp.core import run_tool, available_tools
@@ -124,6 +125,17 @@ def list_commands():
     return sorted(PRESET_COMMANDS) + available_tools()
 
 
+def _nan_to_null(obj):
+    """Recursively replace NaN/±Inf floats with None so json.dumps produces valid JSON."""
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _nan_to_null(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_nan_to_null(v) for v in obj]
+    return obj
+
+
 async def run_command_json(command, arguments_json="{}", progress_cb=None):
     """JSON-in / JSON-out boundary for the Pyodide Web Worker.
 
@@ -142,4 +154,4 @@ async def run_command_json(command, arguments_json="{}", progress_cb=None):
     else:
         arguments = arguments_json or {}
     result = await dispatch(command, arguments, progress_cb)
-    return json.dumps(result, default=str)
+    return json.dumps(_nan_to_null(result), default=str)

@@ -12,6 +12,7 @@ js-sys = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 console_error_panic_hook = "0.1"
+base64 = "0.22"
 
 [dependencies.web-sys]
 version = "0.3"

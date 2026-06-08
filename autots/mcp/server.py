@@ -96,7 +96,7 @@ if MCP_AVAILABLE:
         return TOOLS
 
     @app.call_tool()
-    async def call_tool(name: str, arguments: Any) -> list[TextContent]:
+    async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageContent]:
         """Dispatch tool calls to the shared core and wrap the result for MCP."""
         try:
             result = await run_tool(name, arguments, _log_progress)

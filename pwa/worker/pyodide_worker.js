@@ -37,6 +37,7 @@ async function init(wheelUrl, pyodideUrl) {
   const micropip = self.pyodide.pyimport('micropip');
   await micropip.install(wheelUrl);
 
+  postMessage({ type: 'status', msg: 'Importing AutoTS Python API…' });
   await self.pyodide.runPythonAsync(
     'from autots.mcp.pyodide_api import run_command_json'
   );
@@ -51,7 +52,10 @@ self.onmessage = async (event) => {
     try {
       await init(msg.wheelUrl, msg.pyodideUrl);
     } catch (err) {
-      postMessage({ type: 'init_error', error: String(err && err.stack ? err.stack : err) });
+      // Use err.message for Python exceptions (Pyodide converts them to JS Errors
+      // with the Python traceback in .message); fall back to .stack or String(err).
+      const detail = (err && err.message) ? err.message : (err && err.stack) ? err.stack : String(err);
+      postMessage({ type: 'init_error', error: detail });
     }
     return;
   }
