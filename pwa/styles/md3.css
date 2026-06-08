@@ -18,6 +18,9 @@
   --md-outline: #777680;
   --md-outline-variant: #c7c5d0;
   --md-error: #ba1a1a;
+  --md-on-error: #ffffff;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #410002;
   --md-success: #2e7d32;
 
   /* Shape */
@@ -97,11 +100,27 @@ body {
 .md-btn:disabled { opacity: .5; cursor: not-allowed; }
 .md-btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
 .md-btn.filled:hover:not(:disabled) { box-shadow: var(--md-elev-2); }
+.md-btn.filled.error { background: var(--md-error); color: var(--md-on-error); }
 .md-btn.tonal { background: var(--md-secondary-container); color: var(--md-on-primary-container); }
 .md-btn.outlined { background: transparent; color: var(--md-primary); border: 1px solid var(--md-outline); }
 .md-btn.text { background: transparent; color: var(--md-primary); padding: 10px 12px; }
+.md-btn.text.error { color: var(--md-error); }
+.md-btn:focus-visible { outline: 3px solid var(--md-primary-container); outline-offset: 2px; }
+.md-btn.error:focus-visible { outline-color: var(--md-error-container); }
 
 .md-btn-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.md-card-actions {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+  gap: 8px; margin-top: 16px; padding-top: 12px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+.md-confirmation {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 16px; margin-top: 12px; padding: 16px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-error-container); color: var(--md-on-error-container);
+}
+.md-confirmation p { margin: 4px 0 0; }
 
 /* Text fields */
 .md-field { display: flex; flex-direction: column; gap: 6px; }

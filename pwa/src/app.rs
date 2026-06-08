@@ -177,6 +177,8 @@ pub fn App() -> impl IntoView {
     let sel = create_rw_signal::<usize>(0);
     let forecast_length = create_rw_signal::<i64>(30);
     let forecast_history_points = create_rw_signal::<usize>(90);
+    let confirm_loaded_data_delete = create_rw_signal(false);
+    let deleting_loaded_data = create_rw_signal(false);
 
     // Upload inputs
     let tab = create_rw_signal::<u8>(0); // 0 paste, 1 url, 2 file, 3 sample
@@ -210,6 +212,7 @@ pub fn App() -> impl IntoView {
         features.set(None);
         feature_error.set(None);
         forecast_history_points.set(90);
+        confirm_loaded_data_delete.set(false);
         let id2 = id.clone();
         spawn_local(async move {
             fetch_history(id.clone(), history, sel, error).await;
@@ -393,6 +396,38 @@ pub fn App() -> impl IntoView {
         }
     };
 
+    let delete_loaded_data = move |_| {
+        let Some(id) = data_id.get() else {
+            return;
+        };
+        deleting_loaded_data.set(true);
+        error.set(None);
+        status.set("Deleting loaded data…".into());
+        spawn_local(async move {
+            match call_tool(
+                "clear_cache",
+                json!({ "object_id": id, "cache_type": "data" }),
+            )
+            .await
+            {
+                Ok(_) => {
+                    data_id.set(None);
+                    history.set(None);
+                    report.set(None);
+                    features.set(None);
+                    feature_error.set(None);
+                    forecast.set(None);
+                    overrides.set(Vec::new());
+                    cache.set(None);
+                    confirm_loaded_data_delete.set(false);
+                    status.set("Loaded data deleted.".into());
+                }
+                Err(e) => error.set(Some(e)),
+            }
+            deleting_loaded_data.set(false);
+        });
+    };
+
     // Keep the source-data chart independent from forecast state.
     let history_chart_svg = move || {
         let s = sel.get();
@@ -556,14 +591,46 @@ pub fn App() -> impl IntoView {
                             </div>
                         })}
 
-                        <div class="md-btn-row" style="margin-top:12px">
-                            <button class="md-btn outlined" on:click=download_loaded_data>"Download loaded data CSV"</button>
-                        </div>
-
                         <details class="md-expander" style="margin-top:12px">
                             <summary>"Data table (accessible / machine-readable)"</summary>
                             {move || history.get().map(|h| data_table(&h, sel.get()))}
                         </details>
+
+                        {move || confirm_loaded_data_delete.get().then(|| view! {
+                            <div id="loaded-data-delete-confirmation" class="md-confirmation" role="alert">
+                                <div>
+                                    <strong>"Delete this loaded dataset?"</strong>
+                                    <p class="md-body">"This removes it from the browser cache and closes its forecast controls. This action cannot be undone."</p>
+                                </div>
+                                <div class="md-btn-row">
+                                    <button class="md-btn text"
+                                        disabled=move || deleting_loaded_data.get()
+                                        on:click=move |_| confirm_loaded_data_delete.set(false)>
+                                        "Cancel"
+                                    </button>
+                                    <button class="md-btn filled error"
+                                        disabled=move || deleting_loaded_data.get()
+                                        on:click=delete_loaded_data>
+                                        {move || if deleting_loaded_data.get() { "Deleting…" } else { "Delete data" }}
+                                    </button>
+                                </div>
+                            </div>
+                        })}
+
+                        <div class="md-card-actions">
+                            <button class="md-btn tonal"
+                                disabled=move || deleting_loaded_data.get()
+                                on:click=download_loaded_data>
+                                "Download CSV"
+                            </button>
+                            <button class="md-btn text error"
+                                aria-controls="loaded-data-delete-confirmation"
+                                aria-expanded=move || confirm_loaded_data_delete.get().to_string()
+                                disabled=move || deleting_loaded_data.get() || confirm_loaded_data_delete.get()
+                                on:click=move |_| confirm_loaded_data_delete.set(true)>
+                                "Delete data"
+                            </button>
+                        </div>
                     </section>
                 }
             })}
