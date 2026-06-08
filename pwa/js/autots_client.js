@@ -51,18 +51,19 @@
   }
 
   // micropip needs the real PEP-427 wheel filename; the build publishes
-  // /autots_wheel.json with the exact URL. Fall back to a conventional name.
+  // autots_wheel.json (relative to the page) with the exact URL. Fall back to a
+  // conventional name. Relative paths keep the app portable under a subpath.
   async function resolveWheelUrl(explicit) {
     if (explicit) return explicit;
     if (self.AUTOTS_WHEEL_URL) return self.AUTOTS_WHEEL_URL;
     try {
-      const res = await fetch('/autots_wheel.json', { cache: 'no-store' });
+      const res = await fetch('autots_wheel.json', { cache: 'no-store' });
       if (res.ok) {
         const m = await res.json();
         if (m && m.url) return m.url;
       }
     } catch (_) { /* ignore, use fallback */ }
-    return '/autots-1.0.3-py3-none-any.whl';
+    return 'autots-1.0.3-py3-none-any.whl';
   }
 
   function initRuntime(wheelUrl, pyodideUrl) {
@@ -71,7 +72,7 @@
       readyResolve = resolve;
       readyReject = reject;
     });
-    const workerUrl = self.AUTOTS_WORKER_URL || '/pyodide_worker.js';
+    const workerUrl = self.AUTOTS_WORKER_URL || 'pyodide_worker.js';
     worker = new Worker(workerUrl);
     worker.onmessage = handleMessage;
     worker.onerror = (e) => { if (readyReject) readyReject(new Error(String(e.message || e))); };

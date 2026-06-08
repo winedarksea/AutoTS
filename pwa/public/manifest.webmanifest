@@ -2,13 +2,13 @@
   "name": "AutoTS Forecasting",
   "short_name": "AutoTS",
   "description": "Upload a spreadsheet and forecast it in your browser.",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#fdfbff",
   "theme_color": "#4658b8",
   "icons": [
-    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
-    { "src": "/favicon-32.png", "type": "image/png", "sizes": "32x32" },
-    { "src": "/favicon-180.png", "type": "image/png", "sizes": "180x180" }
+    { "src": "favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "favicon-32.png", "type": "image/png", "sizes": "32x32" },
+    { "src": "favicon-180.png", "type": "image/png", "sizes": "180x180" }
   ]
 }

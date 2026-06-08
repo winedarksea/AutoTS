@@ -125,3 +125,6 @@ temp*.py
 /*.png
 /*.csv
 /*.pickle
+
+# Cloudflare Pages deploy staging (assembled in CI)
+_site/

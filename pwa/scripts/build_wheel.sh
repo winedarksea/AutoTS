@@ -32,5 +32,6 @@ fi
 WHEEL="$(ls -t "$CACHE_DIR"/autots-*.whl | head -1)"
 WHEEL_NAME="$(basename "$WHEEL")"
 cp "$WHEEL" "$DEST_DIR/$WHEEL_NAME"
-printf '{"url": "/%s"}\n' "$WHEEL_NAME" > "$DEST_DIR/autots_wheel.json"
+# Relative URL so the worker can fetch the wheel under any base path (e.g. /forecasting/app/).
+printf '{"url": "%s"}\n' "$WHEEL_NAME" > "$DEST_DIR/autots_wheel.json"
 echo "Wheel ready: $DEST_DIR/$WHEEL_NAME  (manifest: autots_wheel.json)"

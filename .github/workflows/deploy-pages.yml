@@ -1,0 +1,69 @@
+# Build the Sirith landing site + AutoTS PWA and deploy them to Cloudflare Pages.
+#
+# Served tree (single Pages project named "sirith"):
+#   /                  -> site/index.html              (Sirith landing, "Try Forecasting")
+#   /forecasting       -> site/forecasting/index.html  (forecasting landing)
+#   /forecasting/app/  -> pwa/dist/*                    (Leptos + Pyodide PWA)
+#
+# Requires repo secrets CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (the API token
+# needs the "Cloudflare Pages: Edit" permission).
+#
+# One-time manual step: after the first successful deploy, attach the sirith.com (and www)
+# custom domain to the "sirith" Pages project in the Cloudflare dashboard.
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Rust (wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pwa
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: latest
+
+      - name: Build PWA
+        working-directory: pwa
+        run: trunk build --release --public-url ./
+
+      - name: Assemble deploy tree
+        run: |
+          rm -rf _site
+          cp -r site _site
+          mkdir -p _site/forecasting/app
+          cp -r pwa/dist/. _site/forecasting/app/
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name=sirith --branch=main
