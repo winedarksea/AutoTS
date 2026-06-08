@@ -17,9 +17,44 @@ It deliberately avoids importing ``mcp`` so it runs where the MCP SDK is absent.
 
 import json
 import math
+import sys
 
 from autots.models.model_list import superfast as _superfast
 from autots.mcp.core import run_tool, available_tools
+
+# Heavy / network-only dependencies for live data loading. Installed lazily on
+# first ``load_live_data`` call so normal app startup stays fast. ``pyodide-http``
+# patches ``requests``/``urllib`` to route through the browser's fetch (otherwise
+# ``requests`` has no sockets in WASM). Individual packages may still fail to
+# install (e.g. yfinance's curl_cffi C-extension); that is tolerated and shows up
+# later as a per-source failure.
+_LIVE_DEPS = ["pyodide-http", "requests", "fredapi", "pytrends", "yfinance"]
+_live_ready = False
+
+
+async def _ensure_live_deps(progress_cb=None):
+    """Install + patch live-data network dependencies once, under Pyodide only."""
+    global _live_ready
+    if _live_ready or sys.platform != "emscripten":
+        return
+    if progress_cb is not None:
+        try:
+            progress_cb("Installing data packages (first run only)…")
+        except Exception:
+            pass
+    try:
+        import micropip  # noqa: provided by Pyodide
+
+        await micropip.install(_LIVE_DEPS)
+    except Exception as e:  # noqa: BLE001 - best effort; failures surface per-source
+        print(f"live-data dependency install issue: {e!r}")
+    try:
+        import pyodide_http  # noqa
+
+        pyodide_http.patch_all()
+    except Exception as e:  # noqa: BLE001
+        print(f"pyodide_http patch issue: {e!r}")
+    _live_ready = True
 
 # ---------------------------------------------------------------------------
 # Pyodide-safe model sets
@@ -117,6 +152,8 @@ async def dispatch(command, arguments=None, progress_cb=None):
     if command in SEARCH_PRESETS:
         generations, validations = SEARCH_PRESETS[command]
         return await _search_forecast(arguments, progress_cb, generations, validations)
+    if command == "load_live_data":
+        await _ensure_live_deps(progress_cb)
     return await run_tool(command, arguments, progress_cb)
 
 

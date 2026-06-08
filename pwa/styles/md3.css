@@ -207,5 +207,37 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 .md-progress > div { height: 100%; width: 40%; background: var(--md-primary); border-radius: 2px; animation: md-indeterminate 1.2s infinite ease-in-out; }
 @keyframes md-indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
 
+/* Progress bar (determinate) — width set inline from "(i/total)" progress text */
+.md-progress.determinate > div { margin-left: 0; animation: none; transition: width .25s ease; }
+
+/* Live data sources */
+.md-chip.off { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
+.md-chip.warn { background: var(--md-error-container); color: #7a4d00; }
+.md-chip.ready { background: #cdedcf; color: var(--md-success); }
+
+.md-date-row { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
+.md-date-row .md-field { max-width: 200px; }
+
+.md-sources { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.md-source-card { border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-sm); padding: 6px 12px; }
+.md-source-head { display: inline-flex; align-items: center; gap: 10px; vertical-align: middle; }
+.md-source-head input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--md-primary); cursor: pointer; }
+.md-source-title { font-weight: 500; }
+.md-source-body { display: flex; flex-direction: column; gap: 12px; padding: 12px 0 6px 28px; }
+
+.md-info-icon {
+  display: inline-block; margin-left: 6px; text-decoration: none; cursor: help;
+  color: var(--md-primary); font-weight: 700;
+}
+.md-info-icon:hover { color: var(--md-on-primary-container); }
+
+.md-live-results { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; }
+.md-live-results li { display: grid; grid-template-columns: 20px 200px 1fr; gap: 10px; align-items: baseline; font-size: .85rem; }
+.md-live-mark { font-weight: 700; text-align: center; }
+.md-live-ok .md-live-mark { color: var(--md-success); }
+.md-live-fail .md-live-mark { color: var(--md-error); }
+.md-live-name { font-weight: 500; }
+.md-live-detail { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+
 .muted { color: var(--md-on-surface-variant); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }

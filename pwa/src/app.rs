@@ -4,9 +4,11 @@
 //! All forecasting/ingestion logic lives in Python (see autots.mcp.pyodide_api),
 //! so this file could be replaced by a TypeScript app against the same facade.
 
+use std::collections::HashMap;
+
 use leptos::*;
 use serde_json::{json, Value};
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 
 use crate::client::{call_tool, init_runtime, set_progress_handler};
 use crate::model::{effective_values, forecast_to_csv, wide_data_to_csv, WideData};
@@ -181,10 +183,29 @@ pub fn App() -> impl IntoView {
     let deleting_loaded_data = create_rw_signal(false);
 
     // Upload inputs
-    let tab = create_rw_signal::<u8>(0); // 0 paste, 1 url, 2 file, 3 sample
+    let tab = create_rw_signal::<u8>(0); // 0 paste, 1 url, 2 file, 3 sample, 4 live
     let paste_text = create_rw_signal(String::new());
     let url_text = create_rw_signal(String::new());
     let sample = create_rw_signal(String::from("monthly"));
+
+    // Live-data inputs (declarative source model in LIVE_SOURCES)
+    let mut init_enabled = HashMap::new();
+    let mut init_values = HashMap::new();
+    for src in LIVE_SOURCES {
+        init_enabled.insert(src.id.to_string(), src.default_enabled);
+        if let Some(k) = &src.key_field {
+            init_values.insert(k.param.to_string(), k.default.to_string());
+        }
+        for f in src.fields {
+            init_values.insert(f.param.to_string(), f.default.to_string());
+        }
+    }
+    let live_enabled = create_rw_signal(init_enabled);
+    let live_values = create_rw_signal(init_values);
+    let live_sources_result = create_rw_signal::<Option<Value>>(None);
+    let (init_start, init_end) = default_live_dates();
+    let start_date = create_rw_signal(init_start);
+    let end_date = create_rw_signal(init_end);
 
     // Data manager
     let cache = create_rw_signal::<Option<Value>>(None);
@@ -350,6 +371,67 @@ pub fn App() -> impl IntoView {
         });
     };
 
+    // True when at least one source is enabled and has any required key set.
+    let live_any_ready = move || {
+        let en = live_enabled.get();
+        let va = live_values.get();
+        LIVE_SOURCES
+            .iter()
+            .any(|s| live_source_ready(s, &en, &va))
+    };
+
+    let load_live = move |_| {
+        let en = live_enabled.get();
+        let va = live_values.get();
+        let mut args = serde_json::Map::new();
+        // Always emit every source-selecting param: real values when a source is
+        // "ready", null otherwise, so a de-selected/incomplete source is skipped
+        // deterministically (never silently re-enabled by a library default).
+        for src in LIVE_SOURCES {
+            let on = live_source_ready(src, &en, &va);
+            for f in src.fields {
+                let v = if on {
+                    parse_live_field(f, va.get(f.param))
+                } else {
+                    Value::Null
+                };
+                args.insert(f.param.to_string(), v);
+            }
+            if let Some(k) = &src.key_field {
+                let v = if on {
+                    let s = va.get(k.param).map(|s| s.trim().to_string()).unwrap_or_default();
+                    if s.is_empty() { Value::Null } else { Value::String(s) }
+                } else {
+                    Value::Null
+                };
+                args.insert(k.param.to_string(), v);
+            }
+        }
+        args.insert("observation_start".into(), json!(start_date.get()));
+        args.insert("observation_end".into(), json!(end_date.get()));
+        // Deliberately gentle on these free APIs while staying tolerable in a UI.
+        args.insert("sleep_seconds".into(), json!(3));
+
+        busy.set(true);
+        error.set(None);
+        live_sources_result.set(None);
+        status.set("Loading live data…".into());
+        spawn_local(async move {
+            match call_tool("load_live_data", Value::Object(args)).await {
+                Ok(v) => {
+                    live_sources_result.set(v.get("sources").cloned());
+                    if let Some(id) = v.get("data_id").and_then(|x| x.as_str()) {
+                        after_loaded(id.to_string());
+                    } else if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
+                        error.set(Some(err.to_string()));
+                    }
+                }
+                Err(e) => error.set(Some(e)),
+            }
+            busy.set(false);
+        });
+    };
+
     // --- forecast actions --------------------------------------------------
     let do_forecast = move |command: &'static str| {
         let Some(id) = data_id.get() else {
@@ -479,7 +561,13 @@ pub fn App() -> impl IntoView {
             // Status / progress
             <div>
                 <div class="md-status">{move || status.get()}</div>
-                {move || busy.get().then(|| view! { <div class="md-progress"><div></div></div> })}
+                {move || busy.get().then(|| match parse_progress(&status.get()) {
+                    Some((i, total)) if total > 0 => {
+                        let pct = (i.min(total) as f64 / total as f64 * 100.0).round();
+                        view! { <div class="md-progress determinate"><div style=format!("width:{pct}%")></div></div> }.into_view()
+                    }
+                    _ => view! { <div class="md-progress"><div></div></div> }.into_view(),
+                })}
                 {move || error.get().map(|e| view! { <p class="md-error">{e}</p> })}
             </div>
 
@@ -491,6 +579,7 @@ pub fn App() -> impl IntoView {
                     <button class:active=move || tab.get() == 1 on:click=move |_| tab.set(1)>"URL"</button>
                     <button class:active=move || tab.get() == 2 on:click=move |_| tab.set(2)>"File"</button>
                     <button class:active=move || tab.get() == 3 on:click=move |_| tab.set(3)>"Sample"</button>
+                    <button class:active=move || tab.get() == 4 on:click=move |_| tab.set(4)>"Live"</button>
                 </div>
 
                 <div style="margin-top:16px">
@@ -525,7 +614,7 @@ pub fn App() -> impl IntoView {
                                     on:change=on_file />
                             </div>
                         }.into_view(),
-                        _ => view! {
+                        3 => view! {
                             <div class="md-field">
                                 <label class="md-label">"Or try a built-in sample dataset"</label>
                                 <select on:change=move |ev| sample.set(event_target_value(&ev))>
@@ -539,6 +628,37 @@ pub fn App() -> impl IntoView {
                                     <button class="md-btn filled" disabled=move || !ready.get() || busy.get() on:click=load_sample>"Load sample"</button>
                                 </div>
                                 <p class="muted md-body">"Tip: load a sample, download it, and hand it to an LLM as a template for reformatting your own data."</p>
+                            </div>
+                        }.into_view(),
+                        _ => view! {
+                            <div>
+                                <p class="md-body">"Pull recent daily data from free public APIs. Loading is intentionally slow to be kind to these services — watch the progress bar. Some sources may be blocked by your browser; you'll see exactly which below. Toggle off any source you don't want, and fill in API keys where a source says it needs one."</p>
+                                <div class="md-date-row">
+                                    <div class="md-field">
+                                        <label class="md-label">"Start date"</label>
+                                        <input type="date" prop:value=move || start_date.get()
+                                            on:input=move |ev| start_date.set(event_target_value(&ev)) />
+                                    </div>
+                                    <div class="md-field">
+                                        <label class="md-label">"End date"</label>
+                                        <input type="date" prop:value=move || end_date.get()
+                                            on:input=move |ev| end_date.set(event_target_value(&ev)) />
+                                    </div>
+                                </div>
+                                <div class="md-sources">
+                                    {LIVE_SOURCES.iter().map(|src| live_source_card(src, live_enabled, live_values)).collect_view()}
+                                </div>
+                                <div class="md-btn-row">
+                                    <button class="md-btn filled"
+                                        disabled=move || !ready.get() || busy.get() || !live_any_ready()
+                                        on:click=load_live>"Load live data"</button>
+                                </div>
+                                {move || live_sources_result.get().map(|s| view! {
+                                    <div style="margin-top:12px">
+                                        <span class="md-label">"Source results"</span>
+                                        {live_results_table(&s)}
+                                    </div>
+                                })}
                             </div>
                         }.into_view(),
                     }}
@@ -883,4 +1003,502 @@ fn adjust_rows(
             }
         })
         .collect_view()
+}
+
+// ---------------------------------------------------------------------------
+// Live data sources (declarative)
+// ---------------------------------------------------------------------------
+//
+// One descriptor per external API in `load_live_daily`. The Live tab renders
+// these generically and builds the tool arguments from them, so adding a source
+// is a data-only change here plus (optionally) a default in the Python loader.
+
+#[derive(Clone, Copy)]
+enum FieldKind {
+    /// Comma-separated text -> JSON array of strings (None when empty).
+    List,
+    /// Integer -> JSON number (None when blank/invalid).
+    Int,
+    /// Free text -> JSON string (None when empty).
+    Str,
+}
+
+struct LiveField {
+    param: &'static str,
+    label: &'static str,
+    default: &'static str,
+    kind: FieldKind,
+}
+
+struct LiveKey {
+    param: &'static str,
+    label: &'static str,
+    default: &'static str,
+    signup_url: &'static str,
+    /// When true, an empty value makes the source incomplete (excluded). When
+    /// false the key is optional and an empty value is sent as null (the loader
+    /// falls back to a demo key).
+    required: bool,
+}
+
+struct LiveSource {
+    id: &'static str,
+    label: &'static str,
+    default_enabled: bool,
+    key_field: Option<LiveKey>,
+    fields: &'static [LiveField],
+    note: Option<&'static str>,
+}
+
+const CORS_NOTE: &str =
+    "Often blocked by the browser (CORS) or unavailable in-browser — off by default.";
+
+static LIVE_SOURCES: &[LiveSource] = &[
+    LiveSource {
+        id: "fred",
+        label: "FRED economic series",
+        default_enabled: true,
+        key_field: Some(LiveKey {
+            param: "fred_key",
+            label: "FRED API key",
+            default: "",
+            signup_url: "https://fred.stlouisfed.org/docs/api/api_key.html",
+            required: true,
+        }),
+        fields: &[LiveField {
+            param: "fred_series",
+            label: "Series IDs (comma separated)",
+            default: "DGS10,T5YIE,SP500,DCOILWTICO,DEXUSEU,WPU0911",
+            kind: FieldKind::List,
+        }],
+        note: None,
+    },
+    LiveSource {
+        id: "tickers",
+        label: "Stock tickers (Yahoo Finance)",
+        default_enabled: true,
+        key_field: None,
+        fields: &[LiveField {
+            param: "tickers",
+            label: "Tickers (comma separated)",
+            default: "MSFT",
+            kind: FieldKind::List,
+        }],
+        note: None,
+    },
+    LiveSource {
+        id: "earthquake",
+        label: "Earthquakes (USGS)",
+        default_enabled: true,
+        key_field: None,
+        fields: &[
+            LiveField {
+                param: "earthquake_min_magnitude",
+                label: "Minimum magnitude",
+                default: "5",
+                kind: FieldKind::Int,
+            },
+            LiveField {
+                param: "earthquake_days",
+                label: "Days of history",
+                default: "180",
+                kind: FieldKind::Int,
+            },
+        ],
+        note: None,
+    },
+    LiveSource {
+        id: "wikipedia",
+        label: "Wikipedia pageviews",
+        default_enabled: true,
+        key_field: None,
+        fields: &[
+            LiveField {
+                param: "wikipedia_pages",
+                label: "Pages (comma separated, underscores for spaces)",
+                default: "Microsoft_Office,List_of_highest-grossing_films",
+                kind: FieldKind::List,
+            },
+            LiveField {
+                param: "wiki_language",
+                label: "Language code",
+                default: "en",
+                kind: FieldKind::Str,
+            },
+        ],
+        note: None,
+    },
+    LiveSource {
+        id: "nasa",
+        label: "NASA space weather (DONKI)",
+        default_enabled: true,
+        key_field: Some(LiveKey {
+            param: "nasa_api_key",
+            label: "NASA API key",
+            default: "DEMO_KEY",
+            signup_url: "https://api.nasa.gov/",
+            required: true,
+        }),
+        fields: &[],
+        note: Some("Works with the prefilled DEMO_KEY, but it is heavily rate-limited."),
+    },
+    LiveSource {
+        id: "gov",
+        label: "US government web analytics",
+        default_enabled: true,
+        key_field: Some(LiveKey {
+            param: "gsa_key",
+            label: "GSA DAP API key (optional)",
+            default: "",
+            signup_url: "https://open.gsa.gov/api/dap/",
+            required: false,
+        }),
+        fields: &[
+            LiveField {
+                param: "gov_domain_list",
+                label: "Domains (comma separated)",
+                default: "nasa.gov",
+                kind: FieldKind::List,
+            },
+            LiveField {
+                param: "gov_domain_limit",
+                label: "Max records",
+                default: "600",
+                kind: FieldKind::Int,
+            },
+        ],
+        note: Some("Slow. Without a key only the first domain is fetched (demo limit)."),
+    },
+    LiveSource {
+        id: "severe",
+        label: "Severe weather events (NOAA)",
+        default_enabled: true,
+        key_field: None,
+        fields: &[LiveField {
+            param: "weather_event_types",
+            label: "Event types (URL-encoded, comma separated)",
+            default: "%28Z%29+Winter+Weather,%28Z%29+Winter+Storm",
+            kind: FieldKind::List,
+        }],
+        note: None,
+    },
+    LiveSource {
+        id: "london",
+        label: "London air quality",
+        default_enabled: true,
+        key_field: None,
+        fields: &[
+            LiveField {
+                param: "london_air_stations",
+                label: "Station codes (comma separated)",
+                default: "CT3,SK8",
+                kind: FieldKind::List,
+            },
+            LiveField {
+                param: "london_air_species",
+                label: "Species",
+                default: "PM25",
+                kind: FieldKind::Str,
+            },
+            LiveField {
+                param: "london_air_days",
+                label: "Days of history",
+                default: "180",
+                kind: FieldKind::Int,
+            },
+        ],
+        note: None,
+    },
+    LiveSource {
+        id: "weather",
+        label: "NOAA weather stations",
+        default_enabled: false,
+        key_field: Some(LiveKey {
+            param: "noaa_cdo_token",
+            label: "NOAA CDO token",
+            default: "",
+            signup_url: "https://www.ncdc.noaa.gov/cdo-web/token",
+            required: true,
+        }),
+        fields: &[
+            LiveField {
+                param: "weather_stations",
+                label: "Station IDs (comma separated)",
+                default: "USW00094846,USW00014925,USW00014771",
+                kind: FieldKind::List,
+            },
+            LiveField {
+                param: "weather_data_types",
+                label: "Data types (comma separated)",
+                default: "AWND,WSF2,TAVG,PRCP",
+                kind: FieldKind::List,
+            },
+            LiveField {
+                param: "weather_years",
+                label: "Years of history",
+                default: "5",
+                kind: FieldKind::Int,
+            },
+        ],
+        note: Some(CORS_NOTE),
+    },
+    LiveSource {
+        id: "eia",
+        label: "EIA electricity demand",
+        default_enabled: false,
+        key_field: Some(LiveKey {
+            param: "eia_key",
+            label: "EIA API key",
+            default: "",
+            signup_url: "https://www.eia.gov/opendata/register.php",
+            required: true,
+        }),
+        fields: &[LiveField {
+            param: "eia_respondents",
+            label: "Respondents (comma separated)",
+            default: "MISO,PJM,TVA,US48",
+            kind: FieldKind::List,
+        }],
+        note: Some(CORS_NOTE),
+    },
+    LiveSource {
+        id: "trends",
+        label: "Google Trends",
+        default_enabled: false,
+        key_field: None,
+        fields: &[
+            LiveField {
+                param: "trends_list",
+                label: "Search terms (comma separated)",
+                default: "forecasting,cycling,microsoft",
+                kind: FieldKind::List,
+            },
+            LiveField {
+                param: "trends_geo",
+                label: "Geo (e.g. US)",
+                default: "US",
+                kind: FieldKind::Str,
+            },
+        ],
+        note: Some(CORS_NOTE),
+    },
+    LiveSource {
+        id: "caiso",
+        label: "CAISO grid generation",
+        default_enabled: false,
+        key_field: None,
+        fields: &[LiveField {
+            param: "caiso_query",
+            label: "Query name",
+            default: "ENE_SLRS",
+            kind: FieldKind::Str,
+        }],
+        note: Some(CORS_NOTE),
+    },
+];
+
+/// Default date range for live pulls: end = yesterday, start = two years prior.
+fn default_live_dates() -> (String, String) {
+    let day_ms = 86_400_000.0;
+    let now_ms = js_sys::Date::now();
+    let end = js_sys::Date::new(&JsValue::from_f64(now_ms - day_ms));
+    let start = js_sys::Date::new(&JsValue::from_f64(now_ms - day_ms));
+    start.set_full_year(start.get_full_year() - 2);
+    (fmt_js_date(&start), fmt_js_date(&end))
+}
+
+fn fmt_js_date(d: &js_sys::Date) -> String {
+    format!(
+        "{:04}-{:02}-{:02}",
+        d.get_full_year() as i64,
+        d.get_month() as i64 + 1,
+        d.get_date() as i64,
+    )
+}
+
+/// Parse a trailing "(i/total)" out of a progress message for a determinate bar.
+fn parse_progress(s: &str) -> Option<(usize, usize)> {
+    let open = s.rfind('(')?;
+    let rest = &s[open + 1..];
+    let close = rest.find(')')?;
+    let (a, b) = rest[..close].split_once('/')?;
+    Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
+}
+
+fn parse_live_field(f: &LiveField, raw: Option<&String>) -> Value {
+    let raw = raw.map(|s| s.as_str()).unwrap_or(f.default).trim();
+    match f.kind {
+        FieldKind::List => {
+            let items: Vec<Value> = raw
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| Value::String(s.to_string()))
+                .collect();
+            if items.is_empty() {
+                Value::Null
+            } else {
+                Value::Array(items)
+            }
+        }
+        FieldKind::Int => raw.parse::<i64>().map(|n| json!(n)).unwrap_or(Value::Null),
+        FieldKind::Str => {
+            if raw.is_empty() {
+                Value::Null
+            } else {
+                Value::String(raw.to_string())
+            }
+        }
+    }
+}
+
+/// A source is "ready" (will be pulled) when enabled and any required key is set.
+fn live_source_ready(
+    src: &LiveSource,
+    enabled: &HashMap<String, bool>,
+    values: &HashMap<String, String>,
+) -> bool {
+    if !enabled.get(src.id).copied().unwrap_or(false) {
+        return false;
+    }
+    if let Some(k) = &src.key_field {
+        if k.required {
+            let set = values
+                .get(k.param)
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false);
+            if !set {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn live_source_card(
+    src: &'static LiveSource,
+    enabled: RwSignal<HashMap<String, bool>>,
+    values: RwSignal<HashMap<String, String>>,
+) -> View {
+    let id = src.id;
+    let chip = move || {
+        if !enabled.get().get(id).copied().unwrap_or(false) {
+            return view! { <span class="md-chip off">"Off"</span> };
+        }
+        if let Some(k) = &src.key_field {
+            if k.required {
+                let empty = values
+                    .get()
+                    .get(k.param)
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true);
+                if empty {
+                    return view! { <span class="md-chip warn">"Needs API key"</span> };
+                }
+            }
+        }
+        view! { <span class="md-chip ready">"Will load"</span> }
+    };
+
+    let key_view = src.key_field.as_ref().map(|k| {
+        let param = k.param;
+        let placeholder = if k.required { "required" } else { "optional" };
+        view! {
+            <div class="md-field">
+                <label class="md-label">
+                    {k.label}
+                    <a class="md-info-icon" href=k.signup_url target="_blank" rel="noopener"
+                       title="Get an API key (opens the sign-up page)">"ⓘ"</a>
+                </label>
+                <input type="text" value=k.default placeholder=placeholder
+                    on:input=move |ev| values.update(|m| { m.insert(param.to_string(), event_target_value(&ev)); }) />
+            </div>
+        }
+    });
+
+    let fields_view = src
+        .fields
+        .iter()
+        .map(|f| {
+            let param = f.param;
+            view! {
+                <div class="md-field">
+                    <label class="md-label">{f.label}</label>
+                    <input type="text" value=f.default
+                        on:input=move |ev| values.update(|m| { m.insert(param.to_string(), event_target_value(&ev)); }) />
+                </div>
+            }
+        })
+        .collect_view();
+
+    let note = src
+        .note
+        .map(|n| view! { <p class="muted md-body">{n}</p> });
+
+    view! {
+        <details class="md-expander md-source-card">
+            <summary>
+                <span class="md-source-head">
+                    <input type="checkbox"
+                        prop:checked=move || enabled.get().get(id).copied().unwrap_or(false)
+                        on:click=|ev| ev.stop_propagation()
+                        on:change=move |ev| {
+                            let c = event_target_checked(&ev);
+                            enabled.update(|m| { m.insert(id.to_string(), c); });
+                        } />
+                    <span class="md-source-title">{src.label}</span>
+                    {chip}
+                </span>
+            </summary>
+            <div class="md-source-body">
+                {key_view}
+                {fields_view}
+                {note}
+            </div>
+        </details>
+    }
+    .into_view()
+}
+
+fn live_results_table(sources: &Value) -> View {
+    let Some(arr) = sources.as_array() else {
+        return ().into_view();
+    };
+    if arr.is_empty() {
+        return ().into_view();
+    }
+    let rows = arr
+        .iter()
+        .map(|s| {
+            let name = s
+                .get("source")
+                .and_then(Value::as_str)
+                .unwrap_or("—")
+                .to_string();
+            let ok = s.get("status").and_then(Value::as_str) == Some("ok");
+            let series = s.get("series").and_then(Value::as_u64);
+            let err = s.get("error").and_then(Value::as_str).map(str::to_string);
+            let detail = if ok {
+                let base = series
+                    .map(|n| format!("{n} series"))
+                    .unwrap_or_else(|| "loaded".into());
+                match err {
+                    Some(e) => format!("{base} (some items failed: {e})"),
+                    None => base,
+                }
+            } else {
+                err.unwrap_or_else(|| "failed".into())
+            };
+            let cls = if ok { "md-live-ok" } else { "md-live-fail" };
+            let mark = if ok { "✓" } else { "✗" };
+            view! {
+                <li class=cls>
+                    <span class="md-live-mark">{mark}</span>
+                    <span class="md-live-name">{name}</span>
+                    <span class="md-live-detail">{detail}</span>
+                </li>
+            }
+        })
+        .collect_view();
+    view! { <ul class="md-live-results">{rows}</ul> }.into_view()
 }

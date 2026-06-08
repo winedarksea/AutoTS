@@ -581,6 +581,100 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
 
 
 # ===========================================================================
+# Live data loading (no network — loader is mocked)
+# ===========================================================================
+
+
+class TestMCPLiveDataLoader(unittest.TestCase):
+    """load_live_daily's optional progress/status instrumentation (network-free)."""
+
+    def test_all_disabled_raises_with_empty_status(self):
+        from autots.datasets._live import load_live_daily
+
+        status, prog = [], []
+        with self.assertRaises(ValueError):
+            load_live_daily(
+                fred_key=None, fred_series=None, tickers=None, trends_list=None,
+                weather_stations=None, london_air_stations=None,
+                earthquake_min_magnitude=None, nasa_api_key=None,
+                gov_domain_list=None, wikipedia_pages=None,
+                weather_event_types=None, caiso_query=None,
+                eia_key=None, eia_respondents=None,
+                progress_cb=lambda m: prog.append(m), status_log=status,
+            )
+        # No sources were enabled, so nothing should have been attempted.
+        self.assertEqual(status, [])
+        self.assertEqual(prog, [])
+
+
+class TestMCPLiveDataHandler(unittest.IsolatedAsyncioTestCase):
+    """handle_load_live_data forwards params and reports per-source status."""
+
+    async def _noop(self, msg):
+        return None
+
+    async def test_status_passthrough_and_partial_failure(self):
+        from autots.mcp.handlers import data as data_handlers
+        from autots.mcp.cache import clear_cache
+
+        captured = {}
+
+        def fake_loader(long=False, progress_cb=None, status_log=None, **kwargs):
+            captured["kwargs"] = kwargs
+            if status_log is not None:
+                status_log.append({"source": "FRED", "status": "ok", "series": 3})
+                status_log.append(
+                    {"source": "Stock tickers", "status": "failed", "error": "boom"}
+                )
+            return pd.DataFrame(
+                {"a": [1, 2, 3]},
+                index=pd.date_range("2024-01-01", periods=3, name="datetime"),
+            )
+
+        orig = data_handlers.load_live_daily
+        data_handlers.load_live_daily = fake_loader
+        try:
+            res = await data_handlers.handle_load_live_data(
+                {"fred_key": "k", "fred_series": ["DGS10"], "tickers": ["MSFT"]},
+                self._noop,
+            )
+        finally:
+            data_handlers.load_live_daily = orig
+
+        self.assertIsNotNone(res["data_id"])
+        self.assertEqual(res["cols"], 1)
+        statuses = {s["source"]: s["status"] for s in res["sources"]}
+        self.assertEqual(statuses["FRED"], "ok")
+        self.assertEqual(statuses["Stock tickers"], "failed")
+        # Recognized params are forwarded straight through to the loader.
+        self.assertEqual(captured["kwargs"]["fred_key"], "k")
+        self.assertEqual(captured["kwargs"]["tickers"], ["MSFT"])
+        clear_cache(res["data_id"], "data")
+
+    async def test_all_sources_fail_returns_error_not_raise(self):
+        from autots.mcp.handlers import data as data_handlers
+
+        def fake_loader(long=False, progress_cb=None, status_log=None, **kwargs):
+            if status_log is not None:
+                status_log.append({"source": "FRED", "status": "failed", "error": "nope"})
+            raise ValueError("No data successfully downloaded!")
+
+        orig = data_handlers.load_live_daily
+        data_handlers.load_live_daily = fake_loader
+        try:
+            res = await data_handlers.handle_load_live_data(
+                {"fred_key": "k"}, self._noop
+            )
+        finally:
+            data_handlers.load_live_daily = orig
+
+        self.assertIsNone(res["data_id"])
+        self.assertIn("error", res)
+        self.assertEqual(len(res["sources"]), 1)
+        self.assertEqual(res["sources"][0]["status"], "failed")
+
+
+# ===========================================================================
 # Event risk (no MCP required)
 # ===========================================================================
 

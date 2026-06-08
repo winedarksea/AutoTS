@@ -5,6 +5,7 @@ the Pyodide worker) are responsible for wrapping the result.
 """
 
 import base64
+import sys
 
 import pandas as pd
 
@@ -82,18 +83,85 @@ async def handle_load_sample_data(arguments: dict, log_progress) -> dict:
     }
 
 
+# Parameters of load_live_daily that the PWA / general API may control. Absent
+# keys fall back to library defaults; a value of None for any source-selecting
+# parameter skips that source (load_live_daily's contract), so the frontend
+# sends null for de-selected sources.
+_LIVE_PARAM_KEYS = (
+    "observation_start",
+    "observation_end",
+    "fred_key",
+    "fred_series",
+    "tickers",
+    "trends_list",
+    "trends_geo",
+    "weather_data_types",
+    "weather_stations",
+    "weather_years",
+    "noaa_cdo_token",
+    "london_air_stations",
+    "london_air_species",
+    "london_air_days",
+    "earthquake_days",
+    "earthquake_min_magnitude",
+    "gsa_key",
+    "nasa_api_key",
+    "gov_domain_list",
+    "gov_domain_limit",
+    "wikipedia_pages",
+    "wiki_language",
+    "weather_event_types",
+    "caiso_query",
+    "eia_key",
+    "eia_respondents",
+    "sleep_seconds",
+)
+
+
 async def handle_load_live_data(arguments: dict, log_progress) -> dict:
-    fred_key = arguments.get("fred_key")
-    fred_series = arguments.get("fred_series")
-    tickers = arguments.get("tickers")
     long = arguments.get("long", False)
 
-    df = load_live_daily(
-        long=long,
-        fred_key=fred_key,
-        fred_series=fred_series,
-        tickers=tickers,
-    )
+    # Forward only recognized parameters straight through to load_live_daily.
+    kwargs = {k: arguments[k] for k in _LIVE_PARAM_KEYS if k in arguments}
+
+    status_log = []
+
+    # load_live_daily is synchronous and blocking. Under Pyodide we drive the
+    # (sync-backed) async progress wrapper to completion so its postMessage
+    # flushes to the UI thread even while the worker thread is busy. Off Pyodide
+    # (e.g. the MCP server) the progress callback genuinely awaits I/O, so we
+    # skip mid-call progress and rely on the returned per-source status list.
+    if sys.platform == "emscripten":
+
+        def _prog(message):
+            try:
+                log_progress(message).send(None)
+            except StopIteration:
+                pass
+            except Exception:
+                pass
+
+    else:
+        _prog = None
+
+    try:
+        df = load_live_daily(
+            long=long,
+            progress_cb=_prog,
+            status_log=status_log,
+            **kwargs,
+        )
+    except ValueError as e:
+        # Every source failed (e.g. CORS/network in-browser). Surface the
+        # per-source failures rather than erroring out so the UI can explain
+        # what happened.
+        return {
+            "data_id": None,
+            "rows": 0,
+            "cols": 0,
+            "sources": status_log,
+            "error": str(e),
+        }
 
     data_id = cache_object(
         df,
@@ -103,6 +171,7 @@ async def handle_load_live_data(arguments: dict, log_progress) -> dict:
             'format': 'long' if long else 'wide',
             'rows': len(df),
             'columns': len(df.columns),
+            'sources': status_log,
         },
     )
 
@@ -110,6 +179,7 @@ async def handle_load_live_data(arguments: dict, log_progress) -> dict:
         "data_id": data_id,
         "rows": len(df),
         "cols": len(df.columns),
+        "sources": status_log,
     }
 
 

@@ -43,6 +43,8 @@ def load_live_daily(
     eia_respondents: list = ["MISO", "PJM", "TVA", "US48"],
     timeout: float = 300.05,
     sleep_seconds: int = 10,
+    progress_cb=None,
+    status_log=None,
     **kwargs,
 ):
     """Generates a dataframe of data up to the present day. Requires active internet connection.
@@ -75,11 +77,80 @@ def load_live_daily(
         caiso_query (str): ENE_SLRS or None, can try others but probably won't work due to other hardcoded params
         timeout (float): used by some queries
         sleep_seconds (int): increasing this may reduce probability of server download failures
+        progress_cb (callable): optional, called with a short status string as each source begins.
+            Useful for driving a progress bar in a UI.
+        status_log (list): optional, if a list is passed it is appended with one dict per attempted
+            source: {"source": name, "status": "ok"|"failed", "series": n_columns, "error": repr}.
+            Lets callers report which sources succeeded/failed without parsing stdout.
     """
     # TODO: add a proper unittest for this, minimal for each just to test that each API is not broken
     assert sleep_seconds >= 0.5, "sleep_seconds must be >=0.5"
 
     dataset_lists = []
+
+    # --- per-source progress + status instrumentation (optional) -------------
+    # Both default to None, so library/MCP callers see unchanged behavior.
+    enabled_sources = []
+    if fred_key is not None and fred_series is not None:
+        enabled_sources.append("FRED")
+    if tickers is not None:
+        enabled_sources.append("Stock tickers")
+    if weather_stations is not None:
+        enabled_sources.append("NOAA weather")
+    if london_air_stations is not None:
+        enabled_sources.append("London Air")
+    if earthquake_min_magnitude is not None:
+        enabled_sources.append("Earthquakes")
+    if nasa_api_key is not None:
+        enabled_sources.append("NASA space weather")
+    if gov_domain_list is not None:
+        enabled_sources.append("Gov web analytics")
+    if wikipedia_pages is not None:
+        enabled_sources.append("Wikipedia")
+    if weather_event_types is not None:
+        enabled_sources.append("Severe weather events")
+    if trends_list is not None:
+        enabled_sources.append("Google Trends")
+    if caiso_query is not None:
+        enabled_sources.append("CAISO")
+    if eia_key is not None and eia_respondents is not None:
+        enabled_sources.append("EIA electricity")
+    _total_sources = len(enabled_sources)
+    _source_counter = {"i": 0}
+
+    def _start_source(label):
+        """Announce a source is starting; return the current dataset_lists length."""
+        _source_counter["i"] += 1
+        if progress_cb is not None:
+            try:
+                progress_cb(
+                    f"Loading {label} ({_source_counter['i']}/{_total_sources})…"
+                )
+            except Exception:
+                pass
+        return len(dataset_lists)
+
+    def _finish_source(label, start_len, error=None):
+        """Record per-source outcome into status_log (a no-op if not provided)."""
+        if status_log is None:
+            return
+        added = dataset_lists[start_len:]
+        n_series = 0
+        for d in added:
+            shape = getattr(d, "shape", None)
+            n_series += shape[1] if (shape is not None and len(shape) == 2) else 1
+        if added:
+            entry = {"source": label, "status": "ok", "series": int(n_series)}
+            if error:
+                entry["error"] = error
+        else:
+            entry = {
+                "source": label,
+                "status": "failed",
+                "error": error or "no data returned",
+            }
+        status_log.append(entry)
+
     if observation_end is None:
         current_date = datetime.datetime.utcnow()
     else:
@@ -97,8 +168,9 @@ def load_live_daily(
     except Exception as e:
         print(f"requests Session creation failed {repr(e)}")
 
-    try:
-        if fred_key is not None and fred_series is not None:
+    if fred_key is not None and fred_series is not None:
+        _blk = _start_source("FRED")
+        try:
             from fredapi import Fred  # noqa
             from autots.datasets.fred import get_fred_data
 
@@ -111,12 +183,17 @@ def load_live_daily(
             )
             fred_df.index = fred_df.index.tz_localize(None)
             dataset_lists.append(fred_df)
-    except ModuleNotFoundError:
-        print("pip install fredapi (and you'll also need an api key)")
-    except Exception as e:
-        print(f"FRED data failed: {repr(e)}")
+            _finish_source("FRED", _blk)
+        except ModuleNotFoundError:
+            print("pip install fredapi (and you'll also need an api key)")
+            _finish_source("FRED", _blk, error="fredapi not installed")
+        except Exception as e:
+            print(f"FRED data failed: {repr(e)}")
+            _finish_source("FRED", _blk, error=repr(e))
 
     if tickers is not None:
+        _blk = _start_source("Stock tickers")
+        _ticker_errs = []
         for ticker in tickers:
             try:
                 import yfinance as yf
@@ -152,13 +229,22 @@ def load_live_daily(
                 time.sleep(sleep_seconds)
             except ModuleNotFoundError:
                 print("You need to: pip install yfinance")
+                _ticker_errs.append("yfinance not installed")
             except Exception as e:
                 print(f"yfinance data failed: {repr(e)}")
+                _ticker_errs.append(f"{ticker}: {repr(e)}")
+        _finish_source(
+            "Stock tickers",
+            _blk,
+            error="; ".join(_ticker_errs) if _ticker_errs else None,
+        )
 
     str_end_time = current_date.strftime("%Y-%m-%d")
     weather_start_date = current_date - datetime.timedelta(days=360 * weather_years)
 
     if weather_stations is not None:
+        _blk = _start_source("NOAA weather")
+        _weather_errs = []
         for wstation in weather_stations:
             try:
                 # NOAA CDO Web Services v2 API
@@ -287,12 +373,22 @@ def load_live_daily(
 
             except Exception as e:
                 print(f"weather data failed for {wstation}: {repr(e)}")
+                _weather_errs.append(f"{wstation}: {repr(e)}")
+        if noaa_cdo_token is None:
+            _weather_errs.append("noaa_cdo_token required")
+        _finish_source(
+            "NOAA weather",
+            _blk,
+            error="; ".join(_weather_errs) if _weather_errs else None,
+        )
 
     str_end_time = current_date.strftime("%d-%b-%Y")
     start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime(
         "%d-%b-%Y"
     )
     if london_air_stations is not None:
+        _blk = _start_source("London Air")
+        _london_errs = []
         for asite in london_air_stations:
             try:
                 # abase = "http://api.erg.ic.ac.uk/AirQuality/Data/Site/Wide/"
@@ -309,8 +405,15 @@ def load_live_daily(
                 # "/Data/Traffic/Site/SiteCode={SiteCode}/StartDate={StartDate}/EndDate={EndDate}/Json"
             except Exception as e:
                 print(f"London Air data failed: {repr(e)}")
+                _london_errs.append(f"{asite}: {repr(e)}")
+        _finish_source(
+            "London Air",
+            _blk,
+            error="; ".join(_london_errs) if _london_errs else None,
+        )
 
     if earthquake_min_magnitude is not None:
+        _blk = _start_source("Earthquakes")
         try:
             str_end_time = current_date.strftime("%Y-%m-%d")
             start_date = (
@@ -336,10 +439,13 @@ def load_live_daily(
                 }
             )
             dataset_lists.append(global_earthquakes)
+            _finish_source("Earthquakes", _blk)
         except Exception as e:
             print(f"earthquake data failed: {repr(e)}")
+            _finish_source("Earthquakes", _blk, error=repr(e))
 
     if nasa_api_key is not None:
+        _blk = _start_source("NASA space weather")
         try:
             nasa_key = nasa_api_key if nasa_api_key else "DEMO_KEY"
             # convert observation window to NASA-compatible YYYY-MM-DD strings
@@ -506,10 +612,13 @@ def load_live_daily(
             else:
                 print(f"NASA CME request failed with status {response.status_code}")
             time.sleep(sleep_seconds)
+            _finish_source("NASA space weather", _blk)
         except Exception as e:
             print(f"NASA DONKI download failed with error {repr(e)}")
+            _finish_source("NASA space weather", _blk, error=repr(e))
 
     if gov_domain_list is not None:
+        _blk = _start_source("Gov web analytics")
         try:
             # print because this one is slow, and point people at that fact
             if gsa_key is None:
@@ -528,10 +637,14 @@ def load_live_daily(
                 gresult.name = domain
                 dataset_lists.append(gresult.to_frame())
                 time.sleep(sleep_seconds)
+            _finish_source("Gov web analytics", _blk)
         except Exception as e:
             print(f"analytics.gov data failed with {repr(e)}")
+            _finish_source("Gov web analytics", _blk, error=repr(e))
 
     if wikipedia_pages is not None:
+        _blk = _start_source("Wikipedia")
+        _wiki_errs = []
         str_start = pd.to_datetime(observation_start).strftime("%Y%m%d00")
         str_end = current_date.strftime("%Y%m%d00")
         headers = {
@@ -555,9 +668,14 @@ def load_live_daily(
                 time.sleep(sleep_seconds)
             except Exception as e:
                 print(f"Wikipedia api failed with error {repr(e)}")
+                _wiki_errs.append(f"{page}: {repr(e)}")
                 time.sleep(10)
+        _finish_source(
+            "Wikipedia", _blk, error="; ".join(_wiki_errs) if _wiki_errs else None
+        )
 
     if weather_event_types is not None:
+        _blk = _start_source("Severe weather events")
         try:
             for event_type in weather_event_types:
                 # appears to have a fixed max of 500 records
@@ -581,10 +699,13 @@ def load_live_daily(
                 swresult.name = "_".join(event_type.split("+")[1:]) + "_Events"
                 dataset_lists.append(swresult.to_frame())
                 time.sleep(sleep_seconds)
+            _finish_source("Severe weather events", _blk)
         except Exception as e:
             print(f"Severe Weather data failed with {repr(e)}")
+            _finish_source("Severe weather events", _blk, error=repr(e))
 
     if trends_list is not None:
+        _blk = _start_source("Google Trends")
         try:
             from pytrends.request import TrendReq
 
@@ -595,13 +716,17 @@ def load_live_daily(
             gtrends.index = gtrends.index.tz_localize(None)
             gtrends.drop(columns="isPartial", inplace=True, errors="ignore")
             dataset_lists.append(gtrends)
+            _finish_source("Google Trends", _blk)
         except ImportError:
             print("You need to: pip install pytrends")
+            _finish_source("Google Trends", _blk, error="pytrends not installed")
         except Exception as e:
             print(f"pytrends data failed: {repr(e)}")
+            _finish_source("Google Trends", _blk, error=repr(e))
 
     # this was kinda broken last I checked
     if caiso_query is not None:
+        _blk = _start_source("CAISO")
         try:
             n_chunks = (364 * weather_years) / 30
             if n_chunks % 30 != 0:
@@ -637,10 +762,14 @@ def load_live_daily(
             energy_df = pd.concat(energy_df).sort_index()
             energy_df = energy_df[~energy_df.index.duplicated(keep='last')]
             dataset_lists.append(energy_df)
+            _finish_source("CAISO", _blk)
         except Exception as e:
             print(f"caiso download failed with error: {repr(e)}")
+            _finish_source("CAISO", _blk, error=repr(e))
 
     if eia_key is not None and eia_respondents is not None:
+        _blk = _start_source("EIA electricity")
+        _eia_errs = []
         api_url = 'https://api.eia.gov/v2/electricity/rto/daily-region-data/data/'  # ?api_key={eia-key}
         for respond in eia_respondents:
             try:
@@ -681,6 +810,7 @@ def load_live_daily(
                 time.sleep(sleep_seconds)
             except Exception as e:
                 print(f"eia download failed with error {repr(e)}")
+                _eia_errs.append(f"{respond} (demand): {repr(e)}")
             try:
                 api_url_mix = (
                     "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
@@ -729,6 +859,12 @@ def load_live_daily(
                 time.sleep(1)
             except Exception as e:
                 print(f"eia download failed with error {repr(e)}")
+                _eia_errs.append(f"{respond} (fuel mix): {repr(e)}")
+        _finish_source(
+            "EIA electricity",
+            _blk,
+            error="; ".join(_eia_errs) if _eia_errs else None,
+        )
 
     ### End of data download
     if len(dataset_lists) < 1:
