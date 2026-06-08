@@ -74,6 +74,7 @@ EXPECTED_TOOLS = {
     "load_live_data",
     "generate_synthetic_data",
     "load_data_from_file",
+    "smart_load",
     "get_data",
     "convert_long_to_wide",
     "clean_data",
@@ -424,6 +425,159 @@ class TestMCPFeatureDetection(unittest.TestCase):
         prediction = detector.forecast(forecast_length=14)
         self.assertIsNotNone(prediction)
         self.assertEqual(len(prediction.forecast), 14)
+
+
+# ===========================================================================
+# Smart ingestion (no MCP required)
+# ===========================================================================
+
+
+class TestMCPSmartLoad(unittest.TestCase):
+    """Tests for autots.mcp.ingest.smart_load auto-clean / auto-detect."""
+
+    def setUp(self):
+        from autots.mcp.ingest import smart_load
+
+        self.smart_load = smart_load
+
+    def test_messy_wide_cleanup(self):
+        """Empty padding rows/cols and off-center tables are stripped."""
+        messy = (
+            ",,,\n"
+            ",datetime,sales,inventory\n"
+            ",2024-01-01,100,50\n"
+            ",2024-01-02,102,48\n"
+            ",2024-01-03,99,51\n"
+            ",,,\n"
+        )
+        df, rep = self.smart_load(text=messy)
+        self.assertEqual(rep["detected_format"], "wide")
+        self.assertEqual(list(df.columns), ["sales", "inventory"])
+        self.assertEqual(len(df), 3)
+        self.assertIsInstance(df.index, pd.DatetimeIndex)
+        self.assertGreaterEqual(rep["dropped"]["columns"], 1)
+
+    def test_single_series_two_columns(self):
+        df, rep = self.smart_load(
+            text="date,price\n2024-01-01,10\n2024-01-02,11\n2024-01-03,12\n"
+        )
+        self.assertEqual(rep["detected_format"], "wide")
+        self.assertTrue(rep["single_series"])
+        self.assertEqual(df.shape, (3, 1))
+
+    def test_long_format_detection(self):
+        long_text = (
+            "datetime,series_id,value\n"
+            "2024-01-01,a,1\n2024-01-01,b,5\n"
+            "2024-01-02,a,2\n2024-01-02,b,6\n"
+            "2024-01-03,a,3\n2024-01-03,b,7\n"
+        )
+        df, rep = self.smart_load(text=long_text)
+        self.assertEqual(rep["detected_format"], "long")
+        self.assertEqual(sorted(df.columns), ["a", "b"])
+        self.assertEqual(len(df), 3)
+
+    def test_tsv_paste_wide(self):
+        tsv = "datetime\tA\tB\tC\n2024-01-01\t1\t2\t3\n2024-01-02\t4\t5\t6\n2024-01-03\t7\t8\t9\n"
+        df, rep = self.smart_load(text=tsv)
+        self.assertEqual(rep["detected_format"], "wide")
+        self.assertEqual(list(df.columns), ["A", "B", "C"])
+        self.assertEqual(rep["inferred_frequency"], "D")
+
+    def test_no_header_numeric_grid(self):
+        df, rep = self.smart_load(
+            text="2024-01-01,1,2\n2024-01-02,3,4\n2024-01-03,5,6\n"
+        )
+        self.assertFalse(rep["had_header"])
+        self.assertEqual(len(df), 3)
+
+    def test_report_is_json_serializable(self):
+        df, rep = self.smart_load(
+            text="date,price\n2024-01-01,10\n2024-01-02,11\n2024-01-03,12\n"
+        )
+        json.dumps(rep)  # must not raise
+
+    def test_no_date_column_raises(self):
+        with self.assertRaises(ValueError):
+            self.smart_load(text="a,b\nfoo,bar\nbaz,qux\n")
+
+    def test_no_input_raises(self):
+        with self.assertRaises(ValueError):
+            self.smart_load()
+
+
+# ===========================================================================
+# Pyodide API (no MCP required)
+# ===========================================================================
+
+
+class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
+    """Tests for the Pyodide-facing PWA boundary (autots.mcp.pyodide_api)."""
+
+    def setUp(self):
+        from autots.mcp import pyodide_api as P
+
+        self.P = P
+
+    def test_safe_model_sets_exclude_native(self):
+        native = {
+            "GluonTS", "NeuralForecast", "MambaSSM", "pMLP", "TiDE",
+            "PytorchForecasting", "Prophet", "ARCH",
+            "MultivariateRegression", "WindowRegression", "DatepartRegression",
+            "PreprocessingRegression",
+        }
+        self.assertEqual(set(self.P.PYODIDE_FAST_MODELS) & native, set())
+        self.assertEqual(set(self.P.PYODIDE_SEARCH_MODELS) & native, set())
+        self.assertIn("BasicLinearModel", self.P.PYODIDE_FAST_MODELS)
+        self.assertIn("Cassandra", self.P.PYODIDE_SEARCH_MODELS)
+
+    def test_list_commands_has_presets_and_tools(self):
+        commands = self.P.list_commands()
+        for preset in ("make_forecast", "search_forecast", "search_all_night"):
+            self.assertIn(preset, commands)
+        self.assertIn("smart_load", commands)
+        self.assertIn("get_forecast", commands)
+
+    async def test_run_command_json_passthrough(self):
+        from autots.mcp.cache import clear_cache
+
+        out = await self.P.run_command_json(
+            "load_sample_data", json.dumps({"dataset": "sine"})
+        )
+        self.assertIsInstance(out, str)  # JSON string boundary
+        data = json.loads(out)
+        self.assertIn("data_id", data)
+        clear_cache(data["data_id"], "data")
+
+    async def test_make_forecast_requires_data_id(self):
+        out = await self.P.run_command_json("make_forecast", json.dumps({}))
+        self.assertIn("error", json.loads(out))
+
+    async def test_search_pins_safe_models(self):
+        """_search_forecast must force the safe model list even if extra params try to override."""
+        captured = {}
+
+        async def fake_run_tool(name, arguments, progress_cb):
+            captured["name"] = name
+            captured["arguments"] = arguments
+            return {"prediction_id": "x"}
+
+        orig = self.P.run_tool
+        self.P.run_tool = fake_run_tool
+        try:
+            await self.P.dispatch(
+                "search_forecast",
+                {
+                    "data_id": "d",
+                    "autots_params": {"model_list": ["GluonTS"], "n_jobs": -1},
+                },
+            )
+        finally:
+            self.P.run_tool = orig
+
+        params = captured["arguments"]["autots_params"]
+        self.assertEqual(params["model_list"], self.P.PYODIDE_SEARCH_MODELS)
+        self.assertEqual(params["n_jobs"], 1)
 
 
 # ===========================================================================
@@ -1326,6 +1480,8 @@ def run_tests():
         TestMCPServerUtilities,
         TestMCPForecasting,
         TestMCPFeatureDetection,
+        TestMCPSmartLoad,
+        TestMCPPyodideAPI,
         TestMCPEventRiskForecasting,
         TestMCPSyntheticData,
         TestMCPToolHandlers,

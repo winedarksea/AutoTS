@@ -555,6 +555,63 @@ class TestTVAUtilities(unittest.TestCase):
         self.assertEqual(len(weights), 26)
         self.assertGreater(weights[-1], weights[0])
 
+    def test_reconcile_estimates_residuals_when_not_supplied(self):
+        from autots.evaluator.tva.tva import TVA
+
+        tva = TVA.__new__(TVA)
+        tva.reconciliation_method = 'mint'
+        tva._reconciler = mock.Mock()
+        tva._priors = mock.Mock()
+        tva._priors.build_hierarchy_matrix.return_value = np.array(
+            [[1.0, 1.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32
+        )
+        tva._compute_recent_reconciliation_residuals = mock.Mock(
+            return_value=np.ones((30, 3), dtype=np.float64)
+        )
+        tva._reconciler.reconcile.side_effect = (
+            lambda full_df, S, residuals=None: full_df
+        )
+
+        forecasts = pd.DataFrame(
+            [[10.0, 12.0], [11.0, 13.0]],
+            index=pd.date_range("2025-01-01", periods=2, freq="D"),
+            columns=["s0", "s1"],
+        )
+
+        tva.reconcile(forecasts=forecasts)
+
+        tva._compute_recent_reconciliation_residuals.assert_called_once()
+        _, _, kwargs = tva._reconciler.reconcile.mock_calls[0]
+        np.testing.assert_allclose(kwargs['residuals'], np.ones((30, 3)))
+
+    def test_reconcile_prefers_explicit_residuals(self):
+        from autots.evaluator.tva.tva import TVA
+
+        tva = TVA.__new__(TVA)
+        tva.reconciliation_method = 'mint'
+        tva._reconciler = mock.Mock()
+        tva._priors = mock.Mock()
+        tva._priors.build_hierarchy_matrix.return_value = np.array(
+            [[1.0, 1.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32
+        )
+        tva._compute_recent_reconciliation_residuals = mock.Mock()
+        tva._reconciler.reconcile.side_effect = (
+            lambda full_df, S, residuals=None: full_df
+        )
+
+        forecasts = pd.DataFrame(
+            [[10.0, 12.0], [11.0, 13.0]],
+            index=pd.date_range("2025-01-01", periods=2, freq="D"),
+            columns=["s0", "s1"],
+        )
+        residuals = np.full((12, 3), 0.25, dtype=np.float64)
+
+        tva.reconcile(forecasts=forecasts, residuals=residuals)
+
+        tva._compute_recent_reconciliation_residuals.assert_not_called()
+        _, _, kwargs = tva._reconciler.reconcile.mock_calls[0]
+        np.testing.assert_allclose(kwargs['residuals'], residuals)
+
 
 # ---------------------------------------------------------------------------
 # PyTorch-dependent unit tests

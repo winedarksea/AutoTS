@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoTS Pyodide smoke test</title>
+  <style>body{font-family:system-ui;margin:24px} pre{background:#f2f0fa;padding:12px;border-radius:8px;white-space:pre-wrap}</style>
+</head>
+<body>
+  <h1>AutoTS Pyodide smoke test</h1>
+  <p>Serve the <code>dist/</code> folder (which must contain <code>autots.whl</code>)
+     and open this page. It boots Pyodide, installs AutoTS, and runs the full
+     PWA flow (smart_load → make_forecast → search_forecast) entirely in the
+     browser. Requires network access for the Pyodide CDN.</p>
+  <pre id="log">starting…</pre>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+  <script>
+    const log = (m) => { document.getElementById('log').textContent += "\n" + m; };
+    (async () => {
+      try {
+        log("loading Pyodide…");
+        const pyodide = await loadPyodide();
+        log("loading packages…");
+        await pyodide.loadPackage(["micropip","numpy","pandas","scipy","scikit-learn","statsmodels"]);
+        log("installing AutoTS wheel…");
+        const micropip = pyodide.pyimport("micropip");
+        await micropip.install(new URL("../autots.whl", location.href).href);
+        await pyodide.runPythonAsync("from autots.mcp.pyodide_api import run_command_json");
+        const run = pyodide.globals.get("run_command_json");
+        const prog = (t) => log("  · " + t);
+
+        log("smart_load…");
+        let csv = "datetime,sales\n";
+        for (let d = 1; d <= 60; d++) csv += `2024-01-${String(d).padStart(2,'0')},${100 + d}\n`;
+        // dates past Jan are invalid and dropped — fine for a smoke test
+        let r = JSON.parse(await run("smart_load", JSON.stringify({text: csv}), prog));
+        log("  -> data_id " + r.data_id + " rows " + r.rows);
+
+        log("make_forecast…");
+        let f = JSON.parse(await run("make_forecast", JSON.stringify({data_id: r.data_id, forecast_length: 7}), prog));
+        log("  -> prediction_id " + f.prediction_id);
+
+        let fc = JSON.parse(await run("get_forecast", JSON.stringify({prediction_id: f.prediction_id}), prog));
+        log("  -> forecast dates: " + fc.datetime.length);
+
+        log("search_forecast (small budget)…");
+        let s = JSON.parse(await run("search_forecast", JSON.stringify({
+          data_id: r.data_id, forecast_length: 7,
+          autots_params: {max_generations: 1, num_validations: 1}
+        }), prog));
+        log("  -> search prediction_id " + (s.prediction_id || s.error));
+
+        log("\n✅ SMOKE TEST PASSED");
+      } catch (e) {
+        log("\n❌ FAILED: " + (e && e.stack ? e.stack : e));
+      }
+    })();
+  </script>
+</body>
+</html>

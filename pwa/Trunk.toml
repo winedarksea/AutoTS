@@ -1,0 +1,14 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[serve]
+address = "127.0.0.1"
+port = 8080
+
+# Build the AutoTS wheel into Trunk's staging dir so it ships in dist/ and the
+# Pyodide worker can fetch it (URL published via autots_wheel.json).
+[[hooks]]
+stage = "post_build"
+command = "bash"
+command_arguments = ["scripts/build_wheel.sh"]

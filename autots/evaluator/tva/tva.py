@@ -716,11 +716,19 @@ class TVA:
                 constraints.get('target_value', 0.0),
             )
 
-    def reconcile(self, forecasts: pd.DataFrame = None) -> pd.DataFrame:
+    def reconcile(
+        self,
+        forecasts: pd.DataFrame = None,
+        residuals: np.ndarray = None,
+    ) -> pd.DataFrame:
         """Apply hierarchical reconciliation if configured.
 
         Args:
             forecasts: Forecast DataFrame. If None, generates fresh predictions.
+            residuals: Optional historical residual matrix for all hierarchy levels.
+                If omitted, TVA estimates recent one-step residuals from the last
+                30-90 training windows so covariance-aware reconciliation methods
+                can use a meaningful W matrix.
 
         Returns:
             Reconciled DataFrame.
@@ -769,7 +777,12 @@ class TVA:
         else:
             full_df = forecasts
 
-        reconciled = self._reconciler.reconcile(full_df, S)
+        if residuals is None:
+            residuals = self._compute_recent_reconciliation_residuals(S)
+        elif isinstance(residuals, pd.DataFrame):
+            residuals = residuals.values
+
+        reconciled = self._reconciler.reconcile(full_df, S, residuals=residuals)
         # Return only the original bottom-level columns
         return reconciled[list(forecasts.columns)]
 
@@ -972,6 +985,108 @@ class TVA:
         anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
         with torch.no_grad():
             return self._network(x, meta, anchor_mask_t)
+
+    def _compute_recent_reconciliation_residuals(
+        self, S: np.ndarray, history_periods: int = None
+    ) -> Optional[np.ndarray]:
+        """Estimate recent one-step-ahead residuals for hierarchical weighting.
+
+        Uses rolling windows from the fitted training history and compares the
+        network's first-step predictions against the observed series values. The
+        resulting residual matrix is expanded to include aggregate hierarchy nodes
+        so MinT/ERM-style reconciliation can estimate a non-identity covariance.
+        """
+        if self._network is None or self._components is None or self._df_original is None:
+            return None
+
+        trend_data = self._components['trend'].values
+        n_targets = max(trend_data.shape[0] - self.window_size, 0)
+        if n_targets == 0:
+            return None
+
+        if history_periods is None:
+            history_periods = min(max(int(self.forecast_horizon), 30), 90)
+        try:
+            history_periods = int(history_periods)
+        except Exception:
+            history_periods = 30
+
+        history_periods = max(1, min(n_targets, history_periods))
+        target_positions = np.arange(
+            trend_data.shape[0] - history_periods, trend_data.shape[0]
+        )
+        recent_windows = np.stack(
+            [trend_data[pos - self.window_size : pos].T for pos in target_positions],
+            axis=0,
+        ).astype(np.float32, copy=False)
+
+        device = torch.device(self.device)
+        x = torch.tensor(recent_windows, dtype=torch.float32, device=device)
+
+        meta = None
+        if (
+            self._metadata_embeddings is not None
+            and self._metadata_embeddings.shape[1] > 0
+        ):
+            meta = torch.tensor(
+                np.repeat(
+                    self._metadata_embeddings[np.newaxis, :, :],
+                    history_periods,
+                    axis=0,
+                ),
+                dtype=torch.float32,
+                device=device,
+            )
+
+        anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
+        with torch.no_grad():
+            outputs = self._network(x, meta, anchor_mask_t)
+
+        trend_step = outputs['trend_forecast'][:, :, 0].cpu().numpy()
+        seasonal_step = self._components['seasonality'].values[target_positions].T
+        holiday_step = self._components['holidays'].values[target_positions].T
+        level_shift_step = self._components['level_shifts'].values[target_positions].T
+
+        if isinstance(self._fusion_layer, nn.Module):
+            with torch.no_grad():
+                fused = self._fusion_layer(
+                    torch.tensor(
+                        trend_step[:, :, np.newaxis],
+                        dtype=torch.float32,
+                        device=device,
+                    ),
+                    torch.tensor(
+                        seasonal_step.T[:, :, np.newaxis],
+                        dtype=torch.float32,
+                        device=device,
+                    ),
+                    torch.tensor(
+                        holiday_step.T[:, :, np.newaxis],
+                        dtype=torch.float32,
+                        device=device,
+                    ),
+                )
+                predicted_bottom = (
+                    fused.cpu().numpy()[:, :, 0] + level_shift_step.T
+                )
+        else:
+            predicted_bottom = (
+                trend_step + seasonal_step.T + holiday_step.T + level_shift_step.T
+            )
+
+        actual_bottom = self._df_original.values[target_positions]
+        bottom_residuals = actual_bottom - predicted_bottom
+
+        n_bottom = S.shape[1]
+        n_all = S.shape[0]
+        n_agg = n_all - n_bottom
+        if n_agg <= 0:
+            return bottom_residuals
+
+        aggregate_actual = (S[:n_agg] @ actual_bottom.T).T
+        aggregate_predicted = (S[:n_agg] @ predicted_bottom.T).T
+        aggregate_residuals = aggregate_actual - aggregate_predicted
+        return np.concatenate([aggregate_residuals, bottom_residuals], axis=1)
 
     def _create_windows(self, data: np.ndarray) -> tuple:
         """Create sliding windows and targets from (T, N) trend data.

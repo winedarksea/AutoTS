@@ -1,4 +1,4 @@
-# 1.0.3 🇺🇦 🇺🇦 🇺🇦
+# 1.0.4 🇺🇦 🇺🇦 🇺🇦
 * more tuning of MCP download install
 * TVA optimizations
 * Synthetic data minor new options

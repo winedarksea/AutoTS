@@ -194,6 +194,71 @@ try:
             ),
         ),
         Tool(
+            name="smart_load",
+            title="Smart Load (paste / upload / URL)",
+            description=(
+                "Beginner-friendly data loader. Accepts pasted CSV/TSV text, a "
+                "CSV URL (e.g. a published Google Sheet), or base64-encoded file "
+                "bytes (CSV or Excel). Automatically removes empty/padding rows "
+                "and columns, detects wide vs long orientation, and returns a "
+                "data_id plus a report describing what was cleaned and detected. "
+                "Prefer this over load_data_from_file for raw human spreadsheets."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Pasted CSV or TSV text",
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "URL to a CSV (e.g. published Google Sheet)",
+                    },
+                    "content_base64": {
+                        "type": "string",
+                        "description": "Base64-encoded file bytes (CSV or Excel)",
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Original filename (used to detect Excel)",
+                    },
+                    "data_format": {
+                        "type": "string",
+                        "enum": ["auto", "wide", "long"],
+                        "default": "auto",
+                        "description": "Orientation override (default auto-detect)",
+                    },
+                    "long_cols": {
+                        "type": "object",
+                        "description": (
+                            "For long data, optional column names: "
+                            "{date, value, id}"
+                        ),
+                    },
+                },
+            },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "data_id": {
+                        "type": "string",
+                        "description": "Cache ID — pass as data_id to other tools",
+                    },
+                    "report": {
+                        "type": "object",
+                        "description": "Cleanup and detection summary",
+                    },
+                    "rows": {"type": "integer"},
+                    "cols": {"type": "integer"},
+                },
+                "required": ["data_id"],
+            },
+            annotations=ToolAnnotations(
+                readOnlyHint=False, idempotentHint=False, openWorldHint=True
+            ),
+        ),
+        Tool(
             name="get_data",
             title="Get Cached Data",
             description="Retrieve cached data as JSON (wide or long) or save as CSV. Requires data_id from load_sample_data, load_live_data, load_data_from_file, generate_synthetic_data, convert_long_to_wide, or clean_data.",

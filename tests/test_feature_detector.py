@@ -992,6 +992,69 @@ class TestFeatureDetectionOptimizer(unittest.TestCase):
         # Verify it still has the same top-level structure (keys should be preserved)
         self.assertEqual(set(params.keys()), set(mutated.keys()))
 
+    def test_mutate_params_anomaly_and_holiday_blocks_are_atomic(self):
+        """Anomaly/Holiday mutation should not create cross-method parameter hybrids."""
+        optimizer = FeatureDetectionOptimizer(self.generator)
+
+        class _StubSampler:
+            def __init__(self, fresh_params):
+                self._fresh_params = fresh_params
+
+            def get_new_params(self, method='random'):
+                return self._fresh_params
+
+        base_params = {
+            'anomaly_params': {
+                'output': 'multivariate',
+                'method': 'rolling_zscore',
+                'method_params': {
+                    'distribution': 'norm',
+                    'alpha': 0.001,
+                    'rolling_periods': 200,
+                    'center': False,
+                },
+                'fillna': 'ffill',
+            },
+            'holiday_params': {
+                'output': 'multivariate',
+                'method': 'threshold',
+                'method_params': {
+                    'alpha': 0.05,
+                    'window': 7,
+                },
+            },
+        }
+        fresh_params = {
+            'anomaly_params': {
+                'output': 'multivariate',
+                'method': 'minmax',
+                'method_params': {
+                    'alpha': 0.05,
+                },
+                'fillna': 'ffill',
+            },
+            'holiday_params': {
+                'output': 'multivariate',
+                'method': 'impact',
+                'method_params': {
+                    'alpha': 0.2,
+                    'window': 21,
+                },
+            },
+        }
+
+        sampler = _StubSampler(fresh_params)
+        for selected_key in ('anomaly_params', 'holiday_params'):
+            for seed in range(20):
+                rng = random.Random(seed)
+                mutated = optimizer._mutate_params(
+                    base_params,
+                    sampler,
+                    rng,
+                    allowed_keys=(selected_key,),
+                )
+                self.assertEqual(mutated[selected_key], fresh_params[selected_key])
+
     def test_select_best_uses_recovery_lexicographic_order_by_default(self):
         """Default selector should prefer recovery-floor compliance before raw loss."""
         optimizer = FeatureDetectionOptimizer(self.generator)
