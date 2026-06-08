@@ -144,6 +144,16 @@ body {
 /* Chart */
 .md-chart { width: 100%; background: var(--md-surface); border-radius: var(--md-shape-md); }
 .md-chart svg { display: block; width: 100%; height: auto; }
+.md-chart-controls {
+  display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+.md-chart-controls .md-field { min-width: 180px; }
+.md-chart-legend { display: flex; gap: 16px; color: var(--md-on-surface-variant); font-size: .85rem; }
+.md-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.md-chart-legend i { display: inline-block; width: 24px; height: 3px; border-radius: 2px; }
+.md-chart-legend i.actuals { background: var(--md-outline); }
+.md-chart-legend i.forecast { background: var(--md-primary); }
 
 /* Accessible data table (paired with every chart) */
 .md-table-wrap { max-height: 280px; overflow: auto; border-radius: var(--md-shape-sm); }
@@ -160,6 +170,18 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 .md-status { font-size: 0.85rem; color: var(--md-on-surface-variant); min-height: 1.2em; }
 .md-chip { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--md-primary-container); color: var(--md-on-primary-container); font-size: 0.8rem; font-weight: 500; margin: 2px; }
 .md-error { color: var(--md-error); }
+.md-warning { color: #7a4d00; }
+
+/* Cache summaries keep each object to one row; metadata remains available on demand. */
+.md-cache-group { margin-top: 16px; }
+.md-cache-group h3 { margin: 0 0 6px; font-size: .95rem; text-transform: capitalize; }
+.md-cache-table { min-width: 760px; }
+.md-cache-table th:last-child, .md-cache-table td:last-child { text-align: left; }
+.md-cache-table pre { max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-cache-id {
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
 
 /* Progress bar (indeterminate) */
 .md-progress { height: 4px; background: var(--md-primary-container); border-radius: 2px; overflow: hidden; }

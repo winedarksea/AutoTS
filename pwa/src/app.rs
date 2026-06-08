@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use wasm_bindgen::JsCast;
 
 use crate::client::{call_tool, init_runtime, set_progress_handler};
-use crate::model::{effective_values, forecast_to_csv, WideData};
+use crate::model::{effective_values, forecast_to_csv, wide_data_to_csv, WideData};
 use crate::svg;
 
 type Overrides = Vec<Vec<Option<f64>>>;
@@ -40,16 +40,29 @@ async fn fetch_history(
     }
 }
 
-async fn fetch_features(data_id: String, features: RwSignal<Option<Value>>) {
-    if let Ok(det) = call_tool("detect_features", json!({ "data_id": data_id })).await {
-        if let Some(did) = det.get("detector_id").and_then(|x| x.as_str()) {
-            if let Ok(f) =
-                call_tool("get_detected_features", json!({ "detector_id": did })).await
-            {
-                features.set(f.get("detection_counts").cloned());
+async fn fetch_features(
+    data_id: String,
+    features: RwSignal<Option<Value>>,
+    feature_error: RwSignal<Option<String>>,
+    detecting_features: RwSignal<bool>,
+) {
+    detecting_features.set(true);
+    feature_error.set(None);
+    match call_tool("detect_features", json!({ "data_id": data_id })).await {
+        Ok(det) => {
+            let Some(did) = det.get("detector_id").and_then(|x| x.as_str()) else {
+                feature_error.set(Some("Feature detection returned no detector ID.".into()));
+                detecting_features.set(false);
+                return;
+            };
+            match call_tool("get_detected_features", json!({ "detector_id": did })).await {
+                Ok(f) => features.set(f.get("detection_counts").cloned()),
+                Err(e) => feature_error.set(Some(e)),
             }
         }
+        Err(e) => feature_error.set(Some(e)),
     }
+    detecting_features.set(false);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -157,10 +170,13 @@ pub fn App() -> impl IntoView {
     let history = create_rw_signal::<Option<WideData>>(None);
     let report = create_rw_signal::<Option<Value>>(None);
     let features = create_rw_signal::<Option<Value>>(None);
+    let feature_error = create_rw_signal::<Option<String>>(None);
+    let detecting_features = create_rw_signal(false);
     let forecast = create_rw_signal::<Option<WideData>>(None);
     let overrides = create_rw_signal::<Overrides>(Vec::new());
     let sel = create_rw_signal::<usize>(0);
     let forecast_length = create_rw_signal::<i64>(30);
+    let forecast_history_points = create_rw_signal::<usize>(90);
 
     // Upload inputs
     let tab = create_rw_signal::<u8>(0); // 0 paste, 1 url, 2 file, 3 sample
@@ -189,12 +205,20 @@ pub fn App() -> impl IntoView {
     // --- data-loaded continuation: fetch history + features ---------------
     let after_loaded = move |id: String| {
         data_id.set(Some(id.clone()));
+        history.set(None);
         forecast.set(None);
         features.set(None);
+        feature_error.set(None);
+        forecast_history_points.set(90);
         let id2 = id.clone();
         spawn_local(async move {
             fetch_history(id.clone(), history, sel, error).await;
-            fetch_features(id2, features).await;
+            // Feature detection is optional enrichment. Starting it only after
+            // history is loaded keeps the plot independent and avoids
+            // concurrent calls into the single Pyodide runtime.
+            spawn_local(async move {
+                fetch_features(id2, features, feature_error, detecting_features).await;
+            });
         });
     };
 
@@ -304,11 +328,8 @@ pub fn App() -> impl IntoView {
                     Ok(txt) => {
                         let text = txt.as_string().unwrap_or_default();
                         status.set("Cleaning & detecting format…".into());
-                        match call_tool(
-                            "smart_load",
-                            json!({ "text": text, "filename": name }),
-                        )
-                        .await
+                        match call_tool("smart_load", json!({ "text": text, "filename": name }))
+                            .await
                         {
                             Ok(v) => {
                                 report.set(v.get("report").cloned());
@@ -347,13 +368,14 @@ pub fn App() -> impl IntoView {
 
     let refresh_cache = move |_| {
         spawn_local(async move {
-            if let Ok(v) = call_tool("list_cache", json!({})).await {
-                cache.set(Some(v));
+            match call_tool("list_cache", json!({})).await {
+                Ok(v) => cache.set(Some(v)),
+                Err(e) => error.set(Some(e)),
             }
         });
     };
 
-    let download = move |_| {
+    let download_forecast = move |_| {
         if let Some(fc) = forecast.get() {
             let csv = forecast_to_csv(&fc, &overrides.get());
             if let Err(e) = download_csv("autots_forecast.csv", &csv) {
@@ -362,8 +384,27 @@ pub fn App() -> impl IntoView {
         }
     };
 
-    // --- derived: combined chart for the selected series -------------------
-    let chart_svg = move || {
+    let download_loaded_data = move |_| {
+        if let Some(data) = history.get() {
+            let csv = wide_data_to_csv(&data);
+            if let Err(e) = download_csv("autots_loaded_data.csv", &csv) {
+                error.set(Some(e));
+            }
+        }
+    };
+
+    // Keep the source-data chart independent from forecast state.
+    let history_chart_svg = move || {
+        let s = sel.get();
+        let hist = history.get();
+        let hvals = hist
+            .as_ref()
+            .and_then(|h| h.series.get(s))
+            .map(|x| x.values.clone());
+        svg::line_chart(hvals.as_deref(), None)
+    };
+
+    let forecast_chart_svg = move || {
         let s = sel.get();
         let hist = history.get();
         let fc = forecast.get();
@@ -372,10 +413,15 @@ pub fn App() -> impl IntoView {
             .as_ref()
             .and_then(|h| h.series.get(s))
             .map(|x| x.name.clone());
-        let hvals = hist
-            .as_ref()
-            .and_then(|h| h.series.get(s))
-            .map(|x| x.values.clone());
+        let hvals = hist.as_ref().and_then(|h| h.series.get(s)).map(|x| {
+            let requested = forecast_history_points.get();
+            let start = if requested == 0 {
+                0
+            } else {
+                x.values.len().saturating_sub(requested)
+            };
+            x.values[start..].to_vec()
+        });
         let fvals = fc.as_ref().map(|f| {
             let idx = sel_name
                 .as_ref()
@@ -493,8 +539,14 @@ pub fn App() -> impl IntoView {
                             }
                         })}
 
-                        <div class="md-chart" inner_html=chart_svg></div>
+                        <div class="md-chart" inner_html=history_chart_svg></div>
 
+                        {move || detecting_features.get().then(|| view! {
+                            <p class="muted md-body">"Detecting features… The data plot is ready to use."</p>
+                        })}
+                        {move || feature_error.get().map(|e| view! {
+                            <p class="md-warning md-body">"Feature detection was unavailable: " {e}</p>
+                        })}
                         {move || features.get().map(|f| view! {
                             <div style="margin-top:8px">
                                 <span class="md-label">"Detected features"</span>
@@ -503,6 +555,10 @@ pub fn App() -> impl IntoView {
                                 </div>
                             </div>
                         })}
+
+                        <div class="md-btn-row" style="margin-top:12px">
+                            <button class="md-btn outlined" on:click=download_loaded_data>"Download loaded data CSV"</button>
+                        </div>
 
                         <details class="md-expander" style="margin-top:12px">
                             <summary>"Data table (accessible / machine-readable)"</summary>
@@ -538,15 +594,36 @@ pub fn App() -> impl IntoView {
             {move || forecast.get().map(|_| view! {
                 <section class="md-card">
                     <h2>"4 · Review, adjust & download"</h2>
-                    <div class="md-chart" inner_html=chart_svg></div>
+                    <div class="md-chart-controls">
+                        <div class="md-field">
+                            <label class="md-label">"Actual history shown"</label>
+                            <select prop:value=move || forecast_history_points.get().to_string()
+                                on:change=move |ev| {
+                                if let Ok(n) = event_target_value(&ev).parse::<usize>() {
+                                    forecast_history_points.set(n);
+                                }
+                            }>
+                                <option value="30">"30 periods"</option>
+                                <option value="90">"90 periods"</option>
+                                <option value="180">"180 periods"</option>
+                                <option value="365">"365 periods"</option>
+                                <option value="0">"All actuals"</option>
+                            </select>
+                        </div>
+                        <div class="md-chart-legend" aria-label="Chart legend">
+                            <span><i class="actuals"></i>"Actuals"</span>
+                            <span><i class="forecast"></i>"Forecast"</span>
+                        </div>
+                    </div>
+                    <div class="md-chart" inner_html=forecast_chart_svg></div>
 
-                    <details class="md-expander" style="margin-top:12px" open=true>
+                    <details class="md-expander" style="margin-top:12px">
                         <summary>"Adjust forecast points"</summary>
                         {move || adjust_rows(forecast, overrides, history, sel)}
                     </details>
 
                     <div class="md-btn-row" style="margin-top:12px">
-                        <button class="md-btn filled" on:click=download>"Download CSV"</button>
+                        <button class="md-btn filled" on:click=download_forecast>"Download forecast CSV"</button>
                     </div>
                 </section>
             })}
@@ -557,9 +634,7 @@ pub fn App() -> impl IntoView {
                 <div class="md-btn-row">
                     <button class="md-btn outlined" on:click=refresh_cache>"Refresh"</button>
                 </div>
-                {move || cache.get().map(|c| view! {
-                    <pre class="md-body">{serde_json::to_string_pretty(&c).unwrap_or_default()}</pre>
-                })}
+                {move || cache.get().map(|c| cache_summary(&c))}
             </section>
         </main>
     }
@@ -572,7 +647,11 @@ pub fn App() -> impl IntoView {
 fn feature_chips(counts: &Value, series_name: &str) -> View {
     let obj = match counts.get(series_name).and_then(|v| v.as_object()) {
         Some(o) => o.clone(),
-        None => match counts.as_object().and_then(|m| m.values().next()).and_then(|v| v.as_object()) {
+        None => match counts
+            .as_object()
+            .and_then(|m| m.values().next())
+            .and_then(|v| v.as_object())
+        {
             Some(o) => o.clone(),
             None => return ().into_view(),
         },
@@ -611,6 +690,85 @@ fn data_table(data: &WideData, sel: usize) -> View {
     .into_view()
 }
 
+fn cache_summary(cache: &Value) -> View {
+    let Some(groups) = cache.as_object() else {
+        return ().into_view();
+    };
+    if groups.is_empty() {
+        return view! { <p class="muted md-body">"No cached items."</p> }.into_view();
+    }
+
+    groups
+        .iter()
+        .filter_map(|(group_name, entries)| {
+            let entries = entries.as_array()?;
+            let rows = entries
+                .iter()
+                .map(|entry| {
+                    let id = entry
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let created = entry
+                        .get("created_at")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let metadata = entry.get("metadata").cloned().unwrap_or_else(|| json!({}));
+                    let source = metadata
+                        .get("source")
+                        .and_then(Value::as_str)
+                        .unwrap_or("—")
+                        .to_string();
+                    let rows = metadata.get("rows").and_then(Value::as_u64);
+                    let columns = metadata.get("columns").and_then(Value::as_u64);
+                    let shape = match (rows, columns) {
+                        (Some(r), Some(c)) => format!("{r} × {c}"),
+                        _ => "—".into(),
+                    };
+                    let metadata_text = serde_json::to_string_pretty(&metadata).unwrap_or_default();
+                    let id_title = id.clone();
+                    view! {
+                        <tr>
+                            <td class="md-cache-id" title=id_title>{id}</td>
+                            <td>{source}</td>
+                            <td>{shape}</td>
+                            <td>{created}</td>
+                            <td>
+                                <details class="md-expander">
+                                    <summary>"Details"</summary>
+                                    <pre class="md-body">{metadata_text}</pre>
+                                </details>
+                            </td>
+                        </tr>
+                    }
+                })
+                .collect_view();
+            let title = group_name.replace('_', " ");
+            Some(view! {
+                <div class="md-cache-group">
+                    <h3>{title}</h3>
+                    <div class="md-table-wrap">
+                        <table class="md-table md-cache-table">
+                            <thead>
+                                <tr>
+                                    <th>"ID"</th>
+                                    <th>"Source"</th>
+                                    <th>"Shape"</th>
+                                    <th>"Created"</th>
+                                    <th>"More"</th>
+                                </tr>
+                            </thead>
+                            <tbody>{rows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            })
+        })
+        .collect_view()
+}
+
 fn adjust_rows(
     forecast: RwSignal<Option<WideData>>,
     overrides: RwSignal<Overrides>,
@@ -624,10 +782,7 @@ fn adjust_rows(
     let sel_name = history
         .get()
         .and_then(|h| h.series.get(sel.get()).map(|x| x.name.clone()));
-    let idx = sel_name
-        .as_ref()
-        .and_then(|n| fc.index_of(n))
-        .unwrap_or(0);
+    let idx = sel_name.as_ref().and_then(|n| fc.index_of(n)).unwrap_or(0);
     let s = match fc.series.get(idx) {
         Some(s) => s.clone(),
         None => return ().into_view(),

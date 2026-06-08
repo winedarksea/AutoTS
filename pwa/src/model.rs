@@ -58,22 +58,23 @@ fn csv_field(s: &str) -> String {
     }
 }
 
-/// Build a wide CSV (datetime + one column per series), applying per-point
-/// overrides from drag/slider adjustments where present.
-pub fn forecast_to_csv(fc: &WideData, overrides: &[Vec<Option<f64>>]) -> String {
+fn wide_data_to_csv_with_overrides(
+    data: &WideData,
+    overrides: Option<&[Vec<Option<f64>>]>,
+) -> String {
     let mut out = String::from("datetime");
-    for s in &fc.series {
+    for s in &data.series {
         out.push(',');
         out.push_str(&csv_field(&s.name));
     }
     out.push('\n');
 
-    for (r, dt) in fc.datetime.iter().enumerate() {
+    for (r, dt) in data.datetime.iter().enumerate() {
         out.push_str(&csv_field(dt));
-        for (c, s) in fc.series.iter().enumerate() {
+        for (c, s) in data.series.iter().enumerate() {
             out.push(',');
             let v = overrides
-                .get(c)
+                .and_then(|all| all.get(c))
                 .and_then(|col| col.get(r).copied().flatten())
                 .unwrap_or_else(|| s.values.get(r).copied().unwrap_or(f64::NAN));
             if v.is_finite() {
@@ -83,6 +84,16 @@ pub fn forecast_to_csv(fc: &WideData, overrides: &[Vec<Option<f64>>]) -> String 
         out.push('\n');
     }
     out
+}
+
+/// Build a wide CSV (datetime + one column per series).
+pub fn wide_data_to_csv(data: &WideData) -> String {
+    wide_data_to_csv_with_overrides(data, None)
+}
+
+/// Build a wide forecast CSV, applying per-point overrides where present.
+pub fn forecast_to_csv(fc: &WideData, overrides: &[Vec<Option<f64>>]) -> String {
+    wide_data_to_csv_with_overrides(fc, Some(overrides))
 }
 
 /// Effective forecast values for one series (override where set, else original).
@@ -97,4 +108,35 @@ pub fn effective_values(fc: &WideData, overrides: &[Vec<Option<f64>>], series: u
                 .unwrap_or(orig)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{forecast_to_csv, wide_data_to_csv, SeriesData, WideData};
+
+    fn example_data() -> WideData {
+        WideData {
+            datetime: vec!["2026-01-01".into(), "2026-01-02".into()],
+            series: vec![SeriesData {
+                name: "sales,total".into(),
+                values: vec![1.0, 2.0],
+            }],
+        }
+    }
+
+    #[test]
+    fn loaded_data_csv_preserves_wide_shape_and_quotes_headers() {
+        assert_eq!(
+            wide_data_to_csv(&example_data()),
+            "datetime,\"sales,total\"\n2026-01-01,1\n2026-01-02,2\n"
+        );
+    }
+
+    #[test]
+    fn forecast_csv_applies_point_overrides() {
+        assert_eq!(
+            forecast_to_csv(&example_data(), &[vec![None, Some(3.5)]]),
+            "datetime,\"sales,total\"\n2026-01-01,1\n2026-01-02,3.5\n"
+        );
+    }
 }

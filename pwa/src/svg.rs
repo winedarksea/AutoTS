@@ -107,7 +107,7 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
 
     // forecast/history boundary marker
     if !h.is_empty() && !f.is_empty() {
-        let xb = PAD_L + (h.len() as f64 - 1.0) * xstep;
+        let xb = PAD_L + (h.len() as f64 - 0.5) * xstep;
         svg.push_str(&format!(
             "<line x1=\"{xb:.1}\" y1=\"{PAD_T:.0}\" x2=\"{xb:.1}\" y2=\"{:.0}\" \
              stroke=\"var(--md-outline)\" stroke-dasharray=\"4 4\" stroke-width=\"1\"/>",
@@ -122,8 +122,17 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
         ));
     }
     if !f.is_empty() {
-        let x0 = if h.is_empty() { 0.0 } else { h.len() as f64 - 1.0 };
-        let d = path_for(f, x0, n_total, lo, hi);
+        // Include the final actual in the forecast path so the transition is
+        // connected, while forecast markers remain on future-period positions.
+        let (forecast_path_values, x0) = if let Some(last_actual) = h.last() {
+            let mut values = Vec::with_capacity(f.len() + 1);
+            values.push(*last_actual);
+            values.extend_from_slice(f);
+            (values, h.len() as f64 - 1.0)
+        } else {
+            (f.to_vec(), 0.0)
+        };
+        let d = path_for(&forecast_path_values, x0, n_total, lo, hi);
         svg.push_str(&format!(
             "<path d=\"{d}\" fill=\"none\" stroke=\"var(--md-primary)\" stroke-width=\"2.5\"/>"
         ));
@@ -132,7 +141,8 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
             if !v.is_finite() {
                 continue;
             }
-            let x = PAD_L + (x0 + i as f64) * xstep;
+            let forecast_x0 = if h.is_empty() { 0.0 } else { h.len() as f64 };
+            let x = PAD_L + (forecast_x0 + i as f64) * xstep;
             let y = PAD_T + plot_h * (1.0 - (v - lo) / (hi - lo));
             svg.push_str(&format!(
                 "<circle cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"3\" fill=\"var(--md-primary)\"/>"
@@ -142,4 +152,17 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
 
     svg.push_str("</svg>");
     svg
+}
+
+#[cfg(test)]
+mod tests {
+    use super::line_chart;
+
+    #[test]
+    fn chart_distinguishes_history_and_forecast() {
+        let chart = line_chart(Some(&[1.0, 2.0]), Some(&[3.0, 4.0]));
+        assert!(chart.contains("stroke=\"var(--md-outline)\""));
+        assert!(chart.contains("stroke=\"var(--md-primary)\""));
+        assert!(chart.contains("stroke-dasharray=\"4 4\""));
+    }
 }

@@ -6,6 +6,13 @@ Proposed data flow: Rust (polars) <-> arrow <-> Python pandas (pyodide)
 
 The basic app is going to consist of data upload. After data upload, the feature detector is run and the user is shown their uploaded data as an interactive line graph including feature detector labels. Users can select making a forecast (which uses the fast feature detector forecast) or a do forecast search button which uses the main AutoTS search. Users should be able to expand and input parameters, but are not shown many by default until they expand the options. Once the forecast is made, users can view it, drag each data point to adjust it, then download the data (reflecting adjustments, if used).
 
+Implemented UI requirements:
+	Data preview and download are available as soon as cleaned data is loaded. Feature detection is optional enrichment; detector failures are shown inline and do not suppress the data plot.
+	Forecast plots distinguish actuals from forecast values and let users choose how many recent actual periods to display.
+	Cached objects are summarized with one row per object, with full metadata available in expandable details.
+	Forecast point adjustments are collapsed by default until the adjustment UI is redesigned.
+	Loaded data and adjusted forecasts can both be downloaded as wide CSV files.
+
 The long term goal is to include more pages and features in the app, all of the current MCP functions and more. So the design should be extensible.
 Another long term goal is more UI based preprocessing, such as users removing anomalies in the UI, with the data updates tracked and passed back to the data used for forecasting.
 
