@@ -3,6 +3,9 @@ We need a proper theme for the forecasting pwa, which currently has none.
 
 Generally we like Material Design 3 design patterns. We definitely want good support for both light and dark themes. Blue seems a bit overused, so we would lean towards using a cyan or turquoise instead of regular blue, potentially alongside a "wine dark sea" deep sea blue as well. A good color theme might perhaps be "ancient Greek" with colors of Homer's Odyssey, but while still aiming for a modern theme. Likely the overall impression should be "classical" (Roman mosaics and architecture, Grecian coastal landscape, in particular real world materials, particularly metallics, alongside stone) mixed with "modern" (Material 3 Expressive). A classical feel should pervade this app, but practical app needs (realized in modern styles) ultimately are the most important.
 
+Greco-Roman themes can be incorporated in shapes, not so much by including symbols or drawings which can look kitsch, but by how the items are laid out and arranged in the app. 
+Mosaic tiles can influence the design of any markers on the line graphs.
+
 ## Reviewer One Design Proposals:
 
 A strong direction would be: Aegean cyan as the interactive brand color, wine-dark deep sea as the authority/structure color, stone as the surface system, bronze/gold as sparse emphasis, and terracotta/error as semantic warmth. The key is to encode this as Material 3 role tokens, not as ad hoc hex values sprinkled through CSS.
@@ -474,9 +477,6 @@ Forecasting-specific color semantics. This is the part a pure brand palette usua
 Implementation and PWA. Generate the full token set once from your key colors using the Material Theme Builder (or material-color-utilities in code), export it as CSS custom properties, and ship it as a documented tokens.css. Since you're open source, add a one-line norm to CONTRIBUTING — "use the role tokens, never raw hex" — so contributors don't reintroduce ad-hoc colors. Drive theming with prefers-color-scheme plus a manual toggle persisted in localStorage, switching via a data-theme attribute on the root. For the PWA chrome: set theme_color and background_color in the manifest, and use <meta name="theme-color"> with light/dark media queries so the browser bar and status bar match each theme. I'd skip Material You dynamic color for a branded app — it dilutes the identity you're deliberately building; offer it at most as an optional "match my system" setting.
 One judgment call worth making early: decide whether bronze/gold or Tyrian purple is your "second voice." I'd default to bronze as tertiary (warmer, more legible, very Roman-mosaic) and keep purple as the rare extended accent — but if you want the app to feel more regal than coastal, you can swap their roles. Want me to take a pass at the actual tokens.css with both light and dark role assignments filled in, so you have something to drop in directly?
 ```
-## Shapes
-Greco-Roman themes can be incorporated in shapes, not so much by including symbols or drawings which can look kitsch, but by how the items are laid out and arranged in the app. 
-Mosaic tiles can influence the design of any markers on the line graphs.
 
 ## Making metallic a proper metal look. 
 Realistic metal is mostly about highlights, anisotropic streaks, and abrupt tonal shifts, not just hue. Realistic metal wants high dynamic range and directional highlight behavior. However, it is very hard to do well in an app design.

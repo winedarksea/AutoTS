@@ -21,27 +21,30 @@ type Overrides = Vec<Vec<Option<f64>>>;
 //
 // Hand-drawn inline SVGs filled with the same metallic-bronze gradient as the
 // corner emblem (the `--metal-bronze-*` tokens, so they track light/dark).
-// SUN is a Helios radiate disc (shown to switch *to* light); MOON is a Selene
+// SUN is a Vergina Sun — the ancient Macedonian 16-ray starburst, a central
+// disc with a rosette boss (shown to switch *to* light); MOON is a Selene
 // crescent + star (shown to switch *to* dark). Decorative — the button carries
 // an aria-label — so both are aria-hidden.
 // ---------------------------------------------------------------------------
 
+// 16-point star polygon (alternating outer r=11 / inner r=4.6 about 12,12),
+// the silhouette of a Vergina Sun's rays.
 const SUN_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" aria-hidden=\"true\" \
     xmlns=\"http://www.w3.org/2000/svg\">\
     <defs><linearGradient id=\"bzsun\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\
     <stop offset=\"0\" stop-color=\"var(--metal-bronze-light)\"/>\
     <stop offset=\"0.5\" stop-color=\"var(--metal-bronze-mid)\"/>\
     <stop offset=\"1\" stop-color=\"var(--metal-bronze-dark)\"/></linearGradient></defs>\
-    <g stroke=\"url(#bzsun)\" stroke-width=\"1.7\" stroke-linecap=\"round\">\
-    <line x1=\"12\" y1=\"1.6\" x2=\"12\" y2=\"4.3\"/>\
-    <line x1=\"12\" y1=\"19.7\" x2=\"12\" y2=\"22.4\"/>\
-    <line x1=\"1.6\" y1=\"12\" x2=\"4.3\" y2=\"12\"/>\
-    <line x1=\"19.7\" y1=\"12\" x2=\"22.4\" y2=\"12\"/>\
-    <line x1=\"4.7\" y1=\"4.7\" x2=\"6.6\" y2=\"6.6\"/>\
-    <line x1=\"17.4\" y1=\"17.4\" x2=\"19.3\" y2=\"19.3\"/>\
-    <line x1=\"19.3\" y1=\"4.7\" x2=\"17.4\" y2=\"6.6\"/>\
-    <line x1=\"6.6\" y1=\"17.4\" x2=\"4.7\" y2=\"19.3\"/></g>\
-    <circle cx=\"12\" cy=\"12\" r=\"5.1\" fill=\"url(#bzsun)\" \
+    <polygon points=\"12,1 12.9,7.49 16.21,1.84 14.56,8.18 19.78,4.22 15.82,9.44 \
+    22.16,7.79 16.51,11.1 23,12 16.51,12.9 22.16,16.21 15.82,14.56 19.78,19.78 \
+    14.56,15.82 16.21,22.16 12.9,16.51 12,23 11.1,16.51 7.79,22.16 9.44,15.82 \
+    4.22,19.78 8.18,14.56 1.84,16.21 7.49,12.9 1,12 7.49,11.1 1.84,7.79 8.18,9.44 \
+    4.22,4.22 9.44,8.18 7.79,1.84 11.1,7.49\" \
+    fill=\"url(#bzsun)\" stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.5\" \
+    stroke-linejoin=\"round\"/>\
+    <circle cx=\"12\" cy=\"12\" r=\"3.4\" fill=\"url(#bzsun)\" \
+    stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.6\"/>\
+    <circle cx=\"12\" cy=\"12\" r=\"1.4\" fill=\"none\" \
     stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.6\"/></svg>";
 
 const MOON_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" aria-hidden=\"true\" \
