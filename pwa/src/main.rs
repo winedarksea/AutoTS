@@ -1,7 +1,10 @@
 mod app;
+mod cache_view;
 mod client;
 mod dates;
+mod job;
 mod model;
+mod storage;
 mod svg;
 mod theme;
 

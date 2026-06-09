@@ -93,7 +93,24 @@ SEARCH_PRESETS = {
     "search_all_night": (20, 3),
 }
 
-PRESET_COMMANDS = {"make_forecast", *SEARCH_PRESETS}
+PRESET_COMMANDS = {"make_forecast", "restore_data_snapshot", *SEARCH_PRESETS}
+
+
+async def _restore_data_snapshot(arguments, progress_cb):
+    """Rebuild the disposable Python data cache from durable browser JSON."""
+    data = arguments.get("data")
+    if not isinstance(data, dict) or "datetime" not in data:
+        return {"error": "restore_data_snapshot requires wide JSON data"}
+    metadata = dict(arguments.get("metadata") or {})
+    from autots.mcp.cache import cache_object
+    from autots.mcp.data_utils import load_to_dataframe
+
+    df = load_to_dataframe(data=data, data_format="wide")
+    metadata.setdefault("source", "browser_storage_restore")
+    metadata.setdefault("rows", len(df))
+    metadata.setdefault("columns", len(df.columns))
+    data_id = cache_object(df, "data", metadata)
+    return {"data_id": data_id, "rows": len(df), "cols": len(df.columns)}
 
 
 async def _make_forecast(arguments, progress_cb):
@@ -149,6 +166,8 @@ async def dispatch(command, arguments=None, progress_cb=None):
     arguments = arguments or {}
     if command == "make_forecast":
         return await _make_forecast(arguments, progress_cb)
+    if command == "restore_data_snapshot":
+        return await _restore_data_snapshot(arguments, progress_cb)
     if command in SEARCH_PRESETS:
         generations, validations = SEARCH_PRESETS[command]
         return await _search_forecast(arguments, progress_cb, generations, validations)

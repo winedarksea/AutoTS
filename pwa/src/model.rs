@@ -130,17 +130,6 @@ pub fn model_params_to_template_csv(
     out
 }
 
-/// Head-truncate a string to `max` characters for display (adds an ellipsis
-/// when shortened). Char-boundary safe. Never used on downloaded data.
-pub fn truncate_chars(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let head: String = s.chars().take(max).collect();
-        format!("{head}…")
-    }
-}
-
 /// Effective forecast values for one series (override where set, else original).
 pub fn effective_values(fc: &WideData, overrides: &[Vec<Option<f64>>], series: usize) -> Vec<f64> {
     let base = &fc.series[series].values;
@@ -158,8 +147,7 @@ pub fn effective_values(fc: &WideData, overrides: &[Vec<Option<f64>>], series: u
 #[cfg(test)]
 mod tests {
     use super::{
-        forecast_to_csv, model_params_to_template_csv, truncate_chars, wide_data_to_csv,
-        SeriesData, WideData,
+        forecast_to_csv, model_params_to_template_csv, wide_data_to_csv, SeriesData, WideData,
     };
     use serde_json::json;
 
@@ -213,9 +201,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn truncate_chars_adds_ellipsis_only_when_needed() {
-        assert_eq!(truncate_chars("short", 10), "short");
-        assert_eq!(truncate_chars("abcdef", 3), "abc…");
-    }
 }

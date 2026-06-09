@@ -585,6 +585,34 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 
 /* Status / chips */
 .md-status { font-size: 0.85rem; color: var(--md-on-surface-variant); min-height: 1.2em; }
+.md-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+}
+.md-status-row .md-status { flex: 1; }
+.md-btn.text.error { color: var(--md-error); }
+.md-btn.text.error:hover:not(:disabled) { background: var(--md-error-container); }
+.md-disabled-explanation { display: inline-flex; border-radius: 999px; }
+.md-disabled-explanation:focus-visible {
+  outline: 3px solid var(--md-primary-container);
+  outline-offset: 2px;
+}
+.md-compute-status {
+  margin-top: 8px;
+  color: var(--md-on-surface-variant);
+  font-size: .85rem;
+}
+.md-compute-status summary { cursor: pointer; width: fit-content; }
+.md-compute-status dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 8px 0;
+}
+.md-compute-status dt { font-weight: 600; }
+.md-compute-status dd { margin: 0; font-family: ui-monospace, monospace; }
 .md-chip { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--md-primary-container); color: var(--md-on-primary-container); font-size: 0.8rem; font-weight: 500; margin: 2px; }
 .md-error { color: var(--md-error); }
 .md-warning { color: var(--md-warning); }
@@ -600,6 +628,7 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
   font-family: ui-monospace, monospace;
 }
 .md-cache-actions { display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+.md-storage-summary { margin: 10px 0 0; }
 
 /* Model parameters shown inside a cached prediction's "Details" disclosure. */
 .md-cache-params { display: grid; gap: 8px; margin: 8px 0 4px; }

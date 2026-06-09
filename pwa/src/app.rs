@@ -10,9 +10,14 @@ use leptos::*;
 use serde_json::{json, Value};
 use wasm_bindgen::{JsCast, JsValue};
 
-use crate::client::{call_tool, init_runtime, set_progress_handler};
+use crate::client::{
+    call_tool, cancel_forecast, init_runtime, set_lifecycle_handler, set_progress_handler,
+};
+use crate::cache_view::{durable_cache_summary, storage_usage_view};
 use crate::dates::{fmt_date, infer_granularity};
-use crate::model::{effective_values, forecast_to_csv, truncate_chars, wide_data_to_csv, WideData};
+use crate::job::JobState;
+use crate::model::{effective_values, forecast_to_csv, WideData};
+use crate::storage;
 use crate::svg::{self, ChartOutput, FeatureKind, FeatureKindSet, FeatureMarker};
 
 type Overrides = Vec<Vec<Option<f64>>>;
@@ -159,33 +164,6 @@ const MOON_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" ari
     fill=\"url(#bzmoon)\" stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.6\"/>\
     <path d=\"M17.4 2.6l.62 1.66 1.66.62-1.66.62-.62 1.66-.62-1.66-1.66-.62 1.66-.62z\" \
     fill=\"url(#bzmoon)\"/></svg>";
-
-// ---------------------------------------------------------------------------
-// Quiet line-icon glyphs for the cached-data row actions. Unlike the bronze
-// theme toggle these are functional, so they stroke with `currentColor` and
-// inherit the button's color — letting a delete button redden on hover.
-// ---------------------------------------------------------------------------
-
-// Down arrow dropping onto a base line.
-const DOWNLOAD_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-icon-glyph\" aria-hidden=\"true\" \
-    fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" \
-    stroke-linejoin=\"round\" xmlns=\"http://www.w3.org/2000/svg\">\
-    <path d=\"M12 3v12\"/><path d=\"M7 11l5 4 5-4\"/><path d=\"M4 20h16\"/></svg>";
-
-// Document with a folded corner and ruled lines — a downloadable template.
-const TEMPLATE_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-icon-glyph\" aria-hidden=\"true\" \
-    fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" \
-    stroke-linejoin=\"round\" xmlns=\"http://www.w3.org/2000/svg\">\
-    <path d=\"M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z\"/>\
-    <path d=\"M14 3v5h5\"/><path d=\"M8.5 13h7\"/><path d=\"M8.5 17h7\"/></svg>";
-
-// Trash can.
-const TRASH_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-icon-glyph\" aria-hidden=\"true\" \
-    fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" \
-    stroke-linejoin=\"round\" xmlns=\"http://www.w3.org/2000/svg\">\
-    <path d=\"M4 7h16\"/><path d=\"M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2\"/>\
-    <path d=\"M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13\"/>\
-    <path d=\"M10 11v6\"/><path d=\"M14 11v6\"/></svg>";
 
 /// An elegant card heading: a metallic-bronze Cinzel Roman numeral, a thin
 /// bronze keyline, then the title. `numeral` may be empty for unnumbered cards.
@@ -346,36 +324,12 @@ fn feature_legend(
         .collect_view()
 }
 
-async fn fetch_history(
-    data_id: String,
-    history: RwSignal<Option<WideData>>,
-    sel_set: RwSignal<Vec<bool>>,
-    error: RwSignal<Option<String>>,
-) {
-    match call_tool(
-        "get_data",
-        json!({ "data_id": data_id, "output_format": "json_wide" }),
-    )
-    .await
-    {
-        Ok(v) => {
-            if let Some(w) = WideData::from_json_wide(&v) {
-                // Select only the first series by default.
-                let n = w.series.len();
-                sel_set.set((0..n).map(|i| i == 0).collect());
-                history.set(Some(w));
-            }
-        }
-        Err(e) => error.set(Some(e)),
-    }
-}
-
 async fn fetch_features(
     data_id: String,
     features: RwSignal<Option<Value>>,
     feature_error: RwSignal<Option<String>>,
     detecting_features: RwSignal<bool>,
-) {
+) -> Option<Value> {
     detecting_features.set(true);
     feature_error.set(None);
     match call_tool("detect_features", json!({ "data_id": data_id })).await {
@@ -383,101 +337,71 @@ async fn fetch_features(
             let Some(did) = det.get("detector_id").and_then(|x| x.as_str()) else {
                 feature_error.set(Some("Feature detection returned no detector ID.".into()));
                 detecting_features.set(false);
-                return;
+                return None;
             };
             match call_tool("get_detected_features", json!({ "detector_id": did })).await {
                 // Keep the whole response: `detection_counts` drives the legend,
                 // `features` drives the per-point markers.
-                Ok(f) => features.set(Some(f)),
+                Ok(f) => {
+                    features.set(Some(f.clone()));
+                    detecting_features.set(false);
+                    return Some(f);
+                }
                 Err(e) => feature_error.set(Some(e)),
             }
         }
         Err(e) => feature_error.set(Some(e)),
     }
     detecting_features.set(false);
+    None
 }
 
-/// Fetch one forecast output ("forecast" | "upper_forecast" | "lower_forecast")
-/// as wide data. Bounds are best-effort — `None` on any failure.
-async fn fetch_forecast_output(pid: &str, output: &str) -> Option<WideData> {
-    let v = call_tool(
+async fn fetch_forecast_output_value(pid: &str, output: &str) -> Option<(Value, WideData)> {
+    let value = call_tool(
         "get_forecast",
         json!({ "prediction_id": pid, "output": output, "format": "json_wide" }),
     )
     .await
     .ok()?;
-    WideData::from_json_wide(&v)
+    let wide = WideData::from_json_wide(&value)?;
+    Some((value, wide))
 }
 
-/// Reload the cached-objects list. Shared by the manual "Refresh" button and the
-/// per-row delete actions (which refresh after clearing an item).
-async fn reload_cache(cache: RwSignal<Option<Value>>, error: RwSignal<Option<String>>) {
-    match call_tool("list_cache", json!({})).await {
-        Ok(v) => cache.set(Some(v)),
-        Err(e) => error.set(Some(e)),
+async fn reload_artifacts(
+    artifacts: RwSignal<Option<Value>>,
+    storage_summary: RwSignal<Option<Value>>,
+    error: RwSignal<Option<String>>,
+) {
+    match storage::list_artifacts().await {
+        Ok(value) => artifacts.set(Some(value)),
+        Err(message) => error.set(Some(message)),
+    }
+    if let Ok(value) = storage::storage_summary().await {
+        storage_summary.set(Some(value));
     }
 }
 
-/// Download a cached dataset (actuals) as a wide CSV. Fetches the wide JSON and
-/// builds the CSV client-side (reusing `wide_data_to_csv`).
-async fn download_cached_data_csv(id: String, error: RwSignal<Option<String>>) {
-    match call_tool(
-        "get_data",
-        json!({ "data_id": id, "output_format": "json_wide" }),
+async fn restore_runtime_dataset(artifact: &Value) -> Result<String, String> {
+    let data = artifact
+        .pointer("/data/wide")
+        .cloned()
+        .ok_or_else(|| "Stored dataset has no wide data snapshot".to_string())?;
+    let metadata = artifact.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    let result = call_tool(
+        "restore_data_snapshot",
+        json!({ "data": data, "metadata": metadata }),
     )
-    .await
-    {
-        Ok(v) => match WideData::from_json_wide(&v) {
-            Some(w) => {
-                if let Err(e) = download_csv(&format!("autots_data_{id}.csv"), &wide_data_to_csv(&w))
-                {
-                    error.set(Some(e));
-                }
-            }
-            None => error.set(Some("Cached data could not be read".into())),
-        },
-        Err(e) => error.set(Some(e)),
-    }
-}
-
-/// Download a cached forecast as a wide CSV (original values — point adjustments
-/// only apply to the live forecast in the review card).
-async fn download_cached_forecast_csv(pid: String, error: RwSignal<Option<String>>) {
-    match fetch_forecast_output(&pid, "forecast").await {
-        Some(w) => {
-            if let Err(e) =
-                download_csv(&format!("autots_forecast_{pid}.csv"), &wide_data_to_csv(&w))
-            {
-                error.set(Some(e));
-            }
-        }
-        None => error.set(Some("Cached forecast could not be read".into())),
-    }
+    .await?;
+    result
+        .get("data_id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| "Restored dataset returned no runtime ID".to_string())
 }
 
 /// Fetch a prediction's model parameters via `get_model_params`.
 async fn fetch_model_params(pid: &str) -> Result<Value, String> {
     call_tool("get_model_params", json!({ "prediction_id": pid })).await
-}
-
-/// Download a prediction's model as an AutoTS export template CSV (loadable into
-/// a regular AutoTS run via `import_template`).
-async fn download_model_template(pid: String, error: RwSignal<Option<String>>) {
-    match fetch_model_params(&pid).await {
-        Ok(v) => {
-            let name = v.get("model_name").and_then(Value::as_str).unwrap_or("Unknown");
-            let mp = v.get("model_parameters").cloned().unwrap_or(Value::Null);
-            let tp = v
-                .get("transformation_parameters")
-                .cloned()
-                .unwrap_or(Value::Null);
-            let csv = crate::model::model_params_to_template_csv(&pid, name, &mp, &tp);
-            if let Err(e) = download_csv(&format!("autots_template_{pid}.csv"), &csv) {
-                error.set(Some(e));
-            }
-        }
-        Err(e) => error.set(Some(e)),
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -489,11 +413,17 @@ async fn run_forecast(
     upper: RwSignal<Option<WideData>>,
     lower: RwSignal<Option<WideData>>,
     overrides: RwSignal<Overrides>,
+    active_dataset_artifact_id: String,
+    active_forecast_artifact_id: RwSignal<Option<String>>,
+    artifacts: RwSignal<Option<Value>>,
+    storage_summary: RwSignal<Option<Value>>,
     busy: RwSignal<bool>,
+    job_state: RwSignal<JobState>,
     error: RwSignal<Option<String>>,
     status: RwSignal<String>,
 ) {
     busy.set(true);
+    job_state.set(JobState::Running);
     error.set(None);
     status.set("Forecasting…".into());
     let res = call_tool(
@@ -504,19 +434,57 @@ async fn run_forecast(
     match res {
         Ok(v) => {
             if let Some(pid) = v.get("prediction_id").and_then(|x| x.as_str()) {
-                match fetch_forecast_output(pid, "forecast").await {
-                    Some(w) => {
+                match fetch_forecast_output_value(pid, "forecast").await {
+                    Some((forecast_value, w)) => {
                         let ov = w
                             .series
                             .iter()
                             .map(|s| vec![None; s.values.len()])
                             .collect();
                         // Prediction-interval bounds for the uncertainty band.
-                        upper.set(fetch_forecast_output(pid, "upper_forecast").await);
-                        lower.set(fetch_forecast_output(pid, "lower_forecast").await);
+                        let upper_result = fetch_forecast_output_value(pid, "upper_forecast").await;
+                        let lower_result = fetch_forecast_output_value(pid, "lower_forecast").await;
+                        upper.set(upper_result.as_ref().map(|(_, wide)| wide.clone()));
+                        lower.set(lower_result.as_ref().map(|(_, wide)| wide.clone()));
                         overrides.set(ov);
                         forecast.set(Some(w));
-                        status.set("Forecast ready — drag the sliders to adjust.".into());
+                        let model_parameters =
+                            fetch_model_params(pid).await.unwrap_or_else(|_| json!({}));
+                        let artifact = storage::forecast_artifact(
+                            &active_dataset_artifact_id,
+                            &command,
+                            forecast_length,
+                            forecast_value,
+                            upper_result.map(|(value, _)| value),
+                            lower_result.map(|(value, _)| value),
+                            model_parameters,
+                            json!(overrides.get()),
+                        );
+                        match storage::put_artifact(
+                            artifact,
+                            &[active_dataset_artifact_id.clone()],
+                        )
+                        .await
+                        {
+                            Ok(saved) => {
+                                active_forecast_artifact_id.set(
+                                    saved
+                                        .pointer("/artifact/id")
+                                        .and_then(Value::as_str)
+                                        .map(str::to_string),
+                                );
+                                reload_artifacts(artifacts, storage_summary, error).await;
+                                status.set(
+                                    "Forecast ready and saved — drag the sliders to adjust.".into(),
+                                );
+                            }
+                            Err(message) => {
+                                error.set(Some(format!(
+                                    "Forecast is available for this session but could not be saved: {message}"
+                                )));
+                                status.set("Forecast ready.".into());
+                            }
+                        }
                     }
                     None => error.set(Some("Forecast could not be read".into())),
                 }
@@ -524,9 +492,20 @@ async fn run_forecast(
                 error.set(Some("No prediction returned".into()));
             }
         }
-        Err(e) => error.set(Some(e)),
+        Err(e) => {
+            if !matches!(
+                job_state.get_untracked(),
+                JobState::Cancelling | JobState::Restarting
+            ) {
+                error.set(Some(e));
+                job_state.set(JobState::Failed);
+            }
+        }
     }
     busy.set(false);
+    if job_state.get_untracked() == JobState::Running {
+        job_state.set(JobState::Ready);
+    }
 }
 
 fn download_csv(filename: &str, content: &str) -> Result<(), String> {
@@ -577,12 +556,15 @@ pub fn App() -> impl IntoView {
     let ready = create_rw_signal(false);
     let status = create_rw_signal(String::from("Booting Python runtime…"));
     let busy = create_rw_signal(false);
+    let job_state = create_rw_signal(JobState::Restarting);
     let error = create_rw_signal::<Option<String>>(None);
 
     // Effective light/dark theme (from a saved choice, else the OS preference).
     let theme = create_rw_signal(crate::theme::initial_theme());
 
     let data_id = create_rw_signal::<Option<String>>(None);
+    let active_dataset_artifact_id = create_rw_signal::<Option<String>>(None);
+    let active_forecast_artifact_id = create_rw_signal::<Option<String>>(None);
     let history = create_rw_signal::<Option<WideData>>(None);
     let report = create_rw_signal::<Option<Value>>(None);
     let features = create_rw_signal::<Option<Value>>(None);
@@ -634,17 +616,31 @@ pub fn App() -> impl IntoView {
 
     // Data manager
     let cache = create_rw_signal::<Option<Value>>(None);
+    let storage_summary = create_rw_signal::<Option<Value>>(None);
 
     // Boot the runtime once.
     set_progress_handler(move |m| status.set(m));
+    set_lifecycle_handler(move |message| {
+        let next = JobState::from_lifecycle_message(&message);
+        job_state.set(next);
+        if next == JobState::Ready {
+            ready.set(true);
+        }
+    });
+    spawn_local(async move {
+        let _ = storage::request_persistent_storage().await;
+        reload_artifacts(cache, storage_summary, error).await;
+    });
     spawn_local(async move {
         match init_runtime().await {
             Ok(()) => {
                 ready.set(true);
+                job_state.set(JobState::Ready);
                 status.set("Ready. Load some data to begin.".into());
             }
             Err(e) => {
                 error.set(Some(format!("Runtime failed to start: {e}")));
+                job_state.set(JobState::Failed);
                 status.set("Runtime error".into());
             }
         }
@@ -653,6 +649,8 @@ pub fn App() -> impl IntoView {
     // --- data-loaded continuation: fetch history + features ---------------
     let after_loaded = move |id: String| {
         data_id.set(Some(id.clone()));
+        active_dataset_artifact_id.set(None);
+        active_forecast_artifact_id.set(None);
         history.set(None);
         forecast.set(None);
         upper.set(None);
@@ -667,12 +665,69 @@ pub fn App() -> impl IntoView {
         adj_sel.set(0);
         let id2 = id.clone();
         spawn_local(async move {
-            fetch_history(id.clone(), history, sel_set, error).await;
+            let snapshot = call_tool(
+                "get_data",
+                json!({ "data_id": id.clone(), "output_format": "json_wide" }),
+            )
+            .await;
+            let Ok(snapshot) = snapshot else {
+                error.set(snapshot.err());
+                return;
+            };
+            let Some(wide) = WideData::from_json_wide(&snapshot) else {
+                error.set(Some("Loaded data could not be read".into()));
+                return;
+            };
+            let series_count = wide.series.len();
+            let row_count = wide.datetime.len();
+            sel_set.set((0..series_count).map(|index| index == 0).collect());
+            history.set(Some(wide));
+
+            let artifact = storage::dataset_artifact(
+                snapshot,
+                json!({
+                    "source": "pwa_load",
+                    "rows": row_count,
+                    "columns": series_count,
+                }),
+                report.get_untracked(),
+            );
+            match storage::put_artifact(artifact, &[]).await {
+                Ok(saved) => {
+                    active_dataset_artifact_id.set(
+                        saved
+                            .pointer("/artifact/id")
+                            .and_then(Value::as_str)
+                            .map(str::to_string),
+                    );
+                    reload_artifacts(cache, storage_summary, error).await;
+                }
+                Err(message) => error.set(Some(format!(
+                    "Data is loaded for this session but could not be saved: {message}"
+                ))),
+            }
             // Feature detection is optional enrichment. Starting it only after
             // history is loaded keeps the plot independent and avoids
             // concurrent calls into the single Pyodide runtime.
             spawn_local(async move {
-                fetch_features(id2, features, feature_error, detecting_features).await;
+                if let Some(feature_value) =
+                    fetch_features(id2, features, feature_error, detecting_features).await
+                {
+                    if let Some(artifact_id) = active_dataset_artifact_id.get_untracked() {
+                        if let Ok(mut artifact) = storage::get_artifact(&artifact_id).await {
+                            if let Some(data) = artifact.get_mut("data").and_then(Value::as_object_mut)
+                            {
+                                data.insert("features".into(), feature_value);
+                                let _ = storage::put_artifact(
+                                    artifact,
+                                    &[artifact_id.clone()],
+                                )
+                                .await;
+                                reload_artifacts(cache, storage_summary, error).await;
+                            }
+                        }
+                    }
+                }
             });
         });
     };
@@ -680,6 +735,7 @@ pub fn App() -> impl IntoView {
     // --- upload actions ----------------------------------------------------
     let load_sample = move |_| {
         let ds = sample.get();
+        report.set(None);
         busy.set(true);
         error.set(None);
         status.set("Loading sample…".into());
@@ -873,6 +929,10 @@ pub fn App() -> impl IntoView {
             error.set(Some("Load data first".into()));
             return;
         };
+        let Some(dataset_artifact_id) = active_dataset_artifact_id.get() else {
+            error.set(Some("Wait for the loaded dataset to finish saving.".into()));
+            return;
+        };
         let fl = forecast_length.get();
         spawn_local(run_forecast(
             command.to_string(),
@@ -882,14 +942,65 @@ pub fn App() -> impl IntoView {
             upper,
             lower,
             overrides,
+            dataset_artifact_id,
+            active_forecast_artifact_id,
+            cache,
+            storage_summary,
             busy,
+            job_state,
             error,
             status,
         ));
     };
 
     let refresh_cache = move |_| {
-        spawn_local(async move { reload_cache(cache, error).await });
+        spawn_local(async move { reload_artifacts(cache, storage_summary, error).await });
+    };
+
+    let cancel_running_forecast = move |_| {
+        if !job_state.get_untracked().is_forecasting() {
+            return;
+        }
+        job_state.set(JobState::Cancelling);
+        status.set("Cancelling forecast…".into());
+        error.set(None);
+        spawn_local(async move {
+            match cancel_forecast().await {
+                Ok(()) => {
+                    job_state.set(JobState::Restarting);
+                    status.set("Forecast cancelled. Restarting local compute…".into());
+                    if let Some(artifact_id) = active_dataset_artifact_id.get_untracked() {
+                        match storage::get_artifact(&artifact_id).await {
+                            Ok(artifact) => match restore_runtime_dataset(&artifact).await {
+                                Ok(runtime_id) => {
+                                    data_id.set(Some(runtime_id));
+                                    job_state.set(JobState::Ready);
+                                    status.set("Forecast cancelled. Local compute is ready.".into());
+                                }
+                                Err(message) => {
+                                    job_state.set(JobState::Failed);
+                                    error.set(Some(format!(
+                                        "Forecast was cancelled, but the active data could not be restored: {message}"
+                                    )));
+                                }
+                            },
+                            Err(message) => {
+                                job_state.set(JobState::Failed);
+                                error.set(Some(message));
+                            }
+                        }
+                    } else {
+                        job_state.set(JobState::Ready);
+                        status.set("Forecast cancelled. Local compute is ready.".into());
+                    }
+                }
+                Err(message) => {
+                    job_state.set(JobState::Failed);
+                    error.set(Some(format!("Could not restart local compute: {message}")));
+                }
+            }
+            busy.set(false);
+        });
     };
 
     let download_forecast = move |_| {
@@ -921,6 +1032,8 @@ pub fn App() -> impl IntoView {
     // Reused when the active dataset is deleted from the cached-data view.
     let teardown_active = Callback::new(move |_| {
         data_id.set(None);
+        active_dataset_artifact_id.set(None);
+        active_forecast_artifact_id.set(None);
         history.set(None);
         report.set(None);
         features.set(None);
@@ -931,6 +1044,163 @@ pub fn App() -> impl IntoView {
         overrides.set(Vec::new());
         history_ui.zoom.set(None);
         forecast_ui.zoom.set(None);
+    });
+
+    let open_cached_artifact = Callback::new(move |artifact_id: String| {
+        error.set(None);
+        status.set("Opening saved artifact…".into());
+        spawn_local(async move {
+            let result: Result<(), String> = async {
+                let artifact = storage::get_artifact(&artifact_id).await?;
+                let kind = artifact.get("kind").and_then(Value::as_str).unwrap_or("");
+                let dataset_artifact = if kind == "forecast" {
+                    let parent_id = artifact
+                        .get("parent_id")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| "Saved forecast has no input dataset".to_string())?;
+                    storage::get_artifact(parent_id).await?
+                } else {
+                    artifact.clone()
+                };
+                let runtime_id = restore_runtime_dataset(&dataset_artifact).await?;
+                let history_value = dataset_artifact
+                    .pointer("/data/wide")
+                    .cloned()
+                    .ok_or_else(|| "Saved dataset has no data snapshot".to_string())?;
+                let history_wide = WideData::from_json_wide(&history_value)
+                    .ok_or_else(|| "Saved dataset is invalid".to_string())?;
+                let parent_id = dataset_artifact
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "Saved dataset has no ID".to_string())?
+                    .to_string();
+
+                data_id.set(Some(runtime_id));
+                active_dataset_artifact_id.set(Some(parent_id));
+                sel_set.set(
+                    (0..history_wide.series.len())
+                        .map(|index| index == 0)
+                        .collect(),
+                );
+                history.set(Some(history_wide));
+                report.set(
+                    dataset_artifact
+                        .pointer("/data/report")
+                        .filter(|value| !value.is_null())
+                        .cloned(),
+                );
+                features.set(
+                    dataset_artifact
+                        .pointer("/data/features")
+                        .filter(|value| !value.is_null())
+                        .cloned(),
+                );
+                feature_error.set(None);
+                history_ui.zoom.set(None);
+                forecast_ui.zoom.set(None);
+
+                if kind == "forecast" {
+                    forecast.set(
+                        artifact
+                            .pointer("/data/forecast")
+                            .and_then(WideData::from_json_wide),
+                    );
+                    upper.set(
+                        artifact
+                            .pointer("/data/upper")
+                            .filter(|value| !value.is_null())
+                            .and_then(WideData::from_json_wide),
+                    );
+                    lower.set(
+                        artifact
+                            .pointer("/data/lower")
+                            .filter(|value| !value.is_null())
+                            .and_then(WideData::from_json_wide),
+                    );
+                    overrides.set(
+                        artifact
+                            .pointer("/data/overrides")
+                            .cloned()
+                            .and_then(|value| serde_json::from_value(value).ok())
+                            .unwrap_or_default(),
+                    );
+                    active_forecast_artifact_id.set(Some(artifact_id.clone()));
+                    status.set("Saved forecast opened.".into());
+                } else {
+                    forecast.set(None);
+                    upper.set(None);
+                    lower.set(None);
+                    overrides.set(Vec::new());
+                    active_forecast_artifact_id.set(None);
+                    status.set("Saved dataset opened.".into());
+                }
+                Ok(())
+            }
+            .await;
+            if let Err(message) = result {
+                error.set(Some(message));
+            }
+        });
+    });
+
+    let delete_cached_artifact = Callback::new(move |artifact_id: String| {
+        error.set(None);
+        spawn_local(async move {
+            match storage::delete_artifact(&artifact_id).await {
+                Ok(result) => {
+                    let deleted = result
+                        .get("deleted_ids")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default();
+                    let active_dataset_deleted = active_dataset_artifact_id
+                        .get_untracked()
+                        .map(|active_id| {
+                            deleted.iter().any(|value| value.as_str() == Some(&active_id))
+                        })
+                        .unwrap_or(false);
+                    let active_forecast_deleted = active_forecast_artifact_id
+                        .get_untracked()
+                        .map(|active_id| {
+                            deleted.iter().any(|value| value.as_str() == Some(&active_id))
+                        })
+                        .unwrap_or(false);
+                    if active_dataset_deleted {
+                        teardown_active.call(());
+                    } else if active_forecast_deleted {
+                        forecast.set(None);
+                        upper.set(None);
+                        lower.set(None);
+                        overrides.set(Vec::new());
+                        active_forecast_artifact_id.set(None);
+                    }
+                    status.set(format!("Deleted {} saved artifact(s).", deleted.len()));
+                    reload_artifacts(cache, storage_summary, error).await;
+                }
+                Err(message) => error.set(Some(message)),
+            }
+        });
+    });
+
+    // Point adjustments are user artifacts too. Persist each settled signal
+    // update so a tab refresh cannot silently return to the unadjusted values.
+    create_effect(move |_| {
+        let Some(forecast_artifact_id) = active_forecast_artifact_id.get() else {
+            return;
+        };
+        let current_overrides = overrides.get();
+        spawn_local(async move {
+            if let Ok(mut artifact) = storage::get_artifact(&forecast_artifact_id).await {
+                if let Some(data) = artifact.get_mut("data").and_then(Value::as_object_mut) {
+                    data.insert("overrides".into(), json!(current_overrides));
+                    let protected = active_dataset_artifact_id
+                        .get_untracked()
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                    let _ = storage::put_artifact(artifact, &protected).await;
+                }
+            }
+        });
     });
 
     // --- "Your data" chart: rebuilt whenever its inputs change. ----------
@@ -1145,9 +1415,17 @@ pub fn App() -> impl IntoView {
 
         <main class="md-container">
             // Status / progress
-            <div>
-                <div class="md-status">{move || status.get()}</div>
-                {move || busy.get().then(|| match parse_progress(&status.get()) {
+            <div aria-live="polite" aria-busy=move || job_state.get().blocks_data_loading().to_string()>
+                <div class="md-status-row">
+                    <div class="md-status">{move || status.get()}</div>
+                    {move || job_state.get().is_forecasting().then(|| view! {
+                        <button class="md-btn text error" type="button"
+                            on:click=cancel_running_forecast>
+                            "Cancel forecast"
+                        </button>
+                    })}
+                </div>
+                {move || (busy.get() || job_state.get().blocks_data_loading()).then(|| match parse_progress(&status.get()) {
                     Some((i, total)) if total > 0 => {
                         let pct = (i.min(total) as f64 / total as f64 * 100.0).round();
                         view! { <div class="md-progress determinate"><div style=format!("width:{pct}%")></div></div> }.into_view()
@@ -1155,6 +1433,19 @@ pub fn App() -> impl IntoView {
                     _ => view! { <div class="md-progress"><div></div></div> }.into_view(),
                 })}
                 {move || error.get().map(|e| view! { <p class="md-error">{e}</p> })}
+                <details class="md-compute-status">
+                    <summary>"Local compute status"</summary>
+                    <dl>
+                        <dt>"Worker"</dt><dd>"AutoTS Forecast Worker"</dd>
+                        <dt>"State"</dt><dd>{move || format!("{:?}", job_state.get())}</dd>
+                    </dl>
+                    <p class="muted md-body">
+                        "Browsers show this work under their own process names in Task Manager or Activity Monitor; web apps cannot rename those operating-system processes."
+                    </p>
+                </details>
+                <span id="forecast-blocked-reason" class="sr-only">
+                    "Blocked by ongoing forecast"
+                </span>
             </div>
 
             // ---- Upload card ----
@@ -1178,7 +1469,11 @@ pub fn App() -> impl IntoView {
                                     on:input=move |ev| paste_text.set(event_target_value(&ev))
                                 ></textarea>
                                 <div class="md-btn-row">
-                                    <button class="md-btn filled" disabled=move || !ready.get() || busy.get() on:click=load_paste>"Load pasted data"</button>
+                                    <button class="md-btn filled"
+                                        disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
+                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load pasted data")
+                                        aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
+                                        on:click=load_paste>"Load pasted data"</button>
                                 </div>
                             </div>
                         }.into_view(),
@@ -1188,7 +1483,11 @@ pub fn App() -> impl IntoView {
                                 <input type="url" placeholder="https://…/export?format=csv"
                                     on:input=move |ev| url_text.set(event_target_value(&ev)) />
                                 <div class="md-btn-row">
-                                    <button class="md-btn filled" disabled=move || !ready.get() || busy.get() on:click=load_url>"Load from URL"</button>
+                                    <button class="md-btn filled"
+                                        disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
+                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load from URL")
+                                        aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
+                                        on:click=load_url>"Load from URL"</button>
                                 </div>
                             </div>
                         }.into_view(),
@@ -1196,7 +1495,9 @@ pub fn App() -> impl IntoView {
                             <div class="md-field">
                                 <label class="md-label">"Upload a CSV or Excel file"</label>
                                 <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls"
-                                    disabled=move || !ready.get() || busy.get()
+                                    disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
+                                    title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Upload a data file")
+                                    aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
                                     on:change=on_file />
                             </div>
                         }.into_view(),
@@ -1211,7 +1512,14 @@ pub fn App() -> impl IntoView {
                                     <option value="sine">"sine"</option>
                                 </select>
                                 <div class="md-btn-row">
-                                    <button class="md-btn filled" disabled=move || !ready.get() || busy.get() on:click=load_sample>"Load sample"</button>
+                                    <span class="md-disabled-explanation"
+                                        tabindex=move || if job_state.get().blocks_data_loading() { "0" } else { "-1" }
+                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load sample")>
+                                        <button class="md-btn filled"
+                                            disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
+                                            aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
+                                            on:click=load_sample>"Load sample"</button>
+                                    </span>
                                 </div>
                                 <p class="muted md-body">"Tip: load a sample, download it, and hand it to an LLM as a template for reformatting your own data."</p>
                             </div>
@@ -1239,7 +1547,9 @@ pub fn App() -> impl IntoView {
                                 </div>
                                 <div class="md-btn-row">
                                     <button class="md-btn filled"
-                                        disabled=move || !ready.get() || busy.get() || !live_any_ready()
+                                        disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading() || !live_any_ready()
+                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load live data")
+                                        aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
                                         on:click=load_live.clone()>"Load live data"</button>
                                 </div>
                                 {move || live_sources_result.get().map(|s| view! {
@@ -1376,9 +1686,15 @@ pub fn App() -> impl IntoView {
                 <section class="md-card">
                     {section_header("III", "Forecast")}
                     <div class="md-btn-row">
-                        <button class="md-btn filled" disabled=move || busy.get() on:click=move |_| do_forecast("make_forecast")>"Make forecast"</button>
-                        <button class="md-btn tonal" disabled=move || busy.get() on:click=move |_| do_forecast("search_forecast")>"Search for best forecast"</button>
-                        <button class="md-btn outlined" disabled=move || busy.get() on:click=move |_| do_forecast("search_all_night")>"Search all night"</button>
+                        <button class="md-btn filled"
+                            disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
+                            on:click=move |_| do_forecast("make_forecast")>"Make forecast"</button>
+                        <button class="md-btn tonal"
+                            disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
+                            on:click=move |_| do_forecast("search_forecast")>"Search for best forecast"</button>
+                        <button class="md-btn outlined"
+                            disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
+                            on:click=move |_| do_forecast("search_all_night")>"Search all night"</button>
                     </div>
                     <details class="md-expander" style="margin-top:12px">
                         <summary>"Advanced options"</summary>
@@ -1446,8 +1762,16 @@ pub fn App() -> impl IntoView {
                 <div class="md-btn-row">
                     <button class="md-btn outlined" on:click=refresh_cache>"Refresh"</button>
                 </div>
+                {move || storage_summary.get().map(storage_usage_view)}
                 {move || cache.get().map(|c| {
-                    cache_summary(c, cache, error, status, data_id, teardown_active)
+                    durable_cache_summary(
+                        c,
+                        active_dataset_artifact_id,
+                        job_state,
+                        open_cached_artifact,
+                        delete_cached_artifact,
+                        error,
+                    )
                 })}
             </section>
         </main>
@@ -1483,6 +1807,10 @@ fn data_table(data: &WideData, sel: usize) -> View {
     }
     .into_view()
 }
+
+#[cfg(any())]
+mod legacy_runtime_cache_view {
+use super::*;
 
 /// Which per-row actions a cached group supports, plus the `clear_cache`
 /// `cache_type` it maps to. (`list_cache` group keys are pluralised; see
@@ -1733,6 +2061,7 @@ fn cache_summary(
             })
         })
         .collect_view()
+}
 }
 
 fn adjust_rows(

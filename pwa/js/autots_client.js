@@ -5,7 +5,9 @@
  * It exposes a tiny global `autotsClient` with three methods:
  *   initRuntime(wheelUrl, pyodideUrl) -> Promise   (resolves when ready)
  *   callTool(command, argsJson)       -> Promise<string>  (JSON result)
+ *   cancelForecast()                  -> Promise           (fresh runtime ready)
  *   setProgressHandler(fn)            -> void
+ *   setLifecycleHandler(fn)           -> void
  *
  * The Rust/Leptos app binds to this via wasm-bindgen, but the exact same API is
  * what a TypeScript + Plotly rewrite would import. Keep all worker/protocol
@@ -16,17 +18,28 @@
   let nextId = 1;
   const pending = new Map();
   let progressHandler = null;
+  let lifecycleHandler = null;
   let readyResolve = null;
   let readyReject = null;
   let ready = null;
+  let generation = 0;
+  let callQueue = Promise.resolve();
+  let runtimeConfig = null;
 
-  function handleMessage(event) {
+  function notifyLifecycle(state) {
+    if (lifecycleHandler) lifecycleHandler(state);
+  }
+
+  function handleMessage(workerGeneration, event) {
+    if (workerGeneration !== generation) return;
     const m = event.data;
     switch (m.type) {
       case 'ready':
+        notifyLifecycle('ready');
         if (readyResolve) readyResolve();
         break;
       case 'init_error':
+        notifyLifecycle('failed');
         if (readyReject) readyReject(new Error(m.error));
         break;
       case 'status':
@@ -48,6 +61,34 @@
       default:
         break;
     }
+  }
+
+  function rejectPending(error) {
+    for (const request of pending.values()) request.reject(error);
+    pending.clear();
+  }
+
+  function startWorker() {
+    const workerGeneration = ++generation;
+    ready = new Promise((resolve, reject) => {
+      readyResolve = resolve;
+      readyReject = reject;
+    });
+    notifyLifecycle('restarting');
+    const workerUrl = runtimeConfig.workerUrl;
+    worker = new Worker(workerUrl, { name: 'AutoTS Forecast Worker' });
+    worker.onmessage = (event) => handleMessage(workerGeneration, event);
+    worker.onerror = (e) => {
+      if (workerGeneration !== generation) return;
+      notifyLifecycle('failed');
+      if (readyReject) readyReject(new Error(String(e.message || e)));
+    };
+    worker.postMessage({
+      type: 'init',
+      wheelUrl: runtimeConfig.wheelUrl,
+      pyodideUrl: runtimeConfig.pyodideUrl,
+    });
+    return ready;
   }
 
   // micropip needs an absolute wheel URL — relative URLs are ambiguous inside a
@@ -72,38 +113,57 @@
 
   function initRuntime(wheelUrl, pyodideUrl) {
     if (ready) return ready;
-    ready = new Promise((resolve, reject) => {
-      readyResolve = resolve;
-      readyReject = reject;
-    });
-    const workerUrl = self.AUTOTS_WORKER_URL || 'pyodide_worker.js';
-    worker = new Worker(workerUrl);
-    worker.onmessage = handleMessage;
-    worker.onerror = (e) => { if (readyReject) readyReject(new Error(String(e.message || e))); };
-    resolveWheelUrl(wheelUrl).then((resolvedWheel) => {
-      worker.postMessage({
-        type: 'init',
+    return resolveWheelUrl(wheelUrl).then((resolvedWheel) => {
+      runtimeConfig = {
+        workerUrl: self.AUTOTS_WORKER_URL || 'pyodide_worker.js',
         wheelUrl: resolvedWheel,
         pyodideUrl: pyodideUrl || self.AUTOTS_PYODIDE_URL ||
           'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js',
-      });
+      };
+      return startWorker();
     });
-    return ready;
   }
 
   function callTool(command, argsJson) {
-    return (ready || Promise.reject(new Error('runtime not initialized'))).then(
+    const execute = () => (ready || Promise.reject(new Error('runtime not initialized'))).then(
       () => new Promise((resolve, reject) => {
         const id = nextId++;
         pending.set(id, { resolve, reject });
         worker.postMessage({ type: 'call', id, command, argsJson: argsJson || '{}' });
       })
     );
+    const result = callQueue.then(execute, execute);
+    callQueue = result.catch(() => {});
+    return result;
+  }
+
+  function cancelForecast() {
+    if (!runtimeConfig) return Promise.reject(new Error('runtime not initialized'));
+    notifyLifecycle('cancelling');
+    const cancellationError = new Error('Forecast cancelled');
+    cancellationError.name = 'AutoTSCancelledError';
+    rejectPending(cancellationError);
+    if (worker) worker.terminate();
+    worker = null;
+    ready = null;
+    callQueue = Promise.resolve();
+    return startWorker();
   }
 
   function setProgressHandler(fn) {
     progressHandler = fn;
   }
 
-  self.autotsClient = { initRuntime, callTool, setProgressHandler };
+  function setLifecycleHandler(fn) {
+    lifecycleHandler = fn;
+  }
+
+  self.autotsClient = {
+    initRuntime,
+    callTool,
+    cancelForecast,
+    setProgressHandler,
+    setLifecycleHandler,
+    workerLabel: 'AutoTS Forecast Worker',
+  };
 })();

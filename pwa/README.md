@@ -46,6 +46,16 @@ dataset, and forecast.
 First load downloads Pyodide + scientific packages from the jsDelivr CDN
 (network required); subsequent loads are cached by the browser.
 
+Completed datasets and forecasts are stored as versioned JSON artifacts in
+IndexedDB, so they survive tab refreshes. The app keeps up to 25 forecasts,
+25 standalone datasets, and 200 MiB using least-recently-used cleanup.
+
+Forecasting runs in a named browser worker (`AutoTS Forecast Worker`) that can
+be cancelled from the status area. Cancellation terminates and recreates the
+worker, then restores the active dataset from IndexedDB. Browser PWAs cannot
+rename the browser-owned operating-system processes shown by Task Manager or
+Activity Monitor.
+
 ## Smoke test (Python-in-browser, no UI)
 
 ```bash

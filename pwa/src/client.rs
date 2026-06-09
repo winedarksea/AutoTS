@@ -16,8 +16,14 @@ extern "C" {
     #[wasm_bindgen(js_namespace = autotsClient, js_name = callTool, catch)]
     async fn call_tool_js(command: &str, args_json: &str) -> Result<JsValue, JsValue>;
 
+    #[wasm_bindgen(js_namespace = autotsClient, js_name = cancelForecast, catch)]
+    async fn cancel_forecast_js() -> Result<JsValue, JsValue>;
+
     #[wasm_bindgen(js_namespace = autotsClient, js_name = setProgressHandler)]
     fn set_progress_handler_js(cb: &JsValue);
+
+    #[wasm_bindgen(js_namespace = autotsClient, js_name = setLifecycleHandler)]
+    fn set_lifecycle_handler_js(cb: &JsValue);
 }
 
 fn jsval_str(v: JsValue) -> String {
@@ -26,10 +32,7 @@ fn jsval_str(v: JsValue) -> String {
 
 /// Boot the Pyodide runtime (uses URLs configured in index.html when blank).
 pub async fn init_runtime() -> Result<(), String> {
-    init_runtime_js("", "")
-        .await
-        .map(|_| ())
-        .map_err(jsval_str)
+    init_runtime_js("", "").await.map(|_| ()).map_err(jsval_str)
 }
 
 /// Invoke a PWA command (preset or core tool) and parse the JSON result.
@@ -46,9 +49,21 @@ pub async fn call_tool(command: &str, args: Value) -> Result<Value, String> {
     Ok(parsed)
 }
 
+/// Terminate the current worker and wait for a clean Pyodide runtime.
+pub async fn cancel_forecast() -> Result<(), String> {
+    cancel_forecast_js().await.map(|_| ()).map_err(jsval_str)
+}
+
 /// Register a single progress handler; messages stream here during long calls.
 pub fn set_progress_handler<F: FnMut(String) + 'static>(f: F) {
     let cb = Closure::wrap(Box::new(f) as Box<dyn FnMut(String)>);
     set_progress_handler_js(cb.as_ref().unchecked_ref());
+    cb.forget();
+}
+
+/// Register for worker lifecycle states emitted by the JavaScript facade.
+pub fn set_lifecycle_handler<F: FnMut(String) + 'static>(f: F) {
+    let cb = Closure::wrap(Box::new(f) as Box<dyn FnMut(String)>);
+    set_lifecycle_handler_js(cb.as_ref().unchecked_ref());
     cb.forget();
 }

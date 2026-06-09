@@ -553,6 +553,30 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
         out = await self.P.run_command_json("make_forecast", json.dumps({}))
         self.assertIn("error", json.loads(out))
 
+    async def test_restore_data_snapshot_rebuilds_wide_datetime_data(self):
+        from autots.mcp.cache import clear_cache, get_cached_object
+
+        out = await self.P.run_command_json(
+            "restore_data_snapshot",
+            json.dumps(
+                {
+                    "data": {
+                        "datetime": ["2026-01-01", "2026-01-02"],
+                        "sales": [10.0, None],
+                        "returns": [1.0, 2.0],
+                    },
+                    "metadata": {"source": "test_restore"},
+                }
+            ),
+        )
+        result = json.loads(out)
+        restored = get_cached_object(result["data_id"], "data")
+        self.assertEqual(restored["metadata"]["source"], "test_restore")
+        self.assertEqual(list(restored["object"].columns), ["sales", "returns"])
+        self.assertEqual(str(restored["object"].index.dtype), "datetime64[ns]")
+        self.assertTrue(pd.isna(restored["object"].iloc[1, 0]))
+        clear_cache(result["data_id"], "data")
+
     async def test_search_pins_safe_models(self):
         """_search_forecast must force the safe model list even if extra params try to override."""
         captured = {}
