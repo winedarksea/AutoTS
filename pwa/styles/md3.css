@@ -286,8 +286,9 @@ body {
   height: 32px;
   flex: 0 0 auto;
   line-height: 0;
-  margin-top: -1px;
+  margin-top: 0px;
 }
+/* margin-top may need to be more like -2px for 22px size emblem
 
 /* Theme toggle (icon button in the app bar) */
 .md-theme-toggle {

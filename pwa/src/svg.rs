@@ -216,24 +216,30 @@ pub fn fmt_value(v: f64) -> String {
     }
 }
 
-/// Build an SVG path "M…L…" from (local-x-index, value) points, breaking the
-/// pen on non-finite values.
+/// Max local-x distance between consecutive finite points that we bridge with a
+/// connecting line (≈ up to 3 missing points). Larger gaps break the pen so a
+/// genuinely-absent stretch isn't drawn as a misleading flat segment.
+const MAX_GAP_BRIDGE: f64 = 4.0;
+
+/// Build an SVG path "M…L…" from (local-x-index, value) points. Short runs of
+/// non-finite values are bridged with a connecting line (so the line doesn't
+/// fragment when zoomed); gaps wider than [`MAX_GAP_BRIDGE`] break the pen.
 fn path_from(points: &[(f64, f64)], geom: &ChartGeom) -> String {
     let mut d = String::new();
-    let mut pen_down = false;
+    let mut prev_lx: Option<f64> = None;
     for &(lx, v) in points {
         if !v.is_finite() {
-            pen_down = false;
-            continue;
+            continue; // skip missing data; decide below whether to bridge it
         }
         let x = PAD_L + lx * geom.xstep;
         let y = geom.y_of(v);
-        if pen_down {
+        let bridge = matches!(prev_lx, Some(p) if lx - p <= MAX_GAP_BRIDGE);
+        if bridge {
             d.push_str(&format!(" L{x:.1} {y:.1}"));
         } else {
             d.push_str(&format!(" M{x:.1} {y:.1}"));
-            pen_down = true;
         }
+        prev_lx = Some(lx);
     }
     d
 }
@@ -599,6 +605,20 @@ mod tests {
         assert!(out.svg.contains("stroke-dasharray=\"7 3\"")); // dashed forecast
         assert!(out.svg.contains("stroke-linecap=\"round\""));
         assert!(out.svg.contains("stroke-dasharray=\"4 4\"")); // boundary marker
+    }
+
+    #[test]
+    fn short_gap_is_bridged_into_one_subpath() {
+        // A single interior NaN must not fragment the line: one move command.
+        let out = plain(&[s(&[1.0, f64::NAN, 3.0], &[])], &[], &[]);
+        assert_eq!(out.svg.matches(" M").count(), 1);
+    }
+
+    #[test]
+    fn long_gap_breaks_the_pen() {
+        // A run of NaNs wider than MAX_GAP_BRIDGE breaks into two subpaths.
+        let out = plain(&[s(&[1.0, f64::NAN, f64::NAN, f64::NAN, f64::NAN, 6.0], &[])], &[], &[]);
+        assert_eq!(out.svg.matches(" M").count(), 2);
     }
 
     #[test]
