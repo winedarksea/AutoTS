@@ -803,23 +803,56 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
 class TestMCPLiveDataLoader(unittest.TestCase):
     """load_live_daily's optional progress/status instrumentation (network-free)."""
 
+    @staticmethod
+    def _all_sources_disabled_kwargs():
+        return {
+            "fred_key": None,
+            "fred_series": None,
+            "tickers": None,
+            "trends_list": None,
+            "weather_stations": None,
+            "london_air_stations": None,
+            "earthquake_min_magnitude": None,
+            "nasa_api_key": None,
+            "gov_domain_list": None,
+            "wikipedia_pages": None,
+            "weather_event_types": None,
+            "caiso_query": None,
+            "eia_key": None,
+            "eia_respondents": None,
+        }
+
     def test_all_disabled_raises_with_empty_status(self):
         from autots.datasets._live import load_live_daily
 
         status, prog = [], []
         with self.assertRaises(ValueError):
             load_live_daily(
-                fred_key=None, fred_series=None, tickers=None, trends_list=None,
-                weather_stations=None, london_air_stations=None,
-                earthquake_min_magnitude=None, nasa_api_key=None,
-                gov_domain_list=None, wikipedia_pages=None,
-                weather_event_types=None, caiso_query=None,
-                eia_key=None, eia_respondents=None,
-                progress_cb=lambda m: prog.append(m), status_log=status,
+                progress_cb=lambda m: prog.append(m),
+                status_log=status,
+                **self._all_sources_disabled_kwargs(),
             )
         # No sources were enabled, so nothing should have been attempted.
         self.assertEqual(status, [])
         self.assertEqual(prog, [])
+
+    def test_string_observation_end_supports_date_arithmetic(self):
+        from autots.datasets._live import load_live_daily
+
+        with self.assertRaisesRegex(ValueError, "No data successfully downloaded"):
+            load_live_daily(
+                observation_end="2025-01-15",
+                **self._all_sources_disabled_kwargs(),
+            )
+
+    def test_invalid_observation_end_has_clear_error(self):
+        from autots.datasets._live import load_live_daily
+
+        with self.assertRaisesRegex(ValueError, "observation_end must be"):
+            load_live_daily(
+                observation_end="not-a-date",
+                **self._all_sources_disabled_kwargs(),
+            )
 
 
 class TestMCPLiveDataHandler(unittest.IsolatedAsyncioTestCase):

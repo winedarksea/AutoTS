@@ -152,14 +152,22 @@ def load_live_daily(
         status_log.append(entry)
 
     if observation_end is None:
-        current_date = datetime.datetime.utcnow()
+        current_date = pd.Timestamp(datetime.datetime.utcnow())
     else:
-        current_date = observation_end
+        try:
+            current_date = pd.Timestamp(observation_end)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "observation_end must be a valid scalar date or datetime."
+            ) from exc
+        if pd.isna(current_date):
+            raise ValueError(
+                "observation_end must be a valid scalar date or datetime."
+            )
+        if current_date.tzinfo is not None:
+            current_date = current_date.tz_localize(None)
     if observation_start is None:
-        # should take from observation_end but that's expected as a string
-        observation_start = datetime.datetime.utcnow() - datetime.timedelta(
-            days=365 * 6
-        )
+        observation_start = current_date - datetime.timedelta(days=365 * 6)
         observation_start = observation_start.strftime("%Y-%m-%d")
     try:
         import requests
