@@ -14,6 +14,7 @@ import warnings
 import json
 import time
 import datetime
+from scipy.stats import norm as _scipy_norm
 from autots.tools.transform import (
     DatepartRegressionTransformer,
     AnomalyRemoval,
@@ -474,7 +475,7 @@ class TimeSeriesFeatureDetector(
 
         return self
 
-    def forecast(self, forecast_length, frequency=None):
+    def forecast(self, forecast_length, frequency=None, prediction_interval=0.9):
         """Generate a simple forward projection similar to BasicLinearModel.
         This detector is not optimized for forecasting; dedicated forecasting models may provide better results.
         """
@@ -577,23 +578,70 @@ class TimeSeriesFeatureDetector(
         seasonal = self._convert_to_original_scale(seasonal)
         holidays = self._convert_to_original_scale(holidays)
 
+        forecast = trend + level_shifts + seasonal + holidays
+
+        # --- Prediction intervals from per-component uncertainty ---
+        _has_components = self.components and all(
+            col in self.components
+            and 'noise' in self.components[col]
+            and 'seasonality' in self.components[col]
+            for col in columns
+        )
+        if _has_components and 0.0 < prediction_interval < 1.0:
+            # Build component DataFrames vectorially (no for-loop)
+            _noise_df = pd.DataFrame(
+                {col: self.components[col]['noise'] for col in columns},
+                index=self.date_index,
+            )
+            _seas_df = pd.DataFrame(
+                {col: self.components[col]['seasonality'] for col in columns},
+                index=self.date_index,
+            )
+            # Per-series sigma vectors — shape (n_series,)
+            _sigma_noise = _noise_df.std(ddof=1).to_numpy()
+            _sigma_seas = _seas_df.std(ddof=1).to_numpy() * np.clip(
+                1.0 - np.array([self.seasonality_strength.get(c, 0.0) for c in columns]),
+                0.05,
+                1.0,
+            )
+            # Trend extrapolation growth: sigma_noise / sqrt(n_train) * h
+            # shape (forecast_length, n_series) via broadcasting
+            _n_train = float(len(self.date_index))
+            _steps = np.arange(1, forecast_length + 1, dtype=float)[:, np.newaxis]
+            _sigma_trend_growth = (_sigma_noise[np.newaxis, :] / np.sqrt(_n_train)) * _steps
+            # Quadrature combination — shape (forecast_length, n_series)
+            _sigma_total = np.sqrt(
+                _sigma_noise[np.newaxis, :] ** 2
+                + _sigma_trend_growth ** 2
+                + _sigma_seas[np.newaxis, :] ** 2
+            )
+            _z = float(_scipy_norm.ppf(1.0 - (1.0 - prediction_interval) / 2.0))
+            _margin = pd.DataFrame(_z * _sigma_total, index=future_index, columns=columns)
+            lower_forecast = forecast - _margin
+            upper_forecast = forecast + _margin
+        else:
+            lower_forecast = forecast.copy()
+            upper_forecast = forecast.copy()
+            prediction_interval = 0.0
+
         component_frames = {
             'trend': trend,
             'level_shift': level_shifts,
             'seasonality': seasonal,
             'holidays': holidays,
+            'lower_bound': lower_forecast,
+            'upper_bound': upper_forecast,
         }
         components_df = stack_component_frames(component_frames)
-        forecast = trend + level_shifts + seasonal + holidays
         return PredictionObject(
             model_name="TimeSeriesFeatureDetectorForecast",
             forecast_length=forecast_length,
             forecast_index=future_index,
             forecast_columns=columns,
             forecast=forecast,
-            lower_forecast=forecast,
-            upper_forecast=forecast,
-            prediction_interval=0.0,
+            lower_forecast=lower_forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=prediction_interval,
             predict_runtime=datetime.timedelta(0),
             fit_runtime=datetime.timedelta(0),
             model_parameters={'detection_mode': self.detection_mode},
