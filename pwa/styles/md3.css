@@ -286,7 +286,7 @@ body {
   height: 32px;
   flex: 0 0 auto;
   line-height: 0;
-  margin-top: -2px;
+  margin-top: -1px;
 }
 
 /* Theme toggle (icon button in the app bar) */
@@ -406,6 +406,19 @@ body {
 .md-btn.outlined { background: transparent; color: var(--md-primary); border: 1px solid var(--md-outline); }
 .md-btn.text { background: transparent; color: var(--md-primary); padding: 10px 12px; }
 .md-btn.text.error { color: var(--md-error); }
+.md-btn.forecast-duration-short {
+  background: var(--md-primary-container); color: var(--md-on-primary-container);
+}
+.md-btn.forecast-duration-medium {
+  background: var(--md-primary); color: var(--md-on-primary);
+}
+.md-btn.forecast-duration-long {
+  background: var(--md-secondary); color: var(--md-on-secondary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-outline) 45%, transparent);
+}
+.md-btn.forecast-duration-short:hover:not(:disabled),
+.md-btn.forecast-duration-medium:hover:not(:disabled),
+.md-btn.forecast-duration-long:hover:not(:disabled) { box-shadow: var(--md-elev-2); }
 .md-btn:focus-visible { outline: 3px solid var(--md-primary-container); outline-offset: 2px; }
 .md-btn.error:focus-visible { outline-color: var(--md-error-container); }
 
@@ -499,6 +512,10 @@ body {
 .md-tt-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 .md-tt-name { color: var(--md-on-surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .md-tt-val { margin-left: auto; font-weight: 600; font-family: "Roboto Mono", ui-monospace, monospace; }
+.md-tt-feature {
+  margin-top: 3px; color: var(--md-on-surface-variant); font-size: 0.72rem;
+  font-weight: 700; letter-spacing: .04em;
+}
 
 .md-series-chip-swatch {
   width: 10px; height: 10px; border-radius: 2px;

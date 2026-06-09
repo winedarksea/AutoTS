@@ -101,6 +101,15 @@ impl FeatureKind {
         }
     }
 
+    pub fn tooltip_label(self) -> &'static str {
+        match self {
+            FeatureKind::Anomaly => "ANOMALY",
+            FeatureKind::LevelShift => "LEVEL SHIFT",
+            FeatureKind::Changepoint => "TREND CHANGE",
+            FeatureKind::Holiday => "HOLIDAY",
+        }
+    }
+
     /// Fixed per-kind color so the marker type is legible across series.
     fn color(self) -> &'static str {
         match self {
@@ -526,7 +535,8 @@ pub fn line_chart_ex(
         if !w.hist.is_empty() {
             let d = path_from(&w.hist, &geom);
             svg.push_str(&format!(
-                "<path d=\"{d}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2\"/>",
+                "<path d=\"{d}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2\" \
+                 stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
                 w.color
             ));
         }
@@ -534,7 +544,8 @@ pub fn line_chart_ex(
             let d = path_from(&w.fc, &geom);
             svg.push_str(&format!(
                 "<path d=\"{d}\" fill=\"none\" stroke=\"{}\" \
-                 stroke-width=\"2.5\" stroke-dasharray=\"6 4\"/>",
+                 stroke-width=\"2.5\" stroke-dasharray=\"7 3\" \
+                 stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
                 w.color
             ));
         }
@@ -585,7 +596,8 @@ mod tests {
     #[test]
     fn chart_distinguishes_history_and_forecast() {
         let out = plain(&[s(&[1.0, 2.0], &[3.0, 4.0])], &[], &[]);
-        assert!(out.svg.contains("stroke-dasharray=\"6 4\"")); // dashed forecast
+        assert!(out.svg.contains("stroke-dasharray=\"7 3\"")); // dashed forecast
+        assert!(out.svg.contains("stroke-linecap=\"round\""));
         assert!(out.svg.contains("stroke-dasharray=\"4 4\"")); // boundary marker
     }
 

@@ -64,6 +64,7 @@ impl ChartUi {
 
 /// One tooltip row: (palette color index, series name, value at the point).
 type TtRow = (usize, String, f64);
+type ChartTooltip = (String, Vec<TtRow>, Vec<FeatureKind>);
 
 fn norm_date(s: &str) -> String {
     s.chars().take(10).collect()
@@ -114,6 +115,30 @@ fn markers_for_series(
         }
     }
     out
+}
+
+/// Return each detected feature kind once for the selected series at one axis
+/// position. This uses the same marker join as the chart, so hover labels cannot
+/// disagree with late-arriving feature markers.
+fn feature_kinds_at_index(
+    feats: &Value,
+    selected_series: &[&crate::model::SeriesData],
+    dates: &[String],
+    idx: usize,
+) -> Vec<FeatureKind> {
+    let date_indices = date_index_map(dates);
+    FeatureKind::ALL
+        .into_iter()
+        .filter(|kind| {
+            selected_series.iter().any(|series| {
+                markers_for_series(feats, &series.name, &date_indices, &series.values)
+                    .iter()
+                    .any(|marker| {
+                        marker.idx == idx && marker.kind == *kind && marker.value.is_finite()
+                    })
+            })
+        })
+        .collect()
 }
 
 /// Cursor x (in the 920-wide viewBox) for a pointer event over `node`.
@@ -226,10 +251,7 @@ const MIN_BRUSH_VBX: f64 = 8.0;
 /// drag-to-select zoom. The SVG is injected via `inner_html`; the tooltip,
 /// crosshair, and selection rectangle are signal-driven Leptos elements stacked
 /// over it. `tooltip` resolves an absolute axis index to a date + value rows.
-fn chart_block(
-    ui: ChartUi,
-    tooltip: Callback<usize, Option<(String, Vec<TtRow>)>>,
-) -> impl IntoView {
+fn chart_block(ui: ChartUi, tooltip: Callback<usize, Option<ChartTooltip>>) -> impl IntoView {
     let node = create_node_ref::<html::Div>();
 
     let crosshair = move || {
@@ -241,7 +263,7 @@ fn chart_block(
     let tip = move || {
         let idx = ui.hover.get()?;
         let g = ui.geom.get()?;
-        let (date, rows) = tooltip.call(idx)?;
+        let (date, rows, detected_feature_kinds) = tooltip.call(idx)?;
         let pct = g.vbx_of_abs(idx) / svg::VB_W * 100.0;
         let rows_view = rows
             .into_iter()
@@ -255,10 +277,19 @@ fn chart_block(
                 }
             })
             .collect_view();
+        let detected_features_view = detected_feature_kinds
+            .into_iter()
+            .map(|kind| {
+                view! {
+                    <div class="md-tt-feature">{kind.tooltip_label()}</div>
+                }
+            })
+            .collect_view();
         Some(view! {
             <div class="md-chart-tooltip" style=format!("left:{pct:.3}%")>
                 <div class="md-tt-date">{date}</div>
                 {rows_view}
+                {detected_features_view}
             </div>
         })
     };
@@ -1480,17 +1511,35 @@ pub fn App() -> impl IntoView {
     let history_tooltip = Callback::new(move |idx: usize| {
         let h = history.get_untracked()?;
         let ss = sel_set.get_untracked();
-        let date = h.datetime.get(idx).map(|d| {
-            fmt_date(d, infer_granularity(&h.datetime))
-        })?;
-        let rows: Vec<TtRow> = h
+        let selected_series: Vec<&crate::model::SeriesData> = h
             .series
             .iter()
             .enumerate()
-            .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
-            .filter_map(|(ci, s)| s.values.get(idx).map(|v| (ci, s.name.clone(), *v)))
+            .filter(|(series_index, _)| ss.get(*series_index).copied().unwrap_or(false))
+            .map(|(_, series)| series)
             .collect();
-        Some((date, rows))
+        let date = h
+            .datetime
+            .get(idx)
+            .map(|d| fmt_date(d, infer_granularity(&h.datetime)))?;
+        let rows: Vec<TtRow> = selected_series
+            .iter()
+            .filter_map(|series| {
+                let color_index = h.index_of(&series.name)?;
+                series
+                    .values
+                    .get(idx)
+                    .map(|value| (color_index, series.name.clone(), *value))
+            })
+            .collect();
+        let detected_feature_kinds = features
+            .get()
+            .as_ref()
+            .map(|feature_data| {
+                feature_kinds_at_index(feature_data, &selected_series, &h.datetime, idx)
+            })
+            .unwrap_or_default();
+        Some((date, rows, detected_feature_kinds))
     });
     let forecast_tooltip = Callback::new(move |idx: usize| {
         let h = history.get_untracked()?;
@@ -1498,28 +1547,44 @@ pub fn App() -> impl IntoView {
         let ovr = overrides.get_untracked();
         let ss = sel_set.get_untracked();
         let nh = h.datetime.len();
+        let selected_series: Vec<(usize, &crate::model::SeriesData)> = h
+            .series
+            .iter()
+            .enumerate()
+            .filter(|(series_index, _)| ss.get(*series_index).copied().unwrap_or(false))
+            .collect();
         let gran = infer_granularity(&fc.datetime);
         let date = if idx < nh {
             fmt_date(h.datetime.get(idx)?, gran)
         } else {
             fmt_date(fc.datetime.get(idx - nh)?, gran)
         };
-        let rows: Vec<TtRow> = h
-            .series
+        let rows: Vec<TtRow> = selected_series
             .iter()
-            .enumerate()
-            .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
-            .filter_map(|(ci, s)| {
+            .filter_map(|(color_index, series)| {
                 let v = if idx < nh {
-                    s.values.get(idx).copied()
+                    series.values.get(idx).copied()
                 } else {
-                    let fc_idx = fc.index_of(&s.name)?;
+                    let fc_idx = fc.index_of(&series.name)?;
                     effective_values(&fc, &ovr, fc_idx).get(idx - nh).copied()
                 }?;
-                Some((ci, s.name.clone(), v))
+                Some((*color_index, series.name.clone(), v))
             })
             .collect();
-        Some((date, rows))
+        let selected_history_series: Vec<&crate::model::SeriesData> =
+            selected_series.iter().map(|(_, series)| *series).collect();
+        let detected_feature_kinds = if idx < nh {
+            features
+                .get()
+                .as_ref()
+                .map(|feature_data| {
+                    feature_kinds_at_index(feature_data, &selected_history_series, &h.datetime, idx)
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        Some((date, rows, detected_feature_kinds))
     });
     let install_pwa = move |_| {
         spawn_local(async move {
@@ -1836,13 +1901,13 @@ pub fn App() -> impl IntoView {
                 <section class="md-card">
                     {section_header("III", "Forecast")}
                     <div class="md-btn-row">
-                        <button class="md-btn filled"
+                        <button class="md-btn forecast-duration-short"
                             disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
                             on:click=move |_| do_forecast("make_forecast")>"Make forecast"</button>
-                        <button class="md-btn tonal"
+                        <button class="md-btn forecast-duration-medium"
                             disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
                             on:click=move |_| do_forecast("search_forecast")>"Search for best forecast"</button>
-                        <button class="md-btn outlined"
+                        <button class="md-btn forecast-duration-long"
                             disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
                             on:click=move |_| do_forecast("search_all_night")>"Search all night"</button>
                     </div>
