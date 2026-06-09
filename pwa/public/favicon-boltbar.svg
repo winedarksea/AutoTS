@@ -1,6 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"
-     role="img" aria-label="AutoTS: bronze lightning bolt over subtle graph gridlines">
+     role="img" aria-label="AutoTS: bronze lightning bolt over rising turquoise bars">
+  <!-- Bronze metallic gradients reuse the app's metal-bronze tokens
+       (dark #5e4200, mid #c68a2e, light #ffe2a8). CSS vars can't resolve in a
+       favicon context, so the token values are inlined here. The
+       dark/mid/light/mid/dark sweep gives the flat MD3 emblem its one metallic
+       flourish. Use @resvg/resvg-js-cli favicon.svg to regenerate the PNGs. -->
   <defs>
+    <!-- Border: diagonal sweep, top-left highlight -->
     <linearGradient id="bzBorder" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0"    stop-color="#5e4200"/>
       <stop offset="0.30" stop-color="#c68a2e"/>
@@ -8,6 +14,7 @@
       <stop offset="0.78" stop-color="#c68a2e"/>
       <stop offset="1"    stop-color="#5e4200"/>
     </linearGradient>
+    <!-- Bolt: sweep aligned to the bolt's upper-right → lower-left axis -->
     <linearGradient id="bzBolt" x1="0.85" y1="0.1" x2="0.15" y2="0.9">
       <stop offset="0"    stop-color="#5e4200"/>
       <stop offset="0.32" stop-color="#c68a2e"/>
@@ -17,18 +24,20 @@
     </linearGradient>
   </defs>
 
+  <!-- Limestone tile with inset metallic bronze border -->
   <rect x="2" y="2" width="28" height="28" rx="6"
         fill="#faf8f3" stroke="url(#bzBorder)" stroke-width="1.5"/>
 
-  <!-- Subtle horizontal guides imply a chart without competing with the bolt. -->
-  <!-- Matches the light-theme grid token: outline color at 35% opacity. -->
-  <g stroke="#79766e" stroke-opacity="0.35" stroke-width="0.5">
-    <line x1="5.5" y1="10" x2="26.5" y2="10"/>
-    <line x1="5.5" y1="16" x2="26.5" y2="16"/>
-    <line x1="5.5" y1="22" x2="26.5" y2="22"/>
+  <!-- Rising bars use a sunlit Aegean turquoise that balances the warm bronze. -->
+  <g fill="#20b8c9">
+    <rect x="6"  y="23.5" width="4" height="3.5"  rx="0.8"/>
+    <rect x="12" y="21.4" width="4" height="5.6"  rx="0.8"/>
+    <rect x="18" y="17.5" width="4" height="9.5"  rx="0.8"/>
+    <rect x="24" y="10.8" width="4" height="16.2" rx="0.8"/>
   </g>
 
-  <!-- Reuse the primary favicon's established lightning-bolt geometry. -->
+  <!-- The narrow, repeated zig-zag reads clearly as lightning at favicon size;
+       translating every vertex together preserves its balanced silhouette. -->
   <path d="M 26.5 7.32 L 18.19 11.84 L 20.72 14.05 L 13.79 16.45 L 16.07 18.56
            L 6.7 22.62 L 13.43 18.08 L 11.51 16.09 L 18.08 13.69 L 15.91 11.6 Z"
         fill="url(#bzBolt)" stroke="#5e4200" stroke-width="0.3"

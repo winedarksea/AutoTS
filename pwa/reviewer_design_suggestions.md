@@ -533,3 +533,9 @@ on hover:
 ```
 
 ## TODO Items
+Design for the favicon needs to balance the Greco-Roman theme with modern app emblem design that should look good at 32 px.
+The base shape is a rounded-square tile with an inset bronze border.
+The main feature of the emblem is a bronze lightning bolt, inspired by Zeus and Jupiter, but with shaping that still also echoes upward trending time series lines. The bolt then extends down from top right towards the lower left (but arriving slightly above the axis origin, as it has to fit bars beneath it)
+In order to clearly signify "graph", there will be four bar chart bars beneath the lightning bolt using a color like cyan or turquoise. These need to be relatively short to fit under the bolt, and gradually increasing as well as they progress left to right.
+It should use a flat, material design 3 in colors and details, except for the metallic gradient of the border and lightning bolt
+

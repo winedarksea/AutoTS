@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <!-- Container: limestone background + wine-dark sea frame anchors the icon -->
+  <rect x="1" y="1" width="30" height="30" rx="5" fill="#FAF8F3" stroke="#163139" stroke-width="2"/>
+
+  <!-- Faint grid hints at chart context without competing with the candles -->
+  <g stroke="#163139" stroke-width="1" opacity="0.10">
+    <line x1="3" y1="11" x2="29" y2="11"/>
+    <line x1="3" y1="16" x2="29" y2="16"/>
+    <line x1="3" y1="21" x2="29" y2="21"/>
+  </g>
+
+  <!-- Wicks: thin sea-ink lines for fine pixel-level detail -->
+  <g stroke="#163139" stroke-width="1">
+    <line x1="8.5"  y1="10" x2="8.5"  y2="25"/>
+    <line x1="14.5" y1="8"  x2="14.5" y2="22"/>
+    <line x1="20.5" y1="6"  x2="20.5" y2="21"/>
+    <line x1="26.5" y1="4"  x2="26.5" y2="18"/>
+  </g>
+
+  <!-- Bodies: thick blocks aligned to the pixel grid. Rising trend in Aegean -->
+  <!-- cyan + terracotta, ending in a highlighted bronze forecast candle. -->
+  <!-- npx @resvg/resvg-js-cli for creating pngs-->
+  <rect x="6"  y="15" width="5" height="8" fill="#00696E" stroke="#163139" stroke-width="1"/>
+  <rect x="12" y="11" width="5" height="6" fill="#9C4230" stroke="#163139" stroke-width="1"/>
+  <rect x="18" y="10" width="5" height="8" fill="#00696E" stroke="#163139" stroke-width="1"/>
+  <rect x="24" y="7"  width="5" height="7" fill="#C68A2E" stroke="#163139" stroke-width="1"/>
+</svg>
