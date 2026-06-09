@@ -265,8 +265,17 @@ body {
   cursor: pointer;
   transition: background .15s, color .15s;
 }
-.md-theme-toggle:hover { background: var(--md-surface-container-high); color: var(--md-primary); }
+.md-theme-toggle:hover { background: var(--md-surface-container-high); }
 .md-theme-toggle:focus-visible { outline: 3px solid var(--md-primary-container); outline-offset: 2px; }
+.md-toggle-icon { display: inline-flex; }
+.md-toggle-glyph {
+  width: 22px;
+  height: 22px;
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.28));
+  transition: transform .2s ease;
+}
+.md-theme-toggle:hover .md-toggle-glyph { transform: rotate(-12deg) scale(1.06); }
 
 .md-container {
   max-width: 1080px;
@@ -284,7 +293,45 @@ body {
   padding: 20px;
   box-shadow: var(--md-elev-1);
 }
-.md-card > h2 { margin: 0 0 12px; font-size: 1.125rem; font-weight: 500; }
+/* Card heading — classical display face, a bronze Roman-numeral ordinal, and a
+   thin metallic keyline that echoes the wordmark underline. */
+.md-card > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  margin: 0 0 18px;
+  padding-bottom: 10px;
+  font-family: var(--md-font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: .015em;
+  color: var(--md-on-surface);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg,
+      color-mix(in srgb, var(--metal-bronze-mid) 75%, transparent),
+      color-mix(in srgb, var(--metal-bronze-light) 45%, transparent) 38%,
+      transparent 82%) 1;
+}
+.md-section-num {
+  flex: 0 0 auto;
+  font-family: var(--md-font-display);
+  font-weight: 600;
+  font-size: 1.4rem;
+  line-height: 1;
+  letter-spacing: .04em;
+  padding-right: .6rem;
+  border-right: 1px solid var(--md-outline-variant);
+  /* engraved-bronze fill, matching the corner emblem */
+  background: linear-gradient(160deg,
+      var(--metal-bronze-light),
+      var(--metal-bronze-mid) 52%,
+      var(--metal-bronze-dark));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.md-section-title { color: var(--md-on-surface); }
 
 /* Buttons */
 .md-btn {

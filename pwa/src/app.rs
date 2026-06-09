@@ -17,6 +17,58 @@ use crate::svg;
 type Overrides = Vec<Vec<Option<f64>>>;
 
 // ---------------------------------------------------------------------------
+// Classical theme-toggle glyphs.
+//
+// Hand-drawn inline SVGs filled with the same metallic-bronze gradient as the
+// corner emblem (the `--metal-bronze-*` tokens, so they track light/dark).
+// SUN is a Helios radiate disc (shown to switch *to* light); MOON is a Selene
+// crescent + star (shown to switch *to* dark). Decorative — the button carries
+// an aria-label — so both are aria-hidden.
+// ---------------------------------------------------------------------------
+
+const SUN_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" aria-hidden=\"true\" \
+    xmlns=\"http://www.w3.org/2000/svg\">\
+    <defs><linearGradient id=\"bzsun\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\
+    <stop offset=\"0\" stop-color=\"var(--metal-bronze-light)\"/>\
+    <stop offset=\"0.5\" stop-color=\"var(--metal-bronze-mid)\"/>\
+    <stop offset=\"1\" stop-color=\"var(--metal-bronze-dark)\"/></linearGradient></defs>\
+    <g stroke=\"url(#bzsun)\" stroke-width=\"1.7\" stroke-linecap=\"round\">\
+    <line x1=\"12\" y1=\"1.6\" x2=\"12\" y2=\"4.3\"/>\
+    <line x1=\"12\" y1=\"19.7\" x2=\"12\" y2=\"22.4\"/>\
+    <line x1=\"1.6\" y1=\"12\" x2=\"4.3\" y2=\"12\"/>\
+    <line x1=\"19.7\" y1=\"12\" x2=\"22.4\" y2=\"12\"/>\
+    <line x1=\"4.7\" y1=\"4.7\" x2=\"6.6\" y2=\"6.6\"/>\
+    <line x1=\"17.4\" y1=\"17.4\" x2=\"19.3\" y2=\"19.3\"/>\
+    <line x1=\"19.3\" y1=\"4.7\" x2=\"17.4\" y2=\"6.6\"/>\
+    <line x1=\"6.6\" y1=\"17.4\" x2=\"4.7\" y2=\"19.3\"/></g>\
+    <circle cx=\"12\" cy=\"12\" r=\"5.1\" fill=\"url(#bzsun)\" \
+    stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.6\"/></svg>";
+
+const MOON_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" aria-hidden=\"true\" \
+    xmlns=\"http://www.w3.org/2000/svg\">\
+    <defs><linearGradient id=\"bzmoon\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\
+    <stop offset=\"0\" stop-color=\"var(--metal-bronze-light)\"/>\
+    <stop offset=\"0.55\" stop-color=\"var(--metal-bronze-mid)\"/>\
+    <stop offset=\"1\" stop-color=\"var(--metal-bronze-dark)\"/></linearGradient></defs>\
+    <path d=\"M21 14.3A8.6 8.6 0 1 1 10.6 3.1 6.9 6.9 0 0 0 21 14.3Z\" \
+    fill=\"url(#bzmoon)\" stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.6\"/>\
+    <path d=\"M17.4 2.6l.62 1.66 1.66.62-1.66.62-.62 1.66-.62-1.66-1.66-.62 1.66-.62z\" \
+    fill=\"url(#bzmoon)\"/></svg>";
+
+/// An elegant card heading: a metallic-bronze Cinzel Roman numeral, a thin
+/// bronze keyline, then the title. `numeral` may be empty for unnumbered cards.
+fn section_header(numeral: &'static str, title: &'static str) -> impl IntoView {
+    view! {
+        <h2 class="md-section-head">
+            {(!numeral.is_empty()).then(|| view! {
+                <span class="md-section-num" aria-hidden="true">{numeral}</span>
+            })}
+            <span class="md-section-title">{title}</span>
+        </h2>
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Async helpers (small, signal-driven; keep view handlers tiny)
 // ---------------------------------------------------------------------------
 
@@ -569,7 +621,10 @@ pub fn App() -> impl IntoView {
                     theme.set(next);
                 }
             >
-                {move || if theme.get() == crate::theme::Theme::Dark { "☀" } else { "☾" }}
+                <span
+                    class="md-toggle-icon"
+                    inner_html=move || if theme.get() == crate::theme::Theme::Dark { SUN_SVG } else { MOON_SVG }
+                ></span>
             </button>
             <a class="md-btn text" href="/llms.txt" target="_blank">"llms.txt"</a>
         </header>
@@ -590,7 +645,7 @@ pub fn App() -> impl IntoView {
 
             // ---- Upload card ----
             <section class="md-card">
-                <h2>"1 · Load your data"</h2>
+                {section_header("I", "Load your data")}
                 <div class="md-tabs" role="tablist">
                     <button class:active=move || tab.get() == 0 on:click=move |_| tab.set(0)>"Paste"</button>
                     <button class:active=move || tab.get() == 1 on:click=move |_| tab.set(1)>"URL"</button>
@@ -694,7 +749,7 @@ pub fn App() -> impl IntoView {
                 let names: Vec<String> = h.series.iter().map(|s| s.name.clone()).collect();
                 view! {
                     <section class="md-card">
-                        <h2>"2 · Your data"</h2>
+                        {section_header("II", "Your data")}
                         {(names.len() > 1).then(|| {
                             let names = names.clone();
                             view! {
@@ -775,7 +830,7 @@ pub fn App() -> impl IntoView {
             // ---- Forecast controls ----
             {move || data_id.get().map(|_| view! {
                 <section class="md-card">
-                    <h2>"3 · Forecast"</h2>
+                    {section_header("III", "Forecast")}
                     <div class="md-btn-row">
                         <button class="md-btn filled" disabled=move || busy.get() on:click=move |_| do_forecast("make_forecast")>"Make forecast"</button>
                         <button class="md-btn tonal" disabled=move || busy.get() on:click=move |_| do_forecast("search_forecast")>"Search for best forecast"</button>
@@ -797,7 +852,7 @@ pub fn App() -> impl IntoView {
             // ---- Forecast result + adjust + download ----
             {move || forecast.get().map(|_| view! {
                 <section class="md-card">
-                    <h2>"4 · Review, adjust & download"</h2>
+                    {section_header("IV", "Review, adjust & download")}
                     <div class="md-chart-controls">
                         <div class="md-field">
                             <label class="md-label">"Actual history shown"</label>
@@ -834,7 +889,7 @@ pub fn App() -> impl IntoView {
 
             // ---- Data manager ----
             <section class="md-card">
-                <h2>"Cached data & forecasts"</h2>
+                {section_header("", "Cached data & forecasts")}
                 <div class="md-btn-row">
                     <button class="md-btn outlined" on:click=refresh_cache>"Refresh"</button>
                 </div>
