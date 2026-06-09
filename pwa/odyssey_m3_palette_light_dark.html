@@ -1,0 +1,72 @@
+<h2 class="sr-only">An ancient-Greek-themed Material 3 color palette: turquoise primary, verdigris secondary, bronze/gold tertiary, Tyrian purple accent, limestone light surfaces, wine-dark-sea dark surfaces, and a forecasting data-visualization palette.</h2>
+
+<style>
+.fam{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin:0 0 6px}
+.chip{border-radius:var(--border-radius-md);padding:10px 12px;display:flex;justify-content:space-between;align-items:baseline;font-size:13px;line-height:1.3}
+.chip b{font-weight:500}
+.hex{font-family:var(--font-mono);font-size:11px;opacity:.85}
+.role{font-size:11px;color:var(--color-text-tertiary);margin:5px 2px 0}
+.col{display:flex;flex-direction:column;gap:6px}
+.sect{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin:1.5rem 0 .6rem}
+</style>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;padding:1rem 0 0">
+
+  <div class="col">
+    <p class="fam">Primary · turquoise</p>
+    <div class="chip" style="background:#1AA3A3;color:#00302F"><b>Aegean</b><span class="hex">#1AA3A3</span></div>
+    <div class="chip" style="background:#9DF0EF;color:#003738"><b>container</b><span class="hex">#9DF0EF</span></div>
+    <div class="chip" style="background:#003738;color:#9DF0EF"><b>deep</b><span class="hex">#003738</span></div>
+    <p class="role">primary / on-primary anchor</p>
+  </div>
+
+  <div class="col">
+    <p class="fam">Secondary · verdigris</p>
+    <div class="chip" style="background:#5E8B82;color:#0E2420"><b>patina</b><span class="hex">#5E8B82</span></div>
+    <div class="chip" style="background:#C9E9E3;color:#1B3833"><b>container</b><span class="hex">#C9E9E3</span></div>
+    <div class="chip" style="background:#28433E;color:#C9E9E3"><b>deep</b><span class="hex">#28433E</span></div>
+    <p class="role">aged-bronze green, calm support</p>
+  </div>
+
+  <div class="col">
+    <p class="fam">Tertiary · bronze / gold</p>
+    <div class="chip" style="background:#C68A2E;color:#3A2600"><b>mosaic gold</b><span class="hex">#C68A2E</span></div>
+    <div class="chip" style="background:#FFDDA6;color:#5E4200"><b>container</b><span class="hex">#FFDDA6</span></div>
+    <div class="chip" style="background:#5E4200;color:#FFDDA6"><b>bronze</b><span class="hex">#5E4200</span></div>
+    <p class="role">warm metallic accent</p>
+  </div>
+
+  <div class="col">
+    <p class="fam">Extended · Tyrian purple</p>
+    <div class="chip" style="background:#8A3461;color:#F4D3E2"><b>murex</b><span class="hex">#8A3461</span></div>
+    <div class="chip" style="background:#F4D3E2;color:#4D1735"><b>tint</b><span class="hex">#F4D3E2</span></div>
+    <div class="chip" style="background:#4D1735;color:#F4D3E2"><b>deep</b><span class="hex">#4D1735</span></div>
+    <p class="role">rare highlight, use sparingly</p>
+  </div>
+
+</div>
+
+<p class="sect">Surfaces — light (limestone) vs dark (wine-dark sea)</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <div class="col">
+    <div class="chip" style="background:#FAF8F3;color:#1B1C1A;border:0.5px solid var(--color-border-tertiary)"><b>surface</b><span class="hex">#FAF8F3</span></div>
+    <div class="chip" style="background:#EFEBE2;color:#1B1C1A"><b>container</b><span class="hex">#EFEBE2</span></div>
+    <div class="chip" style="background:#1B1C1A;color:#FAF8F3"><b>on-surface text</b><span class="hex">#1B1C1A</span></div>
+  </div>
+  <div class="col">
+    <div class="chip" style="background:#0E1A22;color:#DFE4E3"><b>surface</b><span class="hex">#0E1A22</span></div>
+    <div class="chip" style="background:#16252F;color:#DFE4E3"><b>container</b><span class="hex">#16252F</span></div>
+    <div class="chip" style="background:#1E303B;color:#DFE4E3"><b>container high</b><span class="hex">#1E303B</span></div>
+  </div>
+</div>
+
+<p class="sect">Forecasting data-viz palette (categorical)</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px">
+  <div class="chip" style="background:#1AA3A3;color:#00302F;flex-direction:column;align-items:flex-start;gap:3px"><b>actuals</b><span class="hex">#1AA3A3</span></div>
+  <div class="chip" style="background:#C68A2E;color:#3A2600;flex-direction:column;align-items:flex-start;gap:3px"><b>forecast</b><span class="hex">#C68A2E</span></div>
+  <div class="chip" style="background:#8A3461;color:#F4D3E2;flex-direction:column;align-items:flex-start;gap:3px"><b>series 3</b><span class="hex">#8A3461</span></div>
+  <div class="chip" style="background:#5E8B82;color:#0E2420;flex-direction:column;align-items:flex-start;gap:3px"><b>series 4</b><span class="hex">#5E8B82</span></div>
+  <div class="chip" style="background:#C0563B;color:#3A1206;flex-direction:column;align-items:flex-start;gap:3px"><b>series 5</b><span class="hex">#C0563B</span></div>
+  <div class="chip" style="background:#2E5A78;color:#CFE2EF;flex-direction:column;align-items:flex-start;gap:3px"><b>series 6</b><span class="hex">#2E5A78</span></div>
+  <div class="chip" style="background:#D9B26A;color:#4A3206;flex-direction:column;align-items:flex-start;gap:3px"><b>series 7</b><span class="hex">#D9B26A</span></div>
+</div>

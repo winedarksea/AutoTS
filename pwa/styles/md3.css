@@ -75,6 +75,17 @@
   --viz-uncertainty: color-mix(in srgb, var(--md-primary) 22%, transparent);
   --viz-grid: color-mix(in srgb, var(--md-outline) 35%, transparent);
 
+  /* Multi-series palette: 7 perceptually distinct colours from odyssey palette.
+     Ordered for best visual separation when only a few are toggled on.
+     Dark-enough for contrast on limestone light surfaces. */
+  --viz-s0: #009898; /* Aegean turquoise (actuals anchor) */
+  --viz-s1: #5E8B82; /* verdigris patina */
+  --viz-s2: #8A3461; /* Tyrian purple */
+  --viz-s3: #C0563B; /* terracotta */
+  --viz-s4: #2E5A78; /* deep-sea blue */
+  --viz-s5: #9B7500; /* ochre (darkened for light-bg contrast) */
+  --viz-s6: #C68A2E; /* bronze/gold */
+
   /* --- Metallic bronze (reserved for one ceremonial emblem) --- */
   --metal-bronze-dark: #5e4200;
   --metal-bronze-mid: #c68a2e;
@@ -138,6 +149,15 @@
   --metal-bronze-dark: #3a2600;
   --metal-bronze-mid: #c68a2e;
   --metal-bronze-light: #f5d58a;
+
+  /* Multi-series palette — bright versions for wine-dark-sea surfaces */
+  --viz-s0: #56D6EC; /* bright turquoise */
+  --viz-s1: #8FBAAF; /* light verdigris */
+  --viz-s2: #D48BAF; /* light Tyrian purple */
+  --viz-s3: #E08570; /* light terracotta */
+  --viz-s4: #72A4C6; /* light sea-blue */
+  --viz-s5: #D9B26A; /* gold */
+  --viz-s6: #F5BE49; /* bright bronze */
 }
 
 /* OS-default dark (no explicit user choice). Mirrors the block above. */
@@ -181,6 +201,14 @@
     --metal-bronze-dark: #3a2600;
     --metal-bronze-mid: #c68a2e;
     --metal-bronze-light: #f5d58a;
+
+    --viz-s0: #56D6EC;
+    --viz-s1: #8FBAAF;
+    --viz-s2: #D48BAF;
+    --viz-s3: #E08570;
+    --viz-s4: #72A4C6;
+    --viz-s5: #D9B26A;
+    --viz-s6: #F5BE49;
   }
 }
 
@@ -410,6 +438,52 @@ body {
 /* Chart */
 .md-chart { width: 100%; background: var(--md-surface); border-radius: var(--md-shape-md); }
 .md-chart svg { display: block; width: 100%; height: auto; }
+
+/* Point hover tooltips (pure CSS — no JS required).
+   .chart-pt wraps an invisible hit circle + a .chart-tt tooltip group.
+   The tooltip becomes visible when the group is hovered. */
+.chart-tt { display: none; }
+.chart-pt:hover .chart-tt { display: block; }
+.chart-tt-bg {
+  fill: var(--md-surface-container-high);
+  stroke: var(--md-outline-variant);
+  stroke-width: 1;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.18));
+}
+.chart-tt-val {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--md-on-surface);
+  font-family: "Roboto Mono", ui-monospace, monospace;
+}
+.chart-tt-date {
+  font-size: 10px;
+  fill: var(--md-on-surface-variant);
+}
+
+/* Multi-series toggle chips — each chip carries --chip-color via inline style */
+.md-series-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.md-series-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 20px;
+  border: 1.5px solid var(--chip-color, var(--md-outline-variant));
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: inherit; font-size: 0.85rem; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.md-series-chip.active {
+  background: color-mix(in srgb, var(--chip-color, var(--md-primary)) 15%, transparent);
+  color: var(--md-on-surface);
+  border-color: var(--chip-color, var(--md-primary));
+}
+.md-series-chip-swatch {
+  width: 10px; height: 10px; border-radius: 2px;
+  background: var(--chip-color, var(--md-primary));
+  flex-shrink: 0;
+}
+
 .md-chart-controls {
   display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
   gap: 12px; margin-bottom: 10px;
@@ -418,8 +492,15 @@ body {
 .md-chart-legend { display: flex; gap: 16px; color: var(--md-on-surface-variant); font-size: .85rem; }
 .md-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .md-chart-legend i { display: inline-block; width: 24px; height: 3px; border-radius: 2px; }
-.md-chart-legend i.actuals { background: var(--viz-actuals); }
-.md-chart-legend i.forecast { background: var(--viz-forecast); }
+/* Solid line for actuals, dashed pattern for forecast (line style, not color) */
+.md-chart-legend i.actuals { background: var(--viz-s0); }
+.md-chart-legend i.forecast {
+  background: repeating-linear-gradient(
+    to right,
+    var(--viz-s0) 0, var(--viz-s0) 6px,
+    transparent 6px, transparent 10px
+  );
+}
 
 /* Accessible data table (paired with every chart) */
 .md-table-wrap { max-height: 280px; overflow: auto; border-radius: var(--md-shape-sm); }

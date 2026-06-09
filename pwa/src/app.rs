@@ -75,7 +75,7 @@ fn section_header(numeral: &'static str, title: &'static str) -> impl IntoView {
 async fn fetch_history(
     data_id: String,
     history: RwSignal<Option<WideData>>,
-    sel: RwSignal<usize>,
+    sel_set: RwSignal<Vec<bool>>,
     error: RwSignal<Option<String>>,
 ) {
     match call_tool(
@@ -86,7 +86,9 @@ async fn fetch_history(
     {
         Ok(v) => {
             if let Some(w) = WideData::from_json_wide(&v) {
-                sel.set(0);
+                // Select only the first series by default.
+                let n = w.series.len();
+                sel_set.set((0..n).map(|i| i == 0).collect());
                 history.set(Some(w));
             }
         }
@@ -231,7 +233,11 @@ pub fn App() -> impl IntoView {
     let detecting_features = create_rw_signal(false);
     let forecast = create_rw_signal::<Option<WideData>>(None);
     let overrides = create_rw_signal::<Overrides>(Vec::new());
-    let sel = create_rw_signal::<usize>(0);
+    // sel_set: one bool per series in the loaded dataset (true = visible in chart).
+    // Sized and reset by fetch_history when data loads.
+    let sel_set = create_rw_signal::<Vec<bool>>(vec![true]);
+    // adj_sel: which single series index to show in the adjust-forecast sliders.
+    let adj_sel = create_rw_signal::<usize>(0);
     let forecast_length = create_rw_signal::<i64>(30);
     let forecast_history_points = create_rw_signal::<usize>(90);
     let confirm_loaded_data_delete = create_rw_signal(false);
@@ -289,9 +295,11 @@ pub fn App() -> impl IntoView {
         feature_error.set(None);
         forecast_history_points.set(90);
         confirm_loaded_data_delete.set(false);
+        sel_set.set(vec![true]);
+        adj_sel.set(0);
         let id2 = id.clone();
         spawn_local(async move {
-            fetch_history(id.clone(), history, sel, error).await;
+            fetch_history(id.clone(), history, sel_set, error).await;
             // Feature detection is optional enrichment. Starting it only after
             // history is loaded keeps the plot independent and avoids
             // concurrent calls into the single Pyodide runtime.
@@ -567,41 +575,82 @@ pub fn App() -> impl IntoView {
 
     // Keep the source-data chart independent from forecast state.
     let history_chart_svg = move || {
-        let s = sel.get();
+        let ss = sel_set.get();
         let hist = history.get();
-        let hvals = hist
-            .as_ref()
-            .and_then(|h| h.series.get(s))
-            .map(|x| x.values.clone());
-        svg::line_chart(hvals.as_deref(), None)
+        let hdates = hist.as_ref().map(|h| h.datetime.clone()).unwrap_or_default();
+        if let Some(h) = &hist {
+            let chart_series: Vec<svg::ChartSeries<'_>> = h
+                .series
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
+                .map(|(color_idx, s)| svg::ChartSeries {
+                    h: &s.values,
+                    f: &[],
+                    color_idx,
+                })
+                .collect();
+            svg::line_chart(&chart_series, &hdates, &[])
+        } else {
+            String::new()
+        }
     };
 
     let forecast_chart_svg = move || {
-        let s = sel.get();
+        let ss = sel_set.get();
         let hist = history.get();
         let fc = forecast.get();
         let ovr = overrides.get();
-        let sel_name = hist
+        let requested = forecast_history_points.get();
+
+        let hdates = hist
             .as_ref()
-            .and_then(|h| h.series.get(s))
-            .map(|x| x.name.clone());
-        let hvals = hist.as_ref().and_then(|h| h.series.get(s)).map(|x| {
-            let requested = forecast_history_points.get();
-            let start = if requested == 0 {
-                0
-            } else {
-                x.values.len().saturating_sub(requested)
-            };
-            x.values[start..].to_vec()
-        });
-        let fvals = fc.as_ref().map(|f| {
-            let idx = sel_name
-                .as_ref()
-                .and_then(|n| f.index_of(n))
-                .unwrap_or_else(|| s.min(f.series.len().saturating_sub(1)));
-            effective_values(f, &ovr, idx)
-        });
-        svg::line_chart(hvals.as_deref(), fvals.as_deref())
+            .map(|h| {
+                let start = if requested == 0 {
+                    0
+                } else {
+                    h.datetime.len().saturating_sub(requested)
+                };
+                h.datetime[start..].to_vec()
+            })
+            .unwrap_or_default();
+        let fdates = fc.as_ref().map(|f| f.datetime.clone()).unwrap_or_default();
+
+        // Build owned windowed history + forecast values per selected series.
+        let mut series_data: Vec<(usize, Vec<f64>, Vec<f64>)> = Vec::new();
+        if let Some(h) = &hist {
+            for (color_idx, s) in h.series.iter().enumerate() {
+                if !ss.get(color_idx).copied().unwrap_or(false) {
+                    continue;
+                }
+                let start = if requested == 0 {
+                    0
+                } else {
+                    s.values.len().saturating_sub(requested)
+                };
+                let h_vals = s.values[start..].to_vec();
+                let f_vals = fc
+                    .as_ref()
+                    .map(|f| {
+                        let fc_idx = f
+                            .index_of(&s.name)
+                            .unwrap_or_else(|| color_idx.min(f.series.len().saturating_sub(1)));
+                        effective_values(f, &ovr, fc_idx)
+                    })
+                    .unwrap_or_default();
+                series_data.push((color_idx, h_vals, f_vals));
+            }
+        }
+
+        let chart_series: Vec<svg::ChartSeries<'_>> = series_data
+            .iter()
+            .map(|(color_idx, h_vals, f_vals)| svg::ChartSeries {
+                h: h_vals,
+                f: f_vals,
+                color_idx: *color_idx,
+            })
+            .collect();
+        svg::line_chart(&chart_series, &hdates, &fdates)
     };
 
     view! {
@@ -753,15 +802,34 @@ pub fn App() -> impl IntoView {
                         {(names.len() > 1).then(|| {
                             let names = names.clone();
                             view! {
-                                <div class="md-field" style="max-width:260px">
-                                    <label class="md-label">"Series"</label>
-                                    <select on:change=move |ev| {
-                                        if let Ok(i) = event_target_value(&ev).parse::<usize>() { sel.set(i); }
-                                    }>
-                                        {names.into_iter().enumerate().map(|(i, n)| view! {
-                                            <option value=i.to_string()>{n}</option>
+                                <div class="md-field">
+                                    <label class="md-label">"Series (tap to toggle)"</label>
+                                    <div class="md-series-chips">
+                                        {names.into_iter().enumerate().map(|(i, n)| {
+                                            let color_var = format!("--chip-color:var(--viz-s{})", i % 7);
+                                            view! {
+                                                <button
+                                                    type="button"
+                                                    class="md-series-chip"
+                                                    class:active=move || sel_set.get().get(i).copied().unwrap_or(false)
+                                                    style=color_var
+                                                    on:click=move |_| sel_set.update(|v| {
+                                                        let currently_on = v.get(i).copied().unwrap_or(false);
+                                                        let n_on = v.iter().filter(|&&x| x).count();
+                                                        if currently_on && n_on <= 1 {
+                                                            return; // keep at least one selected
+                                                        }
+                                                        if let Some(b) = v.get_mut(i) {
+                                                            *b = !*b;
+                                                        }
+                                                    })
+                                                >
+                                                    <span class="md-series-chip-swatch" aria-hidden="true"></span>
+                                                    {n}
+                                                </button>
+                                            }
                                         }).collect_view()}
-                                    </select>
+                                    </div>
                                 </div>
                             }
                         })}
@@ -778,14 +846,20 @@ pub fn App() -> impl IntoView {
                             <div style="margin-top:8px">
                                 <span class="md-label">"Detected features"</span>
                                 <div>
-                                    {feature_chips(&f, &history.get().and_then(|h| h.series.get(sel.get()).map(|s| s.name.clone())).unwrap_or_default())}
+                                    {feature_chips(&f, &history.get().and_then(|h| {
+                                        let first = sel_set.get().iter().position(|&b| b).unwrap_or(0);
+                                        h.series.get(first).map(|s| s.name.clone())
+                                    }).unwrap_or_default())}
                                 </div>
                             </div>
                         })}
 
                         <details class="md-expander" style="margin-top:12px">
                             <summary>"Data table (accessible / machine-readable)"</summary>
-                            {move || history.get().map(|h| data_table(&h, sel.get()))}
+                            {move || history.get().map(|h| {
+                                let first = sel_set.get().iter().position(|&b| b).unwrap_or(0);
+                                data_table(&h, first)
+                            })}
                         </details>
 
                         {move || confirm_loaded_data_delete.get().then(|| view! {
@@ -878,7 +952,7 @@ pub fn App() -> impl IntoView {
 
                     <details class="md-expander" style="margin-top:12px">
                         <summary>"Adjust forecast points"</summary>
-                        {move || adjust_rows(forecast, overrides, history, sel)}
+                        {move || adjust_rows(forecast, overrides, history, adj_sel)}
                     </details>
 
                     <div class="md-btn-row" style="margin-top:12px">
@@ -1032,16 +1106,50 @@ fn adjust_rows(
     forecast: RwSignal<Option<WideData>>,
     overrides: RwSignal<Overrides>,
     history: RwSignal<Option<WideData>>,
-    sel: RwSignal<usize>,
+    adj_sel: RwSignal<usize>,
 ) -> View {
     let Some(fc) = forecast.get() else {
         return ().into_view();
     };
-    // map selected history series name -> forecast series index
+
+    // Series picker — only shown when there are multiple forecast series.
+    let series_picker = if fc.series.len() > 1 {
+        let names: Vec<(usize, String)> = fc
+            .series
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i, s.name.clone()))
+            .collect();
+        view! {
+            <div class="md-field" style="max-width:220px; margin-bottom:8px">
+                <label class="md-label">"Adjust series"</label>
+                <select
+                    prop:value=move || adj_sel.get().to_string()
+                    on:change=move |ev| {
+                        if let Ok(n) = event_target_value(&ev).parse::<usize>() {
+                            adj_sel.set(n);
+                        }
+                    }
+                >
+                    {names.into_iter().map(|(i, name)| view! {
+                        <option value=i.to_string()>{name}</option>
+                    }).collect_view()}
+                </select>
+            </div>
+        }
+        .into_view()
+    } else {
+        ().into_view()
+    };
+
+    // Map the history series name at adj_sel → forecast series index.
     let sel_name = history
         .get()
-        .and_then(|h| h.series.get(sel.get()).map(|x| x.name.clone()));
-    let idx = sel_name.as_ref().and_then(|n| fc.index_of(n)).unwrap_or(0);
+        .and_then(|h| h.series.get(adj_sel.get()).map(|x| x.name.clone()));
+    let idx = sel_name
+        .as_ref()
+        .and_then(|n| fc.index_of(n))
+        .unwrap_or_else(|| adj_sel.get().min(fc.series.len().saturating_sub(1)));
     let s = match fc.series.get(idx) {
         Some(s) => s.clone(),
         None => return ().into_view(),
@@ -1049,7 +1157,7 @@ fn adjust_rows(
     let (lo, hi) = finite_range(&s.values);
     let step = ((hi - lo) / 200.0).max(1e-6);
 
-    (0..s.values.len())
+    let rows = (0..s.values.len())
         .map(|r| {
             let orig = s.values[r];
             let dt = fc.datetime.get(r).cloned().unwrap_or_default();
@@ -1074,7 +1182,9 @@ fn adjust_rows(
                 </div>
             }
         })
-        .collect_view()
+        .collect_view();
+
+    view! { <div>{series_picker}{rows}</div> }.into_view()
 }
 
 // ---------------------------------------------------------------------------
