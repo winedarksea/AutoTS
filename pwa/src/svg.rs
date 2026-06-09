@@ -495,8 +495,17 @@ pub fn line_chart_ex(
                 let d = band_path(&w.up, &w.lo, &geom);
                 if !d.is_empty() {
                     svg.push_str(&format!(
-                        "<path d=\"{d}\" fill=\"{}\" fill-opacity=\"0.16\" stroke=\"none\"/>",
-                        w.color
+                        "<path d=\"{d}\" fill=\"var(--viz-uncertainty-fill)\" stroke=\"none\"/>"
+                    ));
+                    let upper_path = path_from(&w.up, &geom);
+                    let lower_path = path_from(&w.lo, &geom);
+                    svg.push_str(&format!(
+                        "<path d=\"{upper_path}\" fill=\"none\" \
+                         stroke=\"var(--viz-uncertainty-line)\" stroke-width=\"1.25\"/>"
+                    ));
+                    svg.push_str(&format!(
+                        "<path d=\"{lower_path}\" fill=\"none\" \
+                         stroke=\"var(--viz-uncertainty-line)\" stroke-width=\"1.25\"/>"
                     ));
                 }
             }
@@ -656,7 +665,13 @@ mod tests {
             FeatureKindSet::none(),
             Granularity::Day,
         );
-        assert!(out.svg.contains("fill-opacity=\"0.16\""));
+        assert!(out.svg.contains("fill=\"var(--viz-uncertainty-fill)\""));
+        assert_eq!(
+            out.svg
+                .matches("stroke=\"var(--viz-uncertainty-line)\"")
+                .count(),
+            2
+        );
     }
 
     #[test]

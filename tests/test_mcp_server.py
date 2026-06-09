@@ -603,6 +603,64 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(params["model_list"], self.P.PYODIDE_SEARCH_MODELS)
         self.assertEqual(params["n_jobs"], 1)
 
+    async def test_search_preserves_prediction_interval(self):
+        captured = {}
+
+        async def fake_run_tool(name, arguments, progress_cb):
+            captured["arguments"] = arguments
+            return {"prediction_id": "x"}
+
+        orig = self.P.run_tool
+        self.P.run_tool = fake_run_tool
+        try:
+            await self.P.dispatch(
+                "search_forecast",
+                {
+                    "data_id": "d",
+                    "autots_params": {"prediction_interval": 0.8},
+                },
+            )
+        finally:
+            self.P.run_tool = orig
+
+        params = captured["arguments"]["autots_params"]
+        self.assertEqual(params["prediction_interval"], 0.8)
+        self.assertEqual(params["max_generations"], 3)
+        self.assertEqual(params["n_jobs"], 1)
+
+    async def test_all_night_search_preserves_timeout_and_large_generation_limit(self):
+        captured = {}
+
+        async def fake_run_tool(name, arguments, progress_cb):
+            captured["name"] = name
+            captured["arguments"] = arguments
+            return {"prediction_id": "x"}
+
+        orig = self.P.run_tool
+        self.P.run_tool = fake_run_tool
+        try:
+            await self.P.dispatch(
+                "search_all_night",
+                {
+                    "data_id": "d",
+                    "autots_params": {
+                        "prediction_interval": 0.95,
+                        "generation_timeout": 240,
+                        "max_generations": 1_000_000,
+                    },
+                },
+            )
+        finally:
+            self.P.run_tool = orig
+
+        params = captured["arguments"]["autots_params"]
+        self.assertEqual(captured["name"], "forecast_custom")
+        self.assertEqual(params["prediction_interval"], 0.95)
+        self.assertEqual(params["generation_timeout"], 240)
+        self.assertEqual(params["max_generations"], 1_000_000)
+        self.assertEqual(params["model_list"], self.P.PYODIDE_SEARCH_MODELS)
+        self.assertEqual(params["n_jobs"], 1)
+
 
 # ===========================================================================
 # Live data loading (no network — loader is mocked)

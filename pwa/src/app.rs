@@ -16,7 +16,10 @@ use crate::client::{
 use crate::cache_view::{durable_cache_summary, storage_usage_view};
 use crate::dates::{fmt_date, infer_granularity};
 use crate::job::JobState;
-use crate::model::{effective_values, forecast_to_csv, WideData};
+use crate::model::{
+    effective_bound_values, effective_values, forecast_to_csv, forecast_with_bounds_to_long_csv,
+    WideData,
+};
 use crate::storage;
 use crate::svg::{self, ChartOutput, FeatureKind, FeatureKindSet, FeatureMarker};
 
@@ -442,6 +445,7 @@ async fn run_forecast(
     command: String,
     data_id: String,
     forecast_length: i64,
+    autots_params: Option<Value>,
     forecast: RwSignal<Option<WideData>>,
     upper: RwSignal<Option<WideData>>,
     lower: RwSignal<Option<WideData>>,
@@ -459,11 +463,14 @@ async fn run_forecast(
     job_state.set(JobState::Running);
     error.set(None);
     status.set("Forecasting…".into());
-    let res = call_tool(
-        &command,
-        json!({ "data_id": data_id, "forecast_length": forecast_length }),
-    )
-    .await;
+    let mut arguments = json!({
+        "data_id": data_id,
+        "forecast_length": forecast_length,
+    });
+    if let Some(params) = autots_params {
+        arguments["autots_params"] = params;
+    }
+    let res = call_tool(&command, arguments).await;
     match res {
         Ok(v) => {
             if let Some(pid) = v.get("prediction_id").and_then(|x| x.as_str()) {
@@ -580,6 +587,20 @@ fn finite_range(values: &[f64]) -> (f64, f64) {
     (lo - span, hi + span) // allow adjustment well beyond the original range
 }
 
+/// Half the browser-local time remaining until 07:00 tomorrow, in whole minutes.
+fn overnight_generation_timeout_minutes() -> i64 {
+    let now = js_sys::Date::new_0();
+    let target = js_sys::Date::new_0();
+    target.set_date(target.get_date() + 1);
+    target.set_hours(7);
+    target.set_minutes(0);
+    target.set_seconds(0);
+    target.set_milliseconds(0);
+    (((target.get_time() - now.get_time()) / 60_000.0) * 0.5)
+        .floor()
+        .max(1.0) as i64
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -614,6 +635,7 @@ pub fn App() -> impl IntoView {
     // adj_sel: which single series index to show in the adjust-forecast sliders.
     let adj_sel = create_rw_signal::<usize>(0);
     let forecast_length = create_rw_signal::<i64>(30);
+    let prediction_interval = create_rw_signal::<f64>(0.9);
     // Chart interaction state (one per chart) + shared display toggles.
     let history_ui = ChartUi::new();
     let forecast_ui = ChartUi::new();
@@ -967,10 +989,22 @@ pub fn App() -> impl IntoView {
             return;
         };
         let fl = forecast_length.get();
+        let autots_params = match command {
+            "search_forecast" => Some(json!({
+                "prediction_interval": prediction_interval.get(),
+            })),
+            "search_all_night" => Some(json!({
+                "prediction_interval": prediction_interval.get(),
+                "generation_timeout": overnight_generation_timeout_minutes(),
+                "max_generations": 1_000_000,
+            })),
+            _ => None,
+        };
         spawn_local(run_forecast(
             command.to_string(),
             id,
             fl,
+            autots_params,
             forecast,
             upper,
             lower,
@@ -1038,27 +1072,39 @@ pub fn App() -> impl IntoView {
 
     let download_forecast = move |_| {
         if let Some(fc) = forecast.get() {
-            let csv = forecast_to_csv(&fc, &overrides.get());
+            let csv = if show_bands.get() {
+                forecast_with_bounds_to_long_csv(
+                    &fc,
+                    upper.get().as_ref(),
+                    lower.get().as_ref(),
+                    &overrides.get(),
+                )
+            } else {
+                forecast_to_csv(&fc, &overrides.get())
+            };
             if let Err(e) = download_csv("autots_forecast.csv", &csv) {
                 error.set(Some(e));
             }
         }
     };
 
-    // True when any forecast point carries a manual override.
+    // True when the actively adjusted series carries a manual override.
     let has_adjustments = move || {
         overrides
             .get()
-            .iter()
-            .any(|col| col.iter().any(Option::is_some))
+            .get(adj_sel.get())
+            .map(|col| col.iter().any(Option::is_some))
+            .unwrap_or(false)
     };
 
-    // Restore the live forecast to its original (un-adjusted) values.
+    // Restore only the actively selected series to its original values.
     let reset_adjustments = move |_| {
-        if let Some(fc) = forecast.get() {
-            let ov = fc.series.iter().map(|s| vec![None; s.values.len()]).collect();
-            overrides.set(ov);
-        }
+        let active_series = adj_sel.get();
+        overrides.update(|all| {
+            if let Some(series_overrides) = all.get_mut(active_series) {
+                series_overrides.fill(None);
+            }
+        });
     };
 
     // Clears every "active" signal tied to the loaded dataset and its forecast.
@@ -1308,11 +1354,6 @@ pub fn App() -> impl IntoView {
             up: Vec<f64>,
             lo: Vec<f64>,
         }
-        let bound_for = |b: &Option<WideData>, name: &str| -> Vec<f64> {
-            b.as_ref()
-                .and_then(|w| w.index_of(name).map(|i| w.series[i].values.clone()))
-                .unwrap_or_default()
-        };
         let mut data: Vec<SeriesVals> = Vec::new();
         for (color_idx, s) in h.series.iter().enumerate() {
             if !ss.get(color_idx).copied().unwrap_or(false) {
@@ -1326,8 +1367,14 @@ pub fn App() -> impl IntoView {
                 name: s.name.clone(),
                 h: s.values.clone(),
                 f: effective_values(&fc, &ovr, fc_idx),
-                up: bound_for(&up, &s.name),
-                lo: bound_for(&lo, &s.name),
+                up: up
+                    .as_ref()
+                    .map(|bounds| effective_bound_values(&fc, bounds, &ovr, fc_idx))
+                    .unwrap_or_default(),
+                lo: lo
+                    .as_ref()
+                    .map(|bounds| effective_bound_values(&fc, bounds, &ovr, fc_idx))
+                    .unwrap_or_default(),
             });
         }
 
@@ -1371,6 +1418,16 @@ pub fn App() -> impl IntoView {
             if total > 0 {
                 let start = h.datetime.len().saturating_sub(90);
                 forecast_ui.zoom.set(Some((start, total - 1)));
+            }
+        }
+    });
+
+    // Cached or newly generated forecasts may have fewer series than the prior
+    // selection; keep the controlled adjustment picker on a valid forecast index.
+    create_effect(move |_| {
+        if let Some(fc) = forecast.get() {
+            if adj_sel.get() >= fc.series.len() {
+                adj_sel.set(0);
             }
         }
     });
@@ -1729,6 +1786,16 @@ pub fn App() -> impl IntoView {
                                     if let Ok(n) = event_target_value(&ev).parse::<i64>() { forecast_length.set(n.max(1)); }
                                 } />
                         </div>
+                        <div class="md-field" style="max-width:220px; margin-top:12px">
+                            <label class="md-label">"Prediction interval"</label>
+                            <input type="number" min="0.01" max="0.99" step="0.01"
+                                prop:value=move || prediction_interval.get().to_string()
+                                on:input=move |ev| {
+                                    if let Ok(value) = event_target_value(&ev).parse::<f64>() {
+                                        prediction_interval.set(value.clamp(0.01, 0.99));
+                                    }
+                                } />
+                        </div>
                     </details>
                 </section>
             })}
@@ -1764,7 +1831,7 @@ pub fn App() -> impl IntoView {
 
                     <details class="md-expander" style="margin-top:12px">
                         <summary>"Adjust forecast points"</summary>
-                        {move || adjust_rows(forecast, overrides, history, adj_sel)}
+                        {move || adjust_rows(forecast, overrides, adj_sel)}
                     </details>
 
                     <div class="md-btn-row" style="margin-top:12px">
@@ -2090,7 +2157,6 @@ fn cache_summary(
 fn adjust_rows(
     forecast: RwSignal<Option<WideData>>,
     overrides: RwSignal<Overrides>,
-    history: RwSignal<Option<WideData>>,
     adj_sel: RwSignal<usize>,
 ) -> View {
     let Some(fc) = forecast.get() else {
@@ -2127,14 +2193,8 @@ fn adjust_rows(
         ().into_view()
     };
 
-    // Map the history series name at adj_sel → forecast series index.
-    let sel_name = history
-        .get()
-        .and_then(|h| h.series.get(adj_sel.get()).map(|x| x.name.clone()));
-    let idx = sel_name
-        .as_ref()
-        .and_then(|n| fc.index_of(n))
-        .unwrap_or_else(|| adj_sel.get().min(fc.series.len().saturating_sub(1)));
+    // `adj_sel` is always a forecast-series index, matching this picker.
+    let idx = adj_sel.get().min(fc.series.len().saturating_sub(1));
     let s = match fc.series.get(idx) {
         Some(s) => s.clone(),
         None => return ().into_view(),

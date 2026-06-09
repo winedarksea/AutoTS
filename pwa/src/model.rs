@@ -96,6 +96,55 @@ pub fn forecast_to_csv(fc: &WideData, overrides: &[Vec<Option<f64>>]) -> String 
     wide_data_to_csv_with_overrides(fc, Some(overrides))
 }
 
+/// Build a long forecast CSV with uncertainty bounds shifted by point adjustments.
+pub fn forecast_with_bounds_to_long_csv(
+    forecast: &WideData,
+    upper: Option<&WideData>,
+    lower: Option<&WideData>,
+    overrides: &[Vec<Option<f64>>],
+) -> String {
+    let mut out = String::from("datetime,series,forecast,lower_forecast,upper_forecast\n");
+    for (series_index, series) in forecast.series.iter().enumerate() {
+        let effective_forecast = effective_values(forecast, overrides, series_index);
+        let effective_lower =
+            lower.map(|bounds| effective_bound_values(forecast, bounds, overrides, series_index));
+        let effective_upper =
+            upper.map(|bounds| effective_bound_values(forecast, bounds, overrides, series_index));
+
+        for (row_index, datetime) in forecast.datetime.iter().enumerate() {
+            out.push_str(&csv_field(datetime));
+            out.push(',');
+            out.push_str(&csv_field(&series.name));
+            out.push(',');
+            push_finite_value(&mut out, effective_forecast.get(row_index).copied());
+            out.push(',');
+            push_finite_value(
+                &mut out,
+                effective_lower
+                    .as_ref()
+                    .and_then(|values| values.get(row_index))
+                    .copied(),
+            );
+            out.push(',');
+            push_finite_value(
+                &mut out,
+                effective_upper
+                    .as_ref()
+                    .and_then(|values| values.get(row_index))
+                    .copied(),
+            );
+            out.push('\n');
+        }
+    }
+    out
+}
+
+fn push_finite_value(output: &mut String, value: Option<f64>) {
+    if let Some(value) = value.filter(|value| value.is_finite()) {
+        output.push_str(&value.to_string());
+    }
+}
+
 /// Compact JSON for a params field, defaulting a missing/null value to `{}`
 /// so the cell is always a valid object string for AutoTS `import_template`.
 fn params_json(v: &Value) -> String {
@@ -144,10 +193,47 @@ pub fn effective_values(fc: &WideData, overrides: &[Vec<Option<f64>>], series: u
         .collect()
 }
 
+/// Shift a series' model bounds by the same per-point delta as its adjusted forecast.
+pub fn effective_bound_values(
+    forecast: &WideData,
+    bounds: &WideData,
+    overrides: &[Vec<Option<f64>>],
+    series_index: usize,
+) -> Vec<f64> {
+    let Some(forecast_series) = forecast.series.get(series_index) else {
+        return Vec::new();
+    };
+    let Some(bound_index) = bounds.index_of(&forecast_series.name) else {
+        return Vec::new();
+    };
+    let bound_values = &bounds.series[bound_index].values;
+
+    forecast_series
+        .values
+        .iter()
+        .enumerate()
+        .map(|(row_index, original_forecast)| {
+            let adjustment_delta = overrides
+                .get(series_index)
+                .and_then(|series_overrides| series_overrides.get(row_index))
+                .copied()
+                .flatten()
+                .map(|adjusted_forecast| adjusted_forecast - original_forecast)
+                .unwrap_or(0.0);
+            bound_values
+                .get(row_index)
+                .copied()
+                .map(|bound| bound + adjustment_delta)
+                .unwrap_or(f64::NAN)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        forecast_to_csv, model_params_to_template_csv, wide_data_to_csv, SeriesData, WideData,
+        effective_bound_values, forecast_to_csv, forecast_with_bounds_to_long_csv,
+        model_params_to_template_csv, wide_data_to_csv, SeriesData, WideData,
     };
     use serde_json::json;
 
@@ -174,6 +260,68 @@ mod tests {
         assert_eq!(
             forecast_to_csv(&example_data(), &[vec![None, Some(3.5)]]),
             "datetime,\"sales,total\"\n2026-01-01,1\n2026-01-02,3.5\n"
+        );
+    }
+
+    #[test]
+    fn long_forecast_csv_includes_shifted_uncertainty_bounds() {
+        let forecast = example_data();
+        let lower = WideData {
+            datetime: forecast.datetime.clone(),
+            series: vec![SeriesData {
+                name: "sales,total".into(),
+                values: vec![0.5, 1.5],
+            }],
+        };
+        let upper = WideData {
+            datetime: forecast.datetime.clone(),
+            series: vec![SeriesData {
+                name: "sales,total".into(),
+                values: vec![1.5, 2.5],
+            }],
+        };
+
+        assert_eq!(
+            forecast_with_bounds_to_long_csv(
+                &forecast,
+                Some(&upper),
+                Some(&lower),
+                &[vec![None, Some(3.5)]],
+            ),
+            "datetime,series,forecast,lower_forecast,upper_forecast\n\
+             2026-01-01,\"sales,total\",1,0.5,1.5\n\
+             2026-01-02,\"sales,total\",3.5,3,4\n"
+        );
+    }
+
+    #[test]
+    fn long_forecast_csv_leaves_missing_bounds_empty() {
+        assert_eq!(
+            forecast_with_bounds_to_long_csv(
+                &example_data(),
+                None,
+                None,
+                &[vec![None, Some(3.5)]],
+            ),
+            "datetime,series,forecast,lower_forecast,upper_forecast\n\
+             2026-01-01,\"sales,total\",1,,\n\
+             2026-01-02,\"sales,total\",3.5,,\n"
+        );
+    }
+
+    #[test]
+    fn effective_bounds_preserve_interval_width_after_adjustment() {
+        let forecast = example_data();
+        let bounds = WideData {
+            datetime: forecast.datetime.clone(),
+            series: vec![SeriesData {
+                name: "sales,total".into(),
+                values: vec![1.5, 2.5],
+            }],
+        };
+        assert_eq!(
+            effective_bound_values(&forecast, &bounds, &[vec![None, Some(3.5)]], 0),
+            vec![1.5, 4.0]
         );
     }
 

@@ -72,7 +72,8 @@
   /* --- Data-viz (theme-aware) --- */
   --viz-actuals: var(--md-primary);          /* turquoise, solid */
   --viz-forecast: var(--md-tertiary);        /* bronze/gold, dashed */
-  --viz-uncertainty: color-mix(in srgb, var(--md-primary) 22%, transparent);
+  --viz-uncertainty-fill: color-mix(in srgb, #74658f 24%, transparent);
+  --viz-uncertainty-line: #74658f;
   --viz-grid: color-mix(in srgb, var(--md-outline) 35%, transparent);
 
   /* Multi-series palette: 7 perceptually distinct colours from odyssey palette.
@@ -150,6 +151,9 @@
   --metal-bronze-mid: #c68a2e;
   --metal-bronze-light: #f5d58a;
 
+  --viz-uncertainty-fill: color-mix(in srgb, #b7a5d8 28%, transparent);
+  --viz-uncertainty-line: #b7a5d8;
+
   /* Multi-series palette — bright versions for wine-dark-sea surfaces */
   --viz-s0: #56D6EC; /* bright turquoise */
   --viz-s1: #8FBAAF; /* light verdigris */
@@ -201,6 +205,9 @@
     --metal-bronze-dark: #3a2600;
     --metal-bronze-mid: #c68a2e;
     --metal-bronze-light: #f5d58a;
+
+    --viz-uncertainty-fill: color-mix(in srgb, #b7a5d8 28%, transparent);
+    --viz-uncertainty-line: #b7a5d8;
 
     --viz-s0: #56D6EC;
     --viz-s1: #8FBAAF;
@@ -275,8 +282,8 @@ body {
   box-shadow: var(--md-elev-1);
 }
 .md-emblem {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   line-height: 0;
   margin-top: -2px;
