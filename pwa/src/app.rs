@@ -165,6 +165,39 @@ const MOON_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" ari
     <path d=\"M17.4 2.6l.62 1.66 1.66.62-1.66.62-.62 1.66-.62-1.66-1.66-.62 1.66-.62z\" \
     fill=\"url(#bzmoon)\"/></svg>";
 
+// Inline favicon SVG for the app-bar emblem. Uses CSS custom properties so
+// both light and dark themes are handled automatically — no duplication needed.
+const EMBLEM_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
+    viewBox=\"0 0 32 32\" width=\"22\" height=\"22\" aria-hidden=\"true\">\
+    <defs>\
+    <linearGradient id=\"emBorder\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\
+    <stop offset=\"0\" stop-color=\"var(--metal-bronze-dark)\"/>\
+    <stop offset=\"0.30\" stop-color=\"var(--metal-bronze-mid)\"/>\
+    <stop offset=\"0.55\" stop-color=\"var(--metal-bronze-light)\"/>\
+    <stop offset=\"0.78\" stop-color=\"var(--metal-bronze-mid)\"/>\
+    <stop offset=\"1\" stop-color=\"var(--metal-bronze-dark)\"/>\
+    </linearGradient>\
+    <linearGradient id=\"emBolt\" x1=\"0.85\" y1=\"0.1\" x2=\"0.15\" y2=\"0.9\">\
+    <stop offset=\"0\" stop-color=\"var(--metal-bronze-dark)\"/>\
+    <stop offset=\"0.32\" stop-color=\"var(--metal-bronze-mid)\"/>\
+    <stop offset=\"0.56\" stop-color=\"var(--metal-bronze-light)\"/>\
+    <stop offset=\"0.80\" stop-color=\"var(--metal-bronze-mid)\"/>\
+    <stop offset=\"1\" stop-color=\"var(--metal-bronze-dark)\"/>\
+    </linearGradient>\
+    </defs>\
+    <rect x=\"2\" y=\"2\" width=\"28\" height=\"28\" rx=\"6\" \
+    fill=\"var(--md-surface)\" stroke=\"url(#emBorder)\" stroke-width=\"1.5\"/>\
+    <g stroke=\"var(--md-outline)\" stroke-opacity=\"0.35\" stroke-width=\"0.5\">\
+    <line x1=\"5.5\" y1=\"10\" x2=\"26.5\" y2=\"10\"/>\
+    <line x1=\"5.5\" y1=\"16\" x2=\"26.5\" y2=\"16\"/>\
+    <line x1=\"5.5\" y1=\"22\" x2=\"26.5\" y2=\"22\"/>\
+    </g>\
+    <path d=\"M 26.5 7.32 L 18.19 11.84 L 20.72 14.05 L 13.79 16.45 L 16.07 18.56 \
+    L 6.7 22.62 L 13.43 18.08 L 11.51 16.09 L 18.08 13.69 L 15.91 11.6 Z\" \
+    fill=\"url(#emBolt)\" stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.3\" \
+    stroke-opacity=\"0.25\" stroke-linejoin=\"round\"/>\
+    </svg>";
+
 /// An elegant card heading: a metallic-bronze Cinzel Roman numeral, a thin
 /// bronze keyline, then the title. `numeral` may be empty for unnumbered cards.
 fn section_header(numeral: &'static str, title: &'static str) -> impl IntoView {
@@ -1390,7 +1423,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <header class="md-appbar">
-            <span class="metal-bronze md-emblem" aria-hidden="true"></span>
+            <span class="md-emblem" inner_html=EMBLEM_SVG></span>
             <span class="brand">"AutoTS"</span>
             <span class="muted">"forecasting for everyone"</span>
             <span class="spacer"></span>

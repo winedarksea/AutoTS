@@ -277,8 +277,8 @@ body {
 .md-emblem {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
   flex: 0 0 auto;
+  line-height: 0;
 }
 
 /* Theme toggle (icon button in the app bar) */
