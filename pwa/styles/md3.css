@@ -279,6 +279,7 @@ body {
   height: 22px;
   flex: 0 0 auto;
   line-height: 0;
+  margin-top: -2px;
 }
 
 /* Theme toggle (icon button in the app bar) */
