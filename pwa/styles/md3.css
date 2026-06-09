@@ -3,25 +3,82 @@
    and the handful of components the app uses (top app bar, cards, buttons,
    text fields, segmented tabs, sliders). */
 
+/* Self-hosted fonts (offline-capable PWA): Inter for all UI/body, Cinzel for
+   the classical wordmark and rare hero headings. Subsetted woff2 in fonts/. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/inter-variable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+  src: url("fonts/cinzel-variable.woff2") format("woff2");
+}
+
+/* "Aegean Classical Modern" theme.
+   Light = limestone/marble surfaces with deep Aegean cyan for action;
+   bronze/gold as a sparse metallic accent; terracotta for error/warmth.
+   Dark = "wine-dark sea" surfaces with a muted turquoise glow.
+   Component CSS only ever references these role tokens, never raw hex. */
+
 :root {
-  /* Color roles (MD3 baseline, indigo-ish primary) */
-  --md-primary: #4658b8;
+  color-scheme: light;
+
+  /* --- Color roles: LIGHT (limestone + deep Aegean) --- */
+  /* Surfaces — warm neutral keyed toward stone, not clinical white */
+  --md-surface: #faf8f3;
+  --md-surface-container: #efebe2;
+  --md-surface-container-high: #e7e2d7;
+  --md-on-surface: #1b1c1a;
+  --md-on-surface-variant: #46494a;
+  --md-outline: #79766e;
+  --md-outline-variant: #ccc8bc;
+
+  /* Primary — Aegean cyan (darker tone for contrast on light) */
+  --md-primary: #00696e;
   --md-on-primary: #ffffff;
-  --md-primary-container: #dfe0ff;
-  --md-on-primary-container: #00105c;
-  --md-secondary-container: #e1e0f9;
-  --md-surface: #fdfbff;
-  --md-surface-container: #f2f0fa;
-  --md-surface-container-high: #ece9f4;
-  --md-on-surface: #1b1b1f;
-  --md-on-surface-variant: #46464f;
-  --md-outline: #777680;
-  --md-outline-variant: #c7c5d0;
-  --md-error: #ba1a1a;
+  --md-primary-container: #9df0ef;
+  --md-on-primary-container: #00201f;
+
+  /* Secondary — wine-dark sea / sea-slate (structure, chrome) */
+  --md-secondary: #3b5461;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #cfe4ec;
+  --md-on-secondary-container: #0e2a33;
+
+  /* Tertiary — bronze / mosaic gold (sparse classical accent) */
+  --md-tertiary: #7a5900;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #ffdda6;
+  --md-on-tertiary-container: #3a2600;
+
+  /* Error — terracotta clay */
+  --md-error: #9c4230;
   --md-on-error: #ffffff;
-  --md-error-container: #ffdad6;
-  --md-on-error-container: #410002;
+  --md-error-container: #ffdad3;
+  --md-on-error-container: #3d0600;
+
+  /* Warning + success (tokenized so they survive dark mode) */
+  --md-warning: #7a4d00;
+  --md-on-warning-container: #3a2600;
   --md-success: #2e7d32;
+  --md-success-container: #cdedcf;
+
+  /* --- Data-viz (theme-aware) --- */
+  --viz-actuals: var(--md-primary);          /* turquoise, solid */
+  --viz-forecast: var(--md-tertiary);        /* bronze/gold, dashed */
+  --viz-uncertainty: color-mix(in srgb, var(--md-primary) 22%, transparent);
+  --viz-grid: color-mix(in srgb, var(--md-outline) 35%, transparent);
+
+  /* --- Metallic bronze (reserved for one ceremonial emblem) --- */
+  --metal-bronze-dark: #5e4200;
+  --metal-bronze-mid: #c68a2e;
+  --metal-bronze-light: #ffe2a8;
 
   /* Shape */
   --md-shape-sm: 8px;
@@ -33,7 +90,98 @@
   --md-elev-1: 0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15);
   --md-elev-2: 0 1px 2px rgba(0,0,0,.30), 0 2px 6px 2px rgba(0,0,0,.15);
 
-  --md-font: "Roboto", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Typography — modern grotesk for UI, Cinzel for the classical wordmark */
+  --md-font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --md-font-display: "Cinzel", Georgia, "Times New Roman", serif;
+}
+
+/* Dark theme tokens. Two equivalent blocks below: an explicit manual choice
+   (data-theme="dark") and the OS-default fallback (prefers dark + not manually
+   set to light), so the manual toggle always wins. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces — deep desaturated sea-blue ("wine-dark sea") */
+  --md-surface: #0e1a22;
+  --md-surface-container: #16252f;
+  --md-surface-container-high: #1e303b;
+  --md-on-surface: #dfe4e3;
+  --md-on-surface-variant: #bfc8c8;
+  --md-outline: #899392;
+  --md-outline-variant: #3f484a;
+
+  --md-primary: #56d6ec;
+  --md-on-primary: #003640;
+  --md-primary-container: #005050;
+  --md-on-primary-container: #9df0ef;
+
+  --md-secondary: #a3cddb;
+  --md-on-secondary: #203641;
+  --md-secondary-container: #2f4c5b;
+  --md-on-secondary-container: #cfe4ec;
+
+  --md-tertiary: #f5be49;
+  --md-on-tertiary: #412d00;
+  --md-tertiary-container: #5e4200;
+  --md-on-tertiary-container: #ffdda6;
+
+  --md-error: #ffb4a7;
+  --md-on-error: #5f160b;
+  --md-error-container: #7d2c1f;
+  --md-on-error-container: #ffdad3;
+
+  --md-warning: #f5be49;
+  --md-on-warning-container: #ffdda6;
+  --md-success: #8fd896;
+  --md-success-container: #1e3d24;
+
+  --metal-bronze-dark: #3a2600;
+  --metal-bronze-mid: #c68a2e;
+  --metal-bronze-light: #f5d58a;
+}
+
+/* OS-default dark (no explicit user choice). Mirrors the block above. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --md-surface: #0e1a22;
+    --md-surface-container: #16252f;
+    --md-surface-container-high: #1e303b;
+    --md-on-surface: #dfe4e3;
+    --md-on-surface-variant: #bfc8c8;
+    --md-outline: #899392;
+    --md-outline-variant: #3f484a;
+
+    --md-primary: #56d6ec;
+    --md-on-primary: #003640;
+    --md-primary-container: #005050;
+    --md-on-primary-container: #9df0ef;
+
+    --md-secondary: #a3cddb;
+    --md-on-secondary: #203641;
+    --md-secondary-container: #2f4c5b;
+    --md-on-secondary-container: #cfe4ec;
+
+    --md-tertiary: #f5be49;
+    --md-on-tertiary: #412d00;
+    --md-tertiary-container: #5e4200;
+    --md-on-tertiary-container: #ffdda6;
+
+    --md-error: #ffb4a7;
+    --md-on-error: #5f160b;
+    --md-error-container: #7d2c1f;
+    --md-on-error-container: #ffdad3;
+
+    --md-warning: #f5be49;
+    --md-on-warning-container: #ffdda6;
+    --md-success: #8fd896;
+    --md-success-container: #1e3d24;
+
+    --metal-bronze-dark: #3a2600;
+    --metal-bronze-mid: #c68a2e;
+    --metal-bronze-light: #f5d58a;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -65,8 +213,60 @@ body {
   top: 0;
   z-index: 10;
 }
-.md-appbar .brand { font-weight: 600; font-size: 1.25rem; }
+.md-appbar .brand {
+  display: inline-block;
+  font-family: var(--md-font-display);
+  font-weight: 600;
+  font-size: 1.3rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  /* thin gold keyline under the wordmark */
+  padding-bottom: 3px;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg,
+      var(--metal-bronze-mid), color-mix(in srgb, var(--metal-bronze-light) 60%, transparent), transparent) 1;
+}
 .md-appbar .spacer { flex: 1; }
+
+/* Ceremonial metallic emblem — the one true-metal flourish. Used sparingly on
+   a key symbol only, never on a core control. */
+.metal-bronze {
+  --metal-angle: 220deg;
+  background:
+    conic-gradient(from var(--metal-angle),
+      var(--metal-bronze-dark) 0deg,
+      var(--metal-bronze-mid) 42deg,
+      var(--metal-bronze-light) 78deg,
+      var(--metal-bronze-mid) 112deg,
+      var(--metal-bronze-dark) 156deg,
+      var(--metal-bronze-mid) 214deg,
+      var(--metal-bronze-light) 252deg,
+      var(--metal-bronze-mid) 292deg,
+      var(--metal-bronze-dark) 360deg);
+  border: 1px solid var(--md-outline-variant);
+  box-shadow: var(--md-elev-1);
+}
+.md-emblem {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+/* Theme toggle (icon button in the app bar) */
+.md-theme-toggle {
+  font-size: 1.1rem;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  border-radius: 999px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.md-theme-toggle:hover { background: var(--md-surface-container-high); color: var(--md-primary); }
+.md-theme-toggle:focus-visible { outline: 3px solid var(--md-primary-container); outline-offset: 2px; }
 
 .md-container {
   max-width: 1080px;
@@ -101,7 +301,7 @@ body {
 .md-btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
 .md-btn.filled:hover:not(:disabled) { box-shadow: var(--md-elev-2); }
 .md-btn.filled.error { background: var(--md-error); color: var(--md-on-error); }
-.md-btn.tonal { background: var(--md-secondary-container); color: var(--md-on-primary-container); }
+.md-btn.tonal { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 .md-btn.outlined { background: transparent; color: var(--md-primary); border: 1px solid var(--md-outline); }
 .md-btn.text { background: transparent; color: var(--md-primary); padding: 10px 12px; }
 .md-btn.text.error { color: var(--md-error); }
@@ -149,7 +349,7 @@ body {
   border: none; background: transparent; color: var(--md-on-surface-variant);
   padding: 8px 18px; cursor: pointer;
 }
-.md-tabs button.active { background: var(--md-secondary-container); color: var(--md-on-primary-container); }
+.md-tabs button.active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 
 /* Expander */
 .md-expander summary {
@@ -171,8 +371,8 @@ body {
 .md-chart-legend { display: flex; gap: 16px; color: var(--md-on-surface-variant); font-size: .85rem; }
 .md-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .md-chart-legend i { display: inline-block; width: 24px; height: 3px; border-radius: 2px; }
-.md-chart-legend i.actuals { background: var(--md-outline); }
-.md-chart-legend i.forecast { background: var(--md-primary); }
+.md-chart-legend i.actuals { background: var(--viz-actuals); }
+.md-chart-legend i.forecast { background: var(--viz-forecast); }
 
 /* Accessible data table (paired with every chart) */
 .md-table-wrap { max-height: 280px; overflow: auto; border-radius: var(--md-shape-sm); }
@@ -189,7 +389,7 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 .md-status { font-size: 0.85rem; color: var(--md-on-surface-variant); min-height: 1.2em; }
 .md-chip { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--md-primary-container); color: var(--md-on-primary-container); font-size: 0.8rem; font-weight: 500; margin: 2px; }
 .md-error { color: var(--md-error); }
-.md-warning { color: #7a4d00; }
+.md-warning { color: var(--md-warning); }
 
 /* Cache summaries keep each object to one row; metadata remains available on demand. */
 .md-cache-group { margin-top: 16px; }
@@ -212,8 +412,8 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 
 /* Live data sources */
 .md-chip.off { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
-.md-chip.warn { background: var(--md-error-container); color: #7a4d00; }
-.md-chip.ready { background: #cdedcf; color: var(--md-success); }
+.md-chip.warn { background: var(--md-tertiary-container); color: var(--md-on-warning-container); }
+.md-chip.ready { background: var(--md-success-container); color: var(--md-success); }
 
 .md-date-row { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
 .md-date-row .md-field { max-width: 200px; }

@@ -6,7 +6,7 @@ Proposed data flow: Rust (polars) <-> arrow <-> Python pandas (pyodide)
 
 The basic app is going to consist of data upload. After data upload, the feature detector is run and the user is shown their uploaded data as an interactive line graph including feature detector labels. Users can select making a forecast (which uses the fast feature detector forecast) or a do forecast search button which uses the main AutoTS search. Users should be able to expand and input parameters, but are not shown many by default until they expand the options. Once the forecast is made, users can view it, drag each data point to adjust it, then download the data (reflecting adjustments, if used).
 
-Implemented UI requirements:
+## Implemented UI requirements:
 	Data preview and download are available as soon as cleaned data is loaded. Feature detection is optional enrichment; detector failures are shown inline and do not suppress the data plot.
 	Forecast plots distinguish actuals from forecast values and let users choose how many recent actual periods to display.
 	Cached objects are summarized with one row per object, with full metadata available in expandable details.
@@ -16,7 +16,7 @@ Implemented UI requirements:
 The long term goal is to include more pages and features in the app, all of the current MCP functions and more. So the design should be extensible.
 Another long term goal is more UI based preprocessing, such as users removing anomalies in the UI, with the data updates tracked and passed back to the data used for forecasting.
 
-Goals:
+## Goals:
 	Make it clear to an LLM how they are to load their data in and get a response.
 		As a starting idea this might mean pairing every visual chart component with a screen-reader-friendly or structured data alternative inside the DOM. Include llms.txt. 
 	Share/reuse code with the MCP server.py, as much as possible. The MCP code is in beta, so we can change the MCP code as needed to make sure it is most elegantly shared.
@@ -31,7 +31,7 @@ Goals:
 	Forecasting should be async or otherwise not block the UI frontend or backend.
 
 Upload of input data is likely the biggest challenge from the user's perspective, and so needs to be designed well.
-Upload:
+## Upload:
 	Data load is handled in Python. Rust passes filename or URL (string), the copied text. Python manages the "database" of files and Rust can retrieve, delete, etc by api.
 	Sources:
 		Copy and paste input that receives tsv, csv
@@ -45,3 +45,6 @@ Upload:
 		Once the empty rows and columns are deleted, we can now load the data.
 		 If only two columns and we can parse one as a date and one as a value, then assume it is just a single time series (effectively wide)
         We can guess date by what parses as a date (strings with hypens or dashes passed to pandas datetime auto loader), value as what parses as a number, and series id as what parses as a string (only works if dates are common formats, ids are not integer ids). If many columns with numeric ids, and one that is datetime, assume it is wide style data.
+
+## Style
+We definitely want good support for both light and dark themes. Blue seems a bit overused, so we would lean towards using a cyan or turquoise instead of regular blue, alongside a "wine dark sea" deep sea blue as well. A good color theme might perhaps be "ancient Greek", but still aiming for a modern theme. Likely the overall impression should be "classical" (Roman mosaics and architecture, Grecian coastal landscape, in particular real world materials, particularly metallics) mixed with light "modern" (Material 3 Expressive).

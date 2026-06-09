@@ -118,7 +118,7 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
     if !h.is_empty() {
         let d = path_for(h, 0.0, n_total, lo, hi);
         svg.push_str(&format!(
-            "<path d=\"{d}\" fill=\"none\" stroke=\"var(--md-outline)\" stroke-width=\"1.5\"/>"
+            "<path d=\"{d}\" fill=\"none\" stroke=\"var(--viz-actuals)\" stroke-width=\"2\"/>"
         ));
     }
     if !f.is_empty() {
@@ -133,10 +133,14 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
             (f.to_vec(), 0.0)
         };
         let d = path_for(&forecast_path_values, x0, n_total, lo, hi);
+        // Bronze/gold, dashed — distinguishable from actuals by hue AND line
+        // style (robust for colorblind readers).
         svg.push_str(&format!(
-            "<path d=\"{d}\" fill=\"none\" stroke=\"var(--md-primary)\" stroke-width=\"2.5\"/>"
+            "<path d=\"{d}\" fill=\"none\" stroke=\"var(--viz-forecast)\" \
+             stroke-width=\"2.5\" stroke-dasharray=\"6 4\"/>"
         ));
-        // markers
+        // Markers: small mosaic-tile diamonds on each forecast point (a light
+        // classical nod), rather than plain circles.
         for (i, &v) in f.iter().enumerate() {
             if !v.is_finite() {
                 continue;
@@ -144,8 +148,14 @@ pub fn line_chart(history: Option<&[f64]>, forecast: Option<&[f64]>) -> String {
             let forecast_x0 = if h.is_empty() { 0.0 } else { h.len() as f64 };
             let x = PAD_L + (forecast_x0 + i as f64) * xstep;
             let y = PAD_T + plot_h * (1.0 - (v - lo) / (hi - lo));
+            let r = 3.5;
             svg.push_str(&format!(
-                "<circle cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"3\" fill=\"var(--md-primary)\"/>"
+                "<path d=\"M{x:.1} {:.1} L{:.1} {y:.1} L{x:.1} {:.1} L{:.1} {y:.1} Z\" \
+                 fill=\"var(--viz-forecast)\"/>",
+                y - r,
+                x + r,
+                y + r,
+                x - r
             ));
         }
     }
@@ -161,8 +171,10 @@ mod tests {
     #[test]
     fn chart_distinguishes_history_and_forecast() {
         let chart = line_chart(Some(&[1.0, 2.0]), Some(&[3.0, 4.0]));
-        assert!(chart.contains("stroke=\"var(--md-outline)\""));
-        assert!(chart.contains("stroke=\"var(--md-primary)\""));
+        assert!(chart.contains("stroke=\"var(--viz-actuals)\""));
+        assert!(chart.contains("stroke=\"var(--viz-forecast)\""));
+        // forecast line is dashed; history/boundary distinction preserved
+        assert!(chart.contains("stroke-dasharray=\"6 4\""));
         assert!(chart.contains("stroke-dasharray=\"4 4\""));
     }
 }

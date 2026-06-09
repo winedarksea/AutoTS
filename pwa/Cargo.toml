@@ -21,6 +21,8 @@ features = [
   "Document",
   "Element",
   "HtmlElement",
+  "Storage",
+  "MediaQueryList",
   "HtmlInputElement",
   "HtmlTextAreaElement",
   "HtmlSelectElement",

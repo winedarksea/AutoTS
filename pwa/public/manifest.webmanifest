@@ -4,8 +4,8 @@
   "description": "Upload a spreadsheet and forecast it in your browser.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#fdfbff",
-  "theme_color": "#4658b8",
+  "background_color": "#faf8f3",
+  "theme_color": "#00696e",
   "icons": [
     { "src": "favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
     { "src": "favicon-32.png", "type": "image/png", "sizes": "32x32" },

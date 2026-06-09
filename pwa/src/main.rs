@@ -2,6 +2,7 @@ mod app;
 mod client;
 mod model;
 mod svg;
+mod theme;
 
 use leptos::*;
 

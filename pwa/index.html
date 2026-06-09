@@ -7,7 +7,26 @@
   <meta name="description" content="Upload a spreadsheet and forecast it in your browser. No code, no server." />
 
   <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#4658b8" />
+  <meta name="theme-color" content="#00696e" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0e1a22" media="(prefers-color-scheme: dark)" />
+
+  <!-- Apply the saved theme before first paint to avoid a flash of the wrong
+       theme. Runs before the WASM bundle mounts. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("autots-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Self-hosted fonts (copied to dist/fonts by Trunk) -->
+  <link data-trunk rel="copy-dir" href="public/fonts" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/inter-variable.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/cinzel-variable.woff2" />
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />

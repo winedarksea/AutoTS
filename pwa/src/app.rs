@@ -168,6 +168,9 @@ pub fn App() -> impl IntoView {
     let busy = create_rw_signal(false);
     let error = create_rw_signal::<Option<String>>(None);
 
+    // Effective light/dark theme (from a saved choice, else the OS preference).
+    let theme = create_rw_signal(crate::theme::initial_theme());
+
     let data_id = create_rw_signal::<Option<String>>(None);
     let history = create_rw_signal::<Option<WideData>>(None);
     let report = create_rw_signal::<Option<Value>>(None);
@@ -551,9 +554,23 @@ pub fn App() -> impl IntoView {
 
     view! {
         <header class="md-appbar">
+            <span class="metal-bronze md-emblem" aria-hidden="true"></span>
             <span class="brand">"AutoTS"</span>
             <span class="muted">"forecasting for everyone"</span>
             <span class="spacer"></span>
+            <button
+                class="md-theme-toggle"
+                type="button"
+                title=move || if theme.get() == crate::theme::Theme::Dark { "Switch to light theme" } else { "Switch to dark theme" }
+                aria-label=move || if theme.get() == crate::theme::Theme::Dark { "Switch to light theme" } else { "Switch to dark theme" }
+                on:click=move |_| {
+                    let next = theme.get().toggled();
+                    crate::theme::apply(next);
+                    theme.set(next);
+                }
+            >
+                {move || if theme.get() == crate::theme::Theme::Dark { "☀" } else { "☾" }}
+            </button>
             <a class="md-btn text" href="/llms.txt" target="_blank">"llms.txt"</a>
         </header>
 
