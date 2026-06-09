@@ -534,6 +534,7 @@ pub fn App() -> impl IntoView {
     let (init_start, init_end) = default_live_dates();
     let start_date = create_rw_signal(init_start);
     let end_date = create_rw_signal(init_end);
+    let live_end_max = fmt_js_date(&js_sys::Date::new_0());
 
     // Data manager
     let cache = create_rw_signal::<Option<Value>>(None);
@@ -718,6 +719,7 @@ pub fn App() -> impl IntoView {
     let load_live = move |_| {
         let en = live_enabled.get();
         let va = live_values.get();
+        let observation_end = clamp_iso_date_max(end_date.get(), &live_end_max);
         let mut args = serde_json::Map::new();
         // Always emit every source-selecting param: real values when a source is
         // "ready", null otherwise, so a de-selected/incomplete source is skipped
@@ -743,7 +745,7 @@ pub fn App() -> impl IntoView {
             }
         }
         args.insert("observation_start".into(), json!(start_date.get()));
-        args.insert("observation_end".into(), json!(end_date.get()));
+        args.insert("observation_end".into(), json!(observation_end));
         // Deliberately gentle on these free APIs while staying tolerable in a UI.
         args.insert("sleep_seconds".into(), json!(3));
 
@@ -1145,8 +1147,8 @@ pub fn App() -> impl IntoView {
                                     </div>
                                     <div class="md-field">
                                         <label class="md-label">"End date"</label>
-                                        <input type="date" prop:value=move || end_date.get()
-                                            on:input=move |ev| end_date.set(event_target_value(&ev)) />
+                                        <input type="date" max=live_end_max.clone() prop:value=move || end_date.get()
+                                            on:input=move |ev| end_date.set(clamp_iso_date_max(event_target_value(&ev), &live_end_max)) />
                                     </div>
                                 </div>
                                 <div class="md-sources">
@@ -1905,6 +1907,14 @@ fn parse_progress(s: &str) -> Option<(usize, usize)> {
     let close = rest.find(')')?;
     let (a, b) = rest[..close].split_once('/')?;
     Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
+}
+
+fn clamp_iso_date_max(date: String, max: &str) -> String {
+    if date > max {
+        max.to_string()
+    } else {
+        date
+    }
 }
 
 fn parse_live_field(f: &LiveField, raw: Option<&String>) -> Value {
