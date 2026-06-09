@@ -1472,9 +1472,6 @@ pub fn App() -> impl IntoView {
                         <dt>"Worker"</dt><dd>"AutoTS Forecast Worker"</dd>
                         <dt>"State"</dt><dd>{move || format!("{:?}", job_state.get())}</dd>
                     </dl>
-                    <p class="muted md-body">
-                        "Browsers show this work under their own process names in Task Manager or Activity Monitor; web apps cannot rename those operating-system processes."
-                    </p>
                 </details>
                 <span id="forecast-blocked-reason" class="sr-only">
                     "Blocked by ongoing forecast"
@@ -1610,11 +1607,12 @@ pub fn App() -> impl IntoView {
                 view! {
                     <section class="md-card">
                         {section_header("II", "Your data")}
+                        {chart_block(history_ui, history_tooltip)}
+
                         {(names.len() > 1).then(|| {
                             let names = names.clone();
                             view! {
                                 <div class="md-field md-series-select">
-                                    <label class="md-label">"Series shown"</label>
                                     <div class="md-dropdown">
                                         <button
                                             type="button"
@@ -1667,7 +1665,6 @@ pub fn App() -> impl IntoView {
                             }
                         })}
 
-                        {chart_block(history_ui, history_tooltip)}
                         <div class="md-chart-controls" style="margin-top:8px">
                             {move || history_ui.zoom.get().is_some().then(|| view! {
                                 <button type="button" class="md-btn text"
@@ -1675,7 +1672,6 @@ pub fn App() -> impl IntoView {
                                     "Reset zoom"
                                 </button>
                             })}
-                            <span class="muted md-body">"Drag across the plot to zoom."</span>
                         </div>
 
                         {move || detecting_features.get().then(|| view! {
@@ -1691,7 +1687,6 @@ pub fn App() -> impl IntoView {
                             }).unwrap_or_default();
                             view! {
                                 <div style="margin-top:8px">
-                                    <span class="md-label">"Detected features — tap to mark on the plot"</span>
                                     <div class="md-feat-legend">
                                         {feature_legend(&f, &series_name, features_on)}
                                     </div>
@@ -1700,16 +1695,12 @@ pub fn App() -> impl IntoView {
                         })}
 
                         <details class="md-expander" style="margin-top:12px">
-                            <summary>"Data table (accessible / machine-readable)"</summary>
+                            <summary>"Data table"</summary>
                             {move || history.get().map(|h| {
                                 let first = sel_set.get().iter().position(|&b| b).unwrap_or(0);
                                 data_table(&h, first)
                             })}
                         </details>
-
-                        <p class="muted md-body" style="margin-top:8px">
-                            "Download or delete this dataset from the “Cached data & forecasts” panel below."
-                        </p>
                     </section>
                 }
             })}
@@ -1770,7 +1761,6 @@ pub fn App() -> impl IntoView {
                         </div>
                     </div>
                     {chart_block(forecast_ui, forecast_tooltip)}
-                    <p class="muted md-body" style="margin-top:4px">"Drag across the plot to zoom."</p>
 
                     <details class="md-expander" style="margin-top:12px">
                         <summary>"Adjust forecast points"</summary>
