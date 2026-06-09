@@ -10,7 +10,7 @@ spreadsheets that contain stray calculations, off-center tables, and empty
 padding rows/columns. ``smart_load`` reproduces the cleanup described in the PWA
 design doc:
 
-  1. Parse pasted text (CSV/TSV), uploaded bytes (CSV/Excel), or a URL.
+  1. Parse pasted text (CSV/TSV), uploaded bytes (CSV/XLSX), or a URL.
   2. Drop fully-empty rows/columns, then rows/columns that are >=95% empty.
   3. Auto-detect orientation (single-series, wide, or long) and return a clean
      wide ``DataFrame`` plus a human/LLM-readable report of what happened.
@@ -18,6 +18,7 @@ design doc:
 
 import io
 import warnings
+import zipfile
 
 import numpy as np
 import pandas as pd
@@ -43,8 +44,28 @@ def _read_raw(text=None, csv_bytes=None, url=None, filename=None):
     """
     name = (filename or "").lower()
 
-    if csv_bytes is not None and (name.endswith(".xlsx") or name.endswith(".xls")):
-        return pd.read_excel(io.BytesIO(csv_bytes), header=None)
+    if name.endswith(".xls"):
+        raise ValueError(
+            "Legacy .xls workbooks are not supported. Save the file as .xlsx "
+            "or export it as CSV."
+        )
+
+    if csv_bytes is not None and name.endswith(".xlsx"):
+        try:
+            return pd.read_excel(
+                io.BytesIO(csv_bytes),
+                header=None,
+                engine="openpyxl",
+            )
+        except ImportError as exc:
+            raise ImportError(
+                "Reading .xlsx files requires the optional 'openpyxl' package."
+            ) from exc
+        except (OSError, ValueError, zipfile.BadZipFile) as exc:
+            raise ValueError(
+                "Could not read the .xlsx workbook. Confirm that it is a valid, "
+                "unprotected Excel file."
+            ) from exc
 
     if text is not None:
         buffer = io.StringIO(text)
@@ -82,7 +103,10 @@ def _strip_empty(df):
 
 
 def _numeric_score(series):
-    return pd.to_numeric(series, errors="coerce").notna().mean()
+    present = series.dropna()
+    if present.empty:
+        return 0.0
+    return pd.to_numeric(present, errors="coerce").notna().mean()
 
 
 def _datetime_score(series):
@@ -91,11 +115,12 @@ def _datetime_score(series):
     Plain integers/floats parse as nanosecond timestamps, so we exclude columns
     that are overwhelmingly numeric to avoid mistaking an id/value for a date.
     """
-    if _numeric_score(series) > 0.9:
+    present = series.dropna()
+    if present.empty or _numeric_score(present) > 0.9:
         return 0.0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        parsed = pd.to_datetime(series, errors="coerce")
+        parsed = pd.to_datetime(present, errors="coerce")
     return parsed.notna().mean()
 
 
@@ -155,7 +180,7 @@ def smart_load(
 
     Args:
         text: Pasted CSV/TSV text.
-        csv_bytes: Raw uploaded bytes (CSV or Excel; Excel detected via filename).
+        csv_bytes: Raw uploaded bytes (CSV or XLSX; XLSX detected via filename).
         url: A CSV URL (e.g. a published Google Sheet).
         filename: Optional original filename, used to detect Excel uploads.
         data_format: "auto" (default), "wide", or "long".

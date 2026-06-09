@@ -602,6 +602,11 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 .md-status-row .md-status { flex: 1; }
 .md-btn.text.error { color: var(--md-error); }
 .md-btn.text.error:hover:not(:disabled) { background: var(--md-error-container); }
+.md-offline-ready {
+  color: var(--md-on-surface-variant);
+  font-size: .8rem;
+  white-space: nowrap;
+}
 .md-disabled-explanation { display: inline-flex; border-radius: 999px; }
 .md-disabled-explanation:focus-visible {
   outline: 3px solid var(--md-primary-container);

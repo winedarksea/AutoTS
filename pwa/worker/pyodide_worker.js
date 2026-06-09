@@ -7,7 +7,7 @@
  * tomorrow) can drive via autots_client.js.
  *
  * Protocol (postMessage):
- *   in:  {type:'init', wheelUrl, pyodideUrl}
+ *   in:  {type:'init', wheelUrl, dependencyUrls, pyodideUrl}
  *        {type:'call', id, command, argsJson}
  *   out: {type:'status', msg}            // load progress
  *        {type:'ready'} | {type:'init_error', error}
@@ -18,7 +18,7 @@
 
 let runCommand = null;
 
-async function init(wheelUrl, pyodideUrl) {
+async function init(wheelUrl, dependencyUrls, pyodideUrl) {
   importScripts(pyodideUrl);
   postMessage({ type: 'status', msg: 'Starting Python runtime…' });
   self.pyodide = await loadPyodide();
@@ -35,6 +35,10 @@ async function init(wheelUrl, pyodideUrl) {
 
   postMessage({ type: 'status', msg: 'Installing AutoTS…' });
   const micropip = self.pyodide.pyimport('micropip');
+  if (dependencyUrls && dependencyUrls.length) {
+    postMessage({ type: 'status', msg: 'Installing spreadsheet support…' });
+    await micropip.install(dependencyUrls);
+  }
   await micropip.install(wheelUrl);
 
   postMessage({ type: 'status', msg: 'Importing AutoTS Python API…' });
@@ -50,7 +54,7 @@ self.onmessage = async (event) => {
 
   if (msg.type === 'init') {
     try {
-      await init(msg.wheelUrl, msg.pyodideUrl);
+      await init(msg.wheelUrl, msg.dependencyUrls || [], msg.pyodideUrl);
     } catch (err) {
       // Use err.message for Python exceptions (Pyodide converts them to JS Errors
       // with the Python traceback in .message); fall back to .stack or String(err).

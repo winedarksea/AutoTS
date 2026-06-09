@@ -19,11 +19,17 @@ extern "C" {
     #[wasm_bindgen(js_namespace = autotsClient, js_name = cancelForecast, catch)]
     async fn cancel_forecast_js() -> Result<JsValue, JsValue>;
 
+    #[wasm_bindgen(js_namespace = autotsClient, js_name = installApp, catch)]
+    async fn install_app_js() -> Result<JsValue, JsValue>;
+
     #[wasm_bindgen(js_namespace = autotsClient, js_name = setProgressHandler)]
     fn set_progress_handler_js(cb: &JsValue);
 
     #[wasm_bindgen(js_namespace = autotsClient, js_name = setLifecycleHandler)]
     fn set_lifecycle_handler_js(cb: &JsValue);
+
+    #[wasm_bindgen(js_namespace = autotsClient, js_name = setInstallHandler)]
+    fn set_install_handler_js(cb: &JsValue);
 }
 
 fn jsval_str(v: JsValue) -> String {
@@ -54,6 +60,14 @@ pub async fn cancel_forecast() -> Result<(), String> {
     cancel_forecast_js().await.map(|_| ()).map_err(jsval_str)
 }
 
+/// Show the browser's saved PWA installation prompt.
+pub async fn install_app() -> Result<bool, String> {
+    install_app_js()
+        .await
+        .map(|value| value.as_bool().unwrap_or(false))
+        .map_err(jsval_str)
+}
+
 /// Register a single progress handler; messages stream here during long calls.
 pub fn set_progress_handler<F: FnMut(String) + 'static>(f: F) {
     let cb = Closure::wrap(Box::new(f) as Box<dyn FnMut(String)>);
@@ -65,5 +79,12 @@ pub fn set_progress_handler<F: FnMut(String) + 'static>(f: F) {
 pub fn set_lifecycle_handler<F: FnMut(String) + 'static>(f: F) {
     let cb = Closure::wrap(Box::new(f) as Box<dyn FnMut(String)>);
     set_lifecycle_handler_js(cb.as_ref().unchecked_ref());
+    cb.forget();
+}
+
+/// Register for offline-readiness and install-prompt availability changes.
+pub fn set_install_handler<F: FnMut(String) + 'static>(f: F) {
+    let cb = Closure::wrap(Box::new(f) as Box<dyn FnMut(String)>);
+    set_install_handler_js(cb.as_ref().unchecked_ref());
     cb.forget();
 }

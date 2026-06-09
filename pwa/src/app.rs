@@ -11,7 +11,8 @@ use serde_json::{json, Value};
 use wasm_bindgen::{JsCast, JsValue};
 
 use crate::client::{
-    call_tool, cancel_forecast, init_runtime, set_lifecycle_handler, set_progress_handler,
+    call_tool, cancel_forecast, init_runtime, install_app, set_install_handler,
+    set_lifecycle_handler, set_progress_handler,
 };
 use crate::cache_view::{durable_cache_summary, storage_usage_view};
 use crate::dates::{fmt_date, infer_granularity};
@@ -614,6 +615,9 @@ pub fn App() -> impl IntoView {
     let busy = create_rw_signal(false);
     let job_state = create_rw_signal(JobState::Restarting);
     let error = create_rw_signal::<Option<String>>(None);
+    let offline_ready = create_rw_signal(false);
+    let install_available = create_rw_signal(false);
+    let app_installed = create_rw_signal(false);
 
     // Effective light/dark theme (from a saved choice, else the OS preference).
     let theme = create_rw_signal(crate::theme::initial_theme());
@@ -682,6 +686,28 @@ pub fn App() -> impl IntoView {
         job_state.set(next);
         if next == JobState::Ready {
             ready.set(true);
+        }
+    });
+    set_install_handler(move |state_json| {
+        if let Ok(state) = serde_json::from_str::<Value>(&state_json) {
+            offline_ready.set(
+                state
+                    .get("offlineReady")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            );
+            install_available.set(
+                state
+                    .get("installAvailable")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            );
+            app_installed.set(
+                state
+                    .get("installed")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            );
         }
     });
     spawn_local(async move {
@@ -861,7 +887,16 @@ pub fn App() -> impl IntoView {
             return;
         };
         let name = file.name();
-        let is_binary = name.ends_with(".xlsx") || name.ends_with(".xls");
+        let lower_name = name.to_ascii_lowercase();
+        if lower_name.ends_with(".xls") {
+            error.set(Some(
+                "Legacy .xls workbooks are not supported. Save the file as .xlsx or CSV."
+                    .into(),
+            ));
+            input.set_value("");
+            return;
+        }
+        let is_binary = lower_name.ends_with(".xlsx");
         busy.set(true);
         error.set(None);
         status.set("Reading file…".into());
@@ -1486,6 +1521,15 @@ pub fn App() -> impl IntoView {
             .collect();
         Some((date, rows))
     });
+    let install_pwa = move |_| {
+        spawn_local(async move {
+            match install_app().await {
+                Ok(true) => status.set("AutoTS installed for offline use.".into()),
+                Ok(false) => {}
+                Err(message) => error.set(Some(format!("Install failed: {message}"))),
+            }
+        });
+    };
 
     view! {
         <header class="md-appbar">
@@ -1493,6 +1537,21 @@ pub fn App() -> impl IntoView {
             <span class="brand">"AutoTS"</span>
             <span class="muted">"forecasting for everyone"</span>
             <span class="spacer"></span>
+            {move || (offline_ready.get() && !app_installed.get()).then(|| {
+                if install_available.get() {
+                    view! {
+                        <button class="md-btn tonal" type="button" on:click=install_pwa>
+                            "Install"
+                        </button>
+                    }.into_view()
+                } else {
+                    view! {
+                        <span class="md-offline-ready" title="Runtime assets are cached">
+                            "Offline ready"
+                        </span>
+                    }.into_view()
+                }
+            })}
             <button
                 class="md-theme-toggle"
                 type="button"
@@ -1537,6 +1596,7 @@ pub fn App() -> impl IntoView {
                     <dl>
                         <dt>"Worker"</dt><dd>"AutoTS Forecast Worker"</dd>
                         <dt>"State"</dt><dd>{move || format!("{:?}", job_state.get())}</dd>
+                        <dt>"Offline"</dt><dd>{move || if offline_ready.get() { "ready" } else { "preparing" }}</dd>
                     </dl>
                 </details>
                 <span id="forecast-blocked-reason" class="sr-only">
@@ -1589,8 +1649,8 @@ pub fn App() -> impl IntoView {
                         }.into_view(),
                         2 => view! {
                             <div class="md-field">
-                                <label class="md-label">"Upload a CSV or Excel file"</label>
-                                <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls"
+                                <label class="md-label">"Upload a CSV or .xlsx file"</label>
+                                <input type="file" accept=".csv,.tsv,.txt,.xlsx"
                                     disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
                                     title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Upload a data file")
                                     aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")

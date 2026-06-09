@@ -44,7 +44,9 @@ to rebuild after changing Python code). Then open the served page, load a sample
 dataset, and forecast.
 
 First load downloads Pyodide + scientific packages from the jsDelivr CDN
-(network required); subsequent loads are cached by the browser.
+(network required). A service worker caches the complete pinned runtime while
+it starts. When the header shows **Offline ready**, the in-app Install action
+creates an app that can relaunch and forecast without a network connection.
 
 Completed datasets and forecasts are stored as versioned JSON artifacts in
 IndexedDB, so they survive tab refreshes. The app keeps up to 25 forecasts,
@@ -79,3 +81,5 @@ search_forecast` and prints pass/fail.
   reflects the adjusted values.
 - Data exchange is JSON today; the worker boundary is designed so Arrow IPC
   (polars ↔ pyarrow) can replace it later without UI changes.
+- Spreadsheet upload supports `.xlsx`; legacy `.xls` files must be saved as
+  `.xlsx` or exported as CSV.

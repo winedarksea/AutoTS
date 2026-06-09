@@ -18,11 +18,15 @@ being fed into heavy operations.
 """
 
 import asyncio
+import importlib.util
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
+import zipfile
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -476,6 +480,107 @@ class TestMCPSmartLoad(unittest.TestCase):
         self.assertEqual(rep["detected_format"], "long")
         self.assertEqual(sorted(df.columns), ["a", "b"])
         self.assertEqual(len(df), 3)
+
+    def test_load_daily_wide_csv_preserves_sparse_numeric_series(self):
+        source = load_daily(long=False)
+        df, rep = self.smart_load(text=source.to_csv())
+
+        self.assertEqual(rep["detected_format"], "wide")
+        self.assertEqual(df.shape, source.shape)
+        self.assertEqual(list(df.columns), list(source.columns))
+        self.assertEqual(df.index.min(), source.index.min())
+        self.assertEqual(df.index.max(), source.index.max())
+        self.assertEqual(df.loc["2017-01-03", "DGS10"], 2.45)
+
+    def test_load_daily_long_csv_converts_to_canonical_wide_data(self):
+        source = load_daily(long=True)
+        df, rep = self.smart_load(text=source.to_csv(index=False))
+
+        self.assertEqual(rep["detected_format"], "long")
+        self.assertEqual(
+            df.shape,
+            (source["datetime"].nunique(), source["series_id"].nunique()),
+        )
+        self.assertEqual(rep["long_columns"], {
+            "date": "datetime",
+            "id": "series_id",
+            "value": "value",
+        })
+        self.assertEqual(df.loc["2017-01-03", "DGS10"], 2.45)
+
+    def test_explicit_long_column_override(self):
+        text = (
+            "when,item,measurement\n"
+            "2024-01-01,a,1\n2024-01-01,b,5\n"
+            "2024-01-02,a,2\n2024-01-02,b,6\n"
+        )
+        df, rep = self.smart_load(
+            text=text,
+            data_format="long",
+            long_cols={"date": "when", "id": "item", "value": "measurement"},
+        )
+
+        self.assertEqual(rep["detected_format"], "long")
+        self.assertEqual(sorted(df.columns), ["a", "b"])
+
+    def test_uppercase_xlsx_uses_openpyxl_engine(self):
+        parsed = pd.DataFrame(
+            [
+                ["datetime", "sales"],
+                ["2024-01-01", 10],
+                ["2024-01-02", 11],
+            ]
+        )
+        with mock.patch("pandas.read_excel", return_value=parsed) as read_excel:
+            df, rep = self.smart_load(csv_bytes=b"xlsx", filename="SALES.XLSX")
+
+        self.assertEqual(rep["detected_format"], "wide")
+        self.assertEqual(df.shape, (2, 1))
+        self.assertEqual(read_excel.call_args.kwargs["engine"], "openpyxl")
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("openpyxl"),
+        "openpyxl optional dependency is not installed",
+    )
+    def test_real_xlsx_workbook_round_trip(self):
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.append(["datetime", "sales"])
+        worksheet.append(["2024-01-01", 10])
+        worksheet.append(["2024-01-02", 11])
+        workbook_bytes = io.BytesIO()
+        workbook.save(workbook_bytes)
+
+        df, rep = self.smart_load(
+            csv_bytes=workbook_bytes.getvalue(),
+            filename="sales.xlsx",
+        )
+
+        self.assertEqual(rep["detected_format"], "wide")
+        self.assertEqual(df.shape, (2, 1))
+        self.assertEqual(df.iloc[-1, 0], 11)
+
+    def test_legacy_xls_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Legacy .xls"):
+            self.smart_load(csv_bytes=b"xls", filename="sales.xls")
+
+    def test_missing_xlsx_engine_has_targeted_error(self):
+        with mock.patch(
+            "pandas.read_excel",
+            side_effect=ImportError("Missing optional dependency 'openpyxl'"),
+        ):
+            with self.assertRaisesRegex(ImportError, "requires.*openpyxl"):
+                self.smart_load(csv_bytes=b"xlsx", filename="sales.xlsx")
+
+    def test_malformed_xlsx_has_targeted_error(self):
+        with mock.patch(
+            "pandas.read_excel",
+            side_effect=zipfile.BadZipFile("not a zip file"),
+        ):
+            with self.assertRaisesRegex(ValueError, "valid, unprotected Excel"):
+                self.smart_load(csv_bytes=b"not-xlsx", filename="sales.xlsx")
 
     def test_tsv_paste_wide(self):
         tsv = "datetime\tA\tB\tC\n2024-01-01\t1\t2\t3\n2024-01-02\t4\t5\t6\n2024-01-03\t7\t8\t9\n"

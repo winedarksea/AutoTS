@@ -76,6 +76,77 @@ vm.runInContext(
   assert.equal(workers[0].terminated, true);
   assert.equal(workers.length, 2);
 
+  const installEvents = {};
+  const installWorkers = [];
+  class InstallWorker extends MockWorker {
+    constructor(url, options) {
+      super(url, options);
+      installWorkers.push(this);
+    }
+  }
+  const installPrompt = {
+    promptCalls: 0,
+    prompt() { this.promptCalls += 1; return Promise.resolve(); },
+    userChoice: Promise.resolve({ outcome: 'accepted' }),
+    preventDefault() {},
+  };
+  const installStates = [];
+  const installContext = {
+    self: {
+      AUTOTS_WORKER_URL: 'worker.js',
+      isSecureContext: true,
+      addEventListener(type, handler) { installEvents[type] = handler; },
+    },
+    navigator: {
+      serviceWorker: {
+        controller: {},
+        register: async () => ({}),
+        ready: Promise.resolve({}),
+        addEventListener() {},
+      },
+    },
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        url: 'autots.whl',
+        dependencies: [
+          { name: 'et-xmlfile', url: 'et_xmlfile.whl' },
+          { name: 'openpyxl', url: 'openpyxl.whl' },
+        ],
+      }),
+    }),
+    document: { baseURI: 'https://example.test/app/' },
+    Worker: InstallWorker,
+    URL,
+    Promise,
+    Error,
+    JSON,
+    queueMicrotask,
+    console,
+  };
+  vm.createContext(installContext);
+  vm.runInContext(
+    fs.readFileSync(require.resolve('./autots_client.js'), 'utf8'),
+    installContext
+  );
+  const installClient = installContext.self.autotsClient;
+  installClient.setInstallHandler((state) => installStates.push(JSON.parse(state)));
+  installEvents.beforeinstallprompt(installPrompt);
+  assert.equal(await installClient.installApp(), false);
+  await installClient.initRuntime('', '');
+  const initMessage = installWorkers[0].messages.find((message) => message.type === 'init');
+  assert.deepEqual(
+    Array.from(initMessage.dependencyUrls),
+    [
+      'https://example.test/app/et_xmlfile.whl',
+      'https://example.test/app/openpyxl.whl',
+    ]
+  );
+  assert.equal(installStates.at(-1).offlineReady, true);
+  assert.equal(installStates.at(-1).installAvailable, true);
+  assert.equal(await installClient.installApp(), true);
+  assert.equal(installPrompt.promptCalls, 1);
+
   console.log('autots_client tests passed');
 })().catch((error) => {
   console.error(error);

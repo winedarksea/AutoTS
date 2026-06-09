@@ -46,6 +46,7 @@ additional = [
 mcp = [
 	"holidays>=0.9",
 	'fredapi',
+	"openpyxl>=3.1.5,<3.2",
 	'lightgbm',
 	'joblib',
 	'scipy',

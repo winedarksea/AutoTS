@@ -234,7 +234,7 @@ async def handle_smart_load(arguments: dict, log_progress) -> dict:
     """Load messy user data (paste / upload / URL) with auto cleanup + detection.
 
     Accepts pasted ``text`` (CSV/TSV), a ``url``, or base64-encoded
-    ``content_base64`` (CSV or Excel; ``filename`` disambiguates). Returns a
+    ``content_base64`` (CSV or XLSX; ``filename`` disambiguates). Returns a
     ``data_id`` plus a ``report`` describing what was cleaned and detected.
     """
     text = arguments.get("text")

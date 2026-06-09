@@ -6,8 +6,10 @@
  *   initRuntime(wheelUrl, pyodideUrl) -> Promise   (resolves when ready)
  *   callTool(command, argsJson)       -> Promise<string>  (JSON result)
  *   cancelForecast()                  -> Promise           (fresh runtime ready)
+ *   installApp()                      -> Promise<boolean>  (show saved prompt)
  *   setProgressHandler(fn)            -> void
  *   setLifecycleHandler(fn)           -> void
+ *   setInstallHandler(fn)             -> void
  *
  * The Rust/Leptos app binds to this via wasm-bindgen, but the exact same API is
  * what a TypeScript + Plotly rewrite would import. Keep all worker/protocol
@@ -19,6 +21,11 @@
   const pending = new Map();
   let progressHandler = null;
   let lifecycleHandler = null;
+  let installHandler = null;
+  let deferredInstallPrompt = null;
+  let offlineReady = false;
+  let appInstalled = false;
+  let serviceWorkerReady = null;
   let readyResolve = null;
   let readyReject = null;
   let ready = null;
@@ -30,13 +37,119 @@
     if (lifecycleHandler) lifecycleHandler(state);
   }
 
+  function notifyInstallState() {
+    if (installHandler) {
+      installHandler(JSON.stringify({
+        offlineReady,
+        installAvailable: Boolean(deferredInstallPrompt),
+        installed: appInstalled,
+      }));
+    }
+  }
+
+  function waitForServiceWorkerControl() {
+    if (navigator.serviceWorker.controller) return Promise.resolve();
+    return new Promise((resolve) => {
+      navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+    });
+  }
+
+  function waitForWorkerActivation(worker) {
+    if (!worker || worker.state === 'activated') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'activated') resolve();
+        if (worker.state === 'redundant') {
+          reject(new Error('Updated service worker became redundant'));
+        }
+      });
+    });
+  }
+
+  function enableInstallManifest() {
+    if (
+      typeof document === 'undefined' ||
+      !document.createElement ||
+      document.querySelector('link[rel="manifest"]')
+    ) return;
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = 'manifest.webmanifest';
+    document.head.appendChild(manifestLink);
+  }
+
+  function initializeOfflineSupport() {
+    if (serviceWorkerReady) return serviceWorkerReady;
+    if (
+      !self.isSecureContext ||
+      typeof navigator === 'undefined' ||
+      !navigator.serviceWorker
+    ) {
+      serviceWorkerReady = Promise.resolve(false);
+      return serviceWorkerReady;
+    }
+    serviceWorkerReady = navigator.serviceWorker.register('service_worker.js')
+      .then(async (registration) => {
+        const updatingWorker = registration.installing || registration.waiting;
+        const previousController = navigator.serviceWorker.controller;
+        let controllerChanged = null;
+        if (updatingWorker && previousController) {
+          controllerChanged = new Promise((resolve) => {
+            navigator.serviceWorker.addEventListener(
+              'controllerchange',
+              resolve,
+              { once: true }
+            );
+          });
+        }
+        await waitForWorkerActivation(updatingWorker);
+        await navigator.serviceWorker.ready;
+        if (
+          controllerChanged &&
+          navigator.serviceWorker.controller === previousController
+        ) {
+          await controllerChanged;
+        } else {
+          await waitForServiceWorkerControl();
+        }
+        return true;
+      })
+      .catch((error) => {
+        console.warn('AutoTS offline support could not start:', error);
+        return false;
+      });
+    return serviceWorkerReady;
+  }
+
+  if (self.addEventListener) {
+    self.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      notifyInstallState();
+    });
+    self.addEventListener('appinstalled', () => {
+      appInstalled = true;
+      deferredInstallPrompt = null;
+      notifyInstallState();
+    });
+  }
+
   function handleMessage(workerGeneration, event) {
     if (workerGeneration !== generation) return;
     const m = event.data;
     switch (m.type) {
       case 'ready':
-        notifyLifecycle('ready');
-        if (readyResolve) readyResolve();
+        Promise.resolve().then(() => {
+          offlineReady = Boolean(
+            typeof navigator !== 'undefined' &&
+            navigator.serviceWorker &&
+            navigator.serviceWorker.controller
+          );
+          if (offlineReady) enableInstallManifest();
+          notifyInstallState();
+          notifyLifecycle(offlineReady ? 'offline-ready' : 'ready');
+          if (readyResolve) readyResolve();
+        });
         break;
       case 'init_error':
         notifyLifecycle('failed');
@@ -86,6 +199,7 @@
     worker.postMessage({
       type: 'init',
       wheelUrl: runtimeConfig.wheelUrl,
+      dependencyUrls: runtimeConfig.dependencyUrls,
       pyodideUrl: runtimeConfig.pyodideUrl,
     });
     return ready;
@@ -95,28 +209,44 @@
   // Pyodide web worker (the worker base URL differs from the page base URL).
   // autots_wheel.json (relative to the page) carries the exact filename; we
   // resolve it to an absolute URL here in the main-thread context.
-  async function resolveWheelUrl(explicit) {
-    if (explicit) return explicit;
-    if (self.AUTOTS_WHEEL_URL) return self.AUTOTS_WHEEL_URL;
+  async function resolveRuntimeAssets(explicitWheelUrl) {
+    if (explicitWheelUrl) {
+      return { wheelUrl: explicitWheelUrl, dependencyUrls: [] };
+    }
+    if (self.AUTOTS_WHEEL_URL) {
+      return { wheelUrl: self.AUTOTS_WHEEL_URL, dependencyUrls: [] };
+    }
     const base = (typeof document !== 'undefined' && document.baseURI) ||
                  (typeof location !== 'undefined' && location.href) || '';
     try {
       const res = await fetch('autots_wheel.json', { cache: 'no-store' });
       if (res.ok) {
         const m = await res.json();
-        if (m && m.url) return base ? new URL(m.url, base).href : m.url;
+        if (m && m.url) {
+          const resolveUrl = (url) => base ? new URL(url, base).href : url;
+          return {
+            wheelUrl: resolveUrl(m.url),
+            dependencyUrls: Array.isArray(m.dependencies)
+              ? m.dependencies.map((dependency) => resolveUrl(dependency.url))
+              : [],
+          };
+        }
       }
     } catch (_) { /* ignore, use fallback */ }
-    return base ? new URL('autots-1.0.4-py3-none-any.whl', base).href
-                : 'autots-1.0.4-py3-none-any.whl';
+    return {
+      wheelUrl: base ? new URL('autots-1.0.4-py3-none-any.whl', base).href
+                     : 'autots-1.0.4-py3-none-any.whl',
+      dependencyUrls: [],
+    };
   }
 
   function initRuntime(wheelUrl, pyodideUrl) {
     if (ready) return ready;
-    return resolveWheelUrl(wheelUrl).then((resolvedWheel) => {
+    return initializeOfflineSupport().then(() => resolveRuntimeAssets(wheelUrl)).then((runtimeAssets) => {
       runtimeConfig = {
         workerUrl: self.AUTOTS_WORKER_URL || 'pyodide_worker.js',
-        wheelUrl: resolvedWheel,
+        wheelUrl: runtimeAssets.wheelUrl,
+        dependencyUrls: runtimeAssets.dependencyUrls,
         pyodideUrl: pyodideUrl || self.AUTOTS_PYODIDE_URL ||
           'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js',
       };
@@ -158,12 +288,29 @@
     lifecycleHandler = fn;
   }
 
+  function setInstallHandler(fn) {
+    installHandler = fn;
+    notifyInstallState();
+  }
+
+  async function installApp() {
+    if (!offlineReady || !deferredInstallPrompt) return false;
+    const prompt = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    await prompt.prompt();
+    const choice = await prompt.userChoice;
+    notifyInstallState();
+    return choice && choice.outcome === 'accepted';
+  }
+
   self.autotsClient = {
     initRuntime,
     callTool,
     cancelForecast,
+    installApp,
     setProgressHandler,
     setLifecycleHandler,
+    setInstallHandler,
     workerLabel: 'AutoTS Forecast Worker',
   };
 })();

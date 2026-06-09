@@ -199,7 +199,7 @@ try:
             description=(
                 "Beginner-friendly data loader. Accepts pasted CSV/TSV text, a "
                 "CSV URL (e.g. a published Google Sheet), or base64-encoded file "
-                "bytes (CSV or Excel). Automatically removes empty/padding rows "
+                "bytes (CSV or XLSX). Automatically removes empty/padding rows "
                 "and columns, detects wide vs long orientation, and returns a "
                 "data_id plus a report describing what was cleaned and detected. "
                 "Prefer this over load_data_from_file for raw human spreadsheets."
@@ -217,7 +217,7 @@ try:
                     },
                     "content_base64": {
                         "type": "string",
-                        "description": "Base64-encoded file bytes (CSV or Excel)",
+                        "description": "Base64-encoded file bytes (CSV or XLSX)",
                     },
                     "filename": {
                         "type": "string",

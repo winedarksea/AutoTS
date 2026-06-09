@@ -27,14 +27,20 @@
         // Resolve wheel URL from autots_wheel.json (written by the build script),
         // falling back to the versioned filename if the manifest is unavailable.
         let wheelUrl;
+        let dependencyUrls = [];
         try {
           const wj = await fetch(new URL("../autots_wheel.json", location.href).href, { cache: 'no-store' });
           if (wj.ok) {
             const wm = await wj.json();
-            wheelUrl = wm && wm.url ? new URL(wm.url, new URL("../", location.href).href).href : null;
+            const assetBase = new URL("../", location.href).href;
+            wheelUrl = wm && wm.url ? new URL(wm.url, assetBase).href : null;
+            dependencyUrls = Array.isArray(wm.dependencies)
+              ? wm.dependencies.map((dependency) => new URL(dependency.url, assetBase).href)
+              : [];
           }
         } catch (_) {}
         if (!wheelUrl) wheelUrl = new URL("../autots-1.0.4-py3-none-any.whl", location.href).href;
+        if (dependencyUrls.length) await micropip.install(dependencyUrls);
         await micropip.install(wheelUrl);
         await pyodide.runPythonAsync("from autots.mcp.pyodide_api import run_command_json");
         const run = pyodide.globals.get("run_command_json");
@@ -46,6 +52,17 @@
         // dates past Jan are invalid and dropped — fine for a smoke test
         let r = JSON.parse(await run("smart_load", JSON.stringify({text: csv}), prog));
         log("  -> data_id " + r.data_id + " rows " + r.rows);
+
+        log("smart_load .xlsx…");
+        const xlsxBase64 = "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";
+        const xlsxResult = JSON.parse(await run("smart_load", JSON.stringify({
+          content_base64: xlsxBase64,
+          filename: "smoke.XLSX"
+        }), prog));
+        if (xlsxResult.rows !== 3 || xlsxResult.cols !== 1) {
+          throw new Error("XLSX ingestion returned unexpected dimensions");
+        }
+        log("  -> .xlsx rows " + xlsxResult.rows + " cols " + xlsxResult.cols);
 
         log("make_forecast…");
         let f = JSON.parse(await run("make_forecast", JSON.stringify({data_id: r.data_id, forecast_length: 7}), prog));

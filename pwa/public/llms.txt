@@ -21,7 +21,8 @@ reading pixels.
    - `smart_load` with `{ "text": "<csv or tsv>" }` — auto-cleans messy
      spreadsheets (drops empty/padding rows & columns) and auto-detects wide vs
      long orientation. Also accepts `{ "url": "<csv url>" }` or
-     `{ "content_base64": "<bytes>", "filename": "x.xlsx" }`.
+     `{ "content_base64": "<bytes>", "filename": "x.xlsx" }`. Legacy `.xls`
+     workbooks are not supported.
    - or `load_sample_data` with `{ "dataset": "monthly" }`.
    Result: `{ "data_id": "...", "report": { ... }, "rows": N, "cols": M }`.
 
