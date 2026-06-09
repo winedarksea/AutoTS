@@ -580,41 +580,39 @@ class TimeSeriesFeatureDetector(
 
         forecast = trend + level_shifts + seasonal + holidays
 
-        # --- Prediction intervals from per-component uncertainty ---
-        _has_components = self.components and all(
-            col in self.components
-            and 'noise' in self.components[col]
-            and 'seasonality' in self.components[col]
-            for col in columns
-        )
-        if _has_components and 0.0 < prediction_interval < 1.0:
-            # Build component DataFrames vectorially (no for-loop)
-            _noise_df = pd.DataFrame(
-                {col: self.components[col]['noise'] for col in columns},
-                index=self.date_index,
+        # --- Prediction intervals (OLS extrapolation prediction variance) ---
+        # Two independent uncertainty sources combined in quadrature:
+        #   1. Irreducible residual sigma (constant in h) from the full model
+        #      misfit; reconstruction_error already absorbs seasonal/holiday error
+        #      so there is no separate seasonal-amplitude inflation.
+        #   2. Trend-slope extrapolation uncertainty: the textbook OLS prediction
+        #      variance of the last trend segment, which the point forecast
+        #      extrapolates. Leverage = 1/m + (x0 - xbar)^2 / Sxx widens the band
+        #      with horizon at a statistically correct rate.
+        _sigma_resid = self._forecast_residual_sigma(columns)
+        if _sigma_resid is not None and 0.0 < prediction_interval < 1.0:
+            # Last-segment length m per series (integer positions 0..m-1).
+            _m = np.array(
+                [self._last_trend_segment_length(col) for col in columns],
+                dtype=float,
             )
-            _seas_df = pd.DataFrame(
-                {col: self.components[col]['seasonality'] for col in columns},
-                index=self.date_index,
+            _has_lev = _m >= 2
+            # Safe denominators so the leverage formula never divides by zero;
+            # results are discarded by np.where for series with m < 2.
+            _m_safe = np.where(_has_lev, _m, 1.0)
+            _Sxx = np.where(_has_lev, _m * (_m ** 2 - 1.0) / 12.0, 1.0)
+            _xbar = (_m - 1.0) / 2.0
+            _h = np.arange(1, forecast_length + 1, dtype=float)[:, np.newaxis]
+            # Future x measured from segment start: x0 = (m - 1) + h.
+            _x0 = (_m - 1.0)[np.newaxis, :] + _h
+            _lev = np.where(
+                _has_lev[np.newaxis, :],
+                1.0 / _m_safe[np.newaxis, :]
+                + (_x0 - _xbar[np.newaxis, :]) ** 2 / _Sxx[np.newaxis, :],
+                0.0,
             )
-            # Per-series sigma vectors — shape (n_series,)
-            _sigma_noise = _noise_df.std(ddof=1).to_numpy()
-            _sigma_seas = _seas_df.std(ddof=1).to_numpy() * np.clip(
-                1.0 - np.array([self.seasonality_strength.get(c, 0.0) for c in columns]),
-                0.05,
-                1.0,
-            )
-            # Trend extrapolation growth: sigma_noise / sqrt(n_train) * h
-            # shape (forecast_length, n_series) via broadcasting
-            _n_train = float(len(self.date_index))
-            _steps = np.arange(1, forecast_length + 1, dtype=float)[:, np.newaxis]
-            _sigma_trend_growth = (_sigma_noise[np.newaxis, :] / np.sqrt(_n_train)) * _steps
-            # Quadrature combination — shape (forecast_length, n_series)
-            _sigma_total = np.sqrt(
-                _sigma_noise[np.newaxis, :] ** 2
-                + _sigma_trend_growth ** 2
-                + _sigma_seas[np.newaxis, :] ** 2
-            )
+            # shape (forecast_length, n_series)
+            _sigma_total = _sigma_resid[np.newaxis, :] * np.sqrt(1.0 + _lev)
             _z = float(_scipy_norm.ppf(1.0 - (1.0 - prediction_interval) / 2.0))
             _margin = pd.DataFrame(_z * _sigma_total, index=future_index, columns=columns)
             lower_forecast = forecast - _margin
@@ -647,6 +645,67 @@ class TimeSeriesFeatureDetector(
             model_parameters={'detection_mode': self.detection_mode},
             components=components_df,
         )
+
+    def _forecast_residual_sigma(self, columns):
+        """Per-series one-step residual sigma for prediction intervals.
+
+        The decomposition ``noise`` component is the genuine in-sample residual
+        (original minus trend+level+seasonality+holidays) and is the primary
+        basis. ``reconstruction_error`` is used only as an additional floor via
+        an elementwise max: the rendered template re-adds the stored noise
+        realization, so its error is normally ~0 and contributes nothing, but a
+        larger value (genuine structural misfit) would still widen the band.
+
+        Returns a float array aligned to ``columns`` with non-finite/zero sigmas
+        set to 0.0 (degenerate band for that series), or ``None`` when no series
+        has a usable residual.
+        """
+        n = len(columns)
+        # Primary: per-series noise-component std (the real residual).
+        sigma = np.full(n, np.nan, dtype=float)
+        for i, col in enumerate(columns):
+            comp = self.components.get(col, {}) if self.components else {}
+            noise = np.asarray(comp.get('noise', []), dtype=float)
+            if noise.size > 1:
+                sigma[i] = float(np.nanstd(noise, ddof=1))
+        # Floor with reconstruction_error std where that is larger (rarely).
+        recon = getattr(self, 'reconstruction_error', None)
+        if recon is not None:
+            try:
+                recon_sigma = (
+                    recon.reindex(columns=columns).std(ddof=1).to_numpy(dtype=float)
+                )
+                # fmax keeps the larger, ignoring NaN (NaN only where both are NaN).
+                sigma = np.fmax(sigma, recon_sigma)
+            except Exception:
+                pass
+        usable = np.isfinite(sigma) & (sigma > 0)
+        if not np.any(usable):
+            return None
+        return np.where(usable, sigma, 0.0)
+
+    def _last_trend_segment_length(self, col):
+        """Number of training observations in the most recent trend segment.
+
+        The point forecast extrapolates the last segment's OLS slope, so its
+        length sets the leverage of the extrapolated line. Returns 0 when it
+        cannot be determined (the leverage term is then skipped for that series).
+        """
+        slope_info = self.trend_slopes.get(col, []) if self.trend_slopes else []
+        if not slope_info or self.date_index is None:
+            return 0
+        last = slope_info[-1]
+        start = last.get('start_date')
+        end = last.get('end_date')
+        if start is None or end is None:
+            return 0
+        try:
+            start = pd.Timestamp(start)
+            end = pd.Timestamp(end)
+        except Exception:
+            return 0
+        mask = (self.date_index >= start) & (self.date_index <= end)
+        return int(np.count_nonzero(mask))
 
     def _prepare_data(self, df):
         """Prepare and standardize input data."""

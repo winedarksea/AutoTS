@@ -227,11 +227,61 @@ class TestFeatureDetector(unittest.TestCase):
         self.assertIsInstance(prediction.components.columns, pd.MultiIndex)
         # Check that expected components exist at level 1 of the MultiIndex
         component_names = prediction.components.columns.get_level_values(1).unique()
-        for comp in ['trend', 'seasonality', 'holidays']:
+        for comp in ['trend', 'seasonality', 'holidays', 'lower_bound', 'upper_bound']:
             self.assertIn(comp, component_names)
-        # Check shape: each series has 4 components (trend, level_shift, seasonality, holidays)
-        expected_cols = self.data.shape[1] * 4  # 4 components per series
+        # Check shape: each series has 6 components (trend, level_shift, seasonality,
+        # holidays, lower_bound, upper_bound)
+        expected_cols = self.data.shape[1] * 6  # 6 components per series
         self.assertEqual(prediction.components.shape, (horizon, expected_cols))
+
+    def test_forecast_prediction_intervals(self):
+        """Prediction bounds are ordered, widen with horizon, and stay finite."""
+        detector = TimeSeriesFeatureDetector()
+        detector.fit(self.data)
+        horizon = 30
+        prediction = detector.forecast(horizon, prediction_interval=0.9)
+
+        lower = prediction.lower_forecast
+        upper = prediction.upper_forecast
+        point = prediction.forecast
+
+        # Bounds bracket the point forecast everywhere and are finite.
+        self.assertTrue(np.isfinite(lower.to_numpy()).all())
+        self.assertTrue(np.isfinite(upper.to_numpy()).all())
+        self.assertTrue((lower <= point + 1e-9).all().all())
+        self.assertTrue((point <= upper + 1e-9).all().all())
+        self.assertAlmostEqual(prediction.prediction_interval, 0.9)
+
+        # Interval width is non-decreasing with horizon (leverage grows with h).
+        width = (upper - lower).to_numpy()
+        self.assertTrue((np.diff(width, axis=0) >= -1e-9).all())
+
+        # The step-1 band must be on the order of the residual sigma (the noise
+        # component), not a degenerate ~0 band and not the seasonal amplitude.
+        z = 1.6448536269514722  # norm.ppf(0.95)
+        for col in self.data.columns:
+            sigma = float(np.nanstd(detector.components[col]['noise'], ddof=1))
+            m = detector._last_trend_segment_length(col)
+            expected_h1 = 2 * z * sigma * np.sqrt(1.0 + 1.0 / m)
+            actual_h1 = float((upper[col] - lower[col]).iloc[0])
+            self.assertGreater(actual_h1, 0.5 * sigma)  # clearly non-degenerate
+            self.assertAlmostEqual(actual_h1, expected_h1, delta=0.05 * expected_h1)
+
+    def test_forecast_prediction_intervals_degenerate_without_residual(self):
+        """Without any residual info the bounds collapse to the point forecast."""
+        detector = TimeSeriesFeatureDetector()
+        detector.fit(self.data)
+        # Strip every source of residual sigma to exercise the fallback branch.
+        detector.reconstruction_error = None
+        detector.components = {}
+        prediction = detector.forecast(7, prediction_interval=0.9)
+        self.assertEqual(prediction.prediction_interval, 0.0)
+        self.assertTrue(
+            np.allclose(
+                prediction.lower_forecast.to_numpy(),
+                prediction.upper_forecast.to_numpy(),
+            )
+        )
 
     def test_level_shift_output_parameter(self):
         """Test that level_shift_params includes output parameter matching detection_mode."""
