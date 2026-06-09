@@ -96,6 +96,51 @@ pub fn forecast_to_csv(fc: &WideData, overrides: &[Vec<Option<f64>>]) -> String 
     wide_data_to_csv_with_overrides(fc, Some(overrides))
 }
 
+/// Compact JSON for a params field, defaulting a missing/null value to `{}`
+/// so the cell is always a valid object string for AutoTS `import_template`.
+fn params_json(v: &Value) -> String {
+    if v.is_null() {
+        "{}".to_string()
+    } else {
+        serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+/// Build a one-row AutoTS export template CSV from a model's parameters.
+///
+/// Columns match `auto_ts.template_cols_id`
+/// (`ID,Model,ModelParameters,TransformationParameters,Ensemble`), so the file
+/// loads back into a regular AutoTS run via `import_template`. The param fields
+/// are JSON strings, RFC4180-quoted because they contain commas and quotes.
+pub fn model_params_to_template_csv(
+    id: &str,
+    model_name: &str,
+    model_parameters: &Value,
+    transformation_parameters: &Value,
+) -> String {
+    let mut out = String::from("ID,Model,ModelParameters,TransformationParameters,Ensemble\n");
+    out.push_str(&csv_field(id));
+    out.push(',');
+    out.push_str(&csv_field(model_name));
+    out.push(',');
+    out.push_str(&csv_field(&params_json(model_parameters)));
+    out.push(',');
+    out.push_str(&csv_field(&params_json(transformation_parameters)));
+    out.push_str(",0\n");
+    out
+}
+
+/// Head-truncate a string to `max` characters for display (adds an ellipsis
+/// when shortened). Char-boundary safe. Never used on downloaded data.
+pub fn truncate_chars(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let head: String = s.chars().take(max).collect();
+        format!("{head}…")
+    }
+}
+
 /// Effective forecast values for one series (override where set, else original).
 pub fn effective_values(fc: &WideData, overrides: &[Vec<Option<f64>>], series: usize) -> Vec<f64> {
     let base = &fc.series[series].values;
@@ -112,7 +157,11 @@ pub fn effective_values(fc: &WideData, overrides: &[Vec<Option<f64>>], series: u
 
 #[cfg(test)]
 mod tests {
-    use super::{forecast_to_csv, wide_data_to_csv, SeriesData, WideData};
+    use super::{
+        forecast_to_csv, model_params_to_template_csv, truncate_chars, wide_data_to_csv,
+        SeriesData, WideData,
+    };
+    use serde_json::json;
 
     fn example_data() -> WideData {
         WideData {
@@ -138,5 +187,35 @@ mod tests {
             forecast_to_csv(&example_data(), &[vec![None, Some(3.5)]]),
             "datetime,\"sales,total\"\n2026-01-01,1\n2026-01-02,3.5\n"
         );
+    }
+
+    #[test]
+    fn template_csv_quotes_json_param_fields() {
+        let csv = model_params_to_template_csv(
+            "1",
+            "LastValueNaive",
+            &json!({"window": 10}),
+            &json!({}),
+        );
+        assert_eq!(
+            csv,
+            "ID,Model,ModelParameters,TransformationParameters,Ensemble\n\
+             1,LastValueNaive,\"{\"\"window\"\":10}\",{},0\n"
+        );
+    }
+
+    #[test]
+    fn template_csv_defaults_null_params_to_empty_object() {
+        let csv = model_params_to_template_csv("1", "GLS", &json!(null), &json!(null));
+        assert_eq!(
+            csv,
+            "ID,Model,ModelParameters,TransformationParameters,Ensemble\n1,GLS,{},{},0\n"
+        );
+    }
+
+    #[test]
+    fn truncate_chars_adds_ellipsis_only_when_needed() {
+        assert_eq!(truncate_chars("short", 10), "short");
+        assert_eq!(truncate_chars("abcdef", 3), "abc…");
     }
 }

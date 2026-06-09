@@ -305,6 +305,24 @@ body {
 }
 .md-theme-toggle:hover .md-toggle-glyph { transform: rotate(-12deg) scale(1.06); }
 
+/* Subtle icon button (cached-data row actions) — quiet at rest, colours on intent. */
+.md-icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  border-radius: 999px;
+  padding: 6px;
+  line-height: 0;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.md-icon-btn:hover:not(:disabled) { background: var(--md-surface-container-high); }
+.md-icon-btn.danger:hover:not(:disabled) { color: var(--md-error); }
+.md-icon-btn:focus-visible { outline: 3px solid var(--md-primary-container); outline-offset: 2px; }
+.md-icon-btn.danger:focus-visible { outline-color: var(--md-error-container); }
+.md-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.md-icon-glyph { width: 18px; height: 18px; display: block; }
+
 .md-container {
   max-width: 1080px;
   margin: 0 auto;
@@ -574,12 +592,31 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 /* Cache summaries keep each object to one row; metadata remains available on demand. */
 .md-cache-group { margin-top: 16px; }
 .md-cache-group h3 { margin: 0 0 6px; font-size: .95rem; text-transform: capitalize; }
-.md-cache-table { min-width: 760px; }
+.md-cache-table { min-width: 860px; }
 .md-cache-table th:last-child, .md-cache-table td:last-child { text-align: left; }
 .md-cache-table pre { max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .md-cache-id {
   max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: ui-monospace, monospace;
+}
+.md-cache-actions { display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+
+/* Model parameters shown inside a cached prediction's "Details" disclosure. */
+.md-cache-params { display: grid; gap: 8px; margin: 8px 0 4px; }
+.md-cache-params dt {
+  margin: 0; font-weight: 600; font-size: .8rem; color: var(--md-on-surface-variant);
+}
+.md-cache-params dd {
+  margin: 2px 0 0; font-family: ui-monospace, monospace; font-size: .8rem;
+  max-height: 6.5em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* Compact inline delete confirmation for a single cached row. */
+.md-cache-confirm {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0;
+  padding: 8px 12px; border-radius: var(--md-shape-md);
+  background: var(--md-error-container); color: var(--md-on-error-container);
+  font-size: .85rem;
 }
 
 /* Progress bar (indeterminate) */

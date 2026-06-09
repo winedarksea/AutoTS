@@ -12,7 +12,7 @@ use wasm_bindgen::{JsCast, JsValue};
 
 use crate::client::{call_tool, init_runtime, set_progress_handler};
 use crate::dates::{fmt_date, infer_granularity};
-use crate::model::{effective_values, forecast_to_csv, wide_data_to_csv, WideData};
+use crate::model::{effective_values, forecast_to_csv, truncate_chars, wide_data_to_csv, WideData};
 use crate::svg::{self, ChartOutput, FeatureKind, FeatureKindSet, FeatureMarker};
 
 type Overrides = Vec<Vec<Option<f64>>>;
@@ -159,6 +159,33 @@ const MOON_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-toggle-glyph\" ari
     fill=\"url(#bzmoon)\" stroke=\"var(--metal-bronze-dark)\" stroke-width=\"0.6\"/>\
     <path d=\"M17.4 2.6l.62 1.66 1.66.62-1.66.62-.62 1.66-.62-1.66-1.66-.62 1.66-.62z\" \
     fill=\"url(#bzmoon)\"/></svg>";
+
+// ---------------------------------------------------------------------------
+// Quiet line-icon glyphs for the cached-data row actions. Unlike the bronze
+// theme toggle these are functional, so they stroke with `currentColor` and
+// inherit the button's color — letting a delete button redden on hover.
+// ---------------------------------------------------------------------------
+
+// Down arrow dropping onto a base line.
+const DOWNLOAD_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-icon-glyph\" aria-hidden=\"true\" \
+    fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" \
+    stroke-linejoin=\"round\" xmlns=\"http://www.w3.org/2000/svg\">\
+    <path d=\"M12 3v12\"/><path d=\"M7 11l5 4 5-4\"/><path d=\"M4 20h16\"/></svg>";
+
+// Document with a folded corner and ruled lines — a downloadable template.
+const TEMPLATE_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-icon-glyph\" aria-hidden=\"true\" \
+    fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" \
+    stroke-linejoin=\"round\" xmlns=\"http://www.w3.org/2000/svg\">\
+    <path d=\"M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z\"/>\
+    <path d=\"M14 3v5h5\"/><path d=\"M8.5 13h7\"/><path d=\"M8.5 17h7\"/></svg>";
+
+// Trash can.
+const TRASH_SVG: &str = "<svg viewBox=\"0 0 24 24\" class=\"md-icon-glyph\" aria-hidden=\"true\" \
+    fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" \
+    stroke-linejoin=\"round\" xmlns=\"http://www.w3.org/2000/svg\">\
+    <path d=\"M4 7h16\"/><path d=\"M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2\"/>\
+    <path d=\"M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13\"/>\
+    <path d=\"M10 11v6\"/><path d=\"M14 11v6\"/></svg>";
 
 /// An elegant card heading: a metallic-bronze Cinzel Roman numeral, a thin
 /// bronze keyline, then the title. `numeral` may be empty for unnumbered cards.
@@ -382,6 +409,77 @@ async fn fetch_forecast_output(pid: &str, output: &str) -> Option<WideData> {
     WideData::from_json_wide(&v)
 }
 
+/// Reload the cached-objects list. Shared by the manual "Refresh" button and the
+/// per-row delete actions (which refresh after clearing an item).
+async fn reload_cache(cache: RwSignal<Option<Value>>, error: RwSignal<Option<String>>) {
+    match call_tool("list_cache", json!({})).await {
+        Ok(v) => cache.set(Some(v)),
+        Err(e) => error.set(Some(e)),
+    }
+}
+
+/// Download a cached dataset (actuals) as a wide CSV. Fetches the wide JSON and
+/// builds the CSV client-side (reusing `wide_data_to_csv`).
+async fn download_cached_data_csv(id: String, error: RwSignal<Option<String>>) {
+    match call_tool(
+        "get_data",
+        json!({ "data_id": id, "output_format": "json_wide" }),
+    )
+    .await
+    {
+        Ok(v) => match WideData::from_json_wide(&v) {
+            Some(w) => {
+                if let Err(e) = download_csv(&format!("autots_data_{id}.csv"), &wide_data_to_csv(&w))
+                {
+                    error.set(Some(e));
+                }
+            }
+            None => error.set(Some("Cached data could not be read".into())),
+        },
+        Err(e) => error.set(Some(e)),
+    }
+}
+
+/// Download a cached forecast as a wide CSV (original values — point adjustments
+/// only apply to the live forecast in the review card).
+async fn download_cached_forecast_csv(pid: String, error: RwSignal<Option<String>>) {
+    match fetch_forecast_output(&pid, "forecast").await {
+        Some(w) => {
+            if let Err(e) =
+                download_csv(&format!("autots_forecast_{pid}.csv"), &wide_data_to_csv(&w))
+            {
+                error.set(Some(e));
+            }
+        }
+        None => error.set(Some("Cached forecast could not be read".into())),
+    }
+}
+
+/// Fetch a prediction's model parameters via `get_model_params`.
+async fn fetch_model_params(pid: &str) -> Result<Value, String> {
+    call_tool("get_model_params", json!({ "prediction_id": pid })).await
+}
+
+/// Download a prediction's model as an AutoTS export template CSV (loadable into
+/// a regular AutoTS run via `import_template`).
+async fn download_model_template(pid: String, error: RwSignal<Option<String>>) {
+    match fetch_model_params(&pid).await {
+        Ok(v) => {
+            let name = v.get("model_name").and_then(Value::as_str).unwrap_or("Unknown");
+            let mp = v.get("model_parameters").cloned().unwrap_or(Value::Null);
+            let tp = v
+                .get("transformation_parameters")
+                .cloned()
+                .unwrap_or(Value::Null);
+            let csv = crate::model::model_params_to_template_csv(&pid, name, &mp, &tp);
+            if let Err(e) = download_csv(&format!("autots_template_{pid}.csv"), &csv) {
+                error.set(Some(e));
+            }
+        }
+        Err(e) => error.set(Some(e)),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_forecast(
     command: String,
@@ -507,8 +605,6 @@ pub fn App() -> impl IntoView {
     let features_on = create_rw_signal(FeatureKindSet::none());
     let show_bands = create_rw_signal(false);
     let series_menu_open = create_rw_signal(false);
-    let confirm_loaded_data_delete = create_rw_signal(false);
-    let deleting_loaded_data = create_rw_signal(false);
 
     // Upload inputs
     let tab = create_rw_signal::<u8>(0); // 0 paste, 1 url, 2 file, 3 sample, 4 live
@@ -567,7 +663,6 @@ pub fn App() -> impl IntoView {
         show_bands.set(false);
         history_ui.zoom.set(None);
         forecast_ui.zoom.set(None);
-        confirm_loaded_data_delete.set(false);
         sel_set.set(vec![true]);
         adj_sel.set(0);
         let id2 = id.clone();
@@ -716,7 +811,9 @@ pub fn App() -> impl IntoView {
             .any(|s| live_source_ready(s, &en, &va))
     };
 
-    let load_live = move |_| {
+    let load_live = {
+        let live_end_max = live_end_max.clone();
+        move |_| {
         let en = live_enabled.get();
         let va = live_values.get();
         let observation_end = clamp_iso_date_max(end_date.get(), &live_end_max);
@@ -767,6 +864,7 @@ pub fn App() -> impl IntoView {
             }
             busy.set(false);
         });
+        }
     };
 
     // --- forecast actions --------------------------------------------------
@@ -791,12 +889,7 @@ pub fn App() -> impl IntoView {
     };
 
     let refresh_cache = move |_| {
-        spawn_local(async move {
-            match call_tool("list_cache", json!({})).await {
-                Ok(v) => cache.set(Some(v)),
-                Err(e) => error.set(Some(e)),
-            }
-        });
+        spawn_local(async move { reload_cache(cache, error).await });
     };
 
     let download_forecast = move |_| {
@@ -808,50 +901,37 @@ pub fn App() -> impl IntoView {
         }
     };
 
-    let download_loaded_data = move |_| {
-        if let Some(data) = history.get() {
-            let csv = wide_data_to_csv(&data);
-            if let Err(e) = download_csv("autots_loaded_data.csv", &csv) {
-                error.set(Some(e));
-            }
+    // True when any forecast point carries a manual override.
+    let has_adjustments = move || {
+        overrides
+            .get()
+            .iter()
+            .any(|col| col.iter().any(Option::is_some))
+    };
+
+    // Restore the live forecast to its original (un-adjusted) values.
+    let reset_adjustments = move |_| {
+        if let Some(fc) = forecast.get() {
+            let ov = fc.series.iter().map(|s| vec![None; s.values.len()]).collect();
+            overrides.set(ov);
         }
     };
 
-    let delete_loaded_data = move |_| {
-        let Some(id) = data_id.get() else {
-            return;
-        };
-        deleting_loaded_data.set(true);
-        error.set(None);
-        status.set("Deleting loaded data…".into());
-        spawn_local(async move {
-            match call_tool(
-                "clear_cache",
-                json!({ "object_id": id, "cache_type": "data" }),
-            )
-            .await
-            {
-                Ok(_) => {
-                    data_id.set(None);
-                    history.set(None);
-                    report.set(None);
-                    features.set(None);
-                    feature_error.set(None);
-                    forecast.set(None);
-                    upper.set(None);
-                    lower.set(None);
-                    overrides.set(Vec::new());
-                    history_ui.zoom.set(None);
-                    forecast_ui.zoom.set(None);
-                    cache.set(None);
-                    confirm_loaded_data_delete.set(false);
-                    status.set("Loaded data deleted.".into());
-                }
-                Err(e) => error.set(Some(e)),
-            }
-            deleting_loaded_data.set(false);
-        });
-    };
+    // Clears every "active" signal tied to the loaded dataset and its forecast.
+    // Reused when the active dataset is deleted from the cached-data view.
+    let teardown_active = Callback::new(move |_| {
+        data_id.set(None);
+        history.set(None);
+        report.set(None);
+        features.set(None);
+        feature_error.set(None);
+        forecast.set(None);
+        upper.set(None);
+        lower.set(None);
+        overrides.set(Vec::new());
+        history_ui.zoom.set(None);
+        forecast_ui.zoom.set(None);
+    });
 
     // --- "Your data" chart: rebuilt whenever its inputs change. ----------
     create_effect(move |_| {
@@ -1148,7 +1228,10 @@ pub fn App() -> impl IntoView {
                                     <div class="md-field">
                                         <label class="md-label">"End date"</label>
                                         <input type="date" max=live_end_max.clone() prop:value=move || end_date.get()
-                                            on:input=move |ev| end_date.set(clamp_iso_date_max(event_target_value(&ev), &live_end_max)) />
+                                            on:input={
+                                                let live_end_max = live_end_max.clone();
+                                                move |ev| end_date.set(clamp_iso_date_max(event_target_value(&ev), &live_end_max))
+                                            } />
                                     </div>
                                 </div>
                                 <div class="md-sources">
@@ -1157,7 +1240,7 @@ pub fn App() -> impl IntoView {
                                 <div class="md-btn-row">
                                     <button class="md-btn filled"
                                         disabled=move || !ready.get() || busy.get() || !live_any_ready()
-                                        on:click=load_live>"Load live data"</button>
+                                        on:click=load_live.clone()>"Load live data"</button>
                                 </div>
                                 {move || live_sources_result.get().map(|s| view! {
                                     <div style="margin-top:12px">
@@ -1281,41 +1364,9 @@ pub fn App() -> impl IntoView {
                             })}
                         </details>
 
-                        {move || confirm_loaded_data_delete.get().then(|| view! {
-                            <div id="loaded-data-delete-confirmation" class="md-confirmation" role="alert">
-                                <div>
-                                    <strong>"Delete this loaded dataset?"</strong>
-                                    <p class="md-body">"This removes it from the browser cache and closes its forecast controls. This action cannot be undone."</p>
-                                </div>
-                                <div class="md-btn-row">
-                                    <button class="md-btn text"
-                                        disabled=move || deleting_loaded_data.get()
-                                        on:click=move |_| confirm_loaded_data_delete.set(false)>
-                                        "Cancel"
-                                    </button>
-                                    <button class="md-btn filled error"
-                                        disabled=move || deleting_loaded_data.get()
-                                        on:click=delete_loaded_data>
-                                        {move || if deleting_loaded_data.get() { "Deleting…" } else { "Delete data" }}
-                                    </button>
-                                </div>
-                            </div>
-                        })}
-
-                        <div class="md-card-actions">
-                            <button class="md-btn tonal"
-                                disabled=move || deleting_loaded_data.get()
-                                on:click=download_loaded_data>
-                                "Download CSV"
-                            </button>
-                            <button class="md-btn text error"
-                                aria-controls="loaded-data-delete-confirmation"
-                                aria-expanded=move || confirm_loaded_data_delete.get().to_string()
-                                disabled=move || deleting_loaded_data.get() || confirm_loaded_data_delete.get()
-                                on:click=move |_| confirm_loaded_data_delete.set(true)>
-                                "Delete data"
-                            </button>
-                        </div>
+                        <p class="muted md-body" style="margin-top:8px">
+                            "Download or delete this dataset from the “Cached data & forecasts” panel below."
+                        </p>
                     </section>
                 }
             })}
@@ -1379,6 +1430,12 @@ pub fn App() -> impl IntoView {
 
                     <div class="md-btn-row" style="margin-top:12px">
                         <button class="md-btn filled" on:click=download_forecast>"Download forecast CSV"</button>
+                        <button class="md-btn text"
+                            disabled=move || !has_adjustments()
+                            title="Restore the original, un-adjusted forecast"
+                            on:click=reset_adjustments>
+                            "Reset adjustments"
+                        </button>
                     </div>
                 </section>
             })}
@@ -1389,7 +1446,9 @@ pub fn App() -> impl IntoView {
                 <div class="md-btn-row">
                     <button class="md-btn outlined" on:click=refresh_cache>"Refresh"</button>
                 </div>
-                {move || cache.get().map(|c| cache_summary(&c))}
+                {move || cache.get().map(|c| {
+                    cache_summary(c, cache, error, status, data_id, teardown_active)
+                })}
             </section>
         </main>
     }
@@ -1425,7 +1484,59 @@ fn data_table(data: &WideData, sel: usize) -> View {
     .into_view()
 }
 
-fn cache_summary(cache: &Value) -> View {
+/// Which per-row actions a cached group supports, plus the `clear_cache`
+/// `cache_type` it maps to. (`list_cache` group keys are pluralised; see
+/// `CACHE_SUMMARY_KEYS` in cache.py.)
+#[derive(Clone, Copy, PartialEq)]
+enum CacheKind {
+    Data,
+    Prediction,
+    Other,
+}
+
+fn group_to_cache_type(group: &str) -> (&'static str, CacheKind) {
+    match group {
+        "data" => ("data", CacheKind::Data),
+        "predictions" => ("prediction", CacheKind::Prediction),
+        "autots_models" => ("autots", CacheKind::Other),
+        "feature_detectors" => ("feature_detector", CacheKind::Other),
+        "event_risk" => ("event_risk", CacheKind::Other),
+        _ => ("", CacheKind::Other),
+    }
+}
+
+/// Render a prediction's fetched model parameters as a compact definition list,
+/// truncating long JSON for display (the downloaded template keeps the full text).
+fn render_model_params(v: &Value) -> View {
+    let name = v
+        .get("model_name")
+        .and_then(Value::as_str)
+        .unwrap_or("—")
+        .to_string();
+    let mp = serde_json::to_string_pretty(&v.get("model_parameters").cloned().unwrap_or(Value::Null))
+        .unwrap_or_default();
+    let tp = serde_json::to_string_pretty(
+        &v.get("transformation_parameters").cloned().unwrap_or(Value::Null),
+    )
+    .unwrap_or_default();
+    view! {
+        <dl class="md-cache-params">
+            <dt>"Model"</dt><dd>{name}</dd>
+            <dt>"Model parameters"</dt><dd>{truncate_chars(&mp, 1200)}</dd>
+            <dt>"Transformation parameters"</dt><dd>{truncate_chars(&tp, 1200)}</dd>
+        </dl>
+    }
+    .into_view()
+}
+
+fn cache_summary(
+    cache: Value,
+    cache_sig: RwSignal<Option<Value>>,
+    error: RwSignal<Option<String>>,
+    status: RwSignal<String>,
+    active_data_id: RwSignal<Option<String>>,
+    teardown_active: Callback<()>,
+) -> View {
     let Some(groups) = cache.as_object() else {
         return ().into_view();
     };
@@ -1437,6 +1548,7 @@ fn cache_summary(cache: &Value) -> View {
         .iter()
         .filter_map(|(group_name, entries)| {
             let entries = entries.as_array()?;
+            let (cache_type, kind) = group_to_cache_type(group_name);
             let rows = entries
                 .iter()
                 .map(|entry| {
@@ -1464,17 +1576,135 @@ fn cache_summary(cache: &Value) -> View {
                     };
                     let metadata_text = serde_json::to_string_pretty(&metadata).unwrap_or_default();
                     let id_title = id.clone();
+
+                    // Per-row interaction state.
+                    let confirm = create_rw_signal(false);
+                    let busy = create_rw_signal(false);
+                    let params = create_rw_signal::<Option<Value>>(None);
+                    let tried = create_rw_signal(false);
+
+                    // --- Action icon buttons (vary by cache kind) ---
+                    let mut actions: Vec<View> = Vec::new();
+                    if kind == CacheKind::Data {
+                        let did = id.clone();
+                        actions.push(view! {
+                            <button class="md-icon-btn" type="button"
+                                title="Download CSV" aria-label="Download CSV"
+                                on:click=move |_| {
+                                    let did = did.clone();
+                                    spawn_local(async move { download_cached_data_csv(did, error).await });
+                                }>
+                                <span class="md-icon-glyph" inner_html=DOWNLOAD_SVG></span>
+                            </button>
+                        }.into_view());
+                    }
+                    if kind == CacheKind::Prediction {
+                        let fid = id.clone();
+                        actions.push(view! {
+                            <button class="md-icon-btn" type="button"
+                                title="Download forecast CSV" aria-label="Download forecast CSV"
+                                on:click=move |_| {
+                                    let fid = fid.clone();
+                                    spawn_local(async move { download_cached_forecast_csv(fid, error).await });
+                                }>
+                                <span class="md-icon-glyph" inner_html=DOWNLOAD_SVG></span>
+                            </button>
+                        }.into_view());
+                        let tid = id.clone();
+                        actions.push(view! {
+                            <button class="md-icon-btn" type="button"
+                                title="Download model template" aria-label="Download model template"
+                                on:click=move |_| {
+                                    let tid = tid.clone();
+                                    spawn_local(async move { download_model_template(tid, error).await });
+                                }>
+                                <span class="md-icon-glyph" inner_html=TEMPLATE_SVG></span>
+                            </button>
+                        }.into_view());
+                    }
+                    // Delete is offered for any group with a known cache type.
+                    if !cache_type.is_empty() {
+                        actions.push(view! {
+                            <button class="md-icon-btn danger" type="button"
+                                title="Delete" aria-label="Delete"
+                                disabled=move || busy.get()
+                                on:click=move |_| confirm.set(true)>
+                                <span class="md-icon-glyph" inner_html=TRASH_SVG></span>
+                            </button>
+                        }.into_view());
+                    }
+
+                    // Inline delete confirmation.
+                    let confirm_id = id.clone();
+                    let confirm_view = move || {
+                        let id = confirm_id.clone();
+                        confirm.get().then(move || {
+                            let del_id = id.clone();
+                            view! {
+                                <div class="md-cache-confirm" role="alert">
+                                    <span>"Delete this cached item? This cannot be undone."</span>
+                                    <button class="md-btn text" disabled=move || busy.get()
+                                        on:click=move |_| confirm.set(false)>"Cancel"</button>
+                                    <button class="md-btn filled error" disabled=move || busy.get()
+                                        on:click=move |_| {
+                                            let id = del_id.clone();
+                                            busy.set(true);
+                                            error.set(None);
+                                            spawn_local(async move {
+                                                match call_tool(
+                                                    "clear_cache",
+                                                    json!({ "object_id": id, "cache_type": cache_type }),
+                                                ).await {
+                                                    Ok(_) => {
+                                                        if active_data_id.get().as_deref() == Some(id.as_str()) {
+                                                            teardown_active.call(());
+                                                        }
+                                                        status.set("Cached item deleted.".into());
+                                                        confirm.set(false);
+                                                        reload_cache(cache_sig, error).await;
+                                                    }
+                                                    Err(e) => error.set(Some(e)),
+                                                }
+                                                busy.set(false);
+                                            });
+                                        }>
+                                        {move || if busy.get() { "Deleting…" } else { "Delete" }}
+                                    </button>
+                                </div>
+                            }
+                        })
+                    };
+
+                    // Details: metadata always; model parameters lazily for predictions.
+                    let pid = id.clone();
+                    let is_prediction = kind == CacheKind::Prediction;
                     view! {
                         <tr>
-                            <td class="md-cache-id" title=id_title>{id}</td>
+                            <td class="md-cache-id" title=id_title>{id.clone()}</td>
                             <td>{source}</td>
                             <td>{shape}</td>
                             <td>{created}</td>
                             <td>
-                                <details class="md-expander">
+                                <details class="md-expander"
+                                    on:toggle=move |_| {
+                                        if is_prediction && !tried.get() {
+                                            tried.set(true);
+                                            let pid = pid.clone();
+                                            spawn_local(async move {
+                                                if let Ok(v) = fetch_model_params(&pid).await {
+                                                    params.set(Some(v));
+                                                }
+                                            });
+                                        }
+                                    }>
                                     <summary>"Details"</summary>
-                                    <pre class="md-body">{metadata_text}</pre>
+                                    {move || params.get().map(|v| render_model_params(&v))}
+                                    <pre class="md-body">{metadata_text.clone()}</pre>
                                 </details>
+                            </td>
+                            <td>
+                                <div class="md-cache-actions">{actions}</div>
+                                {confirm_view}
                             </td>
                         </tr>
                     }
@@ -1493,6 +1723,7 @@ fn cache_summary(cache: &Value) -> View {
                                     <th>"Shape"</th>
                                     <th>"Created"</th>
                                     <th>"More"</th>
+                                    <th>"Actions"</th>
                                 </tr>
                             </thead>
                             <tbody>{rows}</tbody>
@@ -1910,7 +2141,7 @@ fn parse_progress(s: &str) -> Option<(usize, usize)> {
 }
 
 fn clamp_iso_date_max(date: String, max: &str) -> String {
-    if date > max {
+    if date.as_str() > max {
         max.to_string()
     } else {
         date
