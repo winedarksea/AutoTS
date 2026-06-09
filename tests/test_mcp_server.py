@@ -553,6 +553,34 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
         out = await self.P.run_command_json("make_forecast", json.dumps({}))
         self.assertIn("error", json.loads(out))
 
+    async def test_make_forecast_preserves_prediction_interval(self):
+        calls = []
+
+        async def fake_run_tool(name, arguments, progress_cb):
+            calls.append((name, arguments))
+            if name == "detect_features":
+                return {"detector_id": "feature-detector"}
+            return {"prediction_id": "prediction"}
+
+        orig = self.P.run_tool
+        self.P.run_tool = fake_run_tool
+        try:
+            result = await self.P.dispatch(
+                "make_forecast",
+                {
+                    "data_id": "d",
+                    "forecast_length": 12,
+                    "prediction_interval": 0.8,
+                },
+            )
+        finally:
+            self.P.run_tool = orig
+
+        self.assertEqual(result["prediction_id"], "prediction")
+        self.assertEqual(calls[1][0], "forecast_from_features")
+        self.assertEqual(calls[1][1]["forecast_length"], 12)
+        self.assertEqual(calls[1][1]["prediction_interval"], 0.8)
+
     async def test_restore_data_snapshot_rebuilds_wide_datetime_data(self):
         from autots.mcp.cache import clear_cache, get_cached_object
 
@@ -1380,14 +1408,34 @@ class TestMCPToolHandlers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("summary", data)
 
     async def test_forecast_from_features(self):
+        from autots.mcp.cache import get_cached_object
+
         detector_id = await self._ensure_detector()
         result = await call_tool(
             "forecast_from_features",
-            {"detector_id": detector_id, "forecast_length": 14},
+            {
+                "detector_id": detector_id,
+                "forecast_length": 14,
+                "prediction_interval": 0.8,
+            },
         )
         data = _extract(result)
         self.assertIn("prediction_id", data)
         self.assertEqual(data.get("forecast_length"), 14)
+        self.assertEqual(data.get("prediction_interval"), 0.8)
+        prediction = get_cached_object(data["prediction_id"], "prediction")["object"]
+        self.assertTrue(
+            (prediction.upper_forecast.values >= prediction.forecast.values).all()
+        )
+        self.assertTrue(
+            (prediction.forecast.values >= prediction.lower_forecast.values).all()
+        )
+        self.assertGreater(
+            (prediction.upper_forecast - prediction.lower_forecast)
+            .to_numpy()
+            .max(),
+            0,
+        )
         # Clean up derived prediction
         clear_cache(data["prediction_id"], "prediction")
 

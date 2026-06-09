@@ -119,13 +119,18 @@ async def _make_forecast(arguments, progress_cb):
     if not data_id:
         return {"error": "make_forecast requires 'data_id'"}
     forecast_length = arguments.get("forecast_length", 30)
+    prediction_interval = arguments.get("prediction_interval", 0.9)
 
     det = await run_tool("detect_features", {"data_id": data_id}, progress_cb)
     if "error" in det:
         return det
     return await run_tool(
         "forecast_from_features",
-        {"detector_id": det["detector_id"], "forecast_length": forecast_length},
+        {
+            "detector_id": det["detector_id"],
+            "forecast_length": forecast_length,
+            "prediction_interval": prediction_interval,
+        },
         progress_cb,
     )
 

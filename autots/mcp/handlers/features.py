@@ -263,11 +263,15 @@ async def handle_plot_features(arguments: dict, log_progress) -> dict:
 async def handle_forecast_from_features(arguments: dict, log_progress) -> dict:
     detector_id = arguments.get("detector_id")
     forecast_length = arguments.get("forecast_length", 30)
+    prediction_interval = arguments.get("prediction_interval", 0.9)
 
     cached = get_cached_object(detector_id, 'feature_detector')
     detector = cached['object']
 
-    prediction = detector.forecast(forecast_length=forecast_length)
+    prediction = detector.forecast(
+        forecast_length=forecast_length,
+        prediction_interval=prediction_interval,
+    )
 
     historical_data_id = None
     if hasattr(detector, 'df_original') and detector.df_original is not None:
@@ -287,6 +291,7 @@ async def handle_forecast_from_features(arguments: dict, log_progress) -> dict:
         {
             'method': 'feature_detector',
             'forecast_length': forecast_length,
+            'prediction_interval': prediction.prediction_interval,
             'detector_id': detector_id,
             'historical_data_id': historical_data_id,
         },
@@ -295,6 +300,7 @@ async def handle_forecast_from_features(arguments: dict, log_progress) -> dict:
     return {
         "prediction_id": prediction_id,
         "forecast_length": forecast_length,
+        "prediction_interval": prediction.prediction_interval,
         "note": "This forecast is based on detected features and is experimental",
     }
 

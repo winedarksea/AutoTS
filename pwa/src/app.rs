@@ -445,7 +445,7 @@ async fn run_forecast(
     command: String,
     data_id: String,
     forecast_length: i64,
-    autots_params: Option<Value>,
+    additional_arguments: Option<Value>,
     forecast: RwSignal<Option<WideData>>,
     upper: RwSignal<Option<WideData>>,
     lower: RwSignal<Option<WideData>>,
@@ -467,8 +467,10 @@ async fn run_forecast(
         "data_id": data_id,
         "forecast_length": forecast_length,
     });
-    if let Some(params) = autots_params {
-        arguments["autots_params"] = params;
+    if let Some(Value::Object(additional)) = additional_arguments {
+        if let Some(arguments_object) = arguments.as_object_mut() {
+            arguments_object.extend(additional);
+        }
     }
     let res = call_tool(&command, arguments).await;
     match res {
@@ -989,14 +991,21 @@ pub fn App() -> impl IntoView {
             return;
         };
         let fl = forecast_length.get();
-        let autots_params = match command {
-            "search_forecast" => Some(json!({
+        let additional_arguments = match command {
+            "make_forecast" => Some(json!({
                 "prediction_interval": prediction_interval.get(),
             })),
+            "search_forecast" => Some(json!({
+                "autots_params": {
+                    "prediction_interval": prediction_interval.get(),
+                },
+            })),
             "search_all_night" => Some(json!({
-                "prediction_interval": prediction_interval.get(),
-                "generation_timeout": overnight_generation_timeout_minutes(),
-                "max_generations": 1_000_000,
+                "autots_params": {
+                    "prediction_interval": prediction_interval.get(),
+                    "generation_timeout": overnight_generation_timeout_minutes(),
+                    "max_generations": 1_000_000,
+                },
             })),
             _ => None,
         };
@@ -1004,7 +1013,7 @@ pub fn App() -> impl IntoView {
             command.to_string(),
             id,
             fl,
-            autots_params,
+            additional_arguments,
             forecast,
             upper,
             lower,
