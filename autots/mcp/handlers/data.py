@@ -155,12 +155,19 @@ async def handle_load_live_data(arguments: dict, log_progress) -> dict:
         # Every source failed (e.g. CORS/network in-browser). Surface the
         # per-source failures rather than erroring out so the UI can explain
         # what happened.
+        error_message = str(e)
+        if error_message == "No data successfully downloaded!":
+            error_message = (
+                "No live data sources succeeded. Check the per-source results; "
+                "browser CORS restrictions or unavailable optional packages may "
+                "block individual sources."
+            )
         return {
             "data_id": None,
             "rows": 0,
             "cols": 0,
             "sources": status_log,
-            "error": str(e),
+            "error": error_message,
         }
 
     data_id = cache_object(

@@ -2437,7 +2437,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
     LiveSource {
         id: "tickers",
         label: "Stock tickers (Yahoo Finance)",
-        default_enabled: true,
+        default_enabled: false,
         key_field: None,
         fields: &[LiveField {
             param: "tickers",
@@ -2445,7 +2445,9 @@ static LIVE_SOURCES: &[LiveSource] = &[
             default: "MSFT",
             kind: FieldKind::List,
         }],
-        note: None,
+        note: Some(
+            "Unavailable in-browser: current yfinance requires curl-cffi, which has no Pyodide wheel.",
+        ),
     },
     LiveSource {
         id: "earthquake",

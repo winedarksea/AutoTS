@@ -24,6 +24,7 @@ import json
 import os
 import sys
 import tempfile
+import types
 import unittest
 import zipfile
 from unittest import mock
@@ -794,6 +795,56 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(params["model_list"], self.P.PYODIDE_SEARCH_MODELS)
         self.assertEqual(params["n_jobs"], 1)
 
+    async def test_live_dependencies_install_transport_before_optional_adapters(self):
+        install = mock.AsyncMock()
+        install.side_effect = [
+            None,
+            None,
+            None,
+            RuntimeError("lxml unavailable"),
+        ]
+        micropip = types.SimpleNamespace(install=install)
+        pyodide_http = types.SimpleNamespace(patch_all=mock.Mock())
+        original_ready = self.P._live_ready
+        self.P._live_ready = False
+        try:
+            with mock.patch.object(self.P.sys, "platform", "emscripten"), mock.patch.dict(
+                sys.modules,
+                {"micropip": micropip, "pyodide_http": pyodide_http},
+            ):
+                error = await self.P._ensure_live_deps()
+        finally:
+            self.P._live_ready = original_ready
+
+        self.assertIsNone(error)
+        self.assertEqual(
+            [call.args[0] for call in install.await_args_list],
+            [
+                "requests",
+                "pyodide-http",
+                "fredapi",
+                "pytrends",
+            ],
+        )
+        pyodide_http.patch_all.assert_called_once_with()
+
+    async def test_live_dependency_transport_failure_returns_actionable_error(self):
+        micropip = types.SimpleNamespace(
+            install=mock.AsyncMock(side_effect=RuntimeError("missing wheel"))
+        )
+        original_ready = self.P._live_ready
+        self.P._live_ready = False
+        try:
+            with mock.patch.object(self.P.sys, "platform", "emscripten"), mock.patch.dict(
+                sys.modules, {"micropip": micropip}
+            ):
+                result = await self.P.dispatch("load_live_data", {})
+        finally:
+            self.P._live_ready = original_ready
+
+        self.assertIsNone(result["data_id"])
+        self.assertIn("required browser live-data dependency", result["error"])
+
 
 # ===========================================================================
 # Live data loading (no network — loader is mocked)
@@ -918,6 +969,7 @@ class TestMCPLiveDataHandler(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(res["data_id"])
         self.assertIn("error", res)
+        self.assertIn("No live data sources succeeded", res["error"])
         self.assertEqual(len(res["sources"]), 1)
         self.assertEqual(res["sources"][0]["status"], "failed")
 

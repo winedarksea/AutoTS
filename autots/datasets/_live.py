@@ -174,7 +174,9 @@ def load_live_daily(
 
         s = requests.Session()
     except Exception as e:
-        print(f"requests Session creation failed {repr(e)}")
+        raise ValueError(
+            f"Live data HTTP transport is unavailable: {e!r}"
+        ) from e
 
     if fred_key is not None and fred_series is not None:
         _blk = _start_source("FRED")
