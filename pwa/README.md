@@ -44,8 +44,9 @@ to rebuild after changing Python code). Then open the served page, load a sample
 dataset, and forecast.
 
 First load downloads Pyodide + scientific packages from the jsDelivr CDN
-(network required). A service worker caches the complete pinned runtime while
-it starts. When the header shows **Offline ready**, the in-app Install action
+(network required). Runtime startup is never blocked by offline preparation.
+After startup, a service worker caches the complete pinned runtime in the
+background. When the header shows **Offline ready**, the in-app Install action
 creates an app that can relaunch and forecast without a network connection.
 
 Completed datasets and forecasts are stored as versioned JSON artifacts in

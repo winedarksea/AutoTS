@@ -26,6 +26,7 @@
   let offlineReady = false;
   let appInstalled = false;
   let serviceWorkerReady = null;
+  let offlinePreparation = null;
   let readyResolve = null;
   let readyReject = null;
   let ready = null;
@@ -45,25 +46,6 @@
         installed: appInstalled,
       }));
     }
-  }
-
-  function waitForServiceWorkerControl() {
-    if (navigator.serviceWorker.controller) return Promise.resolve();
-    return new Promise((resolve) => {
-      navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
-    });
-  }
-
-  function waitForWorkerActivation(worker) {
-    if (!worker || worker.state === 'activated') return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      worker.addEventListener('statechange', () => {
-        if (worker.state === 'activated') resolve();
-        if (worker.state === 'redundant') {
-          reject(new Error('Updated service worker became redundant'));
-        }
-      });
-    });
   }
 
   function enableInstallManifest() {
@@ -89,36 +71,37 @@
       return serviceWorkerReady;
     }
     serviceWorkerReady = navigator.serviceWorker.register('service_worker.js')
-      .then(async (registration) => {
-        const updatingWorker = registration.installing || registration.waiting;
-        const previousController = navigator.serviceWorker.controller;
-        let controllerChanged = null;
-        if (updatingWorker && previousController) {
-          controllerChanged = new Promise((resolve) => {
-            navigator.serviceWorker.addEventListener(
-              'controllerchange',
-              resolve,
-              { once: true }
-            );
-          });
-        }
-        await waitForWorkerActivation(updatingWorker);
-        await navigator.serviceWorker.ready;
-        if (
-          controllerChanged &&
-          navigator.serviceWorker.controller === previousController
-        ) {
-          await controllerChanged;
-        } else {
-          await waitForServiceWorkerControl();
-        }
-        return true;
-      })
+      .then(() => navigator.serviceWorker.ready)
       .catch((error) => {
         console.warn('AutoTS offline support could not start:', error);
-        return false;
+        return null;
       });
     return serviceWorkerReady;
+  }
+
+  function prepareOfflineSupport() {
+    if (offlinePreparation) return offlinePreparation;
+    offlinePreparation = initializeOfflineSupport().then((registration) => {
+      if (!registration || !registration.active || typeof MessageChannel === 'undefined') {
+        return false;
+      }
+      return new Promise((resolve) => {
+        const channel = new MessageChannel();
+        const timeout = setTimeout(() => resolve(false), 10 * 60 * 1000);
+        channel.port1.onmessage = (event) => {
+          clearTimeout(timeout);
+          resolve(Boolean(event.data && event.data.ok));
+        };
+        registration.active.postMessage(
+          { type: 'prepare-offline' },
+          [channel.port2]
+        );
+      });
+    }).catch((error) => {
+      console.warn('AutoTS offline cache could not complete:', error);
+      return false;
+    });
+    return offlinePreparation;
   }
 
   if (self.addEventListener) {
@@ -139,16 +122,15 @@
     const m = event.data;
     switch (m.type) {
       case 'ready':
-        Promise.resolve().then(() => {
-          offlineReady = Boolean(
-            typeof navigator !== 'undefined' &&
-            navigator.serviceWorker &&
-            navigator.serviceWorker.controller
-          );
-          if (offlineReady) enableInstallManifest();
+        notifyLifecycle('ready');
+        if (readyResolve) readyResolve();
+        prepareOfflineSupport().then((prepared) => {
+          offlineReady = prepared;
+          if (offlineReady) {
+            enableInstallManifest();
+            notifyLifecycle('offline-ready');
+          }
           notifyInstallState();
-          notifyLifecycle(offlineReady ? 'offline-ready' : 'ready');
-          if (readyResolve) readyResolve();
         });
         break;
       case 'init_error':
@@ -242,7 +224,8 @@
 
   function initRuntime(wheelUrl, pyodideUrl) {
     if (ready) return ready;
-    return initializeOfflineSupport().then(() => resolveRuntimeAssets(wheelUrl)).then((runtimeAssets) => {
+    initializeOfflineSupport();
+    return resolveRuntimeAssets(wheelUrl).then((runtimeAssets) => {
       runtimeConfig = {
         workerUrl: self.AUTOTS_WORKER_URL || 'pyodide_worker.js',
         wheelUrl: runtimeAssets.wheelUrl,

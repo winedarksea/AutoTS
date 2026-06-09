@@ -1,6 +1,27 @@
 const CACHE_PREFIX = 'autots-pwa-';
 const CACHE_NAME = `${CACHE_PREFIX}__AUTOTS_CACHE_VERSION__`;
 const PYODIDE_BASE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/';
+const PYODIDE_OFFLINE_ASSETS = [
+  'pyodide.js',
+  'pyodide.asm.js',
+  'pyodide.asm.wasm',
+  'python_stdlib.zip',
+  'pyodide-lock.json',
+  'joblib-1.4.0-py3-none-any.whl',
+  'micropip-0.8.0-py3-none-any.whl',
+  'numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl',
+  'openblas-0.3.26.zip',
+  'packaging-24.2-py3-none-any.whl',
+  'pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl',
+  'patsy-0.5.6-py2.py3-none-any.whl',
+  'python_dateutil-2.9.0.post0-py2.py3-none-any.whl',
+  'pytz-2024.1-py2.py3-none-any.whl',
+  'scikit_learn-1.6.1-cp312-cp312-pyodide_2024_0_wasm32.whl',
+  'scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl',
+  'six-1.16.0-py2.py3-none-any.whl',
+  'statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl',
+  'threadpoolctl-3.5.0-py3-none-any.whl',
+];
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).href;
@@ -15,8 +36,20 @@ async function precachePublishedAssets() {
   }
   const manifest = await manifestResponse.json();
   const assetUrls = manifest.assets.map(scopedUrl);
-  const cache = await caches.open(CACHE_NAME);
-  await cache.addAll(assetUrls);
+  await cacheUrls(assetUrls);
+}
+
+async function cacheUrls(urls) {
+  for (let index = 0; index < urls.length; index += 3) {
+    await Promise.all(urls.slice(index, index + 3).map((url) => cacheFirst(url)));
+  }
+}
+
+async function prepareOfflineCache() {
+  await precachePublishedAssets();
+  await cacheUrls(
+    PYODIDE_OFFLINE_ASSETS.map((filename) => `${PYODIDE_BASE_URL}${filename}`)
+  );
 }
 
 async function cacheFirst(request) {
@@ -42,7 +75,7 @@ async function navigationResponse(request) {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(precachePublishedAssets().then(() => self.skipWaiting()));
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
@@ -70,4 +103,23 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(cacheFirst(event.request));
   }
+});
+
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'prepare-offline') return;
+  const responsePort = event.ports && event.ports[0];
+  event.waitUntil(
+    prepareOfflineCache()
+      .then(() => {
+        if (responsePort) responsePort.postMessage({ ok: true });
+      })
+      .catch((error) => {
+        if (responsePort) {
+          responsePort.postMessage({
+            ok: false,
+            error: String(error && error.message ? error.message : error),
+          });
+        }
+      })
+  );
 });

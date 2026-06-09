@@ -91,6 +91,19 @@ vm.runInContext(
     preventDefault() {},
   };
   const installStates = [];
+  class MockMessageChannel {
+    constructor() {
+      this.port1 = { onmessage: null };
+      this.port2 = {
+        reply: (data) => queueMicrotask(() => this.port1.onmessage({ data })),
+      };
+    }
+  }
+  const activeServiceWorker = {
+    postMessage(_message, ports) {
+      ports[0].reply({ ok: true });
+    },
+  };
   const installContext = {
     self: {
       AUTOTS_WORKER_URL: 'worker.js',
@@ -100,8 +113,8 @@ vm.runInContext(
     navigator: {
       serviceWorker: {
         controller: {},
-        register: async () => ({}),
-        ready: Promise.resolve({}),
+        register: async () => ({ active: activeServiceWorker }),
+        ready: Promise.resolve({ active: activeServiceWorker }),
         addEventListener() {},
       },
     },
@@ -121,6 +134,9 @@ vm.runInContext(
     Promise,
     Error,
     JSON,
+    MessageChannel: MockMessageChannel,
+    setTimeout,
+    clearTimeout,
     queueMicrotask,
     console,
   };
@@ -142,10 +158,51 @@ vm.runInContext(
       'https://example.test/app/openpyxl.whl',
     ]
   );
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(installStates.at(-1).offlineReady, true);
   assert.equal(installStates.at(-1).installAvailable, true);
   assert.equal(await installClient.installApp(), true);
   assert.equal(installPrompt.promptCalls, 1);
+
+  let resolveServiceWorkerRegistration;
+  const delayedWorkers = [];
+  class DelayedWorker extends MockWorker {
+    constructor(url, options) {
+      super(url, options);
+      delayedWorkers.push(this);
+    }
+  }
+  const delayedContext = {
+    self: {
+      AUTOTS_WORKER_URL: 'worker.js',
+      isSecureContext: true,
+      addEventListener() {},
+    },
+    navigator: {
+      serviceWorker: {
+        controller: null,
+        register: () => new Promise((resolve) => {
+          resolveServiceWorkerRegistration = resolve;
+        }),
+        ready: new Promise(() => {}),
+      },
+    },
+    Worker: DelayedWorker,
+    URL,
+    Promise,
+    Error,
+    JSON,
+    queueMicrotask,
+    console,
+  };
+  vm.createContext(delayedContext);
+  vm.runInContext(
+    fs.readFileSync(require.resolve('./autots_client.js'), 'utf8'),
+    delayedContext
+  );
+  await delayedContext.self.autotsClient.initRuntime('wheel.whl', 'pyodide.js');
+  assert.equal(delayedWorkers.length, 1);
+  assert.ok(resolveServiceWorkerRegistration, 'service worker registration should start');
 
   console.log('autots_client tests passed');
 })().catch((error) => {

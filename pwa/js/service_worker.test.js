@@ -54,17 +54,27 @@ vm.runInContext(
   let installPromise;
   handlers.install({ waitUntil: (promise) => { installPromise = promise; } });
   await installPromise;
-  assert.deepEqual(cachedAssets, [
-    'https://example.test/app/index.html',
-    'https://example.test/app/app.js',
-    'https://example.test/app/app_bg.wasm',
-    'https://example.test/app/autots.whl',
-  ]);
+  assert.deepEqual(cachedAssets, []);
 
   let activatePromise;
   handlers.activate({ waitUntil: (promise) => { activatePromise = promise; } });
   await activatePromise;
   assert.deepEqual(deletedCaches, ['autots-pwa-old']);
+
+  const offlineMessages = [];
+  let offlinePromise;
+  handlers.message({
+    data: { type: 'prepare-offline' },
+    ports: [{ postMessage: (message) => offlineMessages.push(message) }],
+    waitUntil: (promise) => { offlinePromise = promise; },
+  });
+  await offlinePromise;
+  assert.equal(offlineMessages.length, 1);
+  assert.equal(offlineMessages[0].ok, true);
+  assert.ok(cachedRequests.includes('https://example.test/app/index.html'));
+  assert.ok(cachedRequests.includes(
+    'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.asm.wasm'
+  ));
 
   let fetchPromise;
   handlers.fetch({
@@ -76,9 +86,9 @@ vm.runInContext(
     respondWith: (promise) => { fetchPromise = promise; },
   });
   await fetchPromise;
-  assert.deepEqual(cachedRequests, [
-    'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/numpy.whl',
-  ]);
+  assert.ok(cachedRequests.includes(
+    'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/numpy.whl'
+  ));
 
   console.log('service worker tests passed');
 })().catch((error) => {

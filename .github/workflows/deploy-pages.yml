@@ -52,7 +52,7 @@ jobs:
 
       - name: Build PWA
         working-directory: pwa
-        run: trunk build --release --public-url ./
+        run: trunk build --release --public-url /forecasting/app/
 
       - name: Assemble deploy tree
         run: |
