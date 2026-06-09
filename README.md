@@ -2,7 +2,7 @@
 
 <img src="/img/autots_1280.png" width="400" height="184" title="AutoTS Logo">
 
-AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale. 
+AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale. Give it a try in your browser with the [official demo app](https://sirith.com/forecasting/app/).
 
 In 2023, AutoTS won in the M6 forecasting competition, delivering the highest performance investment decisions across 12 months of stock market forecasting.
 
