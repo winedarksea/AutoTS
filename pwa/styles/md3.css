@@ -436,59 +436,111 @@ body {
 .md-expander[open] summary::before { content: "▾ "; }
 
 /* Chart */
-.md-chart { width: 100%; background: var(--md-surface); border-radius: var(--md-shape-md); }
-.md-chart svg { display: block; width: 100%; height: auto; }
+.md-chart-wrap { position: relative; }
+.md-chart {
+  width: 100%; background: var(--md-surface); border-radius: var(--md-shape-md);
+  /* let pointer drag-to-zoom work without the page scrolling/selecting */
+  touch-action: none; cursor: crosshair; user-select: none;
+}
+.md-chart svg { display: block; width: 100%; height: auto; pointer-events: none; }
 
-/* Point hover tooltips (pure CSS — no JS required).
-   .chart-pt wraps an invisible hit circle + a .chart-tt tooltip group.
-   The tooltip becomes visible when the group is hovered. */
-.chart-tt { display: none; }
-.chart-pt:hover .chart-tt { display: block; }
-.chart-tt-bg {
-  fill: var(--md-surface-container-high);
-  stroke: var(--md-outline-variant);
-  stroke-width: 1;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,.18));
+/* Pointer overlay: crosshair, tooltip, drag-select rectangle.
+   The plot area spans ~4.7%..88.8% of the chart height (PAD_T/PAD_B of a
+   340-unit viewBox); overlay pieces align to that band. */
+.md-chart-crosshair {
+  position: absolute; top: 4.7%; bottom: 11.2%; width: 0;
+  border-left: 1px dashed var(--md-outline);
+  transform: translateX(-0.5px); pointer-events: none;
 }
-.chart-tt-val {
-  font-size: 13px;
-  font-weight: 600;
-  fill: var(--md-on-surface);
-  font-family: "Roboto Mono", ui-monospace, monospace;
+.md-chart-brush {
+  position: absolute; top: 4.7%; bottom: 11.2%;
+  background: color-mix(in srgb, var(--md-primary) 16%, transparent);
+  border-left: 1px solid var(--md-primary);
+  border-right: 1px solid var(--md-primary);
+  pointer-events: none;
 }
-.chart-tt-date {
-  font-size: 10px;
-  fill: var(--md-on-surface-variant);
+.md-chart-tooltip {
+  position: absolute; top: 6px; transform: translateX(-50%);
+  min-width: 90px; max-width: 220px;
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  box-shadow: var(--md-elev-2);
+  padding: 6px 8px; pointer-events: none; z-index: 2;
 }
+.md-tt-date { font-size: 0.72rem; color: var(--md-on-surface-variant); margin-bottom: 3px; }
+.md-tt-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; line-height: 1.5; }
+.md-tt-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.md-tt-name { color: var(--md-on-surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-tt-val { margin-left: auto; font-weight: 600; font-family: "Roboto Mono", ui-monospace, monospace; }
 
-/* Multi-series toggle chips — each chip carries --chip-color via inline style */
-.md-series-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.md-series-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px 5px 8px;
-  border-radius: 20px;
-  border: 1.5px solid var(--chip-color, var(--md-outline-variant));
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font: inherit; font-size: 0.85rem; cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.md-series-chip.active {
-  background: color-mix(in srgb, var(--chip-color, var(--md-primary)) 15%, transparent);
-  color: var(--md-on-surface);
-  border-color: var(--chip-color, var(--md-primary));
-}
 .md-series-chip-swatch {
   width: 10px; height: 10px; border-radius: 2px;
-  background: var(--chip-color, var(--md-primary));
-  flex-shrink: 0;
+  background: var(--md-primary); flex-shrink: 0;
 }
 
+/* Scrollable checkbox dropdown for series selection */
+.md-series-select { max-width: 280px; }
+.md-dropdown { position: relative; }
+.md-dropdown-toggle { width: 100%; justify-content: space-between; }
+.md-dropdown-caret { transition: transform .2s; }
+.md-dropdown-toggle.open .md-dropdown-caret { transform: rotate(180deg); }
+.md-dropdown-panel {
+  position: absolute; z-index: 5; margin-top: 4px; width: 100%; min-width: 220px;
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  box-shadow: var(--md-elev-2); overflow: hidden;
+}
+.md-dropdown-actions { padding: 4px 8px; border-bottom: 1px solid var(--md-outline-variant); }
+.md-dropdown-list { max-height: 240px; overflow-y: auto; padding: 4px; }
+.md-dropdown-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: var(--md-shape-sm); cursor: pointer; font-size: 0.9rem;
+}
+.md-dropdown-item:hover { background: var(--md-surface-container); }
+.md-dropdown-item input { accent-color: var(--md-primary); }
+
+/* Interactive detected-feature legend (toggles per-type markers on the plot) */
+.md-feat-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.md-feat-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px 4px 8px; border-radius: 999px;
+  border: 1.5px solid var(--md-outline-variant); background: transparent;
+  color: var(--md-on-surface-variant); font: inherit; font-size: 0.8rem; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.md-feat-chip.active { background: var(--md-surface-container-high); color: var(--md-on-surface); border-color: var(--md-outline); }
+.md-feat-chip:disabled { opacity: .45; cursor: default; }
+.md-feat-glyph { display: inline-flex; width: 13px; height: 13px; opacity: .55; filter: saturate(.6); }
+.md-feat-chip.active .md-feat-glyph { opacity: 1; filter: none; }
+
+/* Pill toggle (e.g. uncertainty bounds) */
+.md-toggle-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 16px 7px 12px; border-radius: 999px;
+  border: 1.5px solid var(--md-outline-variant); background: transparent;
+  color: var(--md-on-surface-variant); font: inherit; font-size: 0.85rem; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.md-toggle-chip-mark {
+  width: 28px; height: 16px; border-radius: 999px; flex-shrink: 0;
+  background: var(--md-outline-variant); position: relative; transition: background .15s;
+}
+.md-toggle-chip-mark::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--md-surface); transition: transform .15s;
+}
+.md-toggle-chip.active { color: var(--md-on-surface); border-color: var(--md-primary); }
+.md-toggle-chip.active .md-toggle-chip-mark { background: var(--md-primary); }
+.md-toggle-chip.active .md-toggle-chip-mark::after { transform: translateX(12px); }
+.md-toggle-chip:disabled { opacity: .45; cursor: default; }
+
 .md-chart-controls {
-  display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
+  display: flex; flex-wrap: wrap; align-items: center;
   gap: 12px; margin-bottom: 10px;
 }
-.md-chart-controls .md-field { min-width: 180px; }
+.md-chart-controls .spacer { flex: 1; }
 .md-chart-legend { display: flex; gap: 16px; color: var(--md-on-surface-variant); font-size: .85rem; }
 .md-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .md-chart-legend i { display: inline-block; width: 24px; height: 3px; border-radius: 2px; }

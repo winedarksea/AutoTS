@@ -11,10 +11,112 @@ use serde_json::{json, Value};
 use wasm_bindgen::{JsCast, JsValue};
 
 use crate::client::{call_tool, init_runtime, set_progress_handler};
+use crate::dates::{fmt_date, infer_granularity};
 use crate::model::{effective_values, forecast_to_csv, wide_data_to_csv, WideData};
-use crate::svg;
+use crate::svg::{self, ChartOutput, FeatureKind, FeatureKindSet, FeatureMarker};
 
 type Overrides = Vec<Vec<Option<f64>>>;
+
+/// Per-chart interaction state (pointer hover + drag-to-zoom). All fields are
+/// `RwSignal`, so the struct is `Copy` and cheap to pass to view helpers.
+#[derive(Clone, Copy)]
+struct ChartUi {
+    /// Rendered SVG string (recomputed by an effect from the chart inputs).
+    svg: RwSignal<String>,
+    /// Chart geometry for cursor hit-testing (Copy — cheap to read per move).
+    geom: RwSignal<Option<svg::ChartGeom>>,
+    /// Absolute axis index under the cursor (drives tooltip + crosshair).
+    hover: RwSignal<Option<usize>>,
+    /// Visible window (absolute, inclusive); `None` = full fit.
+    zoom: RwSignal<Option<(usize, usize)>>,
+    /// Drag-select endpoints in viewBox-x while brushing a zoom region.
+    drag_start: RwSignal<Option<f64>>,
+    drag_cur: RwSignal<Option<f64>>,
+}
+
+impl ChartUi {
+    fn new() -> Self {
+        ChartUi {
+            svg: create_rw_signal(String::new()),
+            geom: create_rw_signal(None),
+            hover: create_rw_signal(None),
+            zoom: create_rw_signal(None),
+            drag_start: create_rw_signal(None),
+            drag_cur: create_rw_signal(None),
+        }
+    }
+
+    /// Apply a freshly built chart output to the SVG + geometry signals.
+    fn set_output(&self, out: ChartOutput) {
+        self.geom.set(Some(out.geom));
+        self.svg.set(out.svg);
+    }
+}
+
+/// One tooltip row: (palette color index, series name, value at the point).
+type TtRow = (usize, String, f64);
+
+fn norm_date(s: &str) -> String {
+    s.chars().take(10).collect()
+}
+
+/// Map normalized (YYYY-MM-DD) date -> first axis index, for feature matching.
+fn date_index_map(dates: &[String]) -> HashMap<String, usize> {
+    let mut m = HashMap::new();
+    for (i, d) in dates.iter().enumerate() {
+        m.entry(norm_date(d)).or_insert(i);
+    }
+    m
+}
+
+/// Build detected-feature markers for one series by joining its feature dates to
+/// the axis. `feats` is the full `get_detected_features` response. Unmatched
+/// dates (sub-daily/irregular axes, or outside the data) are silently dropped.
+fn markers_for_series(
+    feats: &Value,
+    name: &str,
+    dmap: &HashMap<String, usize>,
+    values: &[f64],
+) -> Vec<FeatureMarker> {
+    let mut out = Vec::new();
+    let Some(sobj) = feats
+        .get("features")
+        .and_then(|f| f.get("series"))
+        .and_then(|s| s.get(name))
+    else {
+        return out;
+    };
+    for kind in FeatureKind::ALL {
+        let Some(arr) = sobj.get(kind.json_key()).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for item in arr {
+            // holiday_dates are bare strings; others are {date, ...} objects.
+            let date = item
+                .as_str()
+                .map(|s| s.to_string())
+                .or_else(|| item.get("date").and_then(|d| d.as_str()).map(|s| s.to_string()));
+            if let Some(date) = date {
+                if let Some(&idx) = dmap.get(&norm_date(&date)) {
+                    let value = values.get(idx).copied().unwrap_or(f64::NAN);
+                    out.push(FeatureMarker { idx, kind, value });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Cursor x (in the 920-wide viewBox) for a pointer event over `node`.
+fn event_vbx(node: &NodeRef<html::Div>, client_x: i32) -> Option<f64> {
+    let el = node.get()?;
+    let rect = el.get_bounding_client_rect();
+    let w = rect.width();
+    if w <= 0.0 {
+        return None;
+    }
+    Some((client_x as f64 - rect.left()) / w * svg::VB_W)
+}
 
 // ---------------------------------------------------------------------------
 // Classical theme-toggle glyphs.
@@ -75,6 +177,148 @@ fn section_header(numeral: &'static str, title: &'static str) -> impl IntoView {
 // Async helpers (small, signal-driven; keep view handlers tiny)
 // ---------------------------------------------------------------------------
 
+/// Minimum drag distance (in viewBox-x units) to register as a zoom selection.
+const MIN_BRUSH_VBX: f64 = 8.0;
+
+/// A chart with its pointer-interaction overlay: hover tooltip + crosshair, and
+/// drag-to-select zoom. The SVG is injected via `inner_html`; the tooltip,
+/// crosshair, and selection rectangle are signal-driven Leptos elements stacked
+/// over it. `tooltip` resolves an absolute axis index to a date + value rows.
+fn chart_block(
+    ui: ChartUi,
+    tooltip: Callback<usize, Option<(String, Vec<TtRow>)>>,
+) -> impl IntoView {
+    let node = create_node_ref::<html::Div>();
+
+    let crosshair = move || {
+        let idx = ui.hover.get()?;
+        let g = ui.geom.get()?;
+        let pct = g.vbx_of_abs(idx) / svg::VB_W * 100.0;
+        Some(view! { <div class="md-chart-crosshair" style=format!("left:{pct:.3}%")></div> })
+    };
+    let tip = move || {
+        let idx = ui.hover.get()?;
+        let g = ui.geom.get()?;
+        let (date, rows) = tooltip.call(idx)?;
+        let pct = g.vbx_of_abs(idx) / svg::VB_W * 100.0;
+        let rows_view = rows
+            .into_iter()
+            .map(|(ci, name, val)| {
+                view! {
+                    <div class="md-tt-row">
+                        <span class="md-tt-swatch" style=format!("background:var(--viz-s{})", ci % 7)></span>
+                        <span class="md-tt-name">{name}</span>
+                        <span class="md-tt-val">{svg::fmt_value(val)}</span>
+                    </div>
+                }
+            })
+            .collect_view();
+        Some(view! {
+            <div class="md-chart-tooltip" style=format!("left:{pct:.3}%")>
+                <div class="md-tt-date">{date}</div>
+                {rows_view}
+            </div>
+        })
+    };
+    let brush = move || {
+        let s = ui.drag_start.get()?;
+        let c = ui.drag_cur.get()?;
+        let left = s.min(c) / svg::VB_W * 100.0;
+        let width = (c - s).abs() / svg::VB_W * 100.0;
+        Some(view! {
+            <div class="md-chart-brush" style=format!("left:{left:.3}%;width:{width:.3}%")></div>
+        })
+    };
+
+    view! {
+        <div class="md-chart-wrap">
+            <div
+                class="md-chart"
+                node_ref=node
+                inner_html=move || ui.svg.get()
+                on:pointerdown=move |ev: leptos::ev::PointerEvent| {
+                    if let Some(vbx) = event_vbx(&node, ev.client_x()) {
+                        ui.drag_start.set(Some(vbx));
+                        ui.drag_cur.set(Some(vbx));
+                        ui.hover.set(None);
+                        if let Some(el) = node.get() {
+                            let _ = el.set_pointer_capture(ev.pointer_id());
+                        }
+                    }
+                }
+                on:pointermove=move |ev: leptos::ev::PointerEvent| {
+                    let Some(vbx) = event_vbx(&node, ev.client_x()) else { return };
+                    if ui.drag_start.get_untracked().is_some() {
+                        ui.drag_cur.set(Some(vbx));
+                    } else if let Some(g) = ui.geom.get_untracked() {
+                        ui.hover.set(Some(g.index_at_vbx(vbx)));
+                    }
+                }
+                on:pointerup=move |_ev: leptos::ev::PointerEvent| {
+                    if let (Some(s), Some(c)) =
+                        (ui.drag_start.get_untracked(), ui.drag_cur.get_untracked())
+                    {
+                        if (c - s).abs() >= MIN_BRUSH_VBX {
+                            if let Some(g) = ui.geom.get_untracked() {
+                                let a = g.index_at_vbx(s.min(c));
+                                let b = g.index_at_vbx(s.max(c));
+                                if b > a {
+                                    ui.zoom.set(Some((a, b)));
+                                }
+                            }
+                        }
+                    }
+                    ui.drag_start.set(None);
+                    ui.drag_cur.set(None);
+                }
+                on:pointerleave=move |_| {
+                    ui.hover.set(None);
+                }
+            ></div>
+            {crosshair}
+            {brush}
+            {tip}
+        </div>
+    }
+}
+
+/// Interactive "Detected features" legend: one toggle chip per feature kind,
+/// showing its glyph + count and flipping its marker visibility on the charts.
+fn feature_legend(
+    feats: &Value,
+    series_name: &str,
+    features_on: RwSignal<FeatureKindSet>,
+) -> View {
+    let counts = feats
+        .get("detection_counts")
+        .and_then(|c| c.get(series_name))
+        .cloned()
+        .unwrap_or(Value::Null);
+    FeatureKind::ALL
+        .into_iter()
+        .map(|kind| {
+            let count = counts
+                .get(kind.count_key())
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let glyph = svg::legend_glyph(kind);
+            let label = format!("{}: {}", kind.label(), count);
+            view! {
+                <button
+                    type="button"
+                    class="md-feat-chip"
+                    class:active=move || features_on.get().get(kind)
+                    disabled=count == 0
+                    on:click=move |_| features_on.update(|s| *s = s.with_toggled(kind))
+                >
+                    <span class="md-feat-glyph" inner_html=glyph></span>
+                    {label}
+                </button>
+            }
+        })
+        .collect_view()
+}
+
 async fn fetch_history(
     data_id: String,
     history: RwSignal<Option<WideData>>,
@@ -115,7 +359,9 @@ async fn fetch_features(
                 return;
             };
             match call_tool("get_detected_features", json!({ "detector_id": did })).await {
-                Ok(f) => features.set(f.get("detection_counts").cloned()),
+                // Keep the whole response: `detection_counts` drives the legend,
+                // `features` drives the per-point markers.
+                Ok(f) => features.set(Some(f)),
                 Err(e) => feature_error.set(Some(e)),
             }
         }
@@ -124,12 +370,26 @@ async fn fetch_features(
     detecting_features.set(false);
 }
 
+/// Fetch one forecast output ("forecast" | "upper_forecast" | "lower_forecast")
+/// as wide data. Bounds are best-effort — `None` on any failure.
+async fn fetch_forecast_output(pid: &str, output: &str) -> Option<WideData> {
+    let v = call_tool(
+        "get_forecast",
+        json!({ "prediction_id": pid, "output": output, "format": "json_wide" }),
+    )
+    .await
+    .ok()?;
+    WideData::from_json_wide(&v)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_forecast(
     command: String,
     data_id: String,
     forecast_length: i64,
     forecast: RwSignal<Option<WideData>>,
+    upper: RwSignal<Option<WideData>>,
+    lower: RwSignal<Option<WideData>>,
     overrides: RwSignal<Overrides>,
     busy: RwSignal<bool>,
     error: RwSignal<Option<String>>,
@@ -146,25 +406,21 @@ async fn run_forecast(
     match res {
         Ok(v) => {
             if let Some(pid) = v.get("prediction_id").and_then(|x| x.as_str()) {
-                match call_tool(
-                    "get_forecast",
-                    json!({ "prediction_id": pid, "output": "forecast", "format": "json_wide" }),
-                )
-                .await
-                {
-                    Ok(fv) => {
-                        if let Some(w) = WideData::from_json_wide(&fv) {
-                            let ov = w
-                                .series
-                                .iter()
-                                .map(|s| vec![None; s.values.len()])
-                                .collect();
-                            overrides.set(ov);
-                            forecast.set(Some(w));
-                            status.set("Forecast ready — drag the sliders to adjust.".into());
-                        }
+                match fetch_forecast_output(pid, "forecast").await {
+                    Some(w) => {
+                        let ov = w
+                            .series
+                            .iter()
+                            .map(|s| vec![None; s.values.len()])
+                            .collect();
+                        // Prediction-interval bounds for the uncertainty band.
+                        upper.set(fetch_forecast_output(pid, "upper_forecast").await);
+                        lower.set(fetch_forecast_output(pid, "lower_forecast").await);
+                        overrides.set(ov);
+                        forecast.set(Some(w));
+                        status.set("Forecast ready — drag the sliders to adjust.".into());
                     }
-                    Err(e) => error.set(Some(e)),
+                    None => error.set(Some("Forecast could not be read".into())),
                 }
             } else {
                 error.set(Some("No prediction returned".into()));
@@ -235,6 +491,9 @@ pub fn App() -> impl IntoView {
     let feature_error = create_rw_signal::<Option<String>>(None);
     let detecting_features = create_rw_signal(false);
     let forecast = create_rw_signal::<Option<WideData>>(None);
+    // Prediction-interval bounds (for the optional uncertainty band).
+    let upper = create_rw_signal::<Option<WideData>>(None);
+    let lower = create_rw_signal::<Option<WideData>>(None);
     let overrides = create_rw_signal::<Overrides>(Vec::new());
     // sel_set: one bool per series in the loaded dataset (true = visible in chart).
     // Sized and reset by fetch_history when data loads.
@@ -242,7 +501,12 @@ pub fn App() -> impl IntoView {
     // adj_sel: which single series index to show in the adjust-forecast sliders.
     let adj_sel = create_rw_signal::<usize>(0);
     let forecast_length = create_rw_signal::<i64>(30);
-    let forecast_history_points = create_rw_signal::<usize>(90);
+    // Chart interaction state (one per chart) + shared display toggles.
+    let history_ui = ChartUi::new();
+    let forecast_ui = ChartUi::new();
+    let features_on = create_rw_signal(FeatureKindSet::none());
+    let show_bands = create_rw_signal(false);
+    let series_menu_open = create_rw_signal(false);
     let confirm_loaded_data_delete = create_rw_signal(false);
     let deleting_loaded_data = create_rw_signal(false);
 
@@ -294,9 +558,14 @@ pub fn App() -> impl IntoView {
         data_id.set(Some(id.clone()));
         history.set(None);
         forecast.set(None);
+        upper.set(None);
+        lower.set(None);
         features.set(None);
         feature_error.set(None);
-        forecast_history_points.set(90);
+        features_on.set(FeatureKindSet::none());
+        show_bands.set(false);
+        history_ui.zoom.set(None);
+        forecast_ui.zoom.set(None);
         confirm_loaded_data_delete.set(false);
         sel_set.set(vec![true]);
         adj_sel.set(0);
@@ -510,6 +779,8 @@ pub fn App() -> impl IntoView {
             id,
             fl,
             forecast,
+            upper,
+            lower,
             overrides,
             busy,
             error,
@@ -565,7 +836,11 @@ pub fn App() -> impl IntoView {
                     features.set(None);
                     feature_error.set(None);
                     forecast.set(None);
+                    upper.set(None);
+                    lower.set(None);
                     overrides.set(Vec::new());
+                    history_ui.zoom.set(None);
+                    forecast_ui.zoom.set(None);
                     cache.set(None);
                     confirm_loaded_data_delete.set(false);
                     status.set("Loaded data deleted.".into());
@@ -576,85 +851,190 @@ pub fn App() -> impl IntoView {
         });
     };
 
-    // Keep the source-data chart independent from forecast state.
-    let history_chart_svg = move || {
+    // --- "Your data" chart: rebuilt whenever its inputs change. ----------
+    create_effect(move |_| {
+        let Some(h) = history.get() else {
+            history_ui.svg.set(String::new());
+            history_ui.geom.set(None);
+            return;
+        };
         let ss = sel_set.get();
-        let hist = history.get();
-        let hdates = hist.as_ref().map(|h| h.datetime.clone()).unwrap_or_default();
-        if let Some(h) = &hist {
-            let chart_series: Vec<svg::ChartSeries<'_>> = h
-                .series
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
-                .map(|(color_idx, s)| svg::ChartSeries {
-                    h: &s.values,
-                    f: &[],
-                    color_idx,
-                })
-                .collect();
-            svg::line_chart(&chart_series, &hdates, &[])
-        } else {
-            String::new()
-        }
-    };
+        let feats = features.get();
+        let gran = infer_granularity(&h.datetime);
+        let dmap = date_index_map(&h.datetime);
+        let enabled = features_on.get();
+        let zoom = history_ui.zoom.get();
 
-    let forecast_chart_svg = move || {
-        let ss = sel_set.get();
-        let hist = history.get();
-        let fc = forecast.get();
-        let ovr = overrides.get();
-        let requested = forecast_history_points.get();
-
-        let hdates = hist
-            .as_ref()
-            .map(|h| {
-                let start = if requested == 0 {
-                    0
-                } else {
-                    h.datetime.len().saturating_sub(requested)
-                };
-                h.datetime[start..].to_vec()
-            })
-            .unwrap_or_default();
-        let fdates = fc.as_ref().map(|f| f.datetime.clone()).unwrap_or_default();
-
-        // Build owned windowed history + forecast values per selected series.
-        let mut series_data: Vec<(usize, Vec<f64>, Vec<f64>)> = Vec::new();
-        if let Some(h) = &hist {
-            for (color_idx, s) in h.series.iter().enumerate() {
-                if !ss.get(color_idx).copied().unwrap_or(false) {
-                    continue;
-                }
-                let start = if requested == 0 {
-                    0
-                } else {
-                    s.values.len().saturating_sub(requested)
-                };
-                let h_vals = s.values[start..].to_vec();
-                let f_vals = fc
-                    .as_ref()
-                    .map(|f| {
-                        let fc_idx = f
-                            .index_of(&s.name)
-                            .unwrap_or_else(|| color_idx.min(f.series.len().saturating_sub(1)));
-                        effective_values(f, &ovr, fc_idx)
-                    })
-                    .unwrap_or_default();
-                series_data.push((color_idx, h_vals, f_vals));
-            }
-        }
-
-        let chart_series: Vec<svg::ChartSeries<'_>> = series_data
+        let visible: Vec<(usize, &crate::model::SeriesData)> = h
+            .series
             .iter()
-            .map(|(color_idx, h_vals, f_vals)| svg::ChartSeries {
-                h: h_vals,
-                f: f_vals,
+            .enumerate()
+            .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
+            .collect();
+        let series: Vec<svg::ChartSeries<'_>> = visible
+            .iter()
+            .map(|(color_idx, s)| svg::ChartSeries {
+                h: &s.values,
+                f: &[],
+                upper: None,
+                lower: None,
                 color_idx: *color_idx,
             })
             .collect();
-        svg::line_chart(&chart_series, &hdates, &fdates)
-    };
+        let markers: Vec<Vec<FeatureMarker>> = visible
+            .iter()
+            .map(|(_, s)| {
+                feats
+                    .as_ref()
+                    .map(|f| markers_for_series(f, &s.name, &dmap, &s.values))
+                    .unwrap_or_default()
+            })
+            .collect();
+        let out = svg::line_chart_ex(
+            &series, &h.datetime, &[], zoom, false, &markers, enabled, gran,
+        );
+        history_ui.set_output(out);
+    });
+
+    // --- forecast chart: history + forecast + optional band & markers. ----
+    create_effect(move |_| {
+        let (Some(h), Some(fc)) = (history.get(), forecast.get()) else {
+            forecast_ui.svg.set(String::new());
+            forecast_ui.geom.set(None);
+            return;
+        };
+        let ss = sel_set.get();
+        let ovr = overrides.get();
+        let feats = features.get();
+        let up = upper.get();
+        let lo = lower.get();
+        let bands = show_bands.get();
+        let enabled = features_on.get();
+        let zoom = forecast_ui.zoom.get();
+        let gran = infer_granularity(&fc.datetime);
+        let dmap = date_index_map(&h.datetime);
+
+        // Owned per-series history/forecast/bound value vectors.
+        struct SeriesVals {
+            color_idx: usize,
+            name: String,
+            h: Vec<f64>,
+            f: Vec<f64>,
+            up: Vec<f64>,
+            lo: Vec<f64>,
+        }
+        let bound_for = |b: &Option<WideData>, name: &str| -> Vec<f64> {
+            b.as_ref()
+                .and_then(|w| w.index_of(name).map(|i| w.series[i].values.clone()))
+                .unwrap_or_default()
+        };
+        let mut data: Vec<SeriesVals> = Vec::new();
+        for (color_idx, s) in h.series.iter().enumerate() {
+            if !ss.get(color_idx).copied().unwrap_or(false) {
+                continue;
+            }
+            let fc_idx = fc
+                .index_of(&s.name)
+                .unwrap_or_else(|| color_idx.min(fc.series.len().saturating_sub(1)));
+            data.push(SeriesVals {
+                color_idx,
+                name: s.name.clone(),
+                h: s.values.clone(),
+                f: effective_values(&fc, &ovr, fc_idx),
+                up: bound_for(&up, &s.name),
+                lo: bound_for(&lo, &s.name),
+            });
+        }
+
+        let series: Vec<svg::ChartSeries<'_>> = data
+            .iter()
+            .map(|d| svg::ChartSeries {
+                h: &d.h,
+                f: &d.f,
+                upper: (!d.up.is_empty()).then_some(d.up.as_slice()),
+                lower: (!d.lo.is_empty()).then_some(d.lo.as_slice()),
+                color_idx: d.color_idx,
+            })
+            .collect();
+        let markers: Vec<Vec<FeatureMarker>> = data
+            .iter()
+            .map(|d| {
+                feats
+                    .as_ref()
+                    .map(|f| markers_for_series(f, &d.name, &dmap, &d.h))
+                    .unwrap_or_default()
+            })
+            .collect();
+        let out = svg::line_chart_ex(
+            &series,
+            &h.datetime,
+            &fc.datetime,
+            zoom,
+            bands,
+            &markers,
+            enabled,
+            gran,
+        );
+        forecast_ui.set_output(out);
+    });
+
+    // Default the forecast view to the last ~90 history points + all forecast
+    // when a new forecast arrives (drag/reset takes over from there).
+    create_effect(move |_| {
+        if let (Some(h), Some(fc)) = (history.get(), forecast.get()) {
+            let total = h.datetime.len() + fc.datetime.len();
+            if total > 0 {
+                let start = h.datetime.len().saturating_sub(90);
+                forecast_ui.zoom.set(Some((start, total - 1)));
+            }
+        }
+    });
+
+    // Tooltip resolvers: absolute axis index -> (date label, value rows).
+    let history_tooltip = Callback::new(move |idx: usize| {
+        let h = history.get_untracked()?;
+        let ss = sel_set.get_untracked();
+        let date = h.datetime.get(idx).map(|d| {
+            fmt_date(d, infer_granularity(&h.datetime))
+        })?;
+        let rows: Vec<TtRow> = h
+            .series
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
+            .filter_map(|(ci, s)| s.values.get(idx).map(|v| (ci, s.name.clone(), *v)))
+            .collect();
+        Some((date, rows))
+    });
+    let forecast_tooltip = Callback::new(move |idx: usize| {
+        let h = history.get_untracked()?;
+        let fc = forecast.get_untracked()?;
+        let ovr = overrides.get_untracked();
+        let ss = sel_set.get_untracked();
+        let nh = h.datetime.len();
+        let gran = infer_granularity(&fc.datetime);
+        let date = if idx < nh {
+            fmt_date(h.datetime.get(idx)?, gran)
+        } else {
+            fmt_date(fc.datetime.get(idx - nh)?, gran)
+        };
+        let rows: Vec<TtRow> = h
+            .series
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| ss.get(*i).copied().unwrap_or(false))
+            .filter_map(|(ci, s)| {
+                let v = if idx < nh {
+                    s.values.get(idx).copied()
+                } else {
+                    let fc_idx = fc.index_of(&s.name)?;
+                    effective_values(&fc, &ovr, fc_idx).get(idx - nh).copied()
+                }?;
+                Some((ci, s.name.clone(), v))
+            })
+            .collect();
+        Some((date, rows))
+    });
 
     view! {
         <header class="md-appbar">
@@ -805,39 +1185,70 @@ pub fn App() -> impl IntoView {
                         {(names.len() > 1).then(|| {
                             let names = names.clone();
                             view! {
-                                <div class="md-field">
-                                    <label class="md-label">"Series (tap to toggle)"</label>
-                                    <div class="md-series-chips">
-                                        {names.into_iter().enumerate().map(|(i, n)| {
-                                            let color_var = format!("--chip-color:var(--viz-s{})", i % 7);
+                                <div class="md-field md-series-select">
+                                    <label class="md-label">"Series shown"</label>
+                                    <div class="md-dropdown">
+                                        <button
+                                            type="button"
+                                            class="md-btn outlined md-dropdown-toggle"
+                                            class:open=move || series_menu_open.get()
+                                            on:click=move |_| series_menu_open.update(|o| *o = !*o)
+                                        >
+                                            {move || {
+                                                let v = sel_set.get();
+                                                let on = v.iter().filter(|&&b| b).count();
+                                                format!("{on} of {} series", v.len())
+                                            }}
+                                            <span class="md-dropdown-caret" aria-hidden="true">"▾"</span>
+                                        </button>
+                                        {move || series_menu_open.get().then(|| {
+                                            let names = names.clone();
                                             view! {
-                                                <button
-                                                    type="button"
-                                                    class="md-series-chip"
-                                                    class:active=move || sel_set.get().get(i).copied().unwrap_or(false)
-                                                    style=color_var
-                                                    on:click=move |_| sel_set.update(|v| {
-                                                        let currently_on = v.get(i).copied().unwrap_or(false);
-                                                        let n_on = v.iter().filter(|&&x| x).count();
-                                                        if currently_on && n_on <= 1 {
-                                                            return; // keep at least one selected
-                                                        }
-                                                        if let Some(b) = v.get_mut(i) {
-                                                            *b = !*b;
-                                                        }
-                                                    })
-                                                >
-                                                    <span class="md-series-chip-swatch" aria-hidden="true"></span>
-                                                    {n}
-                                                </button>
+                                                <div class="md-dropdown-panel">
+                                                    <div class="md-dropdown-actions">
+                                                        <button type="button" class="md-btn text"
+                                                            on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = true))>
+                                                            "Select all"
+                                                        </button>
+                                                    </div>
+                                                    <div class="md-dropdown-list">
+                                                        {names.into_iter().enumerate().map(|(i, n)| view! {
+                                                            <label class="md-dropdown-item">
+                                                                <input type="checkbox"
+                                                                    prop:checked=move || sel_set.get().get(i).copied().unwrap_or(false)
+                                                                    on:change=move |_| sel_set.update(|v| {
+                                                                        let currently_on = v.get(i).copied().unwrap_or(false);
+                                                                        let n_on = v.iter().filter(|&&x| x).count();
+                                                                        if currently_on && n_on <= 1 {
+                                                                            return; // keep at least one selected
+                                                                        }
+                                                                        if let Some(b) = v.get_mut(i) { *b = !*b; }
+                                                                    }) />
+                                                                <span class="md-series-chip-swatch"
+                                                                    style=format!("background:var(--viz-s{})", i % 7)
+                                                                    aria-hidden="true"></span>
+                                                                {n}
+                                                            </label>
+                                                        }).collect_view()}
+                                                    </div>
+                                                </div>
                                             }
-                                        }).collect_view()}
+                                        })}
                                     </div>
                                 </div>
                             }
                         })}
 
-                        <div class="md-chart" inner_html=history_chart_svg></div>
+                        {chart_block(history_ui, history_tooltip)}
+                        <div class="md-chart-controls" style="margin-top:8px">
+                            {move || history_ui.zoom.get().is_some().then(|| view! {
+                                <button type="button" class="md-btn text"
+                                    on:click=move |_| history_ui.zoom.set(None)>
+                                    "Reset zoom"
+                                </button>
+                            })}
+                            <span class="muted md-body">"Drag across the plot to zoom."</span>
+                        </div>
 
                         {move || detecting_features.get().then(|| view! {
                             <p class="muted md-body">"Detecting features… The data plot is ready to use."</p>
@@ -845,16 +1256,19 @@ pub fn App() -> impl IntoView {
                         {move || feature_error.get().map(|e| view! {
                             <p class="md-warning md-body">"Feature detection was unavailable: " {e}</p>
                         })}
-                        {move || features.get().map(|f| view! {
-                            <div style="margin-top:8px">
-                                <span class="md-label">"Detected features"</span>
-                                <div>
-                                    {feature_chips(&f, &history.get().and_then(|h| {
-                                        let first = sel_set.get().iter().position(|&b| b).unwrap_or(0);
-                                        h.series.get(first).map(|s| s.name.clone())
-                                    }).unwrap_or_default())}
+                        {move || features.get().map(|f| {
+                            let series_name = history.get().and_then(|h| {
+                                let first = sel_set.get().iter().position(|&b| b).unwrap_or(0);
+                                h.series.get(first).map(|s| s.name.clone())
+                            }).unwrap_or_default();
+                            view! {
+                                <div style="margin-top:8px">
+                                    <span class="md-label">"Detected features — tap to mark on the plot"</span>
+                                    <div class="md-feat-legend">
+                                        {feature_legend(&f, &series_name, features_on)}
+                                    </div>
                                 </div>
-                            </div>
+                            }
                         })}
 
                         <details class="md-expander" style="margin-top:12px">
@@ -931,27 +1345,30 @@ pub fn App() -> impl IntoView {
                 <section class="md-card">
                     {section_header("IV", "Review, adjust & download")}
                     <div class="md-chart-controls">
-                        <div class="md-field">
-                            <label class="md-label">"Actual history shown"</label>
-                            <select prop:value=move || forecast_history_points.get().to_string()
-                                on:change=move |ev| {
-                                if let Ok(n) = event_target_value(&ev).parse::<usize>() {
-                                    forecast_history_points.set(n);
-                                }
-                            }>
-                                <option value="30">"30 periods"</option>
-                                <option value="90">"90 periods"</option>
-                                <option value="180">"180 periods"</option>
-                                <option value="365">"365 periods"</option>
-                                <option value="0">"All actuals"</option>
-                            </select>
-                        </div>
+                        <button
+                            type="button"
+                            class="md-toggle-chip"
+                            class:active=move || show_bands.get()
+                            disabled=move || upper.get().is_none() || lower.get().is_none()
+                            on:click=move |_| show_bands.update(|b| *b = !*b)
+                        >
+                            <span class="md-toggle-chip-mark" aria-hidden="true"></span>
+                            "Uncertainty bounds"
+                        </button>
+                        {move || forecast_ui.zoom.get().is_some().then(|| view! {
+                            <button type="button" class="md-btn text"
+                                on:click=move |_| forecast_ui.zoom.set(None)>
+                                "Reset zoom"
+                            </button>
+                        })}
+                        <span class="spacer"></span>
                         <div class="md-chart-legend" aria-label="Chart legend">
                             <span><i class="actuals"></i>"Actuals"</span>
                             <span><i class="forecast"></i>"Forecast"</span>
                         </div>
                     </div>
-                    <div class="md-chart" inner_html=forecast_chart_svg></div>
+                    {chart_block(forecast_ui, forecast_tooltip)}
+                    <p class="muted md-body" style="margin-top:4px">"Drag across the plot to zoom."</p>
 
                     <details class="md-expander" style="margin-top:12px">
                         <summary>"Adjust forecast points"</summary>
@@ -979,26 +1396,6 @@ pub fn App() -> impl IntoView {
 // ---------------------------------------------------------------------------
 // View helpers
 // ---------------------------------------------------------------------------
-
-fn feature_chips(counts: &Value, series_name: &str) -> View {
-    let obj = match counts.get(series_name).and_then(|v| v.as_object()) {
-        Some(o) => o.clone(),
-        None => match counts
-            .as_object()
-            .and_then(|m| m.values().next())
-            .and_then(|v| v.as_object())
-        {
-            Some(o) => o.clone(),
-            None => return ().into_view(),
-        },
-    };
-    obj.iter()
-        .map(|(k, v)| {
-            let label = format!("{k}: {v}");
-            view! { <span class="md-chip">{label}</span> }
-        })
-        .collect_view()
-}
 
 fn data_table(data: &WideData, sel: usize) -> View {
     let Some(s) = data.series.get(sel) else {

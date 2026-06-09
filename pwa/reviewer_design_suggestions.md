@@ -531,3 +531,13 @@ on hover:
   box-shadow: var(--md-sys-elevation-1);
 }
 ```
+
+## TODO Items
+The forecast graphs should have an option to turn on the probabilistic uncertainty bounds and show those.  The selector that turns the on needs to be properly integrated into the Greco-Roman meets Material Design 3 fusion style present here. 
+The multiselector that selects which series to show on the graph should probably be a scrollable, checkbox dropdown, or similar, to prevent large datasets with lots of series overwhelming the screen with options.
+When multiple lines are shown on the “Your Data” historical plot, they should all use a solid line (with different colors) rather than some being dotted or dashed.
+On hover needs to work in the “Your Data” plot as well, not just for forecasts.
+On hover should show the full date, including day. And ideally, it should be tied to frequency, so monthly would show year and month only, while hourly would go down to the hourly level. AutoTS has a consistent frequency label, but it may not be passed with the data back to the frontend.
+Markers on each individual data point should not be used in the forecasts. Markers (squares on the points) should only be used on the feature detectors where any anomaly, level shift, etc. is present.
+Detected features on the plot currently has a legend “anomalies: 25” etc. These should become selectable and turn on/off the point markers marking each type of feature detector (each type should have a different marker style) on the graph
+Both the “Your Data” graph and the forecast adjustment graph should have the option to select and zoom in on the data, then an option to reset the view after (to the full zoomed to fit). This needs to be more elegant than the current “Actual history shown” way of showing more or less of the data.

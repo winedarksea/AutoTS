@@ -1,5 +1,6 @@
 mod app;
 mod client;
+mod dates;
 mod model;
 mod svg;
 mod theme;

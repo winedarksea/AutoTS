@@ -21,6 +21,8 @@ features = [
   "Document",
   "Element",
   "HtmlElement",
+  "DomRect",
+  "PointerEvent",
   "Storage",
   "MediaQueryList",
   "HtmlInputElement",
