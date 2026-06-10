@@ -1730,12 +1730,12 @@ pub fn App() -> impl IntoView {
                                             on:click=load_sample>"Load sample"</button>
                                     </span>
                                 </div>
-                                <p class="muted md-body">"Tip: load a sample, download it, and hand it to an LLM as a template for reformatting your own data."</p>
+                                <p class="md-label">"Tip: load a sample, download it, and hand it to an LLM as a template for reformatting your own data."</p>
                             </div>
                         }.into_view(),
                         _ => view! {
                             <div>
-                                <p class="md-body">"Pull recent daily data from free public APIs. Loading is intentionally slow to be kind to these services — watch the progress bar. Some sources may be blocked by your browser; you'll see exactly which below. Toggle off any source you don't want, and fill in API keys where a source says it needs one."</p>
+                                <p class="md-label">"Pull recent daily data from free public APIs. Some sources may be blocked by your browser."</p>
                                 <div class="md-date-row">
                                     <div class="md-field">
                                         <label class="md-label">"Start date"</label>
@@ -2445,7 +2445,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
             default: "DGS10,T5YIE,SP500,DCOILWTICO,DEXUSEU,WPU0911",
             kind: FieldKind::List,
         }],
-        note: None,
+        note: Some(CORS_NOTE),
     },
     LiveSource {
         id: "tickers",
@@ -2508,7 +2508,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
             required: true,
         }),
         fields: &[],
-        note: Some("Works with the prefilled DEMO_KEY, but it is heavily rate-limited."),
+        note: Some(CORS_NOTE),
     },
     LiveSource {
         id: "gov",
@@ -2535,7 +2535,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
                 kind: FieldKind::Int,
             },
         ],
-        note: Some("Slow. Without a key only the first domain is fetched (demo limit)."),
+        note: Some(CORS_NOTE),
     },
     LiveSource {
         id: "severe",
