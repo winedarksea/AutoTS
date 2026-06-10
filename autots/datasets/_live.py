@@ -74,7 +74,7 @@ def load_live_daily(
     weather_stations: list = ["USW00094846", "USW00014925", "USW00014771"],
     weather_years: int = 5,
     noaa_cdo_token: str = None,  # https://www.ncdc.noaa.gov/cdo-web/token
-    london_air_stations: list = ['CT3', 'SK8'],
+    london_air_stations: list = ['KC1', 'BX2'],
     london_air_species: str = "PM25",
     london_air_days: int = 180,
     earthquake_days: int = 180,

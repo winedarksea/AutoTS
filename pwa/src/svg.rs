@@ -393,7 +393,7 @@ pub fn line_chart_ex(
         let mut lo = Vec::new();
         if n_forecast > 0 && b >= n_history {
             // connector from the last history point if the boundary is in view
-            if n_history >= 1 && a <= n_history - 1 {
+            if n_history > 0 && a < n_history {
                 if let Some(&hv) = s.h.get(n_history - 1) {
                     fc.push(((n_history - 1 - a) as f64, hv));
                 }

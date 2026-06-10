@@ -534,8 +534,11 @@ async fn run_forecast(
                             model_parameters,
                             json!(overrides.get()),
                         );
-                        match storage::put_artifact(artifact, &[active_dataset_artifact_id.clone()])
-                            .await
+                        match storage::put_artifact(
+                            artifact,
+                            std::slice::from_ref(&active_dataset_artifact_id),
+                        )
+                        .await
                         {
                             Ok(saved) => {
                                 active_forecast_artifact_id.set(
@@ -830,8 +833,11 @@ pub fn App() -> impl IntoView {
                                 artifact.get_mut("data").and_then(Value::as_object_mut)
                             {
                                 data.insert("features".into(), feature_value);
-                                let _ =
-                                    storage::put_artifact(artifact, &[artifact_id.clone()]).await;
+                                let _ = storage::put_artifact(
+                                    artifact,
+                                    std::slice::from_ref(&artifact_id),
+                                )
+                                .await;
                                 reload_artifacts(cache, storage_summary, error).await;
                             }
                         }
@@ -1699,7 +1705,7 @@ pub fn App() -> impl IntoView {
                                 <div class="md-btn-row">
                                     <button class="md-btn filled"
                                         disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
-                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load pasted data")
+                                        title=move || if job_state.get().blocks_data_loading() { "Blocked by ongoing forecast" } else { "Load pasted data" }
                                         aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
                                         on:click=load_paste>"Load pasted data"</button>
                                 </div>
@@ -1713,7 +1719,7 @@ pub fn App() -> impl IntoView {
                                 <div class="md-btn-row">
                                     <button class="md-btn filled"
                                         disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
-                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load from URL")
+                                        title=move || if job_state.get().blocks_data_loading() { "Blocked by ongoing forecast" } else { "Load from URL" }
                                         aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
                                         on:click=load_url>"Load from URL"</button>
                                 </div>
@@ -1724,7 +1730,7 @@ pub fn App() -> impl IntoView {
                                 <label class="md-label">"Upload a CSV or .xlsx file"</label>
                                 <input type="file" accept=".csv,.tsv,.txt,.xlsx"
                                     disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
-                                    title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Upload a data file")
+                                    title=move || if job_state.get().blocks_data_loading() { "Blocked by ongoing forecast" } else { "Upload a data file" }
                                     aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
                                     on:change=on_file />
                             </div>
@@ -1742,7 +1748,7 @@ pub fn App() -> impl IntoView {
                                 <div class="md-btn-row">
                                     <span class="md-disabled-explanation"
                                         tabindex=move || if job_state.get().blocks_data_loading() { "0" } else { "-1" }
-                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load sample")>
+                                        title=move || if job_state.get().blocks_data_loading() { "Blocked by ongoing forecast" } else { "Load sample" }>
                                         <button class="md-btn filled"
                                             disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading()
                                             aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
@@ -1776,7 +1782,7 @@ pub fn App() -> impl IntoView {
                                 <div class="md-btn-row">
                                     <button class="md-btn filled"
                                         disabled=move || !ready.get() || busy.get() || job_state.get().blocks_data_loading() || !live_any_ready()
-                                        title=move || job_state.get().blocks_data_loading().then_some("Blocked by ongoing forecast").unwrap_or("Load live data")
+                                        title=move || if job_state.get().blocks_data_loading() { "Blocked by ongoing forecast" } else { "Load live data" }
                                         aria-describedby=move || job_state.get().blocks_data_loading().then_some("forecast-blocked-reason")
                                         on:click=load_live.clone()>"Load live data"</button>
                                 </div>
@@ -2328,7 +2334,6 @@ fn adjust_rows(
             <div class="md-field" style="max-width:220px; margin-bottom:8px">
                 <label class="md-label">"Adjust series"</label>
                 <select
-                    prop:value=move || adj_sel.get().to_string()
                     on:change=move |ev| {
                         if let Ok(n) = event_target_value(&ev).parse::<usize>() {
                             adj_sel.set(n);
@@ -2336,7 +2341,12 @@ fn adjust_rows(
                     }
                 >
                     {names.into_iter().map(|(i, name)| view! {
-                        <option value=i.to_string()>{name}</option>
+                        <option
+                            value=i.to_string()
+                            prop:selected=move || adj_sel.get() == i
+                        >
+                            {name}
+                        </option>
                     }).collect_view()}
                 </select>
             </div>
@@ -2437,7 +2447,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
     LiveSource {
         id: "fred",
         label: "FRED economic series",
-        default_enabled: true,
+        default_enabled: false,
         key_field: Some(LiveKey {
             param: "fred_key",
             label: "FRED API key",
@@ -2505,7 +2515,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
     LiveSource {
         id: "nasa",
         label: "NASA space weather (DONKI)",
-        default_enabled: true,
+        default_enabled: false,
         key_field: Some(LiveKey {
             param: "nasa_api_key",
             label: "NASA API key",
@@ -2519,7 +2529,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
     LiveSource {
         id: "gov",
         label: "US government web analytics",
-        default_enabled: true,
+        default_enabled: false,
         key_field: Some(LiveKey {
             param: "gsa_key",
             label: "GSA DAP API key (optional)",
@@ -2565,7 +2575,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
             LiveField {
                 param: "london_air_stations",
                 label: "Station codes (comma separated)",
-                default: "CT3,SK8",
+                default: "KC1,BX2",
                 kind: FieldKind::List,
             },
             LiveField {
@@ -2607,7 +2617,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
     LiveSource {
         id: "eia",
         label: "EIA electricity demand",
-        default_enabled: false,
+        default_enabled: true,
         key_field: Some(LiveKey {
             param: "eia_key",
             label: "EIA API key",
@@ -2621,7 +2631,7 @@ static LIVE_SOURCES: &[LiveSource] = &[
             default: "MISO,PJM,TVA,US48",
             kind: FieldKind::List,
         }],
-        note: Some(CORS_NOTE),
+        note: None,
     },
     LiveSource {
         id: "trends",
