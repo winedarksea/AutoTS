@@ -4,6 +4,7 @@ mod client;
 mod dates;
 mod job;
 mod model;
+mod status_view;
 mod storage;
 mod svg;
 mod theme;

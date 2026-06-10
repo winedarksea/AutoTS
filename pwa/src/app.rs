@@ -21,6 +21,7 @@ use crate::model::{
     effective_bound_values, effective_values, forecast_to_csv, forecast_with_bounds_to_long_csv,
     WideData,
 };
+use crate::status_view::SessionStatusPanel;
 use crate::storage;
 use crate::svg::{self, ChartOutput, FeatureKind, FeatureKindSet, FeatureMarker};
 
@@ -1113,7 +1114,7 @@ pub fn App() -> impl IntoView {
         spawn_local(async move { reload_artifacts(cache, storage_summary, error).await });
     };
 
-    let cancel_running_forecast = move |_| {
+    let cancel_running_forecast = Callback::new(move |_| {
         if !job_state.get_untracked().is_forecasting() {
             return;
         }
@@ -1158,7 +1159,7 @@ pub fn App() -> impl IntoView {
             }
             busy.set(false);
         });
-    };
+    });
 
     let download_forecast = move |_| {
         if let Some(fc) = forecast.get() {
@@ -1621,8 +1622,10 @@ pub fn App() -> impl IntoView {
     view! {
         <header class="md-appbar">
             <span class="md-emblem" inner_html=EMBLEM_SVG></span>
-            <span class="brand">"AutoTS"</span>
-            <span class="muted">"forecasting for everyone"</span>
+            <span class="wordmark">
+                <span class="brand">"AutoTS"</span>
+                <span class="tagline">"Forecasting for Everyone"</span>
+            </span>
             <span class="spacer"></span>
             {move || (
                 offline_ready.get() && install_available.get() && !app_installed.get()
@@ -1649,39 +1652,11 @@ pub fn App() -> impl IntoView {
             </button>
         </header>
 
+        <div class="md-page-shell">
         <main class="md-container">
-            // Status / progress
-            <div aria-live="polite" aria-busy=move || job_state.get().blocks_data_loading().to_string()>
-                <div class="md-status-row">
-                    <div class="md-status">{move || status.get()}</div>
-                    {move || job_state.get().is_forecasting().then(|| view! {
-                        <button class="md-btn text error" type="button"
-                            on:click=cancel_running_forecast>
-                            "Cancel forecast"
-                        </button>
-                    })}
-                </div>
-                {move || (busy.get() || job_state.get().blocks_data_loading()).then(|| match parse_progress(&status.get()) {
-                    Some((i, total)) if total > 0 => {
-                        let pct = (i.min(total) as f64 / total as f64 * 100.0).round();
-                        view! { <div class="md-progress determinate"><div style=format!("width:{pct}%")></div></div> }.into_view()
-                    }
-                    _ => view! { <div class="md-progress"><div></div></div> }.into_view(),
-                })}
-                {move || error.get().map(|e| view! { <p class="md-error">{e}</p> })}
-                <details class="md-compute-status">
-                    <summary>"Local compute status"</summary>
-                    <dl>
-                        <dt>"Worker"</dt><dd>"AutoTS Forecast Worker"</dd>
-                        <dt>"State"</dt><dd>{move || format!("{:?}", job_state.get())}</dd>
-                        <dt>"Offline"</dt><dd>{move || if offline_ready.get() { "ready" } else { "preparing" }}</dd>
-                    </dl>
-                </details>
-                <span id="forecast-blocked-reason" class="sr-only">
-                    "Blocked by ongoing forecast"
-                </span>
-            </div>
-
+            <span id="forecast-blocked-reason" class="sr-only">
+                "Blocked by ongoing forecast"
+            </span>
             // ---- Upload card ----
             <section class="md-card">
                 {section_header("I", "Load your data")}
@@ -2016,6 +1991,16 @@ pub fn App() -> impl IntoView {
                 })}
             </section>
         </main>
+
+        <SessionStatusPanel
+            status=status
+            busy=busy
+            job_state=job_state
+            offline_ready=offline_ready
+            error=error
+            cancel_forecast=cancel_running_forecast
+        />
+        </div>
 
         <footer class="md-footer">
             <a href="/llms.txt" target="_blank" rel="noopener">"llms.txt"</a>
@@ -2686,15 +2671,6 @@ fn fmt_js_date(d: &js_sys::Date) -> String {
         d.get_month() as i64 + 1,
         d.get_date() as i64,
     )
-}
-
-/// Parse a trailing "(i/total)" out of a progress message for a determinate bar.
-fn parse_progress(s: &str) -> Option<(usize, usize)> {
-    let open = s.rfind('(')?;
-    let rest = &s[open + 1..];
-    let close = rest.find(')')?;
-    let (a, b) = rest[..close].split_once('/')?;
-    Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
 }
 
 fn clamp_iso_date_max(date: String, max: &str) -> String {

@@ -27,6 +27,25 @@ impl JobState {
     pub fn is_forecasting(self) -> bool {
         self == Self::Running
     }
+
+    pub fn display_label(self) -> &'static str {
+        match self {
+            Self::Ready => "Compute ready",
+            Self::Running => "Forecast running",
+            Self::Cancelling => "Cancelling forecast",
+            Self::Restarting => "Restarting compute",
+            Self::Failed => "Compute unavailable",
+        }
+    }
+
+    pub fn status_role_class(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Running => "running",
+            Self::Cancelling | Self::Restarting => "warning",
+            Self::Failed => "failed",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -40,5 +59,14 @@ mod tests {
         assert!(JobState::Restarting.blocks_data_loading());
         assert!(!JobState::Ready.blocks_data_loading());
         assert!(!JobState::Failed.blocks_data_loading());
+    }
+
+    #[test]
+    fn states_have_stable_user_facing_labels_and_roles() {
+        assert_eq!(JobState::Ready.display_label(), "Compute ready");
+        assert_eq!(JobState::Running.display_label(), "Forecast running");
+        assert_eq!(JobState::Cancelling.status_role_class(), "warning");
+        assert_eq!(JobState::Restarting.status_role_class(), "warning");
+        assert_eq!(JobState::Failed.display_label(), "Compute unavailable");
     }
 }
