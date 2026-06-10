@@ -47,6 +47,23 @@ fn document_element() -> Option<web_sys::Element> {
     web_sys::window()?.document()?.document_element()
 }
 
+/// Override the OS-based favicon media queries after a manual theme choice.
+fn apply_favicon_theme(theme: Theme) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let (light_media, dark_media) = match theme {
+        Theme::Light => ("all", "not all"),
+        Theme::Dark => ("not all", "all"),
+    };
+    if let Some(light_icon) = document.get_element_by_id("autots-favicon-light") {
+        let _ = light_icon.set_attribute("media", light_media);
+    }
+    if let Some(dark_icon) = document.get_element_by_id("autots-favicon-dark") {
+        let _ = dark_icon.set_attribute("media", dark_media);
+    }
+}
+
 /// Whether the OS currently prefers a dark color scheme.
 fn os_prefers_dark() -> bool {
     web_sys::window()
@@ -76,6 +93,7 @@ pub fn apply(theme: Theme) {
     if let Some(el) = document_element() {
         let _ = el.set_attribute("data-theme", theme.as_str());
     }
+    apply_favicon_theme(theme);
     if let Some(storage) = local_storage() {
         let _ = storage.set_item(STORAGE_KEY, theme.as_str());
     }

@@ -9,14 +9,27 @@
   <meta name="theme-color" content="#00696e" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0e1a22" media="(prefers-color-scheme: dark)" />
 
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+  <link rel="apple-touch-icon" href="favicon-180.png" />
+  <link id="autots-favicon-light" rel="icon" type="image/svg+xml" href="favicon.svg"
+        media="(prefers-color-scheme: light)" />
+  <link id="autots-favicon-dark" rel="icon" type="image/svg+xml" href="favicon-dark.svg"
+        media="(prefers-color-scheme: dark)" />
+
   <!-- Apply the saved theme before first paint to avoid a flash of the wrong
-       theme. Runs before the WASM bundle mounts. -->
+       theme. The favicon links use OS media queries until a saved manual
+       choice overrides them. Runs before the WASM bundle mounts. -->
   <script>
     (function () {
       try {
         var t = localStorage.getItem("autots-theme");
         if (t === "light" || t === "dark") {
           document.documentElement.setAttribute("data-theme", t);
+          document.getElementById("autots-favicon-light").media =
+            t === "light" ? "all" : "not all";
+          document.getElementById("autots-favicon-dark").media =
+            t === "dark" ? "all" : "not all";
         }
       } catch (e) {}
     })();
@@ -27,11 +40,8 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/inter-variable.woff2" />
   <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/cinzel-variable.woff2" />
 
-  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
-  <link rel="apple-touch-icon" href="favicon-180.png" />
   <link data-trunk rel="copy-file" href="public/favicon.svg" />
+  <link data-trunk rel="copy-file" href="public/favicon-dark.svg" />
   <link data-trunk rel="copy-file" href="public/favicon-32.png" />
   <link data-trunk rel="copy-file" href="public/favicon-16.png" />
   <link data-trunk rel="copy-file" href="public/favicon-180.png" />
