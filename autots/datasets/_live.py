@@ -185,9 +185,11 @@ def load_live_daily(
         added = dataset_lists[start_len:]
         n_series = 0
         for d in added:
-            shape = getattr(d, "shape", None)
-            n_series += shape[1] if (shape is not None and len(shape) == 2) else 1
-        if added:
+            if isinstance(d, pd.DataFrame):
+                n_series += int(d.notna().any(axis=0).sum())
+            elif isinstance(d, pd.Series):
+                n_series += int(d.notna().any())
+        if n_series:
             entry = {"source": label, "status": "ok", "series": int(n_series)}
             if error:
                 entry["error"] = error
@@ -195,7 +197,7 @@ def load_live_daily(
             entry = {
                 "source": label,
                 "status": "failed",
-                "error": error or "no data returned",
+                "error": error or "no usable data returned",
             }
         status_log.append(entry)
 
@@ -217,6 +219,20 @@ def load_live_daily(
     if observation_start is None:
         observation_start = current_date - datetime.timedelta(days=365 * 6)
         observation_start = observation_start.strftime("%Y-%m-%d")
+    try:
+        observation_start_timestamp = pd.Timestamp(observation_start)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "observation_start must be a valid scalar date or datetime."
+        ) from exc
+    if pd.isna(observation_start_timestamp):
+        raise ValueError(
+            "observation_start must be a valid scalar date or datetime."
+        )
+    if observation_start_timestamp.tzinfo is not None:
+        observation_start_timestamp = observation_start_timestamp.tz_localize(None)
+    if observation_start_timestamp > current_date:
+        raise ValueError("observation_start must be on or before observation_end.")
     try:
         import requests
 
@@ -977,6 +993,17 @@ def load_live_daily(
             lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"),
             dataset_lists,
         )
+    # Some APIs return a named column containing only missing values. Such a
+    # column is not a usable time series and causes downstream feature
+    # detection to emit nanvar warnings. Also enforce the caller's shared date
+    # window after sources with coarse history controls have over-fetched.
+    df = df[
+        (df.index >= observation_start_timestamp)
+        & (df.index <= current_date)
+    ]
+    df = df.dropna(axis=1, how="all")
+    if df.shape[0] < 1 or df.shape[1] < 1:
+        raise ValueError("No data successfully downloaded!")
     print(f"{df.shape[1]} series downloaded.")
     s.close()
     df.index.name = "datetime"

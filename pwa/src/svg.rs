@@ -349,14 +349,20 @@ pub fn line_chart_ex(
         xstep: 0.0,
     };
     if series.is_empty() {
-        return ChartOutput { svg: String::new(), geom: empty_geom };
+        return ChartOutput {
+            svg: String::new(),
+            geom: empty_geom,
+        };
     }
 
     let n_history = series.iter().map(|s| s.h.len()).max().unwrap_or(0);
     let n_forecast = series.iter().map(|s| s.f.len()).max().unwrap_or(0);
     let n_full = n_history + n_forecast;
     if n_full == 0 {
-        return ChartOutput { svg: String::new(), geom: empty_geom };
+        return ChartOutput {
+            svg: String::new(),
+            geom: empty_geom,
+        };
     }
 
     // Resolve the visible absolute window [a, b].
@@ -409,7 +415,13 @@ pub fn line_chart_ex(
                 }
             }
         }
-        wins.push(Win { hist, fc, up, lo, color: s.color() });
+        wins.push(Win {
+            hist,
+            fc,
+            up,
+            lo,
+            color: s.color(),
+        });
     }
 
     // Y scale over every visible value (incl. bands when shown).
@@ -423,10 +435,10 @@ pub fn line_chart_ex(
         }
     }
     let refs: Vec<&[f64]> = scale_slices.iter().map(|v| v.as_slice()).collect();
-    let (lo_v, hi_v) = match finite_min_max(&refs) {
-        Some(v) => v,
-        None => return ChartOutput { svg: String::new(), geom: empty_geom },
-    };
+    // Preserve the chart frame and date axis for an all-missing selection.
+    // An empty SVG makes the whole data card appear broken and hides the fact
+    // that the chosen series simply has no observations in this window.
+    let (lo_v, hi_v) = finite_min_max(&refs).unwrap_or((0.0, 1.0));
 
     let plot_w = W - PAD_L - PAD_R;
     let xstep = if n_local > 1 {
@@ -583,7 +595,13 @@ mod tests {
     use crate::dates::Granularity;
 
     fn s(h: &'static [f64], f: &'static [f64]) -> ChartSeries<'static> {
-        ChartSeries { h, f, upper: None, lower: None, color_idx: 0 }
+        ChartSeries {
+            h,
+            f,
+            upper: None,
+            lower: None,
+            color_idx: 0,
+        }
     }
 
     fn plain(series: &[ChartSeries<'_>], hd: &[String], fd: &[String]) -> ChartOutput {
@@ -617,7 +635,11 @@ mod tests {
     #[test]
     fn long_gap_breaks_the_pen() {
         // A run of NaNs wider than MAX_GAP_BRIDGE breaks into two subpaths.
-        let out = plain(&[s(&[1.0, f64::NAN, f64::NAN, f64::NAN, f64::NAN, 6.0], &[])], &[], &[]);
+        let out = plain(
+            &[s(&[1.0, f64::NAN, f64::NAN, f64::NAN, f64::NAN, 6.0], &[])],
+            &[],
+            &[],
+        );
         assert_eq!(out.svg.matches(" M").count(), 2);
     }
 
@@ -629,6 +651,16 @@ mod tests {
         let out = plain(&[a, b], &[], &[]);
         assert!(out.svg.contains("var(--viz-s0)"));
         assert!(out.svg.contains("var(--viz-s1)"));
+    }
+
+    #[test]
+    fn all_missing_series_keeps_chart_frame_visible() {
+        let dates = vec!["2024-01-01".to_string(), "2024-01-02".to_string()];
+        let out = plain(&[s(&[f64::NAN, f64::NAN], &[])], &dates, &[]);
+
+        assert!(out.svg.starts_with("<svg"));
+        assert!(out.svg.contains("Jan"));
+        assert_eq!(out.geom.n_local, 2);
     }
 
     #[test]
@@ -709,8 +741,16 @@ mod tests {
     #[test]
     fn markers_drawn_only_for_enabled_kinds() {
         let marks = vec![vec![
-            FeatureMarker { idx: 0, kind: FeatureKind::Anomaly, value: 1.0 },
-            FeatureMarker { idx: 1, kind: FeatureKind::Holiday, value: 2.0 },
+            FeatureMarker {
+                idx: 0,
+                kind: FeatureKind::Anomaly,
+                value: 1.0,
+            },
+            FeatureMarker {
+                idx: 1,
+                kind: FeatureKind::Holiday,
+                value: 2.0,
+            },
         ]];
         let mut en = FeatureKindSet::none();
         en = en.with_toggled(FeatureKind::Anomaly);

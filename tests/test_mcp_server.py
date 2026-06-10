@@ -913,6 +913,61 @@ class TestMCPLiveDataLoader(unittest.TestCase):
                 **self._all_sources_disabled_kwargs(),
             )
 
+    def test_observation_start_must_not_follow_end(self):
+        from autots.datasets._live import load_live_daily
+
+        with self.assertRaisesRegex(ValueError, "on or before observation_end"):
+            load_live_daily(
+                observation_start="2025-01-16",
+                observation_end="2025-01-15",
+                **self._all_sources_disabled_kwargs(),
+            )
+
+    def test_all_missing_live_series_is_removed_and_result_is_date_clipped(self):
+        from autots.datasets import _live
+
+        status = []
+
+        class _FakeResponse:
+            def __init__(self, content):
+                self.content = content.encode("utf-8")
+
+        class _FakeSession:
+            def get(self, url, **kwargs):
+                if "site=CT3" in url:
+                    return _FakeResponse(
+                        "Site,Species,ReadingDateTime,Value\n"
+                        "CT3,PM2.5,01/01/2025 00:00,9\n"
+                        "CT3,PM2.5,02/01/2025 00:00,\n"
+                    )
+                return _FakeResponse(
+                    "Site,Species,ReadingDateTime,Value\n"
+                    "SK8,PM2.5,01/01/2025 00:00,10\n"
+                    "SK8,PM2.5,02/01/2025 00:00,11\n"
+                    "SK8,PM2.5,04/01/2025 00:00,12\n"
+                )
+
+            def close(self):
+                pass
+
+        kwargs = self._all_sources_disabled_kwargs()
+        kwargs["london_air_stations"] = ["CT3", "SK8"]
+        with mock.patch("requests.Session", return_value=_FakeSession()):
+            with mock.patch.object(_live.time, "sleep", return_value=None):
+                result = _live.load_live_daily(
+                    observation_start="2025-01-02",
+                    observation_end="2025-01-03",
+                    london_air_days=1,
+                    sleep_seconds=0.5,
+                    status_log=status,
+                    **kwargs,
+                )
+
+        self.assertEqual(result.columns.tolist(), ["SK8_PM2.5"])
+        self.assertEqual(result.index.tolist(), [pd.Timestamp("2025-01-02")])
+        self.assertEqual(status[0]["status"], "ok")
+        self.assertEqual(status[0]["series"], 1)
+
     def test_browser_status_zero_is_described_as_transport_failure(self):
         from autots.datasets import _live
 

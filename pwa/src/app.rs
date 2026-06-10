@@ -10,12 +10,12 @@ use leptos::*;
 use serde_json::{json, Value};
 use wasm_bindgen::{JsCast, JsValue};
 
+use crate::cache_view::{durable_cache_summary, storage_usage_view};
 use crate::client::{
     call_tool, cancel_forecast, init_runtime, install_app, set_install_handler,
     set_lifecycle_handler, set_progress_handler,
 };
-use crate::cache_view::{durable_cache_summary, storage_usage_view};
-use crate::dates::{fmt_date, infer_granularity};
+use crate::dates::{date_span_days, fmt_date, infer_granularity};
 use crate::job::JobState;
 use crate::model::{
     effective_bound_values, effective_values, forecast_to_csv, forecast_with_bounds_to_long_csv,
@@ -102,10 +102,11 @@ fn markers_for_series(
         };
         for item in arr {
             // holiday_dates are bare strings; others are {date, ...} objects.
-            let date = item
-                .as_str()
-                .map(|s| s.to_string())
-                .or_else(|| item.get("date").and_then(|d| d.as_str()).map(|s| s.to_string()));
+            let date = item.as_str().map(|s| s.to_string()).or_else(|| {
+                item.get("date")
+                    .and_then(|d| d.as_str())
+                    .map(|s| s.to_string())
+            });
             if let Some(date) = date {
                 if let Some(&idx) = dmap.get(&norm_date(&date)) {
                     let value = values.get(idx).copied().unwrap_or(f64::NAN);
@@ -357,11 +358,7 @@ fn chart_block(ui: ChartUi, tooltip: Callback<usize, Option<ChartTooltip>>) -> i
 
 /// Interactive "Detected features" legend: one toggle chip per feature kind,
 /// showing its glyph + count and flipping its marker visibility on the charts.
-fn feature_legend(
-    feats: &Value,
-    series_name: &str,
-    features_on: RwSignal<FeatureKindSet>,
-) -> View {
+fn feature_legend(feats: &Value, series_name: &str, features_on: RwSignal<FeatureKindSet>) -> View {
     let counts = feats
         .get("detection_counts")
         .and_then(|c| c.get(series_name))
@@ -454,7 +451,10 @@ async fn restore_runtime_dataset(artifact: &Value) -> Result<String, String> {
         .pointer("/data/wide")
         .cloned()
         .ok_or_else(|| "Stored dataset has no wide data snapshot".to_string())?;
-    let metadata = artifact.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    let metadata = artifact
+        .get("metadata")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     let result = call_tool(
         "restore_data_snapshot",
         json!({ "data": data, "metadata": metadata }),
@@ -534,11 +534,8 @@ async fn run_forecast(
                             model_parameters,
                             json!(overrides.get()),
                         );
-                        match storage::put_artifact(
-                            artifact,
-                            &[active_dataset_artifact_id.clone()],
-                        )
-                        .await
+                        match storage::put_artifact(artifact, &[active_dataset_artifact_id.clone()])
+                            .await
                         {
                             Ok(saved) => {
                                 active_forecast_artifact_id.set(
@@ -794,7 +791,7 @@ pub fn App() -> impl IntoView {
             };
             let series_count = wide.series.len();
             let row_count = wide.datetime.len();
-            sel_set.set((0..series_count).map(|index| index == 0).collect());
+            sel_set.set(wide.initial_series_selection());
             history.set(Some(wide));
 
             let artifact = storage::dataset_artifact(
@@ -829,14 +826,12 @@ pub fn App() -> impl IntoView {
                 {
                     if let Some(artifact_id) = active_dataset_artifact_id.get_untracked() {
                         if let Ok(mut artifact) = storage::get_artifact(&artifact_id).await {
-                            if let Some(data) = artifact.get_mut("data").and_then(Value::as_object_mut)
+                            if let Some(data) =
+                                artifact.get_mut("data").and_then(Value::as_object_mut)
                             {
                                 data.insert("features".into(), feature_value);
-                                let _ = storage::put_artifact(
-                                    artifact,
-                                    &[artifact_id.clone()],
-                                )
-                                .await;
+                                let _ =
+                                    storage::put_artifact(artifact, &[artifact_id.clone()]).await;
                                 reload_artifacts(cache, storage_summary, error).await;
                             }
                         }
@@ -921,8 +916,7 @@ pub fn App() -> impl IntoView {
         let lower_name = name.to_ascii_lowercase();
         if lower_name.ends_with(".xls") {
             error.set(Some(
-                "Legacy .xls workbooks are not supported. Save the file as .xlsx or CSV."
-                    .into(),
+                "Legacy .xls workbooks are not supported. Save the file as .xlsx or CSV.".into(),
             ));
             input.set_value("");
             return;
@@ -985,64 +979,81 @@ pub fn App() -> impl IntoView {
     let live_any_ready = move || {
         let en = live_enabled.get();
         let va = live_values.get();
-        LIVE_SOURCES
-            .iter()
-            .any(|s| live_source_ready(s, &en, &va))
+        LIVE_SOURCES.iter().any(|s| live_source_ready(s, &en, &va))
     };
 
     let load_live = {
         let live_end_max = live_end_max.clone();
         move |_| {
-        let en = live_enabled.get();
-        let va = live_values.get();
-        let observation_end = clamp_iso_date_max(end_date.get(), &live_end_max);
-        let mut args = serde_json::Map::new();
-        // Always emit every source-selecting param: real values when a source is
-        // "ready", null otherwise, so a de-selected/incomplete source is skipped
-        // deterministically (never silently re-enabled by a library default).
-        for src in LIVE_SOURCES {
-            let on = live_source_ready(src, &en, &va);
-            for f in src.fields {
-                let v = if on {
-                    parse_live_field(f, va.get(f.param))
-                } else {
-                    Value::Null
-                };
-                args.insert(f.param.to_string(), v);
-            }
-            if let Some(k) = &src.key_field {
-                let v = if on {
-                    let s = va.get(k.param).map(|s| s.trim().to_string()).unwrap_or_default();
-                    if s.is_empty() { Value::Null } else { Value::String(s) }
-                } else {
-                    Value::Null
-                };
-                args.insert(k.param.to_string(), v);
-            }
-        }
-        args.insert("observation_start".into(), json!(start_date.get()));
-        args.insert("observation_end".into(), json!(observation_end));
-        // Deliberately gentle on these free APIs while staying tolerable in a UI.
-        args.insert("sleep_seconds".into(), json!(3));
-
-        busy.set(true);
-        error.set(None);
-        live_sources_result.set(None);
-        status.set("Loading live data…".into());
-        spawn_local(async move {
-            match call_tool("load_live_data", Value::Object(args)).await {
-                Ok(v) => {
-                    live_sources_result.set(v.get("sources").cloned());
-                    if let Some(id) = v.get("data_id").and_then(|x| x.as_str()) {
-                        after_loaded(id.to_string());
-                    } else if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
-                        error.set(Some(err.to_string()));
-                    }
+            let en = live_enabled.get();
+            let va = live_values.get();
+            let observation_start = start_date.get();
+            let observation_end = clamp_iso_date_max(end_date.get(), &live_end_max);
+            let Some((history_days, history_years)) =
+                live_history_parameters(&observation_start, &observation_end)
+            else {
+                error.set(Some(
+                    "Start date must be a valid date on or before the end date.".into(),
+                ));
+                return;
+            };
+            let mut args = serde_json::Map::new();
+            // Always emit every source-selecting param: real values when a source is
+            // "ready", null otherwise, so a de-selected/incomplete source is skipped
+            // deterministically (never silently re-enabled by a library default).
+            for src in LIVE_SOURCES {
+                let on = live_source_ready(src, &en, &va);
+                for f in src.fields {
+                    let v = if on {
+                        parse_live_field(f, va.get(f.param))
+                    } else {
+                        Value::Null
+                    };
+                    args.insert(f.param.to_string(), v);
                 }
-                Err(e) => error.set(Some(e)),
+                if let Some(k) = &src.key_field {
+                    let v = if on {
+                        let s = va
+                            .get(k.param)
+                            .map(|s| s.trim().to_string())
+                            .unwrap_or_default();
+                        if s.is_empty() {
+                            Value::Null
+                        } else {
+                            Value::String(s)
+                        }
+                    } else {
+                        Value::Null
+                    };
+                    args.insert(k.param.to_string(), v);
+                }
             }
-            busy.set(false);
-        });
+            args.insert("observation_start".into(), json!(observation_start));
+            args.insert("observation_end".into(), json!(observation_end));
+            args.insert("earthquake_days".into(), json!(history_days));
+            args.insert("london_air_days".into(), json!(history_days));
+            args.insert("weather_years".into(), json!(history_years));
+            // Deliberately gentle on these free APIs while staying tolerable in a UI.
+            args.insert("sleep_seconds".into(), json!(3));
+
+            busy.set(true);
+            error.set(None);
+            live_sources_result.set(None);
+            status.set("Loading live data…".into());
+            spawn_local(async move {
+                match call_tool("load_live_data", Value::Object(args)).await {
+                    Ok(v) => {
+                        live_sources_result.set(v.get("sources").cloned());
+                        if let Some(id) = v.get("data_id").and_then(|x| x.as_str()) {
+                            after_loaded(id.to_string());
+                        } else if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
+                            error.set(Some(err.to_string()));
+                        }
+                    }
+                    Err(e) => error.set(Some(e)),
+                }
+                busy.set(false);
+            });
         }
     };
 
@@ -1114,7 +1125,8 @@ pub fn App() -> impl IntoView {
                                 Ok(runtime_id) => {
                                     data_id.set(Some(runtime_id));
                                     job_state.set(JobState::Ready);
-                                    status.set("Forecast cancelled. Local compute is ready.".into());
+                                    status
+                                        .set("Forecast cancelled. Local compute is ready.".into());
                                 }
                                 Err(message) => {
                                     job_state.set(JobState::Failed);
@@ -1228,11 +1240,7 @@ pub fn App() -> impl IntoView {
 
                 data_id.set(Some(runtime_id));
                 active_dataset_artifact_id.set(Some(parent_id));
-                sel_set.set(
-                    (0..history_wide.series.len())
-                        .map(|index| index == 0)
-                        .collect(),
-                );
+                sel_set.set(history_wide.initial_series_selection());
                 history.set(Some(history_wide));
                 report.set(
                     dataset_artifact
@@ -1307,13 +1315,17 @@ pub fn App() -> impl IntoView {
                     let active_dataset_deleted = active_dataset_artifact_id
                         .get_untracked()
                         .map(|active_id| {
-                            deleted.iter().any(|value| value.as_str() == Some(&active_id))
+                            deleted
+                                .iter()
+                                .any(|value| value.as_str() == Some(&active_id))
                         })
                         .unwrap_or(false);
                     let active_forecast_deleted = active_forecast_artifact_id
                         .get_untracked()
                         .map(|active_id| {
-                            deleted.iter().any(|value| value.as_str() == Some(&active_id))
+                            deleted
+                                .iter()
+                                .any(|value| value.as_str() == Some(&active_id))
                         })
                         .unwrap_or(false);
                     if active_dataset_deleted {
@@ -1394,7 +1406,14 @@ pub fn App() -> impl IntoView {
             })
             .collect();
         let out = svg::line_chart_ex(
-            &series, &h.datetime, &[], zoom, false, &markers, enabled, gran,
+            &series,
+            &h.datetime,
+            &[],
+            zoom,
+            false,
+            &markers,
+            enabled,
+            gran,
         );
         history_ui.set_output(out);
     });
@@ -1815,6 +1834,10 @@ pub fn App() -> impl IntoView {
                                                             on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = true))>
                                                             "Select all"
                                                         </button>
+                                                        <button type="button" class="md-btn text"
+                                                            on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = false))>
+                                                            "Deselect all"
+                                                        </button>
                                                     </div>
                                                     <div class="md-dropdown-list">
                                                         {names.into_iter().enumerate().map(|(i, n)| view! {
@@ -2026,69 +2049,73 @@ fn data_table(data: &WideData, sel: usize) -> View {
 
 #[cfg(any())]
 mod legacy_runtime_cache_view {
-use super::*;
+    use super::*;
 
-/// Which per-row actions a cached group supports, plus the `clear_cache`
-/// `cache_type` it maps to. (`list_cache` group keys are pluralised; see
-/// `CACHE_SUMMARY_KEYS` in cache.py.)
-#[derive(Clone, Copy, PartialEq)]
-enum CacheKind {
-    Data,
-    Prediction,
-    Other,
-}
-
-fn group_to_cache_type(group: &str) -> (&'static str, CacheKind) {
-    match group {
-        "data" => ("data", CacheKind::Data),
-        "predictions" => ("prediction", CacheKind::Prediction),
-        "autots_models" => ("autots", CacheKind::Other),
-        "feature_detectors" => ("feature_detector", CacheKind::Other),
-        "event_risk" => ("event_risk", CacheKind::Other),
-        _ => ("", CacheKind::Other),
+    /// Which per-row actions a cached group supports, plus the `clear_cache`
+    /// `cache_type` it maps to. (`list_cache` group keys are pluralised; see
+    /// `CACHE_SUMMARY_KEYS` in cache.py.)
+    #[derive(Clone, Copy, PartialEq)]
+    enum CacheKind {
+        Data,
+        Prediction,
+        Other,
     }
-}
 
-/// Render a prediction's fetched model parameters as a compact definition list,
-/// truncating long JSON for display (the downloaded template keeps the full text).
-fn render_model_params(v: &Value) -> View {
-    let name = v
-        .get("model_name")
-        .and_then(Value::as_str)
-        .unwrap_or("—")
-        .to_string();
-    let mp = serde_json::to_string_pretty(&v.get("model_parameters").cloned().unwrap_or(Value::Null))
+    fn group_to_cache_type(group: &str) -> (&'static str, CacheKind) {
+        match group {
+            "data" => ("data", CacheKind::Data),
+            "predictions" => ("prediction", CacheKind::Prediction),
+            "autots_models" => ("autots", CacheKind::Other),
+            "feature_detectors" => ("feature_detector", CacheKind::Other),
+            "event_risk" => ("event_risk", CacheKind::Other),
+            _ => ("", CacheKind::Other),
+        }
+    }
+
+    /// Render a prediction's fetched model parameters as a compact definition list,
+    /// truncating long JSON for display (the downloaded template keeps the full text).
+    fn render_model_params(v: &Value) -> View {
+        let name = v
+            .get("model_name")
+            .and_then(Value::as_str)
+            .unwrap_or("—")
+            .to_string();
+        let mp = serde_json::to_string_pretty(
+            &v.get("model_parameters").cloned().unwrap_or(Value::Null),
+        )
         .unwrap_or_default();
-    let tp = serde_json::to_string_pretty(
-        &v.get("transformation_parameters").cloned().unwrap_or(Value::Null),
-    )
-    .unwrap_or_default();
-    view! {
-        <dl class="md-cache-params">
-            <dt>"Model"</dt><dd>{name}</dd>
-            <dt>"Model parameters"</dt><dd>{truncate_chars(&mp, 1200)}</dd>
-            <dt>"Transformation parameters"</dt><dd>{truncate_chars(&tp, 1200)}</dd>
-        </dl>
-    }
-    .into_view()
-}
-
-fn cache_summary(
-    cache: Value,
-    cache_sig: RwSignal<Option<Value>>,
-    error: RwSignal<Option<String>>,
-    status: RwSignal<String>,
-    active_data_id: RwSignal<Option<String>>,
-    teardown_active: Callback<()>,
-) -> View {
-    let Some(groups) = cache.as_object() else {
-        return ().into_view();
-    };
-    if groups.is_empty() {
-        return view! { <p class="muted md-body">"No cached items."</p> }.into_view();
+        let tp = serde_json::to_string_pretty(
+            &v.get("transformation_parameters")
+                .cloned()
+                .unwrap_or(Value::Null),
+        )
+        .unwrap_or_default();
+        view! {
+            <dl class="md-cache-params">
+                <dt>"Model"</dt><dd>{name}</dd>
+                <dt>"Model parameters"</dt><dd>{truncate_chars(&mp, 1200)}</dd>
+                <dt>"Transformation parameters"</dt><dd>{truncate_chars(&tp, 1200)}</dd>
+            </dl>
+        }
+        .into_view()
     }
 
-    groups
+    fn cache_summary(
+        cache: Value,
+        cache_sig: RwSignal<Option<Value>>,
+        error: RwSignal<Option<String>>,
+        status: RwSignal<String>,
+        active_data_id: RwSignal<Option<String>>,
+        teardown_active: Callback<()>,
+    ) -> View {
+        let Some(groups) = cache.as_object() else {
+            return ().into_view();
+        };
+        if groups.is_empty() {
+            return view! { <p class="muted md-body">"No cached items."</p> }.into_view();
+        }
+
+        groups
         .iter()
         .filter_map(|(group_name, entries)| {
             let entries = entries.as_array()?;
@@ -2277,7 +2304,7 @@ fn cache_summary(
             })
         })
         .collect_view()
-}
+    }
 }
 
 fn adjust_rows(
@@ -2446,20 +2473,12 @@ static LIVE_SOURCES: &[LiveSource] = &[
         label: "Earthquakes (USGS)",
         default_enabled: true,
         key_field: None,
-        fields: &[
-            LiveField {
-                param: "earthquake_min_magnitude",
-                label: "Minimum magnitude",
-                default: "5",
-                kind: FieldKind::Int,
-            },
-            LiveField {
-                param: "earthquake_days",
-                label: "Days of history",
-                default: "180",
-                kind: FieldKind::Int,
-            },
-        ],
+        fields: &[LiveField {
+            param: "earthquake_min_magnitude",
+            label: "Minimum magnitude",
+            default: "5",
+            kind: FieldKind::Int,
+        }],
         note: None,
     },
     LiveSource {
@@ -2555,12 +2574,6 @@ static LIVE_SOURCES: &[LiveSource] = &[
                 default: "PM25",
                 kind: FieldKind::Str,
             },
-            LiveField {
-                param: "london_air_days",
-                label: "Days of history",
-                default: "180",
-                kind: FieldKind::Int,
-            },
         ],
         note: None,
     },
@@ -2587,12 +2600,6 @@ static LIVE_SOURCES: &[LiveSource] = &[
                 label: "Data types (comma separated)",
                 default: "AWND,WSF2,TAVG,PRCP",
                 kind: FieldKind::List,
-            },
-            LiveField {
-                param: "weather_years",
-                label: "Years of history",
-                default: "5",
-                kind: FieldKind::Int,
             },
         ],
         note: Some(CORS_NOTE),
@@ -2686,6 +2693,18 @@ fn clamp_iso_date_max(date: String, max: &str) -> String {
     } else {
         date
     }
+}
+
+/// Translate the shared calendar range into legacy per-source history units.
+fn live_history_parameters(start: &str, end: &str) -> Option<(i64, i64)> {
+    let history_days = date_span_days(start, end)?;
+    if history_days < 0 {
+        return None;
+    }
+    // NOAA and CAISO internally use 360-day request chunks. Round upward so
+    // their pull fully covers the selected range; Python trims the final frame.
+    let history_years = (history_days.max(1) + 359) / 360;
+    Some((history_days, history_years))
 }
 
 fn parse_live_field(f: &LiveField, raw: Option<&String>) -> Value {
@@ -2794,9 +2813,7 @@ fn live_source_card(
         })
         .collect_view();
 
-    let note = src
-        .note
-        .map(|n| view! { <p class="muted md-body">{n}</p> });
+    let note = src.note.map(|n| view! { <p class="muted md-body">{n}</p> });
 
     view! {
         <details class="md-expander md-source-card">

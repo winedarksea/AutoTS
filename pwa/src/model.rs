@@ -47,6 +47,18 @@ impl WideData {
     pub fn index_of(&self, name: &str) -> Option<usize> {
         self.series.iter().position(|s| s.name == name)
     }
+
+    /// Select a useful initial chart series instead of an all-missing column.
+    pub fn initial_series_selection(&self) -> Vec<bool> {
+        let selected_index = self
+            .series
+            .iter()
+            .position(|series| series.values.iter().any(|value| value.is_finite()))
+            .unwrap_or(0);
+        (0..self.series.len())
+            .map(|index| index == selected_index)
+            .collect()
+    }
 }
 
 /// RFC4180: wrap a field in double-quotes if it contains comma, quote, or newline.
@@ -248,6 +260,25 @@ mod tests {
     }
 
     #[test]
+    fn initial_selection_skips_all_missing_series() {
+        let data = WideData {
+            datetime: vec!["2026-01-01".into()],
+            series: vec![
+                SeriesData {
+                    name: "missing".into(),
+                    values: vec![f64::NAN],
+                },
+                SeriesData {
+                    name: "available".into(),
+                    values: vec![4.0],
+                },
+            ],
+        };
+
+        assert_eq!(data.initial_series_selection(), vec![false, true]);
+    }
+
+    #[test]
     fn loaded_data_csv_preserves_wide_shape_and_quotes_headers() {
         assert_eq!(
             wide_data_to_csv(&example_data()),
@@ -297,12 +328,7 @@ mod tests {
     #[test]
     fn long_forecast_csv_leaves_missing_bounds_empty() {
         assert_eq!(
-            forecast_with_bounds_to_long_csv(
-                &example_data(),
-                None,
-                None,
-                &[vec![None, Some(3.5)]],
-            ),
+            forecast_with_bounds_to_long_csv(&example_data(), None, None, &[vec![None, Some(3.5)]],),
             "datetime,series,forecast,lower_forecast,upper_forecast\n\
              2026-01-01,\"sales,total\",1,,\n\
              2026-01-02,\"sales,total\",3.5,,\n"
@@ -327,12 +353,8 @@ mod tests {
 
     #[test]
     fn template_csv_quotes_json_param_fields() {
-        let csv = model_params_to_template_csv(
-            "1",
-            "LastValueNaive",
-            &json!({"window": 10}),
-            &json!({}),
-        );
+        let csv =
+            model_params_to_template_csv("1", "LastValueNaive", &json!({"window": 10}), &json!({}));
         assert_eq!(
             csv,
             "ID,Model,ModelParameters,TransformationParameters,Ensemble\n\
@@ -348,5 +370,4 @@ mod tests {
             "ID,Model,ModelParameters,TransformationParameters,Ensemble\n1,GLS,{},{},0\n"
         );
     }
-
 }

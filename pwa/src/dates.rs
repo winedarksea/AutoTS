@@ -53,7 +53,14 @@ fn parse(s: &str) -> Option<Parts> {
         .unwrap_or("0")
         .parse()
         .unwrap_or(0);
-    Some(Parts { y, mo: mo.clamp(1, 12), d: d.clamp(1, 31), h, mi, se })
+    Some(Parts {
+        y,
+        mo: mo.clamp(1, 12),
+        d: d.clamp(1, 31),
+        h,
+        mi,
+        se,
+    })
 }
 
 /// Days since 1970-01-01 (Howard Hinnant's days_from_civil). Valid for any date.
@@ -65,6 +72,13 @@ fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d as i64 - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     era * 146097 + doe - 719468
+}
+
+/// Whole calendar days from `start` to `end` for ISO-style date strings.
+pub fn date_span_days(start: &str, end: &str) -> Option<i64> {
+    let start = parse(start)?;
+    let end = parse(end)?;
+    Some(days_from_civil(end.y, end.mo, end.d) - days_from_civil(start.y, start.mo, start.d))
 }
 
 fn to_seconds(p: &Parts) -> i64 {
@@ -80,11 +94,18 @@ fn weekday(p: &Parts) -> &'static str {
 
 /// Infer display granularity from the median gap between consecutive points.
 pub fn infer_granularity(dates: &[String]) -> Granularity {
-    let secs: Vec<i64> = dates.iter().filter_map(|s| parse(s).map(|p| to_seconds(&p))).collect();
+    let secs: Vec<i64> = dates
+        .iter()
+        .filter_map(|s| parse(s).map(|p| to_seconds(&p)))
+        .collect();
     if secs.len() < 2 {
         return Granularity::Day;
     }
-    let mut deltas: Vec<i64> = secs.windows(2).map(|w| (w[1] - w[0]).abs()).filter(|&d| d > 0).collect();
+    let mut deltas: Vec<i64> = secs
+        .windows(2)
+        .map(|w| (w[1] - w[0]).abs())
+        .filter(|&d| d > 0)
+        .collect();
     if deltas.is_empty() {
         return Granularity::Day;
     }
@@ -171,10 +192,19 @@ mod tests {
     }
 
     #[test]
+    fn calculates_calendar_date_span_across_leap_day() {
+        assert_eq!(date_span_days("2024-02-28", "2024-03-01"), Some(2));
+        assert_eq!(date_span_days("2024-03-01", "2024-02-28"), Some(-2));
+    }
+
+    #[test]
     fn formats_per_granularity() {
         assert_eq!(fmt_date("2024-01-15", Granularity::Year), "2024");
         assert_eq!(fmt_date("2024-01-15", Granularity::Month), "Jan 2024");
         assert_eq!(fmt_date("2024-01-15", Granularity::Day), "Mon 15 Jan 2024");
-        assert_eq!(fmt_date("2024-01-15 14:30:00", Granularity::Hour), "15 Jan 14:30");
+        assert_eq!(
+            fmt_date("2024-01-15 14:30:00", Granularity::Hour),
+            "15 Jan 14:30"
+        );
     }
 }
