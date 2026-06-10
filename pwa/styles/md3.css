@@ -248,11 +248,12 @@ body {
   top: 0;
   z-index: 10;
 }
-/* Wordmark + tagline share one text baseline (both set in the display serif),
-   so the two read as a single balanced lockup beside the emblem. */
+/* Wordmark + tagline are different sizes, so align them (and the emblem) by
+   their vertical centers rather than a shared baseline — otherwise the smaller
+   tagline's centroid sits below the larger wordmark's. */
 .md-appbar .wordmark {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 .md-appbar .brand {
@@ -260,9 +261,14 @@ body {
   font-family: var(--md-font-display);
   font-weight: 600;
   font-size: 1.3rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  /* thin gold keyline under the wordmark */
+  letter-spacing: .06em;
+  /* Keep the natural mixed case ("AutoTS"): Cinzel renders the lowercase letters
+     as small capitals, so the taller A/T/S vs. shorter u-t-o make the
+     capitalization legible and avoid the all-caps "AU-TOTS" misreading. */
+  /* thin gold keyline under the wordmark. The matching padding-top keeps the
+     text centered within the box (offsetting the 3px padding + 2px border below)
+     so center-alignment lands on the glyph centroid, not above it. */
+  padding-top: 5px;
   padding-bottom: 3px;
   border-bottom: 2px solid transparent;
   border-image: linear-gradient(90deg,
@@ -300,7 +306,11 @@ body {
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  line-height: 0;
+  /* Center the (smaller) icon glyph within the box so its centroid aligns with
+     the wordmark, rather than floating at the top of the line. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Theme toggle (icon button in the app bar) */
@@ -648,7 +658,7 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
   max-height: min(60dvh, 28rem);
   margin: 0 auto;
   padding: 12px 16px;
-  overflow: hidden;
+  overflow-y: auto;
   color: var(--md-on-surface);
   background: var(--md-surface-container-high);
   border: 1px solid var(--md-outline-variant);
@@ -658,8 +668,8 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
 .md-session-summary {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 44px;
+  gap: 8px;
+  min-height: 32px;
 }
 .md-session-heading {
   min-width: 0;
@@ -709,29 +719,8 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.md-session-toggle {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: 999px;
-  color: var(--md-on-surface-variant);
-  background: transparent;
-  cursor: pointer;
-}
-.md-session-toggle:hover { background: var(--md-surface-container); }
-.md-session-toggle:focus-visible {
-  outline: 3px solid var(--md-primary-container);
-  outline-offset: 2px;
-}
-.md-session-toggle-glyph {
-  display: inline-block;
-  font-size: 1.1rem;
-  transition: transform .2s ease;
-}
-.md-session-panel.expanded .md-session-toggle-glyph { transform: rotate(180deg); }
 .md-session-activity {
-  margin: 0;
+  margin: 4px 0 0;
   overflow: hidden;
   color: var(--md-on-surface-variant);
   font-size: .85rem;
@@ -739,35 +728,7 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
   white-space: nowrap;
 }
 .md-session-panel .md-progress { margin-top: 8px; }
-.md-session-details {
-  display: none;
-  max-height: calc(min(60vh, 28rem) - 92px);
-  max-height: calc(min(60dvh, 28rem) - 92px);
-  margin-top: 12px;
-  padding-top: 12px;
-  overflow-y: auto;
-  border-top: 1px solid var(--md-outline-variant);
-}
-.md-session-panel.expanded .md-session-details { display: block; }
-.md-session-panel.expanded .md-session-activity {
-  overflow: visible;
-  white-space: normal;
-}
-.md-session-facts {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 5px 12px;
-  margin: 0;
-  font-size: .82rem;
-}
-.md-session-facts dt { font-weight: 600; }
-.md-session-facts dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, monospace;
-}
-.md-session-error { margin: 0 0 12px; overflow-wrap: anywhere; }
+.md-session-error { margin: 10px 0 0; overflow-wrap: anywhere; }
 .md-session-cancel { margin-top: 12px; }
 .md-btn.text.error { color: var(--md-error); }
 .md-btn.text.error:hover:not(:disabled) { background: var(--md-error-container); }
@@ -893,19 +854,11 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
     border-bottom: 1px solid var(--metal-bronze-mid);
   }
   .md-session-state { white-space: normal; }
-  .md-session-toggle { display: none; }
   .md-session-activity {
     margin-top: 12px;
     overflow: visible;
     white-space: normal;
   }
-  .md-session-details {
-    display: block;
-    max-height: none;
-    overflow: visible;
-  }
-  .md-session-facts { grid-template-columns: 1fr; gap: 2px; }
-  .md-session-facts dd { margin-bottom: 7px; }
   .md-session-cancel { width: 100%; }
 }
 
@@ -919,13 +872,10 @@ table.md-table thead th { position: sticky; top: 0; background: var(--md-surface
   }
   .md-session-title { font-size: .9rem; }
   .md-session-state { font-size: .76rem; }
-  .md-session-facts { grid-template-columns: 1fr; gap: 2px; }
-  .md-session-facts dd { margin-bottom: 7px; }
   .md-session-cancel { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .md-session-toggle-glyph,
   .md-progress.determinate > div { transition: none; }
   .md-progress > div { animation: none; width: 100%; }
 }

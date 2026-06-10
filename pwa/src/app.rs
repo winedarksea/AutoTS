@@ -1996,7 +1996,6 @@ pub fn App() -> impl IntoView {
             status=status
             busy=busy
             job_state=job_state
-            offline_ready=offline_ready
             error=error
             cancel_forecast=cancel_running_forecast
         />

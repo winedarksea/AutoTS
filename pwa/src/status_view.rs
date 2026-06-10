@@ -9,33 +9,12 @@ pub fn SessionStatusPanel(
     status: RwSignal<String>,
     busy: RwSignal<bool>,
     job_state: RwSignal<JobState>,
-    offline_ready: RwSignal<bool>,
     error: RwSignal<Option<String>>,
     cancel_forecast: Callback<()>,
 ) -> impl IntoView {
-    let expanded = create_rw_signal(false);
-    let cancellation_requested = create_rw_signal(false);
-
-    create_effect(move |_| {
-        let state = job_state.get();
-        if error.get().is_some() {
-            expanded.set(true);
-            cancellation_requested.set(false);
-        } else if cancellation_requested.get() && state == JobState::Ready {
-            expanded.set(false);
-            cancellation_requested.set(false);
-        }
-    });
-
-    let cancel = move |_| {
-        cancellation_requested.set(true);
-        cancel_forecast.call(());
-    };
-
     view! {
         <aside
             class="md-session-panel"
-            class:expanded=move || expanded.get()
             aria-live="polite"
             aria-busy=move || job_state.get().blocks_data_loading().to_string()
             aria-label="Session status"
@@ -54,20 +33,6 @@ pub fn SessionStatusPanel(
                         {move || job_state.get().display_label()}
                     </span>
                 </div>
-                <button
-                    class="md-session-toggle"
-                    type="button"
-                    aria-expanded=move || expanded.get().to_string()
-                    aria-controls="session-status-details"
-                    aria-label=move || if expanded.get() {
-                        "Collapse session details"
-                    } else {
-                        "Expand session details"
-                    }
-                    on:click=move |_| expanded.update(|value| *value = !*value)
-                >
-                    <span class="md-session-toggle-glyph" aria-hidden="true">"⌃"</span>
-                </button>
             </div>
 
             <p class="md-session-activity">{move || status.get()}</p>
@@ -100,26 +65,19 @@ pub fn SessionStatusPanel(
                 }
             })}
 
-            <div id="session-status-details" class="md-session-details">
-                {move || error.get().map(|message| view! {
-                    <p class="md-error md-session-error">{message}</p>
-                })}
+            {move || error.get().map(|message| view! {
+                <p class="md-error md-session-error">{message}</p>
+            })}
 
-                <dl class="md-session-facts">
-                    <dt>"Worker"</dt>
-                    <dd>"AutoTS Forecast Worker"</dd>
-                    <dt>"State"</dt>
-                    <dd>{move || job_state.get().display_label()}</dd>
-                    <dt>"Offline"</dt>
-                    <dd>{move || if offline_ready.get() { "ready" } else { "preparing" }}</dd>
-                </dl>
-
-                {move || job_state.get().is_forecasting().then(|| view! {
-                    <button class="md-btn text error md-session-cancel" type="button" on:click=cancel>
-                        "Cancel forecast"
-                    </button>
-                })}
-            </div>
+            {move || job_state.get().is_forecasting().then(|| view! {
+                <button
+                    class="md-btn text error md-session-cancel"
+                    type="button"
+                    on:click=move |_| cancel_forecast.call(())
+                >
+                    "Cancel forecast"
+                </button>
+            })}
         </aside>
     }
 }
