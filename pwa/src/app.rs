@@ -1058,9 +1058,6 @@ pub fn App() -> impl IntoView {
         };
         let fl = forecast_length.get();
         let additional_arguments = match command {
-            "make_forecast" => Some(json!({
-                "prediction_interval": prediction_interval.get(),
-            })),
             "search_forecast" => Some(json!({
                 "autots_params": {
                     "prediction_interval": prediction_interval.get(),
@@ -1903,7 +1900,7 @@ pub fn App() -> impl IntoView {
                     <div class="md-btn-row">
                         <button class="md-btn forecast-duration-short"
                             disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
-                            on:click=move |_| do_forecast("make_forecast")>"Make forecast"</button>
+                            on:click=move |_| do_forecast("forecast_fast")>"Make forecast"</button>
                         <button class="md-btn forecast-duration-medium"
                             disabled=move || busy.get() || job_state.get() != JobState::Ready || active_dataset_artifact_id.get().is_none()
                             on:click=move |_| do_forecast("search_forecast")>"Search for best forecast"</button>
