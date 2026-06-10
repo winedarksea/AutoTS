@@ -804,7 +804,13 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
             RuntimeError("lxml unavailable"),
         ]
         micropip = types.SimpleNamespace(install=install)
-        pyodide_http = types.SimpleNamespace(patch_all=mock.Mock())
+        pyodide_http_core = types.SimpleNamespace(
+            HEADERS_TO_IGNORE=("user-agent",)
+        )
+        pyodide_http = types.SimpleNamespace(
+            patch_all=mock.Mock(),
+            _core=pyodide_http_core,
+        )
         original_ready = self.P._live_ready
         self.P._live_ready = False
         try:
@@ -827,6 +833,8 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
             ],
         )
         pyodide_http.patch_all.assert_called_once_with()
+        self.assertIn("accept-encoding", pyodide_http_core.HEADERS_TO_IGNORE)
+        self.assertIn("connection", pyodide_http_core.HEADERS_TO_IGNORE)
 
     async def test_live_dependency_transport_failure_returns_actionable_error(self):
         micropip = types.SimpleNamespace(
@@ -904,6 +912,17 @@ class TestMCPLiveDataLoader(unittest.TestCase):
                 observation_end="not-a-date",
                 **self._all_sources_disabled_kwargs(),
             )
+
+    def test_browser_status_zero_is_described_as_transport_failure(self):
+        from autots.datasets import _live
+
+        with mock.patch.object(_live.sys, "platform", "emscripten"):
+            message = _live._format_live_download_error(
+                RuntimeError("BadStatusLine('HTTP/1.1 0\\n')")
+            )
+
+        self.assertIn("before receiving an HTTP response", message)
+        self.assertIn("CORS", message)
 
 
 class TestMCPLiveDataHandler(unittest.IsolatedAsyncioTestCase):

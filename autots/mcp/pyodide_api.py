@@ -31,6 +31,26 @@ _LIVE_OPTIONAL_DEPS = ["fredapi", "pytrends"]
 _live_ready = False
 
 
+def _configure_pyodide_http_browser_headers():
+    """Prevent XMLHttpRequest attempts to set browser-controlled headers."""
+    try:
+        from pyodide_http import _core
+    except (ImportError, AttributeError):
+        return
+
+    browser_controlled_headers = {
+        "accept-encoding",
+        "connection",
+        "content-length",
+        "cookie",
+        "host",
+        "referer",
+    }
+    _core.HEADERS_TO_IGNORE = tuple(
+        sorted(set(_core.HEADERS_TO_IGNORE) | browser_controlled_headers)
+    )
+
+
 async def _ensure_live_deps(progress_cb=None):
     """Install and patch browser networking, returning an error when unavailable."""
     global _live_ready
@@ -59,6 +79,7 @@ async def _ensure_live_deps(progress_cb=None):
         import requests  # noqa: F401
         import pyodide_http  # noqa
 
+        _configure_pyodide_http_browser_headers()
         pyodide_http.patch_all()
     except Exception as e:  # noqa: BLE001
         return f"Unable to initialize browser HTTP support: {e!r}"

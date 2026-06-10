@@ -9,8 +9,24 @@ import time
 import datetime
 import io
 import json
+import sys
 import numpy as np
 import pandas as pd
+
+
+def _format_live_download_error(error):
+    """Explain browser transport failures without reporting synthetic HTTP 0."""
+    error_text = repr(error)
+    if sys.platform == "emscripten" and (
+        "HTTP/1.1 0" in error_text
+        or "HTTP 0" in error_text
+        or "status 0" in error_text.lower()
+    ):
+        return (
+            "Browser blocked the request before receiving an HTTP response "
+            "(usually a CORS restriction)."
+        )
+    return error_text
 
 
 def load_live_daily(
@@ -198,8 +214,9 @@ def load_live_daily(
             print("pip install fredapi (and you'll also need an api key)")
             _finish_source("FRED", _blk, error="fredapi not installed")
         except Exception as e:
-            print(f"FRED data failed: {repr(e)}")
-            _finish_source("FRED", _blk, error=repr(e))
+            error_message = _format_live_download_error(e)
+            print(f"FRED data failed: {error_message}")
+            _finish_source("FRED", _blk, error=error_message)
 
     if tickers is not None:
         _blk = _start_source("Stock tickers")
@@ -312,11 +329,28 @@ def load_live_daily(
 
                             if response.status_code != 200:
                                 if (
+                                    sys.platform == "emscripten"
+                                    and response.status_code == 0
+                                ):
+                                    error_message = (
+                                        "Browser blocked the request before receiving "
+                                        "an HTTP response (usually a CORS restriction)."
+                                    )
+                                else:
+                                    error_message = f"HTTP {response.status_code}"
+                                if (
                                     offset == 1
                                 ):  # Only print error on first request for this chunk
                                     print(
-                                        f"weather data failed for {wstation} ({dtype}, {start_date_str} to {end_date_str}): HTTP {response.status_code}"
+                                        f"weather data failed for {wstation} ({dtype}, "
+                                        f"{start_date_str} to {end_date_str}): "
+                                        f"{error_message}"
                                     )
+                                if (
+                                    sys.platform == "emscripten"
+                                    and response.status_code == 0
+                                ):
+                                    raise RuntimeError(error_message)
                                 break
 
                             try:
@@ -382,8 +416,11 @@ def load_live_daily(
                     dataset_lists.append(wdf)
 
             except Exception as e:
-                print(f"weather data failed for {wstation}: {repr(e)}")
-                _weather_errs.append(f"{wstation}: {repr(e)}")
+                error_message = _format_live_download_error(e)
+                print(f"weather data failed for {wstation}: {error_message}")
+                _weather_errs.append(f"{wstation}: {error_message}")
+                if "usually a CORS restriction" in error_message:
+                    break
         if noaa_cdo_token is None:
             _weather_errs.append("noaa_cdo_token required")
         _finish_source(
