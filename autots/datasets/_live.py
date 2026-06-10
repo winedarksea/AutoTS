@@ -8,6 +8,7 @@ into a single wide-format DataFrame.
 import time
 import datetime
 import io
+import math
 import sys
 import numpy as np
 import pandas as pd
@@ -708,7 +709,13 @@ def load_live_daily(
                 report = "domain"  # site, domain, download, second-level-domain
                 url = f"https://api.gsa.gov/analytics/dap/v1.1/domain/{domain}/reports/{report}/data?api_key={gsa_key}&limit={gov_domain_limit}&after={observation_start}"
                 data = s.get(url, timeout=timeout)
-                gdf = pd.read_json(data.text, orient="records")
+                if sys.platform == "emscripten" and not data.text.strip():
+                    raise RuntimeError(
+                        "Browser blocked the response body (received an empty "
+                        "response despite a successful status, usually a CORS "
+                        "restriction)."
+                    )
+                gdf = pd.read_json(io.StringIO(data.text), orient="records")
                 gdf['date'] = pd.to_datetime(gdf['date'])
                 # essentially duplicates brought by agency and null agency
                 gresult = gdf.groupby('date')['visits'].first()
@@ -760,7 +767,7 @@ def load_live_daily(
                 url = f"https://www.ncdc.noaa.gov/stormevents/csv?eventType={event_type}&beginDate_mm=01&beginDate_dd=01&beginDate_yyyy=2000&endDate_mm=09&endDate_dd=30&endDate_yyyy=9999&hailfilter=0.00&tornfilter=2&windfilter=000&sort=DN&statefips=-999%2CALL"
                 csv_in = io.StringIO(s.get(url, timeout=timeout).text)
                 try:
-                    # new in 1.3.0 of pandas
+                    # on_bad_lines added in pandas 1.3; error_bad_lines removed in 2.0.
                     df = pd.read_csv(csv_in, low_memory=False, on_bad_lines='skip')
                 except Exception:
                     df = pd.read_csv(csv_in, low_memory=False, error_bad_lines=False)
@@ -802,24 +809,35 @@ def load_live_daily(
             print(f"pytrends data failed: {repr(e)}")
             _finish_source("Google Trends", _blk, error=repr(e))
 
-    # this was kinda broken last I checked
     if caiso_query is not None:
         _blk = _start_source("CAISO")
         try:
-            n_chunks = (364 * weather_years) / 30
-            if n_chunks % 30 != 0:
-                n_chunks = int(n_chunks) + 1
+            # CAISO's OASIS API rejects date ranges over ~28 days with a
+            # "Data can be requested for period of 31 days only" error,
+            # returned as a 200 OK zip containing an XML error doc (which
+            # pd.read_csv silently mis-parses as a 1-row CSV). 27-day chunks
+            # (+1 day overlap, as before) stay under that limit.
+            chunk_days = 27
+            n_chunks = math.ceil((364 * weather_years) / chunk_days)
             energy_df = []
             for x in range(n_chunks):
                 try:
                     end_nospace = (
-                        current_date - datetime.timedelta(days=30 * x)
+                        current_date - datetime.timedelta(days=chunk_days * x)
                     ).strftime("%Y%m%d")
                     start_nospace = (
-                        current_date - datetime.timedelta(days=30 * (x + 1) + 1)
+                        current_date
+                        - datetime.timedelta(days=chunk_days * (x + 1) + 1)
                     ).strftime("%Y%m%d")
                     caiso_url = f"http://oasis.caiso.com/oasisapi/SingleZip?resultformat=6&queryname={caiso_query}&version=1&market_run_id=RTM&tac_zone_name=ALL&schedule=Generation&startdatetime={start_nospace}T00:00-0000&enddatetime={end_nospace}T23:00-0000"
                     data = pd.read_csv(caiso_url, compression='zip')
+                    if 'OPR_DT' not in data.columns:
+                        # CAISO returned an XML error/disclaimer doc instead
+                        # of CSV (e.g. date range rejected); pandas parsed it
+                        # as a 1-row CSV with the XML declaration as header.
+                        raise RuntimeError(
+                            f"CAISO returned an unexpected response: {data.columns[0]}"
+                        )
                     data['OPR_DT'] = pd.to_datetime(data['OPR_DT'])
                     data = data[data['OPR_HR'] < 25]
                     energy_df.append(
@@ -835,12 +853,21 @@ def load_live_daily(
                     )
                     time.sleep(sleep_seconds + 8)
                 except Exception as e:
-                    print(f"caiso download failed with error: {repr(e)}")
+                    error_message = _format_live_download_error(e)
+                    print(f"caiso download failed with error: {error_message}")
+                    if sys.platform == "emscripten":
+                        # CAISO's OASIS API has no CORS headers, so every
+                        # remaining chunk would fail the same way; don't burn
+                        # through the rest of the retry/sleep loop for nothing.
+                        break
                     time.sleep(sleep_seconds)
-            energy_df = pd.concat(energy_df).sort_index()
-            energy_df = energy_df[~energy_df.index.duplicated(keep='last')]
-            dataset_lists.append(energy_df)
-            _finish_source("CAISO", _blk)
+            if energy_df:
+                energy_df = pd.concat(energy_df).sort_index()
+                energy_df = energy_df[~energy_df.index.duplicated(keep='last')]
+                dataset_lists.append(energy_df)
+                _finish_source("CAISO", _blk)
+            else:
+                _finish_source("CAISO", _blk, error="no data returned")
         except Exception as e:
             print(f"caiso download failed with error: {repr(e)}")
             _finish_source("CAISO", _blk, error=repr(e))
