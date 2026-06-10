@@ -8,7 +8,6 @@ into a single wide-format DataFrame.
 import time
 import datetime
 import io
-import json
 import sys
 import numpy as np
 import pandas as pd
@@ -27,6 +26,38 @@ def _format_live_download_error(error):
             "(usually a CORS restriction)."
         )
     return error_text
+
+
+def _eia_query_params(params, prefix=""):
+    """Flatten EIA's nested params dict into bracketed query-string tuples.
+
+    EIA's v2 API accepts the same query either as an ``X-Params`` JSON header or
+    as bracketed query-string params (e.g. ``facets[respondent][0]=MISO``). The
+    query-string form is a "simple" request that avoids a CORS preflight, so it
+    works from the browser (Pyodide) while remaining identical for normal Python
+    users. ``None`` values are omitted to match the header form, where JSON
+    ``null`` is ignored by the API.
+
+    Returns a list of ``(key, value)`` tuples suitable for ``requests``' ``params``
+    (a list preserves repeated keys; ``requests`` percent-encodes the brackets,
+    which EIA accepts).
+    """
+    items = []
+    if isinstance(params, dict):
+        iterator = params.items()
+    elif isinstance(params, (list, tuple)):
+        iterator = enumerate(params)
+    else:
+        if params is not None:
+            items.append((prefix, params))
+        return items
+    for key, value in iterator:
+        child_prefix = f"{prefix}[{key}]" if prefix else str(key)
+        if isinstance(value, (dict, list, tuple)):
+            items.extend(_eia_query_params(value, child_prefix))
+        elif value is not None:
+            items.append((child_prefix, value))
+    return items
 
 
 def load_live_daily(
@@ -837,10 +868,7 @@ def load_live_daily(
 
                 res = s.get(
                     api_url,
-                    params={
-                        "api_key": eia_key,
-                    },
-                    headers={"X-Params": json.dumps(params)},
+                    params=[("api_key", eia_key)] + _eia_query_params(params),
                 )
                 eia_df = pd.json_normalize(res.json()['response']['data'])
                 eia_df['datetime'] = pd.to_datetime(eia_df['period'])
@@ -885,10 +913,7 @@ def load_live_daily(
                 }
                 res = s.get(
                     api_url_mix,
-                    params={
-                        "api_key": eia_key,
-                    },
-                    headers={"X-Params": json.dumps(params)},
+                    params=[("api_key", eia_key)] + _eia_query_params(params),
                 )
                 eia_df = pd.json_normalize(res.json()['response']['data'])
                 eia_df['datetime'] = pd.to_datetime(eia_df['period'])

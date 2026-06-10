@@ -925,6 +925,79 @@ class TestMCPLiveDataLoader(unittest.TestCase):
         self.assertIn("CORS", message)
 
 
+class TestEIAQueryParams(unittest.TestCase):
+    """EIA requests use bracketed query-string params (CORS-safe), not X-Params."""
+
+    def test_flatten_nested_payload(self):
+        from autots.datasets._live import _eia_query_params
+
+        params = {
+            "frequency": "daily",
+            "data": ["value"],
+            "facets": {"type": ["D"], "respondent": ["MISO"], "timezone": ["Eastern"]},
+            "start": None,
+            "end": None,
+            "sort": [{"column": "period", "direction": "desc"}],
+            "offset": 0,
+            "length": 5000,
+        }
+        result = _eia_query_params(params)
+        # nested dict/list keys are flattened into EIA's bracketed form
+        self.assertIn(("data[0]", "value"), result)
+        self.assertIn(("facets[type][0]", "D"), result)
+        self.assertIn(("facets[respondent][0]", "MISO"), result)
+        self.assertIn(("facets[timezone][0]", "Eastern"), result)
+        self.assertIn(("sort[0][column]", "period"), result)
+        self.assertIn(("sort[0][direction]", "desc"), result)
+        self.assertIn(("frequency", "daily"), result)
+        # None values are omitted (JSON null is ignored by EIA)
+        keys = [k for k, _ in result]
+        self.assertNotIn("start", keys)
+        self.assertNotIn("end", keys)
+
+    def test_eia_request_uses_query_params_not_xparams_header(self):
+        from autots.datasets import _live
+
+        calls = []
+
+        class _FakeResp:
+            def json(self):
+                # empty data -> source fails cleanly without a network call
+                return {"response": {"data": []}}
+
+        class _FakeSession:
+            def get(self, url, params=None, headers=None, **kwargs):
+                calls.append({"url": url, "params": params, "headers": headers})
+                return _FakeResp()
+
+            def close(self):
+                pass
+
+        kwargs = TestMCPLiveDataLoader._all_sources_disabled_kwargs()
+        kwargs["eia_key"] = "TESTKEY"
+        kwargs["eia_respondents"] = ["MISO"]
+
+        # requests is imported inside load_live_daily, so patch the module globally
+        with mock.patch("requests.Session", return_value=_FakeSession()):
+            with self.assertRaisesRegex(ValueError, "No data successfully downloaded"):
+                _live.load_live_daily(**kwargs)
+
+        # one demand call + one fuel-mix call for the single respondent
+        self.assertEqual(len(calls), 2)
+        for call in calls:
+            # no custom X-Params header (that header is what tripped CORS preflight)
+            self.assertIsNone(call["headers"])
+            self.assertIsInstance(call["params"], list)
+            self.assertEqual(call["params"][0], ("api_key", "TESTKEY"))
+            keys = [k for k, _ in call["params"]]
+            self.assertNotIn("X-Params", keys)
+            self.assertIn("facets[respondent][0]", keys)
+        demand_keys = [k for k, _ in calls[0]["params"]]
+        mix_keys = [k for k, _ in calls[1]["params"]]
+        self.assertIn("facets[type][0]", demand_keys)
+        self.assertIn("facets[fueltype][0]", mix_keys)
+
+
 class TestMCPLiveDataHandler(unittest.IsolatedAsyncioTestCase):
     """handle_load_live_data forwards params and reports per-source status."""
 
