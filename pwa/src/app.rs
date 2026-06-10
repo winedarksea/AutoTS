@@ -1599,20 +1599,12 @@ pub fn App() -> impl IntoView {
             <span class="brand">"AutoTS"</span>
             <span class="muted">"forecasting for everyone"</span>
             <span class="spacer"></span>
-            {move || (offline_ready.get() && !app_installed.get()).then(|| {
-                if install_available.get() {
-                    view! {
-                        <button class="md-btn tonal" type="button" on:click=install_pwa>
-                            "Install"
-                        </button>
-                    }.into_view()
-                } else {
-                    view! {
-                        <span class="md-offline-ready" title="Runtime assets are cached">
-                            "Offline ready"
-                        </span>
-                    }.into_view()
-                }
+            {move || (
+                offline_ready.get() && install_available.get() && !app_installed.get()
+            ).then(|| view! {
+                <button class="md-btn tonal" type="button" on:click=install_pwa>
+                    "Install"
+                </button>
             })}
             <button
                 class="md-theme-toggle"
@@ -1630,7 +1622,6 @@ pub fn App() -> impl IntoView {
                     inner_html=move || if theme.get() == crate::theme::Theme::Dark { SUN_SVG } else { MOON_SVG }
                 ></span>
             </button>
-            <a class="md-btn text" href="/llms.txt" target="_blank">"llms.txt"</a>
         </header>
 
         <main class="md-container">
@@ -1996,6 +1987,10 @@ pub fn App() -> impl IntoView {
                 })}
             </section>
         </main>
+
+        <footer class="md-footer">
+            <a href="/llms.txt" target="_blank" rel="noopener">"llms.txt"</a>
+        </footer>
     }
 }
 
