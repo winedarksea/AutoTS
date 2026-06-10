@@ -424,6 +424,9 @@ body {
   color: transparent;
 }
 .md-section-title { color: var(--md-on-surface); }
+/* Trailing action (e.g. refresh) in an unnumbered card heading: pushed to the
+   right edge and vertically centered against the baseline-aligned title. */
+.md-section-action { margin-left: auto; align-self: center; }
 
 /* Buttons */
 .md-btn {
@@ -560,12 +563,29 @@ body {
   background: var(--md-primary); flex-shrink: 0;
 }
 
-/* Scrollable checkbox dropdown for series selection */
+/* Scrollable checkbox dropdown for series selection (lives in a chart-controls
+   row as a compact picker chip, alongside Reset zoom / toggle chips). */
 .md-series-select { max-width: 280px; }
 .md-dropdown { position: relative; }
-.md-dropdown-toggle { width: 100%; justify-content: space-between; }
+/* Compact picker chip trigger — matches the chart-control chip vocabulary
+   (md-feat-chip / md-toggle-chip): auto width, pill, outline-variant border. */
+.md-series-trigger {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 999px;
+  border: 1.5px solid var(--md-outline-variant); background: transparent;
+  color: var(--md-on-surface-variant); font: inherit; font-size: 0.85rem;
+  cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.md-series-trigger:hover { color: var(--md-on-surface); border-color: var(--md-outline); }
+.md-series-trigger.open {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface); border-color: var(--md-outline);
+}
+.md-series-trigger:focus-visible { outline: 3px solid var(--md-primary-container); outline-offset: 2px; }
+.md-series-trigger-mark { display: inline-flex; line-height: 0; flex-shrink: 0; }
 .md-dropdown-caret { transition: transform .2s; }
-.md-dropdown-toggle.open .md-dropdown-caret { transform: rotate(180deg); }
+.md-series-trigger.open .md-dropdown-caret { transform: rotate(180deg); }
 .md-dropdown-panel {
   position: absolute; z-index: 5; margin-top: 4px; width: 100%; min-width: 220px;
   background: var(--md-surface-container-high);

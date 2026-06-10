@@ -229,6 +229,22 @@ const EMBLEM_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
     stroke-opacity=\"0.25\" stroke-linejoin=\"round\"/>\
     </svg>";
 
+// Line-art refresh glyph (circular arrow) for the cached-data reload icon button.
+// Inherits the button's text color via `currentColor`, so it tracks the theme.
+const REFRESH_SVG: &str = "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" \
+    aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" \
+    stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" \
+    stroke-linejoin=\"round\">\
+    <path d=\"M21 12a9 9 0 1 1-2.64-6.36\"/>\
+    <path d=\"M21 3v6h-6\"/></svg>";
+
+// Three stacked lines of decreasing length — a compact "series list" mark for the
+// chart series picker. `currentColor` so it tracks the chip's text color/state.
+const SERIES_SVG: &str = "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" \
+    aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" \
+    stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\">\
+    <path d=\"M2.5 4.5h11\"/><path d=\"M2.5 8h8\"/><path d=\"M2.5 11.5h5\"/></svg>";
+
 /// An elegant card heading: a metallic-bronze Cinzel Roman numeral, a thin
 /// bronze keyline, then the title. `numeral` may be empty for unnumbered cards.
 fn section_header(numeral: &'static str, title: &'static str) -> impl IntoView {
@@ -239,6 +255,73 @@ fn section_header(numeral: &'static str, title: &'static str) -> impl IntoView {
             })}
             <span class="md-section-title">{title}</span>
         </h2>
+    }
+}
+
+/// Compact series-visibility picker: a chip-style dropdown trigger plus a
+/// checkbox panel for choosing which series are drawn on a chart. `sel_set` is the
+/// shared per-series visibility set (so pickers on different charts stay in sync);
+/// `menu_open` is this instance's own open/close state. Caller gates on
+/// `names.len() > 1`.
+fn series_picker(
+    names: Vec<String>,
+    sel_set: RwSignal<Vec<bool>>,
+    menu_open: RwSignal<bool>,
+) -> impl IntoView {
+    view! {
+        <div class="md-dropdown md-series-select">
+            <button
+                type="button"
+                class="md-series-trigger"
+                class:open=move || menu_open.get()
+                on:click=move |_| menu_open.update(|o| *o = !*o)
+            >
+                <span class="md-series-trigger-mark" aria-hidden="true" inner_html=SERIES_SVG></span>
+                {move || {
+                    let v = sel_set.get();
+                    let on = v.iter().filter(|&&b| b).count();
+                    format!("{on} of {} series", v.len())
+                }}
+                <span class="md-dropdown-caret" aria-hidden="true">"▾"</span>
+            </button>
+            {move || menu_open.get().then(|| {
+                let names = names.clone();
+                view! {
+                    <div class="md-dropdown-panel">
+                        <div class="md-dropdown-actions">
+                            <button type="button" class="md-btn text"
+                                on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = true))>
+                                "Select all"
+                            </button>
+                            <button type="button" class="md-btn text"
+                                on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = false))>
+                                "Deselect all"
+                            </button>
+                        </div>
+                        <div class="md-dropdown-list">
+                            {names.into_iter().enumerate().map(|(i, n)| view! {
+                                <label class="md-dropdown-item">
+                                    <input type="checkbox"
+                                        prop:checked=move || sel_set.get().get(i).copied().unwrap_or(false)
+                                        on:change=move |_| sel_set.update(|v| {
+                                            let currently_on = v.get(i).copied().unwrap_or(false);
+                                            let n_on = v.iter().filter(|&&x| x).count();
+                                            if currently_on && n_on <= 1 {
+                                                return; // keep at least one selected
+                                            }
+                                            if let Some(b) = v.get_mut(i) { *b = !*b; }
+                                        }) />
+                                    <span class="md-series-chip-swatch"
+                                        style=format!("background:var(--viz-s{})", i % 7)
+                                        aria-hidden="true"></span>
+                                    {n}
+                                </label>
+                            }).collect_view()}
+                        </div>
+                    </div>
+                }
+            })}
+        </div>
     }
 }
 
@@ -677,12 +760,13 @@ pub fn App() -> impl IntoView {
     // Chart interaction state (one per chart) + shared display toggles.
     let history_ui = ChartUi::new();
     let forecast_ui = ChartUi::new();
-    let features_on = create_rw_signal(FeatureKindSet::none());
+    let features_on = create_rw_signal(FeatureKindSet::all());
     let show_bands = create_rw_signal(false);
     let series_menu_open = create_rw_signal(false);
+    let forecast_series_menu_open = create_rw_signal(false);
 
     // Upload inputs
-    let tab = create_rw_signal::<u8>(0); // 0 paste, 1 url, 2 file, 3 sample, 4 live
+    let tab = create_rw_signal::<u8>(3); // 0 paste, 1 url, 2 file, 3 sample, 4 live
     let paste_text = create_rw_signal(String::new());
     let url_text = create_rw_signal(String::new());
     let sample = create_rw_signal(String::from("monthly"));
@@ -772,7 +856,7 @@ pub fn App() -> impl IntoView {
         lower.set(None);
         features.set(None);
         feature_error.set(None);
-        features_on.set(FeatureKindSet::none());
+        features_on.set(FeatureKindSet::all());
         show_bands.set(false);
         history_ui.zoom.set(None);
         forecast_ui.zoom.set(None);
@@ -1712,11 +1796,11 @@ pub fn App() -> impl IntoView {
                         }.into_view(),
                         3 => view! {
                             <div class="md-field">
-                                <label class="md-label">"Or try a built-in sample dataset"</label>
+                                <label class="md-label">"Try a built-in sample dataset"</label>
                                 <select on:change=move |ev| sample.set(event_target_value(&ev))>
+                                    <option value="daily">"daily"</option>
                                     <option value="monthly">"monthly"</option>
                                     <option value="weekly">"weekly"</option>
-                                    <option value="daily">"daily"</option>
                                     <option value="hourly">"hourly"</option>
                                     <option value="sine">"sine"</option>
                                 </select>
@@ -1788,67 +1872,9 @@ pub fn App() -> impl IntoView {
                         {section_header("II", "Your data")}
                         {chart_block(history_ui, history_tooltip)}
 
-                        {(names.len() > 1).then(|| {
-                            let names = names.clone();
-                            view! {
-                                <div class="md-field md-series-select">
-                                    <div class="md-dropdown">
-                                        <button
-                                            type="button"
-                                            class="md-btn outlined md-dropdown-toggle"
-                                            class:open=move || series_menu_open.get()
-                                            on:click=move |_| series_menu_open.update(|o| *o = !*o)
-                                        >
-                                            {move || {
-                                                let v = sel_set.get();
-                                                let on = v.iter().filter(|&&b| b).count();
-                                                format!("{on} of {} series", v.len())
-                                            }}
-                                            <span class="md-dropdown-caret" aria-hidden="true">"▾"</span>
-                                        </button>
-                                        {move || series_menu_open.get().then(|| {
-                                            let names = names.clone();
-                                            view! {
-                                                <div class="md-dropdown-panel">
-                                                    <div class="md-dropdown-actions">
-                                                        <button type="button" class="md-btn text"
-                                                            on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = true))>
-                                                            "Select all"
-                                                        </button>
-                                                        <button type="button" class="md-btn text"
-                                                            on:click=move |_| sel_set.update(|v| v.iter_mut().for_each(|b| *b = false))>
-                                                            "Deselect all"
-                                                        </button>
-                                                    </div>
-                                                    <div class="md-dropdown-list">
-                                                        {names.into_iter().enumerate().map(|(i, n)| view! {
-                                                            <label class="md-dropdown-item">
-                                                                <input type="checkbox"
-                                                                    prop:checked=move || sel_set.get().get(i).copied().unwrap_or(false)
-                                                                    on:change=move |_| sel_set.update(|v| {
-                                                                        let currently_on = v.get(i).copied().unwrap_or(false);
-                                                                        let n_on = v.iter().filter(|&&x| x).count();
-                                                                        if currently_on && n_on <= 1 {
-                                                                            return; // keep at least one selected
-                                                                        }
-                                                                        if let Some(b) = v.get_mut(i) { *b = !*b; }
-                                                                    }) />
-                                                                <span class="md-series-chip-swatch"
-                                                                    style=format!("background:var(--viz-s{})", i % 7)
-                                                                    aria-hidden="true"></span>
-                                                                {n}
-                                                            </label>
-                                                        }).collect_view()}
-                                                    </div>
-                                                </div>
-                                            }
-                                        })}
-                                    </div>
-                                </div>
-                            }
-                        })}
-
                         <div class="md-chart-controls" style="margin-top:8px">
+                            {(names.len() > 1)
+                                .then(|| series_picker(names.clone(), sel_set, series_menu_open))}
                             {move || history_ui.zoom.get().is_some().then(|| view! {
                                 <button type="button" class="md-btn text"
                                     on:click=move |_| history_ui.zoom.set(None)>
@@ -1931,6 +1957,13 @@ pub fn App() -> impl IntoView {
                 <section class="md-card">
                     {section_header("IV", "Review, adjust & download")}
                     <div class="md-chart-controls">
+                        {move || {
+                            let names: Vec<String> = history.get()
+                                .map(|h| h.series.iter().map(|s| s.name.clone()).collect())
+                                .unwrap_or_default();
+                            (names.len() > 1)
+                                .then(|| series_picker(names, sel_set, forecast_series_menu_open))
+                        }}
                         <button
                             type="button"
                             class="md-toggle-chip"
@@ -1974,10 +2007,14 @@ pub fn App() -> impl IntoView {
 
             // ---- Data manager ----
             <section class="md-card">
-                {section_header("", "Cached data & forecasts")}
-                <div class="md-btn-row">
-                    <button class="md-btn outlined" on:click=refresh_cache>"Refresh"</button>
-                </div>
+                <h2 class="md-section-head">
+                    <span class="md-section-title">"Cached data & forecasts"</span>
+                    <button class="md-icon-btn md-section-action" type="button"
+                        title="Refresh cached data" aria-label="Refresh cached data"
+                        on:click=refresh_cache>
+                        <span class="md-icon-glyph" inner_html=REFRESH_SVG></span>
+                    </button>
+                </h2>
                 {move || storage_summary.get().map(storage_usage_view)}
                 {move || cache.get().map(|c| {
                     durable_cache_summary(
@@ -2035,266 +2072,6 @@ fn data_table(data: &WideData, sel: usize) -> View {
         </div>
     }
     .into_view()
-}
-
-#[cfg(any())]
-mod legacy_runtime_cache_view {
-    use super::*;
-
-    /// Which per-row actions a cached group supports, plus the `clear_cache`
-    /// `cache_type` it maps to. (`list_cache` group keys are pluralised; see
-    /// `CACHE_SUMMARY_KEYS` in cache.py.)
-    #[derive(Clone, Copy, PartialEq)]
-    enum CacheKind {
-        Data,
-        Prediction,
-        Other,
-    }
-
-    fn group_to_cache_type(group: &str) -> (&'static str, CacheKind) {
-        match group {
-            "data" => ("data", CacheKind::Data),
-            "predictions" => ("prediction", CacheKind::Prediction),
-            "autots_models" => ("autots", CacheKind::Other),
-            "feature_detectors" => ("feature_detector", CacheKind::Other),
-            "event_risk" => ("event_risk", CacheKind::Other),
-            _ => ("", CacheKind::Other),
-        }
-    }
-
-    /// Render a prediction's fetched model parameters as a compact definition list,
-    /// truncating long JSON for display (the downloaded template keeps the full text).
-    fn render_model_params(v: &Value) -> View {
-        let name = v
-            .get("model_name")
-            .and_then(Value::as_str)
-            .unwrap_or("—")
-            .to_string();
-        let mp = serde_json::to_string_pretty(
-            &v.get("model_parameters").cloned().unwrap_or(Value::Null),
-        )
-        .unwrap_or_default();
-        let tp = serde_json::to_string_pretty(
-            &v.get("transformation_parameters")
-                .cloned()
-                .unwrap_or(Value::Null),
-        )
-        .unwrap_or_default();
-        view! {
-            <dl class="md-cache-params">
-                <dt>"Model"</dt><dd>{name}</dd>
-                <dt>"Model parameters"</dt><dd>{truncate_chars(&mp, 1200)}</dd>
-                <dt>"Transformation parameters"</dt><dd>{truncate_chars(&tp, 1200)}</dd>
-            </dl>
-        }
-        .into_view()
-    }
-
-    fn cache_summary(
-        cache: Value,
-        cache_sig: RwSignal<Option<Value>>,
-        error: RwSignal<Option<String>>,
-        status: RwSignal<String>,
-        active_data_id: RwSignal<Option<String>>,
-        teardown_active: Callback<()>,
-    ) -> View {
-        let Some(groups) = cache.as_object() else {
-            return ().into_view();
-        };
-        if groups.is_empty() {
-            return view! { <p class="muted md-body">"No cached items."</p> }.into_view();
-        }
-
-        groups
-        .iter()
-        .filter_map(|(group_name, entries)| {
-            let entries = entries.as_array()?;
-            let (cache_type, kind) = group_to_cache_type(group_name);
-            let rows = entries
-                .iter()
-                .map(|entry| {
-                    let id = entry
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string();
-                    let created = entry
-                        .get("created_at")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string();
-                    let metadata = entry.get("metadata").cloned().unwrap_or_else(|| json!({}));
-                    let source = metadata
-                        .get("source")
-                        .and_then(Value::as_str)
-                        .unwrap_or("—")
-                        .to_string();
-                    let rows = metadata.get("rows").and_then(Value::as_u64);
-                    let columns = metadata.get("columns").and_then(Value::as_u64);
-                    let shape = match (rows, columns) {
-                        (Some(r), Some(c)) => format!("{r} × {c}"),
-                        _ => "—".into(),
-                    };
-                    let metadata_text = serde_json::to_string_pretty(&metadata).unwrap_or_default();
-                    let id_title = id.clone();
-
-                    // Per-row interaction state.
-                    let confirm = create_rw_signal(false);
-                    let busy = create_rw_signal(false);
-                    let params = create_rw_signal::<Option<Value>>(None);
-                    let tried = create_rw_signal(false);
-
-                    // --- Action icon buttons (vary by cache kind) ---
-                    let mut actions: Vec<View> = Vec::new();
-                    if kind == CacheKind::Data {
-                        let did = id.clone();
-                        actions.push(view! {
-                            <button class="md-icon-btn" type="button"
-                                title="Download CSV" aria-label="Download CSV"
-                                on:click=move |_| {
-                                    let did = did.clone();
-                                    spawn_local(async move { download_cached_data_csv(did, error).await });
-                                }>
-                                <span class="md-icon-glyph" inner_html=DOWNLOAD_SVG></span>
-                            </button>
-                        }.into_view());
-                    }
-                    if kind == CacheKind::Prediction {
-                        let fid = id.clone();
-                        actions.push(view! {
-                            <button class="md-icon-btn" type="button"
-                                title="Download forecast CSV" aria-label="Download forecast CSV"
-                                on:click=move |_| {
-                                    let fid = fid.clone();
-                                    spawn_local(async move { download_cached_forecast_csv(fid, error).await });
-                                }>
-                                <span class="md-icon-glyph" inner_html=DOWNLOAD_SVG></span>
-                            </button>
-                        }.into_view());
-                        let tid = id.clone();
-                        actions.push(view! {
-                            <button class="md-icon-btn" type="button"
-                                title="Download model template" aria-label="Download model template"
-                                on:click=move |_| {
-                                    let tid = tid.clone();
-                                    spawn_local(async move { download_model_template(tid, error).await });
-                                }>
-                                <span class="md-icon-glyph" inner_html=TEMPLATE_SVG></span>
-                            </button>
-                        }.into_view());
-                    }
-                    // Delete is offered for any group with a known cache type.
-                    if !cache_type.is_empty() {
-                        actions.push(view! {
-                            <button class="md-icon-btn danger" type="button"
-                                title="Delete" aria-label="Delete"
-                                disabled=move || busy.get()
-                                on:click=move |_| confirm.set(true)>
-                                <span class="md-icon-glyph" inner_html=TRASH_SVG></span>
-                            </button>
-                        }.into_view());
-                    }
-
-                    // Inline delete confirmation.
-                    let confirm_id = id.clone();
-                    let confirm_view = move || {
-                        let id = confirm_id.clone();
-                        confirm.get().then(move || {
-                            let del_id = id.clone();
-                            view! {
-                                <div class="md-cache-confirm" role="alert">
-                                    <span>"Delete this cached item? This cannot be undone."</span>
-                                    <button class="md-btn text" disabled=move || busy.get()
-                                        on:click=move |_| confirm.set(false)>"Cancel"</button>
-                                    <button class="md-btn filled error" disabled=move || busy.get()
-                                        on:click=move |_| {
-                                            let id = del_id.clone();
-                                            busy.set(true);
-                                            error.set(None);
-                                            spawn_local(async move {
-                                                match call_tool(
-                                                    "clear_cache",
-                                                    json!({ "object_id": id, "cache_type": cache_type }),
-                                                ).await {
-                                                    Ok(_) => {
-                                                        if active_data_id.get().as_deref() == Some(id.as_str()) {
-                                                            teardown_active.call(());
-                                                        }
-                                                        status.set("Cached item deleted.".into());
-                                                        confirm.set(false);
-                                                        reload_cache(cache_sig, error).await;
-                                                    }
-                                                    Err(e) => error.set(Some(e)),
-                                                }
-                                                busy.set(false);
-                                            });
-                                        }>
-                                        {move || if busy.get() { "Deleting…" } else { "Delete" }}
-                                    </button>
-                                </div>
-                            }
-                        })
-                    };
-
-                    // Details: metadata always; model parameters lazily for predictions.
-                    let pid = id.clone();
-                    let is_prediction = kind == CacheKind::Prediction;
-                    view! {
-                        <tr>
-                            <td class="md-cache-id" title=id_title>{id.clone()}</td>
-                            <td>{source}</td>
-                            <td>{shape}</td>
-                            <td>{created}</td>
-                            <td>
-                                <details class="md-expander"
-                                    on:toggle=move |_| {
-                                        if is_prediction && !tried.get() {
-                                            tried.set(true);
-                                            let pid = pid.clone();
-                                            spawn_local(async move {
-                                                if let Ok(v) = fetch_model_params(&pid).await {
-                                                    params.set(Some(v));
-                                                }
-                                            });
-                                        }
-                                    }>
-                                    <summary>"Details"</summary>
-                                    {move || params.get().map(|v| render_model_params(&v))}
-                                    <pre class="md-body">{metadata_text.clone()}</pre>
-                                </details>
-                            </td>
-                            <td>
-                                <div class="md-cache-actions">{actions}</div>
-                                {confirm_view}
-                            </td>
-                        </tr>
-                    }
-                })
-                .collect_view();
-            let title = group_name.replace('_', " ");
-            Some(view! {
-                <div class="md-cache-group">
-                    <h3>{title}</h3>
-                    <div class="md-table-wrap">
-                        <table class="md-table md-cache-table">
-                            <thead>
-                                <tr>
-                                    <th>"ID"</th>
-                                    <th>"Source"</th>
-                                    <th>"Shape"</th>
-                                    <th>"Created"</th>
-                                    <th>"More"</th>
-                                    <th>"Actions"</th>
-                                </tr>
-                            </thead>
-                            <tbody>{rows}</tbody>
-                        </table>
-                    </div>
-                </div>
-            })
-        })
-        .collect_view()
-    }
 }
 
 fn adjust_rows(

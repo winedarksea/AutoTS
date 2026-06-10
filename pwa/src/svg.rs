@@ -126,8 +126,12 @@ impl FeatureKind {
 pub struct FeatureKindSet(pub [bool; 4]);
 
 impl FeatureKindSet {
+    #[allow(dead_code)] // used by tests; the app now defaults to `all()`
     pub fn none() -> Self {
         FeatureKindSet([false; 4])
+    }
+    pub fn all() -> Self {
+        FeatureKindSet([true; 4])
     }
     pub fn get(self, k: FeatureKind) -> bool {
         self.0[k.index()]
