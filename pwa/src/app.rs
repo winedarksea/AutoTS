@@ -27,6 +27,8 @@ use crate::svg::{self, ChartOutput, FeatureKind, FeatureKindSet, FeatureMarker};
 
 type Overrides = Vec<Vec<Option<f64>>>;
 
+const DEFAULT_SAMPLE_DATASET: &str = "daily";
+
 /// Per-chart interaction state (pointer hover + drag-to-zoom). All fields are
 /// `RwSignal`, so the struct is `Copy` and cheap to pass to view helpers.
 #[derive(Clone, Copy)]
@@ -769,7 +771,7 @@ pub fn App() -> impl IntoView {
     let tab = create_rw_signal::<u8>(3); // 0 paste, 1 url, 2 file, 3 sample, 4 live
     let paste_text = create_rw_signal(String::new());
     let url_text = create_rw_signal(String::new());
-    let sample = create_rw_signal(String::from("monthly"));
+    let sample = create_rw_signal(String::from(DEFAULT_SAMPLE_DATASET));
 
     // Live-data inputs (declarative source model in LIVE_SOURCES)
     let mut init_enabled = HashMap::new();
