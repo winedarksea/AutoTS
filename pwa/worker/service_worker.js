@@ -63,6 +63,43 @@ async function cacheFirst(request) {
   return response;
 }
 
+function isRuntimePackageRequest(request) {
+  const requestUrl = new URL(request.url);
+  // Only same-origin runtime assets need this network-first + content-type guard:
+  // our SPA host can answer a missing .whl/manifest with an HTML fallback page,
+  // which must never poison the cache. Pyodide's CDN wheels (jsdelivr) are never
+  // HTML and stay on cacheFirst so the large scientific wheels serve from cache.
+  if (requestUrl.origin !== self.location.origin) return false;
+  return requestUrl.pathname.endsWith('.whl') ||
+    requestUrl.pathname.endsWith('/autots_wheel.json');
+}
+
+function isValidRuntimePackageResponse(request, response) {
+  if (!response.ok || response.type === 'opaque') return false;
+  const requestUrl = new URL(request.url);
+  const contentType = response.headers && response.headers.get
+    ? response.headers.get('content-type') || ''
+    : '';
+  if (requestUrl.pathname.endsWith('.whl')) {
+    return !contentType.toLowerCase().includes('text/html');
+  }
+  return contentType.toLowerCase().includes('application/json');
+}
+
+async function runtimePackageResponse(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const response = await fetch(request);
+    if (isValidRuntimePackageResponse(request, response)) {
+      await cache.put(request, response.clone());
+      return response;
+    }
+    return (await cache.match(request)) || response;
+  } catch (_) {
+    return cache.match(request);
+  }
+}
+
 async function navigationResponse(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
@@ -95,6 +132,10 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
   if (event.request.mode === 'navigate') {
     event.respondWith(navigationResponse(event.request));
+    return;
+  }
+  if (isRuntimePackageRequest(event.request)) {
+    event.respondWith(runtimePackageResponse(event.request));
     return;
   }
   if (

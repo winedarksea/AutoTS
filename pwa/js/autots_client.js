@@ -33,6 +33,7 @@
   let generation = 0;
   let callQueue = Promise.resolve();
   let runtimeConfig = null;
+  const RUNTIME_ASSET_CACHE_KEY = 'runtime-asset-v1';
 
   function notifyLifecycle(state) {
     if (lifecycleHandler) lifecycleHandler(state);
@@ -200,26 +201,34 @@
     }
     const base = (typeof document !== 'undefined' && document.baseURI) ||
                  (typeof location !== 'undefined' && location.href) || '';
+    const addRuntimeAssetCacheKey = (url) => {
+      if (!base) return url;
+      const resolvedUrl = new URL(url, base);
+      resolvedUrl.searchParams.set('autots-cache', RUNTIME_ASSET_CACHE_KEY);
+      return resolvedUrl.href;
+    };
     try {
-      const res = await fetch('autots_wheel.json', { cache: 'no-store' });
+      const res = await fetch(
+        addRuntimeAssetCacheKey('autots_wheel.json'),
+        { cache: 'no-store' }
+      );
       if (res.ok) {
         const m = await res.json();
         if (m && m.url) {
-          const resolveUrl = (url) => base ? new URL(url, base).href : url;
           return {
-            wheelUrl: resolveUrl(m.url),
+            wheelUrl: addRuntimeAssetCacheKey(m.url),
             dependencyUrls: Array.isArray(m.dependencies)
-              ? m.dependencies.map((dependency) => resolveUrl(dependency.url))
+              ? m.dependencies.map(
+                (dependency) => addRuntimeAssetCacheKey(dependency.url)
+              )
               : [],
           };
         }
       }
-    } catch (_) { /* ignore, use fallback */ }
-    return {
-      wheelUrl: base ? new URL('autots-1.0.4-py3-none-any.whl', base).href
-                     : 'autots-1.0.4-py3-none-any.whl',
-      dependencyUrls: [],
-    };
+    } catch (_) { /* report one consistent runtime-asset error below */ }
+    throw new Error(
+      'Unable to load autots_wheel.json; the forecasting runtime assets are unavailable'
+    );
   }
 
   function initRuntime(wheelUrl, pyodideUrl) {

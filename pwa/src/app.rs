@@ -616,7 +616,7 @@ async fn run_forecast(
                             upper_result.map(|(value, _)| value),
                             lower_result.map(|(value, _)| value),
                             model_parameters,
-                            json!(overrides.get()),
+                            json!(overrides.get_untracked()),
                         );
                         match storage::put_artifact(
                             artifact,

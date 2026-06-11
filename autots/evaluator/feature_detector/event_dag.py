@@ -110,6 +110,36 @@ def _periods_between(start, end, step: pd.Timedelta) -> int:
     return max(periods, 1)
 
 
+def _safe_duration(value, max_periods=None) -> int:
+    """Coerce a record ``duration`` to a sane period count.
+
+    Records occasionally carry a corrupt or out-of-range ``duration`` (e.g. a
+    raw sample count or a value derived from a multi-century / NaT date span).
+    Such values overflow int64 nanoseconds when multiplied by ``step`` in
+    :func:`_safe_end_date`, so clamp to ``[1, max_periods]`` before use.
+    """
+    try:
+        duration = int(value)
+    except (TypeError, ValueError):
+        duration = 1
+    duration = max(duration, 1)
+    if max_periods is not None and max_periods >= 1:
+        duration = min(duration, max_periods)
+    return duration
+
+
+def _safe_end_date(start_date, duration: int, step: pd.Timedelta):
+    """``start_date + (duration - 1) * step`` that degrades instead of crashing.
+
+    Even after clamping, defend the Timedelta multiply against int64 overflow so
+    a pathological record can never abort ``detector.fit``.
+    """
+    try:
+        return start_date + (duration - 1) * step
+    except (OverflowError, ValueError):
+        return start_date
+
+
 def _safe_float(value) -> float:
     try:
         result = float(value)
@@ -124,7 +154,7 @@ def _family_order_index(source_families):
     return {name: idx for idx, name in enumerate(source_families)}
 
 
-def _extract_record_fields(family, record, step, shared_default=False):
+def _extract_record_fields(family, record, step, shared_default=False, max_periods=None):
     shared_flag = bool(shared_default)
     subtype = family
     magnitude = 0.0
@@ -148,17 +178,17 @@ def _extract_record_fields(family, record, step, shared_default=False):
             prior_slope = _safe_float(record.get('prior_slope', 0.0))
             new_slope = _safe_float(record.get('new_slope', magnitude))
             magnitude = new_slope - prior_slope
-        duration = max(int(record.get('duration', 1) or 1), 1)
-        end_date = start_date + (duration - 1) * step
+        duration = _safe_duration(record.get('duration', 1) or 1, max_periods)
+        end_date = _safe_end_date(start_date, duration, step)
     else:
         values = list(record)
         start_date = pd.Timestamp(values[0])
         if family == 'anomalies':
             magnitude = _safe_float(values[1] if len(values) > 1 else 0.0)
             subtype = str(values[2] if len(values) > 2 else 'point_outlier')
-            duration = max(int(values[3] if len(values) > 3 else 1), 1)
+            duration = _safe_duration(values[3] if len(values) > 3 else 1, max_periods)
             shared_flag = bool(values[4] if len(values) > 4 else shared_default)
-            end_date = start_date + (duration - 1) * step
+            end_date = _safe_end_date(start_date, duration, step)
         elif family == 'level_shifts':
             magnitude = _safe_float(values[1] if len(values) > 1 else 0.0)
             subtype = str(values[2] if len(values) > 2 else 'validated')
@@ -193,6 +223,8 @@ def _extract_member_events(detector, params, step):
     mode = getattr(detector, 'detection_mode', 'multivariate')
     columns = list(getattr(detector.df_original, 'columns', []))
     family_rank = _family_order_index(source_families)
+    date_index = getattr(detector, 'date_index', None)
+    max_periods = max(len(date_index) if date_index is not None else 0, 1)
     members = []
 
     if mode == 'univariate':
@@ -217,6 +249,7 @@ def _extract_member_events(detector, params, step):
                     record,
                     step=step,
                     shared_default=(mode == 'univariate'),
+                    max_periods=max_periods,
                 )
                 member_series = series_name if mode != 'univariate' else '__broadcast__'
                 members.append(

@@ -6,6 +6,7 @@ const handlers = {};
 const deletedCaches = [];
 const cachedAssets = [];
 const cachedRequests = [];
+let runtimePackageContentType = 'application/octet-stream';
 const cache = {
   addAll: async (urls) => { cachedAssets.push(...urls); },
   match: async () => null,
@@ -37,6 +38,9 @@ const context = {
     return {
       ok: true,
       type: 'basic',
+      headers: {
+        get: (name) => name === 'content-type' ? runtimePackageContentType : null,
+      },
       clone() { return this; },
     };
   },
@@ -89,6 +93,32 @@ vm.runInContext(
   assert.ok(cachedRequests.includes(
     'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/numpy.whl'
   ));
+
+  const runtimeWheelUrl =
+    'https://example.test/app/autots.whl?autots-cache=runtime-asset-v1';
+  handlers.fetch({
+    request: {
+      method: 'GET',
+      mode: 'cors',
+      url: runtimeWheelUrl,
+    },
+    respondWith: (promise) => { fetchPromise = promise; },
+  });
+  await fetchPromise;
+  assert.ok(cachedRequests.includes(runtimeWheelUrl));
+
+  const cachedRequestCount = cachedRequests.length;
+  runtimePackageContentType = 'text/html';
+  handlers.fetch({
+    request: {
+      method: 'GET',
+      mode: 'cors',
+      url: 'https://example.test/app/missing.whl',
+    },
+    respondWith: (promise) => { fetchPromise = promise; },
+  });
+  await fetchPromise;
+  assert.equal(cachedRequests.length, cachedRequestCount);
 
   console.log('service worker tests passed');
 })().catch((error) => {

@@ -655,6 +655,36 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
         self.assertIn("data_id", data)
         clear_cache(data["data_id"], "data")
 
+    async def test_daily_sample_snapshot_uses_json_null_for_missing_values(self):
+        from autots.mcp.cache import clear_cache
+
+        loaded_json = await self.P.run_command_json(
+            "load_sample_data", json.dumps({"dataset": "daily"})
+        )
+        loaded = json.loads(loaded_json)
+        try:
+            snapshot_json = await self.P.run_command_json(
+                "get_data",
+                json.dumps(
+                    {
+                        "data_id": loaded["data_id"],
+                        "output_format": "json_wide",
+                    }
+                ),
+            )
+            snapshot = json.loads(snapshot_json)
+            self.assertNotIn("NaN", snapshot_json)
+            self.assertTrue(
+                any(
+                    value is None
+                    for series_name, values in snapshot.items()
+                    if series_name != "datetime"
+                    for value in values
+                )
+            )
+        finally:
+            clear_cache(loaded["data_id"], "data")
+
     async def test_make_forecast_requires_data_id(self):
         out = await self.P.run_command_json("make_forecast", json.dumps({}))
         self.assertIn("error", json.loads(out))

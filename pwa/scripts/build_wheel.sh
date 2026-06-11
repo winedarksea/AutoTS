@@ -18,6 +18,17 @@ FORCE="${2:-}"
 OPENPYXL_VERSION="3.1.5"
 ET_XMLFILE_VERSION="2.0.0"
 
+if [[ -n "${PYTHON:-}" ]]; then
+  PYTHON_BIN="$PYTHON"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  echo "Python is required to build the PWA wheel." >&2
+  exit 1
+fi
+
 mkdir -p "$CACHE_DIR" "$DEST_DIR"
 
 if [[ "$FORCE" == "--force" ]]; then
@@ -26,9 +37,16 @@ if [[ "$FORCE" == "--force" ]]; then
     "$CACHE_DIR"/et_xmlfile-*.whl
 fi
 
-if ! ls "$CACHE_DIR"/autots-*.whl >/dev/null 2>&1; then
+WHEEL="$(ls -t "$CACHE_DIR"/autots-*.whl 2>/dev/null | head -1 || true)"
+if [[ -z "$WHEEL" ]] ||
+   find "$REPO_ROOT/autots" "$REPO_ROOT/setup.py" "$REPO_ROOT/pyproject.toml" \
+     -type f -newer "$WHEEL" -print -quit | grep -q .; then
   echo "Building AutoTS wheel (pure-Python, no deps)…"
-  python -m pip wheel "$REPO_ROOT" --no-deps -w "$CACHE_DIR" >/dev/null
+  rm -f "$CACHE_DIR"/autots-*.whl
+  "$PYTHON_BIN" -m pip wheel \
+    --no-deps \
+    --wheel-dir "$CACHE_DIR" \
+    "$REPO_ROOT" >/dev/null
 fi
 
 # micropip requires the real PEP-427 wheel filename, so preserve the basename
@@ -40,7 +58,7 @@ cp "$WHEEL" "$DEST_DIR/$WHEEL_NAME"
 if ! ls "$CACHE_DIR"/openpyxl-"$OPENPYXL_VERSION"-*.whl >/dev/null 2>&1 ||
    ! ls "$CACHE_DIR"/et_xmlfile-"$ET_XMLFILE_VERSION"-*.whl >/dev/null 2>&1; then
   echo "Downloading pinned Excel reader wheels…"
-  python -m pip download \
+  "$PYTHON_BIN" -m pip download \
     --only-binary=:all: \
     --no-deps \
     --dest "$CACHE_DIR" \
@@ -55,7 +73,7 @@ ET_XMLFILE_NAME="$(basename "$ET_XMLFILE_WHEEL")"
 cp "$OPENPYXL_WHEEL" "$DEST_DIR/$OPENPYXL_NAME"
 cp "$ET_XMLFILE_WHEEL" "$DEST_DIR/$ET_XMLFILE_NAME"
 
-python - "$DEST_DIR/autots_wheel.json" "$WHEEL_NAME" "$ET_XMLFILE_NAME" "$OPENPYXL_NAME" <<'PY'
+"$PYTHON_BIN" - "$DEST_DIR/autots_wheel.json" "$WHEEL_NAME" "$ET_XMLFILE_NAME" "$OPENPYXL_NAME" <<'PY'
 import json
 import sys
 
@@ -75,7 +93,7 @@ with open(manifest_path, "w", encoding="utf-8") as manifest_file:
     manifest_file.write("\n")
 PY
 
-python - "$DEST_DIR" <<'PY'
+"$PYTHON_BIN" - "$DEST_DIR" <<'PY'
 import hashlib
 import json
 import os

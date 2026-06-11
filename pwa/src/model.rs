@@ -48,16 +48,22 @@ impl WideData {
         self.series.iter().position(|s| s.name == name)
     }
 
-    /// Select a useful initial chart series instead of an all-missing column.
+    /// Select every series that has at least one real value, skipping any series
+    /// that is entirely missing/NaN. NaN values within an otherwise-populated
+    /// series are normal (AutoTS handles them during forecasting) and must not
+    /// cause that series to be hidden. If every series is entirely missing, fall
+    /// back to selecting the first one so the chart isn't left empty.
     pub fn initial_series_selection(&self) -> Vec<bool> {
-        let selected_index = self
+        let selection: Vec<bool> = self
             .series
             .iter()
-            .position(|series| series.values.iter().any(|value| value.is_finite()))
-            .unwrap_or(0);
-        (0..self.series.len())
-            .map(|index| index == selected_index)
-            .collect()
+            .map(|series| series.values.iter().any(|value| value.is_finite()))
+            .collect();
+        if selection.iter().any(|&selected| selected) {
+            selection
+        } else {
+            (0..self.series.len()).map(|index| index == 0).collect()
+        }
     }
 }
 
@@ -276,6 +282,53 @@ mod tests {
         };
 
         assert_eq!(data.initial_series_selection(), vec![false, true]);
+    }
+
+    #[test]
+    fn initial_selection_keeps_partially_missing_series() {
+        let data = WideData {
+            datetime: vec!["2026-01-01".into(), "2026-01-02".into()],
+            series: vec![
+                SeriesData {
+                    name: "a".into(),
+                    values: vec![1.0, f64::NAN],
+                },
+                SeriesData {
+                    name: "b".into(),
+                    values: vec![f64::NAN, 2.0],
+                },
+                SeriesData {
+                    name: "all_missing".into(),
+                    values: vec![f64::NAN, f64::NAN],
+                },
+            ],
+        };
+
+        // Series with at least one real value stay selected; only the
+        // entirely-missing series is dropped.
+        assert_eq!(
+            data.initial_series_selection(),
+            vec![true, true, false]
+        );
+    }
+
+    #[test]
+    fn initial_selection_falls_back_to_first_when_all_missing() {
+        let data = WideData {
+            datetime: vec!["2026-01-01".into()],
+            series: vec![
+                SeriesData {
+                    name: "a".into(),
+                    values: vec![f64::NAN],
+                },
+                SeriesData {
+                    name: "b".into(),
+                    values: vec![f64::NAN],
+                },
+            ],
+        };
+
+        assert_eq!(data.initial_series_selection(), vec![true, false]);
     }
 
     #[test]

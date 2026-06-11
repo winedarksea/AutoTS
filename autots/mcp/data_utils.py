@@ -1,5 +1,7 @@
 """DataFrame loading and CSV formatting utilities for the AutoTS MCP server."""
 
+import math
+import numbers
 import os
 import tempfile
 import uuid
@@ -8,6 +10,25 @@ from typing import Optional, Union
 import pandas as pd
 
 from autots import long_to_wide
+
+
+def sanitize_json_values(obj):
+    """Replace dataframe missing and non-finite scalar values with JSON null."""
+    if isinstance(obj, dict):
+        return {key: sanitize_json_values(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_json_values(value) for value in obj]
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, numbers.Integral):
+        return int(obj)
+    if isinstance(obj, numbers.Real):
+        numeric_value = float(obj)
+        return numeric_value if math.isfinite(numeric_value) else None
+    try:
+        return None if pd.isna(obj) else obj
+    except (TypeError, ValueError):
+        return obj
 
 
 def serialize_timestamps(obj):
@@ -103,7 +124,7 @@ def dataframe_to_output(
     if output_format == "json_wide":
         result = df_copy.reset_index().to_dict(orient='list')
         result['datetime'] = result.pop('index', result.get('datetime'))
-        return result
+        return sanitize_json_values(result)
 
     elif output_format == "json_long":
         df_reset = df_copy.reset_index()
@@ -112,7 +133,7 @@ def dataframe_to_output(
             id_vars=[index_col], var_name='series_id', value_name='value'
         )
         df_long = df_long.rename(columns={index_col: 'datetime'})
-        return df_long.to_dict(orient='list')
+        return sanitize_json_values(df_long.to_dict(orient='list'))
 
     elif output_format in ["csv_wide", "csv_long"]:
         if save_path is None:

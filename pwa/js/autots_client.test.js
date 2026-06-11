@@ -91,6 +91,7 @@ vm.runInContext(
     preventDefault() {},
   };
   const installStates = [];
+  const fetchedRuntimeAssetUrls = [];
   class MockMessageChannel {
     constructor() {
       this.port1 = { onmessage: null };
@@ -118,16 +119,19 @@ vm.runInContext(
         addEventListener() {},
       },
     },
-    fetch: async () => ({
-      ok: true,
-      json: async () => ({
-        url: 'autots.whl',
-        dependencies: [
-          { name: 'et-xmlfile', url: 'et_xmlfile.whl' },
-          { name: 'openpyxl', url: 'openpyxl.whl' },
-        ],
-      }),
-    }),
+    fetch: async (url) => {
+      fetchedRuntimeAssetUrls.push(url);
+      return {
+        ok: true,
+        json: async () => ({
+          url: 'autots.whl',
+          dependencies: [
+            { name: 'et-xmlfile', url: 'et_xmlfile.whl' },
+            { name: 'openpyxl', url: 'openpyxl.whl' },
+          ],
+        }),
+      };
+    },
     document: { baseURI: 'https://example.test/app/' },
     Worker: InstallWorker,
     URL,
@@ -150,12 +154,19 @@ vm.runInContext(
   installEvents.beforeinstallprompt(installPrompt);
   assert.equal(await installClient.installApp(), false);
   await installClient.initRuntime('', '');
+  assert.deepEqual(fetchedRuntimeAssetUrls, [
+    'https://example.test/app/autots_wheel.json?autots-cache=runtime-asset-v1',
+  ]);
   const initMessage = installWorkers[0].messages.find((message) => message.type === 'init');
+  assert.equal(
+    initMessage.wheelUrl,
+    'https://example.test/app/autots.whl?autots-cache=runtime-asset-v1'
+  );
   assert.deepEqual(
     Array.from(initMessage.dependencyUrls),
     [
-      'https://example.test/app/et_xmlfile.whl',
-      'https://example.test/app/openpyxl.whl',
+      'https://example.test/app/et_xmlfile.whl?autots-cache=runtime-asset-v1',
+      'https://example.test/app/openpyxl.whl?autots-cache=runtime-asset-v1',
     ]
   );
   await new Promise((resolve) => setImmediate(resolve));

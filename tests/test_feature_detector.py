@@ -398,6 +398,33 @@ class TestFeatureDetector(unittest.TestCase):
         )
         self.assertIsNone(event_dag['event_clusters'][2]['family_id'])
 
+    def test_event_dag_survives_pathological_duration_without_overflow(self):
+        # A corrupt/out-of-range anomaly duration (e.g. a raw sample count or a
+        # value derived from a multi-century date span) previously overflowed
+        # int64 nanoseconds in ``start_date + (duration - 1) * step`` and aborted
+        # ``detector.fit``. The duration must now be clamped to the series length
+        # and the Timedelta multiply guarded.
+        detector = self._make_manual_event_dag_detector()
+        detector.anomalies = {
+            'a': [(pd.Timestamp('2024-01-10'), 3.0, 'point_outlier', 10 ** 12, False)],
+            'b': [{'date': pd.Timestamp('2024-01-11'), 'magnitude': 2.0,
+                   'type': 'point_outlier', 'duration': 10 ** 12}],
+            'c': [],
+        }
+        detector.trend_changepoints = {'a': [], 'b': [], 'c': []}
+        detector.level_shifts = {'a': [], 'b': [], 'c': []}
+
+        event_dag = detector._rebuild_event_dag()  # must not raise OverflowError
+
+        n_periods = len(detector.date_index)  # 45
+        self.assertEqual(len(event_dag['member_events']), 2)
+        for member in event_dag['member_events']:
+            # end_date stays within the clamped horizon, never centuries out.
+            span_days = (
+                pd.Timestamp(member['end_date']) - pd.Timestamp(member['start_date'])
+            ).days
+            self.assertLessEqual(span_days, n_periods)
+
     def test_event_dag_is_exposed_in_template_features_query_and_plot(self):
         detector = self._make_manual_event_dag_detector()
         detector.anomalies = {
