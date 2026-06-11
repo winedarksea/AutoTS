@@ -2012,6 +2012,7 @@ class AutoTS(object):
             self.best_model['TransformationParameters'].iloc[0]
         )
         if "ID" not in self.best_model.columns:
+            self.best_model = self.best_model.copy()
             self.best_model['ID'] = create_model_id(
                 self.best_model_name,
                 self.best_model_params,

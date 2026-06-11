@@ -1797,7 +1797,7 @@ pub fn App() -> impl IntoView {
                         3 => view! {
                             <div class="md-field">
                                 <label class="md-label">"Try a built-in sample dataset"</label>
-                                <select on:change=move |ev| sample.set(event_target_value(&ev))>
+                                <select prop:value=move || sample.get() on:change=move |ev| sample.set(event_target_value(&ev))>
                                     <option value="daily">"daily"</option>
                                     <option value="monthly">"monthly"</option>
                                     <option value="weekly">"weekly"</option>
