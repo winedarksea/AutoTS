@@ -232,21 +232,36 @@ class GluonTS(ModelObject):
 
         elif self.gluon_model == 'SFF':
             try:
-                from gluonts.mx import SimpleFeedForwardEstimator
-            except Exception:
-                from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
+                try:
+                    from gluonts.mx import SimpleFeedForwardEstimator
+                except Exception:
+                    from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
 
-            estimator = SimpleFeedForwardEstimator(
-                prediction_length=ts_metadata['forecast_length'],
-                context_length=ts_metadata['context_length'],
-                # freq=ts_metadata['freq'],
-                trainer=Trainer(
-                    epochs=self.epochs,
-                    learning_rate=self.learning_rate,
-                    hybridize=False,
+                estimator = SimpleFeedForwardEstimator(
+                    prediction_length=ts_metadata['forecast_length'],
+                    context_length=ts_metadata['context_length'],
+                    # freq=ts_metadata['freq'],
+                    trainer=Trainer(
+                        epochs=self.epochs,
+                        learning_rate=self.learning_rate,
+                        hybridize=False,
+                        num_batches_per_epoch=100,
+                    ),
+                )
+            except Exception:
+                from gluonts.torch import SimpleFeedForwardEstimator
+
+                estimator = SimpleFeedForwardEstimator(
+                    prediction_length=ts_metadata['forecast_length'],
+                    context_length=ts_metadata['context_length'],
+                    lr=self.learning_rate,
                     num_batches_per_epoch=100,
-                ),
-            )
+                    trainer_kwargs={
+                        'max_epochs': self.epochs,
+                        'logger': False,
+                        'log_every_n_steps': 0,
+                    },
+                )
 
         elif self.gluon_model == 'Transformer':
             try:
