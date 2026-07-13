@@ -175,7 +175,7 @@ general_template_dict = {
     "29": {
         "Model": "SectionalMotif",
         "ModelParameters": "{\"window\": 10, \"point_method\": \"weighted_mean\", \"distance_metric\": \"sokalmichener\", \"include_differenced\": true, \"k\": 20, \"stride_size\": 1, \"regression_type\": null}",
-        "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": null}, \"transformation_params\": {\"0\": {}}}",
+        "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": \"None\"}, \"transformation_params\": {\"0\": {}}}",
         "Ensemble": 0,
     },
     "30": {
@@ -282,9 +282,7 @@ general_template_dict = {
             "num_split": 4, "min_num_epochs": 5, "train_epochs": 40,
             "epoch_len": null, "permute": true, "normalize": false
         }''',
-        'TransformationParameters': '''
-        {"fillna": "ffill", "transformations": {"0": "AlignLastValue", "1": "Log", "2": "AlignLastValue", "3": "MinMaxScaler"}, "transformation_params": {"0": {"rows": 4, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "3": {}}}
-        ''',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "AlignLastValue", "1": "Log", "2": "AlignLastValue", "3": "MinMaxScaler"}, "transformation_params": {"0": {"rows": 4, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "1": {}, "2": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "3": {}}}',
         'Ensemble': 0,
     },
     "44": {
@@ -314,25 +312,25 @@ general_template_dict = {
     "48": {  # optimized 200 minutes on initial model import on load_daily
         "Model": "DMD",
         'ModelParameters': '{"rank": 10, "alpha": 1, "amplitude_threshold": null, "eigenvalue_threshold": null}',
-        "TransformationParameters": '''{"fillna": "linear", "transformations": {"0": "HistoricValues", "1": "AnomalyRemoval", "2": "SeasonalDifference", "3": "AnomalyRemoval"},"transformation_params": {"0": {"window": 10}, "1": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "ffill", "transform_dict": {"fillna": null, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "isolated_only": false}, "2": {"lag_1": 7, "method": "Mean"}, "3": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "fake_date", "transform_dict": {"transformations": {"0": "DifferencedTransformer"}, "transformation_params": {"0": {}}}, "isolated_only": false}}}''',
+        "TransformationParameters": '{"fillna": "linear", "transformations": {"0": "HistoricValues", "1": "AnomalyRemoval", "2": "SeasonalDifference", "3": "AnomalyRemoval"},"transformation_params": {"0": {"window": 10}, "1": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "ffill", "transform_dict": {"fillna": null, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "isolated_only": false}, "2": {"lag_1": 7, "method": "Mean"}, "3": {"method": "zscore", "method_params": {"distribution": "norm", "alpha": 0.05}, "fillna": "fake_date", "transform_dict": {"transformations": {"0": "DifferencedTransformer"}, "transformation_params": {"0": {}}}, "isolated_only": false}}}',
         "Ensemble": 0,
     },
     "49": {  # short optimization on M5
         "Model": "DMD",
-        "ModelParameters": '''{"rank": 2, "alpha": 1, "amplitude_threshold": null, "eigenvalue_threshold": 1}''',
-        "TransformationParameters": '''{"fillna": "ffill", "transformations": {"0": "SeasonalDifference", "1": "AlignLastValue", "2": "Round", "3": "Round", "4": "MinMaxScaler"}, "transformation_params": {"0": {"lag_1": 7, "method": "LastValue"}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "2": {"decimals": 0, "on_transform": false, "on_inverse": true}, "3": {"decimals": 0, "on_transform": false, "on_inverse": true}, "4": {}}}''',
+        "ModelParameters": '{"rank": 2, "alpha": 1, "amplitude_threshold": null, "eigenvalue_threshold": 1}',
+        "TransformationParameters": '{"fillna": "ffill", "transformations": {"0": "SeasonalDifference", "1": "AlignLastValue", "2": "Round", "3": "Round", "4": "MinMaxScaler"}, "transformation_params": {"0": {"lag_1": 7, "method": "LastValue"}, "1": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}, "2": {"decimals": 0, "on_transform": false, "on_inverse": true}, "3": {"decimals": 0, "on_transform": false, "on_inverse": true}, "4": {}}}',
         "Ensemble": 0,
     },
     "50": {
         'Model': 'NVAR',
         'ModelParameters': '{"k": 2, "ridge_param": 2e-06, "warmup_pts": 1, "seed_pts": 1, "seed_weighted": null, "batch_size": 5, "batch_method": "std_sorted"}',
-        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "HolidayTransformer", "1": "PositiveShift"}, "transformation_params": {"0": {"threshold": 0.9, "splash_threshold": null, "use_dayofmonth_holidays": true, "use_wkdom_holidays": true, "use_wkdeom_holidays": false, "use_lunar_holidays": false, "use_lunar_weekday": false, "use_islamic_holidays": false, "use_hebrew_holidays": false, "anomaly_detector_params": {"method": "rolling_zscore", "method_params": {"distribution": "uniform", "alpha": 0.03, "rolling_periods": 300, "center": true}, "fillna": "ffill", "transform_dict": {"fillna": "nearest", "transformations": {"0": null}, "transformation_params": {"0": {}}}, "isolated_only": false}, "remove_excess_anomalies": true, "impact": "datepart_regression", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic"}}, "datepart_method": "simple", "polynomial_degree": null, "transform_dict": null, "holiday_countries_used": false}}, "1": {}}}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "HolidayTransformer", "1": "PositiveShift"}, "transformation_params": {"0": {"threshold": 0.9, "splash_threshold": null, "use_dayofmonth_holidays": true, "use_wkdom_holidays": true, "use_wkdeom_holidays": false, "use_lunar_holidays": false, "use_lunar_weekday": false, "use_islamic_holidays": false, "use_hebrew_holidays": false, "anomaly_detector_params": {"method": "rolling_zscore", "method_params": {"distribution": "uniform", "alpha": 0.03, "rolling_periods": 300, "center": true}, "fillna": "ffill", "transform_dict": {"fillna": "nearest", "transformations": {"0": "None"}, "transformation_params": {"0": {}}}, "isolated_only": false}, "remove_excess_anomalies": true, "impact": "datepart_regression", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic"}}, "datepart_method": "simple", "polynomial_degree": null, "transform_dict": null, "holiday_countries_used": false}}, "1": {}}}',
         "Ensemble": 0,
     },
     "51": {  # optimized on M5, 60 SMAPE 2024-06-06
         'Model': 'BallTreeMultivariateMotif',
         'ModelParameters': '{"window": 28, "point_method": "median", "distance_metric": "euclidean", "k": 15}',
-        'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "QuantileTransformer", "1": "QuantileTransformer", "2": "DatepartRegression"}, "transformation_params": 	{"0": {"output_distribution": "uniform", "n_quantiles": 1000}, "1": {"output_distribution": "normal", "n_quantiles": 100}, "2": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic"}}, "datepart_method": "expanded", "polynomial_degree": null, "transform_dict": null, "holiday_countries_used": false}}}',
+        'TransformationParameters': '{"fillna": "ffill_mean_biased", "transformations": {"0": "QuantileTransformer", "1": "QuantileTransformer", "2": "DatepartRegression"}, "transformation_params": {"0": {"output_distribution": "uniform", "n_quantiles": 1000}, "1": {"output_distribution": "normal", "n_quantiles": 100}, "2": {"regression_model": {"model": "ElasticNet", "model_params": {"l1_ratio": 0.1, "fit_intercept": true, "selection": "cyclic"}}, "datepart_method": "expanded", "polynomial_degree": null, "transform_dict": null, "holiday_countries_used": false}}}',
         "Ensemble": 0,
     },
     "52": {  # optimized on dap, 2.43 SMAPE 2024-06-20

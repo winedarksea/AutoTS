@@ -28,6 +28,48 @@ from autots.templates.general import general_template
 from autots.tools.cpu_count import cpu_count, set_n_jobs
 
 
+def find_null_transformation_names(obj, path=""):
+    """Recursively find null transformer names in any nested 'transformations' dict.
+
+    Templates nest transform dicts (e.g. HolidayTransformer's
+    anomaly_detector_params.transform_dict), so a single top-level check misses
+    bugs like GH #242, where a null transformer name several levels deep crashes
+    GeneralTransformer at runtime.
+    """
+    found = []
+    if isinstance(obj, dict):
+        transformations = obj.get("transformations")
+        if isinstance(transformations, dict):
+            for key, value in transformations.items():
+                if value is None:
+                    found.append(f"{path}/transformations/{key}")
+        for key, value in obj.items():
+            found.extend(find_null_transformation_names(value, f"{path}/{key}"))
+    elif isinstance(obj, list):
+        for idx, item in enumerate(obj):
+            found.extend(find_null_transformation_names(item, f"{path}[{idx}]"))
+    return found
+
+
+def find_transformation_key_mismatches(obj, path=""):
+    """Recursively find 'transformations'/'transformation_params' dicts with mismatched keys."""
+    mismatches = []
+    if isinstance(obj, dict):
+        transformations = obj.get("transformations")
+        transformation_params = obj.get("transformation_params")
+        if isinstance(transformations, dict) and isinstance(transformation_params, dict):
+            t_keys = set(transformations.keys())
+            p_keys = set(transformation_params.keys())
+            if t_keys != p_keys:
+                mismatches.append((path, t_keys, p_keys))
+        for key, value in obj.items():
+            mismatches.extend(find_transformation_key_mismatches(value, f"{path}/{key}"))
+    elif isinstance(obj, list):
+        for idx, item in enumerate(obj):
+            mismatches.extend(find_transformation_key_mismatches(item, f"{path}[{idx}]"))
+    return mismatches
+
+
 class AutoTSTest(unittest.TestCase):
     def test_autots(self):
         print("Starting AutoTS class tests")
@@ -813,6 +855,22 @@ class AutoTSTest(unittest.TestCase):
                 self.assertIsInstance(mod, dict)
                 self.assertIsInstance(trans, dict)
                 self.assertIsNotNone(ensemble)
+
+                null_transforms = find_null_transformation_names(trans)
+                self.assertEqual(
+                    null_transforms,
+                    [],
+                    f"Model {model} (index {index}) has null transformation name(s)"
+                    f" in TransformationParameters at: {null_transforms}",
+                )
+
+                key_mismatches = find_transformation_key_mismatches(trans)
+                self.assertEqual(
+                    key_mismatches,
+                    [],
+                    f"Model {model} (index {index}) has mismatched keys between"
+                    f" 'transformations' and 'transformation_params' at: {key_mismatches}",
+                )
 
     def test_custom_validations(self):
         long = False
