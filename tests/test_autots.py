@@ -29,6 +29,25 @@ from autots.tools.cpu_count import cpu_count, set_n_jobs
 
 
 class AutoTSTest(unittest.TestCase):
+    def test_long_horizon_fit_uses_degraded_validation_split(self):
+        df = pd.DataFrame(
+            {"series": np.arange(6)},
+            index=pd.date_range("2020-01-01", periods=6, freq="D"),
+        )
+        model = AutoTS(
+            forecast_length=8,
+            max_generations=0,
+            num_validations="auto",
+            model_list=["ConstantNaive"],
+            transformer_list="superfast",
+            verbose=1,
+        )
+        with self.assertWarnsRegex(RuntimeWarning, "requested 8 forecast periods"):
+            model.fit(df)
+        self.assertEqual(model.num_validations, 0)
+        self.assertEqual(len(model.validation_indexes), 1)
+        self.assertEqual(len(model.validation_indexes[0]), 6)
+
     def test_autots(self):
         print("Starting AutoTS class tests")
         forecast_length = 8

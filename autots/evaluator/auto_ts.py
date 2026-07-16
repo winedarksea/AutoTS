@@ -140,6 +140,8 @@ class AutoTS(object):
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
             Useful in (unrecommended) cases where forecast_length > training length.
+            If forecast_length exceeds all available rows, AutoTS instead warns and
+            uses a degraded half-history validation split.
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.

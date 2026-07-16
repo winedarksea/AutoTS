@@ -8,6 +8,7 @@ Created on Mon Jan 16 11:36:01 2023
 
 @author: Colin
 """
+import warnings
 import numpy as np
 from autots.tools.transform import GeneralTransformer
 from autots.tools.window_functions import retrieve_closest_indices
@@ -29,6 +30,31 @@ def validate_num_validations(
     verbose=0,
 ):
     """Check how many validations are possible given the length of the data. Beyond initial eval split which is always assumed."""
+    available_periods = df_wide_numeric.shape[0]
+    if forecast_length > available_periods:
+        warning_message = (
+            f"User requested {forecast_length} forecast periods but the training data "
+            f"has only {available_periods} periods available. Cross validation and "
+            "model selection will be degraded."
+        )
+        warnings.warn(warning_message, RuntimeWarning, stacklevel=2)
+        if verbose >= 0:
+            print(warning_message)
+
+        if validation_method != "mixed_length":
+            # num_validations excludes the initial evaluation split. The splitter
+            # below will use half of the available history for that one split.
+            return 0
+
+        # Mixed-length validation can use progressively shorter holdouts even
+        # when the requested production horizon exceeds all available history.
+        max_additional_validations = max(0, available_periods - 2)
+        if num_validations == "auto":
+            return min(3, max_additional_validations)
+        if num_validations == "max":
+            return max_additional_validations
+        return min(abs(int(num_validations)), max_additional_validations)
+
     if 'seasonal' in validation_method and validation_method != "seasonal":
         seasonal_val_periods = extract_seasonal_val_periods(validation_method)
         temp = df_wide_numeric.shape[0] + forecast_length
@@ -85,6 +111,12 @@ def generate_validation_indices(
     bval_list = ['backwards', 'back', 'backward']
     base_val_list = bval_list + ['even', 'Even']
     # num_validations = int(num_validations)
+
+    # A normal forecast-length holdout is impossible here. The shared splitter
+    # will create the degraded half-history split instead, so avoid specialized
+    # index generators that require a full requested-horizon window.
+    if forecast_length > df_wide_numeric.shape[0] and validation_method != "mixed_length":
+        return [df_wide_numeric.index]
 
     # generate similarity matching indices (so it can fail now, not after all the generations)
     if validation_method == "similarity":
@@ -168,6 +200,15 @@ def generate_validation_indices(
     elif validation_method in ["mixed_length"]:
         idx = df_wide_numeric.index
         shp0 = df_wide_numeric.shape[0]
+        if forecast_length > shp0:
+            # Keep every split non-empty while moving the cutoff later for each
+            # validation, allowing model selection on several forecast lengths.
+            max_additional_validations = max(0, shp0 - 2)
+            num_validations = min(num_validations, max_additional_validations)
+            for split_number in range(1, num_validations + 2):
+                cut = int(shp0 * split_number / (split_number + 1))
+                validation_indexes.append((idx[:cut], idx[cut:]))
+            return validation_indexes
         count = 0
         for y in range(num_validations + 1):
             if count == 0:
