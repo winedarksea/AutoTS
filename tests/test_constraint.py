@@ -4,6 +4,7 @@ import unittest
 import warnings
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from autots import load_daily, ModelPrediction
 
 
@@ -169,12 +170,14 @@ class TestConstraint(unittest.TestCase):
                 # apply an artificially low value
                 prediction.forecast.iloc[0, 0] = -10
                 prediction.forecast.iloc[0, -1] = df.iloc[:, -1].max() * 1.1
-                prediction.plot(df, df.columns[-1])
-                prediction.plot(df, df.columns[0])
+                for series in [df.columns[-1], df.columns[0]]:
+                    plot_axis = prediction.plot(df, series)
+                    plt.close(plot_axis.figure)
 
                 prediction.apply_constraints(df_train=df, **constraint)
-                prediction.plot(df, df.columns[-1])
-                prediction.plot(df, df.columns[0])
+                for series in [df.columns[-1], df.columns[0]]:
+                    plot_axis = prediction.plot(df, series)
+                    plt.close(plot_axis.figure)
                 # assuming all history was positive as example data currently is
                 if key in ["empty", "dampening"]:
                     self.assertTrue(prediction.forecast.min().min() == -10)
