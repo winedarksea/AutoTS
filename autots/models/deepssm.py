@@ -43,6 +43,21 @@ except Exception:
     HAS_TORCH = False
 
 
+def _select_torch_device():
+    """Device selection: CUDA > MPS > CPU. Safe to call without torch installed."""
+    if not HAS_TORCH:
+        return "cpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    # only check MPS on macOS to avoid false positives on Linux
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        import platform
+
+        if platform.system() == "Darwin":
+            return "mps"
+    return "cpu"
+
+
 # TODO: consider instead of passing changepoint features, pass the fit changepoint (from TimeSeriesFeatureDetector)
 # TODO: take advantage of the 2d feature shape with convolutional designs
 
@@ -159,6 +174,36 @@ def build_series_feature_mapping(
         series_feat_mapping[series_idx] = series_feature_indices.tolist()
 
     return series_feat_mapping, True
+
+
+def clamp_training_window(
+    n_timesteps,
+    prediction_batch_size,
+    context_length=0,
+    use_naive_window=False,
+    verbose=0,
+):
+    """Shrink window params to what a short history can actually supply.
+
+    create_training_batches requires
+    ``max(naive_offset, context_length) + prediction_batch_size + 1 <= n_timesteps``,
+    where naive_offset is prediction_batch_size when the naive window is used.
+    Randomly drawn params routinely exceed that on short data, so clamp rather
+    than fail the whole model.
+
+    Returns:
+        (prediction_batch_size, context_length)
+    """
+    pbs, ctx = int(prediction_batch_size), int(context_length)
+    max_pbs = (n_timesteps - 1) // 2 if use_naive_window else n_timesteps - 2
+    new_pbs = max(1, min(pbs, max_pbs))
+    new_ctx = max(0, min(ctx, n_timesteps - new_pbs - 1))
+    if verbose > 0 and (new_pbs != pbs or new_ctx != ctx):
+        print(
+            f"deepssm: {n_timesteps} timesteps too few for prediction_batch_size "
+            f"{pbs}/context_length {ctx}, reduced to {new_pbs}/{new_ctx}"
+        )
+    return new_pbs, new_ctx
 
 
 def create_training_batches(
@@ -620,9 +665,9 @@ class RankedSharpeLoss(Module):
         n = x.shape[0]
 
         # Create pairwise comparison matrix
-        # diff[i,j] = x[i] - x[j]
-        x_expanded = x.unsqueeze(1)  # (n, 1)
-        diff = x_expanded - x_expanded.T  # (n, n)
+        # diff[i,j] = x[i] - x[j], ranking along dim 0 and broadcasting over any
+        # trailing dims. .T would reverse every dim, misaligning non-1D input.
+        diff = x.unsqueeze(1) - x.unsqueeze(0)
 
         # Soft ranks using sigmoid: higher values get lower ranks (ranks start from 1)
         # sigmoid(diff/temp) ≈ 1 when x[i] > x[j], ≈ 0 when x[i] < x[j]
@@ -773,8 +818,9 @@ class ShortHorizonRankLoss(Module):
         if n < 2:
             return x  # Return original if can't rank
 
-        x_expanded = x.unsqueeze(1)
-        diff = x_expanded - x_expanded.T
+        # rank along dim 0, broadcasting over any trailing dims (ie horizon)
+        # .T would reverse every dim, which misaligns anything but 1D/2D input
+        diff = x.unsqueeze(1) - x.unsqueeze(0)
         soft_comparison = torch.sigmoid(diff / temperature)
         soft_ranks = soft_comparison.sum(dim=1) + 1
         return soft_ranks
@@ -805,6 +851,9 @@ class ShortHorizonRankLoss(Module):
         # Get the most recent stored prediction ranks
         if hasattr(self, '_prev_pred_ranks'):
             prev_ranks = self._prev_pred_ranks
+            # a partial final batch changes n, making the two incomparable
+            if prev_ranks.shape != current_pred_ranks.shape:
+                return torch.tensor(0.0, device=current_pred_ranks.device)
 
             # Compute ranking change penalty
             rank_diff = torch.abs(current_pred_ranks - prev_ranks)
@@ -1501,20 +1550,7 @@ class MambaSSM(ModelObject):
         self.prediction_batch_size = prediction_batch_size
         self.model = None
 
-        # Device selection: CUDA > MPS > CPU
-        # Check CUDA first (highest priority for performance)
-        if torch.cuda.is_available():
-            self.device = "cuda"
-        # Only check MPS on macOS to avoid false positives on Linux
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            import platform
-
-            if platform.system() == "Darwin":  # macOS only
-                self.device = "mps"
-            else:
-                self.device = "cpu"
-        else:
-            self.device = "cpu"
+        self.device = _select_torch_device()
 
         try:
             torch.manual_seed(self.random_seed)
@@ -1699,6 +1735,13 @@ class MambaSSM(ModelObject):
         else:
             naive_feature_indices = []
 
+        self.prediction_batch_size, self.context_length = clamp_training_window(
+            y_train_scaled.shape[0],
+            self.prediction_batch_size,
+            self.context_length,
+            self.use_naive_feature,
+            verbose=self.verbose,
+        )
         X_data, Y_data = create_training_batches(
             y_train_scaled,
             train_feats_scaled,
@@ -2583,6 +2626,12 @@ class pMLP(ModelObject):
         else:
             naive_feature_indices = []
 
+        self.prediction_batch_size, _ = clamp_training_window(
+            y_train_scaled.shape[0],
+            self.prediction_batch_size,
+            use_naive_window=self.use_naive_feature,
+            verbose=self.verbose,
+        )
         self.X_data, self.Y_data = create_training_batches(
             y_train_scaled,
             train_feats_scaled,
@@ -2599,20 +2648,7 @@ class pMLP(ModelObject):
         )
 
         # 5. Torch setup - optimized for MLP
-        # # Device selection: CUDA > MPS > CPU
-        # Check CUDA first (highest priority for performance)
-        if torch.cuda.is_available():
-            self.device = "cuda"
-        # Only check MPS on macOS to avoid false positives on Linux
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            import platform
-
-            if platform.system() == "Darwin":  # macOS only
-                self.device = "mps"
-            else:
-                self.device = "cpu"
-        else:
-            self.device = "cpu"
+        self.device = _select_torch_device()
 
         # Account for potentially different feature dimensions per series
         if has_per_series:

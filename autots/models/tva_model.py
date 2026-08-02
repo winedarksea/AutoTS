@@ -147,6 +147,13 @@ class TVAModel(ModelObject):
         else:
             effective_window = self.window_size
 
+        # anchors need min_anchor_history observations behind them; asking for
+        # more than the data holds leaves nothing to anchor on and the forecast
+        # comes back all NaN
+        effective_min_anchor = min(
+            self.min_anchor_history, max(10, len(df) - self.forecast_length - 1)
+        )
+
         structure_learning_config = {"enabled": self.structure_learning_enabled}
         if isinstance(self.structure_learning_config, dict):
             # preserve explicit overrides while ensuring enabled flag follows wrapper arg
@@ -172,7 +179,7 @@ class TVAModel(ModelObject):
             prototype_assignment_method=self.prototype_assignment_method,
             prototype_assignment_temperature=self.prototype_assignment_temperature,
             reconciliation_method=self.reconciliation_method,
-            min_anchor_history=self.min_anchor_history,
+            min_anchor_history=effective_min_anchor,
             holiday_country=self.holiday_country,
             holiday_countries=self.holiday_countries,
             structure_learning_config=structure_learning_config,

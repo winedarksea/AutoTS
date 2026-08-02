@@ -12,6 +12,7 @@ Stability is not the strong suit of GluonTS.
 import logging
 import random
 import datetime
+from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
@@ -35,6 +36,82 @@ except Exception:  # except ImportError
     _has_gluonts = False
 else:
     _has_gluonts = True
+
+# these only ever had an mxnet implementation, and gluonts ships no module for
+# them at all when mxnet is absent (mxnet has no python 3.12 build)
+MXNET_ONLY_MODELS = (
+    'DeepState',
+    'DeepFactor',
+    'Transformer',
+    'MQCNN',
+    'DeepVAR',
+    'GPVAR',
+    'NBEATS',
+    'Rotbaum',
+    'LSTNet',
+    'DeepRenewalProcess',
+    'SelfAttention',
+    'DeepTPP',
+)
+
+
+_mxnet_flag = None
+
+
+def _has_mxnet():
+    """Cached check so param generation doesn't repeatedly probe the import."""
+    global _mxnet_flag
+    if _mxnet_flag is None:
+        try:
+            import importlib.util
+
+            _mxnet_flag = importlib.util.find_spec("mxnet") is not None
+        except Exception:
+            _mxnet_flag = False
+    return _mxnet_flag
+
+
+@contextmanager
+def _torch_load_trusted():
+    """Let torch.load read the checkpoint gluonts just wrote.
+
+    torch 2.6 flipped ``torch.load(weights_only=)`` to True, which rejects the
+    arbitrary objects lightning stores in a checkpoint (functools.partial,
+    getattr, object, ...). Allowlisting them one at a time is endless, and the
+    file is one this same process created moments earlier, so it is trusted.
+    Scoped to the training call rather than set globally.
+    """
+    try:
+        import torch
+    except Exception:
+        yield
+        return
+    original = torch.load
+
+    def patched(*args, **kwargs):
+        # must override, not setdefault: lightning's checkpoint loader passes
+        # weights_only=True explicitly, so a default would never apply
+        kwargs["weights_only"] = False
+        return original(*args, **kwargs)
+
+    torch.load = patched
+    try:
+        yield
+    finally:
+        torch.load = original
+
+
+def _choose_gluon_model(models, weights, k=1):
+    """Draw an estimator, dropping mx-only ones when mxnet is unavailable.
+
+    Without this the majority of random draws are unrunnable on python 3.12.
+    """
+    if not _has_mxnet():
+        usable = [(m, w) for m, w in zip(models, weights) if m not in MXNET_ONLY_MODELS]
+        if usable:
+            models = [m for m, _ in usable]
+            weights = [w for _, w in usable]
+    return random.choices(models, weights, k=k)
 
 
 class GluonTS(ModelObject):
@@ -146,6 +223,13 @@ class GluonTS(ModelObject):
         self.fit_data(df, future_regressor=future_regressor)
         npts_flag = False
 
+        # lightning settings shared by the torch backend estimators. Without
+        # max_epochs they silently ignore self.epochs and use lightning's default.
+        torch_trainer_kwargs = {
+            'logger': False,
+            'log_every_n_steps': 0,
+            'max_epochs': self.epochs,
+        }
         pytorch_models = ['PatchTST', 'DeepAR']  # those supporting
         if self.gluon_model in pytorch_models:
             pass
@@ -192,30 +276,25 @@ class GluonTS(ModelObject):
                     freq=ts_metadata['freq'],
                     context_length=ts_metadata['context_length'],
                     prediction_length=ts_metadata['forecast_length'],
-                    trainer_kwargs={
-                        'logger': False,
-                        'log_every_n_steps': 0,
-                    },  # , 'callbacks': callbacks
+                    trainer_kwargs=torch_trainer_kwargs,
                 )
 
         elif self.gluon_model == 'NPTS':
-            try:
-                from gluonts.model.npts import NPTSPredictor
+            from gluonts.model.npts import NPTSPredictor
 
+            try:
                 estimator = NPTSPredictor(
                     freq=ts_metadata['freq'],
                     context_length=ts_metadata['context_length'],
                     prediction_length=ts_metadata['forecast_length'],
                 )
-                npts_flag = True
-            except Exception:
-                from gluonts.model.npts import NPTSEstimator
-
-                estimator = NPTSEstimator(
-                    freq=ts_metadata['freq'],
+            except TypeError:
+                # newer gluonts dropped the freq argument
+                estimator = NPTSPredictor(
                     context_length=ts_metadata['context_length'],
                     prediction_length=ts_metadata['forecast_length'],
                 )
+            npts_flag = True
 
         elif self.gluon_model == 'MQCNN':
             try:
@@ -309,15 +388,26 @@ class GluonTS(ModelObject):
         elif self.gluon_model == 'WaveNet':
             # Usually needs more epochs/training iterations than other models do
             try:
-                from gluonts.mx import WaveNetEstimator
-            except Exception:
-                from gluonts.model.wavenet import WaveNetEstimator
+                try:
+                    from gluonts.mx import WaveNetEstimator
+                except Exception:
+                    from gluonts.model.wavenet import WaveNetEstimator
 
-            estimator = WaveNetEstimator(
-                freq=ts_metadata['freq'],
-                prediction_length=ts_metadata['forecast_length'],
-                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
-            )
+                estimator = WaveNetEstimator(
+                    freq=ts_metadata['freq'],
+                    prediction_length=ts_metadata['forecast_length'],
+                    trainer=Trainer(
+                        epochs=self.epochs, learning_rate=self.learning_rate
+                    ),
+                )
+            except Exception:
+                from gluonts.torch import WaveNetEstimator
+
+                estimator = WaveNetEstimator(
+                    freq=ts_metadata['freq'],
+                    prediction_length=ts_metadata['forecast_length'],
+                    trainer_kwargs=torch_trainer_kwargs,
+                )
         elif self.gluon_model == 'DeepVAR':
             try:
                 from gluonts.mx import DeepVAREstimator
@@ -415,16 +505,28 @@ class GluonTS(ModelObject):
             )
         elif self.gluon_model == 'TemporalFusionTransformer':
             try:
-                from gluonts.mx import TemporalFusionTransformerEstimator
-            except Exception:
-                from gluonts.model.tft import TemporalFusionTransformerEstimator
+                try:
+                    from gluonts.mx import TemporalFusionTransformerEstimator
+                except Exception:
+                    from gluonts.model.tft import TemporalFusionTransformerEstimator
 
-            estimator = TemporalFusionTransformerEstimator(
-                prediction_length=ts_metadata['forecast_length'],
-                context_length=ts_metadata['context_length'],
-                freq=ts_metadata['freq'],
-                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
-            )
+                estimator = TemporalFusionTransformerEstimator(
+                    prediction_length=ts_metadata['forecast_length'],
+                    context_length=ts_metadata['context_length'],
+                    freq=ts_metadata['freq'],
+                    trainer=Trainer(
+                        epochs=self.epochs, learning_rate=self.learning_rate
+                    ),
+                )
+            except Exception:
+                from gluonts.torch import TemporalFusionTransformerEstimator
+
+                estimator = TemporalFusionTransformerEstimator(
+                    prediction_length=ts_metadata['forecast_length'],
+                    context_length=ts_metadata['context_length'],
+                    freq=ts_metadata['freq'],
+                    trainer_kwargs=torch_trainer_kwargs,
+                )
         elif self.gluon_model == 'DeepTPP':
             try:
                 from gluonts.mx import DeepTPPEstimator
@@ -450,7 +552,7 @@ class GluonTS(ModelObject):
                 context_length=ts_metadata['context_length'],
                 patch_len=5,
                 lr=self.learning_rate,
-                trainer_kwargs={'logger': False, 'log_every_n_steps': 0},
+                trainer_kwargs=torch_trainer_kwargs,
             )
         else:
             raise ValueError("'gluon_model' not recognized.")
@@ -458,7 +560,8 @@ class GluonTS(ModelObject):
         if self.gluon_model == 'NPTS' and npts_flag:
             self.GluonPredictor = estimator
         else:
-            self.GluonPredictor = estimator.train(self.test_ds)
+            with _torch_load_trusted():
+                self.GluonPredictor = estimator.train(self.test_ds)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -654,7 +757,7 @@ class GluonTS(ModelObject):
         """Return dict of new parameters for parameter tuning."""
 
         if "deep" in method:
-            gluon_model_choice = random.choices(
+            gluon_model_choice = _choose_gluon_model(
                 [
                     'DeepAR',
                     'NPTS',
@@ -699,7 +802,7 @@ class GluonTS(ModelObject):
                 [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.05, 0.02]
             )[0]
         else:
-            gluon_model_choice = random.choices(
+            gluon_model_choice = _choose_gluon_model(
                 [
                     'DeepAR',
                     'NPTS',

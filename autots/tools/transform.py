@@ -1406,6 +1406,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 df_local = df_local.reindex(y.index)
         else:
             y = df_local.to_numpy()
+        y_frame = y
         regressor = self._align_regressor_to_index(regressor, df_local.index)
         if y.shape[1] == 1:
             y = np.asarray(y).ravel()
@@ -1463,6 +1464,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
             y.fillna(0) if isinstance(y, pd.DataFrame) else np.nan_to_num(y),
         )
         self.feature_columns_ = list(X.columns) if isinstance(X, pd.DataFrame) else None
+        # transform_dict entries such as ReconciliationTransformer append
+        # aggregate series, so the model can predict wider than df
+        self.target_columns_ = (
+            list(y_frame.columns) if isinstance(y_frame, pd.DataFrame) else None
+        )
         self.shape = df_local.shape
         return self
 
@@ -1584,9 +1590,31 @@ class DatepartRegressionTransformer(EmptyTransformer):
         )
         if self.partial_nan_rows:
             pred = pred.reshape(-1, df.shape[1])
-        y = pd.DataFrame(pred, columns=df.columns, index=df.index)
-        df = df - y
+        df = df - self._predictions_to_frame(pred, df)
         return df
+
+    def _predictions_to_frame(self, pred, df):
+        """Frame model output against df's columns.
+
+        transform_dict entries such as ReconciliationTransformer append aggregate
+        series, so the fitted targets can be wider than df.
+        """
+        # RadiusNeighbors returns NaN where no neighbor falls in radius, and the
+        # result is added to / subtracted from df, so a single NaN would spread
+        # across the whole forecast. Zero leaves those cells untouched.
+        pred = np.nan_to_num(
+            np.asarray(pred, dtype=float), nan=0.0, posinf=0.0, neginf=0.0
+        )
+        target_columns = getattr(self, "target_columns_", None)
+        if (
+            target_columns is not None
+            and pred.ndim > 1
+            and pred.shape[1] == len(target_columns)
+            and len(target_columns) != df.shape[1]
+        ):
+            y = pd.DataFrame(pred, columns=target_columns, index=df.index)
+            return y.reindex(columns=df.columns, fill_value=0.0)
+        return pd.DataFrame(pred, columns=df.columns, index=df.index)
 
     def inverse_transform(self, df, regressor=None):
         """Return data to original form.
@@ -1631,8 +1659,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         )
         if self.partial_nan_rows:
             pred = pred.reshape(-1, df.shape[1])
-        y = pd.DataFrame(pred, columns=df.columns, index=df.index)
-        df = df + y
+        df = df + self._predictions_to_frame(pred, df)
         return df
 
 
@@ -3596,8 +3623,12 @@ class AnomalyRemoval(EmptyTransformer):
         import copy as _copy
 
         liberal_params = _copy.deepcopy(self.method_params)
-        alpha = liberal_params.get("alpha", 0.001)
-        liberal_params["alpha"] = min(alpha * self.liberal_alpha_multiplier, 0.1)
+        # only the distribution based methods take alpha; the sklearn detectors
+        # (EE, IsolationForest, LOF...) reject it as an unexpected kwarg
+        if "alpha" in liberal_params:
+            liberal_params["alpha"] = min(
+                liberal_params["alpha"] * self.liberal_alpha_multiplier, 0.1
+            )
 
         liberal_anomalies, liberal_scores = detect_anomalies(
             self.df_anomaly,

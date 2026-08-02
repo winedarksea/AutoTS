@@ -183,6 +183,30 @@ class PytorchForecasting(ModelObject):
         else:
             encoder = None
 
+        # encoder + horizon + lags can consume the entire history, leaving the
+        # dataset with no usable samples ("filters should not remove all entries").
+        # The training split is only n - forecast_length long (the tail is held
+        # out for validation), and each sample needs encoder + forecast_length.
+        max_lag = max((max(v) for v in self.lags.values() if v), default=0)
+        usable_encoder = df_int.shape[0] - 2 * self.forecast_length - max_lag - 1
+        if usable_encoder >= 1 and self.max_encoder_length > usable_encoder:
+            if self.verbose > 0:
+                print(
+                    f"PytorchForecasting max_encoder_length {self.max_encoder_length} "
+                    f"exceeds what {df_int.shape[0]} observations allow, "
+                    f"reduced to {usable_encoder}"
+                )
+            self.max_encoder_length = usable_encoder
+        # a lag longer than the encoder window cannot be computed; lags are drawn
+        # independently of max_encoder_length, and the clamp above can shrink it
+        if max_lag >= self.max_encoder_length:
+            self.lags = {
+                k: [lag for lag in v if lag < self.max_encoder_length]
+                for k, v in self.lags.items()
+            }
+            self.lags = {k: v for k, v in self.lags.items() if v}
+            max_lag = max((max(v) for v in self.lags.values() if v), default=0)
+
         training = TimeSeriesDataSet(
             data,
             time_idx=self.range_idx_name,
@@ -193,7 +217,10 @@ class PytorchForecasting(ModelObject):
             # static_categoricals=["series_id"],  # recommeded for DeepAR
             max_encoder_length=self.max_encoder_length,
             min_encoder_length=(
-                self.max_encoder_length if self.max_encoder_length < 90 else 7
+                # NHiTS and NBeats assert a fixed encoder length
+                self.max_encoder_length
+                if self.max_encoder_length < 90 or self.model in ["NHiTS", "NBeats"]
+                else 7
             ),
             max_prediction_length=self.forecast_length,
             target_normalizer=encoder,
@@ -359,7 +386,9 @@ class PytorchForecasting(ModelObject):
         self.trainer.fit(
             self.tft, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
         )
-        self.encoder_tail = df_int.tail(self.max_encoder_length)
+        # lagged variables need max_lag rows of history beyond the encoder window,
+        # otherwise building the prediction dataset filters out every entry
+        self.encoder_tail = df_int.tail(self.max_encoder_length + max_lag)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -541,6 +570,12 @@ class PytorchForecasting(ModelObject):
         if parameter_dict['model'] == "DeepAR":
             parameter_dict["target_normalizer"] = "EncoderNormalizer"
         elif parameter_dict['model'] == "NHiTS":
+            parameter_dict["add_target_scales"] = False
+        elif parameter_dict['model'] == "NBeats":
+            # NBeats is univariate only: pytorch_forecasting rejects any covariate
+            # ("The only variable as input should be the target")
+            parameter_dict["datepart_method"] = None
+            parameter_dict["lags"] = {}
             parameter_dict["add_target_scales"] = False
         return parameter_dict
 

@@ -9,6 +9,12 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
+# architectures whose EXOGENOUS_FUTR is False: passing a future_regressor raises
+NO_FUTURE_REGRESSOR = ("PatchTST", "NBEATS")
+
+# count/rate distributions whose parameters go out of bounds on unscaled data
+COUNT_DISTRIBUTION_LOSSES = ("NegativeBinomial", "Poisson", "Bernoulli", "Tweedie")
+
 
 class NeuralForecast(ModelObject):
     """See NeuralForecast documentation for details.
@@ -163,10 +169,12 @@ class NeuralForecast(ModelObject):
                 distribution='StudentT', level=levels, return_params=False
             )
         elif loss == "NegativeBinomial":
+            # no total_count: newer neuralforecast derives it from the network
+            # output, and passing it here raises "got multiple values for
+            # argument 'total_count'" once training starts
             loss = DistributionLoss(
                 distribution='NegativeBinomial',
                 level=levels,
-                total_count=3,
                 return_params=False,
             )
         elif loss == "Normal":
@@ -377,13 +385,25 @@ class NeuralForecast(ModelObject):
             "TiDE",
             "FEDformer",
         ]
+        weights = [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.01]
         if method in model_list:
             models = method
+        elif "regressor" in method:
+            # drop the no-future-exogenous models so a regressor draw stays a
+            # regressor draw rather than being silently downgraded below
+            pairs = [
+                (m, w)
+                for m, w in zip(model_list, weights)
+                if m not in NO_FUTURE_REGRESSOR
+            ]
+            models = random.choices([p[0] for p in pairs], [p[1] for p in pairs])[0]
         else:
-            models = random.choices(
-                model_list, [0.05, 0.4, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.01]
-            )[0]
-        if "regressor" in method:
+            models = random.choices(model_list, weights)[0]
+        # these architectures have EXOGENOUS_FUTR = False and raise if handed a
+        # future_regressor, so they can never be paired with regression_type "User"
+        if models in NO_FUTURE_REGRESSOR:
+            regression_type_choice = None
+        elif "regressor" in method:
             regression_type_choice = "User"
         else:
             regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
@@ -485,11 +505,17 @@ class NeuralForecast(ModelObject):
         else:
             model_args = {}
 
+        scaler_choices = ["identity", 'robust', 'minmax', 'standard']
+        scaler_weights = [0.5, 0.5, 0.2, 0.2]
+        if loss in COUNT_DISTRIBUTION_LOSSES:
+            # unscaled data drives these distributions' parameters to their
+            # constraint boundary ("Expected parameter probs ... to satisfy the
+            # constraint HalfOpenInterval"), so they need an actual scaler
+            scaler_choices, scaler_weights = scaler_choices[1:], scaler_weights[1:]
+
         return {
             'model': models,
-            'scaler_type': random.choices(
-                ["identity", 'robust', 'minmax', 'standard'], [0.5, 0.5, 0.2, 0.2]
-            )[0],
+            'scaler_type': random.choices(scaler_choices, scaler_weights)[0],
             'loss': loss,
             'learning_rate': random.choices(
                 [0.001, 0.1, 0.01, 0.0003, 0.00001, 0.000001],

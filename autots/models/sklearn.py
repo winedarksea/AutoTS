@@ -18,6 +18,7 @@ try:
         ElasticNet,
         MultiTaskElasticNet,
         LinearRegression,
+        RANSACRegressor,
         Ridge,
     )
     from sklearn.tree import (
@@ -25,6 +26,20 @@ try:
         DecisionTreeClassifier,
         ExtraTreeRegressor,
     )
+
+    class SafeRANSACRegressor(RANSACRegressor):
+        """RANSAC that stays usable when X is wider than it is tall.
+
+        sklearn defaults min_samples to n_features + 1, which raises on wide X
+        (long windows, few rows). Only override when the default would fail, as
+        lowering it unnecessarily costs consensus quality.
+        """
+
+        def fit(self, X, y, **kwargs):
+            if self.min_samples is None and X.shape[1] + 1 > X.shape[0]:
+                self.min_samples = max(2, X.shape[0] // 2)
+            return super().fit(X, y, **kwargs)
+
 except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
@@ -612,9 +627,7 @@ def retrieve_regressor(
             regr = PoissonRegressor(**model_param_dict)
         return regr
     elif model_class == 'RANSAC':
-        from sklearn.linear_model import RANSACRegressor
-
-        return RANSACRegressor(random_state=random_seed, **model_param_dict)
+        return SafeRANSACRegressor(random_state=random_seed, **model_param_dict)
     elif model_class == "LinearRegression":
         return LinearRegression(**model_param_dict)
     elif model_class == "GaussianProcessRegressor":
@@ -1528,9 +1541,10 @@ def generate_regressor_params(
                                 'quantile',
                                 "fair",
                                 'mape',
-                                ['regression', 'mape'],
                             ],
-                            [0.5, 0.2, 0.2, 0.1, 0.2, 0.05, 0.01, 0.05, 0.05, 0.1],
+                            # a list here becomes the invalid objective
+                            # "regression,mape" once LightGBM stringifies it
+                            [0.5, 0.2, 0.2, 0.1, 0.2, 0.05, 0.01, 0.05, 0.05],
                         )[0],
                         "learning_rate": random.choices(
                             [0.001, 0.1, 0.01, 0.7],
@@ -2196,9 +2210,14 @@ class WindowRegression(ModelObject):
         if (
             df.shape[1] * self.forecast_length
         ) > 200 and self.input_dim == "multivariate":
-            raise ValueError(
-                "Scale exceeds recommendation for input_dim == `multivariate`"
-            )
+            # multivariate windows blow up with series count * horizon, so fall
+            # back rather than fail a param set that is only invalid for this data
+            if self.verbose > 0:
+                print(
+                    "WindowRegression scale exceeds recommendation for "
+                    "input_dim == `multivariate`, using `univariate` instead"
+                )
+            self.input_dim = "univariate"
         df = self.basic_profile(df)
         regression_type = self.regression_type
         if self.regression_type in ["User", "user"]:
@@ -2229,6 +2248,19 @@ class WindowRegression(ModelObject):
                 holiday_country=self.holiday_country,
             )
         self.df_train = df
+
+        # a short history can't support a long window: the window maker returns
+        # zero slices and the regressors then fail on empty arrays
+        max_window = (
+            df.shape[0] - (1 if self.output_dim == '1step' else self.forecast_length) - 1
+        )
+        if max_window >= 1 and self.window_size > max_window:
+            if self.verbose > 0:
+                print(
+                    f"WindowRegression window_size {self.window_size} exceeds what "
+                    f"{df.shape[0]} observations allow, reduced to {max_window}"
+                )
+            self.window_size = max_window
 
         self.X, self.Y = window_maker(
             df,
@@ -2360,6 +2392,26 @@ class WindowRegression(ModelObject):
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
                     rfPred.columns = self.last_window.columns
+                # RadiusNeighbors emits NaN when no neighbors are found, and
+                # boosted models can diverge to inf on unscaled data. Fed back
+                # into last_window either one poisons every later step, so carry
+                # the most recent value forward instead.
+                arr = rfPred.to_numpy(dtype=float)
+                if not np.isfinite(arr).all():
+                    bad = ~np.isfinite(arr)
+                    if rfPred.shape[1] == self.last_window.shape[1]:
+                        fill = np.nan_to_num(
+                            self.last_window.to_numpy(dtype=float)[-1],
+                            nan=0.0,
+                            posinf=0.0,
+                            neginf=0.0,
+                        )
+                        arr[bad] = np.broadcast_to(fill, arr.shape)[bad]
+                    else:
+                        arr[bad] = 0.0
+                    rfPred = pd.DataFrame(
+                        arr, index=rfPred.index, columns=rfPred.columns
+                    )
                 forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
                 self.last_window = pd.concat(
                     [self.last_window, rfPred], axis=0, ignore_index=True
@@ -3253,9 +3305,11 @@ class MultivariateRegression(ModelObject):
                 error = np.abs(pred_y - self.Y)
                 error_percentile = np.percentile(error, self.discard_data)
                 error_check = error < error_percentile
-                new_X = X_arr[error_check]
-                new_Y = self.Y[error_check]
-                self.model.fit(new_X, new_Y)
+                # a model that fits its training data perfectly (an unrestricted
+                # DecisionTree, say) has zero error everywhere, so a strict < here
+                # discards every row and leaves nothing to refit on
+                if error_check.sum() >= 2:
+                    self.model.fit(X_arr[error_check], self.Y[error_check])
             # Capture fit runtime before fit_data(), because fit_data() calls
             # basic_profile() and resets self.startTime.
             self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -3459,6 +3513,19 @@ class MultivariateRegression(ModelObject):
                 c_x_pred = np.nan_to_num(c_x_pred, nan=0.0, posinf=0.0, neginf=0.0)
 
             rfPred = self.model.predict(c_x_pred)
+            # RadiusNeighbors returns NaN when no neighbor falls inside the radius.
+            # pred_clean is fed back into current_x, so one NaN poisons every later
+            # step and the whole forecast; carry the last value forward instead.
+            if np.any(~np.isfinite(rfPred)):
+                rfPred = np.asarray(rfPred, dtype=float)
+                bad = ~np.isfinite(rfPred)
+                last_vals = np.nan_to_num(
+                    current_x.iloc[-1].to_numpy(dtype=float),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                )
+                rfPred[bad] = last_vals[bad]
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()

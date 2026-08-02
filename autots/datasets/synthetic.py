@@ -4276,16 +4276,15 @@ def augment_with_synthetic_bounds(
     if Y_array_2d.shape[0] != orig_len:
         return X, Y
 
-    if np.isnan(X_array).any():
-        col_means = np.nanmean(X_array, axis=0)
-        col_means = np.where(np.isnan(col_means), 0.0, col_means)
-        inds = np.where(np.isnan(X_array))
-        X_array[inds] = np.take(col_means, inds[1])
-    if np.isnan(Y_array_2d).any():
-        col_means = np.nanmean(Y_array_2d, axis=0)
-        col_means = np.where(np.isnan(col_means), 0.0, col_means)
-        inds = np.where(np.isnan(Y_array_2d))
-        Y_array_2d[inds] = np.take(col_means, inds[1])
+    # inf must be replaced as well as nan: an infinite bound below makes
+    # rng.uniform raise OverflowError("Range exceeds valid bounds")
+    for arr in (X_array, Y_array_2d):
+        if not np.isfinite(arr).all():
+            finite_only = np.where(np.isfinite(arr), arr, np.nan)
+            col_means = np.nanmean(finite_only, axis=0)
+            col_means = np.where(np.isfinite(col_means), col_means, 0.0)
+            inds = np.where(~np.isfinite(arr))
+            arr[inds] = np.take(col_means, inds[1])
 
     X_min = X_array.min(axis=0)
     X_max = X_array.max(axis=0)
