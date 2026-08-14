@@ -13,6 +13,7 @@ Can be used standalone or embedded in TimeSeriesFeatureDetector via ExtendedAnom
 """
 
 import copy
+import math
 import random
 import warnings
 
@@ -20,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from autots.tools.transform import AnomalyRemoval
+from autots.tools.anomaly_utils import anomaly_scores_to_strength
 
 try:
     from scipy.signal import argrelextrema
@@ -43,6 +45,33 @@ _TYPE_RANK = {t: i for i, t in enumerate(_TYPE_PRIORITY)}
 
 def _type_rank(anomaly_type):
     return _TYPE_RANK.get(anomaly_type, len(_TYPE_PRIORITY))
+
+
+def default_extended_anomaly_params():
+    """Conservative starting parameters for :class:`ExtendedAnomalyDetector`.
+
+    Extended anomaly detection is opt-in on TimeSeriesFeatureDetector; pass the
+    result of this function as ``extended_anomaly_params`` to enable it.
+    """
+    return {
+        'sustained_window': 7,
+        'sustained_baseline': 45,
+        'sustained_threshold': 2.2,
+        'cusum_k': 0.5,
+        'cusum_h': 4.0,
+        'slope_reversion_min_hold': 5,
+        'slope_reversion_min_reversion': 7,
+        'slope_reversion_cumsum_threshold': 3.0,
+        'slope_reversion_max_duration': 84,
+        'decay_lookahead': 21,
+        'decay_fit_min_r2': 0.5,
+        'min_segment_run': 2,
+        'sustained_hysteresis': 0.7,
+        'segment_max_gap': 1,
+        'merge_distance_days': 2,
+        'max_anomalies_per_series': 25,
+        'min_point_anomaly_share': 0.4,
+    }
 
 
 class ExtendedAnomalyDetector:
@@ -114,6 +143,10 @@ class ExtendedAnomalyDetector:
         Events within this many days of each other (or overlapping) are merged.
     max_anomalies_per_series : int
         Cap on the number of events returned per series.
+    min_point_anomaly_share : float
+        Fraction of the cap reserved for pass-1 point events so that sustained
+        detections cannot crowd them out entirely. Unused reserved slots spill
+        over to the other class.
     """
 
     def __init__(
@@ -135,6 +168,7 @@ class ExtendedAnomalyDetector:
         segment_max_gap=1,
         merge_distance_days=3,
         max_anomalies_per_series=25,
+        min_point_anomaly_share=0.4,
     ):
         self.point_anomaly_params = point_anomaly_params
         self.sustained_window = max(2, int(sustained_window))
@@ -158,6 +192,7 @@ class ExtendedAnomalyDetector:
         self.segment_max_gap = max(0, int(segment_max_gap))
         self.merge_distance_days = max(0, int(merge_distance_days))
         self.max_anomalies_per_series = max(1, int(max_anomalies_per_series))
+        self.min_point_anomaly_share = float(np.clip(min_point_anomaly_share, 0.0, 1.0))
 
         # Filled by fit()
         self._events = {}  # {series_name: [event_dict, ...]}
@@ -241,6 +276,8 @@ class ExtendedAnomalyDetector:
             'min_segment_run': random.choice([2, 3]),
             'sustained_hysteresis': round(random.uniform(0.55, 0.85), 2),
             'segment_max_gap': random.choice([0, 1, 2]),
+            'max_anomalies_per_series': random.choice([15, 25, 40, 60]),
+            'min_point_anomaly_share': random.choice([0.0, 0.25, 0.4, 0.6]),
         }
 
     # ------------------------------------------------------------------
@@ -269,26 +306,108 @@ class ExtendedAnomalyDetector:
 
         all_events = decayed + cusum_events + slope_events + seg_events
         merged = self._merge_events(all_events, date_index)
-        if len(merged) <= self.max_anomalies_per_series:
+        return self._apply_cap(merged)
+
+    # ------------------------------------------------------------------
+    # Capping
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _event_rank_key(event):
+        """Sort key for choosing which events survive the cap.
+
+        Ranks on ``strength`` (uniform, higher = stronger) and falls back to
+        ``|magnitude|`` when it is absent. The raw ``score`` is deliberately
+        never used: pass-1 scores are p-values (smaller = stronger) while
+        pass-2 scores are magnitudes, so ranking on it inverts the ordering.
+        """
+        strength = event.get('strength')
+        if strength is None or not np.isfinite(strength):
+            strength = 0.0
+        magnitude = event.get('magnitude', 0.0)
+        if magnitude is None or not np.isfinite(magnitude):
+            magnitude = 0.0
+        duration = int(event.get('duration', 1) or 1)
+        return (float(strength), float(abs(magnitude)), duration)
+
+    @staticmethod
+    def _is_point_class(event):
+        """True for events seeded from the pass-1 point detector."""
+        return event.get('source') in ('pass1', 'decay_extension')
+
+    def _group_duplicate_slots(self, events):
+        """Group events that describe the same underlying spike.
+
+        ``_merge_events`` deliberately refuses to collapse a short event into a
+        much longer one of another type, so a single spike can be emitted both
+        as a point event and as an overlapping sustained window. Both records
+        are worth keeping, but they should consume one cap slot, not two.
+
+        Returns a list of groups; the first element of each group is the
+        strongest member and represents the group when ranking.
+        """
+        point_events = [e for e in events if self._is_point_class(e)]
+        other_events = [e for e in events if not self._is_point_class(e)]
+
+        groups = []
+        claimed = set()
+        for other in other_events:
+            group = [other]
+            for idx, point in enumerate(point_events):
+                if idx in claimed:
+                    continue
+                if not (other['date'] <= point['date'] <= other['end_date']):
+                    continue
+                # Same spike only if the magnitudes agree; an unrelated small
+                # blip inside a long window is its own event.
+                mag_a = abs(float(point.get('magnitude', 0.0) or 0.0))
+                mag_b = abs(float(other.get('magnitude', 0.0) or 0.0))
+                if mag_a <= 0 or mag_b <= 0:
+                    continue
+                if abs(mag_a - mag_b) > 0.05 * max(mag_a, mag_b):
+                    continue
+                claimed.add(idx)
+                group.append(point)
+            group.sort(key=self._event_rank_key, reverse=True)
+            groups.append(group)
+
+        for idx, point in enumerate(point_events):
+            if idx not in claimed:
+                groups.append([point])
+        return groups
+
+    def _apply_cap(self, merged):
+        """Truncate to ``max_anomalies_per_series``, reserving point-event slots.
+
+        Point spikes and sustained events are ranked separately: their
+        strengths come from different detectors, and without a reserved share
+        a drifty series full of sustained candidates crowds the spikes out
+        entirely. Unused reserved slots spill over to the other class.
+        """
+        cap = self.max_anomalies_per_series
+        groups = self._group_duplicate_slots(merged)
+        if len(groups) <= cap:
+            merged.sort(key=lambda event: event['date'])
             return merged
 
-        # When capping event count, keep the strongest events rather than the
-        # earliest chronological events, then restore date order for output.
-        def _event_strength(event):
-            score = event.get('score')
-            if score is None or not np.isfinite(score):
-                score = 0.0
-            magnitude = event.get('magnitude', 0.0)
-            if magnitude is None or not np.isfinite(magnitude):
-                magnitude = 0.0
-            duration = int(event.get('duration', 1) or 1)
-            return (float(score), float(abs(magnitude)), duration)
+        point_groups, other_groups = [], []
+        for group in groups:
+            target = point_groups if self._is_point_class(group[0]) else other_groups
+            target.append(group)
 
-        strongest = sorted(merged, key=_event_strength, reverse=True)[
-            : self.max_anomalies_per_series
-        ]
-        strongest.sort(key=lambda event: event['date'])
-        return strongest
+        for bucket in (point_groups, other_groups):
+            bucket.sort(key=lambda group: self._event_rank_key(group[0]), reverse=True)
+
+        point_quota = int(math.ceil(cap * self.min_point_anomaly_share))
+        point_quota = min(point_quota, len(point_groups))
+        other_quota = min(cap - point_quota, len(other_groups))
+        # Spill unused slots back to whichever class still has candidates
+        point_quota = min(cap - other_quota, len(point_groups))
+
+        kept = point_groups[:point_quota] + other_groups[:other_quota]
+        selected = [event for group in kept for event in group]
+        selected.sort(key=lambda event: event['date'])
+        return selected
 
     # ------------------------------------------------------------------
     # Pass-1 internal runner (when no external records provided)
@@ -314,6 +433,17 @@ class ExtendedAnomalyDetector:
             detector.fit(df_single)
             anomaly_col = detector.anomalies.iloc[:, 0]
             mask = anomaly_col == -1
+            strengths = None
+            if hasattr(detector, 'scores') and not detector.scores.empty:
+                try:
+                    strengths = anomaly_scores_to_strength(
+                        detector.scores,
+                        detector.method,
+                        detector.method_params,
+                        detector.anomalies,
+                    )
+                except Exception:
+                    strengths = None
             events = []
             for date in series.index[mask]:
                 idx = series.index.get_loc(date)
@@ -324,12 +454,19 @@ class ExtendedAnomalyDetector:
                         score = float(detector.scores.iloc[idx, 0])
                     except Exception:
                         pass
+                strength = None
+                if strengths is not None:
+                    try:
+                        strength = float(strengths.iloc[idx, 0])
+                    except Exception:
+                        strength = None
                 events.append(
                     {
                         'date': pd.Timestamp(date),
                         'magnitude': abs(mag),
                         'type': 'point_outlier',
                         'score': score,
+                        'strength': strength,
                     }
                 )
             return events
@@ -421,6 +558,9 @@ class ExtendedAnomalyDetector:
                         'duration': duration,
                         'magnitude': mag,
                         'score': float(np.max(S[onset_idx : end_fall + 1])),
+                        'strength': self._threshold_multiple(
+                            float(np.max(S[onset_idx : end_fall + 1])), self.cusum_h
+                        ),
                         'type': anomaly_type,
                         'source': 'cusum',
                     }
@@ -532,6 +672,9 @@ class ExtendedAnomalyDetector:
                     'duration': duration,
                     'magnitude': mag,
                     'score': float(peak_z),
+                    'strength': self._threshold_multiple(
+                        float(peak_z), self.slope_reversion_cumsum_threshold
+                    ),
                     'type': 'slope_reversion',
                     'source': 'slope_template',
                 }
@@ -756,6 +899,10 @@ class ExtendedAnomalyDetector:
                     'duration': duration,
                     'magnitude': mag,
                     'score': float(np.max(np.abs(z[start_idx : end_idx + 1]))),
+                    'strength': self._threshold_multiple(
+                        float(np.max(np.abs(z[start_idx : end_idx + 1]))),
+                        self.sustained_threshold,
+                    ),
                     'type': anomaly_type,
                     'source': 'segmented_shift',
                 }
@@ -821,12 +968,18 @@ class ExtendedAnomalyDetector:
                 new_mag = max(prev['magnitude'], ev['magnitude'])
                 score_a = prev.get('score') or 0.0
                 score_b = ev.get('score') or 0.0
+                strengths = [
+                    s
+                    for s in (prev.get('strength'), ev.get('strength'))
+                    if s is not None and np.isfinite(s)
+                ]
                 merged[-1] = {
                     'date': new_start,
                     'end_date': new_end,
                     'duration': new_duration,
                     'magnitude': new_mag,
                     'score': max(score_a, score_b),
+                    'strength': max(strengths) if strengths else None,
                     'type': new_type,
                     'source': prev.get('source', 'merged'),
                 }
@@ -838,6 +991,35 @@ class ExtendedAnomalyDetector:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _threshold_multiple(score, threshold):
+        """Express a detector score as a multiple of its own trigger threshold.
+
+        Each pass-2 detector compares its score against a different statistic
+        (a CUSUM sum, a z-score), so raw scores are not comparable between
+        them. Dividing by the threshold that fired makes them so: 1.0 is the
+        detection boundary for every detector.
+        """
+        try:
+            score = float(score)
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(score) or not np.isfinite(threshold) or threshold <= 0:
+            return None
+        return abs(score) / threshold
+
+    @staticmethod
+    def _coerce_strength(value):
+        """Return a finite float strength or None."""
+        if value is None:
+            return None
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        return value if np.isfinite(value) else None
 
     def _normalise_event(self, event, date_index):
         """Ensure event dict has all required keys."""
@@ -880,6 +1062,7 @@ class ExtendedAnomalyDetector:
                 else 0.0
             ),
             'score': ev.get('score'),
+            'strength': self._coerce_strength(ev.get('strength')),
             'type': ev.get('type', 'point_outlier'),
             'source': ev.get('source', 'pass1'),
         }
@@ -1033,6 +1216,11 @@ class ExtendedAnomalyMixin:
         within an extended event's window is dropped in favour of the extended
         version.  Base events not covered by any extended event are kept as-is.
 
+        A base event is only considered covered when the extended event is not
+        dramatically longer, mirroring the guard in :meth:`_merge_events`. A
+        one-day spike sitting inside a 45-day sustained window describes a
+        different phenomenon and would otherwise be silently absorbed.
+
         Parameters
         ----------
         base_records : dict
@@ -1063,6 +1251,7 @@ class ExtendedAnomalyMixin:
                     combined.append(event)
                     continue
 
+                base_dur = int(event.get('duration', 1) or 1)
                 covered = False
                 for ext_ev in extended:
                     try:
@@ -1073,9 +1262,15 @@ class ExtendedAnomalyMixin:
                                 'end_date', ext_start + pd.Timedelta(days=ext_dur - 1)
                             )
                         )
-                        if ext_start <= onset <= ext_end:
-                            covered = True
-                            break
+                        if not (ext_start <= onset <= ext_end):
+                            continue
+                        longer = max(base_dur, ext_dur)
+                        shorter = max(1, min(base_dur, ext_dur))
+                        if shorter <= 21 and (longer / shorter) > 2.0:
+                            # Different phenomena; keep the short base event.
+                            continue
+                        covered = True
+                        break
                     except Exception:
                         continue
 
