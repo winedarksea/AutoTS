@@ -26,6 +26,7 @@ from autots.models.sklearn import (
 from autots.models.base import PredictionObject
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
+    anomaly_scores_to_strength,
     detect_anomalies,
     anomaly_df_to_holidays,
     holiday_new_params,
@@ -3533,6 +3534,7 @@ class AnomalyRemoval(EmptyTransformer):
         on_inverse=False,
         holiday_dates=None,
         holiday_proximity_days=2,
+        holiday_override_strength=1.5,
         two_pass=False,
         liberal_alpha_multiplier=10.0,
         n_jobs=1,
@@ -3549,6 +3551,9 @@ class AnomalyRemoval(EmptyTransformer):
             holiday_dates (set or None): Optional set/list of known holiday dates.
                 Anomalies near these dates can be un-flagged.
             holiday_proximity_days (int): +/- day window around holiday dates.
+            holiday_override_strength (float or None): anomalies this many times
+                stronger than the other flagged points in the holiday windows
+                survive suppression. None restores unconditional suppression.
             two_pass (bool): if True, run liberal candidate detection then local validation.
             liberal_alpha_multiplier (float): alpha multiplier for first-pass detection.
             n_jobs (int): multiprocessing jobs, used by some methods
@@ -3565,6 +3570,7 @@ class AnomalyRemoval(EmptyTransformer):
         self.on_inverse = on_inverse
         self.holiday_dates = holiday_dates
         self.holiday_proximity_days = holiday_proximity_days
+        self.holiday_override_strength = holiday_override_strength
         self.two_pass = two_pass
         self.liberal_alpha_multiplier = liberal_alpha_multiplier
 
@@ -3606,17 +3612,84 @@ class AnomalyRemoval(EmptyTransformer):
         return self
 
     def _filter_holiday_proximate_anomalies(self):
-        """Clear anomaly flags that occur near known holiday dates."""
+        """Clear anomaly flags that occur near known holiday dates.
+
+        Holiday-driven spikes are expected behaviour, not anomalies, so flags in
+        the proximity window are cleared. An unconditional clear also discards
+        genuine anomalies that merely happen to land on a holiday, which is the
+        opposite of what users want from the strongest events. Points that are
+        ``holiday_override_strength`` times stronger than the other flagged
+        points in the holiday windows are therefore kept.
+        """
         holiday_set = {pd.Timestamp(d) for d in self.holiday_dates}
         if not holiday_set:
             return
         prox_days = int(max(0, self.holiday_proximity_days))
-        for col in self.anomalies.columns:
-            for idx, date in enumerate(self.anomalies.index):
-                if self.anomalies.iloc[idx, self.anomalies.columns.get_loc(col)] != -1:
-                    continue
-                if any(abs((date - h).days) <= prox_days for h in holiday_set):
-                    self.anomalies.iloc[idx, self.anomalies.columns.get_loc(col)] = 1
+
+        # Build the suppression mask over the index once rather than testing
+        # every (date, holiday) pair for every column.
+        index = self.anomalies.index
+        near_holiday = np.zeros(len(index), dtype=bool)
+        index_positions = pd.Series(np.arange(len(index)), index=index)
+        for holiday in holiday_set:
+            for offset in range(-prox_days, prox_days + 1):
+                position = index_positions.get(holiday + pd.Timedelta(days=offset))
+                if position is not None:
+                    near_holiday[position] = True
+        if not near_holiday.any():
+            return
+
+        suppress = pd.DataFrame(
+            np.repeat(near_holiday[:, None], self.anomalies.shape[1], axis=1),
+            index=index,
+            columns=self.anomalies.columns,
+        )
+
+        override = self.holiday_override_strength
+        if override is not None and getattr(self, 'scores', None) is not None:
+            strengths = self._normalized_strengths()
+            if strengths is not None:
+                strengths = strengths.reindex(
+                    index=index, columns=self.anomalies.columns
+                )
+                flagged_near = suppress & (self.anomalies == -1)
+                # Compare each candidate against its peers - the other flagged
+                # points in the holiday window - rather than an absolute cut.
+                # A recurring holiday spike is large every year, so it never
+                # stands out from its peers and stays suppressed, while a day
+                # that is extreme even by holiday standards survives.
+                peer = strengths.where(flagged_near).median()
+                reference = peer.fillna(1.0).clip(lower=1.0) * float(override)
+                keep = strengths.ge(reference, axis=1)
+                suppress = suppress & ~keep.fillna(False)
+
+        self.anomalies = self.anomalies.mask(
+            suppress & (self.anomalies == -1), 1
+        )
+
+    def _normalized_strengths(self):
+        """Uniform higher-is-stronger anomaly scores, or None if unavailable."""
+        scores = getattr(self, 'scores', None)
+        if scores is None or getattr(scores, 'empty', True):
+            return None
+        try:
+            strengths = anomaly_scores_to_strength(
+                scores, self.method, self.method_params, self.anomalies
+            )
+        except Exception:
+            return None
+        if isinstance(strengths, pd.Series):
+            strengths = strengths.to_frame()
+        if not isinstance(strengths, pd.DataFrame) or strengths.empty:
+            return None
+        if strengths.shape[1] == 1 and self.anomalies.shape[1] > 1:
+            # univariate scoring: one shared column applies to every series
+            strengths = pd.DataFrame(
+                np.repeat(strengths.to_numpy(), self.anomalies.shape[1], axis=1),
+                index=strengths.index,
+                columns=self.anomalies.columns,
+            )
+        return strengths
 
     def _fit_two_pass(self, df):
         """Liberal first-pass anomaly detection followed by local noise validation."""

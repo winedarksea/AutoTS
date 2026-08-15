@@ -206,10 +206,11 @@ class TimeSeriesFeatureDetector(
                 'method': 'rolling_zscore',
                 'method_params': {
                     'distribution': 'norm',
-                    'alpha': 0.001,
+                    'alpha': 0.05,
                     'rolling_periods': 200,
                     'center': False,
                 },
+                'transform_dict': None,
                 'fillna': 'ffill',
             }
         else:
@@ -1625,15 +1626,20 @@ class TimeSeriesFeatureDetector(
             'output': 'multivariate',
             'method': method_choice,
             'method_params': method_params,
+            'transform_dict': None,
             'fillna': 'ffill',
         }
-        if random.random() < 0.2:
+        if 'alpha' in method_params and random.random() < 0.2:
             anomaly_params['two_pass'] = True
             anomaly_params['liberal_alpha_multiplier'] = random.choice(
                 [5.0, 10.0, 20.0]
             )
         if random.random() < 0.3:
             anomaly_params['holiday_proximity_days'] = random.choice([1, 2, 3, 5])
+        if random.random() < 0.3:
+            anomaly_params['holiday_override_strength'] = random.choice(
+                [None, 1.25, 1.5, 2.0, 3.0]
+            )
 
         # Changepoint params
         changepoint_params = ChangepointDetector.get_new_params(method=method)
