@@ -163,6 +163,23 @@ class NornDecomposer:
 
         return result
 
+    def get_residual_sigma(self):
+        """Per-series one-step residual sigma from the underlying detector.
+
+        Exposes the detector's own reconstruction-residual sigma (the same
+        quantity its OLS prediction intervals are built from) so TVA can add
+        it in quadrature to the network's learned sigma. Returns an (N,) float
+        array aligned to the fitted columns, or None when unavailable.
+        """
+        if self.detector is None or self._df_original is None:
+            return None
+        try:
+            return self.detector._forecast_residual_sigma(
+                self._df_original.columns
+            )
+        except Exception:
+            return None
+
     def _urd_verdict(self, series_name: str) -> float:
         """Hidden: Urd (Norn of the past) judges the noise-to-signal ratio."""
         if self.detector is None:

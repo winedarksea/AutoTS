@@ -63,3 +63,34 @@ graph TB
         Backprop -.->|Backpropagate Adjustments| Fusion
     end
 ```
+
+## Current architecture (post factor-discovery rework)
+
+TVA is a **sparse dynamic factor model with a residual lead-lag graph**:
+
+1. `decomposition.py` — detector-based strict decomposition (trend,
+   seasonality, holidays, level shifts, anomalies).
+2. `discovery.py` (torch-free) — the primary structural object:
+   - varimax-rotated, soft-thresholded factor loadings over the differenced
+     trend panel (factor count by parallel analysis, named from metadata);
+   - factor-residual **conditional** edge discovery: GraphicalLassoCV +
+     lagged screening → stability-selected LassoLarsIC VAR over a
+     deterministic rolling-window grid (direction from lag structure) →
+     held-out delta-MSE falsification; plus LIFT-style lead-lag, event,
+     metadata, and business edge families.
+3. `trend_network.py` — the network learns a *correction* on top of an
+   in-graph damped-trend baseline; the discovered graph enters as fixed
+   topology (`SeriesGraphLearner`: learnable per-edge deltas + family gates
+   only), neighbor token mixing, lag-shifted leading-indicator channels,
+   factor-driver terms, and a derived (never free) latent attention mask.
+4. `losses.py` — huber forecast loss is the objective; everything else is a
+   small regularizer. Coherence consensus forms over signed graph neighbors.
+5. Predict: window-anchored de-normalization, calibrated NLL sigma intervals
+   (+ decomposition residual in quadrature), MinT reconciliation by default
+   whenever metadata yields a hierarchy.
+
+Introspection: `TVA.get_edges()`, `TVA.get_factors()`, `TVA.get_graph()`
+(series-level N×N), `TVA.plot_graph()` (drawn over real series names).
+Benchmarks: `examples/tva_benchmark.py`; ablations:
+`examples/tva_graph_ablation.py` (graph must beat shuffled/transposed
+controls by more than the seed spread before it is called load-bearing).

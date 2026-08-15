@@ -352,9 +352,11 @@ class TestYggdrasilPriors(unittest.TestCase):
         adj = p.build_structural_prior_adjacency()
 
         self.assertEqual(adj.shape, (3, 3))
+        # event edges are now DIRECTED: a's changepoint (Jan 10) precedes
+        # b's (Jan 12), so the edge runs a -> b only
         self.assertGreater(adj[0, 1], 0.0)
+        self.assertEqual(adj[1, 0], 0.0)
         self.assertEqual(adj[0, 2], 0.0)
-        np.testing.assert_allclose(adj, adj.T, atol=1e-6)
 
     def test_structural_merge_weights_and_renormalize_available_sources(self):
         from autots.evaluator.tva.priors import SeriesMetadata, YggdrasilPriors
@@ -405,53 +407,10 @@ class TestYggdrasilPriors(unittest.TestCase):
             atol=1e-6,
         )
 
-    def test_causal_prior_recovers_driver_responder_direction(self):
-        from autots.evaluator.tva.priors import YggdrasilPriors
-
-        rng = np.random.default_rng(42)
-        n = 220
-        driver = np.cumsum(rng.normal(0.0, 0.5, n))
-        responder = np.roll(driver, 1) * 0.9 + rng.normal(0.0, 0.05, n)
-        responder[0] = driver[0]
-        unrelated = rng.normal(0.0, 1.0, n).cumsum()
-        trend = pd.DataFrame(
-            {
-                'driver': driver,
-                'responder': responder,
-                'unrelated': unrelated,
-            },
-            index=pd.date_range("2023-01-01", periods=n, freq="D"),
-        )
-
-        p = YggdrasilPriors(
-            trend_data=trend,
-            observed_history={'driver': n, 'responder': n, 'unrelated': n},
-            causal_prior_construction_config={'max_lag': 2, 'top_k': 2, 'min_history': 90},
-        )
-        adj = p.build_causal_prior_adjacency()
-
-        self.assertIsNotNone(adj)
-        self.assertGreater(adj[0, 1], adj[1, 0])
-        self.assertGreater(adj[0, 1], adj[2, 1])
-        np.testing.assert_allclose(np.diag(adj), np.zeros(3), atol=1e-6)
-
-    def test_causal_prior_skip_when_statsmodels_missing(self):
-        from autots.evaluator.tva import priors as priors_module
-        from autots.evaluator.tva.priors import YggdrasilPriors
-
-        trend = pd.DataFrame(
-            np.random.default_rng(0).normal(size=(120, 2)),
-            index=pd.date_range("2024-01-01", periods=120, freq="D"),
-            columns=['a', 'b'],
-        )
-        p = YggdrasilPriors(
-            trend_data=trend,
-            observed_history={'a': 120, 'b': 120},
-            causal_prior_construction_config={'max_lag': 2},
-        )
-
-        with mock.patch.object(priors_module, 'HAS_STATSMODELS', False):
-            self.assertIsNone(p.build_causal_prior_adjacency())
+    # NOTE: pairwise Granger causal-prior construction was deleted; series-
+    # level causal structure now comes from factor-residual discovery, which
+    # is covered (including driver/responder direction) in
+    # tests/test_tva_discovery.py.
 
     def test_metadata_embeddings_encode_all_available_attribute_axes(self):
         from autots.evaluator.tva.priors import YggdrasilPriors
@@ -1025,15 +984,32 @@ class TestStructureLearningUtilities(unittest.TestCase):
         self.assertEqual(config.derive_latent_sizes(8), [4, 2])
         self.assertEqual(config.derive_latent_sizes(5), [3, 2])
 
-    def test_directed_graph_learner_breaks_symmetric_initialization(self):
-        from autots.evaluator.tva.structure import DirectedGraphLearner
+    def test_series_graph_learner_anchors_topology_at_discovery(self):
+        from autots.evaluator.tva.structure import SeriesGraphLearner
 
-        learner = DirectedGraphLearner(n_nodes=3)
+        edges = [
+            {'source': 0, 'target': 1, 'lag': 2, 'sign': 1, 'weight': 0.8,
+             'family': 'lasso'},
+            {'source': 2, 'target': 1, 'lag': 1, 'sign': -1, 'weight': 0.4,
+             'family': 'leadlag'},
+        ]
+        learner = SeriesGraphLearner(n_series=3, edges=edges)
         adj = learner.adjacency.detach().cpu().numpy()
 
-        self.assertGreater(adj[0, 1], adj[1, 0])
-        self.assertGreater(adj[0, 2], adj[2, 0])
+        # topology comes from the edge list, direction from lag structure —
+        # no index-order bias exists anywhere
+        self.assertGreater(adj[0, 1], 0.0)
+        self.assertGreater(adj[2, 1], 0.0)
+        self.assertEqual(adj[1, 0], 0.0)
+        self.assertEqual(adj[1, 2], 0.0)
         np.testing.assert_allclose(np.diag(adj), np.zeros(3), atol=1e-6)
+        # signs survive into the signed adjacency
+        signed = learner.signed_adjacency.detach().cpu().numpy()
+        self.assertGreater(signed[0, 1], 0.0)
+        self.assertLess(signed[2, 1], 0.0)
+        # only deltas and family gates are learnable
+        param_names = {name for name, _ in learner.named_parameters()}
+        self.assertEqual(param_names, {'edge_delta', 'family_gate'})
 
     def test_graph_snapshot_marks_acyclic_graph(self):
         from autots.evaluator.tva.structure import build_graph_snapshot
@@ -1294,7 +1270,10 @@ class TestCompositeTrendNetworkV1(unittest.TestCase):
         out = net(torch.randn(2, 4, 30))
         self.assertEqual(out['trend_forecast'].shape, (2, 4, 10))
 
-    def test_v1_resizes_series_level_prior_to_latent_mask(self):
+    def test_v1_mismatched_prior_falls_back_to_full_attention(self):
+        """Bilinear prior interpolation is deleted: a series-level (N, N)
+        prior no longer gets image-resized into latent space. A size mismatch
+        now falls back to full attention instead of a distorted mask."""
         from autots.evaluator.tva.trend_network import CompositeTrendNetworkV1
 
         prior = np.array(
@@ -1319,8 +1298,8 @@ class TestCompositeTrendNetworkV1(unittest.TestCase):
         )
 
         self.assertEqual(tuple(net._attn_mask.shape), (2, 2))
-        self.assertTrue(torch.isneginf(net._attn_mask[0, 1]))
-        self.assertTrue(torch.isneginf(net._attn_mask[1, 0]))
+        self.assertTrue(torch.isfinite(net._attn_mask).all())
+        np.testing.assert_allclose(net._attn_mask.numpy(), 0.0, atol=1e-6)
 
     def test_v1_mask_keeps_self_attention_with_zero_diagonal_prior(self):
         from autots.evaluator.tva.trend_network import CompositeTrendNetworkV1
@@ -1400,17 +1379,14 @@ class TestCompositeTrendNetworkV2(unittest.TestCase):
         )
         out = net(torch.randn(2, 4, 30))
         self.assertIn('causal_prior', out)
-        self.assertEqual(out['causal_prior'].shape, (2, 2))
+        # priors stay at SERIES level — never image-resized into latent space
+        self.assertEqual(out['causal_prior'].shape, (4, 4))
         self.assertTrue(torch.all(out['causal_prior'] >= 0))
 
     def test_v2_learned_adjacency_property(self):
         net = self._make_net()
         adj = net.learned_adjacency
-        self.assertEqual(adj.shape, (2, 2))  # n_global x n_global
-
-    def test_v2_promote_responder_no_error(self):
-        net = self._make_net()
-        net.promote_responder(2)  # should not raise
+        self.assertEqual(adj.shape, (4, 4))  # n_series x n_series
 
     def test_v2_glorious_purpose(self):
         net = self._make_net()
@@ -1445,8 +1421,9 @@ class TestCompositeTrendNetworkV2(unittest.TestCase):
         self.assertTrue(out['structure_mode'])
         self.assertTrue(len(out['assignment_matrices']) > 0)
         self.assertEqual(out['trend_forecast'].shape, (2, 5, 10))
-        self.assertEqual(out['adjacency'].shape, (2, 2))
-        self.assertEqual(out['structure_prior'].shape, (2, 2))
+        # adjacency and priors are series-level now
+        self.assertEqual(out['adjacency'].shape, (5, 5))
+        self.assertEqual(out['structure_prior'].shape, (5, 5))
         self.assertTrue(torch.isfinite(out['assignment_drift']))
         self.assertGreaterEqual(float(out['assignment_drift'].item()), 0.0)
 
@@ -1745,7 +1722,11 @@ class TestTVAIntegration(unittest.TestCase):
             tva.fit(df)
 
         self.assertIsNotNone(tva._prior_adj)
-        self.assertIsNotNone(tva._network._causal_prior)
+        # causal structure now comes from discovery, surfaced as an edge table
+        edges = tva.get_edges()
+        self.assertIsInstance(edges, pd.DataFrame)
+        factors = tva.get_factors()
+        self.assertIsNotNone(factors['factors'])
 
     def test_predict_custom_forecast_length(self):
         tva = self._make_tva()
@@ -1772,7 +1753,8 @@ class TestTVAIntegration(unittest.TestCase):
         tva = self._make_tva(trend_network='v2')
         tva.fit(self.df)
         graph = tva.get_graph()
-        self.assertEqual(graph.shape, (2, 2))  # n_global x n_global
+        n = self.df.shape[1]
+        self.assertEqual(graph.shape, (n, n))  # series-level N x N
 
     def test_v2_structure_learning_snapshot_and_plot(self):
         import matplotlib
@@ -1848,7 +1830,9 @@ class TestTVAIntegration(unittest.TestCase):
         )
         tva.fit(df)
         snapshot = tva.get_graph_snapshot()
-        self.assertEqual(len(snapshot['node_table']), 3)
+        # level 0 now spans ALL series (anchors + responders) so the DAG is
+        # drawn over real series names, plus one latent level node
+        self.assertEqual(len(snapshot['node_table']), 4)
         self.assertEqual(len(snapshot['series_table']), 3)
         self.assertEqual(snapshot['series_table'][2]['kind'], 'responder')
         forecast = tva.predict()
@@ -2278,6 +2262,90 @@ class TestTVALossWeights(unittest.TestCase):
         tva.fit(df)
         forecast = tva.predict()
         self.assertEqual(forecast.shape, (10, 3))
+
+
+class TestTVATorchFreeMode(unittest.TestCase):
+    """trend_network='none' — the Phase-4 kill-rule configuration.
+
+    Torch-free by design (needs only the feature detector), so it runs even
+    where torch is unavailable.
+    """
+
+    def test_none_mode_fit_predict(self):
+        try:
+            from autots.evaluator.feature_detector import (  # noqa: F401
+                TimeSeriesFeatureDetector,
+            )
+        except Exception:
+            self.skipTest("feature detector unavailable")
+        from autots.evaluator.tva.tva import TVA
+
+        df = _make_daily_df(n_series=4, n_days=300)
+        tva = TVA(
+            trend_network='none',
+            window_size=60,
+            forecast_horizon=14,
+            verbose=0,
+        )
+        tva.fit(df)
+        self.assertIsNone(tva._network)
+        forecast = tva.predict()
+        self.assertEqual(forecast.shape, (14, 4))
+        self.assertTrue(np.isfinite(forecast.values).all())
+        # forecast length is not capped by forecast_horizon in numpy mode
+        longer = tva.predict(forecast_length=30)
+        self.assertEqual(longer.shape, (30, 4))
+        # continuity with the last observed trend value
+        gap = np.abs(forecast.iloc[0].values - df.iloc[-1].values)
+        self.assertTrue((gap < df.abs().mean().values).all())
+        # discovery artifacts still surfaced
+        self.assertIsInstance(tva.get_edges(), pd.DataFrame)
+        graph = tva.get_graph()
+        self.assertEqual(graph.shape, (4, 4))
+        # residual-sigma intervals available for the wrapper
+        self.assertIsNotNone(tva._last_sigma)
+        self.assertEqual(tva._last_sigma.shape, (30, 4))
+
+
+@SKIP_INTEGRATION
+class TestTVABenchmarkSmoke(unittest.TestCase):
+    """Guard test keeping examples/tva_benchmark.py importable and runnable.
+
+    Tiny configuration: 1 dataset, 1 fold, 5 epochs. The real benchmark runs
+    are done manually from the example script — this only prevents rot.
+    """
+
+    def test_benchmark_smoke(self):
+        import os
+        import sys
+
+        examples_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'examples'
+        )
+        sys.path.insert(0, examples_dir)
+        try:
+            import tva_benchmark
+        finally:
+            sys.path.remove(examples_dir)
+
+        datasets = tva_benchmark.build_datasets(seed=42, smoke=True)
+        self.assertIn('factor_panel', datasets)
+        models = [
+            ('SeasonalNaive', {}),
+            (tva_benchmark.TVA_MODEL_NAME, {}),
+        ]
+        results = tva_benchmark.run_benchmark(
+            datasets,
+            models,
+            n_folds=1,
+            seed=42,
+            include_tva=True,
+            tva_params={'epochs': 5, 'window_size': 60},
+            verbose=False,
+        )
+        self.assertEqual(results['error'].isna().sum(), len(results))
+        summary = tva_benchmark.summarize(results)
+        self.assertIn('mase_skill_geo', summary.columns)
 
 
 if __name__ == '__main__':

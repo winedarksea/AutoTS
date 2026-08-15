@@ -25,7 +25,9 @@ class TVAModel(ModelObject):
         frequency: String alias of datetime index frequency or 'infer'.
         prediction_interval: Confidence interval for probabilistic forecast.
         forecast_length: Number of periods to forecast (sets TVA forecast_horizon).
-        trend_network: 'v2' (learned directed graph, default) or 'v1' (hierarchical latent).
+        trend_network: 'v2' (learned directed graph, default), 'v1'
+            (hierarchical latent), or 'none' (torch-free damped rolling trend
+            + factor/edge discovery + MinT + residual-sigma intervals).
         fusion: 'attention' (DigitalTwinFusion) or 'additive' (AdditiveFusion).
         d_token: Token/latent dimension.
         n_meso: Meso latent width, integer or 'auto'.
@@ -59,12 +61,12 @@ class TVAModel(ModelObject):
         forecast_length: int = 28,
         trend_network: str = "v2",
         fusion: str = "attention",
-        d_token: int = 64,
+        d_token: int = 32,
         n_meso="auto",
         n_global="auto",
         n_prototypes="auto",
-        n_heads: int = 4,
-        epochs: int = 50,
+        n_heads: int = 2,
+        epochs: int = 200,
         lr: float = 1e-3,
         batch_size: int = 32,
         window_size: int = 91,
@@ -232,12 +234,33 @@ class TVAModel(ModelObject):
         if just_point_forecast:
             return forecast
 
-        upper_forecast, lower_forecast = Point_to_Probability(
-            self.df_train,
-            forecast,
-            method="inferred_normal",
-            prediction_interval=self.prediction_interval,
-        )
+        # P3-3: use the trained, calibrated sigma (network NLL head, scaled
+        # back to raw units, validation-calibrated, decomposition residual
+        # added in quadrature) for intervals; fall back to the generic
+        # Point_to_Probability heuristic only when sigma is unavailable.
+        sigma_df = getattr(self._tva, "_last_sigma", None)
+        if sigma_df is not None and not sigma_df.empty:
+            sigma = sigma_df.reindex(columns=self.column_names)
+            n_sigma = len(sigma)
+            if n_sigma >= forecast_length:
+                sigma = sigma.iloc[:forecast_length]
+            else:
+                pad = pd.concat(
+                    [sigma.iloc[[-1]]] * (forecast_length - n_sigma),
+                    ignore_index=True,
+                )
+                sigma = pd.concat([sigma, pad], ignore_index=True)
+            sigma.index = test_index
+            z_score = self._interval_z(self.prediction_interval)
+            upper_forecast = forecast + z_score * sigma
+            lower_forecast = forecast - z_score * sigma
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train,
+                forecast,
+                method="inferred_normal",
+                prediction_interval=self.prediction_interval,
+            )
 
         predict_runtime = datetime.datetime.now() - predict_start_time
         prediction = PredictionObject(
@@ -254,6 +277,22 @@ class TVAModel(ModelObject):
             model_parameters=self.get_params(),
         )
         return prediction
+
+    @staticmethod
+    def _interval_z(prediction_interval: float) -> float:
+        """Two-sided normal z for a central prediction interval."""
+        p = 1.0 - (1.0 - float(prediction_interval)) / 2.0
+        try:
+            from scipy.stats import norm
+
+            return float(norm.ppf(p))
+        except Exception:
+            import torch
+
+            return float(
+                torch.erfinv(torch.tensor(2.0 * p - 1.0, dtype=torch.float64)).item()
+                * (2.0**0.5)
+            )
 
     def get_params(self):
         """Return dict of current parameters."""
@@ -290,26 +329,32 @@ class TVAModel(ModelObject):
         """
         fast_mode = "fast" in str(method).lower()
 
-        trend_network = random.choices(["v2", "v1"], weights=[0.75, 0.25])[0]
+        # 'none' is the torch-free damped-trend + discovery mode — the Phase-4
+        # ablation showed it matches the full network on synthetic panels, so
+        # it gets real sampling weight
+        trend_network = random.choices(
+            ["v2", "none", "v1"], weights=[0.55, 0.3, 0.15]
+        )[0]
         fusion = random.choices(
             ["attention", "additive", "direct"], weights=[0.35, 0.45, 0.15]
         )[0]
         d_token = random.choices(
-            [32, 48, 64, 96, 128], weights=[0.15, 0.2, 0.35, 0.2, 0.1]
+            [16, 24, 32, 48, 64], weights=[0.1, 0.2, 0.4, 0.2, 0.1]
         )[0]
-        n_heads = random.choices([2, 4, 8, 10], weights=[0.2, 0.6, 0.2, 0.1])[0]
+        n_heads = random.choices([2, 4, 8], weights=[0.55, 0.35, 0.1])[0]
         # keep n_heads as divisor of d_token
         if d_token % n_heads != 0:
             n_heads = 4 if d_token % 4 == 0 else 2
         if fast_mode:
-            epochs = random.choices([15, 20, 30, 40], weights=[0.2, 0.4, 0.3, 0.1])[0]
+            epochs = random.choices([30, 50, 80, 120], weights=[0.2, 0.4, 0.3, 0.1])[0]
             batch_size = random.choices([16, 32, 64], weights=[0.1, 0.45, 0.45])[0]
             window_size = random.choices(
                 [30, 45, 60, 91], weights=[0.2, 0.3, 0.3, 0.2]
             )[0]
         else:
+            # early stopping bounds the effective epochs; sample high maxima
             epochs = random.choices(
-                [20, 30, 50, 75, 100], weights=[0.2, 0.3, 0.3, 0.15, 0.05]
+                [50, 100, 200, 300], weights=[0.15, 0.3, 0.4, 0.15]
             )[0]
             batch_size = random.choices([16, 32, 64], weights=[0.2, 0.5, 0.3])[0]
             window_size = random.choices(
@@ -373,29 +418,29 @@ class TVAModel(ModelObject):
         loss_weights = {
             "forecast": random.choices([0.75, 1.0, 1.25], weights=[0.15, 0.7, 0.15])[0],
             "orthogonality": random.choices(
-                [0.0, 0.25, 0.5, 1.0], weights=[0.1, 0.2, 0.3, 0.4]
+                [0.0, 0.1, 0.25, 0.5], weights=[0.15, 0.25, 0.4, 0.2]
             )[0],
             "local_trend": random.choices(
-                [0.0, 0.05, 0.1, 0.25, 0.5, 1.0],
-                weights=[0.12, 0.15, 0.2, 0.22, 0.18, 0.13],
+                [0.0, 0.05, 0.1, 0.25, 0.5],
+                weights=[0.15, 0.2, 0.35, 0.2, 0.1],
             )[0],
             "smoothness": random.choices(
-                [0.0, 0.01, 0.03, 0.1, 0.2, 0.3],
-                weights=[0.1, 0.2, 0.25, 0.3, 0.15, 0.05],
+                [0.0, 0.01, 0.02, 0.05, 0.1],
+                weights=[0.15, 0.2, 0.35, 0.2, 0.1],
             )[0],
             "soft_prior": random.choices(
-                [0.0, 0.1, 0.25, 0.5, 0.75], weights=[0.15, 0.25, 0.3, 0.3, 0.1]
+                [0.0, 0.1, 0.25, 0.5], weights=[0.2, 0.25, 0.4, 0.15]
             )[0],
             "causal_prior": random.choices(
-                [0.0, 0.1, 0.25, 0.5], weights=[0.2, 0.25, 0.3, 0.25]
+                [0.0, 0.1, 0.25, 0.5], weights=[0.2, 0.25, 0.4, 0.15]
             )[0],
             "coherence": random.choices(
-                [0.0, 0.05, 0.25, 0.5, 1.0, 2.0],
-                weights=[0.2, 0.1, 0.2, 0.1, 0.25, 0.15],
+                [0.0, 0.1, 0.25, 0.5, 1.0],
+                weights=[0.2, 0.2, 0.35, 0.15, 0.1],
             )[0],
             "probabilistic": random.choices(
-                [0.0, 0.05, 0.1, 0.2, 0.3],
-                weights=[0.1, 0.2, 0.35, 0.25, 0.1],
+                [0.0, 0.1, 0.25, 0.5, 0.75],
+                weights=[0.1, 0.15, 0.25, 0.35, 0.15],
             )[0],
             "fusion_forecast": random.choices(
                 [0.0, 0.25, 0.5, 0.75, 1.0],

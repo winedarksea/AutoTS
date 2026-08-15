@@ -59,7 +59,12 @@ class TVA:
 
     Args:
         detector_params: Dict passed to TimeSeriesFeatureDetector.
-        trend_network: 'v1' (hierarchical latent) or 'v2' (learned directed).
+        trend_network: 'v2' (learned directed, default), 'v1' (hierarchical
+            latent), or 'none' — a torch-free mode that forecasts the trend
+            with a damped rolling-trend extrapolation while still running
+            factor/edge discovery, MinT reconciliation, and residual-sigma
+            intervals. 'none' is the Phase-4 kill-rule configuration: fast,
+            interpretable, and a strong baseline the network must beat.
         fusion: How stochastic components (trend, seasonality, holidays) are
             recombined before level shifts are added additively.
             'attention' (default): DigitalTwinFusion — self-attention contextualizes
@@ -78,10 +83,13 @@ class TVA:
             construction from event clusters and metadata. Defaults to blending
             detected changepoints/anomalies with metadata similarity
             ({'sources': ['event', 'metadata'], ...}). Pass {} to disable.
-        causal_prior_construction_config: Dict configuring automatic Granger-causal
-            prior construction from decomposed trend components (requires
-            statsmodels). Defaults to {'max_lag': 3, 'min_history': 90,
-            'top_k': 8, 'alpha': 0.05, 'difference': True}. Pass {} to disable.
+        causal_prior_construction_config: Deprecated and ignored — series-level
+            causal structure now comes from factor-residual discovery
+            (autots.evaluator.tva.discovery). Use discovery_config instead.
+        discovery_config: Dict overriding discovery.DEFAULT_DISCOVERY_CONFIG
+            (factor extraction, conditional screening, stability selection,
+            lead-lag scan, falsification). Pass {'enabled': False} to skip
+            structure discovery entirely.
         d_token: Token/latent dimension.
         n_meso: Number of meso latent nodes, or 'auto' (default) to set as
             2 * n_global derived from N series.
@@ -90,7 +98,8 @@ class TVA:
         n_prototypes: Number of prototype trend signatures, or 'auto' (default)
             to set as max(2, round(log2(N_anchors + 1))). Capped at 8.
         n_heads: Attention heads.
-        epochs: Training epochs. Default 50 (needed for DAG warmup convergence).
+        epochs: Maximum training epochs. Default 200; training normally stops
+            earlier via time-ordered validation early stopping (patience 8).
         lr: Learning rate.
         batch_size: Training batch size.
         window_size: Input trend window length.
@@ -121,12 +130,13 @@ class TVA:
         causal_prior: np.ndarray = None,
         prior_construction_config: dict = None,
         causal_prior_construction_config: dict = None,
-        d_token: int = 64,
+        discovery_config: dict = None,
+        d_token: int = 32,
         n_meso: int | str = 'auto',
         n_global: int | str = 'auto',
         n_prototypes: int | str = 'auto',
-        n_heads: int = 4,
-        epochs: int = 50,
+        n_heads: int = 2,
+        epochs: int = 200,
         lr: float = 1e-3,
         batch_size: int = 32,
         window_size: int = 91,
@@ -144,8 +154,12 @@ class TVA:
         prototype_assignment_temperature: float = 1.0,
         structure_learning_config: dict = None,
     ):
-        if not HAS_TORCH:
-            raise ImportError("TVA requires PyTorch. Install with: pip install torch")
+        if not HAS_TORCH and str(trend_network) != 'none':
+            raise ImportError(
+                "TVA requires PyTorch for trend_network 'v1'/'v2'. Install with: "
+                "pip install torch — or use trend_network='none' for the "
+                "torch-free damped-trend + factor-discovery mode."
+            )
 
         # Apply defaults for config dicts using sentinel pattern to allow explicit
         # override with {} to disable. These replace None-only defaults.
@@ -164,15 +178,6 @@ class TVA:
                 'source_weights': {'event': 0.7, 'metadata': 0.3},
                 'max_distance_days': 7,
             }
-        if causal_prior_construction_config is None:
-            causal_prior_construction_config = {
-                'max_lag': 3,
-                'min_history': 90,
-                'top_k': 8,
-                'alpha': 0.05,
-                'difference': True,
-            }
-
         self.detector_params = detector_params
         self.trend_network_type = trend_network
         self.fusion_type = fusion
@@ -182,6 +187,7 @@ class TVA:
         self.causal_prior = causal_prior
         self.prior_construction_config = prior_construction_config
         self.causal_prior_construction_config = causal_prior_construction_config
+        self.discovery_config = discovery_config
         self.d_token = d_token
         self.n_meso = n_meso
         self.n_global = n_global
@@ -226,6 +232,11 @@ class TVA:
         self._anchor_mask = None
         self._metadata_embeddings = None
         self._prior_adj = None
+        self._trend_scale = None
+        self._sigma_calibration = None
+        self._last_sigma = None
+        self._discovery = None
+        self._reconciliation_method_effective = None
 
     def fit(self, df: pd.DataFrame) -> 'TVA':
         """Full TVA pipeline: decompose, build priors, train network.
@@ -236,7 +247,8 @@ class TVA:
         Returns:
             self
         """
-        torch.manual_seed(self.random_seed)
+        if HAS_TORCH:
+            torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self._df_original = df
 
@@ -316,7 +328,11 @@ class TVA:
         trend_data = self._components['trend'].values  # (T, N)
         T_total, N = trend_data.shape
 
-        # create sliding windows
+        # per-series scale: robust std of trend first differences, floored so
+        # near-constant trends do not explode when normalized (P1-1)
+        self._trend_scale = self._compute_trend_scale(trend_data)
+
+        # create sliding windows (window-local delta targets, per-series scaled)
         windows, targets = self._create_windows(trend_data)
         if len(windows) == 0:
             raise ValueError(
@@ -351,11 +367,31 @@ class TVA:
 
         anchor_mask_t = torch.tensor(self._anchor_mask, dtype=torch.bool, device=device)
 
-        # metadata tensor
+        # metadata tensor — one copy, expanded per batch (identical per window)
         meta_t = None
         if self._metadata_embeddings is not None and d_meta > 0:
-            meta_np = np.tile(self._metadata_embeddings, (len(windows), 1, 1))
-            meta_t = torch.tensor(meta_np, dtype=torch.float32, device=device)
+            meta_t = torch.tensor(
+                self._metadata_embeddings[np.newaxis, :, :],
+                dtype=torch.float32,
+                device=device,
+            )
+
+        # Step 3.5: Structure discovery — factors first, conditional edges
+        # second (Phase 2). Torch-free; the network only learns small deltas
+        # on top of this data-anchored structure.
+        self._run_structure_discovery()
+
+        # Arm A mode (Phase 4 kill rule): no torch network at all — detector
+        # decomposition + damped rolling trend + discovery for explainability
+        # + MinT + residual-sigma intervals. Fast, interpretable, torch-free.
+        if self.trend_network_type == 'none':
+            self._network = None
+            self._fusion_layer = None
+            self._loss_fn = None
+            self._setup_reconciliation()
+            if self.verbose:
+                print("TVA: torch-free mode ('none') — no network training.")
+            return self
 
         # Step 4: Instantiate network
         if self.verbose:
@@ -367,9 +403,18 @@ class TVA:
         )
 
         n_anchors = int(self._anchor_mask.sum())
+        # n_global = r: the latent width follows the number of discovered
+        # factors instead of the arbitrary ceil(sqrt(n_anchors)) (D-2)
+        n_global_resolved = self.n_global
+        if (
+            n_global_resolved == 'auto'
+            and self._discovery is not None
+            and self._discovery['loadings'].shape[1] > 0
+        ):
+            n_global_resolved = max(2, int(self._discovery['loadings'].shape[1]))
         self._n_global_fit, self._n_meso_fit, self._n_prototypes_fit = (
             self._resolve_network_sizes(
-                n_anchors, self.n_global, self.n_meso, self.n_prototypes
+                n_anchors, n_global_resolved, self.n_meso, self.n_prototypes
             )
         )
         if self.verbose >= 2:
@@ -400,10 +445,7 @@ class TVA:
             )
             if self.causal_prior is not None:
                 network_kwargs['causal_prior'] = self.causal_prior
-            elif self._priors is not None:
-                network_kwargs['causal_prior'] = (
-                    self._priors.build_causal_prior_adjacency()
-                )
+            network_kwargs['discovery'] = self._build_network_discovery_inputs()
             self._network = CompositeTrendNetworkV2(**network_kwargs).to(device)
         else:
             self._network = CompositeTrendNetworkV1(**network_kwargs).to(device)
@@ -437,13 +479,35 @@ class TVA:
         all_params = list(self._network.parameters())
         if hasattr(self._fusion_layer, 'parameters'):
             all_params += list(self._fusion_layer.parameters())
-        optimizer = torch.optim.AdamW(all_params, lr=self.lr)
+        optimizer = torch.optim.AdamW(all_params, lr=self.lr, weight_decay=0.05)
 
-        dataset = TensorDataset(X, Y, S_sea, S_hol, S_lvl, S_ano)
+        # Time-ordered validation split (P1-5). Windows overlap by W-1, so a
+        # random split would leak the target; the holdout must be the LAST
+        # windows by time. Validation monitors forecast loss only.
+        n_windows_total = X.shape[0]
+        n_val = 0
+        if n_windows_total >= 12:
+            n_val = int(
+                min(
+                    max(2 * self.forecast_horizon, np.ceil(0.1 * n_windows_total)),
+                    n_windows_total // 3,
+                )
+            )
+        n_train = n_windows_total - n_val
+        X_val, Y_val = X[n_train:], Y[n_train:]
+        X_tr = X[:n_train]
+
+        dataset = TensorDataset(
+            X_tr, Y[:n_train], S_sea[:n_train], S_hol[:n_train],
+            S_lvl[:n_train], S_ano[:n_train],
+        )
+        # sample weights are computed AFTER the split so the sampler indices
+        # align with the training subset rather than the full window set
         sample_weights = self._compute_window_sample_weights(
             self._components['trend'].index
         )
         if sample_weights is not None:
+            sample_weights = sample_weights[:n_train]
             sampler = WeightedRandomSampler(
                 weights=torch.tensor(sample_weights, dtype=torch.double),
                 num_samples=len(sample_weights),
@@ -474,6 +538,35 @@ class TVA:
             else range(self.epochs)
         )
 
+        # early stopping state (P1-5): monitor validation forecast loss only —
+        # the penalty terms are regularizers, not the objective
+        patience = 8
+        best_val = float('inf')
+        epochs_since_best = 0
+        best_network_state = None
+        best_fusion_state = None
+
+        def _validation_forecast_loss() -> float:
+            if n_val == 0:
+                return float('nan')
+            self._network.eval()
+            total_val = 0.0
+            n_val_batches = 0
+            with torch.no_grad():
+                for start in range(0, n_val, self.batch_size):
+                    x_v = X_val[start : start + self.batch_size]
+                    y_v = Y_val[start : start + self.batch_size]
+                    meta_v = None
+                    if meta_t is not None:
+                        meta_v = meta_t.expand(x_v.shape[0], -1, -1)
+                    out_v = self._network(x_v, meta_v, anchor_mask_t)
+                    total_val += self._loss_fn.forecast_loss(
+                        out_v['trend_forecast'], y_v
+                    ).item()
+                    n_val_batches += 1
+            self._network.train()
+            return total_val / max(n_val_batches, 1)
+
         for epoch in epoch_iter:
             epoch_loss = 0.0
             n_batches = 0
@@ -486,10 +579,10 @@ class TVA:
             for batch in loader:
                 x_b, y_b, sea_b, hol_b, lvl_b, ano_b = batch
 
-                # expand metadata for batch
+                # expand metadata for batch (identical embedding per window)
                 meta_b = None
                 if meta_t is not None:
-                    meta_b = meta_t[: x_b.shape[0]]
+                    meta_b = meta_t.expand(x_b.shape[0], -1, -1)
 
                 outputs = self._network(x_b, meta_b, anchor_mask_t)
 
@@ -564,21 +657,120 @@ class TVA:
                 n_batches += 1
 
             avg_loss = epoch_loss / max(n_batches, 1)
+
+            val_loss = _validation_forecast_loss()
             if self.verbose >= 2:
-                print(f"  Epoch {epoch+1}/{self.epochs} — loss: {avg_loss:.6f}")
+                print(
+                    f"  Epoch {epoch+1}/{self.epochs} — loss: {avg_loss:.6f}"
+                    + (f" val_forecast: {val_loss:.6f}" if n_val else "")
+                )
+            if n_val:
+                if val_loss < best_val - 1e-8:
+                    best_val = val_loss
+                    epochs_since_best = 0
+                    best_network_state = {
+                        k: v.detach().clone()
+                        for k, v in self._network.state_dict().items()
+                    }
+                    if isinstance(self._fusion_layer, nn.Module):
+                        best_fusion_state = {
+                            k: v.detach().clone()
+                            for k, v in self._fusion_layer.state_dict().items()
+                        }
+                else:
+                    epochs_since_best += 1
+                    if epochs_since_best >= patience:
+                        if self.verbose >= 2:
+                            print(
+                                f"  Early stopping at epoch {epoch+1} "
+                                f"(best val {best_val:.6f})"
+                            )
+                        break
+
+        # restore best weights found on the validation holdout
+        if best_network_state is not None:
+            self._network.load_state_dict(best_network_state)
+        if best_fusion_state is not None and isinstance(self._fusion_layer, nn.Module):
+            self._fusion_layer.load_state_dict(best_fusion_state)
 
         self._network.eval()
         if isinstance(self._fusion_layer, nn.Module):
             self._fusion_layer.eval()
 
+        # store validation residual statistics for sigma calibration (P3-2)
+        self._calibrate_sigma(X_val, Y_val, meta_t, anchor_mask_t, n_val)
+
         # Step 8: Setup reconciliation
-        if self.reconciliation_method:
-            self._reconciler = ReconciliationBridge(method=self.reconciliation_method)
+        self._setup_reconciliation()
 
         if self.verbose:
             print("TVA: Training complete.")
 
         return self
+
+    def _run_structure_discovery(self):
+        """Factor and edge discovery (torch-free, Phase 2)."""
+        self._discovery = None
+        discovery_cfg = dict(self.discovery_config or {})
+        discovery_enabled = discovery_cfg.pop('enabled', True)
+        if not discovery_enabled:
+            return
+        if self.verbose:
+            print("TVA: Discovering factor and edge structure...")
+        from autots.evaluator.tva.discovery import discover_structure
+
+        extra_adjacencies = {}
+        if self._priors is not None:
+            structural_config = self._priors._resolve_structural_config()
+            if structural_config:
+                event_adj = self._priors._build_event_prior_adjacency(
+                    structural_config
+                )
+                if event_adj is not None:
+                    extra_adjacencies['event'] = event_adj
+            metadata_adj = self._priors._build_metadata_prior_adjacency()
+            if metadata_adj is not None:
+                extra_adjacencies['metadata'] = metadata_adj
+        if self.prior_adjacency is not None:
+            extra_adjacencies['business'] = np.asarray(
+                self.prior_adjacency, dtype=np.float32
+            )
+        if self.causal_prior is not None:
+            business = extra_adjacencies.get('business')
+            causal = np.asarray(self.causal_prior, dtype=np.float32)
+            extra_adjacencies['business'] = (
+                causal if business is None else np.maximum(business, causal)
+            )
+        try:
+            self._discovery = discover_structure(
+                self._components['trend'],
+                anchor_mask=self._anchor_mask,
+                series_metadata=self.series_metadata,
+                config=discovery_cfg or None,
+                seed=self.random_seed,
+                extra_adjacencies=extra_adjacencies or None,
+            )
+        except Exception as exc:
+            warnings.warn(
+                f"TVA structure discovery failed; continuing without it. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self._discovery = None
+
+    def _setup_reconciliation(self):
+        """P3-4: post-hoc MinT gives an auditable guarantee (S·b − a = 0);
+        default to it whenever metadata yields a real hierarchy and the user
+        did not choose otherwise."""
+        self._reconciliation_method_effective = self.reconciliation_method
+        if self._reconciliation_method_effective is None and self._priors is not None:
+            S = self._priors.build_hierarchy_matrix()
+            if S.shape[0] > S.shape[1]:
+                self._reconciliation_method_effective = 'mint'
+        if self._reconciliation_method_effective:
+            self._reconciler = ReconciliationBridge(
+                method=self._reconciliation_method_effective
+            )
 
     def predict(self, forecast_length: int = None) -> pd.DataFrame:
         """Generate forecasts for all series.
@@ -589,22 +781,25 @@ class TVA:
         Returns:
             Wide DataFrame (forecast_length, N) with forecasted values.
         """
-        if self._network is None:
+        if self._components is None:
             raise RuntimeError("TVA must be fit before calling predict.")
 
         if forecast_length is None:
             forecast_length = self.forecast_horizon
 
+        # torch-free mode: damped rolling-trend extrapolation
+        if self._network is None:
+            return self._predict_numpy(int(forecast_length))
+
         device = torch.device(self.device)
 
-        # get last window of trend data
+        # get last window of trend data, normalized to network input space
         trend_data = self._components['trend'].values  # (T, N)
         last_window = trend_data[-self.window_size :]  # (window_size, N)
+        x_np, anchor = self._normalized_last_window(last_window)
+        scale = self._get_trend_scale()
 
-        # to tensor: (1, N, T_window)
-        x = torch.tensor(
-            last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
-        )
+        x = torch.tensor(x_np, dtype=torch.float32, device=device)
 
         # metadata
         meta = None
@@ -624,7 +819,8 @@ class TVA:
         with torch.no_grad():
             outputs = self._network(x, meta, anchor_mask_t)
 
-        trend_forecast = outputs['trend_forecast'].cpu().numpy()[0]  # (N, T_fc)
+        # (N, T_fc) — normalized deltas relative to the last observed trend value
+        trend_forecast_norm = outputs['trend_forecast'].cpu().numpy()[0]
 
         # get forecast components from decomposer
         fc_length = min(forecast_length, self.forecast_horizon)
@@ -636,31 +832,37 @@ class TVA:
         level_shifts = forecast_comps['level_shifts'].values.T
 
         # truncate trend forecast if needed
-        trend_fc = trend_forecast[:, :fc_length]
+        trend_fc_norm = trend_forecast_norm[:, :fc_length]
+        anchor_col = anchor[:, np.newaxis]
+        scale_col = scale[:, np.newaxis]
+        trend_fc = trend_fc_norm * scale_col + anchor_col
 
-        # fuse stochastic components; level_shifts always added additively afterward
+        # fuse stochastic components in the SAME normalized space used during
+        # training (trend deltas + scale-normalized components), then invert.
+        # Level shifts are always added additively after fusion.
         if isinstance(self._fusion_layer, nn.Module):
             with torch.no_grad():
                 t_trend = torch.tensor(
-                    trend_fc[np.newaxis], dtype=torch.float32, device=device
+                    trend_fc_norm[np.newaxis], dtype=torch.float32, device=device
                 )
                 t_sea = torch.tensor(
-                    seasonal[np.newaxis, :, :fc_length],
+                    (seasonal[:, :fc_length] / scale_col)[np.newaxis],
                     dtype=torch.float32,
                     device=device,
                 )
                 t_hol = torch.tensor(
-                    holidays[np.newaxis, :, :fc_length],
+                    (holidays[:, :fc_length] / scale_col)[np.newaxis],
                     dtype=torch.float32,
                     device=device,
                 )
                 t_ls = torch.tensor(
-                    level_shifts[np.newaxis, :, :fc_length],
+                    (level_shifts[:, :fc_length] / scale_col)[np.newaxis],
                     dtype=torch.float32,
                     device=device,
                 )
-                fused = self._fusion_layer(t_trend, t_sea, t_hol) + t_ls
-                forecast_values = fused.cpu().numpy()[0].T  # (T, N)
+                fused_norm = self._fusion_layer(t_trend, t_sea, t_hol) + t_ls
+                fused = fused_norm.cpu().numpy()[0] * scale_col + anchor_col
+                forecast_values = fused.T  # (T, N)
         else:
             forecast_values = (
                 trend_fc
@@ -674,6 +876,102 @@ class TVA:
         result = pd.DataFrame(
             forecast_values, index=future_index, columns=self._df_original.columns
         )
+
+        # Route the trained sigma head to a usable, calibrated raw-scale sigma
+        # (P3-1/P3-2): de-normalize, apply per-series validation calibration,
+        # then add the decomposition residual sigma in quadrature.
+        self._last_sigma = None
+        sigma = outputs.get('sigma')
+        if sigma is not None:
+            sigma_raw = sigma.cpu().numpy()[0][:, :fc_length] * scale_col
+            if self._sigma_calibration is not None:
+                sigma_raw = sigma_raw * self._sigma_calibration[:, np.newaxis]
+            resid_sigma = None
+            if hasattr(self._decomposer, 'get_residual_sigma'):
+                resid_sigma = self._decomposer.get_residual_sigma()
+            if resid_sigma is not None:
+                sigma_raw = np.sqrt(
+                    sigma_raw**2 + np.asarray(resid_sigma)[:, np.newaxis] ** 2
+                )
+            self._last_sigma = pd.DataFrame(
+                sigma_raw.T, index=future_index, columns=self._df_original.columns
+            )
+
+        # coherence via reconciliation is primary (P3-4): when a hierarchy is
+        # configured (or defaulted from metadata), reconcile before returning
+        if (
+            getattr(self, '_reconciliation_method_effective', None)
+            and self._priors is not None
+        ):
+            try:
+                result = self.reconcile(result)
+            except Exception as exc:
+                warnings.warn(
+                    f"TVA reconciliation failed; returning unreconciled forecast. {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
+        return result
+
+    def _predict_numpy(self, forecast_length: int) -> pd.DataFrame:
+        """Torch-free forecast: damped local trend + detector components.
+
+        The Arm A configuration from the Phase-4 ablation: per-series OLS
+        slope over the last min(window_size, 4H) trend steps, damped with
+        phi = 0.9, anchored at the last observed trend value; detector
+        seasonality/holidays/level shifts added additively; intervals from
+        the decomposition residual sigma; MinT reconciliation when a
+        hierarchy is configured.
+        """
+        trend = self._components['trend'].values
+        T, N = trend.shape
+        L = max(min(self.window_size, 4 * self.forecast_horizon), 2)
+        L = min(L, T)
+        x = trend[-L:]
+        t_idx = np.arange(L) - (L - 1) / 2.0
+        denom = max(float(np.sum(t_idx**2)), 1e-8)
+        slope = (x * t_idx[:, np.newaxis]).sum(axis=0) / denom  # (N,)
+        damp = np.cumsum(0.9 ** np.arange(1, forecast_length + 1))
+        trend_fc = trend[-1][np.newaxis, :] + damp[:, np.newaxis] * slope[np.newaxis, :]
+
+        forecast_comps = self._decomposer.get_forecast_components(forecast_length)
+        forecast_values = (
+            trend_fc
+            + forecast_comps['seasonality'].values
+            + forecast_comps['holidays'].values
+            + forecast_comps['level_shifts'].values
+        )
+        future_index = forecast_comps['trend'].index[:forecast_length]
+        result = pd.DataFrame(
+            forecast_values,
+            index=future_index,
+            columns=self._df_original.columns,
+        )
+
+        self._last_sigma = None
+        resid_sigma = None
+        if hasattr(self._decomposer, 'get_residual_sigma'):
+            resid_sigma = self._decomposer.get_residual_sigma()
+        if resid_sigma is not None:
+            self._last_sigma = pd.DataFrame(
+                np.tile(np.asarray(resid_sigma)[np.newaxis, :], (forecast_length, 1)),
+                index=future_index,
+                columns=self._df_original.columns,
+            )
+
+        if (
+            getattr(self, '_reconciliation_method_effective', None)
+            and self._priors is not None
+        ):
+            try:
+                result = self.reconcile(result)
+            except Exception as exc:
+                warnings.warn(
+                    f"TVA reconciliation failed; returning unreconciled forecast. {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
         return result
 
@@ -737,10 +1035,11 @@ class TVA:
             forecasts = self.predict()
 
         if self._reconciler is None:
-            if self.reconciliation_method:
-                self._reconciler = ReconciliationBridge(
-                    method=self.reconciliation_method
-                )
+            method = getattr(
+                self, '_reconciliation_method_effective', self.reconciliation_method
+            )
+            if method:
+                self._reconciler = ReconciliationBridge(method=method)
             else:
                 return forecasts
 
@@ -813,8 +1112,15 @@ class TVA:
         Returns:
             (M, M) numpy array.
         """
-        if self._network is None:
+        if self._network is None and self._components is None:
             raise RuntimeError("TVA must be fit first.")
+
+        if self._network is None:
+            # torch-free mode: the discovered merged adjacency IS the graph
+            if self._discovery is not None:
+                return np.asarray(self._discovery['adjacency'], dtype=np.float32)
+            n = len(self._df_original.columns)
+            return np.zeros((n, n), dtype=np.float32)
 
         if hasattr(self._network, 'learned_adjacency'):
             return self._network.learned_adjacency.detach().cpu().numpy()
@@ -854,8 +1160,16 @@ class TVA:
         decoded_top_trends = None
         if 'composite_trend' in outputs:
             decoded_top_trends = outputs['composite_trend'].detach().cpu().numpy()[0]
+        graph = self.get_graph()
+        # V2's graph is series-level (N x N): draw the DAG over real series
+        # names (W-7). Legacy latent-sized graphs keep the top-level view.
+        dag_level = (
+            'series'
+            if graph.shape[0] == len(self._df_original.columns)
+            else 'top'
+        )
         snapshot = build_graph_snapshot(
-            adjacency_dense=self.get_graph(),
+            adjacency_dense=graph,
             assignment_matrices=assignment_matrices,
             threshold=(
                 self._structure_config.threshold_for_export
@@ -870,6 +1184,7 @@ class TVA:
             prototype_weights=prototype_weights,
             global_prototype_weights=global_prototype_weights,
             decoded_top_trends=decoded_top_trends,
+            dag_level=dag_level,
         )
         return snapshot.to_dict()
 
@@ -922,7 +1237,78 @@ class TVA:
             metadata_color_by=metadata_color_by,
         )
 
+    def get_edges(self) -> pd.DataFrame:
+        """Return the discovered edge table over real series names (W-7).
+
+        Columns: source, target, lag, sign, weight, family, stability,
+        delta_mse. Empty DataFrame when discovery was disabled or found
+        nothing.
+        """
+        columns = [
+            'source', 'target', 'lag', 'sign', 'weight', 'family', 'stability',
+            'delta_mse',
+        ]
+        if self._discovery is None or not self._discovery.get('edges'):
+            return pd.DataFrame(columns=columns)
+        return pd.DataFrame(self._discovery['edges'])[columns]
+
+    def get_factors(self) -> dict:
+        """Return named composite factors and their sparse signed loadings (W-7).
+
+        Returns:
+            Dict with 'factors' (DataFrame, one named column per factor, level
+            space, indexed like the training data), 'loadings' (DataFrame,
+            series x factor), and 'factor_names'.
+        """
+        if self._discovery is None:
+            return {'factors': None, 'loadings': None, 'factor_names': []}
+        names = self._discovery['factor_names']
+        index = self._components['trend'].index if self._components else None
+        factors = pd.DataFrame(
+            self._discovery['factors'], index=index, columns=names
+        )
+        loadings = pd.DataFrame(
+            self._discovery['loadings'],
+            index=list(self._df_original.columns),
+            columns=names,
+        )
+        return {'factors': factors, 'loadings': loadings, 'factor_names': names}
+
     # ---- internal helpers ----
+
+    def _build_network_discovery_inputs(self) -> Optional[dict]:
+        """Convert the named discovery result into network-ready buffers."""
+        if self._discovery is None:
+            return None
+        name_to_idx = {c: i for i, c in enumerate(self._df_original.columns)}
+        edges_indexed = []
+        for edge in self._discovery.get('edges', []):
+            src = name_to_idx.get(edge['source'])
+            dst = name_to_idx.get(edge['target'])
+            if src is None or dst is None:
+                continue
+            edges_indexed.append(
+                {
+                    'source': src,
+                    'target': dst,
+                    'lag': edge['lag'],
+                    'sign': edge['sign'],
+                    'weight': edge['weight'],
+                    'family': edge['family'],
+                }
+            )
+        communities = np.asarray(self._discovery.get('communities'))
+        anchor_communities = None
+        if communities.size and self._anchor_mask is not None:
+            anchor_communities = communities[self._anchor_mask]
+        families = sorted({e['family'] for e in edges_indexed}) or None
+        return {
+            'edges': edges_indexed,
+            'families': families,
+            'loadings': self._discovery.get('loadings'),
+            'anchor_communities': anchor_communities,
+            'adjacency': self._discovery.get('adjacency'),
+        }
 
     @staticmethod
     def _resolve_network_sizes(
@@ -967,9 +1353,8 @@ class TVA:
         device = torch.device(self.device)
         trend_data = self._components['trend'].values
         last_window = trend_data[-self.window_size :]
-        x = torch.tensor(
-            last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
-        )
+        x_np, _anchor = self._normalized_last_window(last_window)
+        x = torch.tensor(x_np, dtype=torch.float32, device=device)
 
         meta = None
         if (
@@ -1015,8 +1400,18 @@ class TVA:
         target_positions = np.arange(
             trend_data.shape[0] - history_periods, trend_data.shape[0]
         )
+        scale = self._get_trend_scale()
+        window_anchors = np.stack(
+            [trend_data[pos - 1] for pos in target_positions], axis=0
+        )  # (H, N)
         recent_windows = np.stack(
-            [trend_data[pos - self.window_size : pos].T for pos in target_positions],
+            [
+                (
+                    (trend_data[pos - self.window_size : pos] - trend_data[pos - 1])
+                    / scale
+                ).T
+                for pos in target_positions
+            ],
             axis=0,
         ).astype(np.float32, copy=False)
 
@@ -1042,36 +1437,43 @@ class TVA:
         with torch.no_grad():
             outputs = self._network(x, meta, anchor_mask_t)
 
-        trend_step = outputs['trend_forecast'][:, :, 0].cpu().numpy()
-        seasonal_step = self._components['seasonality'].values[target_positions].T
-        holiday_step = self._components['holidays'].values[target_positions].T
-        level_shift_step = self._components['level_shifts'].values[target_positions].T
+        # normalized one-step trend prediction; de-normalize with each window's anchor
+        trend_step_norm = outputs['trend_forecast'][:, :, 0].cpu().numpy()  # (H, N)
+        trend_step = trend_step_norm * scale[np.newaxis, :] + window_anchors
+        seasonal_step = self._components['seasonality'].values[target_positions]
+        holiday_step = self._components['holidays'].values[target_positions]
+        level_shift_step = self._components['level_shifts'].values[target_positions]
 
         if isinstance(self._fusion_layer, nn.Module):
             with torch.no_grad():
-                fused = self._fusion_layer(
+                fused_norm = self._fusion_layer(
                     torch.tensor(
-                        trend_step[:, :, np.newaxis],
+                        trend_step_norm[:, :, np.newaxis],
                         dtype=torch.float32,
                         device=device,
                     ),
                     torch.tensor(
-                        seasonal_step.T[:, :, np.newaxis],
+                        (seasonal_step / scale)[:, :, np.newaxis],
                         dtype=torch.float32,
                         device=device,
                     ),
                     torch.tensor(
-                        holiday_step.T[:, :, np.newaxis],
+                        (holiday_step / scale)[:, :, np.newaxis],
                         dtype=torch.float32,
                         device=device,
                     ),
+                ) + torch.tensor(
+                    (level_shift_step / scale)[:, :, np.newaxis],
+                    dtype=torch.float32,
+                    device=device,
                 )
                 predicted_bottom = (
-                    fused.cpu().numpy()[:, :, 0] + level_shift_step.T
+                    fused_norm.cpu().numpy()[:, :, 0] * scale[np.newaxis, :]
+                    + window_anchors
                 )
         else:
             predicted_bottom = (
-                trend_step + seasonal_step.T + holiday_step.T + level_shift_step.T
+                trend_step + seasonal_step + holiday_step + level_shift_step
             )
 
         actual_bottom = self._df_original.values[target_positions]
@@ -1088,8 +1490,48 @@ class TVA:
         aggregate_residuals = aggregate_actual - aggregate_predicted
         return np.concatenate([aggregate_residuals, bottom_residuals], axis=1)
 
+    @staticmethod
+    def _compute_trend_scale(trend_data: np.ndarray) -> np.ndarray:
+        """Per-series robust scale of trend first differences (P1-1).
+
+        Robust std (MAD * 1.4826) of first differences, falling back to plain
+        std when the MAD is zero, floored at max(1e-6, 1e-4 * |median level|).
+        """
+        diffs = np.diff(trend_data, axis=0)
+        if diffs.shape[0] == 0:
+            diffs = np.zeros_like(trend_data)
+        med = np.nanmedian(diffs, axis=0)
+        mad = 1.4826 * np.nanmedian(np.abs(diffs - med), axis=0)
+        std = np.nanstd(diffs, axis=0)
+        scale = np.where(mad > 0, mad, std)
+        floor = np.maximum(1e-6, 1e-4 * np.abs(np.nanmedian(trend_data, axis=0)))
+        scale = np.maximum(np.nan_to_num(scale, nan=0.0), floor)
+        return scale.astype(np.float32)
+
+    def _get_trend_scale(self) -> np.ndarray:
+        if self._trend_scale is None:
+            n = self._components['trend'].shape[1]
+            return np.ones(n, dtype=np.float32)
+        return self._trend_scale
+
+    def _normalized_last_window(self, window: np.ndarray) -> tuple:
+        """Normalize a (T_window, N) trend window to network input space.
+
+        Returns:
+            x: (1, N, T_window) float32 array of (window - window[-1]) / scale.
+            anchor: (N,) last raw trend value per series.
+        """
+        scale = self._get_trend_scale()
+        anchor = window[-1]
+        x = ((window - anchor) / scale).T[np.newaxis, :, :].astype(np.float32)
+        return x, anchor
+
     def _create_windows(self, data: np.ndarray) -> tuple:
         """Create sliding windows and targets from (T, N) trend data.
+
+        Windows and targets are window-local deltas: the per-window last value
+        is subtracted (so the network is anchored at the last observed trend
+        value) and each series is divided by its robust difference scale (P1-1).
 
         Returns:
             windows: (n_windows, N, window_size) — transposed for network input.
@@ -1102,17 +1544,23 @@ class TVA:
         if n_windows == 0:
             return np.array([]), np.array([])
 
+        scale = self._get_trend_scale()
         windows = np.zeros((n_windows, N, self.window_size), dtype=np.float32)
         targets = np.zeros((n_windows, N, self.forecast_horizon), dtype=np.float32)
 
         for i in range(n_windows):
-            windows[i] = data[i : i + self.window_size].T
-            targets[i] = data[i + self.window_size : i + total_len].T
+            anchor = data[i + self.window_size - 1]  # (N,)
+            windows[i] = ((data[i : i + self.window_size] - anchor) / scale).T
+            targets[i] = ((data[i + self.window_size : i + total_len] - anchor) / scale).T
 
         return windows, targets
 
     def _create_target_windows(self, data: np.ndarray) -> np.ndarray:
         """Create target-only windows (aligned with _create_windows targets).
+
+        Scaled per series but NOT centered — these components are already
+        zero-mean; centering them would break OrthogonalityPenalty and the
+        fusion MSE (P1-1).
 
         Returns:
             (n_windows, N, forecast_horizon)
@@ -1124,11 +1572,45 @@ class TVA:
         if n_windows == 0:
             return np.array([])
 
+        scale = self._get_trend_scale()
         targets = np.zeros((n_windows, N, self.forecast_horizon), dtype=np.float32)
         for i in range(n_windows):
-            targets[i] = data[i + self.window_size : i + total_len].T
+            targets[i] = (data[i + self.window_size : i + total_len] / scale).T
 
         return targets
+
+    def _calibrate_sigma(self, X_val, Y_val, meta_t, anchor_mask_t, n_val: int):
+        """Per-series sigma calibration from the validation holdout (P3-2).
+
+        r_j = std(validation residual_j) / mean(sigma_pred_j), computed in the
+        normalized space (the scale cancels), clipped to a sane range. Applied
+        multiplicatively to the predicted sigma at predict time.
+        """
+        self._sigma_calibration = None
+        if n_val <= 1:
+            return
+        residuals = []
+        sigmas = []
+        with torch.no_grad():
+            for start in range(0, n_val, self.batch_size):
+                x_v = X_val[start : start + self.batch_size]
+                y_v = Y_val[start : start + self.batch_size]
+                meta_v = None
+                if meta_t is not None:
+                    meta_v = meta_t.expand(x_v.shape[0], -1, -1)
+                out = self._network(x_v, meta_v, anchor_mask_t)
+                sigma_v = out.get('sigma')
+                if sigma_v is None:
+                    return
+                residuals.append(
+                    (out['trend_forecast'] - y_v).cpu().numpy()
+                )
+                sigmas.append(sigma_v.cpu().numpy())
+        resid = np.concatenate(residuals, axis=0)  # (B, N, H)
+        sig = np.concatenate(sigmas, axis=0)
+        ratio = resid.std(axis=(0, 2)) / np.clip(sig.mean(axis=(0, 2)), 1e-8, None)
+        ratio = np.nan_to_num(ratio, nan=1.0, posinf=4.0, neginf=1.0)
+        self._sigma_calibration = np.clip(ratio, 0.25, 4.0).astype(np.float32)
 
     def _compute_window_sample_weights(
         self, index: Optional[pd.Index]

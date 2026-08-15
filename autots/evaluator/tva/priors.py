@@ -6,19 +6,10 @@ Acts as the 'world tree' for the forecasting graph, connecting
 related time series across different domains through shared metadata.
 """
 
-import warnings
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import Dict, Optional
-
-try:
-    from statsmodels.tsa.stattools import grangercausalitytests
-
-    HAS_STATSMODELS = True
-except Exception:
-    grangercausalitytests = None
-    HAS_STATSMODELS = False
 
 
 @dataclass(init=False)
@@ -155,18 +146,6 @@ class YggdrasilPriors:
                 },
             )
         )
-        return resolved
-
-    def _resolve_causal_config(self) -> dict:
-        config = self.causal_prior_construction_config
-        if not config:
-            return {}
-        resolved = dict(config)
-        resolved['max_lag'] = int(resolved.get('max_lag', 3))
-        resolved['min_history'] = int(resolved.get('min_history', 90))
-        resolved['top_k'] = int(resolved.get('top_k', 8))
-        resolved['alpha'] = float(resolved.get('alpha', 0.05))
-        resolved['difference'] = bool(resolved.get('difference', True))
         return resolved
 
     @staticmethod
@@ -402,19 +381,49 @@ class YggdrasilPriors:
 
     @staticmethod
     def _cluster_records_by_time(records: list, max_distance_days: int) -> list:
+        """Cluster event records by timestamp with a bounded cluster diameter.
+
+        Complete-linkage agglomerative clustering with a distance cap: no two
+        events in a cluster are more than max_distance_days apart. This
+        replaces single-linkage gap chaining, where a busy panel chains into
+        one giant cluster and yields an all-ones prior (D-7b).
+        """
         if not records:
             return []
-        sorted_records = sorted(records, key=lambda x: x['timestamp'])
-        clusters = [[sorted_records[0]]]
-        max_gap = pd.Timedelta(days=max_distance_days)
+        if len(records) == 1:
+            return [list(records)]
+        day_values = np.array(
+            [record['timestamp'].value for record in records], dtype=float
+        ) / (86400.0 * 1e9)
+        labels = None
+        try:
+            from sklearn.cluster import AgglomerativeClustering
 
-        for record in sorted_records[1:]:
-            previous = clusters[-1][-1]
-            if record['timestamp'] - previous['timestamp'] <= max_gap:
-                clusters[-1].append(record)
-            else:
-                clusters.append([record])
-        return clusters
+            clustering = AgglomerativeClustering(
+                n_clusters=None,
+                distance_threshold=float(max_distance_days) + 1e-9,
+                linkage='complete',
+            )
+            labels = clustering.fit_predict(day_values.reshape(-1, 1))
+        except Exception:
+            pass
+        if labels is None:
+            # fallback: sorted gap chaining (legacy behavior)
+            order = np.argsort(day_values)
+            labels = np.zeros(len(records), dtype=int)
+            current = 0
+            for prev, nxt in zip(order[:-1], order[1:]):
+                if day_values[nxt] - day_values[prev] > max_distance_days:
+                    current += 1
+                labels[nxt] = current
+
+        clusters = {}
+        for record, label in zip(records, labels):
+            clusters.setdefault(int(label), []).append(record)
+        return [
+            sorted(cluster, key=lambda x: x['timestamp'])
+            for _, cluster in sorted(clusters.items())
+        ]
 
     def _build_event_prior_adjacency(self, config: dict) -> Optional[np.ndarray]:
         n = self.n_series
@@ -452,6 +461,15 @@ class YggdrasilPriors:
                         per_series[event['series_name']] = event
                 if len(per_series) < min_series_per_cluster:
                     continue
+                # D-7c: drop market-wide clusters — a shock that hits (nearly)
+                # every series belongs to the shared factor, not to pairwise
+                # edges. Keeping it would re-inject the common-driver
+                # confounder the factor layer just removed.
+                market_wide_fraction = float(
+                    config.get('market_wide_fraction', 0.8)
+                )
+                if n >= 4 and len(per_series) >= market_wide_fraction * n:
+                    continue
 
                 cluster_events = list(per_series.values())
                 cluster_center = pd.Timestamp(
@@ -472,13 +490,22 @@ class YggdrasilPriors:
                 )
                 weight = family_weight * tightness * cluster_strength
 
+                # D-7a: DIRECT edges — earlier event -> later event. Ties emit
+                # both directions at half weight. No blanket symmetrization.
                 series_names = sorted(per_series.keys())
                 for i, left_name in enumerate(series_names):
                     left_idx = series_index[left_name]
+                    left_time = per_series[left_name]['timestamp']
                     for right_name in series_names[i + 1 :]:
                         right_idx = series_index[right_name]
-                        adjacency[left_idx, right_idx] += weight
-                        adjacency[right_idx, left_idx] += weight
+                        right_time = per_series[right_name]['timestamp']
+                        if left_time < right_time:
+                            adjacency[left_idx, right_idx] += weight
+                        elif right_time < left_time:
+                            adjacency[right_idx, left_idx] += weight
+                        else:
+                            adjacency[left_idx, right_idx] += weight / 2.0
+                            adjacency[right_idx, left_idx] += weight / 2.0
 
         return self._normalize_off_diagonal(adjacency)
 
@@ -531,110 +558,6 @@ class YggdrasilPriors:
                 source_matrices[source_name] = self._build_event_prior_adjacency(config)
 
         return self._blend_structural_sources(source_matrices, config)
-
-    def build_causal_prior_adjacency(self) -> Optional[np.ndarray]:
-        """Construct a directed causal prior from decomposed trend components."""
-        config = self._resolve_causal_config()
-        if not config:
-            return None
-        if not HAS_STATSMODELS or self.trend_data is None or self.n_series < 2:
-            return None
-
-        trend_data = self.trend_data.copy()
-        min_history = int(config['min_history'])
-        alpha = float(config['alpha'])
-        max_lag = max(int(config['max_lag']), 1)
-        top_k = max(int(config['top_k']), 1)
-
-        valid_columns = []
-        for column in trend_data.columns:
-            history = int(
-                self.observed_history.get(column, trend_data[column].notna().sum())
-            )
-            if history >= min_history:
-                valid_columns.append(column)
-        if len(valid_columns) < 2:
-            return None
-
-        working = trend_data[valid_columns].astype(float)
-        if bool(config.get('difference', True)):
-            working = working.diff()
-        working = working.replace([np.inf, -np.inf], np.nan)
-        if len(working.dropna(how='all')) <= max_lag + 2:
-            return None
-
-        diff_corr = working.corr().abs().fillna(0.0)
-        adjacency = np.zeros((self.n_series, self.n_series), dtype=np.float32)
-        series_index = self._series_index()
-        found_signal = False
-
-        for target in valid_columns:
-            candidate_scores = (
-                diff_corr[target]
-                .drop(labels=[target], errors='ignore')
-                .sort_values(ascending=False)
-            )
-            if top_k:
-                candidate_scores = candidate_scores.head(top_k)
-
-            for source, corr_strength in candidate_scores.items():
-                if float(corr_strength) <= 0:
-                    continue
-                pair = working[[target, source]].dropna()
-                if len(pair) <= max_lag + 2:
-                    continue
-                try:
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings(
-                            'ignore',
-                            message='verbose is deprecated',
-                            category=FutureWarning,
-                        )
-                        results = grangercausalitytests(
-                            pair,
-                            maxlag=max_lag,
-                            verbose=False,
-                        )
-                except Exception:
-                    continue
-
-                best_pvalue = None
-                best_lag = None
-                for lag, result in results.items():
-                    try:
-                        pvalue = float(result[0]['ssr_ftest'][1])
-                    except Exception:
-                        continue
-                    if best_pvalue is None or pvalue < best_pvalue:
-                        best_pvalue = pvalue
-                        best_lag = int(lag)
-
-                if best_pvalue is None or best_pvalue >= alpha:
-                    continue
-
-                lag_factor = 1.0 / max(best_lag, 1)
-                significance = 1.0 - min(best_pvalue / alpha, 1.0)
-                weight = float(
-                    np.clip(corr_strength * significance * lag_factor, 0.0, 1.0)
-                )
-                if weight <= 0:
-                    continue
-
-                adjacency[series_index[source], series_index[target]] = max(
-                    adjacency[series_index[source], series_index[target]],
-                    weight,
-                )
-                found_signal = True
-
-        if not found_signal:
-            return None
-
-        max_off_diag = float(np.nanmax(adjacency)) if adjacency.size else 0.0
-        if max_off_diag > 0:
-            adjacency = adjacency / max_off_diag
-        adjacency = np.clip(adjacency, 0.0, 1.0)
-        np.fill_diagonal(adjacency, 0.0)
-        return adjacency.astype(np.float32)
 
     def build_prior_adjacency(self) -> Optional[np.ndarray]:
         """Backward-compatible alias for structural prior construction."""

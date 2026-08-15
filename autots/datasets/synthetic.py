@@ -4449,3 +4449,92 @@ def augment_with_synthetic_bounds(
         aug_Y = np.concatenate([synthetic_Y, Y_array], axis=0)
 
     return aug_X, aug_Y
+
+
+def make_svar_panel(
+    n_series: int = 12,
+    n_obs: int = 500,
+    n_factors: int = 1,
+    edge_density: float = 0.15,
+    max_lag: int = 3,
+    shock_rate: float = 0.02,
+    seed: int = 42,
+):
+    """Structural-VAR panel with a shared factor, known edges, lags, loadings.
+
+    Ground-truth generator for TVA structure discovery tests: a small set of
+    latent random-walk factors drives every series (the confounder), while a
+    sparse set of directed, lagged edges connects the idiosyncratic residual
+    processes. Per-series scale multipliers span three orders of magnitude so
+    scale-domination regressions get caught.
+
+    Args:
+        n_series: Number of series.
+        n_obs: Number of daily observations.
+        n_factors: Number of shared latent factors (0 = no confounder).
+        edge_density: Probability of a directed edge j -> i (i != j). Edges
+            are sampled in a fixed topological order (j < i) so the system
+            is stable and directions are unambiguous.
+        max_lag: Maximum edge lag; each edge gets a lag in 1..max_lag.
+        shock_rate: Probability per step of a large innovation burst.
+        seed: Reproducibility seed.
+
+    Returns:
+        (df, true_adjacency, true_lags, true_loadings) where df is a wide
+        daily DataFrame, true_adjacency is (N, N) with signed coefficients
+        at [source, target], true_lags is (N, N) int (0 = no edge), and
+        true_loadings is (N, n_factors).
+    """
+    rng = np.random.default_rng(seed)
+    index = pd.date_range("2020-01-01", periods=n_obs, freq="D")
+    t = np.arange(n_obs)
+
+    # shared latent factors: smoothed random walks with drift
+    loadings = np.zeros((n_series, max(n_factors, 1)))
+    factor_paths = np.zeros((n_obs, max(n_factors, 1)))
+    if n_factors > 0:
+        for j in range(n_factors):
+            drift = rng.normal(0.0, 0.005)
+            walk = np.cumsum(rng.normal(0.0, 0.08, n_obs)) + drift * t
+            factor_paths[:, j] = (
+                pd.Series(walk).rolling(10, min_periods=1, center=True).mean().values
+            )
+        for i in range(n_series):
+            j = i % n_factors
+            loadings[i, j] = rng.uniform(0.6, 1.3) * rng.choice([1.0, -1.0], p=[0.8, 0.2])
+
+    # sparse directed lagged edges over the residual processes (j < i: acyclic
+    # contemporaneous ordering keeps the lagged system stable)
+    true_adjacency = np.zeros((n_series, n_series))
+    true_lags = np.zeros((n_series, n_series), dtype=int)
+    for i in range(n_series):
+        for j in range(i):
+            if rng.random() < edge_density:
+                coef = rng.uniform(0.45, 0.8) * rng.choice([1.0, -1.0], p=[0.7, 0.3])
+                lag = int(rng.integers(1, max_lag + 1))
+                true_adjacency[j, i] = coef
+                true_lags[j, i] = lag
+
+    # simulate residual processes
+    ar = 0.3
+    resid = np.zeros((n_obs, n_series))
+    shocks = rng.normal(0.0, 1.0, (n_obs, n_series))
+    burst_mask = rng.random((n_obs, n_series)) < shock_rate
+    shocks = shocks + burst_mask * rng.normal(0.0, 5.0, (n_obs, n_series))
+    for step in range(1, n_obs):
+        resid[step] = ar * resid[step - 1] + shocks[step]
+        for i in range(n_series):
+            for j in range(n_series):
+                lag = true_lags[j, i]
+                if lag and step - lag >= 0:
+                    resid[step, i] += true_adjacency[j, i] * resid[step - lag, j]
+
+    # per-series scales spanning 3 orders of magnitude
+    scales = 10.0 ** rng.uniform(0.0, 3.0, n_series)
+    base = rng.uniform(20.0, 50.0, n_series)
+    values = (base + factor_paths @ loadings.T * 3.0 + resid) * scales
+
+    df = pd.DataFrame(
+        values, index=index, columns=[f"svar_{i}" for i in range(n_series)]
+    )
+    return df, true_adjacency, true_lags, loadings

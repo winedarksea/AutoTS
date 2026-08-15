@@ -11,7 +11,6 @@ and reconstructs per-series trend forecasts that are structurally consistent
 with those shared states.
 """
 
-import math
 import warnings
 import numpy as np
 
@@ -26,84 +25,56 @@ except Exception:
 
 if HAS_TORCH:
     from autots.evaluator.tva.structure import (
-        DirectedGraphLearner,
         DynamicHierarchyLearner,
+        SeriesGraphLearner,
         StructureLearningConfig,
     )
 
-    def _resize_graph_prior_to_square_numpy(
+    def _validate_square_prior(
         graph_prior: np.ndarray,
-        target_size: int,
+        expected_size: int,
         prior_name: str,
     ) -> np.ndarray:
-        """Resize an optional square prior matrix into latent graph size."""
+        """Validate a square prior matrix; a size mismatch is now a BUG.
+
+        Priors are series-level (N, N) throughout — the old bilinear
+        image-interpolation into latent space is deleted (row i of a resized
+        matrix corresponded to nothing). Mismatched priors are dropped with a
+        warning rather than silently distorted.
+        """
         if graph_prior is None:
             return None
         graph_prior = np.asarray(graph_prior, dtype=np.float32)
-        if graph_prior.ndim != 2 or graph_prior.shape[0] != graph_prior.shape[1]:
+        if graph_prior.shape != (expected_size, expected_size):
             warnings.warn(
-                f"{prior_name} shape {graph_prior.shape} is not square. "
-                f"Using a zero prior of shape ({target_size}, {target_size}) instead.",
+                f"{prior_name} shape {graph_prior.shape} does not match the "
+                f"expected series-level shape ({expected_size}, {expected_size}); "
+                "the prior will be ignored. Provide an (N, N) matrix over the "
+                "input columns.",
                 UserWarning,
                 stacklevel=2,
             )
-            return np.zeros((target_size, target_size), dtype=np.float32)
-        if graph_prior.shape != (target_size, target_size):
-            warnings.warn(
-                f"{prior_name} shape {graph_prior.shape} does not match "
-                f"target_size={target_size}. The prior will be bilinearly interpolated "
-                f"to ({target_size}, {target_size}).",
-                UserWarning,
-                stacklevel=2,
-            )
-            try:
-                graph_prior = (
-                    F.interpolate(
-                        torch.tensor(graph_prior, dtype=torch.float32)
-                        .unsqueeze(0)
-                        .unsqueeze(0),
-                        size=(target_size, target_size),
-                        mode='bilinear',
-                        align_corners=False,
-                    )
-                    .squeeze(0)
-                    .squeeze(0)
-                    .numpy()
-                )
-            except Exception:
-                graph_prior = np.zeros((target_size, target_size), dtype=np.float32)
-        return graph_prior.astype(np.float32)
-
-    class PositionalEncoding(nn.Module):
-        """Sinusoidal positional encoding for temporal sequences."""
-
-        def __init__(self, d_model: int, max_len: int = 2000):
-            super().__init__()
-            pe = torch.zeros(max_len, d_model)
-            position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-            div_term = torch.exp(
-                torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-            )
-            pe[:, 0::2] = torch.sin(position * div_term)
-            pe[:, 1::2] = torch.cos(position * div_term[: d_model // 2 + d_model % 2])
-            self.register_buffer('pe', pe.unsqueeze(0))  # (1, max_len, D)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x + self.pe[:, : x.size(1)]
+            return None
+        return graph_prior
 
     class TrendTokenizer(nn.Module):
         """Converts each series' trend window into a channel token.
 
-        1D convolution over the time dimension per channel, followed by
-        positional encoding and optional metadata concatenation.
+        1D convolution over the time dimension per channel, average-pooled into
+        a small number of temporal patches (preserving slope/curvature/recency
+        information that a global pool would destroy), flattened and projected,
+        with optional metadata concatenation.
 
         Args:
             window_size: Length of input trend window.
             d_token: Output token dimension.
             d_meta: Dimension of metadata embeddings to concatenate (0 = none).
+            n_patches: Number of temporal patches retained by pooling.
         """
 
-        def __init__(self, window_size: int, d_token: int, d_meta: int = 0):
+        def __init__(
+            self, window_size: int, d_token: int, d_meta: int = 0, n_patches: int = 8
+        ):
             super().__init__()
             self.d_token = d_token
             self.d_meta = d_meta
@@ -113,7 +84,9 @@ if HAS_TORCH:
             self.conv = nn.Conv1d(
                 1, d_conv_out, kernel_size=min(7, window_size), padding=3
             )
-            self.pool = nn.AdaptiveAvgPool1d(1)
+            self.n_patches = max(1, min(int(n_patches), int(window_size)))
+            self.pool = nn.AdaptiveAvgPool1d(self.n_patches)
+            self.patch_proj = nn.Linear(d_conv_out * self.n_patches, d_conv_out)
             self.norm = nn.LayerNorm(d_token)
 
         def forward(
@@ -131,7 +104,8 @@ if HAS_TORCH:
             # process each series through 1D conv
             x = trends.reshape(B * N, 1, T)  # (B*N, 1, T)
             x = F.gelu(self.conv(x))  # (B*N, D_conv, T)
-            x = self.pool(x).squeeze(-1)  # (B*N, D_conv)
+            x = self.pool(x)  # (B*N, D_conv, P)
+            x = self.patch_proj(x.reshape(B * N, -1))  # (B*N, D_conv)
             x = x.reshape(B, N, -1)  # (B, N, D_conv)
 
             if metadata is not None and self.d_meta > 0:
@@ -348,8 +322,13 @@ if HAS_TORCH:
             )
             self.norm_series = nn.LayerNorm(d_token)
 
-            # project token to forecast horizon
+            # project token to forecast horizon. Zero-initialized (P1-3): the
+            # network output is a learned CORRECTION on top of the in-graph
+            # damped-trend baseline, so training starts from a competent
+            # forecast rather than a random level.
             self.forecast_head = nn.Linear(d_token, forecast_horizon)
+            nn.init.zeros_(self.forecast_head.weight)
+            nn.init.zeros_(self.forecast_head.bias)
 
         def forward(
             self,
@@ -417,7 +396,10 @@ if HAS_TORCH:
             super().__init__()
             self.cross_attn = nn.MultiheadAttention(d_token, n_heads, batch_first=True)
             self.norm = nn.LayerNorm(d_token)
+            # zero-init: responder output is a correction on the damped baseline
             self.forecast_head = nn.Linear(d_token, forecast_horizon)
+            nn.init.zeros_(self.forecast_head.weight)
+            nn.init.zeros_(self.forecast_head.bias)
 
         def forward(
             self, anchor_tokens: torch.Tensor, responder_tokens: torch.Tensor
@@ -495,8 +477,38 @@ if HAS_TORCH:
                 d_token, forecast_horizon, max(n_heads // 2, 1)
             )
 
+            # damped local-trend baseline (P1-3): sigmoid(2.1972) ≈ 0.9 at init
+            self._trend_damping_logit = nn.Parameter(torch.tensor(2.1972246))
+
             # build fixed attention mask from prior adjacency
             self._register_attention_mask(prior_adjacency)
+
+        def _damped_trend_baseline(self, trend_input: torch.Tensor) -> torch.Tensor:
+            """In-graph damped-trend forecast from the normalized input window.
+
+            OLS slope over the last min(W, 4H) steps of each series, projected
+            forward as slope * sum_{k<=h} phi^k with a learnable damping phi.
+            Because windows are anchored at their last value (zero at t = W-1),
+            this is a pure delta continuation from the anchor.
+
+            Args:
+                trend_input: (B, N, T_window) normalized trend windows.
+
+            Returns:
+                (B, N, forecast_horizon) baseline forecast deltas.
+            """
+            T = trend_input.shape[-1]
+            H = self.forecast_horizon
+            L = max(min(T, 4 * H), 2)
+            x = trend_input[..., -L:]
+            t_idx = torch.arange(L, device=x.device, dtype=x.dtype)
+            t_centered = t_idx - t_idx.mean()
+            denom = (t_centered**2).sum().clamp(min=1e-8)
+            slope = (x * t_centered).sum(dim=-1) / denom  # (B, N)
+            phi = torch.sigmoid(self._trend_damping_logit)
+            steps = torch.arange(1, H + 1, device=x.device, dtype=x.dtype)
+            damp = torch.cumsum(phi**steps, dim=0)  # (H,)
+            return slope.unsqueeze(-1) * damp
 
         def _register_attention_mask(self, prior_adjacency: np.ndarray = None):
             """Convert prior adjacency to attention mask for sparse attention.
@@ -504,11 +516,13 @@ if HAS_TORCH:
             In V1 this is a fixed buffer. In V2 it becomes a parameter.
             """
             if prior_adjacency is not None:
-                prior_adjacency = _resize_graph_prior_to_square_numpy(
-                    prior_adjacency,
-                    target_size=self.n_global,
-                    prior_name='V1 prior_adjacency',
-                )
+                prior_adjacency = np.asarray(prior_adjacency, dtype=np.float32)
+                if prior_adjacency.shape != (self.n_global, self.n_global):
+                    # V1's latent mask needs an (n_global, n_global) prior;
+                    # anything else falls back to full attention
+                    prior_adjacency = np.ones(
+                        (self.n_global, self.n_global), dtype=np.float32
+                    )
                 # threshold to binary and convert to attention mask format
                 # 0 = attend, -inf = block
                 binary = (prior_adjacency > 0.1).astype(np.float32)
@@ -549,7 +563,6 @@ if HAS_TORCH:
                 anchor_tokens = tokens[:, anchor_mask]
             else:
                 anchor_tokens = tokens
-                anchor_mask_bool = None
 
             # encode
             meso, glob, skip = self.encoder(anchor_tokens)
@@ -592,19 +605,14 @@ if HAS_TORCH:
             else:
                 trend_forecast = anchor_forecasts
 
+            # network output is a correction over the damped-trend baseline (P1-3)
+            trend_forecast = trend_forecast + self._damped_trend_baseline(trend_input)
+
             # compute per-series prototype weights by projecting tokens through prototype
             proto_logits = self.prototype.compute_logits(tokens)  # (B, N, K)
             prototype_weights = F.softmax(proto_logits, dim=-1)
 
             # composite-only reconstruction per series (for local trend penalty)
-            # each series' "composite" trend = weighted sum of global composite trends
-            # prototype_weights: (B, N, K), we need to map K prototypes to n_global composite trends
-            # simplified: use prototype weights as the mapping
-            # composite_trend: (B, n_global, T_forecast)
-            # map via global usage weights averaged
-            with torch.no_grad():
-                avg_global_usage = usage_weights_global.mean(dim=1)  # (B, K)
-            # composite_trend_per_series approximation
             composite_per_series = torch.matmul(
                 prototype_weights, self.prototype._sacred_timeline_prototypes
             )  # (B, N, D)
@@ -634,7 +642,13 @@ if HAS_TORCH:
             All other args passed to V1.
         """
 
-        def __init__(self, *args, causal_prior: np.ndarray = None, **kwargs):
+        def __init__(
+            self,
+            *args,
+            causal_prior: np.ndarray = None,
+            discovery: dict = None,
+            **kwargs,
+        ):
             prior_adj = kwargs.get('prior_adjacency', None)
             n_anchor_series = int(
                 kwargs.pop('n_anchor_series', kwargs.get('n_series', 1))
@@ -645,8 +659,8 @@ if HAS_TORCH:
                 structure_learning_config
             )
             self.n_anchor_series = max(int(n_anchor_series), 1)
+            discovery = dict(discovery or {})
 
-            top_latent_size = self.n_global
             self.dynamic_hierarchy = None
             self.structure_level_sizes = []
             if self.structure_config.enabled and self.structure_config.learn_hierarchy:
@@ -654,39 +668,81 @@ if HAS_TORCH:
                     n_anchor=self.n_anchor_series,
                     d_token=self.tokenizer.d_token,
                     config=self.structure_config,
+                    initial_communities=discovery.get('anchor_communities'),
                 )
                 self.structure_level_sizes = list(self.dynamic_hierarchy.level_sizes)
-                top_latent_size = int(self.structure_level_sizes[-1])
+                # the U-Cast encoder is entirely unused on the hierarchy path;
+                # keeping it would just carry dead parameters
+                self.encoder = None
 
-            resized_prior_adj = None
-            if prior_adj is not None:
-                resized_prior_adj = _resize_graph_prior_to_square_numpy(
-                    prior_adj,
-                    target_size=top_latent_size,
-                    prior_name='V2 prior_adjacency',
-                )
-            self.graph_learner = DirectedGraphLearner(
-                n_nodes=top_latent_size,
-                prior_adjacency=resized_prior_adj,
+            # W-1: series-level graph anchored at the discovered edge set
+            edges = list(discovery.get('edges') or [])
+            self.graph_learner = SeriesGraphLearner(
+                n_series=self.n_series,
+                edges=edges,
+                families=discovery.get('families'),
+            )
+
+            # priors stay at SERIES level; a shape mismatch is a bug, not
+            # something to paper over with interpolation
+            prior_adj = _validate_square_prior(
+                prior_adj, self.n_series, 'V2 prior_adjacency'
             )
             self.register_buffer(
                 '_structure_prior',
                 (
                     None
-                    if resized_prior_adj is None
-                    else torch.tensor(resized_prior_adj, dtype=torch.float32)
+                    if prior_adj is None
+                    else torch.tensor(prior_adj, dtype=torch.float32)
+                ),
+            )
+            causal_prior = _validate_square_prior(
+                causal_prior, self.n_series, 'V2 causal_prior'
+            )
+            self.register_buffer(
+                '_causal_prior',
+                (
+                    None
+                    if causal_prior is None
+                    else torch.tensor(causal_prior, dtype=torch.float32)
                 ),
             )
 
-            # causal prior regularizes learned edges as a soft target.
-            causal_prior_tensor = None
-            if causal_prior is not None:
-                causal_prior_tensor = self._resize_graph_prior_to_latent_space(
-                    causal_prior,
-                    n_latent=top_latent_size,
-                    prior_name='causal_prior',
-                )
-            self.register_buffer('_causal_prior', causal_prior_tensor)
+            # W-2: factors as explicit drivers. Loadings are a buffer with a
+            # learnable residual; the factor track is read out of the input
+            # window via the loading pseudo-inverse and forecast in-graph with
+            # the shared damped-trend machinery.
+            loadings = discovery.get('loadings')
+            if loadings is not None and np.asarray(loadings).size:
+                loadings = np.asarray(loadings, dtype=np.float32)
+                if loadings.ndim != 2 or loadings.shape[0] != self.n_series:
+                    loadings = None
+            else:
+                loadings = None
+            if loadings is None:
+                loadings = np.zeros((self.n_series, 1), dtype=np.float32)
+            self.register_buffer(
+                'factor_loadings', torch.tensor(loadings, dtype=torch.float32)
+            )
+            self.register_buffer(
+                'factor_loadings_pinv',
+                torch.tensor(np.linalg.pinv(loadings), dtype=torch.float32),
+            )
+            self.loading_delta = nn.Parameter(torch.zeros_like(self.factor_loadings))
+            # gate opens from zero so the factor channel never double-counts
+            # the per-series damped baseline at initialization
+            self.factor_gate = nn.Parameter(torch.tensor(0.0))
+
+            # W-3: graph is multiplicative on the input path of every series.
+            # Zero-init mixers keep the start clean while gradients flow.
+            self.graph_mix = nn.Linear(self.tokenizer.d_token, self.tokenizer.d_token)
+            nn.init.zeros_(self.graph_mix.weight)
+            nn.init.zeros_(self.graph_mix.bias)
+            self.graph_gamma = nn.Parameter(torch.tensor(0.5))
+            self.lift_mix = nn.Linear(self.tokenizer.d_token, self.tokenizer.d_token)
+            nn.init.zeros_(self.lift_mix.weight)
+            nn.init.zeros_(self.lift_mix.bias)
+            self.lift_gamma = nn.Parameter(torch.tensor(0.5))
 
             # adaptive prototypes: regime gating
             self._regime_gate = nn.Sequential(
@@ -700,28 +756,86 @@ if HAS_TORCH:
 
         @property
         def learned_adjacency(self) -> torch.Tensor:
-            """Learned adjacency as a sigmoid-normalized matrix."""
+            """(N, N) series-level adjacency (discovered topology, learned deltas)."""
             return self.graph_learner.adjacency
 
-        @staticmethod
-        def _resize_graph_prior_to_latent_space(
-            graph_prior: np.ndarray, n_latent: int, prior_name: str
-        ) -> torch.Tensor:
-            """Map optional graph priors into the latent adjacency size."""
-            graph_prior = _resize_graph_prior_to_square_numpy(
-                graph_prior,
-                target_size=n_latent,
-                prior_name=f'V2 {prior_name}',
-            )
-            return torch.tensor(graph_prior, dtype=torch.float32)
-
         def _register_attention_mask(self, prior_adjacency=None):
-            """Override: in V2 the mask is derived from learned adjacency at forward time."""
-            # register a dummy buffer; actual mask computed in forward
+            """Override: V2's latent mask is DERIVED from the series graph at
+            forward time (W-4), never a free parameter."""
             self.register_buffer(
                 '_attn_mask',
                 torch.zeros(self.n_global, self.n_global, dtype=torch.float32),
             )
+
+        def _factor_driver_term(self, trend_input: torch.Tensor) -> torch.Tensor:
+            """loadings_i · damped-forecast(factor track) per series (W-2)."""
+            # factor track inside the normalized window: (B, r, W)
+            f_track = torch.einsum(
+                'rn,bnw->brw', self.factor_loadings_pinv, trend_input
+            )
+            f_fc = self._damped_trend_baseline(f_track)  # (B, r, H)
+            loadings = self.factor_loadings + self.loading_delta
+            return torch.einsum('nr,brh->bnh', loadings, f_fc)
+
+        def _lift_input(self, trend_input: torch.Tensor) -> torch.Tensor:
+            """Lag-shifted leading-indicator windows aggregated per target (W-3).
+
+            For every discovered edge with lag > 0, the source's window is
+            shifted right by the estimated lag (so the information that led by
+            `lag` steps aligns with the target's present) and added, weighted
+            by the learned edge weight, into the target's LIFT channel.
+            """
+            learner = self.graph_learner
+            if learner.n_edges == 0:
+                return None
+            lag_mask = learner.edge_lag > 0
+            if not bool(lag_mask.any()):
+                return None
+            weights = learner.edge_weights() * learner.edge_sign
+            x_lift = torch.zeros_like(trend_input)
+            for lag in torch.unique(learner.edge_lag[lag_mask]).tolist():
+                lag = int(lag)
+                if lag >= trend_input.shape[-1]:
+                    continue
+                edge_sel = lag_mask & (learner.edge_lag == lag)
+                src = learner.edge_src[edge_sel]
+                dst = learner.edge_dst[edge_sel]
+                w = weights[edge_sel]
+                shifted = torch.cat(
+                    [
+                        trend_input[..., :1].expand(-1, -1, lag),
+                        trend_input[..., :-lag],
+                    ],
+                    dim=-1,
+                )
+                contribution = shifted[:, src] * w.view(1, -1, 1)
+                x_lift = x_lift.index_add(1, dst, contribution)
+            return x_lift
+
+        def _derived_latent_mask(
+            self, anchor_mask: torch.Tensor, assignments: list, latent_size: int
+        ) -> torch.Tensor:
+            """A_latent = normalize(Pᵀ A_series P) as an additive log-bias (W-4).
+
+            No free parameters; inherits series semantics; gradients flow to
+            the edge deltas through log instead of a saturated softmax bias.
+            """
+            adjacency = self.graph_learner.adjacency
+            if anchor_mask is not None:
+                anchor_adj = adjacency[anchor_mask][:, anchor_mask]
+            else:
+                anchor_adj = adjacency
+            P = None
+            for assignment in assignments:
+                P = assignment if P is None else P @ assignment
+            if P is None or P.shape[0] != anchor_adj.shape[0]:
+                return torch.zeros(
+                    latent_size, latent_size, device=adjacency.device
+                )
+            latent_adj = P.transpose(0, 1) @ anchor_adj @ P
+            row_sum = latent_adj.sum(dim=-1, keepdim=True).clamp(min=1e-6)
+            latent_adj = latent_adj / row_sum
+            return torch.log(latent_adj.clamp(min=1e-4))
 
         def forward(self, trend_input, metadata=None, anchor_mask=None) -> dict:
             """Same interface as V1, plus structure outputs when enabled."""
@@ -729,6 +843,19 @@ if HAS_TORCH:
 
             # tokenize
             tokens = self.tokenizer(trend_input, metadata)
+
+            # W-3: the series graph is multiplicative on the input path —
+            # graph-neighbor token mixing plus lag-shifted leading indicators
+            # through the same tokenizer. O(1) edge-specific gradients.
+            adjacency = self.graph_learner.adjacency
+            if self.graph_learner.n_edges:
+                row_sum = adjacency.sum(dim=-1, keepdim=True).clamp(min=1e-6)
+                nbr = torch.einsum('ij,bjd->bid', adjacency / row_sum, tokens)
+                tokens = tokens + self.graph_gamma * self.graph_mix(nbr)
+                x_lift = self._lift_input(trend_input)
+                if x_lift is not None:
+                    lift_tokens = self.tokenizer(x_lift, metadata)
+                    tokens = tokens + self.lift_gamma * self.lift_mix(lift_tokens)
 
             if anchor_mask is not None:
                 anchor_tokens = tokens[:, anchor_mask]
@@ -750,7 +877,11 @@ if HAS_TORCH:
                 )
                 latent_levels = hierarchy_outputs['levels']
                 glob = hierarchy_outputs['top_latent']
-                glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
+                # W-4: latent mask derived from the series graph, not free
+                latent_mask = self._derived_latent_mask(
+                    anchor_mask, structure_assignments, glob.shape[1]
+                )
+                glob = self.sparse_attn(glob, latent_mask)
                 glob_conditioned, usage_weights_global = self.prototype(glob)
                 regime_weights = self._regime_gate(
                     glob_conditioned.mean(dim=1, keepdim=True)
@@ -769,7 +900,12 @@ if HAS_TORCH:
                 composite_trend = self.decoder.forecast_head(glob_conditioned)
             else:
                 meso, glob, skip = self.encoder(anchor_tokens)
-                glob = self.sparse_attn(glob, self.graph_learner.attention_mask())
+                glob = self.sparse_attn(
+                    glob,
+                    torch.zeros(
+                        glob.shape[1], glob.shape[1], device=glob.device
+                    ),
+                )
                 glob_conditioned, usage_weights_global = self.prototype(glob)
                 regime_weights = self._regime_gate(
                     glob_conditioned.mean(dim=1, keepdim=True)
@@ -797,6 +933,14 @@ if HAS_TORCH:
                 trend_forecast = anchor_forecasts
                 responder_mask = None
 
+            # network output is a correction over the damped-trend baseline (P1-3)
+            # plus the factor-driver channel (W-2, gate opens from zero)
+            trend_forecast = (
+                trend_forecast
+                + self._damped_trend_baseline(trend_input)
+                + self.factor_gate * self._factor_driver_term(trend_input)
+            )
+
             # prototype weights per series
             proto_logits = self.prototype.compute_logits(tokens)
             prototype_weights = F.softmax(proto_logits, dim=-1)
@@ -820,21 +964,13 @@ if HAS_TORCH:
                 'composite_trend_per_series': composite_per_series,
                 'global_prototype_weights': usage_weights_global,
                 'adjacency': self.learned_adjacency,
+                'signed_adjacency': self.graph_learner.signed_adjacency,
                 'structure_mode': bool(self.structure_config.enabled),
                 'assignment_matrices': structure_assignments,
                 'assignment_drift': assignment_drift,
                 'structure_prior': self._structure_prior,
                 'causal_prior': self._causal_prior,
             }
-
-        def promote_responder(self, series_idx: int):
-            """Promote a responder series to anchor status.
-
-            This is a metadata-level operation; the actual anchor_mask is
-            managed externally and passed to forward(). This method exists
-            as a hook for incremental graph updates.
-            """
-            pass  # anchor_mask management is external to the network
 
         def _glorious_purpose(self):
             """Hidden: every variant has a glorious purpose."""

@@ -214,12 +214,14 @@ class BifrostOptimizer:
         for param in network.parameters():
             param.requires_grad_(False)
 
-        # get baseline input
+        # get baseline input (normalized network space; see TVA P1-1)
         trend_data = self.tva._components['trend'].values
         last_window = trend_data[-self.tva.window_size :]
-        x = torch.tensor(
-            last_window.T[np.newaxis, :, :], dtype=torch.float32, device=device
-        )
+        x_np, anchor = self.tva._normalized_last_window(last_window)
+        scale = self.tva._get_trend_scale()
+        anchor_col = anchor[:, np.newaxis]
+        scale_col = scale[:, np.newaxis]
+        x = torch.tensor(x_np, dtype=torch.float32, device=device)
 
         meta = None
         if (
@@ -241,7 +243,8 @@ class BifrostOptimizer:
         optimizer = torch.optim.Adam([perturbation], lr=self.lr)
 
         # estimate variance per series for covariance-aware weighting
-        trend_var = np.var(trend_data, axis=0)  # (N,)
+        # (in the same normalized space the perturbation lives in)
+        trend_var = np.var(trend_data / scale, axis=0)  # (N,)
         trend_var = np.maximum(trend_var, 1e-8)
         # inverse variance as regularization weight (high variance = less penalty for perturbation)
         inv_var = 1.0 / trend_var
@@ -250,13 +253,20 @@ class BifrostOptimizer:
             inv_var[np.newaxis, :, np.newaxis], dtype=torch.float32, device=device
         )
 
+        scale_t = torch.tensor(
+            scale_col[np.newaxis], dtype=torch.float32, device=device
+        )
+        anchor_t = torch.tensor(
+            anchor_col[np.newaxis], dtype=torch.float32, device=device
+        )
+
         for step in range(self.n_steps):
             optimizer.zero_grad()
 
-            # forward with perturbation
+            # forward with perturbation; constraints operate on RAW trend units
             perturbed_input = x + perturbation
             outputs = network(perturbed_input, meta, anchor_mask_t)
-            forecast = outputs['trend_forecast']
+            forecast = outputs['trend_forecast'] * scale_t + anchor_t
 
             # constraint losses
             total_loss = torch.tensor(0.0, device=device)
@@ -274,15 +284,17 @@ class BifrostOptimizer:
         for param, grad_state in original_grad_state.items():
             param.requires_grad_(grad_state)
 
-        # generate final adjusted forecast
+        # generate final adjusted forecast (normalized network output)
         with torch.no_grad():
             final_input = x + perturbation
             final_outputs = network(final_input, meta, anchor_mask_t)
-            trend_forecast = (
+            trend_forecast_norm = (
                 final_outputs['trend_forecast'].cpu().numpy()[0]
             )  # (N, T_fc)
 
-        # fuse with other components
+        # fuse with other components — same normalized-space contract as
+        # TVA.predict(): level shifts are additive AFTER fusion, never passed
+        # as the anomalies argument.
         fc_length = self.tva.forecast_horizon
         forecast_comps = self.tva._decomposer.get_forecast_components(fc_length)
 
@@ -290,31 +302,34 @@ class BifrostOptimizer:
         holidays = forecast_comps['holidays'].values.T
         level_shifts = forecast_comps['level_shifts'].values.T
 
-        trend_fc = trend_forecast[:, :fc_length]
+        trend_fc_norm = trend_forecast_norm[:, :fc_length]
 
         if isinstance(self.tva._fusion_layer, nn.Module):
             with torch.no_grad():
                 t_trend = torch.tensor(
-                    trend_fc[np.newaxis], dtype=torch.float32, device=device
+                    trend_fc_norm[np.newaxis], dtype=torch.float32, device=device
                 )
                 t_sea = torch.tensor(
-                    seasonal[np.newaxis, :, :fc_length],
+                    (seasonal[:, :fc_length] / scale_col)[np.newaxis],
                     dtype=torch.float32,
                     device=device,
                 )
                 t_hol = torch.tensor(
-                    holidays[np.newaxis, :, :fc_length],
+                    (holidays[:, :fc_length] / scale_col)[np.newaxis],
                     dtype=torch.float32,
                     device=device,
                 )
                 t_ls = torch.tensor(
-                    level_shifts[np.newaxis, :, :fc_length],
+                    (level_shifts[:, :fc_length] / scale_col)[np.newaxis],
                     dtype=torch.float32,
                     device=device,
                 )
-                fused = self.tva._fusion_layer(t_trend, t_sea, t_hol, t_ls)
-                forecast_values = fused.cpu().numpy()[0].T
+                fused_norm = self.tva._fusion_layer(t_trend, t_sea, t_hol) + t_ls
+                forecast_values = (
+                    fused_norm.cpu().numpy()[0] * scale_col + anchor_col
+                ).T
         else:
+            trend_fc = trend_fc_norm * scale_col + anchor_col
             forecast_values = (
                 trend_fc
                 + seasonal[:, :fc_length]
