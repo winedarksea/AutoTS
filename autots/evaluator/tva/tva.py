@@ -213,10 +213,13 @@ class TVA:
         self.min_anchor_history = min_anchor_history
         self.holiday_country = holiday_country
         self.holiday_countries = holiday_countries
-        if device is None:
+        if device is not None:
+            self.device = device
+        elif HAS_TORCH:
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         else:
-            self.device = device
+            # torch-free mode (trend_network='none') never moves tensors
+            self.device = 'cpu'
         self.random_seed = random_seed
         self.verbose = verbose
 
@@ -342,7 +345,25 @@ class TVA:
                 f"have {T_total}."
             )
 
-        # prepare other component windows for loss computation
+        # Step 3.5: Structure discovery — factors first, conditional edges
+        # second (Phase 2). Torch-free; the network only learns small deltas
+        # on top of this data-anchored structure.
+        self._run_structure_discovery()
+
+        # Arm A mode (Phase 4 kill rule): no torch network at all — detector
+        # decomposition + damped rolling trend + discovery for explainability
+        # + MinT + residual-sigma intervals. Fast, interpretable, torch-free.
+        if self.trend_network_type == 'none':
+            self._network = None
+            self._fusion_layer = None
+            self._loss_fn = None
+            self._setup_reconciliation()
+            if self.verbose:
+                print("TVA: torch-free mode ('none') — no network training.")
+            return self
+
+        # Torch-only from here: build the training tensors. Kept below the
+        # torch-free early return so trend_network='none' never touches torch.
         seasonal_targets = self._create_target_windows(
             self._components['seasonality'].values
         )
@@ -356,7 +377,6 @@ class TVA:
             self._components['anomalies'].values
         )
 
-        # to tensors
         device = torch.device(self.device)
         X = torch.tensor(windows, dtype=torch.float32, device=device)  # (B, N, T_win)
         Y = torch.tensor(targets, dtype=torch.float32, device=device)  # (B, N, T_fc)
@@ -375,23 +395,6 @@ class TVA:
                 dtype=torch.float32,
                 device=device,
             )
-
-        # Step 3.5: Structure discovery — factors first, conditional edges
-        # second (Phase 2). Torch-free; the network only learns small deltas
-        # on top of this data-anchored structure.
-        self._run_structure_discovery()
-
-        # Arm A mode (Phase 4 kill rule): no torch network at all — detector
-        # decomposition + damped rolling trend + discovery for explainability
-        # + MinT + residual-sigma intervals. Fast, interpretable, torch-free.
-        if self.trend_network_type == 'none':
-            self._network = None
-            self._fusion_layer = None
-            self._loss_fn = None
-            self._setup_reconciliation()
-            if self.verbose:
-                print("TVA: torch-free mode ('none') — no network training.")
-            return self
 
         # Step 4: Instantiate network
         if self.verbose:

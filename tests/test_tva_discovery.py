@@ -14,9 +14,11 @@ import numpy as np
 import pandas as pd
 
 from autots.datasets.synthetic import make_svar_panel
+from autots.datasets import generate_synthetic_daily_data
 from autots.evaluator.tva.discovery import (
     discover_structure,
     forecast_factors,
+    match_factors,
 )
 
 try:
@@ -256,6 +258,195 @@ class TestGraphChangesForecast(unittest.TestCase):
         denom = fc_with.abs().mean().item() + 1e-9
         rel_diff = (fc_with - fc_without).abs().mean().item() / denom
         self.assertGreater(rel_diff, 1e-3)
+
+
+def _factor_panel(strength=0.85, seed=42, n_days=900, n_series=15, **kwargs):
+    """Latent-factor panel from the generator, plus its ground truth."""
+    gen = generate_synthetic_daily_data(
+        n_days=n_days,
+        n_series=n_series,
+        random_seed=seed,
+        n_latent_factors=3,
+        factor_strength=strength,
+        series_type_override='standard',
+        noise_level=0.05,
+        **kwargs,
+    )
+    data = gen.get_data()
+    trends = pd.DataFrame(
+        {name: gen.get_components(name)['trend'] for name in data.columns},
+        index=data.index,
+    )
+    return gen, data, trends
+
+
+def _recovery_scores(gen, panel, config=None):
+    """Run discovery on `panel` and score it against the generator's truth."""
+    truth = gen.get_true_factors()
+    result = discover_structure(panel, config=config or FAST_CONFIG, seed=42)
+    matched = match_factors(truth['factors'], result['factors'])
+
+    true_loadings = truth['loadings'].reindex(panel.columns).values
+    nonzero = np.abs(true_loadings).max(axis=1) > 0
+    true_dominant = np.abs(true_loadings).argmax(axis=1)
+    inverse = {est: true for true, est in matched['assignment'].items()}
+    mapped = np.array([inverse.get(int(c), -1) for c in result['communities']])
+    accuracy = (
+        float((mapped[nonzero] == true_dominant[nonzero]).mean())
+        if nonzero.any()
+        else 0.0
+    )
+    return {
+        'n_factors': int(result['loadings'].shape[1]),
+        'mean_abs_corr': matched['mean_abs_corr'],
+        'community_accuracy': accuracy,
+    }
+
+
+class TestGeneratorFactorRecovery(unittest.TestCase):
+    """Discovery against SyntheticDailyGenerator latent-factor ground truth.
+
+    Thresholds were calibrated empirically on these fixed seeds and set
+    ~0.1 below the observed values, per this suite's convention.
+    """
+
+    def test_generator_factor_recovery_oracle(self):
+        """On true trend components, factors and communities are recovered."""
+        gen, _data, trends = _factor_panel(strength=0.85, seed=42)
+        scores = _recovery_scores(gen, trends)
+        self.assertEqual(scores['n_factors'], 3, "should find all three factors")
+        self.assertGreaterEqual(scores['mean_abs_corr'], 0.8)
+        self.assertGreaterEqual(scores['community_accuracy'], 0.7)
+
+    def test_generator_factor_recovery_raw_is_much_weaker(self):
+        """Raw daily data is NOT a substitute for a decomposed trend.
+
+        A piecewise-linear trend contributes almost no variance to first
+        differences (its diff is a step function that only moves at
+        changepoints), so observation noise swamps the factor signal in the
+        differenced panel discovery operates on. This is the decomposition
+        bottleneck made measurable: it guards against anyone concluding that
+        discovery can be fed raw series.
+        """
+        gen, data, trends = _factor_panel(strength=0.85, seed=42)
+        raw = _recovery_scores(gen, data)
+        oracle = _recovery_scores(gen, trends)
+        self.assertLess(raw['mean_abs_corr'], 0.35)
+        self.assertGreater(oracle['mean_abs_corr'] - raw['mean_abs_corr'], 0.4)
+
+    def test_generator_factor_recovery_low_strength_degrades(self):
+        """Weak factor structure scores below strong factor structure."""
+        gen_strong, _d, trends_strong = _factor_panel(strength=0.85, seed=42)
+        gen_weak, _d2, trends_weak = _factor_panel(strength=0.3, seed=42)
+        strong = _recovery_scores(gen_strong, trends_strong)
+        weak = _recovery_scores(gen_weak, trends_weak)
+        self.assertGreater(strong['mean_abs_corr'], weak['mean_abs_corr'])
+        self.assertGreaterEqual(
+            strong['community_accuracy'], weak['community_accuracy']
+        )
+
+
+class TestFactorHPSmoothing(unittest.TestCase):
+    """The opt-in `factor_hp_lambda` pre-smoothing and its measured tradeoff."""
+
+    def test_hp_smoothing_off_by_default(self):
+        from autots.evaluator.tva.discovery import DEFAULT_DISCOVERY_CONFIG
+
+        self.assertIsNone(DEFAULT_DISCOVERY_CONFIG['factor_hp_lambda'])
+
+    def test_hp_smoothing_rescues_noise_dominated_input(self):
+        """On raw daily data, pre-smoothing lifts recovery by a wide margin."""
+        gen, data, _trends = _factor_panel(strength=0.85, seed=42)
+        off = _recovery_scores(gen, data)
+        smoothed_config = dict(FAST_CONFIG, factor_hp_lambda=1e8)
+        on = _recovery_scores(gen, data, config=smoothed_config)
+        self.assertLess(off['mean_abs_corr'], 0.35)
+        self.assertGreater(on['mean_abs_corr'], 0.45)
+
+    def test_hp_smoothing_costs_accuracy_on_clean_input(self):
+        """It is a tradeoff, not a free win — it hurts an already-clean panel.
+
+        Guards against anyone promoting it to a global default without
+        re-measuring the clean-input and edge-precision costs.
+        """
+        gen, _data, trends = _factor_panel(strength=0.85, seed=42)
+        off = _recovery_scores(gen, trends)
+        smoothed_config = dict(FAST_CONFIG, factor_hp_lambda=1e8)
+        on = _recovery_scores(gen, trends, config=smoothed_config)
+        self.assertGreater(off['mean_abs_corr'], on['mean_abs_corr'])
+
+
+class TestTorchFreeMode(unittest.TestCase):
+    """trend_network='none' must never touch torch.
+
+    Regression test: the torch-free mode shipped raising
+    ``NameError: name 'torch' is not defined`` on any machine without torch,
+    because device selection in ``__init__`` and the training-tensor
+    construction in ``fit()`` both ran before the 'none' early return.
+    """
+
+    @staticmethod
+    def _panel():
+        rng = np.random.default_rng(0)
+        index = pd.date_range('2021-01-01', periods=400, freq='D')
+        return pd.DataFrame(
+            {
+                f'tf_{i}': 50 + np.cumsum(rng.normal(0.02, 0.5, 400))
+                for i in range(5)
+            },
+            index=index,
+        )
+
+    def test_none_mode_without_torch(self):
+        from unittest import mock
+
+        import autots.evaluator.tva.tva as tva_module
+
+        df = self._panel()
+        with mock.patch.object(tva_module, 'HAS_TORCH', False):
+            saved = tva_module.__dict__.pop('torch', None)
+            try:
+                model = tva_module.TVA(trend_network='none', verbose=0)
+                model.fit(df)
+                forecast = model.predict(14)
+            finally:
+                if saved is not None:
+                    tva_module.torch = saved
+        values = forecast['trend'] if isinstance(forecast, dict) else forecast
+        self.assertEqual(np.asarray(values).shape, (14, df.shape[1]))
+
+    def test_network_modes_require_torch(self):
+        from unittest import mock
+
+        import autots.evaluator.tva.tva as tva_module
+
+        with mock.patch.object(tva_module, 'HAS_TORCH', False):
+            with self.assertRaises(ImportError):
+                tva_module.TVA(trend_network='v2')
+
+
+class TestMatchFactors(unittest.TestCase):
+    def test_match_factors_identity(self):
+        """Permuted, sign-flipped, rescaled factors recover at corr ~= 1."""
+        rng = np.random.default_rng(0)
+        factors = np.cumsum(rng.normal(0, 1, (400, 3)), axis=0)
+        permuted = factors[:, [2, 0, 1]] * np.array([-1.0, 1.0, 2.5])
+        matched = match_factors(factors, permuted)
+        self.assertEqual(matched['assignment'], {0: 1, 1: 2, 2: 0})
+        self.assertEqual(matched['signs'], {0: 1, 1: 1, 2: -1})
+        self.assertGreater(matched['mean_abs_corr'], 0.999)
+
+    def test_match_factors_penalizes_missing_factors(self):
+        """Recovering only 2 of 3 factors cannot score a perfect match."""
+        rng = np.random.default_rng(1)
+        factors = np.cumsum(rng.normal(0, 1, (300, 3)), axis=0)
+        matched = match_factors(factors, factors[:, :2])
+        self.assertEqual(len(matched['assignment']), 2)
+        self.assertAlmostEqual(matched['mean_abs_corr'], 2.0 / 3.0, places=3)
+
+    def test_match_factors_handles_empty(self):
+        matched = match_factors(np.zeros((0, 2)), np.zeros((0, 2)))
+        self.assertEqual(matched['mean_abs_corr'], 0.0)
 
 
 if __name__ == '__main__':

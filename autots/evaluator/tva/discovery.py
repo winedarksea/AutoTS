@@ -24,6 +24,21 @@ DEFAULT_DISCOVERY_CONFIG = {
     # factor extraction
     'variance_target': 0.6,  # smallest r explaining >= this share of variance
     'max_factors': 4,
+    # Optional Hodrick-Prescott smoothing applied to the panel BEFORE
+    # differencing, for factor extraction ONLY (edges are still found on the
+    # unsmoothed residuals, so short-lag lead-lag structure survives).
+    #
+    # OFF by default, because it is a genuine tradeoff, not a free win
+    # (measured in examples/tva_factor_validation.py against generator ground
+    # truth). A piecewise-linear trend contributes almost no variance to first
+    # differences, so on NOISE-DOMINATED input the factor signal is buried and
+    # pre-smoothing helps enormously: mean |corr| factor recovery on raw daily
+    # panels went 0.005 -> 0.57 at lambda=1e8. But on an already-clean trend
+    # panel the same smoothing HURTS (0.85 -> 0.51, factor counts collapse),
+    # and lasso edge precision on SVAR panels drops 0.78 -> 0.64 at every
+    # lambda tested. Enable it only when the input is known to be noisy
+    # relative to its trend movement; 1e8 suits daily data.
+    'factor_hp_lambda': None,
     'soft_threshold': 0.15,  # fraction of per-factor max |loading| zeroed out
     # deconfounding
     'factor_lags': (0, 1),
@@ -63,6 +78,28 @@ def _resolve_config(config: Optional[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # D-1: preprocessing
 # ---------------------------------------------------------------------------
+
+
+def _hp_smooth(values: np.ndarray, lam: float) -> np.ndarray:
+    """Hodrick-Prescott trend of each column (NaN-safe, degrades to input)."""
+    try:
+        from statsmodels.tsa.filters.hp_filter import hpfilter
+    except ImportError:  # pragma: no cover - statsmodels is an AutoTS dep
+        return values
+    filled = pd.DataFrame(values).ffill().bfill().values
+    if not np.all(np.isfinite(filled)):
+        filled = np.nan_to_num(filled, nan=0.0, posinf=0.0, neginf=0.0)
+    out = np.empty_like(filled, dtype=float)
+    for j in range(filled.shape[1]):
+        column = filled[:, j]
+        if np.ptp(column) < 1e-12:
+            out[:, j] = column
+            continue
+        try:
+            out[:, j] = hpfilter(column, lamb=float(lam))[1]
+        except Exception:
+            out[:, j] = column
+    return out
 
 
 def _difference_and_standardize(trend_values: np.ndarray) -> tuple:
@@ -643,13 +680,22 @@ def discover_structure(
     # D-1: difference + standardize
     X, _scale = _difference_and_standardize(values)
 
+    # D-1b: a separate, HP-smoothed view used ONLY for factor extraction.
+    # Edges are still discovered on the residuals of the unsmoothed panel, so
+    # lead-lag structure at short lags is not smoothed away.
+    hp_lambda = cfg.get('factor_hp_lambda')
+    if hp_lambda:
+        X_factor, _ = _difference_and_standardize(_hp_smooth(values, hp_lambda))
+    else:
+        X_factor = X
+
     # D-2: factors from anchors (short-history series shouldn't shape them)
     if anchor_mask is not None and np.any(anchor_mask) and not np.all(anchor_mask):
         anchor_idx = np.where(np.asarray(anchor_mask, dtype=bool))[0]
-        _f_anchor, _l_anchor, scores = extract_factors(X[:, anchor_idx], cfg)
-        # loadings for ALL series by regression of X on the factor scores
+        _f_anchor, _l_anchor, scores = extract_factors(X_factor[:, anchor_idx], cfg)
+        # loadings for ALL series by regression on the factor scores
         gram = scores.T @ scores
-        loadings = (X.T @ scores) @ np.linalg.pinv(gram)
+        loadings = (X_factor.T @ scores) @ np.linalg.pinv(gram)
         tau = float(cfg['soft_threshold']) * np.abs(loadings).max(
             axis=0, keepdims=True
         )
@@ -658,7 +704,7 @@ def discover_structure(
             [np.zeros((1, scores.shape[1])), np.cumsum(scores, axis=0)], axis=0
         )
     else:
-        factors, loadings, scores = extract_factors(X, cfg)
+        factors, loadings, scores = extract_factors(X_factor, cfg)
 
     factor_names = name_factors(loadings, series_names, series_metadata)
 
@@ -782,3 +828,105 @@ def forecast_factors(
     steps = np.arange(1, horizon + 1)
     damp = np.cumsum(phi**steps)
     return damp[:, None] * slope[None, :]
+
+
+def match_factors(true_factors, est_factors) -> dict:
+    """Align estimated factors to known/true factors and score the recovery.
+
+    Both inputs are level-space tracks (discovery returns cumulative sums of
+    the differenced factor scores; generator factors are levels), so they are
+    differenced before comparison — the shared *movement* is what identifies a
+    factor, not its arbitrary integration constant. Matching is a Hungarian
+    assignment on the |correlation| matrix, which handles both permutation and
+    sign indeterminacy of the factor basis.
+
+    Args:
+        true_factors: (T, K) array-like (DataFrame ok) of reference factors.
+        est_factors: (T, r) array-like of estimated factors. May have a
+            different number of factors than ``true_factors``.
+
+    Returns:
+        dict with:
+            'assignment': {true_index: est_index} for the matched pairs
+            'correlations': {true_index: signed correlation} per matched pair
+            'signs': {true_index: +1/-1} sign of each matched correlation
+            'mean_abs_corr': mean |corr| over matched pairs, averaged over
+                ``max(K, r)`` so missing/spurious factors are penalized
+            'n_true', 'n_est': factor counts
+    """
+    true_arr = np.asarray(
+        true_factors.values if hasattr(true_factors, 'values') else true_factors,
+        dtype=float,
+    )
+    est_arr = np.asarray(
+        est_factors.values if hasattr(est_factors, 'values') else est_factors,
+        dtype=float,
+    )
+    if true_arr.ndim == 1:
+        true_arr = true_arr[:, None]
+    if est_arr.ndim == 1:
+        est_arr = est_arr[:, None]
+
+    empty = {
+        'assignment': {},
+        'correlations': {},
+        'signs': {},
+        'mean_abs_corr': 0.0,
+        'n_true': int(true_arr.shape[1]),
+        'n_est': int(est_arr.shape[1]),
+    }
+    if true_arr.size == 0 or est_arr.size == 0:
+        return empty
+
+    # difference to level-invariant movement, then trim to a common length
+    d_true = np.diff(true_arr, axis=0)
+    d_est = np.diff(est_arr, axis=0)
+    T = min(d_true.shape[0], d_est.shape[0])
+    if T < 3:
+        return empty
+    d_true = d_true[-T:]
+    d_est = d_est[-T:]
+
+    def _z(arr):
+        arr = arr - arr.mean(axis=0, keepdims=True)
+        sd = arr.std(axis=0, keepdims=True)
+        return np.divide(arr, sd, out=np.zeros_like(arr), where=sd > 1e-12)
+
+    zt = _z(d_true)
+    ze = _z(d_est)
+    corr = (zt.T @ ze) / float(T)  # (K, r)
+    corr = np.nan_to_num(corr, nan=0.0)
+
+    try:
+        from scipy.optimize import linear_sum_assignment
+
+        rows, cols = linear_sum_assignment(-np.abs(corr))
+    except ImportError:  # pragma: no cover - scipy is a hard AutoTS dep
+        rows, cols, used = [], [], set()
+        for i in np.argsort(-np.abs(corr).max(axis=1)):
+            order = np.argsort(-np.abs(corr[i]))
+            for j in order:
+                if j not in used:
+                    rows.append(i)
+                    cols.append(j)
+                    used.add(j)
+                    break
+        rows, cols = np.array(rows, dtype=int), np.array(cols, dtype=int)
+
+    assignment, correlations, signs = {}, {}, {}
+    for i, j in zip(rows, cols):
+        c = float(corr[i, j])
+        assignment[int(i)] = int(j)
+        correlations[int(i)] = c
+        signs[int(i)] = 1 if c >= 0 else -1
+
+    denom = max(true_arr.shape[1], est_arr.shape[1])
+    mean_abs = sum(abs(c) for c in correlations.values()) / denom if denom else 0.0
+    return {
+        'assignment': assignment,
+        'correlations': correlations,
+        'signs': signs,
+        'mean_abs_corr': float(mean_abs),
+        'n_true': int(true_arr.shape[1]),
+        'n_est': int(est_arr.shape[1]),
+    }
