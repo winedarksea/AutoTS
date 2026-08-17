@@ -45,6 +45,63 @@ DEFAULT_FACTOR_CONFIG = {
     # exposure
     'prune_share': 0.02,
     'grad_clip': 1.0,
+    # ---- Phase 1 safety layer (all default-off until each clears its gate) --
+    # 1a: pick the factor continuation rule by held-out reconstruction error
+    'continuation_select': False,
+    'continuation_origins': 3,
+    'continuation_config': None,
+    # 1c: zero loadings of series the factor model forecasts worse than a
+    # damped local-linear baseline on their own raw target
+    'gate_forecast_margin': None,
+    # 1d: quarantine series whose recent tail is numerically constant
+    'frozen_tail_gate': False,
+    'frozen_tail_min_len': 14,
+    # 1b / 1b' / 1e: post-forecast safety layer (see tva/safety.py)
+    'sn_blend': False,
+    'error_cap': False,
+    'reanchor': False,
+    'conformal_sigma': False,
+    'inner_folds': 3,
+    # refit the factor stage on truncated history so inner validation origins
+    # aren't in-sample (only the factor stage is refit, the extrapolation
+    # being graded)
+    'inner_refit': False,
+    'safety_config': None,
+    # ---- Phase 2 -----------------------------------------------------------
+    # 2a: per-series seasonal-path arbitration (datepart / empirical / amplitude)
+    'seasonal_arbitration': False,
+    'seasonal_config': None,
+    # 2c: model the trend block in log space
+    'space': 'level',
+    'log_epsilon': 1e-6,
+    # 2b: alternative trend-isolation input ('detector' | 'robust')
+    'input_estimator': 'detector',
+    'input_config': None,
+    # ---- Phase 4 -----------------------------------------------------------
+    # post-forecast coherence shrink on standardized trend trajectories;
+    # default-off, re-gated on loading recovery
+    'coherence': False,
+    'coherence_config': None,
+    # ---- Phase 3 -----------------------------------------------------------
+    # 3b: fit shared factors on long-history *anchors* only, then project
+    # responder series onto the frozen paths via their own observed overlap
+    # (avoids handing a late-launching series full weight via ffill/bfill)
+    'anchor_selection': False,
+    # multiplied by the forecast horizon to get the anchor min_observed threshold
+    'min_observed_multiple': 3.0,
+    # below this a responder can't identify a loading vector; it is zeroed
+    # and reported in info['insufficient_overlap']
+    'min_responder_overlap': 90,
+    # ridge on the responder projection and a cap on assigned shared movement:
+    # a short overlap can make the factor columns nearly collinear with
+    # [1, t], and an unregularized loading then explodes under extrapolation
+    'responder_ridge': 1e-2,
+    'responder_loading_cap': 2.0,
+    # 3c: data-derived group factors underneath the global ones
+    'group_factors': False,
+    'group_stability_threshold': 0.70,
+    'group_refits': 8,
+    'rank_candidates': (0, 1, 2, 3, 4, 6),
 }
 
 
@@ -59,11 +116,8 @@ def hinge_design(
     Args:
         n_time: number of time steps T.
         knot_spacing: steps between candidate knots (>= 1).
-        max_knots: cap on candidate knots. The l1 solve is superlinear in the
-            number of columns, so an uncapped 7-day grid makes long panels slow
-            (131 s at N=200 / T=3000); the spacing is widened instead. The cap
-            only binds beyond ~1400 steps at the default spacing, where knots
-            that fine are far below the resolution the noise supports anyway.
+        max_knots: cap on candidate knots; widens spacing instead, since the
+            l1 solve is superlinear in column count.
 
     Returns:
         (T, P) design matrix, float32.
@@ -77,6 +131,20 @@ def hinge_design(
         np.clip(t - k, 0.0, None) / float(n_time) for k in knots
     ]
     return np.column_stack(cols).astype(np.float32)
+
+
+def hinge_knot_times(
+    n_time: int, knot_spacing: int, max_knots: int = 200
+) -> np.ndarray:
+    """Time indices of the hinge knots ``hinge_design`` would build.
+
+    Derived rather than stored so callers (e.g. the regime-slope continuation
+    candidate) can't drift out of sync with ``hinge_design``'s widening rule.
+    """
+    spacing = max(int(knot_spacing), 1)
+    if max_knots and n_time // spacing > max_knots:
+        spacing = int(np.ceil(n_time / float(max_knots)))
+    return np.arange(spacing, max(n_time - spacing, spacing + 1), spacing)
 
 
 def robust_level_scale(values: np.ndarray, floor_frac: float = 1e-3):
@@ -123,14 +191,8 @@ def _l1_trend_filter(scores: np.ndarray, design: np.ndarray, alpha: float):
     """Column-wise l1 trend filtering of noisy factor scores.
 
     Each score column is standardized before the Lasso and rescaled after, so
-    ``alpha`` is a pure smoothness knob rather than a quantity that has to be
-    retuned for every panel's scale (an unstandardized penalty measured 0.05 vs
-    0.68 recovery on the same design across two panels).
-
-    Args:
-        scores: (T, K) noisy level-space factor scores.
-        design: (T, P) hinge design from ``hinge_design``.
-        alpha: Lasso penalty on the standardized hinge coefficients.
+    ``alpha`` is a pure smoothness knob rather than something retuned per
+    panel scale.
 
     Returns:
         (fitted (T, K) centered, coefficients (P, K)).
@@ -156,14 +218,9 @@ def _l1_trend_filter(scores: np.ndarray, design: np.ndarray, alpha: float):
 def select_n_factors(values: np.ndarray, cap: int = 6, window: int = 181) -> int:
     """Rank hint from the smoothed level panel's singular spectrum.
 
-    Daily noise dominates the raw level-space spectrum, so it is smoothed away
-    first; the rank is then the Ahn-Horenstein eigenvalue-ratio argmax
-    (``argmax_k s_k / s_{k+1}``), which needs no threshold calibration.
-
-    Args:
-        values: (T, N) normalized level panel.
-        cap: maximum factors to report.
-        window: smoothing window for noise suppression.
+    Daily noise dominates the raw spectrum, so it is smoothed first; rank is
+    the Ahn-Horenstein eigenvalue-ratio argmax (``argmax_k s_k / s_{k+1}``),
+    which needs no threshold calibration.
 
     Returns:
         Integer in [1, cap].
@@ -196,15 +253,6 @@ def estimate_factors_alternating(
     Torch-free. This is the stage that actually finds the factors; the torch
     model refines around it.
 
-    Args:
-        values: (T, N) normalized adjusted level panel.
-        n_factors: K.
-        knot_spacing: candidate-knot spacing for the trend-filter basis.
-        alpha: l1 penalty on hinge coefficients.
-        iters: alternating iterations.
-        init_window: smoothing window for the SVD initialization.
-        gls: reweight series by inverse high-frequency residual scale.
-
     Returns:
         dict with 'factors' (T, K), 'loadings' (N, K), 'coefs' (P, K),
         'design' (T, P), 'weights' (N,).
@@ -233,10 +281,8 @@ def estimate_factors_alternating(
         lw = loadings * weights[None, :]
         scores = (yc * weights[None, :]) @ np.linalg.pinv(lw)  # (T, K)
         factors, coefs = _l1_trend_filter(scores, design, alpha)
-        # normalize on the LEVEL scale inside the loop: ``alpha`` penalizes
-        # hinge coefficients in level units, so rescaling the target here (e.g.
-        # to unit-increment std, ~300x larger) would silently gut the penalty
-        # and collapse every factor onto the same noise-chasing path
+        # normalize on the LEVEL scale: alpha penalizes hinge coefficients in
+        # level units, rescaling the target here would silently gut the penalty
         sd = factors.std(axis=0)
         sd[~np.isfinite(sd) | (sd <= 0)] = 1.0
         factors = factors / sd[None, :]
@@ -247,8 +293,7 @@ def estimate_factors_alternating(
             hf = np.diff(resid, axis=0).std(axis=0) / np.sqrt(2.0)
             weights = 1.0 / np.maximum(hf, 1e-6)
             weights = weights / max(weights.mean(), 1e-12)
-    # final identification: unit-std increments, matching the torch model's
-    # ``factor_paths`` normalization so coefficients transfer without rescale
+    # unit-std increments, matching the torch model's factor_paths normalization
     sd = np.diff(factors, axis=0).std(axis=0)
     sd[~np.isfinite(sd) | (sd <= 0)] = 1.0
     factors = factors / sd[None, :]
@@ -276,13 +321,6 @@ def split_half_stability(
     fitting two disjoint halves of the panel should yield matching paths.
     Factors that are merely absorbing idiosyncratic trends do not replicate.
 
-    Args:
-        values: (T, N) normalized adjusted level panel.
-        n_factors: K to fit on each half.
-        n_reps: random splits to average over.
-        seed: RNG seed for the splits.
-        **kwargs: forwarded to ``estimate_factors_alternating``.
-
     Returns:
         Mean ``match_factors`` score between the two halves, in [0, 1].
     """
@@ -304,6 +342,127 @@ def split_half_stability(
             continue
         scores.append(match_factors(fa['factors'], fb['factors'])['mean_abs_corr'])
     return float(np.mean(scores)) if scores else float('nan')
+
+
+def observed_mask(values: np.ndarray, mask=None) -> np.ndarray:
+    """(T, N) boolean mask of genuinely observed cells.
+
+    When ``mask`` is None, derived from finiteness of ``values`` — correct for
+    a raw panel, degenerates to "everything observed" for a filled one (the
+    back-compatible default).
+    """
+    arr = np.asarray(values, dtype=float)
+    if mask is None:
+        return np.isfinite(arr)
+    m = np.asarray(getattr(mask, 'values', mask))
+    if m.shape != arr.shape:
+        raise ValueError(
+            f"observation mask shape {m.shape} does not match panel {arr.shape}"
+        )
+    return m.astype(bool) & np.isfinite(arr)
+
+
+def select_anchors(values: np.ndarray, mask=None, min_observed: int = 540):
+    """Split a panel into long-history anchors and short-history responders.
+
+    Anchors are chosen purely from **actual observed history** — never from
+    metadata, series names or declared launch dates, which are routinely wrong
+    in production panels. Shared factor paths are then identified from anchors
+    only, so a late-launching series can't inject fabricated pre-launch rows
+    into the common-trend estimate.
+
+    Callers should set ``min_observed`` to roughly ``3 x forecast_horizon``: a
+    series needs enough history to identify its own loading and cover several
+    non-overlapping validation windows before it defines the factor basis.
+
+    Returns:
+        (anchor_idx, responder_idx) — both ascending int arrays partitioning
+        ``range(N)``. If no column clears the threshold the longest-history
+        columns are promoted instead, since a factor model needs anchors.
+    """
+    obs = observed_mask(values, mask)
+    counts = obs.sum(axis=0).astype(int)
+    n_series = counts.size
+    keep = counts >= int(min_observed)
+    if not keep.any() and n_series:
+        # degenerate panel: fall back to the top half by observed history
+        order = np.argsort(-counts)
+        keep = np.zeros(n_series, dtype=bool)
+        keep[order[: max(n_series // 2, 1)]] = True
+    anchor_idx = np.where(keep)[0]
+    responder_idx = np.where(~keep)[0]
+    return anchor_idx, responder_idx
+
+
+def _masked_line_fit(target: np.ndarray, t_norm: np.ndarray, obs: np.ndarray):
+    """(level, slope) of ``[1, t]`` fit to the observed rows of one series."""
+    rows = np.where(obs)[0]
+    if rows.size < 2:
+        level = float(np.nanmean(target[rows])) if rows.size else 0.0
+        return (0.0 if not np.isfinite(level) else level), 0.0
+    design = np.column_stack([np.ones(rows.size), t_norm[rows]])
+    coef, *_ = np.linalg.lstsq(design, target[rows], rcond=None)
+    return float(coef[0]), float(coef[1])
+
+
+def _fit_series_on_frozen_factors(
+    paths: np.ndarray,
+    target: np.ndarray,
+    obs: np.ndarray,
+    t_norm: np.ndarray,
+    max_lag: int,
+    ridge: float = 1e-2,
+    cap: float = 2.0,
+):
+    """Masked least squares of one series against frozen factor paths.
+
+    Fits ``y_t = a + b t + sum_k w_k F_k(t - d)`` over rows where ``y`` was
+    genuinely observed; lag ``d`` is chosen by exhaustive search over
+    ``0..max_lag`` (cheap: one lstsq per candidate, no gradient through rows
+    that don't exist).
+
+    Two guards, neither optional: a **ridge** on the factor columns only (over
+    a short window a factor path is close to a line, nearly collinear with
+    ``[1, t]``, so an unregularized loading can explode under extrapolation),
+    and a **variance cap** on the implied shared component so a responder
+    can't be assigned more shared movement than it has movement.
+
+    Returns:
+        (loadings (K,), lag int, level float, slope float, sse float).
+    """
+    rows = np.where(obs)[0]
+    K = paths.shape[1]
+    y = target[rows]
+    base = np.column_stack([np.ones(rows.size), t_norm[rows]])
+    y_sd = float(np.std(y)) if rows.size > 1 else 0.0
+    best = None
+    for d in range(int(max_lag) + 1):
+        shifted = paths[np.clip(rows - d, 0, None)]
+        design = np.column_stack([base, shifted])
+        gram = design.T @ design
+        energy = float(np.mean(np.diag(gram)[2:])) if K else 0.0
+        pen = np.zeros(design.shape[1])
+        pen[2:] = float(ridge) * max(energy, 1e-12)
+        coef = np.linalg.solve(gram + np.diag(pen), design.T @ y)
+        w = np.asarray(coef[2:], dtype=float)
+        if cap and y_sd > 0 and K:
+            full = paths[np.clip(np.arange(paths.shape[0]) - d, 0, None)] @ w
+            shared_sd = float(np.std(full))
+            if shared_sd > float(cap) * y_sd:
+                w = w * (float(cap) * y_sd / shared_sd)
+                # refit line against what the shrunken loading leaves over
+                resid_y = y - (paths[np.clip(rows - d, 0, None)] @ w)
+                line, *_ = np.linalg.lstsq(base, resid_y, rcond=None)
+                coef = np.concatenate([line, w])
+        resid = y - np.column_stack(
+            [base, paths[np.clip(rows - d, 0, None)]]
+        ) @ np.concatenate([coef[:2], w])
+        sse = float(resid @ resid)
+        if best is None or sse < best[-1]:
+            best = (w, d, float(coef[0]), float(coef[1]), sse)
+    if best is None:  # pragma: no cover - max_lag is never negative
+        return np.zeros(K), 0, 0.0, 0.0, float('inf')
+    return best
 
 
 if HAS_TORCH:
@@ -340,6 +499,8 @@ if HAS_TORCH:
             design = hinge_design(self.T, knot_spacing)
             self.register_buffer('design', torch.tensor(design))
             self.P = design.shape[1]
+            # knot positions of the same basis, for regime-aware extrapolation
+            self.knot_times = hinge_knot_times(self.T, knot_spacing)
 
             self.coef = nn.Parameter(torch.zeros(self.P, self.K))
             self.loadings = nn.Parameter(torch.zeros(self.N, self.K))
@@ -411,6 +572,19 @@ if HAS_TORCH:
             *observed* movement for its first ``d`` horizon steps; later times
             are damped local-linear continuations of each factor.
             """
+            deltas = self.continuation_deltas(origins, horizon)
+            return self.rolling_forecast_from(origins, deltas, horizon)
+
+        def continuation_deltas(
+            self, origins: 'torch.Tensor', horizon: int
+        ) -> 'torch.Tensor':
+            """(O, H, K) incumbent factor deltas: damped local-linear.
+
+            Split out of ``rolling_forecast`` so the extrapolation rule is a
+            replaceable input rather than a hard-wired step (plan item 1a).
+            Returned as deltas relative to ``paths[origin]`` so every candidate
+            rule is anchored identically.
+            """
             paths = self.factor_paths()
             device = paths.device
             H = max(int(horizon), 1)
@@ -427,7 +601,28 @@ if HAS_TORCH:
 
             steps = torch.arange(1, H + 1, device=device, dtype=paths.dtype)
             damp = torch.cumsum(self.phi()[None, :] ** steps[:, None], dim=0)
-            future = paths[origins][:, None, :] + damp[None, :, :] * slope[:, None, :]
+            return damp[None, :, :] * slope[:, None, :]
+
+        def rolling_forecast_from(
+            self, origins: 'torch.Tensor', deltas: 'torch.Tensor', horizon: int
+        ) -> 'torch.Tensor':
+            """(O, H, N) forecasts recombined from supplied factor deltas.
+
+            Everything downstream of the extrapolation rule — lag weighting,
+            loadings, the idiosyncratic line — is identical regardless of how
+            the future factor path was produced, so candidate continuations are
+            compared through exactly the same recombination the model uses.
+            """
+            paths = self.factor_paths()
+            device = paths.device
+            H = max(int(horizon), 1)
+            if not torch.is_tensor(deltas):
+                deltas = torch.as_tensor(
+                    np.asarray(deltas, dtype=np.float32), device=device
+                )
+            deltas = deltas.to(device=device, dtype=paths.dtype)
+            steps = torch.arange(1, H + 1, device=device, dtype=paths.dtype)
+            future = paths[origins][:, None, :] + deltas
 
             past_idx = (
                 origins[:, None]
@@ -453,14 +648,23 @@ if HAS_TORCH:
             )
             return idio + shared
 
-        def forecast(self, horizon: int, origin: int = None) -> 'torch.Tensor':
-            """(N, H) normalized-space forecast from ``origin`` (default last)."""
+        def forecast(
+            self, horizon: int, origin: int = None, deltas=None
+        ) -> 'torch.Tensor':
+            """(N, H) normalized-space forecast from ``origin`` (default last).
+
+            ``deltas`` optionally supplies (1, H, K) factor deltas from a
+            validation-selected continuation instead of the incumbent damped
+            local-linear rule.
+            """
             if origin is None:
                 origin = self.T - 1
             origins = torch.tensor(
                 [int(origin)], device=self.coef.device, dtype=torch.long
             )
-            return self.rolling_forecast(origins, horizon)[0].T
+            if deltas is None:
+                return self.rolling_forecast(origins, horizon)[0].T
+            return self.rolling_forecast_from(origins, deltas, horizon)[0].T
 
         # ---- introspection ---------------------------------------------------
 
@@ -478,10 +682,9 @@ if HAS_TORCH:
         def live_factors(self, prune_share: float = 0.02) -> np.ndarray:
             """Indices of factors above the pruning threshold, strongest first.
 
-            The threshold is deliberately low: a genuine but minor factor can
-            carry only ~5% of the loading energy, and pruning it costs more
-            recovery than a dead column does. Guarding against spurious factors
-            is the job of ``select_n_factors`` / an explicit ``n_factors``.
+            Threshold is deliberately low: pruning a genuine but minor factor
+            costs more recovery than a dead column does. Guarding against
+            spurious factors is ``select_n_factors``'s job, not this.
             """
             share = self.variance_share()
             keep = np.where(share >= prune_share)[0]
@@ -535,8 +738,6 @@ if HAS_TORCH:
                 max_corr = float(np.nanmax(np.abs(c)))
             else:
                 max_corr = 0.0
-            # share of the *reconstructed* trend variation carried by the
-            # shared factor term.
             shared = paths @ lam.T  # (T, N)
             shared = shared - shared.mean(axis=0, keepdims=True)
             t_norm = np.arange(self.T, dtype=float) / float(self.T)
@@ -582,18 +783,36 @@ if HAS_TORCH:
             )
         return penalty
 
-    def _gate_trendless_series(model, y: 'torch.Tensor', min_ratio: float) -> list:
-        """Zero the loadings of series that have no low-frequency structure.
+    def _zero_and_refit_idio(model, target: np.ndarray, drop: np.ndarray) -> list:
+        """Zero the loadings of ``drop`` and refit their idiosyncratic line.
 
-        Args:
-            model: fitted LatentFactorTrend (mutated in place).
-            y: (N, T) normalized panel the model was fit to.
-            min_ratio: minimum smoothed-to-residual spread ratio to keep
-                loadings.
+        Shared by every gate so they cannot drift apart in how they retire a
+        series: a gated series still needs some forecast, and "no shared
+        structure" is a plain linear idio line fit to its raw target.
 
         Returns:
-            Indices of the series whose loadings were zeroed.
+            The retired indices as a plain list.
         """
+        drop = np.asarray(drop, dtype=int)
+        if drop.size == 0:
+            return []
+        with torch.no_grad():
+            t = model.time_index.detach().cpu().numpy()
+            design = np.column_stack([np.ones_like(t), t])
+            coef, *_ = np.linalg.lstsq(design, target[:, drop], rcond=None)
+            model.loadings[drop] = 0.0
+            model.idio_level[drop] = torch.tensor(
+                coef[0], dtype=model.idio_level.dtype,
+                device=model.idio_level.device,
+            )
+            model.idio_slope[drop] = torch.tensor(
+                coef[1], dtype=model.idio_slope.dtype,
+                device=model.idio_slope.device,
+            )
+        return [int(i) for i in drop]
+
+    def _gate_trendless_series(model, y: 'torch.Tensor', min_ratio: float) -> list:
+        """Zero the loadings of series that have no low-frequency structure."""
         if not min_ratio:
             return []
         with torch.no_grad():
@@ -604,20 +823,223 @@ if HAS_TORCH:
                 (target - smoothed).std(axis=0), 1e-9
             )
             drop = np.where(ratio < float(min_ratio))[0]
-            if drop.size:
-                t = model.time_index.detach().cpu().numpy()
-                design = np.column_stack([np.ones_like(t), t])
-                coef, *_ = np.linalg.lstsq(design, target[:, drop], rcond=None)
-                model.loadings[drop] = 0.0
-                model.idio_level[drop] = torch.tensor(
-                    coef[0], dtype=model.idio_level.dtype,
-                    device=model.idio_level.device,
-                )
-                model.idio_slope[drop] = torch.tensor(
-                    coef[1], dtype=model.idio_slope.dtype,
-                    device=model.idio_slope.device,
-                )
+        return _zero_and_refit_idio(model, target, drop)
+
+    def _frozen_tail_series(target: np.ndarray, min_len: int = 14) -> np.ndarray:
+        """Indices whose last ``min_len`` observations are numerically constant.
+
+        A dead-flat segment has ~zero high-frequency residual, and the GLS
+        weighting in ``estimate_factors_alternating`` is ``1 / hf`` — so a
+        frozen series would otherwise get outsized weight while carrying no
+        information.
+        """
+        min_len = max(int(min_len), 2)
+        if target.shape[0] < min_len:
+            return np.array([], dtype=int)
+        tail = target[-min_len:]
+        spread = np.nanmax(tail, axis=0) - np.nanmin(tail, axis=0)
+        overall = np.nanstd(target, axis=0)
+        overall = np.where(np.isfinite(overall) & (overall > 0), overall, 1.0)
+        # relative to the series' own variation, so a low-variance but live
+        # series doesn't false-positive
+        return np.where(np.isfinite(spread) & (spread <= 1e-8 * overall))[0]
+
+    def _gate_frozen_series(model, y: 'torch.Tensor', min_len: int) -> list:
+        """Retire frozen-tail series and forecast them as a constant.
+
+        Zeroing the loadings is not enough: the idiosyncratic line refit would
+        still put a slope through the whole history. A frozen series' only
+        defensible forecast is its held value, so the idio line is pinned flat
+        at that value instead.
+        """
+        with torch.no_grad():
+            target = y.detach().cpu().numpy().T  # (T, N)
+            drop = _frozen_tail_series(target, min_len)
+            if drop.size == 0:
+                return []
+            held = target[-1, drop]
+            model.loadings[drop] = 0.0
+            model.idio_level[drop] = torch.tensor(
+                held, dtype=model.idio_level.dtype, device=model.idio_level.device
+            )
+            model.idio_slope[drop] = torch.zeros(
+                drop.size, dtype=model.idio_slope.dtype,
+                device=model.idio_slope.device,
+            )
         return [int(i) for i in drop]
+
+    def _damped_linear_baseline(
+        target: np.ndarray, origins: np.ndarray, horizon: int, window: int = 90,
+        phi: float = 0.9,
+    ) -> np.ndarray:
+        """(O, H, N) damped local-linear continuation of the raw target.
+
+        The comparator for the per-series predictive gate: the simplest thing
+        that could possibly work on a single series, with no shared factors at
+        all. A series the factor model cannot beat this on has nothing to gain
+        from the factor layer.
+        """
+        origins = np.atleast_1d(np.asarray(origins, dtype=int))
+        H = max(int(horizon), 1)
+        steps = np.arange(1, H + 1, dtype=float)
+        damp = np.cumsum(np.power(float(phi), steps))
+        out = np.empty((origins.size, H, target.shape[1]), dtype=float)
+        for i, origin in enumerate(origins):
+            lo = max(int(origin) - int(window) + 1, 0)
+            seg = target[lo : int(origin) + 1]
+            t = np.arange(seg.shape[0], dtype=float)
+            t = t - t.mean()
+            denom = float((t**2).sum())
+            slope = (
+                (seg * t[:, None]).sum(axis=0) / denom if denom > 1e-12
+                else np.zeros(target.shape[1])
+            )
+            out[i] = target[int(origin)][None, :] + damp[:, None] * slope[None, :]
+        return out
+
+    def _gate_underperforming_series(
+        model, y: 'torch.Tensor', origins: np.ndarray, horizon: int,
+        margin: float,
+    ) -> list:
+        """Retire series the factor model forecasts worse than a naive line.
+
+        Reuses the rolling-origin forecasts stage B already computes for sigma.
+        Retired when ``MAE(factor) > margin * MAE(baseline)``; the margin
+        means a tie keeps the factor layer, since coherence is built on it.
+        """
+        if not margin or origins.size == 0:
+            return []
+        with torch.no_grad():
+            target = y.detach().cpu().numpy().T  # (T, N)
+            H = max(int(horizon), 1)
+            valid = origins[origins + H < target.shape[0]]
+            if valid.size == 0:
+                return []
+            idx = torch.tensor(valid, device=y.device, dtype=torch.long)
+            pred = model.rolling_forecast(idx, H).cpu().numpy()  # (O, H, N)
+            h_off = np.arange(1, H + 1)
+            actual = target[valid[:, None] + h_off[None, :]]  # (O, H, N)
+            base = _damped_linear_baseline(
+                target, valid, H, window=model.slope_window
+            )
+            mae_model = np.nanmean(np.abs(pred - actual), axis=(0, 1))
+            mae_base = np.nanmean(np.abs(base - actual), axis=(0, 1))
+            drop = np.where(mae_model > float(margin) * mae_base)[0]
+        return _zero_and_refit_idio(model, target, drop)
+
+    def _inner_origins(n_time: int, horizon: int, n_origins: int, floor: int) -> np.ndarray:
+        """Non-overlapping validation origins ending just before ``n_time``.
+
+        Oldest first. Origins needing less history than ``floor`` are dropped
+        rather than clamped — clamping would make two "independent" folds
+        reuse the same window.
+        """
+        H = max(int(horizon), 1)
+        out = []
+        for i in range(max(int(n_origins), 0)):
+            origin = n_time - 1 - H * (i + 1)
+            if origin < max(int(floor), 2):
+                break
+            out.append(origin)
+        return np.array(sorted(out), dtype=int)
+
+    def _select_continuation(
+        model, y: 'torch.Tensor', horizon: int, cfg: dict
+    ) -> dict:
+        """Plan item 1a: pick a continuation rule per factor by validation.
+
+        Scored on reconstructed-series MASE (scaled by each series' in-sample
+        seasonal-naive MAE so a large-scale series cannot dominate the choice),
+        pooled over held-out inner origins.
+        """
+        from autots.evaluator.tva.continuation import (
+            build_specs,
+            select_continuations,
+        )
+
+        H = max(int(horizon), 1)
+        target = y.detach().cpu().numpy().T  # (T, N)
+        origins = _inner_origins(
+            model.T, H, int(cfg['continuation_origins']), model.slope_window
+        )
+        if origins.size == 0:
+            return {'choice': {}, 'origins': [], 'reason': 'insufficient history'}
+
+        h_off = np.arange(1, H + 1)
+        actual = target[origins[:, None] + h_off[None, :]]  # (O, H, N)
+        season = 7
+        if target.shape[0] > season:
+            scale = np.nanmean(
+                np.abs(target[season:] - target[:-season]), axis=0
+            )
+        else:
+            scale = np.nanmean(np.abs(np.diff(target, axis=0)), axis=0)
+        scale = np.where(np.isfinite(scale) & (scale > 1e-9), scale, np.nan)
+
+        idx = torch.tensor(origins, device=y.device, dtype=torch.long)
+        with torch.no_grad():
+            model_deltas = model.continuation_deltas(idx, H).cpu().numpy()
+
+        def score_fn(deltas):
+            with torch.no_grad():
+                pred = model.rolling_forecast_from(idx, deltas, H).cpu().numpy()
+            mae = np.nanmean(np.abs(pred - actual), axis=(0, 1))
+            with np.errstate(invalid='ignore'):
+                return float(np.nanmean(mae / scale))
+
+        with torch.no_grad():
+            paths = model.factor_paths().cpu().numpy()
+            coef = model.coef.detach().cpu().numpy()
+        result = select_continuations(
+            paths,
+            origins,
+            H,
+            score_fn,
+            specs=build_specs(cfg.get('continuation_config')),
+            knot_times=model.knot_times,
+            coef=coef,
+            model_deltas=model_deltas,
+            config=cfg.get('continuation_config'),
+        )
+        result['origins'] = [int(o) for o in origins]
+        return result
+
+    def selected_continuation_deltas(
+        model, horizon: int, continuation: dict, origin: int = None,
+        config: dict = None,
+    ):
+        """(1, H, K) factor deltas for a validation-selected continuation.
+
+        Returns ``None`` when no selection was made, so callers fall through to
+        the model's own damped local-linear rule and today's behavior is
+        reproduced exactly.
+        """
+        if not continuation or not continuation.get('choice'):
+            return None
+        from autots.evaluator.tva.continuation import apply_choice, build_specs
+
+        H = max(int(horizon), 1)
+        if origin is None:
+            origin = model.T - 1
+        with torch.no_grad():
+            paths = model.factor_paths().cpu().numpy()
+            coef = model.coef.detach().cpu().numpy()
+            origins = torch.tensor(
+                [int(origin)], device=model.coef.device, dtype=torch.long
+            )
+            model_deltas = model.continuation_deltas(origins, H).cpu().numpy()
+        choice = {int(k): v for k, v in continuation['choice'].items()}
+        return apply_choice(
+            paths,
+            np.array([int(origin)]),
+            H,
+            choice,
+            specs=build_specs(config),
+            knot_times=model.knot_times,
+            coef=coef,
+            model_deltas=model_deltas,
+            config=config,
+        )
 
     def fit_latent_factor_model(
         values: np.ndarray,
@@ -632,17 +1054,7 @@ if HAS_TORCH:
     ):
         """Fit the latent-factor trend model on a normalized level panel.
 
-        Args:
-            values: (T, N) **normalized** adjusted level panel (see
-                ``robust_level_scale``).
-            n_factors: K to fit before pruning.
-            knot_spacing: candidate-knot spacing of the trend-filter basis.
-            max_lag: maximum learned response lag.
-            horizon: horizon used by the stage-B damping calibration.
-            config: overrides for ``DEFAULT_FACTOR_CONFIG``.
-            seed: torch/numpy seed.
-            device: torch device string.
-            verbose: 0 silent, 1 summary, 2 per-check losses.
+        ``values`` must already be normalized (see ``robust_level_scale``).
 
         Returns:
             (model, info) — info carries the identification result, losses,
@@ -697,7 +1109,6 @@ if HAS_TORCH:
         val_mask[torch.tensor(np.sort(rng.choice(T, n_val, replace=False)), device=dev)] = True
         train_mask = ~val_mask
 
-        # the alternating estimator identifies the factor paths
         param_groups = []
         if cfg['lr_coef'] > 0:
             param_groups.append({'params': [model.coef], 'lr': cfg['lr_coef']})
@@ -727,9 +1138,8 @@ if HAS_TORCH:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg['grad_clip'])
             opt.step()
             if cfg['lr_coef'] > 0:
-                # proximal l1 on the hinge coefficients keeps the factor paths
-                # piecewise linear with sparse breakpoints (plain Adam on an l1
-                # term never reaches zero, so refinement blurs changepoints)
+                # proximal l1: plain Adam on an l1 term never reaches zero,
+                # which would blur changepoints
                 with torch.no_grad():
                     thresh = cfg['w_prox'] * cfg['lr_coef']
                     model.coef[1:] = torch.sign(model.coef[1:]) * (
@@ -805,11 +1215,41 @@ if HAS_TORCH:
         for p in model.parameters():
             p.requires_grad_(True)
 
+        # ---- Phase 1 gates -------------------------------------------------
+        # order matters: frozen (dead data) -> trendless -> predictive, so the
+        # predictive gate never retires a series for another's contamination
+        frozen = (
+            _gate_frozen_series(model, y, cfg['frozen_tail_min_len'])
+            if cfg.get('frozen_tail_gate')
+            else []
+        )
         gated = _gate_trendless_series(model, y, cfg['min_trend_to_noise'])
+        underperforming = _gate_underperforming_series(
+            model, y, pool if pool.size else np.array([], dtype=int), H,
+            cfg.get('gate_forecast_margin'),
+        )
+
+        # ---- 1a: validation-selected factor continuation --------------------
+        continuation = None
+        if cfg.get('continuation_select'):
+            try:
+                continuation = _select_continuation(model, y, H, cfg)
+            except Exception as exc:  # pragma: no cover - never fail the fit
+                warnings.warn(
+                    f"TVA factor continuation selection failed, keeping the "
+                    f"default damped local-linear rule. {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continuation = None
 
         diag = model.diagnostics()
         info = {
-            'gated_series': gated,
+            'gated_series': sorted(set(gated) | set(frozen) | set(underperforming)),
+            'gated_trendless': gated,
+            'gated_frozen': frozen,
+            'gated_underperforming': underperforming,
+            'continuation': continuation,
             'identification': ident,
             'history': history,
             'stage_a_val': best_val if np.isfinite(best_val) else None,
@@ -835,6 +1275,458 @@ if HAS_TORCH:
             )
         return model, info
 
+    def _lag_logits_from_lags(lags: np.ndarray, n_lags: int) -> np.ndarray:
+        """(n, D) near-one-hot logits reproducing integer response lags.
+
+        The responder lags are chosen by exhaustive search rather than learned
+        as a soft distribution, so they are written back as logits whose
+        softmax is one-hot to within 1e-13 — the model's forecast path only
+        ever reads ``lag_weights()``.
+        """
+        out = np.full((len(lags), int(n_lags)), -30.0, dtype=np.float32)
+        for i, d in enumerate(lags):
+            out[i, int(np.clip(d, 0, n_lags - 1))] = 0.0
+        return out
+
+    def _responder_sigma(
+        model, arr: np.ndarray, obs: np.ndarray, cols: np.ndarray,
+        horizon: int, device,
+    ) -> np.ndarray:
+        """Rolling-origin residual sigma for projected series, observed rows only.
+
+        Anchors keep the sigma the anchor-only fit produced (it is the same
+        model on the same rows); responders need their own, and it has to be
+        computed over the rows they actually observed, otherwise the fabricated
+        pre-launch region would set their forecast interval width.
+        """
+        T = arr.shape[0]
+        H = max(int(horizon), 1)
+        span = max(min(300, T // 3), 1)
+        lo = max(T - span, model.slope_window)
+        hi = T - H - 1
+        pool = np.arange(lo, hi + 1) if hi >= lo else np.array([], dtype=int)
+        if pool.size >= 4:
+            if pool.size > 128:
+                pool = pool[np.linspace(0, pool.size - 1, 128).astype(int)]
+            origins = torch.tensor(pool, device=device, dtype=torch.long)
+            with torch.no_grad():
+                pred = model.rolling_forecast(origins, H).cpu().numpy()
+            h_off = np.arange(1, H + 1)
+            idx = pool[:, None] + h_off[None, :]
+            actual = arr[idx][:, :, cols]
+            seen = obs[idx][:, :, cols]
+            resid = np.where(seen, pred[:, :, cols] - actual, np.nan)
+        else:
+            with torch.no_grad():
+                recon = model().detach().cpu().numpy().T  # (T, N)
+            resid = np.where(obs[:, cols], recon[:, cols] - arr[:, cols], np.nan)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            sig = np.nanstd(resid.reshape(-1, len(cols)), axis=0)
+        return np.nan_to_num(sig, nan=0.0)
+
+    def fit_anchor_factor_model(
+        values: np.ndarray,
+        n_factors: int = 6,
+        knot_spacing: int = 7,
+        max_lag: int = 14,
+        horizon: int = 28,
+        config: dict = None,
+        seed: int = 42,
+        device: str = 'cpu',
+        verbose: int = 0,
+        mask=None,
+        anchors=None,
+    ):
+        """Anchor-aware entry point for the latent-factor trend model.
+
+        Superset of ``fit_latent_factor_model``: without ``mask``/``anchors``
+        and default config it delegates to it verbatim. With
+        ``config['anchor_selection'] = True`` (or explicit ``anchors``) the fit
+        becomes two-stage: factors/loadings/lags/idio lines are estimated on
+        **anchors** only (long-history series), then frozen and every other
+        series is projected onto them by masked least squares over its own
+        observed overlap. This avoids the bias of padding a late-launching
+        series backwards (``ffill().bfill()``): the fabricated flat segment
+        would otherwise skew both the factor path and the GLS weights.
+
+        Args:
+            mask: optional (T, N) observation mask (bool array or DataFrame).
+            anchors: optional explicit anchor column indices, overriding
+                ``select_anchors``. Passing every column reproduces the
+                all-series fit exactly (the negative control).
+
+        Returns:
+            (model, info). ``info`` carries everything ``fit_latent_factor_model``
+            returns, plus ``'anchor_idx'``, ``'responder_idx'``,
+            ``'observed_counts'``, ``'responder_lags'`` and
+            ``'insufficient_overlap'`` (overlap too short to identify a
+            loading — zero loadings, caller should fall back to SeasonalNaive).
+        """
+        cfg = dict(DEFAULT_FACTOR_CONFIG)
+        if config:
+            cfg.update({k: v for k, v in config.items() if v is not None})
+
+        use_anchors = bool(cfg.get('anchor_selection')) or anchors is not None
+        base_kwargs = dict(
+            n_factors=n_factors,
+            knot_spacing=knot_spacing,
+            max_lag=max_lag,
+            horizon=horizon,
+            config=config,
+            seed=seed,
+            device=device,
+            verbose=verbose,
+        )
+        if not use_anchors:
+            model, info = fit_latent_factor_model(values, **base_kwargs)
+            info.setdefault('anchor_idx', np.arange(model.N))
+            info.setdefault('responder_idx', np.array([], dtype=int))
+            info.setdefault(
+                'observed_counts', observed_mask(values, mask).sum(axis=0)
+            )
+            info.setdefault('insufficient_overlap', [])
+        else:
+            model, info = _fit_with_anchors(
+                values, mask, anchors, cfg, base_kwargs
+            )
+
+        if cfg.get('group_factors'):
+            _attach_group_factors(model, values, mask, cfg, info, horizon, seed)
+        return model, info
+
+    def _fit_with_anchors(values, mask, anchors, cfg, base_kwargs):
+        """Two-stage anchor fit; see ``fit_anchor_factor_model`` for the why."""
+        arr = np.asarray(values, dtype=np.float32)
+        T, N = arr.shape
+        obs = observed_mask(arr, mask)
+        horizon = max(int(base_kwargs['horizon']), 1)
+        min_observed = int(round(float(cfg['min_observed_multiple']) * horizon))
+        if anchors is not None:
+            anchor_idx = np.unique(np.asarray(anchors, dtype=int))
+            responder_idx = np.setdiff1d(np.arange(N), anchor_idx)
+        else:
+            anchor_idx, responder_idx = select_anchors(
+                arr, obs, min_observed=min_observed
+            )
+        counts = obs.sum(axis=0).astype(int)
+
+        # ---- stage 1: the shared factors, anchors only ----------------------
+        anchor_kwargs = dict(base_kwargs)
+        anchor_kwargs['n_factors'] = int(
+            max(1, min(int(base_kwargs['n_factors']), len(anchor_idx)))
+        )
+        sub = arr[:, anchor_idx]
+        # anchors may still carry short gaps; fill only within their observed
+        # span, never past it
+        sub = _interpolate_within_span(sub, obs[:, anchor_idx])
+        anchor_model, info = fit_latent_factor_model(sub, **anchor_kwargs)
+        dev = torch.device(base_kwargs['device'])
+
+        if responder_idx.size == 0 and len(anchor_idx) == N and np.array_equal(
+            anchor_idx, np.arange(N)
+        ):
+            model = anchor_model  # negative control: identical to the flat fit
+        else:
+            model = _expand_to_full_panel(
+                anchor_model, arr, obs, anchor_idx, responder_idx, cfg,
+                base_kwargs, info, dev,
+            )
+            sigma = np.zeros(N, dtype=float)
+            sigma[anchor_idx] = np.asarray(info['sigma'], dtype=float)
+            if responder_idx.size:
+                sigma[responder_idx] = _responder_sigma(
+                    model, arr.astype(float), obs, responder_idx, horizon, dev
+                )
+            info['sigma'] = sigma
+            # gate indices were anchor-local; lift them to panel columns
+            for key in (
+                'gated_series', 'gated_trendless', 'gated_frozen',
+                'gated_underperforming',
+            ):
+                info[key] = sorted(int(anchor_idx[i]) for i in info.get(key, []))
+            info['gated_series'] = sorted(
+                set(info['gated_series']) | set(info.get('insufficient_overlap', []))
+            )
+        info['anchor_idx'] = anchor_idx
+        info['responder_idx'] = responder_idx
+        info['observed_counts'] = counts
+        info['min_observed'] = min_observed
+        info.setdefault('insufficient_overlap', [])
+        info.setdefault('responder_lags', {})
+        return model, info
+
+    def _interpolate_within_span(sub: np.ndarray, obs: np.ndarray) -> np.ndarray:
+        """Linear interpolation of interior gaps only; never before first obs."""
+        # ascontiguousarray, not a bare copy: a column-fancy-indexed slice can
+        # come back non-C-contiguous, which perturbs torch's reduction order
+        out = np.ascontiguousarray(np.asarray(sub, dtype=np.float32))
+        n_time = out.shape[0]
+        t = np.arange(n_time, dtype=float)
+        for j in range(out.shape[1]):
+            rows = np.where(obs[:, j])[0]
+            if rows.size == 0 or rows.size == n_time:
+                continue
+            lo, hi = rows[0], rows[-1]
+            span = np.arange(lo, hi + 1)
+            fill = np.interp(t[span], t[rows], out[rows, j])
+            out[span, j] = fill.astype(np.float32)
+            # outside the observed span, hold the nearest observed edge
+            out[:lo, j] = out[lo, j]
+            out[hi + 1:, j] = out[hi, j]
+        return out
+
+    def _expand_to_full_panel(
+        anchor_model, arr, obs, anchor_idx, responder_idx, cfg, base_kwargs,
+        info, dev,
+    ):
+        """Copy the anchor fit into an N-series model and project responders."""
+        T, N = arr.shape
+        model = LatentFactorTrend(
+            n_series=N,
+            n_time=T,
+            n_factors=anchor_model.K,
+            knot_spacing=cfg['knot_spacing'],
+            max_lag=base_kwargs['max_lag'],
+            slope_window=cfg['slope_window'],
+        ).to(dev)
+        with torch.no_grad():
+            model.coef.copy_(anchor_model.coef)
+            model.phi_logit.copy_(anchor_model.phi_logit)
+            model.idio_phi_logit.copy_(anchor_model.idio_phi_logit)
+            a_idx = torch.tensor(anchor_idx, device=dev, dtype=torch.long)
+            model.loadings[a_idx] = anchor_model.loadings.detach()
+            model.lag_logits[a_idx] = anchor_model.lag_logits.detach()
+            model.idio_level[a_idx] = anchor_model.idio_level.detach()
+            model.idio_slope[a_idx] = anchor_model.idio_slope.detach()
+
+            paths = model.factor_paths().detach().cpu().numpy().astype(float)
+            t_norm = model.time_index.detach().cpu().numpy().astype(float)
+
+        target = arr.astype(float)
+        min_overlap = max(
+            int(cfg['min_responder_overlap']), anchor_model.K + 3
+        )
+        loadings = np.zeros((responder_idx.size, anchor_model.K))
+        lags = np.zeros(responder_idx.size, dtype=int)
+        levels = np.zeros(responder_idx.size)
+        slopes = np.zeros(responder_idx.size)
+        short = []
+        for i, col in enumerate(responder_idx):
+            column_obs = obs[:, col]
+            if int(column_obs.sum()) < min_overlap:
+                # not enough overlap to identify a loading vector: the model's
+                # own representation of "no shared structure" is a bare line
+                levels[i], slopes[i] = _masked_line_fit(
+                    target[:, col], t_norm, column_obs
+                )
+                short.append(int(col))
+                continue
+            w, d, level, slope, _ = _fit_series_on_frozen_factors(
+                paths, target[:, col], column_obs, t_norm, model.max_lag,
+                ridge=float(cfg['responder_ridge']),
+                cap=float(cfg['responder_loading_cap']),
+            )
+            loadings[i], lags[i], levels[i], slopes[i] = w, d, level, slope
+
+        with torch.no_grad():
+            r_idx = torch.tensor(responder_idx, device=dev, dtype=torch.long)
+            model.loadings[r_idx] = torch.tensor(
+                loadings, dtype=torch.float32, device=dev
+            )
+            model.lag_logits[r_idx] = torch.tensor(
+                _lag_logits_from_lags(lags, model.D), device=dev
+            )
+            model.idio_level[r_idx] = torch.tensor(
+                levels, dtype=torch.float32, device=dev
+            )
+            model.idio_slope[r_idx] = torch.tensor(
+                slopes, dtype=torch.float32, device=dev
+            )
+        info['insufficient_overlap'] = sorted(short)
+        info['responder_lags'] = {
+            int(col): int(lags[i]) for i, col in enumerate(responder_idx)
+        }
+        return model
+
+    def _attach_group_factors(model, values, mask, cfg, info, horizon, seed):
+        """Plan item 3c: add stability-screened group factors under the global.
+
+        Finds block structure (movement shared by a subset of series) in the
+        global-factor residual via consensus clustering (``tva/grouping.py``),
+        fits a small factor model inside each surviving block, and appends
+        those as extra columns with loadings zero outside the block.
+
+        Kept only if it beats the flat rank on inner rolling-origin
+        validation — a group factor is strictly more parameters, so in-sample
+        improvement alone is not evidence. Mutates ``info`` and the model in
+        place; does not return anything.
+        """
+        from autots.evaluator.tva import grouping
+
+        arr = np.asarray(values, dtype=float)
+        T, N = arr.shape
+        obs = observed_mask(arr, mask)
+        prune = cfg['prune_share']
+        with torch.no_grad():
+            paths = model.factor_paths().detach().cpu().numpy().astype(float)
+        threshold = float(cfg['group_stability_threshold'])
+        group_cfg = {
+            'refits': int(cfg['group_refits']),
+            'stability_threshold': threshold,
+        }
+        found = grouping.discover_groups(
+            arr, global_factors=paths, config=group_cfg, seed=seed,
+            knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
+            iters=cfg['alt_iters'], init_window=cfg['init_window'],
+            gls=cfg['gls'],
+        )
+        labels = found['labels']
+        groups = found['groups']
+        info['group_labels'] = labels
+        info['groups'] = groups
+        info['group_consensus'] = found['co_membership']
+
+        flat_score = grouping.rolling_origin_score(
+            arr, model.K, horizon, n_origins=cfg['inner_folds'],
+            knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
+            iters=cfg['alt_iters'], init_window=cfg['init_window'],
+            gls=cfg['gls'],
+        )
+        info['group_flat_score'] = flat_score
+        if not groups:
+            info['group_applied'] = False
+            info['group_reason'] = 'no cluster reproduced above threshold'
+            info['loading_graph'] = grouping.loading_graph(
+                model.fitted_loadings(prune), labels
+            )
+            return
+
+        # ---- fit one small factor model inside each surviving block ---------
+        resid = found['residual']
+        extra_coefs, extra_loadings, member_of = [], [], []
+        rank_table = {}
+        for gid, members in groups.items():
+            members = np.asarray(members, dtype=int)
+            sub = resid[:, members]
+            sel = grouping.select_rank(
+                sub,
+                candidates=tuple(int(r) for r in cfg['rank_candidates'] if r <= 2),
+                horizon=horizon,
+                n_origins=cfg['inner_folds'],
+                seed=seed,
+                knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
+                iters=cfg['alt_iters'], init_window=cfg['init_window'],
+                gls=cfg['gls'],
+            )
+            rank_table[int(gid)] = sel
+            r = int(sel['rank'])
+            if r <= 0:
+                continue
+            fit = estimate_factors_alternating(
+                sub, n_factors=r, knot_spacing=cfg['knot_spacing'],
+                alpha=cfg['alpha'], iters=cfg['alt_iters'],
+                init_window=cfg['init_window'], gls=cfg['gls'],
+            )
+            for k in range(r):
+                col = np.zeros(N)
+                col[members] = fit['loadings'][:, k]
+                extra_coefs.append(fit['coefs'][:, k])
+                extra_loadings.append(col)
+                member_of.append(int(gid))
+        info['group_rank_selection'] = rank_table
+
+        if not extra_coefs:
+            info['group_applied'] = False
+            info['group_reason'] = 'every surviving cluster selected rank 0'
+            info['loading_graph'] = grouping.loading_graph(
+                model.fitted_loadings(prune), labels
+            )
+            return
+
+        # ---- held-out comparison: grouped layer vs the flat rank ------------
+        grouped_score = grouping.rolling_origin_score(
+            arr, model.K + len(extra_coefs), horizon, n_origins=cfg['inner_folds'],
+            membership=labels, n_global=model.K,
+            knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
+            iters=cfg['alt_iters'], init_window=cfg['init_window'],
+            gls=cfg['gls'],
+        )
+        info['group_score'] = grouped_score
+        wins = np.isfinite(grouped_score) and (
+            not np.isfinite(flat_score) or grouped_score < flat_score
+        )
+        if not wins:
+            info['group_applied'] = False
+            info['group_reason'] = (
+                f'group layer did not beat flat rank on inner validation '
+                f'({grouped_score:.4f} vs {flat_score:.4f})'
+            )
+            info['loading_graph'] = grouping.loading_graph(
+                model.fitted_loadings(prune), labels
+            )
+            return
+
+        _append_factor_columns(
+            model, np.column_stack(extra_coefs), np.column_stack(extra_loadings),
+            arr, obs,
+        )
+        info['group_applied'] = True
+        info['group_factor_of'] = member_of
+        info['n_factors_fit'] = model.K
+        with torch.no_grad():
+            info['loading_graph'] = grouping.loading_graph(
+                model.loadings.detach().cpu().numpy(), labels
+            )
+
+    def _append_factor_columns(model, coefs, loadings, arr, obs):
+        """Grow a fitted model by extra factor columns, in place.
+
+        Group factors share the global hinge design, so they simply
+        concatenate onto ``coef``. Idio lines are refit afterwards since the
+        group factor absorbed part of what they were carrying.
+        """
+        K_new = coefs.shape[1]
+        dev = model.coef.device
+        with torch.no_grad():
+            model.coef = nn.Parameter(
+                torch.cat(
+                    [model.coef.detach(),
+                     torch.tensor(coefs, dtype=torch.float32, device=dev)],
+                    dim=1,
+                )
+            )
+            model.loadings = nn.Parameter(
+                torch.cat(
+                    [model.loadings.detach(),
+                     torch.tensor(loadings, dtype=torch.float32, device=dev)],
+                    dim=1,
+                )
+            )
+            model.phi_logit = nn.Parameter(
+                torch.cat(
+                    [model.phi_logit.detach(),
+                     torch.full((K_new,), 1.4922, device=dev)]
+                )
+            )
+            model.K = model.K + K_new
+            # refit the idiosyncratic line against what the factors now explain
+            paths = model.factor_paths().detach().cpu().numpy()
+            lam = model.loadings.detach().cpu().numpy()
+            t = model.time_index.detach().cpu().numpy()
+            shared = paths @ lam.T
+            design = np.column_stack([np.ones_like(t), t])
+            for j in range(model.N):
+                rows = np.where(obs[:, j])[0]
+                if rows.size < 2:  # pragma: no cover
+                    continue
+                coef, *_ = np.linalg.lstsq(
+                    design[rows], arr[rows, j] - shared[rows, j], rcond=None
+                )
+                model.idio_level[j] = float(coef[0])
+                model.idio_slope[j] = float(coef[1])
+
+
 else:  # pragma: no cover - torch-free environments
 
     class LatentFactorTrend:  # type: ignore[no-redef]
@@ -844,17 +1736,7 @@ else:  # pragma: no cover - torch-free environments
             )
 
     def _gate_trendless_series(model, y: 'torch.Tensor', min_ratio: float) -> list:
-        """Zero the loadings of series that have no low-frequency structure.
-
-        Args:
-            model: fitted LatentFactorTrend (mutated in place).
-            y: (N, T) normalized panel the model was fit to.
-            min_ratio: minimum smoothed-to-residual spread ratio to keep
-                loadings.
-
-        Returns:
-            Indices of the series whose loadings were zeroed.
-        """
+        """Zero the loadings of series that have no low-frequency structure."""
         if not min_ratio:
             return []
         with torch.no_grad():
@@ -881,6 +1763,11 @@ else:  # pragma: no cover - torch-free environments
         return [int(i) for i in drop]
 
     def fit_latent_factor_model(*args, **kwargs):  # type: ignore[misc]
+        raise ImportError(
+            "trend_network='factor' requires torch. Use trend_network='none'."
+        )
+
+    def fit_anchor_factor_model(*args, **kwargs):  # type: ignore[misc]
         raise ImportError(
             "trend_network='factor' requires torch. Use trend_network='none'."
         )

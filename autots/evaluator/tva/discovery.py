@@ -29,6 +29,13 @@ DEFAULT_DISCOVERY_CONFIG = {
     'soft_threshold': 0.15,  # fraction of per-factor max |loading| zeroed out
     # deconfounding
     'factor_lags': (0, 1),
+    # also regress out detected shared components (panel-mean seasonality /
+    # holidays / level shifts / anomalies) -- an unmodeled calendar effect is
+    # a confounder like any other
+    'deconfound_components': False,
+    # circular-shift null reps for edge-count calibration; 0 disables
+    'null_calibration_reps': 0,
+    'null_quantile': 0.95,
     # conditional screening
     'top_k': 8,
     # lasso VAR direction/lag/weight
@@ -251,23 +258,111 @@ def name_factors(loadings: np.ndarray, series_names: list,
 # ---------------------------------------------------------------------------
 
 
-def deconfound(X: np.ndarray, scores: np.ndarray, factor_lags=(0, 1)) -> np.ndarray:
+def deconfound(
+    X: np.ndarray, scores: np.ndarray, factor_lags=(0, 1),
+    shared: np.ndarray = None,
+) -> np.ndarray:
     """Regress each series on the factors at the given lags; return residuals.
 
-    Everything downstream (edges) operates on these residuals: an edge then
-    means "B leads A even after the shared macro force is removed."
+    Downstream edges then mean "B leads A after the shared macro force is
+    removed."
+
+    Args:
+        shared: optional (T, M) extra nuisance columns (detected seasonality,
+            holidays, shifts, anomalies), entered contemporaneously only --
+            lagging a calendar effect would let it absorb real lead-lag signal.
     """
     T1, N = X.shape
     max_l = max(factor_lags) if len(factor_lags) else 0
-    if scores.shape[1] == 0 or T1 <= max_l + 2:
+    has_shared = shared is not None and np.size(shared) > 0
+    if (scores.shape[1] == 0 and not has_shared) or T1 <= max_l + 2:
         return X.copy()
     design_cols = [np.ones((T1 - max_l, 1))]
     for lag in factor_lags:
         design_cols.append(scores[max_l - lag : T1 - lag])
+    if has_shared:
+        shared = np.asarray(shared, dtype=float)
+        if shared.ndim == 1:
+            shared = shared[:, None]
+        if shared.shape[0] >= T1:
+            block = shared[max_l:T1]
+            # drop constant / degenerate nuisance columns: they duplicate the
+            # intercept and only make the least-squares solve ill-conditioned
+            keep = np.std(block, axis=0) > 1e-12
+            if keep.any():
+                design_cols.append(block[:, keep])
     design = np.concatenate(design_cols, axis=1)
     Y = X[max_l:]
     beta, *_ = np.linalg.lstsq(design, Y, rcond=None)
     return Y - design @ beta
+
+
+def shared_component_columns(components: dict, columns=None) -> np.ndarray:
+    """(T, M) panel-mean nuisance columns from a detector component dict.
+
+    One column per available component family. Uses the panel mean, not the
+    per-series value, so the per-series remainder stays visible to screening.
+    """
+    if not components:
+        return None
+    blocks = []
+    for key in ('seasonality', 'holidays', 'level_shifts', 'anomalies'):
+        comp = components.get(key)
+        if comp is None:
+            continue
+        values = np.asarray(
+            comp[columns].values if columns is not None and hasattr(comp, 'columns')
+            else (comp.values if hasattr(comp, 'values') else comp),
+            dtype=float,
+        )
+        if values.ndim != 2 or values.size == 0:
+            continue
+        with np.errstate(invalid='ignore'):
+            blocks.append(np.nanmean(values, axis=1))
+    if not blocks:
+        return None
+    out = np.column_stack(blocks)
+    return np.where(np.isfinite(out), out, 0.0)
+
+
+def circular_shift_null(
+    residuals: np.ndarray, screen_fn, n_reps: int = 20, seed: int = 42,
+    quantile: float = 0.95,
+) -> dict:
+    """How many edges does this screening procedure invent on coupling-free data?
+
+    Circularly shifting each series destroys cross-series timing while
+    preserving its own autocorrelation and marginal distribution, so any edge
+    still found is manufactured by the procedure rather than the data.
+
+    Args:
+        screen_fn: callable (T, N) -> number of edges found.
+
+    Returns:
+        dict with ``counts``, ``mean``, ``quantile`` and ``floor``.
+    """
+    residuals = np.asarray(residuals, dtype=float)
+    T, N = residuals.shape
+    if n_reps <= 0 or T < 4 or N < 2:
+        return {'counts': [], 'mean': None, 'quantile': quantile, 'floor': None}
+    rng = np.random.default_rng(seed)
+    counts = []
+    for _ in range(int(n_reps)):
+        shifted = np.column_stack(
+            [np.roll(residuals[:, i], int(rng.integers(1, T))) for i in range(N)]
+        )
+        try:
+            counts.append(int(screen_fn(shifted)))
+        except Exception:  # pragma: no cover - a failed replicate is not a null
+            continue
+    if not counts:
+        return {'counts': [], 'mean': None, 'quantile': quantile, 'floor': None}
+    return {
+        'counts': counts,
+        'mean': float(np.mean(counts)),
+        'quantile': float(quantile),
+        'floor': float(np.quantile(counts, quantile)),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -624,6 +719,7 @@ def discover_structure(
     seed: int = 42,
     extra_adjacencies: Optional[dict] = None,
     external_factors: Optional[np.ndarray] = None,
+    components: Optional[dict] = None,
 ) -> dict:
     """Discover factors, loadings, and a conditional lead-lag edge table.
 
@@ -640,6 +736,9 @@ def discover_structure(
             'event', 'metadata', and 'business' families built elsewhere.
         external_factors: optional (T, K) level-space factor paths to
             deconfound against instead of the internal difference-space SVD.
+        components: optional detector component dict (seasonality, holidays,
+            level_shifts, anomalies), regressed out alongside the factors when
+            ``config['deconfound_components']`` is set.
 
     Returns:
         dict with 'factors' (T, r) level-space composite tracks, 'loadings'
@@ -721,13 +820,30 @@ def discover_structure(
 
     factor_names = name_factors(loadings, series_names, series_metadata)
 
-    # D-3: deconfound
-    R = deconfound(X, scores, cfg['factor_lags'])
+    # D-3: deconfound (factors, plus detected shared components when enabled)
+    shared_cols = None
+    if cfg.get('deconfound_components') and components:
+        shared_cols = shared_component_columns(components, series_names)
+    R = deconfound(X, scores, cfg['factor_lags'], shared=shared_cols)
 
     # D-4: conditional screening (contemporaneous + lagged)
     candidates = conditional_candidates(
         R, top_k=int(cfg['top_k']), max_lag=int(cfg['max_lag'])
     )
+
+    # diagnostic only -- never drops edges, just reports the acceptance floor
+    null_calibration = None
+    if int(cfg.get('null_calibration_reps', 0) or 0) > 0:
+        def _screen(shifted):
+            cands = conditional_candidates(
+                shifted, top_k=int(cfg['top_k']), max_lag=int(cfg['max_lag'])
+            )
+            return len(stability_selected_edges(shifted, cands, cfg, rng))
+
+        null_calibration = circular_shift_null(
+            R, _screen, n_reps=int(cfg['null_calibration_reps']), seed=seed,
+            quantile=float(cfg.get('null_quantile', 0.95)),
+        )
 
     # D-5: stability-selected lasso VAR + D-9 falsification
     lasso_edges = stability_selected_edges(R, candidates, cfg, rng)
@@ -811,6 +927,7 @@ def discover_structure(
         'adjacency': merged,
         'family_adjacencies': family_adjacencies,
         'communities': communities,
+        'null_calibration': null_calibration,
         'config': cfg,
     }
 

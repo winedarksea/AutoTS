@@ -121,6 +121,9 @@ class TVA:
         factor_max_lag: Maximum learned per-series response lag in 'factor'
             mode. Defaults to 0 (contemporaneous)
         factor_config: Dict overriding factor_network.DEFAULT_FACTOR_CONFIG.
+        coherence_config: Post-forecast coherence-shrink settings (None = off).
+        derived_definitions: Declared ratio identities {column: (num, den)};
+            never inferred from column names.
         factor_deconfound_edges: Re-run series edge discovery deconfounded
             against the learned factors ('factor' mode). Off by default
         structure_learning_config: Dict enabling DAG and dynamic hierarchy learning
@@ -165,6 +168,8 @@ class TVA:
         factor_knot_spacing: int = 7,
         factor_max_lag: int = 0,
         factor_config: dict = None,
+        coherence_config: dict = None,
+        derived_definitions: dict = None,
         factor_deconfound_edges: bool = False,
     ):
         if not HAS_TORCH and str(trend_network) != 'none':
@@ -206,6 +211,8 @@ class TVA:
         self.factor_knot_spacing = factor_knot_spacing
         self.factor_max_lag = factor_max_lag
         self.factor_config = factor_config
+        self.coherence_config = coherence_config
+        self.derived_definitions = derived_definitions
         self.factor_deconfound_edges = factor_deconfound_edges
         self.d_token = d_token
         self.n_meso = n_meso
@@ -769,18 +776,74 @@ class TVA:
             ).fillna(0.0)
         return adjusted.to_numpy(dtype=float)
 
+    def _robust_adjusted_panel(self) -> np.ndarray:
+        """Trend-isolated panel from the joint robust estimator (2b).
+
+        Uses the ORIGINAL missing-data mask rather than ffill/bfill: a filled
+        run is not an observation and must not carry estimation weight.
+
+        Falls back to ``_build_adjusted_panel`` on any failure.
+        """
+        from autots.evaluator.tva.robust_input import robust_adjusted_panel
+
+        try:
+            frame = self._df_original
+            values = frame.to_numpy(dtype=float)
+            mask = np.isfinite(values)
+            components = {
+                key: (
+                    self._components[key]
+                    .reindex(index=frame.index, columns=frame.columns)
+                    .fillna(0.0)
+                    .to_numpy(dtype=float)
+                )
+                for key in ('seasonality', 'holidays', 'anomalies', 'level_shifts')
+                if self._components.get(key) is not None
+            }
+            cfg = (self.factor_config or {}).get('input_config') or {}
+            result = robust_adjusted_panel(
+                values, mask=mask, components=components,
+                shrink=cfg.get('shrink'), config=cfg.get('config'),
+            )
+            adjusted = np.asarray(result['adjusted'], dtype=float)
+            if adjusted.shape != values.shape or not np.isfinite(adjusted).any():
+                raise ValueError('robust input returned an unusable panel')
+            self._robust_input_info = result.get('diagnostics')
+            return adjusted
+        except Exception as exc:  # pragma: no cover - never fail a fit
+            warnings.warn(
+                f"TVA: robust trend-isolation input failed; falling back to the "
+                f"detector-adjusted panel. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return self._build_adjusted_panel()
+
+    def _factor_input_panel(self) -> np.ndarray:
+        """The adjusted panel the factor stage is fit on, per config (2b)."""
+        estimator = str(
+            (self.factor_config or {}).get('input_estimator', 'detector')
+            or 'detector'
+        )
+        if estimator == 'robust':
+            return self._robust_adjusted_panel()
+        return self._build_adjusted_panel()
+
     def _fit_factor_network(self, df: pd.DataFrame):
         """Fit the level-space latent-factor trend model ('factor' mode)."""
         from autots.evaluator.tva.factor_network import (
-            fit_latent_factor_model,
+            fit_anchor_factor_model,
             robust_level_scale,
             select_n_factors,
         )
 
-        adjusted = self._build_adjusted_panel()
+        adjusted_raw = self._factor_input_panel()
+        space = str((self.factor_config or {}).get('space', 'level') or 'level')
+        adjusted = self._to_factor_space(adjusted_raw, space)
         center, scale = robust_level_scale(adjusted)
         normalized = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
-        self._factor_scale = {'center': center, 'scale': scale}
+        self._factor_scale = {'center': center, 'scale': scale, 'space': space}
+        self._adjusted_raw = adjusted_raw
 
         n_factors = self.n_factors
         if n_factors == 'auto' or n_factors is None:
@@ -795,17 +858,25 @@ class TVA:
 
         if self.verbose:
             print(f"TVA: fitting latent-factor trend model (K={n_factors})...")
-        self._factor_network, self._factor_info = fit_latent_factor_model(
+        cfg = dict(self.factor_config or {})
+        cfg.setdefault(
+            'min_observed_multiple',
+            max(float(self.min_anchor_history) / max(self.forecast_horizon, 1), 1.0),
+        )
+        observed_mask = self._df_original.notna().to_numpy()
+        self._factor_network, self._factor_info = fit_anchor_factor_model(
             normalized,
             n_factors=n_factors,
             knot_spacing=self.factor_knot_spacing,
             max_lag=self.factor_max_lag,
             horizon=self.forecast_horizon,
-            config=self.factor_config,
+            config=cfg,
             seed=self.random_seed,
             device=self.device,
             verbose=max(self.verbose - 1, 0),
+            mask=observed_mask,
         )
+        self._select_factor_space(adjusted_raw, n_factors)
         self._network = None
         self._fusion_layer = None
         self._loss_fn = None
@@ -815,18 +886,11 @@ class TVA:
     def _rediscover_edges_with_factors(self):
         """Re-run edge discovery deconfounded against the *learned* factors.
 
-        Series->series edges only mean anything once the shared confounder is
-        removed. Discovery's own factors come from the lag-1 differenced
-        detector trend, where slow factors have poor SNR; the learned
-        level-space paths are a better confounder estimate, so the edge table
-        is rebuilt against them and the learned factors/loadings replace the
-        discovered ones for accessor consistency.
-
-        Measured, and the reason this is opt-in: on a pure-confounder panel
-        (true edge set empty) it drops data-driven edges 70 -> 60, far short of
-        the ~0 target, and on a lag-10 leader/follower panel it halves recall
-        (0.126 -> 0.067). The confounder estimate is better but not good
-        enough to make series-level edges trustworthy.
+        Discovery's own factors come from the lag-1 differenced detector
+        trend, where slow factors have poor SNR; the learned level-space paths
+        are a better confounder estimate. Opt-in: the improved confounder
+        estimate is still not good enough to make series-level edges
+        trustworthy on its own.
         """
         if self._discovery is None or self._factor_network is None:
             return
@@ -1143,6 +1207,658 @@ class TVA:
 
         return result
 
+    def _select_factor_space(self, adjusted_raw: np.ndarray, n_factors: int):
+        """Pick level vs log modeling space by inner-origin validation (2c).
+
+        Only runs when ``factor_config['space'] == 'auto'``. Data-driven
+        rather than assumed from column semantics; costs one extra
+        factor-stage fit, and the winner is left installed.
+        """
+        from autots.evaluator.tva.factor_network import (
+            fit_latent_factor_model,
+            robust_level_scale,
+        )
+
+        requested = str((self.factor_config or {}).get('space', 'level') or 'level')
+        if requested != 'auto':
+            return
+
+        horizon = max(int(self.forecast_horizon or 28), 1)
+        best = None
+        for space in ('level', 'log'):
+            try:
+                adjusted = self._to_factor_space(adjusted_raw, space)
+                center, scale = robust_level_scale(adjusted)
+                normalized = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
+                cfg = dict(self.factor_config or {})
+                cfg['space'] = space
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    model, info = fit_latent_factor_model(
+                        normalized,
+                        n_factors=n_factors,
+                        knot_spacing=self.factor_knot_spacing,
+                        max_lag=self.factor_max_lag,
+                        horizon=horizon,
+                        config=cfg,
+                        seed=self.random_seed,
+                        device=self.device,
+                        verbose=0,
+                    )
+                self._factor_network, self._factor_info = model, info
+                self._factor_scale = {
+                    'center': center, 'scale': scale, 'space': space
+                }
+                folds = self._factor_inner_folds(horizon, 2)
+                if not folds:
+                    score = np.inf
+                else:
+                    errors = [
+                        np.abs(folds['tva_folds'][i] - folds['actual_folds'][i])
+                        for i in range(len(folds['tva_folds']))
+                    ]
+                    with np.errstate(invalid='ignore'):
+                        score = float(
+                            np.nanmean(
+                                np.nanmean(np.concatenate(errors, axis=0), axis=0)
+                                / folds['scale']
+                            )
+                        )
+                if not np.isfinite(score):
+                    score = np.inf
+            except Exception:  # pragma: no cover - a failed space is not a crash
+                continue
+            state = (score, space, self._factor_network, self._factor_info,
+                     dict(self._factor_scale))
+            if best is None or score < best[0]:
+                best = state
+        if best is None:
+            return
+        _score, space, model, info, factor_scale = best
+        self._factor_network, self._factor_info = model, info
+        self._factor_scale = factor_scale
+        if self.verbose:
+            print(f"TVA: factor modeling space selected by validation: {space}")
+
+    def _to_factor_space(self, values: np.ndarray, space: str) -> np.ndarray:
+        """Map the adjusted panel into the factor model's modeling space (2c).
+
+        Signed log1p so the transform is defined even where the adjusted
+        panel goes negative after component subtraction. Only the trend block
+        round-trips through this space; components stay in level space.
+        """
+        values = np.asarray(values, dtype=float)
+        if str(space) != 'log':
+            return values
+        return np.sign(values) * np.log1p(np.abs(values))
+
+    def _from_factor_space(self, values: np.ndarray, space: str) -> np.ndarray:
+        """Inverse of ``_to_factor_space``."""
+        values = np.asarray(values, dtype=float)
+        if str(space) != 'log':
+            return values
+        return np.sign(values) * np.expm1(np.clip(np.abs(values), None, 700.0))
+
+    def _selected_continuation(self, forecast_length: int, origin: int = None):
+        """(1, H, K) deltas from the validation-selected continuation, or None.
+
+        ``None`` means use the model's own damped local-linear rule (the
+        pre-Phase-1 default).
+        """
+        info = getattr(self, '_factor_info', None)
+        if not info or not info.get('continuation'):
+            return None
+        from autots.evaluator.tva.factor_network import (
+            selected_continuation_deltas,
+        )
+
+        try:
+            return selected_continuation_deltas(
+                self._factor_network,
+                forecast_length,
+                info['continuation'],
+                origin=origin,
+                config=(info.get('config') or {}).get('continuation_config'),
+            )
+        except Exception as exc:  # pragma: no cover - never fail a forecast
+            warnings.warn(
+                f"TVA: selected factor continuation could not be applied; "
+                f"falling back to the default rule. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+    def _factor_trend_at_origin(self, origin: int, horizon: int) -> np.ndarray:
+        """(H, N) level-space trend forecast made from a historical origin.
+
+        Re-evaluates the fitted model at ``origin`` rather than refitting —
+        every candidate sees the same mildly-optimistic model, so the
+        selection ranking is unaffected and a full fit per fold is avoided.
+        """
+        deltas = self._selected_continuation(horizon, origin=origin)
+        with torch.no_grad():
+            normalized = (
+                self._factor_network.forecast(horizon, origin=origin, deltas=deltas)
+                .cpu()
+                .numpy()
+            )  # (N, H)
+        center = self._factor_scale['center']
+        scale = self._factor_scale['scale']
+        return self._from_factor_space(
+            normalized.T * scale[np.newaxis, :] + center[np.newaxis, :],
+            self._factor_scale.get('space', 'level'),
+        )
+
+    def _refit_factor_trend(self, adjusted: np.ndarray, origin: int, horizon: int):
+        """(H, N) level trend from a factor model refit on history <= origin.
+
+        Honest counterpart of ``_factor_trend_at_origin``: only the factor
+        stage is refit (components reused, truncated), so the extrapolation
+        the safety layer grades is genuinely out of sample.
+
+        Returns ``None`` on any failure; caller falls back to in-sample eval.
+        """
+        from autots.evaluator.tva.factor_network import (
+            fit_latent_factor_model,
+            robust_level_scale,
+        )
+
+        try:
+            history = np.asarray(adjusted, dtype=float)[: int(origin) + 1]
+            if history.shape[0] < max(3 * horizon, 120):
+                return None
+            center, scale = robust_level_scale(history)
+            normalized = (history - center[np.newaxis, :]) / scale[np.newaxis, :]
+            cfg = dict((self._factor_info or {}).get('config') or {})
+            # the refit exists to *score* the incumbent, so it must not run the
+            # selections that depend on it -- that would be circular
+            for key in ('continuation_select', 'inner_refit'):
+                cfg[key] = False
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                model, _info = fit_latent_factor_model(
+                    normalized,
+                    n_factors=self._factor_network.K,
+                    knot_spacing=self.factor_knot_spacing,
+                    max_lag=self.factor_max_lag,
+                    horizon=horizon,
+                    config=cfg,
+                    seed=self.random_seed,
+                    verbose=0,
+                )
+                with torch.no_grad():
+                    normalized_fc = model.forecast(horizon).cpu().numpy()
+            return normalized_fc.T * scale[np.newaxis, :] + center[np.newaxis, :]
+        except Exception:  # pragma: no cover - diagnostics only, never fatal
+            return None
+
+    def _factor_inner_folds(self, horizon: int, n_folds: int = 3) -> dict:
+        """Inner rolling origins, in level space, for the safety selections.
+
+        Returns the model forecast, a SeasonalNaive forecast, actuals, the
+        MASE scale, and level anchors, all aligned on the same origins.
+        Empty dict when history can't support even one origin.
+        """
+        from autots.evaluator.tva.safety import seasonal_naive_forecast
+
+        df = self._df_original
+        values = df.to_numpy(dtype=float)
+        T = values.shape[0]
+        H = max(int(horizon), 1)
+        season = int(getattr(self, 'season_length', 7) or 7)
+
+        adjusted = self._factor_input_panel()
+        cfg_all = (self._factor_info or {}).get('config') or {}
+        window = int(
+            ((self.factor_config or {}).get('reanchor_window'))
+            or 14
+        )
+
+        origins = []
+        for i in range(max(int(n_folds), 0)):
+            origin = T - 1 - H * (i + 1)
+            if origin < max(H, season) + 1:
+                break
+            origins.append(origin)
+        origins = sorted(origins)
+        if not origins:
+            return {}
+
+        refit = bool(cfg_all.get('inner_refit'))
+        tva_folds, sn_folds, actual_folds = [], [], []
+        anchor_levels, origin_levels = [], []
+        comps = {
+            key: (
+                self._components.get(key)
+                .reindex(index=df.index, columns=df.columns)
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+                if self._components.get(key) is not None
+                else np.zeros_like(values)
+            )
+            for key in ('seasonality', 'holidays', 'level_shifts', 'trend')
+        }
+        from autots.evaluator.tva import seasonal as sn_mod
+
+        for origin in origins:
+            trend = (
+                self._refit_factor_trend(adjusted, origin, H)
+                if refit
+                else self._factor_trend_at_origin(origin, H)
+            )
+            if trend is None:
+                trend = self._factor_trend_at_origin(origin, H)
+            window_slice = slice(origin + 1, origin + 1 + H)
+            # must be a FORECAST of periodic components, not their in-sample
+            # fitted values -- fitted values would hand this fold an oracle
+            # the SeasonalNaive fold doesn't get, biasing the blend selection
+            residual = (
+                values[: origin + 1]
+                - comps['trend'][: origin + 1]
+                - comps['level_shifts'][: origin + 1]
+            )
+            periodic = sn_mod.tile_profile(
+                sn_mod.empirical_profile(residual, season, 2), H
+            )
+            if periodic is None:
+                periodic = np.zeros((H, values.shape[1]), dtype=float)
+            # a level shift is a step: the only thing knowable at the origin is
+            # that it persists
+            add_back = periodic + comps['level_shifts'][origin][np.newaxis, :]
+            tva_folds.append(trend + add_back)
+            sn_folds.append(
+                seasonal_naive_forecast(values[: origin + 1], H, season)
+            )
+            actual_folds.append(values[window_slice])
+            recent = adjusted[max(origin + 1 - window, 0) : origin + 1]
+            anchor_levels.append(np.nanmedian(recent, axis=0))
+            origin_levels.append(trend[0])
+
+        train = values[: origins[0] + 1]
+        if train.shape[0] > season:
+            scale = np.nanmean(np.abs(train[season:] - train[:-season]), axis=0)
+        else:
+            scale = np.nanmean(np.abs(np.diff(train, axis=0)), axis=0)
+        scale = np.where(np.isfinite(scale) & (scale > 1e-9), scale, np.nan)
+
+        return {
+            'origins': [int(o) for o in origins],
+            'tva_folds': tva_folds,
+            'sn_folds': sn_folds,
+            'actual_folds': actual_folds,
+            'scale': scale,
+            'anchor_levels': np.asarray(anchor_levels, dtype=float),
+            'origin_levels': np.asarray(origin_levels, dtype=float),
+            'season_m': season,
+        }
+
+    def _seasonal_candidates(self, horizon: int, datepart_future: np.ndarray,
+                             upto: int = None) -> dict:
+        """{name: (H, N)} seasonal-path candidates for one forecast window.
+
+        ``upto`` restricts history used for the empirical/amplitude
+        candidates, keeping selection honest at a historical origin.
+        """
+        from autots.evaluator.tva import seasonal as sn
+
+        cfg = ((self._factor_info or {}).get('config') or {}).get(
+            'seasonal_config'
+        ) or {}
+        season = int(cfg.get('season_m', getattr(self, 'season_length', 7) or 7))
+        df = self._df_original
+        values = df.to_numpy(dtype=float)
+        end = len(values) if upto is None else int(upto) + 1
+
+        def comp(key):
+            frame = self._components.get(key)
+            if frame is None:
+                return np.zeros_like(values)
+            return (
+                frame.reindex(index=df.index, columns=df.columns)
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+            )
+
+        residual = values[:end] - comp('trend')[:end] - comp('level_shifts')[:end]
+        candidates = {'datepart': np.asarray(datepart_future, dtype=float)}
+
+        n_cycles = int(cfg.get('n_cycles', 2))
+        profile = sn.empirical_profile(residual, season, n_cycles)
+        weekly = sn.tile_profile(profile, horizon)
+        # a yearly cycle only earns a candidate when at least two exist to
+        # average; one noisy year tiled forward is worse than the datepart fit
+        yearly_m = int(cfg.get('yearly_m', 365))
+        min_years = int(cfg.get('min_years_for_yearly', 2))
+        if weekly is not None and end >= yearly_m * min_years:
+            yearly = sn.tile_profile(
+                sn.empirical_profile(residual, yearly_m, n_cycles), horizon
+            )
+            if yearly is not None:
+                candidates['empirical_yearly'] = yearly
+        if weekly is not None:
+            candidates['empirical'] = weekly
+
+        window = season * int(cfg.get('amplitude_window_cycles', 2))
+        fitted_in = comp('seasonality')[:end]
+        if fitted_in.shape[0] >= window:
+            alpha = sn.amplitude_scale(
+                fitted_in[-window:], residual[-window:], cfg
+            )
+            candidates['amplitude'] = (
+                np.asarray(datepart_future, dtype=float) * alpha[np.newaxis, :]
+            )
+        return candidates
+
+    def _select_seasonal_paths(self, horizon: int, datepart_future: np.ndarray):
+        """(H, N) seasonal path plus the selection diagnostics (2a).
+
+        Scored on one held-out window at origin ``T - H - 1``, each candidate
+        assembled into a complete forecast so the comparison isolates just the
+        seasonal path. Incumbent datepart path wins ties.
+        """
+        datepart_future = np.asarray(datepart_future, dtype=float)
+        cfg_all = (self._factor_info or {}).get('config') or {}
+        if not cfg_all.get('seasonal_arbitration'):
+            return datepart_future, {}
+
+        from autots.evaluator.tva import seasonal as sn
+
+        try:
+            df = self._df_original
+            values = df.to_numpy(dtype=float)
+            T = values.shape[0]
+            H = max(int(horizon), 1)
+            origin = T - H - 1
+            season = int(getattr(self, 'season_length', 7) or 7)
+            if origin < max(3 * H, 2 * season):
+                return datepart_future, {'reason': 'insufficient history'}
+
+            def comp(key):
+                frame = self._components.get(key)
+                if frame is None:
+                    return np.zeros_like(values)
+                return (
+                    frame.reindex(index=df.index, columns=df.columns)
+                    .fillna(0.0)
+                    .to_numpy(dtype=float)
+                )
+
+            window = slice(origin + 1, origin + 1 + H)
+            trend = self._factor_trend_at_origin(origin, H)
+            fixed = comp('holidays')[window] + comp('level_shifts')[window]
+            hist_candidates = self._seasonal_candidates(
+                H, comp('seasonality')[window], upto=origin
+            )
+            assembled = {
+                name: trend + path + fixed
+                for name, path in hist_candidates.items()
+                if path is not None
+            }
+            actual = values[window]
+            train = values[: origin + 1]
+            if train.shape[0] > season:
+                scale = np.nanmean(
+                    np.abs(train[season:] - train[:-season]), axis=0
+                )
+            else:
+                scale = np.nanmean(np.abs(np.diff(train, axis=0)), axis=0)
+            selection = sn.select_seasonal_paths(
+                assembled, actual, scale, default='datepart',
+                config=cfg_all.get('seasonal_config'),
+            )
+            future_candidates = self._seasonal_candidates(H, datepart_future)
+            path = sn.assemble_choice(
+                future_candidates, selection['choice'], 'datepart'
+            )
+            selection.pop('scores', None)
+            return path, selection
+        except Exception as exc:  # pragma: no cover - never fail a forecast
+            warnings.warn(
+                f"TVA seasonal arbitration failed; keeping the datepart path. "
+                f"{exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return datepart_future, {'error': str(exc)}
+
+    def _apply_coherence(self, normalized_fc: np.ndarray, horizon: int):
+        """Coherence-shrink the standardized trend block (Phase 4).
+
+        Applied to standardized trend only, before denormalization and before
+        seasonality/holidays/anomalies/level-shifts are added back, so local
+        features aren't smeared toward a cross-series consensus.
+
+        Default-off: useful once the factor-loading identification is good
+        enough to trust, gated on loading recovery rather than retired.
+
+        Args:
+            normalized_fc: (N, H) standardized-space trend forecast.
+            horizon: H.
+
+        Returns:
+            (adjusted (N, H), info dict).
+        """
+        cfg = (self._factor_info or {}).get('config') or {}
+        if not cfg.get('coherence'):
+            return normalized_fc, {}
+        try:
+            from autots.evaluator.tva import coherence as ch
+
+            cconf = dict(cfg.get('coherence_config') or {})
+            cconf.setdefault('gated', self._factor_info.get('gated_series'))
+            cconf.setdefault('sigma', self._factor_info.get('sigma'))
+            loadings = self._factor_network.fitted_loadings(
+                cfg.get('prune_share', 0.02)
+            )
+            graphs, _meta = ch.build_candidates(loadings, cconf)
+            folds = self._coherence_inner_folds(horizon)
+            if not folds:
+                return normalized_fc, {'reason': 'insufficient history'}
+            selection = ch.select_coherence(
+                folds['trend_folds'], folds['actual_folds'], graphs,
+                folds['scale'], cconf,
+            )
+            trend = np.asarray(normalized_fc, dtype=float).T  # (H, N)
+            adjusted, info = ch.apply_selection(trend, selection, graphs, cconf)
+            return np.asarray(adjusted, dtype=float).T, info
+        except Exception as exc:  # pragma: no cover - never fail a forecast
+            warnings.warn(
+                f"TVA coherence shrink failed; returning the unshrunk trend. "
+                f"{exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return normalized_fc, {'error': str(exc)}
+
+    def _coherence_inner_folds(self, horizon: int, n_folds: int = 3) -> dict:
+        """Inner folds in STANDARDIZED trend space, for the coherence selector.
+
+        Distinct from ``_factor_inner_folds`` (level space, components added
+        back): coherence is a property of the trend block alone.
+        """
+        try:
+            adjusted = self._to_factor_space(
+                self._factor_input_panel(), self._factor_scale.get('space', 'level')
+            )
+            center = self._factor_scale['center']
+            scale = self._factor_scale['scale']
+            std_panel = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
+            T = std_panel.shape[0]
+            H = max(int(horizon), 1)
+            season = int(getattr(self, 'season_length', 7) or 7)
+            origins = []
+            for i in range(max(int(n_folds), 0)):
+                origin = T - 1 - H * (i + 1)
+                if origin < max(H, season) + 1:
+                    break
+                origins.append(origin)
+            if not origins:
+                return {}
+            trend_folds, actual_folds = [], []
+            for origin in sorted(origins):
+                deltas = self._selected_continuation(H, origin=origin)
+                with torch.no_grad():
+                    path = (
+                        self._factor_network.forecast(H, origin=origin, deltas=deltas)
+                        .cpu()
+                        .numpy()
+                        .T
+                    )
+                trend_folds.append(path)
+                actual_folds.append(std_panel[origin + 1 : origin + 1 + H])
+            train = std_panel[: min(origins) + 1]
+            if train.shape[0] > season:
+                denom = np.nanmean(
+                    np.abs(train[season:] - train[:-season]), axis=0
+                )
+            else:
+                denom = np.nanmean(np.abs(np.diff(train, axis=0)), axis=0)
+            return {
+                'trend_folds': trend_folds,
+                'actual_folds': actual_folds,
+                'scale': np.where(
+                    np.isfinite(denom) & (denom > 1e-12), denom, np.nan
+                ),
+            }
+        except Exception:  # pragma: no cover
+            return {}
+
+    def _apply_derived_identities(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Rebuild declared ratio columns from their parents' forecasts (6d).
+
+        Forecasting ``Z = X / Y`` directly lets X, Y, Z tell inconsistent
+        stories; replacing it with ``forecast(X) / forecast(Y)`` makes it
+        coherent by construction. Definitions are declared, never inferred
+        from column names.
+        """
+        definitions = self.derived_definitions
+        if not definitions:
+            return result
+        history = self._df_original
+        for column, spec in definitions.items():
+            try:
+                numerator, denominator = spec[0], spec[1]
+            except Exception:
+                continue
+            if any(
+                name not in result.columns
+                for name in (column, numerator, denominator)
+            ):
+                continue
+            den_fc = result[denominator].to_numpy(dtype=float)
+            reference = float(
+                np.nanmedian(np.abs(history[denominator].to_numpy(dtype=float)))
+            )
+            floor = max(reference * 1e-3, 1e-12)
+            if not np.isfinite(reference) or np.nanmin(np.abs(den_fc)) < floor:
+                # near-zero denominator would amplify error; keep direct forecast
+                continue
+            result[column] = result[numerator].to_numpy(dtype=float) / den_fc
+        return result
+
+    def _apply_safety_layer(self, forecast_values: np.ndarray, horizon: int):
+        """Blend, re-anchor and cap the reconstructed factor forecast (1b/1b'/1e).
+
+        Each piece is selected on the same inner rolling origins and can
+        settle on a no-op by selection, not just by config; with all four
+        flags off this returns the input unchanged, bit for bit.
+
+        Order: re-anchor (fixes level offset) before blend (fixes path shape)
+        so blending doesn't spend budget correcting an offset a shift would
+        fix for free; cap runs last as the final bound.
+
+        Returns:
+            (adjusted forecast (H, N), diagnostics dict).
+        """
+        cfg = (self._factor_info or {}).get('config') or {}
+        wants = any(
+            cfg.get(key)
+            for key in ('sn_blend', 'reanchor', 'error_cap', 'conformal_sigma')
+        )
+        if not wants:
+            return forecast_values, {}
+
+        from autots.evaluator.tva import safety as sf
+
+        sconf = cfg.get('safety_config') or {}
+        folds = self._factor_inner_folds(horizon, int(cfg.get('inner_folds', 3) or 3))
+        if not folds:
+            return forecast_values, {'reason': 'insufficient history for inner folds'}
+
+        values = self._df_original.to_numpy(dtype=float)
+        season = folds['season_m']
+        scale = folds['scale']
+        tva_folds = folds['tva_folds']
+        info = {'origins': folds['origins']}
+
+        # ---- 1e: re-anchor the level ---------------------------------------
+        offset = np.zeros(values.shape[1], dtype=float)
+        alpha = np.zeros(values.shape[1], dtype=float)
+        if cfg.get('reanchor'):
+            alpha = sf.select_reanchor_alpha(
+                tva_folds, folds['actual_folds'], folds['anchor_levels'],
+                folds['origin_levels'], scale, sconf,
+            )
+            window = int(sconf.get('reanchor_window', 14) or 14)
+            adjusted = self._factor_input_panel()
+            anchor_now = np.nanmedian(adjusted[-window:], axis=0)
+            offset = anchor_now - self._factor_trend_at_origin(
+                len(values) - 1 - horizon, horizon
+            )[0]
+            offsets_by_fold = folds['anchor_levels'] - folds['origin_levels']
+            tva_folds = [
+                sf.apply_reanchor(f, offsets_by_fold[i], alpha)
+                for i, f in enumerate(tva_folds)
+            ]
+            forecast_values = sf.apply_reanchor(forecast_values, offset, alpha)
+            info['reanchor_alpha'] = alpha.tolist()
+
+        # ---- 1b: SeasonalNaive blend ---------------------------------------
+        weights = np.ones(values.shape[1], dtype=float)
+        sn_fc = sf.seasonal_naive_forecast(values, horizon, season)
+        if cfg.get('sn_blend'):
+            weights = sf.select_blend_weights(
+                tva_folds, folds['sn_folds'], folds['actual_folds'], scale, sconf
+            )
+            forecast_values = sf.blend_forecasts(forecast_values, sn_fc, weights)
+            info['blend_weights'] = weights.tolist()
+
+        # ---- 1b': horizon-bucketed conformal scales -------------------------
+        bucket_scales = None
+        if cfg.get('conformal_sigma') or cfg.get('error_cap'):
+            residuals = np.stack(
+                [tva_folds[i] - folds['actual_folds'][i] for i in range(len(tva_folds))]
+            )
+            bucket_scales = sf.horizon_bucket_scales(residuals, sconf)
+
+        # ---- 1b: error cap --------------------------------------------------
+        capped = 0
+        if cfg.get('error_cap'):
+            abs_errors = [
+                np.abs(folds['sn_folds'][i] - folds['actual_folds'][i])
+                for i in range(len(tva_folds))
+            ]
+            lower, upper = sf.error_cap_bounds(
+                sn_fc, abs_errors, horizon, sconf,
+                bucket_scales=bucket_scales if cfg.get('conformal_sigma') else None,
+            )
+            capped = sf.count_capped(forecast_values, lower, upper)
+            forecast_values = sf.apply_error_cap(forecast_values, lower, upper)
+            info['capped_cells'] = int(capped)
+
+        info['summary'] = sf.summarize(
+            blend_weights=weights, reanchor_alphas=alpha,
+            bucket_scales=bucket_scales, capped_cells=capped,
+            scale=scale, n_series=values.shape[1], horizon=horizon,
+        )
+        # only hand a bucket profile to sigma when the flag asked for it; the
+        # JSON-safe copy of it lives in info['summary']
+        info['bucket_scales'] = (
+            bucket_scales if cfg.get('conformal_sigma') else None
+        )
+        return forecast_values, info
+
     def _predict_factor(self, forecast_length: int) -> pd.DataFrame:
         """Forecast from the learned latent-factor trend model.
 
@@ -1157,22 +1873,41 @@ class TVA:
         if self._factor_network is None:
             raise RuntimeError("TVA must be fit before calling predict.")
 
+        deltas = self._selected_continuation(forecast_length)
         with torch.no_grad():
             normalized_fc = (
-                self._factor_network.forecast(forecast_length).cpu().numpy()
+                self._factor_network.forecast(forecast_length, deltas=deltas)
+                .cpu()
+                .numpy()
             )  # (N, H)
+        normalized_fc, self._coherence_info = self._apply_coherence(
+            normalized_fc, forecast_length
+        )
         center = self._factor_scale['center']
         scale = self._factor_scale['scale']
-        trend_fc = normalized_fc.T * scale[np.newaxis, :] + center[np.newaxis, :]
+        space = self._factor_scale.get('space', 'level')
+        trend_fc = self._from_factor_space(
+            normalized_fc.T * scale[np.newaxis, :] + center[np.newaxis, :], space
+        )
 
         forecast_comps = self._decomposer.get_forecast_components(forecast_length)
         future_index = forecast_comps['trend'].index[:forecast_length]
+        seasonal_path, seasonal_info = self._select_seasonal_paths(
+            forecast_length, forecast_comps['seasonality'].values
+        )
+        self._seasonal_info = seasonal_info
         forecast_values = (
             trend_fc
-            + forecast_comps['seasonality'].values
+            + seasonal_path
             + forecast_comps['holidays'].values
             + forecast_comps['level_shifts'].values
         )
+
+        forecast_values, safety = self._apply_safety_layer(
+            forecast_values, forecast_length
+        )
+        self._safety_info = safety
+
         result = pd.DataFrame(
             forecast_values, index=future_index, columns=self._df_original.columns
         )
@@ -1185,8 +1920,12 @@ class TVA:
             model_sigma = np.sqrt(
                 model_sigma**2 + np.asarray(resid_sigma, dtype=float) ** 2
             )
+        from autots.evaluator.tva.safety import conformal_sigma
+
         self._last_sigma = pd.DataFrame(
-            np.tile(model_sigma[np.newaxis, :], (forecast_length, 1)),
+            conformal_sigma(
+                model_sigma, forecast_length, safety.get('bucket_scales')
+            ),
             index=future_index,
             columns=self._df_original.columns,
         )
@@ -1203,6 +1942,9 @@ class TVA:
                     RuntimeWarning,
                     stacklevel=2,
                 )
+        # declared ratio identities are enforced last, after blending, shrinkage
+        # and reconciliation, so nothing downstream can break them again
+        result = self._apply_derived_identities(result)
         return result
 
     def what_if(self, **constraints) -> pd.DataFrame:
@@ -1470,6 +2212,15 @@ class TVA:
     def get_edges(self) -> pd.DataFrame:
         """Return the discovered edge table over real series names (W-7).
 
+        **These are predictive screening results, not causal claims.** An edge
+        means "after removing the shared factors, this series' history helped
+        predict that one's, stably across subsamples" — useful for screening,
+        not evidence of mechanism. Series edges stay disabled for forecasting
+        until they clear the false-positive/lag-recovery/follower-forecast
+        gates together; the trustworthy structural output today is the
+        factor -> series loading graph (``get_factor_graph`` /
+        ``get_factor_diagnostics``'s ``loading_graph``).
+
         Columns: source, target, lag, sign, weight, family, stability,
         delta_mse. Empty DataFrame when discovery was disabled or found
         nothing. In trend_network='factor' mode the induced factor -> series
@@ -1491,6 +2242,86 @@ class TVA:
         if series_edges.empty:
             return factor_edges.reset_index(drop=True)
         return pd.concat([series_edges, factor_edges], ignore_index=True)
+
+    def get_factor_diagnostics(self) -> dict:
+        """Everything the factor mode decided, in one JSON-safe dict.
+
+        Returns:
+            dict with the selected rank, factors/loadings, anchor/responder
+            masks, stability scores, continuation choice, per-series blend
+            weights, re-anchor alphas, gated series (by reason), the learned
+            loading graph, validation scores and the coherence adjustment
+            magnitude. Keys are absent rather than fabricated when the
+            corresponding mechanism was not enabled.
+        """
+        info = getattr(self, '_factor_info', None) or {}
+        safety = getattr(self, '_safety_info', None) or {}
+        seasonal = getattr(self, '_seasonal_info', None) or {}
+        columns = list(self._df_original.columns) if self._df_original is not None else []
+
+        def names(indices):
+            if indices is None:
+                return []
+            return [columns[i] for i in indices if 0 <= i < len(columns)]
+
+        out = {
+            'n_factors_fit': info.get('n_factors_fit'),
+            'n_factors_live': info.get('n_factors_live'),
+            'space': (self._factor_scale or {}).get('space', 'level'),
+            'input_estimator': (self.factor_config or {}).get(
+                'input_estimator', 'detector'
+            ),
+            'gated_series': names(info.get('gated_series')),
+            'gated_trendless': names(info.get('gated_trendless')),
+            'gated_frozen': names(info.get('gated_frozen')),
+            'gated_underperforming': names(info.get('gated_underperforming')),
+            'diagnostics': info.get('diagnostics'),
+            'stage_a_val': info.get('stage_a_val'),
+            'stage_b_loss': info.get('stage_b_loss'),
+        }
+        if info.get('continuation'):
+            cont = info['continuation']
+            out['continuation'] = {
+                'choice': cont.get('choice'),
+                'origins': cont.get('origins'),
+                'score': cont.get('score'),
+                'baseline_score': cont.get('baseline_score'),
+            }
+        for key in (
+            'anchor_idx', 'responder_idx', 'insufficient_overlap',
+            'observed_counts', 'loading_graph', 'group_assignment',
+            'stability',
+        ):
+            if info.get(key) is not None:
+                value = info[key]
+                out[key] = (
+                    names(value)
+                    if key in ('anchor_idx', 'responder_idx', 'insufficient_overlap')
+                    else value
+                )
+        if safety:
+            out['safety'] = {
+                'origins': safety.get('origins'),
+                'blend_weights': dict(
+                    zip(columns, safety.get('blend_weights', []))
+                ) or None,
+                'reanchor_alpha': dict(
+                    zip(columns, safety.get('reanchor_alpha', []))
+                ) or None,
+                'capped_cells': safety.get('capped_cells'),
+                'summary': safety.get('summary'),
+            }
+        if seasonal:
+            out['seasonal_paths'] = {
+                columns[int(i)]: name
+                for i, name in (seasonal.get('choice') or {}).items()
+                if 0 <= int(i) < len(columns)
+            }
+            out['seasonal_n_changed'] = seasonal.get('n_changed')
+        coherence = getattr(self, '_coherence_info', None)
+        if coherence:
+            out['coherence'] = coherence
+        return out
 
     def get_factors(self) -> dict:
         """Return named composite factors and their sparse signed loadings (W-7).

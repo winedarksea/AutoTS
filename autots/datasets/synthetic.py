@@ -254,6 +254,14 @@ class SyntheticDailyGenerator:
         factor_cross_loading_prob=0.25,
         factor_sign_flip_prob=0.1,
         factor_response_lag_max=0,
+        scale_log_range=None,
+        frozen_tail=None,
+        derived_ratio_specs=None,
+        short_history_share=0.0,
+        short_history_range=(0.15, 0.6),
+        missing_share=0.0,
+        missing_run_max=1,
+        noise_scale_mode='level',
     ):
         self.start_date = pd.Timestamp(start_date)
         self.n_days = n_days
@@ -335,6 +343,33 @@ class SyntheticDailyGenerator:
         self.series_type_override = series_type_override
 
         # Latent trend-factor configuration (all gated: 0 factors == legacy behavior)
+        # LRP-artifact options: scale spread, derived ratio columns, frozen tails.
+        if scale_log_range is not None:
+            lo, hi = (float(x) for x in scale_log_range)
+            if hi < lo:
+                lo, hi = hi, lo
+            scale_log_range = (lo, hi)
+        self.scale_log_range = scale_log_range
+        self.frozen_tail = dict(frozen_tail or {})
+        self.derived_ratio_specs = [
+            tuple(spec) for spec in (derived_ratio_specs or [])
+        ]
+        self.derived_ratio_columns = []
+        self.frozen_tail_applied = {}
+
+        # ragged starts + missing masks: exercise the anchor/responder split.
+        self.short_history_share = float(np.clip(short_history_share, 0.0, 1.0))
+        lo, hi = (float(x) for x in short_history_range)
+        self.short_history_range = (min(lo, hi), max(lo, hi))
+        self.missing_share = float(np.clip(missing_share, 0.0, 1.0))
+        self.missing_run_max = max(int(missing_run_max), 1)
+        self.series_start_offsets = {}
+        self.missing_mask_applied = {}
+
+        # 'trend_delta' scales noise to the trend-increment std instead of series
+        # level, so SNR is controlled directly rather than confounded by scale.
+        self.noise_scale_mode = str(noise_scale_mode or 'level')
+
         self.n_latent_factors = max(0, int(n_latent_factors))
         self.include_factor_series = bool(include_factor_series)
         self.factor_strength = float(np.clip(factor_strength, 0.0, 1.0))
@@ -538,7 +573,11 @@ class SyntheticDailyGenerator:
             self.series_types[series_name] = series_type
 
             # Set scale for this series (every 3rd series is 10x larger)
-            if self.series_type_override is not None:
+            if self.scale_log_range is not None:
+                # log-uniform: stresses unscaled covariance and rank selection.
+                lo, hi = self.scale_log_range
+                scale = float(10.0 ** self.rng.uniform(lo, hi))
+            elif self.series_type_override is not None:
                 scale = 1.0
             else:
                 scale = 10.0 if i % 3 == 0 else 1.0
@@ -569,6 +608,12 @@ class SyntheticDailyGenerator:
 
         self.template['meta']['holiday_config'] = copy.deepcopy(self.holiday_config)
         self.template['meta']['anomaly_types'] = list(self.anomaly_types)
+
+        self._apply_short_histories(data_arrays)
+        self._apply_missing_masks(data_arrays)
+        self._apply_frozen_tails(data_arrays)
+        self._append_derived_ratio_columns(data_arrays)
+
         self.data = pd.DataFrame(data_arrays, index=self.date_index)
 
     def _render_series_from_template(self, series_template):
@@ -869,6 +914,7 @@ class SyntheticDailyGenerator:
 
         # 5. Generate noise
         noise = self._generate_noise(series_name, series_type, scale)
+        noise = self._rescale_noise_to_trend(series_template, noise, series_name)
         if series_type == 'variance_regimes':
             noise_mode = 'garch'
         elif series_type in ['autocorrelated_noise', 'multiplicative_seasonality']:
@@ -1193,6 +1239,139 @@ class SyntheticDailyGenerator:
             sigma = max(abs(mean), 1.0) * 0.05
         strength = self.factor_strength
         return mean + (1.0 - strength) * (idio - mean) + strength * sigma * projection
+
+    def _apply_short_histories(self, data_arrays):
+        """Blank the leading segment of a random subset of series.
+
+        Offsets are recorded as truth so a harness can check anchors were
+        chosen from observed history, not metadata.
+        """
+        if self.short_history_share <= 0:
+            return
+        names = [n for n in data_arrays if not n.startswith('market_factor_')]
+        if not names:
+            return
+        n_short = int(round(self.short_history_share * len(names)))
+        if n_short <= 0:
+            return
+        chosen = self.rng.choice(len(names), size=n_short, replace=False)
+        lo, hi = self.short_history_range
+        for pos in np.atleast_1d(chosen):
+            name = names[int(pos)]
+            frac = float(self.rng.uniform(lo, hi))
+            start = int(np.clip(round(frac * self.n_days), 1, self.n_days - 2))
+            values = np.asarray(data_arrays[name], dtype=float)
+            values[:start] = np.nan
+            data_arrays[name] = values
+            self.series_start_offsets[name] = start
+        self.template['short_history'] = {
+            k: int(v) for k, v in self.series_start_offsets.items()
+        }
+
+    def _apply_missing_masks(self, data_arrays):
+        """Punch random observation gaps, optionally in runs.
+
+        Gaps never land before a short-history start or on the final
+        observation, so the last value stays defined for naive baselines.
+        """
+        if self.missing_share <= 0:
+            return
+        for name, values in list(data_arrays.items()):
+            if name.startswith('market_factor_'):
+                continue
+            values = np.asarray(values, dtype=float)
+            start = int(self.series_start_offsets.get(name, 0))
+            span = len(values) - start - 1
+            if span <= 1:
+                continue
+            n_missing = int(round(self.missing_share * span))
+            if n_missing <= 0:
+                continue
+            placed = 0
+            guard = 0
+            while placed < n_missing and guard < 10 * n_missing:
+                guard += 1
+                run = int(self.rng.randint(1, self.missing_run_max + 1))
+                at = int(self.rng.randint(start, len(values) - 1))
+                stop = min(at + run, len(values) - 1)
+                newly = int(np.sum(~np.isnan(values[at:stop])))
+                values[at:stop] = np.nan
+                placed += newly
+            data_arrays[name] = values
+            self.missing_mask_applied[name] = int(
+                np.sum(np.isnan(values[start:]))
+            )
+        self.template['missing_mask'] = dict(self.missing_mask_applied)
+
+    def _apply_frozen_tails(self, data_arrays):
+        """Hold the last N observations of chosen series numerically constant.
+
+        A frozen tail has near-zero high-frequency residual, so GLS weighting
+        by ``1 / hf`` would otherwise let it dominate loading estimation.
+        """
+        if not self.frozen_tail:
+            return
+        for series_name, n_frozen in self.frozen_tail.items():
+            if series_name not in data_arrays:
+                continue
+            n_frozen = int(n_frozen)
+            if n_frozen <= 0:
+                continue
+            values = np.asarray(data_arrays[series_name], dtype=float)
+            n_frozen = min(n_frozen, len(values))
+            held = values[-n_frozen]
+            if not np.isfinite(held):
+                finite = values[np.isfinite(values)]
+                if finite.size == 0:
+                    continue
+                held = float(finite[-1])
+            values[-n_frozen:] = held
+            data_arrays[series_name] = values
+            self.frozen_tail_applied[series_name] = {
+                'n_days': int(n_frozen),
+                'value': float(held),
+                'start_date': str(self.date_index[len(values) - n_frozen].date()),
+            }
+        self.template['frozen_tail'] = copy.deepcopy(self.frozen_tail_applied)
+
+    def _append_derived_ratio_columns(self, data_arrays):
+        """Append deterministic ``numerator / denominator`` columns.
+
+        Generated post-hoc from finished series so the identity is exact.
+        Spec is ``(numerator, denominator)`` or ``(numerator, denominator, column_name)``.
+        """
+        if not self.derived_ratio_specs:
+            return
+        manifest = {}
+        for spec in self.derived_ratio_specs:
+            if len(spec) == 3:
+                numerator, denominator, column = spec
+            else:
+                numerator, denominator = spec
+                column = f"{numerator}_over_{denominator}"
+            if numerator not in data_arrays or denominator not in data_arrays:
+                continue
+            num = np.asarray(data_arrays[numerator], dtype=float)
+            den = np.asarray(data_arrays[denominator], dtype=float)
+            # near-zero denominators -> NaN, not inf
+            with np.errstate(divide='ignore', invalid='ignore'):
+                ratio = np.where(np.abs(den) > 1e-12, num / den, np.nan)
+            data_arrays[column] = ratio
+            self.series_scales[column] = 1.0
+            self.series_types[column] = 'derived_ratio'
+            self.components[column] = {'derived_ratio': ratio}
+            if self.n_latent_factors > 0:
+                # ratio is not an independent draw on the factors
+                self.factor_loadings[column] = np.zeros(
+                    self.n_latent_factors, dtype=float
+                )
+                self.factor_response_lags[column] = 0
+            manifest[column] = {
+                'numerator': str(numerator),
+                'denominator': str(denominator),
+            }
+            self.derived_ratio_columns.append(column)
+        self.template['derived_ratios'] = manifest
 
     def _append_observed_factor_series(self, data_arrays):
         """Append the latent factors as observed ``market_factor_*`` columns."""
@@ -2081,6 +2260,26 @@ class SyntheticDailyGenerator:
             return weekday_matches[week - 1]
         return weekday_matches[-1]
 
+    def _rescale_noise_to_trend(self, series_template, noise, series_name):
+        """Rescale noise to a multiple of the daily trend-increment std.
+
+        Level-proportional noise confounds recovery difficulty with trend
+        steepness; scaling to ``std(diff(trend))`` fixes SNR directly instead.
+        No-op unless ``noise_scale_mode == 'trend_delta'``.
+        """
+        if getattr(self, 'noise_scale_mode', 'level') != 'trend_delta':
+            return noise
+        trend_info = series_template.get('components', {}).get('trend') or {}
+        trend = np.asarray(trend_info.get('values', []), dtype=float)
+        if trend.size < 3:
+            return noise
+        delta = np.std(np.diff(trend))
+        current = np.std(noise)
+        if not np.isfinite(delta) or delta <= 0 or current <= 1e-12:
+            return noise
+        target = float(self.series_noise_levels.get(series_name, self.noise_level))
+        return noise * (target * delta / current)
+
     def _generate_noise(self, series_name, series_type, scale):
         """Generate noise with changepoints and optional GARCH-like regimes."""
         noise = np.zeros(self.n_days)
@@ -2800,6 +2999,14 @@ class SyntheticDailyGenerator:
         series_type = self.series_types.get(series_name, 'standard')
         return self.SERIES_TYPE_DESCRIPTIONS.get(series_type, series_type)
 
+    def get_derived_ratios(self):
+        """{column: {'numerator', 'denominator'}} for post-hoc ratio columns."""
+        return copy.deepcopy(self.template.get('derived_ratios', {}))
+
+    def get_frozen_tails(self):
+        """{column: {'n_days', 'value', 'start_date'}} for held-constant tails."""
+        return copy.deepcopy(self.frozen_tail_applied)
+
     def get_true_factors(self):
         """
         Get latent trend-factor ground truth (scoring oracle, never a model input).
@@ -2815,6 +3022,15 @@ class SyntheticDailyGenerator:
             - ``factor_changepoints``: {factor_name: [(date, prior_slope, new_slope)]}
             - ``factor_strength``: float
             - ``include_factor_series``: bool
+            - ``adjacency``: DataFrame (source x target) of true leader->follower
+              response delays in days; 0 means "no true edge"
+            - ``edges``: same structure as a list of
+              ``{'source', 'target', 'lag'}`` dicts (only positive delays)
+            - ``dominant_factor``: {series_name: int} index of the largest-|w| factor
+            - ``observation_mask``: DataFrame (date x series) of bools, True where observed
+            - ``responder``: {series_name: bool}, True for short-history cohorts
+            - ``level_shifts`` / ``shared_events``: truth from ``get_level_shifts()``
+              / the shared-event manifest
 
         In latent mode (``include_factor_series=False``) the factor paths are
         NOT present anywhere in ``get_data()`` -- they exist only here, for
@@ -2837,13 +3053,57 @@ class SyntheticDailyGenerator:
         loadings = pd.DataFrame(
             loading_matrix, index=series_order, columns=self.latent_factor_names
         )
+        lags = dict(self.factor_response_lags)
+        dominant = {}
+        for name in series_order:
+            row = np.asarray(self.factor_loadings[name], dtype=float)
+            if np.abs(row).max() > 0:
+                dominant[name] = int(np.abs(row).argmax())
+
+        # edge = shared dominant factor + target responds strictly later
+        adjacency = pd.DataFrame(
+            0, index=series_order, columns=series_order, dtype=int
+        )
+        edges = []
+        for source, source_factor in dominant.items():
+            for target, target_factor in dominant.items():
+                if source == target or source_factor != target_factor:
+                    continue
+                delay = int(lags.get(target, 0)) - int(lags.get(source, 0))
+                if delay > 0:
+                    adjacency.loc[source, target] = delay
+                    edges.append(
+                        {'source': source, 'target': target, 'lag': delay}
+                    )
+
+        try:
+            emitted = self.get_data()
+            observation_mask = emitted.notna()
+            responder = {
+                str(col): bool(
+                    emitted[col].first_valid_index() is not None
+                    and emitted[col].first_valid_index() != emitted.index[0]
+                )
+                for col in emitted.columns
+            }
+        except Exception:  # pragma: no cover - truth is best-effort here
+            observation_mask = None
+            responder = {name: False for name in series_order}
+
         return {
             'factors': factors,
             'loadings': loadings,
-            'factor_response_lags': dict(self.factor_response_lags),
+            'factor_response_lags': lags,
             'factor_changepoints': copy.deepcopy(self.latent_factor_changepoints),
             'factor_strength': float(self.factor_strength),
             'include_factor_series': bool(self.include_factor_series),
+            'adjacency': adjacency,
+            'edges': edges,
+            'dominant_factor': dominant,
+            'observation_mask': observation_mask,
+            'responder': responder,
+            'level_shifts': copy.deepcopy(self.level_shifts),
+            'shared_events': copy.deepcopy(self.shared_events),
         }
 
     def get_components(self, series_name=None):
@@ -4488,6 +4748,140 @@ class SyntheticDailyGenerator:
 
 
 # Convenience function for quick generation
+def generate_metric_surface_geo_panel(
+    n_days: int = 1095,
+    metrics=('dau', 'timespent', 'impressions'),
+    surfaces=('feed', 'search', 'video', 'marketplace'),
+    geos=('US', 'EU', 'APAC'),
+    geo_scale=(100.0, 10.0, 1.0),
+    factor_strength: float = 0.85,
+    noise_level: float = 0.05,
+    shared_event_count: int = 3,
+    random_seed: int = 42,
+):
+    """Generate a metric.surface.geo panel: one latent factor per surface,
+    per-geo loading scales, shared events, and matching ``SeriesMetadata`` --
+    exercises coherence shrinkage and MinT reconciliation together.
+
+    Args:
+        geo_scale: multiplier per geo, in the order of ``geos`` (recycled).
+        factor_strength: share of trend movement driven by the surface factor.
+        shared_event_count: number of panel-wide events.
+
+    Returns:
+        dict with ``df`` (wide, one column per metric.surface.geo),
+        ``factors`` (T, n_surfaces), ``loadings`` (n_series, n_surfaces),
+        ``series_metadata`` (list of dicts ready for ``SeriesMetadata``),
+        ``surface_of`` / ``geo_of`` / ``metric_of`` maps, ``events``, and
+        ``true_trends``.
+    """
+    rng = np.random.default_rng(random_seed)
+    index = pd.date_range('2019-01-01', periods=n_days, freq='D')
+    t = np.arange(n_days, dtype=float)
+
+    # one piecewise-linear factor per surface
+    factors = np.zeros((n_days, len(surfaces)))
+    for j in range(len(surfaces)):
+        n_knots = int(rng.integers(2, 5))
+        knots = np.sort(rng.choice(np.arange(60, n_days - 60), n_knots, replace=False))
+        slope = rng.normal(0.0, 0.004)
+        path = np.zeros(n_days)
+        current = slope
+        previous = 0
+        level = 0.0
+        for knot in list(knots) + [n_days]:
+            span = np.arange(knot - previous)
+            path[previous:knot] = level + current * span
+            level = path[knot - 1] if knot > previous else level
+            current = current + rng.normal(0.0, 0.004)
+            previous = knot
+        path = path - path.mean()
+        std = path.std()
+        factors[:, j] = path / std if std > 1e-9 else path
+
+    # shared events: hit every geo of one surface at once
+    events = []
+    for _ in range(max(int(shared_event_count), 0)):
+        events.append(
+            {
+                'day': int(rng.integers(90, n_days - 90)),
+                'surface': str(surfaces[int(rng.integers(len(surfaces)))]),
+                'magnitude': float(rng.normal(0.0, 0.15)),
+                'length': int(rng.integers(7, 40)),
+            }
+        )
+
+    scales = list(geo_scale)
+    columns, metadata, rows, trends = [], [], [], []
+    loadings = np.zeros((len(metrics) * len(surfaces) * len(geos), len(surfaces)))
+    weekly = np.sin(2 * np.pi * (t % 7) / 7.0) + 0.4 * np.cos(4 * np.pi * (t % 7) / 7.0)
+    yearly = np.sin(2 * np.pi * t / 365.25)
+
+    i = 0
+    for metric in metrics:
+        for s_idx, surface in enumerate(surfaces):
+            for g_idx, geo in enumerate(geos):
+                name = f'{metric}.{surface}.{geo}'
+                scale = float(scales[g_idx % len(scales)])
+                # same surface factor moves each geo by a different amount
+                loading = float(rng.uniform(0.7, 1.3)) * (1.0 + 0.15 * g_idx)
+                loadings[i, s_idx] = loading
+
+                idio = np.cumsum(rng.normal(0.0, 0.01, n_days))
+                idio = idio - idio.mean()
+                trend = (
+                    (1.0 - factor_strength) * idio
+                    + factor_strength * loading * factors[:, s_idx]
+                )
+                for event in events:
+                    if event['surface'] != surface:
+                        continue
+                    start = event['day']
+                    stop = min(start + event['length'], n_days)
+                    trend[start:stop] += event['magnitude']
+                    trend[stop:] += event['magnitude'] * 0.3
+
+                base = 1000.0 * scale
+                season = 0.05 * weekly + 0.08 * yearly
+                values = base * (1.0 + trend + season)
+                values = values + rng.normal(0.0, noise_level * base, n_days)
+                rows.append(values)
+                trends.append(base * (1.0 + trend))
+                columns.append(name)
+                metadata.append(
+                    {
+                        'name': name,
+                        'attribute_values': {
+                            'metric_type': metric,
+                            'surface': surface,
+                            'geography': geo,
+                        },
+                        'hierarchy_path': ['global', metric, surface, geo],
+                        'history_periods': n_days,
+                    }
+                )
+                i += 1
+
+    df = pd.DataFrame(np.column_stack(rows), index=index, columns=columns)
+    return {
+        'df': df,
+        'factors': pd.DataFrame(
+            factors, index=index, columns=[f'surface_{s}' for s in surfaces]
+        ),
+        'loadings': pd.DataFrame(
+            loadings, index=columns, columns=[f'surface_{s}' for s in surfaces]
+        ),
+        'true_trends': pd.DataFrame(
+            np.column_stack(trends), index=index, columns=columns
+        ),
+        'series_metadata': metadata,
+        'metric_of': {c: c.split('.')[0] for c in columns},
+        'surface_of': {c: c.split('.')[1] for c in columns},
+        'geo_of': {c: c.split('.')[2] for c in columns},
+        'events': events,
+    }
+
+
 def generate_synthetic_daily_data(
     start_date='2015-01-01', n_days=2555, n_series=10, random_seed=42, **kwargs
 ):

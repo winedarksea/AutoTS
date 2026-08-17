@@ -26,6 +26,10 @@ class TVAModel(ModelObject):
         prediction_interval: Confidence interval for probabilistic forecast.
         forecast_length: Number of periods to forecast (sets TVA forecast_horizon).
         n_factors: latent factors for trend_network='factor' ('auto' default).
+        factor_config: overrides for factor_network.DEFAULT_FACTOR_CONFIG.
+        coherence_config: post-forecast coherence-shrink settings (None = off).
+        derived_definitions: declared ratio identities {column: (num, den)}
+            used for post-reconciliation; never inferred from column names.
         factor_knot_spacing: trend-filter knot spacing in 'factor' mode.
         factor_max_lag: max learned response lag in 'factor' mode (0 = off).
         trend_network: 'v2' (learned directed graph, default), 'factor'
@@ -68,6 +72,9 @@ class TVAModel(ModelObject):
         n_factors="auto",
         factor_knot_spacing: int = 7,
         factor_max_lag: int = 0,
+        factor_config: dict = None,
+        coherence_config: dict = None,
+        derived_definitions: dict = None,
         d_token: int = 32,
         n_meso="auto",
         n_global="auto",
@@ -109,6 +116,9 @@ class TVAModel(ModelObject):
         self.n_factors = n_factors
         self.factor_knot_spacing = factor_knot_spacing
         self.factor_max_lag = factor_max_lag
+        self.factor_config = factor_config
+        self.coherence_config = coherence_config
+        self.derived_definitions = derived_definitions
         self.d_token = d_token
         self.n_meso = n_meso
         self.n_global = n_global
@@ -179,6 +189,9 @@ class TVAModel(ModelObject):
             n_factors=self.n_factors,
             factor_knot_spacing=self.factor_knot_spacing,
             factor_max_lag=self.factor_max_lag,
+            factor_config=self.factor_config,
+            coherence_config=self.coherence_config,
+            derived_definitions=self.derived_definitions,
             d_token=self.d_token,
             n_meso=self.n_meso,
             n_global=self.n_global,
@@ -315,6 +328,9 @@ class TVAModel(ModelObject):
             "n_factors": self.n_factors,
             "factor_knot_spacing": self.factor_knot_spacing,
             "factor_max_lag": self.factor_max_lag,
+            "factor_config": self.factor_config,
+            "coherence_config": self.coherence_config,
+            "derived_definitions": self.derived_definitions,
             "d_token": self.d_token,
             "n_meso": self.n_meso,
             "n_global": self.n_global,
